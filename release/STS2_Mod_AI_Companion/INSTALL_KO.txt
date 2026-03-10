@@ -1,0 +1,14 @@
+STS2 Mod AI Companion release staging
+
+This directory is reserved for future packaged releases.
+
+The initial bootstrap intentionally does not include built binaries.
+
+Expected release artifacts later:
+
+- sts2-mod-ai-companion.pck
+- sts2-mod-ai-companion.dll
+- Sts2ModKit.Core.dll
+- sts2-mod-ai-companion.config.json
+
+For now, build from source and use `Sts2ModKit.Tool` to stage native package outputs locally.

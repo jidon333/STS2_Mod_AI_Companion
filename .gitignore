@@ -1,0 +1,8 @@
+bin/
+obj/
+.vs/
+artifacts/*
+!artifacts/.gitkeep
+release/STS2_Mod_AI_Companion/*.dll
+release/STS2_Mod_AI_Companion/*.pck
+release/STS2_Mod_AI_Companion/*.json
