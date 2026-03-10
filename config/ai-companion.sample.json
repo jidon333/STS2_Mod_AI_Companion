@@ -13,5 +13,34 @@
     "description": "AI companion mod scaffold for Slay the Spire 2. Phase 1 is an external coaching assistant. Long-term goal is an AI teammate for multiplayer.",
     "pckName": "sts2-mod-ai-companion.pck",
     "packageFolderName": "Sts2ModAiCompanion"
+  },
+  "liveExport": {
+    "enabled": true,
+    "discoveryMode": true,
+    "scenePollingEnabled": true,
+    "scenePollingIntervalMs": 1000,
+    "scenePollingMaxNodes": 256,
+    "duplicateSuppressionMs": 250,
+    "snapshotWriteThrottleMs": 150,
+    "maxRecentChanges": 16,
+    "maxDeckEntries": 40,
+    "maxChoiceEntries": 10,
+    "relativeLiveRoot": "ai_companion/live",
+    "eventsFileName": "events.ndjson",
+    "snapshotFileName": "state.latest.json",
+    "summaryFileName": "state.latest.txt",
+    "sessionFileName": "session.json"
+  },
+  "assistant": {
+    "codexCommand": "codex",
+    "optionalGodotExe": "C:\\\\Tools\\\\Godot_v4.5.1-stable_win64\\\\Godot_v4.5.1-stable_win64_console.exe",
+    "autoAdviceEnabled": true,
+    "livePollIntervalMs": 750,
+    "stateDebounceMs": 300,
+    "minAdviceIntervalMs": 2000,
+    "maxKnowledgeEntries": 20,
+    "maxKnowledgeBytes": 12288,
+    "recentEventsCount": 20,
+    "companionArtifactsRelativeRoot": "companion"
   }
 }

@@ -86,7 +86,7 @@ public static partial class AiCompanionModEntryPoint
         files.Add(WriteNativeTextFile(
             packageRoot,
             AiCompanionRuntimeState.RuntimeConfigFileName,
-            BuildRuntimeConfigContents(),
+            BuildRuntimeConfigContents(configuration),
             "generated"));
 
         var primaryAssemblySourcePath = Path.Combine(runtimeAssemblyRoot, configuration.AiCompanionMod.RuntimeAssemblyFileName);
@@ -323,9 +323,16 @@ public static partial class AiCompanionModEntryPoint
         return JsonSerializer.Serialize(manifest, JsonOptions);
     }
 
-    private static string BuildRuntimeConfigContents()
+    private static string BuildRuntimeConfigContents(ScaffoldConfiguration configuration)
     {
-        return JsonSerializer.Serialize(AiCompanionRuntimeConfig.Defaults, JsonOptions);
+        var runtimeConfig = new AiCompanionRuntimeConfig
+        {
+            Enabled = configuration.LiveExport.Enabled,
+            GamePaths = configuration.GamePaths,
+            LiveExport = configuration.LiveExport,
+        };
+
+        return JsonSerializer.Serialize(runtimeConfig, JsonOptions);
     }
 
     private static void RecreateDirectory(string path)

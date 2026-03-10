@@ -1,7 +1,10 @@
 using System.Text.Json;
 using Sts2ModKit.Core.Configuration;
+using Sts2ModKit.Core.Knowledge;
+using Sts2ModKit.Core.LiveExport;
 using Sts2ModKit.Core.Planning;
 using Sts2ModAiCompanion.Mod;
+using Sts2ModKit.Tool;
 
 var command = args.Length == 0 ? "help" : args[0].ToLowerInvariant();
 var options = ParseOptions(args.Skip(1).ToArray());
@@ -23,6 +26,71 @@ try
             });
             return 0;
 
+        case "show-live-export-layout":
+            {
+                var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+                PrintJson(new
+                {
+                    loadResult.ConfigurationSource,
+                    LiveExport = configuration.LiveExport,
+                    Layout = layout,
+                });
+                return 0;
+            }
+
+        case "prepare-live-smoke":
+            {
+                var result = LiveSmokeCommands.Prepare(configuration);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "inspect-live-export":
+            {
+                var lineCount = options.TryGetValue("--tail", out var tailRaw)
+                    && int.TryParse(tailRaw, out var parsedTail)
+                    ? parsedTail
+                    : 20;
+                var result = LiveSmokeCommands.Inspect(configuration, lineCount);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "inspect-godot-log":
+            {
+                var lineCount = options.TryGetValue("--lines", out var lineRaw)
+                    && int.TryParse(lineRaw, out var parsedLines)
+                    ? parsedLines
+                    : 200;
+                var result = LiveSmokeCommands.InspectGodotLog(configuration, lineCount);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "extract-static-knowledge":
+            {
+                var knowledgeRoot = ResolveKnowledgeRoot(options, configuration, workspaceRoot);
+                var result = StaticKnowledgeCommands.Extract(configuration, knowledgeRoot);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "inspect-static-knowledge":
+            {
+                var knowledgeRoot = ResolveKnowledgeRoot(options, configuration, workspaceRoot);
+                var result = StaticKnowledgeCommands.Inspect(knowledgeRoot);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "merge-observed-knowledge":
+            {
+                var knowledgeRoot = ResolveKnowledgeRoot(options, configuration, workspaceRoot);
+                var result = StaticKnowledgeCommands.MergeObserved(configuration, knowledgeRoot);
+                PrintJson(result);
+                return 0;
+            }
+
         case "materialize-native-package":
             {
                 var outputRoot = ResolveArtifactsRoot(configuration, workspaceRoot);
@@ -42,7 +110,7 @@ try
                 var layoutKind = options.TryGetValue("--layout", out var requestedLayout)
                     ? requestedLayout
                     : "flat";
-                var godotExecutablePath = ResolveGodotExecutablePath(options, workspaceRoot);
+                var godotExecutablePath = ResolveGodotExecutablePath(options, configuration, workspaceRoot);
                 var result = AiCompanionModEntryPoint.BuildNativePck(configuration, outputRoot, runtimeAssemblyRoot, layoutKind, godotExecutablePath, workspaceRoot);
                 PrintJson(result);
                 return 0;
@@ -63,7 +131,7 @@ try
         case "dry-run-snapshot":
             {
                 var snapshotRoot = ResolveSnapshotRoot(options, configuration, workspaceRoot);
-                var plan = SnapshotPlanner.CreateDefaultPlan(configuration.GamePaths, snapshotRoot);
+                var plan = CreateSnapshotPlan(configuration, snapshotRoot);
                 PrintJson(plan);
                 return 0;
             }
@@ -71,7 +139,7 @@ try
         case "snapshot":
             {
                 var snapshotRoot = ResolveSnapshotRoot(options, configuration, workspaceRoot);
-                var plan = SnapshotPlanner.CreateDefaultPlan(configuration.GamePaths, snapshotRoot);
+                var plan = CreateSnapshotPlan(configuration, snapshotRoot);
                 var result = SnapshotExecutor.ExecuteSnapshot(plan);
                 PrintJson(result);
                 return 0;
@@ -80,7 +148,7 @@ try
         case "dry-run-restore":
             {
                 var snapshotRoot = ResolveSnapshotRoot(options, configuration, workspaceRoot);
-                var plan = ResolveRestorePlan(snapshotRoot, configuration.GamePaths);
+                var plan = ResolveRestorePlan(snapshotRoot, configuration);
                 PrintJson(plan);
                 return 0;
             }
@@ -88,7 +156,7 @@ try
         case "restore":
             {
                 var snapshotRoot = ResolveSnapshotRoot(options, configuration, workspaceRoot);
-                var plan = ResolveRestorePlan(snapshotRoot, configuration.GamePaths);
+                var plan = ResolveRestorePlan(snapshotRoot, configuration);
                 var result = SnapshotExecutor.ExecuteRestore(plan);
                 PrintJson(result);
                 return 0;
@@ -191,6 +259,19 @@ static string ResolveArtifactsRoot(ScaffoldConfiguration configuration, string w
     return Path.GetFullPath(configuration.GamePaths.ArtifactsRoot, workspaceRoot);
 }
 
+static string ResolveKnowledgeRoot(
+    IReadOnlyDictionary<string, string> options,
+    ScaffoldConfiguration configuration,
+    string workspaceRoot)
+{
+    if (options.TryGetValue("--knowledge-root", out var explicitRoot))
+    {
+        return Path.GetFullPath(explicitRoot, workspaceRoot);
+    }
+
+    return Path.Combine(ResolveArtifactsRoot(configuration, workspaceRoot), "knowledge");
+}
+
 static string ResolveRuntimeAssemblyRoot(IReadOnlyDictionary<string, string> options, string workspaceRoot)
 {
     if (options.TryGetValue("--runtime-assembly-root", out var explicitRoot))
@@ -198,14 +279,25 @@ static string ResolveRuntimeAssemblyRoot(IReadOnlyDictionary<string, string> opt
         return Path.GetFullPath(explicitRoot, workspaceRoot);
     }
 
+    var modBuildOutput = Path.Combine(workspaceRoot, "src", "Sts2ModAiCompanion.Mod", "bin", "Debug", "net7.0");
+    if (Directory.Exists(modBuildOutput))
+    {
+        return modBuildOutput;
+    }
+
     return AppContext.BaseDirectory;
 }
 
-static string ResolveGodotExecutablePath(IReadOnlyDictionary<string, string> options, string workspaceRoot)
+static string ResolveGodotExecutablePath(IReadOnlyDictionary<string, string> options, ScaffoldConfiguration configuration, string workspaceRoot)
 {
     if (options.TryGetValue("--godot-exe", out var explicitPath))
     {
         return Path.GetFullPath(explicitPath, workspaceRoot);
+    }
+
+    if (!string.IsNullOrWhiteSpace(configuration.Assistant.OptionalGodotExe))
+    {
+        return Path.GetFullPath(configuration.Assistant.OptionalGodotExe!, workspaceRoot);
     }
 
     return Path.Combine(workspaceRoot, "artifacts", "tools", "Godot_v4.5.1-stable_win64", "Godot_v4.5.1-stable_win64_console.exe");
@@ -226,7 +318,15 @@ static string ResolveSnapshotRoot(
         workspaceRoot);
 }
 
-static RestorePlan ResolveRestorePlan(string snapshotRoot, GamePathOptions gamePaths)
+static SnapshotPlan CreateSnapshotPlan(ScaffoldConfiguration configuration, string snapshotRoot)
+{
+    return SnapshotPlanner.CreateDefaultPlan(
+        configuration.GamePaths,
+        snapshotRoot,
+        trackedModsPaths: BuildTrackedModsPaths(configuration));
+}
+
+static RestorePlan ResolveRestorePlan(string snapshotRoot, ScaffoldConfiguration configuration)
 {
     var reportPath = SnapshotPlanner.BuildSnapshotReportPath(snapshotRoot);
     if (File.Exists(reportPath))
@@ -235,14 +335,36 @@ static RestorePlan ResolveRestorePlan(string snapshotRoot, GamePathOptions gameP
         return SnapshotPlanner.CreateRestorePlan(snapshot);
     }
 
-    var plan = SnapshotPlanner.CreateDefaultPlan(gamePaths, snapshotRoot);
+    var plan = CreateSnapshotPlan(configuration, snapshotRoot);
     return SnapshotPlanner.CreateRestorePlan(plan);
+}
+
+static IReadOnlyList<string> BuildTrackedModsPaths(ScaffoldConfiguration configuration)
+{
+    var modsRoot = Path.Combine(configuration.GamePaths.GameDirectory, "mods");
+    var aiDllName = Path.ChangeExtension(configuration.AiCompanionMod.PckName, ".dll");
+
+    return new[]
+    {
+        Path.Combine(modsRoot, configuration.AiCompanionMod.RuntimeConfigFileName),
+        Path.Combine(modsRoot, aiDllName),
+        Path.Combine(modsRoot, configuration.AiCompanionMod.PckName),
+        Path.Combine(modsRoot, configuration.AiCompanionMod.RuntimeLogFileName),
+        Path.Combine(modsRoot, "Sts2ModKit.Core.dll"),
+    };
 }
 
 static void WriteUsage()
 {
     Console.WriteLine("Usage:");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- show-config [--config path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- show-live-export-layout [--config path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- prepare-live-smoke [--config path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-live-export [--config path] [--tail 20]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-godot-log [--config path] [--lines 200]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- extract-static-knowledge [--config path] [--knowledge-root path] [--godot-exe path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-static-knowledge [--knowledge-root path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- merge-observed-knowledge [--config path] [--knowledge-root path] [--godot-exe path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- materialize-native-package [--config path] [--artifacts-root path] [--runtime-assembly-root path] [--layout flat|subdir]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- build-native-pck [--config path] [--artifacts-root path] [--runtime-assembly-root path] [--layout flat|subdir] [--godot-exe path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- deploy-native-package [--config path] [--artifacts-root path] [--runtime-assembly-root path] [--layout flat|subdir]");

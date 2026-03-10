@@ -8,6 +8,10 @@ public sealed record ScaffoldConfiguration
 
     public AiCompanionModOptions AiCompanionMod { get; init; } = AiCompanionModOptions.Defaults;
 
+    public LiveExportOptions LiveExport { get; init; } = LiveExportOptions.Defaults;
+
+    public AssistantOptions Assistant { get; init; } = AssistantOptions.Defaults;
+
     public static ScaffoldConfiguration CreateLocalDefault()
     {
         return new ScaffoldConfiguration();
@@ -24,6 +28,8 @@ public sealed record ScaffoldConfiguration
         {
             GamePaths = GamePaths.With(partial.GamePaths),
             AiCompanionMod = AiCompanionMod.With(partial.AiCompanionMod),
+            LiveExport = LiveExport.With(partial.LiveExport),
+            Assistant = Assistant.With(partial.Assistant),
         };
     }
 }
@@ -33,6 +39,10 @@ public sealed record PartialScaffoldConfiguration
     public PartialGamePathOptions? GamePaths { get; init; }
 
     public PartialAiCompanionModOptions? AiCompanionMod { get; init; }
+
+    public PartialLiveExportOptions? LiveExport { get; init; }
+
+    public PartialAssistantOptions? Assistant { get; init; }
 }
 
 public sealed record GamePathOptions
@@ -147,6 +157,171 @@ public sealed record PartialAiCompanionModOptions
     public string? PckName { get; init; }
 
     public string? PackageFolderName { get; init; }
+}
+
+public sealed record LiveExportOptions
+{
+    public bool Enabled { get; init; } = true;
+
+    public bool DiscoveryMode { get; init; } = true;
+
+    public bool ScenePollingEnabled { get; init; } = true;
+
+    public int ScenePollingIntervalMs { get; init; } = 1000;
+
+    public int ScenePollingMaxNodes { get; init; } = 256;
+
+    public int DuplicateSuppressionMs { get; init; } = 250;
+
+    public int SnapshotWriteThrottleMs { get; init; } = 150;
+
+    public int MaxRecentChanges { get; init; } = 16;
+
+    public int MaxDeckEntries { get; init; } = 40;
+
+    public int MaxChoiceEntries { get; init; } = 10;
+
+    public string RelativeLiveRoot { get; init; } = "ai_companion/live";
+
+    public string EventsFileName { get; init; } = "events.ndjson";
+
+    public string SnapshotFileName { get; init; } = "state.latest.json";
+
+    public string SummaryFileName { get; init; } = "state.latest.txt";
+
+    public string SessionFileName { get; init; } = "session.json";
+
+    public static LiveExportOptions Defaults { get; } = new();
+
+    public LiveExportOptions With(PartialLiveExportOptions? partial)
+    {
+        if (partial is null)
+        {
+            return this;
+        }
+
+        return this with
+        {
+            Enabled = partial.Enabled ?? Enabled,
+            DiscoveryMode = partial.DiscoveryMode ?? DiscoveryMode,
+            ScenePollingEnabled = partial.ScenePollingEnabled ?? ScenePollingEnabled,
+            ScenePollingIntervalMs = partial.ScenePollingIntervalMs ?? ScenePollingIntervalMs,
+            ScenePollingMaxNodes = partial.ScenePollingMaxNodes ?? ScenePollingMaxNodes,
+            DuplicateSuppressionMs = partial.DuplicateSuppressionMs ?? DuplicateSuppressionMs,
+            SnapshotWriteThrottleMs = partial.SnapshotWriteThrottleMs ?? SnapshotWriteThrottleMs,
+            MaxRecentChanges = partial.MaxRecentChanges ?? MaxRecentChanges,
+            MaxDeckEntries = partial.MaxDeckEntries ?? MaxDeckEntries,
+            MaxChoiceEntries = partial.MaxChoiceEntries ?? MaxChoiceEntries,
+            RelativeLiveRoot = partial.RelativeLiveRoot ?? RelativeLiveRoot,
+            EventsFileName = partial.EventsFileName ?? EventsFileName,
+            SnapshotFileName = partial.SnapshotFileName ?? SnapshotFileName,
+            SummaryFileName = partial.SummaryFileName ?? SummaryFileName,
+            SessionFileName = partial.SessionFileName ?? SessionFileName,
+        };
+    }
+}
+
+public sealed record PartialLiveExportOptions
+{
+    public bool? Enabled { get; init; }
+
+    public bool? DiscoveryMode { get; init; }
+
+    public bool? ScenePollingEnabled { get; init; }
+
+    public int? ScenePollingIntervalMs { get; init; }
+
+    public int? ScenePollingMaxNodes { get; init; }
+
+    public int? DuplicateSuppressionMs { get; init; }
+
+    public int? SnapshotWriteThrottleMs { get; init; }
+
+    public int? MaxRecentChanges { get; init; }
+
+    public int? MaxDeckEntries { get; init; }
+
+    public int? MaxChoiceEntries { get; init; }
+
+    public string? RelativeLiveRoot { get; init; }
+
+    public string? EventsFileName { get; init; }
+
+    public string? SnapshotFileName { get; init; }
+
+    public string? SummaryFileName { get; init; }
+
+    public string? SessionFileName { get; init; }
+}
+
+public sealed record AssistantOptions
+{
+    public string CodexCommand { get; init; } = "codex";
+
+    public string? OptionalGodotExe { get; init; }
+
+    public bool AutoAdviceEnabled { get; init; } = true;
+
+    public int LivePollIntervalMs { get; init; } = 750;
+
+    public int StateDebounceMs { get; init; } = 300;
+
+    public int MinAdviceIntervalMs { get; init; } = 2000;
+
+    public int MaxKnowledgeEntries { get; init; } = 20;
+
+    public int MaxKnowledgeBytes { get; init; } = 12288;
+
+    public int RecentEventsCount { get; init; } = 20;
+
+    public string CompanionArtifactsRelativeRoot { get; init; } = "companion";
+
+    public static AssistantOptions Defaults { get; } = new();
+
+    public AssistantOptions With(PartialAssistantOptions? partial)
+    {
+        if (partial is null)
+        {
+            return this;
+        }
+
+        return this with
+        {
+            CodexCommand = partial.CodexCommand ?? CodexCommand,
+            OptionalGodotExe = partial.OptionalGodotExe ?? OptionalGodotExe,
+            AutoAdviceEnabled = partial.AutoAdviceEnabled ?? AutoAdviceEnabled,
+            LivePollIntervalMs = partial.LivePollIntervalMs ?? LivePollIntervalMs,
+            StateDebounceMs = partial.StateDebounceMs ?? StateDebounceMs,
+            MinAdviceIntervalMs = partial.MinAdviceIntervalMs ?? MinAdviceIntervalMs,
+            MaxKnowledgeEntries = partial.MaxKnowledgeEntries ?? MaxKnowledgeEntries,
+            MaxKnowledgeBytes = partial.MaxKnowledgeBytes ?? MaxKnowledgeBytes,
+            RecentEventsCount = partial.RecentEventsCount ?? RecentEventsCount,
+            CompanionArtifactsRelativeRoot = partial.CompanionArtifactsRelativeRoot ?? CompanionArtifactsRelativeRoot,
+        };
+    }
+}
+
+public sealed record PartialAssistantOptions
+{
+    public string? CodexCommand { get; init; }
+
+    public string? OptionalGodotExe { get; init; }
+
+    public bool? AutoAdviceEnabled { get; init; }
+
+    public int? LivePollIntervalMs { get; init; }
+
+    public int? StateDebounceMs { get; init; }
+
+    public int? MinAdviceIntervalMs { get; init; }
+
+    public int? MaxKnowledgeEntries { get; init; }
+
+    public int? MaxKnowledgeBytes { get; init; }
+
+    public int? RecentEventsCount { get; init; }
+
+    public string? CompanionArtifactsRelativeRoot { get; init; }
 }
 
 public sealed record ConfigurationLoadResult

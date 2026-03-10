@@ -1,10 +1,15 @@
 using System.Text.Json;
+using Sts2ModKit.Core.Configuration;
 
 namespace Sts2ModAiCompanion.Mod.Runtime;
 
 public sealed record AiCompanionRuntimeConfig
 {
     public bool Enabled { get; init; } = true;
+
+    public GamePathOptions GamePaths { get; init; } = GamePathOptions.CreateLocalDefault();
+
+    public LiveExportOptions LiveExport { get; init; } = LiveExportOptions.Defaults;
 
     public static AiCompanionRuntimeConfig Defaults { get; } = new();
 }

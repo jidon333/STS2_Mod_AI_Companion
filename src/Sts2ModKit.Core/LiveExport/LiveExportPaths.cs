@@ -1,0 +1,118 @@
+using System.Text.Json;
+using Sts2ModKit.Core.Configuration;
+
+namespace Sts2ModKit.Core.LiveExport;
+
+public static class LiveExportPathResolver
+{
+    public static string BuildModdedProfileRoot(GamePathOptions gamePaths)
+    {
+        return Path.Combine(
+            gamePaths.UserDataRoot,
+            "steam",
+            gamePaths.SteamAccountId,
+            "modded",
+            $"profile{gamePaths.ProfileIndex}");
+    }
+
+    public static LiveExportLayout Resolve(GamePathOptions gamePaths, LiveExportOptions options)
+    {
+        var moddedProfileRoot = BuildModdedProfileRoot(gamePaths);
+        var liveRoot = CombineRelativeSegments(moddedProfileRoot, options.RelativeLiveRoot);
+        return new LiveExportLayout(
+            moddedProfileRoot,
+            liveRoot,
+            Path.Combine(liveRoot, options.EventsFileName),
+            Path.Combine(liveRoot, options.SnapshotFileName),
+            Path.Combine(liveRoot, options.SummaryFileName),
+            Path.Combine(liveRoot, options.SessionFileName));
+    }
+
+    public static void EnsureDirectory(LiveExportLayout layout)
+    {
+        Directory.CreateDirectory(layout.LiveRoot);
+    }
+
+    private static string CombineRelativeSegments(string root, string relativePath)
+    {
+        var segments = relativePath
+            .Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return segments.Aggregate(root, Path.Combine);
+    }
+}
+
+public sealed class LiveExportDeduplicator
+{
+    private readonly object _sync = new();
+    private readonly Dictionary<LiveExportDedupKey, DateTimeOffset> _seen = new();
+    private readonly TimeSpan _window;
+
+    public LiveExportDeduplicator(TimeSpan window)
+    {
+        _window = window;
+    }
+
+    public bool ShouldSuppress(LiveExportObservation observation)
+    {
+        lock (_sync)
+        {
+            var key = new LiveExportDedupKey(
+                observation.TriggerKind,
+                observation.Screen ?? string.Empty,
+                BuildPayloadSignature(observation.Payload));
+
+            var now = observation.ObservedAt;
+            if (_seen.TryGetValue(key, out var lastSeenAt) && now - lastSeenAt < _window)
+            {
+                return true;
+            }
+
+            _seen[key] = now;
+            return false;
+        }
+    }
+
+    private static string BuildPayloadSignature(IReadOnlyDictionary<string, object?> payload)
+    {
+        if (payload.Count == 0)
+        {
+            return "<empty>";
+        }
+
+        return JsonSerializer.Serialize(payload, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = false,
+        });
+    }
+}
+
+public static class LiveExportAtomicFileWriter
+{
+    public static void WriteAllTextAtomic(string path, string contents)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var tempPath = path + ".tmp";
+        File.WriteAllText(tempPath, contents);
+
+        if (File.Exists(path))
+        {
+            File.Replace(tempPath, path, destinationBackupFileName: null, ignoreMetadataErrors: true);
+            return;
+        }
+
+        File.Move(tempPath, path);
+    }
+
+    public static void WriteJsonAtomic<T>(string path, T value, JsonSerializerOptions? options = null)
+    {
+        options ??= new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+        };
+
+        WriteAllTextAtomic(path, JsonSerializer.Serialize(value, options));
+    }
+}

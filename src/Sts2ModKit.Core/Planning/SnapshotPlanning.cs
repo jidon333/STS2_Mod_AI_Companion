@@ -5,6 +5,8 @@ namespace Sts2ModKit.Core.Planning;
 public interface IFileStateProbe
 {
     bool FileExists(string path);
+
+    IReadOnlyList<string> EnumerateFiles(string directoryPath);
 }
 
 public sealed class PhysicalFileStateProbe : IFileStateProbe
@@ -12,6 +14,16 @@ public sealed class PhysicalFileStateProbe : IFileStateProbe
     public bool FileExists(string path)
     {
         return File.Exists(path);
+    }
+
+    public IReadOnlyList<string> EnumerateFiles(string directoryPath)
+    {
+        if (!Directory.Exists(directoryPath))
+        {
+            return Array.Empty<string>();
+        }
+
+        return Directory.GetFiles(directoryPath, "*", SearchOption.TopDirectoryOnly);
     }
 }
 
@@ -49,11 +61,12 @@ public static class SnapshotPlanner
     public static SnapshotPlan CreateDefaultPlan(
         GamePathOptions options,
         string snapshotRoot,
-        IFileStateProbe? probe = null)
+        IFileStateProbe? probe = null,
+        IReadOnlyList<string>? trackedModsPaths = null)
     {
         probe ??= new PhysicalFileStateProbe();
 
-        var entries = BuildEntries(options)
+        var entries = BuildEntries(options, probe, trackedModsPaths)
             .Select(spec => new SnapshotEntry(
                 spec.Category,
                 spec.SourcePath,
@@ -106,7 +119,10 @@ public static class SnapshotPlanner
         return Path.Combine(snapshotRoot, "restore-report.json");
     }
 
-    private static IEnumerable<(string Category, string SourcePath, string RelativeBackupPath)> BuildEntries(GamePathOptions options)
+    private static IEnumerable<(string Category, string SourcePath, string RelativeBackupPath)> BuildEntries(
+        GamePathOptions options,
+        IFileStateProbe probe,
+        IReadOnlyList<string>? trackedModsPaths)
     {
         var profileDirectory = Path.Combine(
             options.UserDataRoot,
@@ -151,5 +167,28 @@ public static class SnapshotPlanner
             "RunSave",
             Path.Combine(profileDirectory, "current_run.save.backup"),
             Path.Combine("user", "steam", options.SteamAccountId, $"profile{options.ProfileIndex}", "saves", "current_run.save.backup"));
+
+        var modsRoot = Path.Combine(options.GameDirectory, "mods");
+        var trackedModFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in probe.EnumerateFiles(modsRoot))
+        {
+            trackedModFiles.Add(path);
+        }
+
+        if (trackedModsPaths is not null)
+        {
+            foreach (var path in trackedModsPaths)
+            {
+                trackedModFiles.Add(path);
+            }
+        }
+
+        foreach (var modFilePath in trackedModFiles.OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+        {
+            yield return (
+                "GameMods",
+                modFilePath,
+                Path.Combine("game", "mods", Path.GetFileName(modFilePath)));
+        }
     }
 }
