@@ -1,0 +1,192 @@
+{
+  "generatedAt": "2026-03-10T23:59:27.0779873+00:00",
+  "knowledgeRoot": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge",
+  "metadata": {
+    "releaseVersion": "v0.98.3",
+    "releaseCommit": "cb602cef",
+    "releaseDate": "2026-03-09T19:21:00-07:00",
+    "stats": {
+      "atlas:ui_atlas": "102",
+      "atlas:compressed": "45",
+      "atlas:epoch_atlas": "57",
+      "atlas:relic_atlas": "336",
+      "atlas:relic_outline_atlas": "336",
+      "atlas:power_atlas": "268",
+      "atlas:card_atlas": "840",
+      "atlas:potion_atlas": "63",
+      "atlas:potion_outline_atlas": "63",
+      "atlas:stats_screen_atlas": "16",
+      "atlas:intent_atlas": "310",
+      "atlas:era_atlas": "27",
+      "atlas:controller_atlas": "112",
+      "source": "extract-static-knowledge",
+      "eventsLoaded": "104",
+      "snapshotLoaded": "True"
+    }
+  },
+  "sources": [
+    {
+      "kind": "release-info",
+      "path": "D:\\Program Files (x86)\\Steam\\steamapps\\common\\Slay the Spire 2\\release_info.json",
+      "exists": true,
+      "size": 112,
+      "lastWriteTime": "2026-03-10T18:36:34.7139441+00:00"
+    },
+    {
+      "kind": "game-assembly",
+      "path": "D:\\Program Files (x86)\\Steam\\steamapps\\common\\Slay the Spire 2\\data_sts2_windows_x86_64\\sts2.dll",
+      "exists": true,
+      "size": 8871424,
+      "lastWriteTime": "2026-03-10T18:36:34.5327479+00:00"
+    },
+    {
+      "kind": "game-pck",
+      "path": "D:\\Program Files (x86)\\Steam\\steamapps\\common\\Slay the Spire 2\\SlayTheSpire2.pck",
+      "exists": true,
+      "size": 1647470256,
+      "lastWriteTime": "2026-03-10T18:36:34.5347486+00:00"
+    },
+    {
+      "kind": "godot-log",
+      "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\logs\\godot.log",
+      "exists": true,
+      "size": 7877,
+      "lastWriteTime": "2026-03-10T17:04:05.1111379+00:00"
+    },
+    {
+      "kind": "live-events",
+      "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live\\events.ndjson",
+      "exists": true,
+      "size": 159224,
+      "lastWriteTime": "2026-03-10T17:05:37.9909077+00:00"
+    },
+    {
+      "kind": "live-snapshot",
+      "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live\\state.latest.json",
+      "exists": true,
+      "size": 1404,
+      "lastWriteTime": "2026-03-10T17:05:37.9909077+00:00"
+    },
+    {
+      "kind": "live-summary",
+      "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live\\state.latest.txt",
+      "exists": true,
+      "size": 975,
+      "lastWriteTime": "2026-03-10T17:05:37.9954218+00:00"
+    },
+    {
+      "kind": "live-session",
+      "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live\\session.json",
+      "exists": true,
+      "size": 425,
+      "lastWriteTime": "2026-03-10T17:05:37.9994201+00:00"
+    },
+    {
+      "kind": "catalog-previous",
+      "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\catalog.latest.json",
+      "exists": true,
+      "size": 6779108,
+      "lastWriteTime": "2026-03-10T23:57:46.452732+00:00"
+    },
+    {
+      "kind": "assembly-scan",
+      "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\assembly-scan.json",
+      "exists": true,
+      "size": 2945234,
+      "lastWriteTime": "2026-03-10T23:58:36.8900516+00:00"
+    },
+    {
+      "kind": "pck-inventory",
+      "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\pck-inventory.json",
+      "exists": true,
+      "size": 3834265,
+      "lastWriteTime": "2026-03-10T23:59:27.0246619+00:00"
+    },
+    {
+      "kind": "observed-merge",
+      "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\observed-merge.json",
+      "exists": true,
+      "size": 922,
+      "lastWriteTime": "2026-03-10T23:59:27.0276634+00:00"
+    }
+  ],
+  "steps": [
+    {
+      "name": "release-scan",
+      "status": "completed",
+      "outputPath": "D:\\Program Files (x86)\\Steam\\steamapps\\common\\Slay the Spire 2\\release_info.json",
+      "stats": {
+        "releaseVersion": "v0.98.3",
+        "releaseCommit": "cb602cef",
+        "eventsLoaded": "104",
+        "snapshotLoaded": "True"
+      },
+      "warnings": []
+    },
+    {
+      "name": "assembly-scan",
+      "status": "completed",
+      "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\assembly-scan.json",
+      "stats": {
+        "cards": "3071",
+        "relics": "1111",
+        "potions": "530",
+        "events": "669",
+        "shops": "123",
+        "rewards": "211",
+        "keywords": "340"
+      },
+      "warnings": []
+    },
+    {
+      "name": "pck-inventory",
+      "status": "warning",
+      "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\pck-inventory.json",
+      "stats": {
+        "cards": "3564",
+        "relics": "1255",
+        "potions": "548",
+        "events": "742",
+        "shops": "294",
+        "rewards": "77",
+        "keywords": "1416"
+      },
+      "warnings": [
+        "Configured optional Godot executable: C:\\\\Tools\\\\Godot_v4.5.1-stable_win64\\\\Godot_v4.5.1-stable_win64_console.exe"
+      ]
+    },
+    {
+      "name": "observed-merge",
+      "status": "completed",
+      "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\observed-merge.json",
+      "stats": {
+        "cards": "0",
+        "relics": "0",
+        "potions": "0",
+        "events": "0",
+        "shops": "0",
+        "rewards": "0",
+        "keywords": "0"
+      },
+      "warnings": []
+    },
+    {
+      "name": "catalog-build",
+      "status": "completed",
+      "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\catalog.latest.json",
+      "stats": {
+        "cards": "6635",
+        "relics": "2366",
+        "potions": "1078",
+        "events": "1411",
+        "shops": "417",
+        "rewards": "288",
+        "keywords": "1758"
+      },
+      "warnings": []
+    }
+  ],
+  "warnings": [
+    "Configured optional Godot executable: C:\\\\Tools\\\\Godot_v4.5.1-stable_win64\\\\Godot_v4.5.1-stable_win64_console.exe"
+  ]
+}

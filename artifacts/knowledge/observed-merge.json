@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-03-10T23:59:27.0277615+00:00",
+  "metadata": {
+    "releaseVersion": "v0.98.3",
+    "releaseCommit": "cb602cef",
+    "releaseDate": "2026-03-09T19:21:00-07:00",
+    "stats": {
+      "atlas:ui_atlas": "102",
+      "atlas:compressed": "45",
+      "atlas:epoch_atlas": "57",
+      "atlas:relic_atlas": "336",
+      "atlas:relic_outline_atlas": "336",
+      "atlas:power_atlas": "268",
+      "atlas:card_atlas": "840",
+      "atlas:potion_atlas": "63",
+      "atlas:potion_outline_atlas": "63",
+      "atlas:stats_screen_atlas": "16",
+      "atlas:intent_atlas": "310",
+      "atlas:era_atlas": "27",
+      "atlas:controller_atlas": "112",
+      "source": "extract-static-knowledge",
+      "eventsLoaded": "104",
+      "snapshotLoaded": "True"
+    }
+  },
+  "cards": [],
+  "relics": [],
+  "potions": [],
+  "events": [],
+  "shops": [],
+  "rewards": [],
+  "keywords": []
+}

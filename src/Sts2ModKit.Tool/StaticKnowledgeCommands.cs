@@ -14,6 +14,8 @@ internal sealed record StaticKnowledgeExtractionResult(
     string AssemblyScanPath,
     string PckInventoryPath,
     string ObservedMergePath,
+    string MarkdownRoot,
+    string MarkdownOverviewPath,
     object Counts,
     object SourceCounts,
     IReadOnlyList<string> Warnings);
@@ -26,6 +28,8 @@ internal sealed record StaticKnowledgeInspectionResult(
     bool AssemblyScanExists,
     bool PckInventoryExists,
     bool ObservedMergeExists,
+    bool MarkdownExists,
+    string MarkdownRoot,
     object? Metadata,
     object? Counts,
     object? SourceCounts,
@@ -60,6 +64,7 @@ internal static class StaticKnowledgeCommands
         var assemblyScanPath = Path.Combine(knowledgeRoot, "assembly-scan.json");
         var pckInventoryPath = Path.Combine(knowledgeRoot, "pck-inventory.json");
         var observedMergePath = Path.Combine(knowledgeRoot, "observed-merge.json");
+        var markdownRoot = Path.Combine(knowledgeRoot, "markdown");
         var catalog = TryReadJson<StaticKnowledgeCatalog>(catalogPath);
         var sourceManifest = TryReadJson<StaticKnowledgeSourceManifest>(sourceManifestPath);
 
@@ -71,6 +76,8 @@ internal static class StaticKnowledgeCommands
             File.Exists(assemblyScanPath),
             File.Exists(pckInventoryPath),
             File.Exists(observedMergePath),
+            Directory.Exists(markdownRoot),
+            markdownRoot,
             catalog?.Metadata ?? sourceManifest?.Metadata,
             catalog is null ? null : BuildCounts(catalog),
             catalog is null ? null : BuildSourceCounts(catalog),
@@ -91,6 +98,8 @@ internal static class StaticKnowledgeCommands
         var assemblyScanPath = Path.Combine(knowledgeRoot, "assembly-scan.json");
         var pckInventoryPath = Path.Combine(knowledgeRoot, "pck-inventory.json");
         var observedMergePath = Path.Combine(knowledgeRoot, "observed-merge.json");
+        var markdownRoot = Path.Combine(knowledgeRoot, "markdown");
+        var markdownOverviewPath = Path.Combine(markdownRoot, "README.md");
         var warnings = new List<string>();
         var steps = new List<StaticKnowledgePipelineStep>();
 
@@ -188,6 +197,7 @@ internal static class StaticKnowledgeCommands
         WriteJson(catalogPath, catalog);
         File.WriteAllText(summaryPath, StaticKnowledgeSummaryFormatter.Format(catalog));
         WriteJson(sourceManifestPath, sourceManifest);
+        StaticKnowledgeMarkdownReportFormatter.WriteReports(markdownRoot, catalog, sourceManifest);
 
         return new StaticKnowledgeExtractionResult(
             knowledgeRoot,
@@ -197,6 +207,8 @@ internal static class StaticKnowledgeCommands
             assemblyScanPath,
             pckInventoryPath,
             observedMergePath,
+            markdownRoot,
+            markdownOverviewPath,
             BuildCounts(catalog),
             BuildSourceCounts(catalog),
             warnings);

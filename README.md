@@ -54,6 +54,8 @@ dotnet run --project src\Sts2ModKit.Tool -- extract-static-knowledge
 dotnet run --project src\Sts2ModKit.Tool -- inspect-static-knowledge
 ```
 
+생성 결과는 `artifacts\knowledge\` 아래의 JSON과 `artifacts\knowledge\markdown\` 아래의 사람이 읽는 Markdown 리포트에서 함께 확인할 수 있습니다.
+
 6. live smoke가 필요하면 snapshot부터 시작합니다.
 
 ```powershell
@@ -95,5 +97,6 @@ dotnet run --project src\Sts2AiCompanion.Wpf
 - `docs\SMOKE_TEST_CHECKLIST.md`
 - `docs\BACKUP_AND_ROLLBACK.md`
 - `docs\development\README.md`
+- `docs\development\REPO_STRUCTURE.md`
 
 개발 과정과 트러블슈팅, 초보자용 설명은 `docs\development\` 아래에 한글로 정리합니다.
