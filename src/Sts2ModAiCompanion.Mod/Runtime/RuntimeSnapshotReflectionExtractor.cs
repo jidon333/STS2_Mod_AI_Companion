@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Sts2ModKit.Core.LiveExport;
@@ -152,10 +153,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         Dictionary<string, string?> meta,
         params string?[] screenCandidates)
     {
-        var screen = screenOverride
-                     ?? TryReadString(roots, "CurrentScreen", "Screen", "ScreenName", "RoomType")
-                     ?? InferScreen(screenCandidates);
-        var runId = TryReadString(roots, "RunId", "Id", "Seed", "SaveId");
+        var runId = ResolveRunId(roots);
         var act = TryReadInt(roots, "Act", "ActNum", "CurrentAct");
         var floor = TryReadInt(roots, "Floor", "CurrentFloor", "FloorNum");
         var player = ExtractPlayerSummary(roots);
@@ -164,6 +162,12 @@ internal static class RuntimeSnapshotReflectionExtractor
         var potions = ExtractStringList(roots, config.LiveExport.MaxChoiceEntries, "Potions", "OwnedPotions", "PotionSlots");
         var choices = ExtractChoices(instance, args, roots, config.LiveExport.MaxChoiceEntries);
         var encounter = ExtractEncounter(roots);
+        var screen = ResolveScreen(screenOverride, roots, screenCandidates);
+        if (string.Equals(screen, "unknown", StringComparison.Ordinal)
+            && encounter?.InCombat == true)
+        {
+            screen = "combat";
+        }
         var warnings = BuildWarnings(player, deck, relics, potions, choices);
 
         meta["screen"] = screen;
@@ -200,6 +204,87 @@ internal static class RuntimeSnapshotReflectionExtractor
             encounter,
             payload,
             meta);
+    }
+
+    private static string? ResolveRunId(IReadOnlyList<object> roots)
+    {
+        var exact = TryReadString(roots, "RunId");
+        if (IsPlausibleRunId(exact))
+        {
+            return exact;
+        }
+
+        var candidateRoots = new List<object>();
+        foreach (var root in roots)
+        {
+            if (LooksLikeRunContext(root))
+            {
+                AddIfUseful(candidateRoots, root);
+            }
+
+            AddIfUseful(candidateRoots, TryGetMemberValue(root, "Run"));
+            AddIfUseful(candidateRoots, TryGetMemberValue(root, "RunState"));
+            AddIfUseful(candidateRoots, TryGetMemberValue(root, "Save"));
+            AddIfUseful(candidateRoots, TryGetMemberValue(root, "SaveState"));
+        }
+
+        foreach (var root in candidateRoots)
+        {
+            foreach (var memberName in new[] { "RunId", "SaveId", "Seed", "Id" })
+            {
+                var candidate = TryReadString(root, memberName);
+                if (IsPlausibleRunId(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool LooksLikeRunContext(object root)
+    {
+        var typeName = root is Type type
+            ? type.FullName ?? type.Name
+            : root.GetType().FullName ?? root.GetType().Name;
+
+        return typeName.Contains("Run", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Save", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Session", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Profile", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPlausibleRunId(string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return false;
+        }
+
+        if (candidate.StartsWith("pending-", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (candidate.StartsWith("CARD.", StringComparison.OrdinalIgnoreCase)
+            || candidate.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase)
+            || candidate.StartsWith("POTION.", StringComparison.OrdinalIgnoreCase)
+            || candidate.StartsWith("EVENT.", StringComparison.OrdinalIgnoreCase)
+            || candidate.StartsWith("OPTION_", StringComparison.OrdinalIgnoreCase)
+            || candidate.EndsWith("_POWER", StringComparison.OrdinalIgnoreCase)
+            || candidate.EndsWith("_BUTTON", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (candidate.All(char.IsDigit))
+        {
+            return true;
+        }
+
+        return candidate.Length >= 8
+               && candidate.All(character => char.IsLetterOrDigit(character) || character is '-' or '_');
     }
 
     private static IReadOnlyList<object> GatherRoots(object? instance, object?[]? args, object? result)
@@ -373,6 +458,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         int maxEntries)
     {
         var choiceRoots = new List<object>();
+        var candidateItems = new List<object>();
         AddIfUseful(choiceRoots, instance);
         if (args is not null)
         {
@@ -382,38 +468,79 @@ internal static class RuntimeSnapshotReflectionExtractor
                 foreach (var item in ExpandEnumerable(arg))
                 {
                     AddIfUseful(choiceRoots, item);
+                    AddIfUseful(candidateItems, item);
                 }
             }
         }
 
         foreach (var root in roots)
         {
-            AddIfUseful(choiceRoots, TryGetMemberValue(root, "Choices"));
-            AddIfUseful(choiceRoots, TryGetMemberValue(root, "Options"));
-            AddIfUseful(choiceRoots, TryGetMemberValue(root, "Rewards"));
-            AddIfUseful(choiceRoots, TryGetMemberValue(root, "Buttons"));
+            AddIfUseful(choiceRoots, root);
+            AddChoiceCandidate(candidateItems, root);
         }
 
-        var choices = new List<LiveExportChoiceSummary>();
-        foreach (var item in FindEnumerableItems(choiceRoots, "Choices", "Options", "Rewards", "Buttons", "Cards"))
+        foreach (var root in roots)
         {
-            var label = TryReadString(item, "Label", "Text", "Name", "DisplayName", "Id", "CardName");
-            if (string.IsNullOrWhiteSpace(label))
+            foreach (var memberName in new[]
+                     {
+                         "Choices",
+                         "Options",
+                         "Rewards",
+                         "Buttons",
+                         "CurrentOptions",
+                         "RewardButtons",
+                         "RewardAlternatives",
+                         "Hand",
+                         "HandCards",
+                         "RewardContainer",
+                         "RewardsContainer",
+                         "ChoicesContainer",
+                         "CharacterCardContainer",
+                         "ColorlessCardContainer",
+                         "RelicContainer",
+                         "PotionContainer",
+                         "CardRemovalNode",
+                     })
             {
-                continue;
+                var candidate = TryGetMemberValue(root, memberName);
+                AddIfUseful(choiceRoots, candidate);
+                AddChoiceCandidate(candidateItems, candidate);
+                foreach (var item in ExpandEnumerable(candidate))
+                {
+                    AddIfUseful(choiceRoots, item);
+                    AddIfUseful(candidateItems, item);
+                }
             }
-
-            choices.Add(new LiveExportChoiceSummary(
-                InferChoiceKind(item.GetType().FullName),
-                label,
-                TryReadString(item, "Value", "Id", "CardId"),
-                TryReadString(item, "Description", "Tooltip", "Body", "Text")));
         }
 
-        return choices
+        foreach (var item in FindEnumerableItems(
+                     choiceRoots,
+                     "Choices",
+                     "Options",
+                     "Rewards",
+                     "Buttons",
+                     "Cards",
+                     "CurrentOptions",
+                     "RewardButtons",
+                     "RewardAlternatives",
+                     "Hand",
+                     "HandCards",
+                     "MerchantSlots",
+                     "RewardButtons",
+                     "Buttons"))
+        {
+            AddIfUseful(candidateItems, item);
+        }
+
+        var choices = candidateItems
+            .Select(TryCreateChoiceSummary)
+            .Where(choice => choice is not null)
+            .Cast<LiveExportChoiceSummary>()
             .DistinctBy(choice => $"{choice.Kind}|{choice.Label}|{choice.Value}")
             .Take(maxEntries)
             .ToArray();
+
+        return choices;
     }
 
     private static LiveExportEncounterSummary? ExtractEncounter(IEnumerable<object> roots)
@@ -606,6 +733,16 @@ internal static class RuntimeSnapshotReflectionExtractor
             return "idle";
         }
 
+        if (string.Equals(screen, "rewards", StringComparison.Ordinal)
+            || string.Equals(screen, "event", StringComparison.Ordinal)
+            || string.Equals(screen, "rest-site", StringComparison.Ordinal)
+            || string.Equals(screen, "shop", StringComparison.Ordinal)
+            || string.Equals(screen, "map", StringComparison.Ordinal)
+            || string.Equals(screen, "character-select", StringComparison.Ordinal))
+        {
+            return "active";
+        }
+
         return semanticKind switch
         {
             "run-ended" => "ended",
@@ -668,11 +805,6 @@ internal static class RuntimeSnapshotReflectionExtractor
             return "character-select";
         }
 
-        if (joined.Contains("Combat", StringComparison.OrdinalIgnoreCase))
-        {
-            return "combat";
-        }
-
         if (joined.Contains("Event", StringComparison.OrdinalIgnoreCase))
         {
             return "event";
@@ -698,6 +830,42 @@ internal static class RuntimeSnapshotReflectionExtractor
             return "shop";
         }
 
+        if (joined.Contains("Combat", StringComparison.OrdinalIgnoreCase))
+        {
+            return "combat";
+        }
+
+        return "unknown";
+    }
+
+    private static string ResolveScreen(string? screenOverride, IReadOnlyList<object> roots, params string?[] screenCandidates)
+    {
+        if (!string.IsNullOrWhiteSpace(screenOverride))
+        {
+            return screenOverride;
+        }
+
+        var sceneScreen = InferScreen(screenCandidates);
+        if (!string.Equals(sceneScreen, "unknown", StringComparison.Ordinal))
+        {
+            return sceneScreen;
+        }
+
+        var explicitScreen = InferScreen(
+            TryReadString(roots, "CurrentScreen"),
+            TryReadString(roots, "Screen"),
+            TryReadString(roots, "ScreenName"));
+        if (!string.Equals(explicitScreen, "unknown", StringComparison.Ordinal))
+        {
+            return explicitScreen;
+        }
+
+        var roomScreen = InferScreen(TryReadString(roots, "RoomType"));
+        if (!string.Equals(roomScreen, "unknown", StringComparison.Ordinal))
+        {
+            return roomScreen;
+        }
+
         return "unknown";
     }
 
@@ -718,7 +886,7 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static string? TryReadString(object? root, params string[] memberNames)
     {
         var value = TryReadValue(root, memberNames);
-        return value?.ToString();
+        return TryConvertToDisplayString(value);
     }
 
     private static int? TryReadInt(IEnumerable<object> roots, params string[] memberNames)
@@ -818,14 +986,14 @@ internal static class RuntimeSnapshotReflectionExtractor
             var type = source as Type ?? source.GetType();
             var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
             var property = type.GetProperties(flags)
-                .FirstOrDefault(candidate => string.Equals(candidate.Name, memberName, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(candidate => MemberNameMatches(candidate.Name, memberName));
             if (property is not null && property.GetIndexParameters().Length == 0)
             {
                 return property.GetValue(source is Type ? null : source);
             }
 
             var field = type.GetFields(flags)
-                .FirstOrDefault(candidate => string.Equals(candidate.Name, memberName, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(candidate => MemberNameMatches(candidate.Name, memberName));
             if (field is not null)
             {
                 return field.GetValue(source is Type ? null : source);
@@ -837,6 +1005,17 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return null;
+    }
+
+    private static bool MemberNameMatches(string candidateName, string requestedName)
+    {
+        static string Normalize(string value)
+        {
+            return value.TrimStart('_');
+        }
+
+        return string.Equals(candidateName, requestedName, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(Normalize(candidateName), Normalize(requestedName), StringComparison.OrdinalIgnoreCase);
     }
 
     private static object? TryInvokeMethod(object source, string methodName, params object?[]? args)
@@ -970,6 +1149,212 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         target.Add(candidate);
+    }
+
+    private static void AddChoiceCandidate(ICollection<object> target, object? candidate)
+    {
+        AddIfUseful(target, candidate);
+        if (candidate is null)
+        {
+            return;
+        }
+
+        foreach (var child in TryEnumerateChildren(candidate).Take(48))
+        {
+            AddIfUseful(target, child);
+        }
+    }
+
+    private static LiveExportChoiceSummary? TryCreateChoiceSummary(object item)
+    {
+        if (!LooksLikeChoiceCandidate(item))
+        {
+            return null;
+        }
+
+        var label = TryResolveChoiceLabel(item);
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        return new LiveExportChoiceSummary(
+            InferChoiceKind(item.GetType().FullName),
+            label,
+            TryResolveChoiceValue(item),
+            TryResolveChoiceDescription(item));
+    }
+
+    private static bool LooksLikeChoiceCandidate(object item)
+    {
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        return typeName.Contains("Button", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Option", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Merchant", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Card", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Potion", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Relic", StringComparison.OrdinalIgnoreCase)
+               || TryGetMemberValue(item, "Option") is not null
+               || TryGetMemberValue(item, "Reward") is not null
+               || TryGetMemberValue(item, "Entry") is not null
+               || TryGetMemberValue(item, "Card") is not null;
+    }
+
+    private static string? TryResolveChoiceLabel(object item)
+    {
+        return FirstNonEmpty(
+            TryReadString(item, "Label", "Title", "OptionName", "Text", "DisplayName", "CardName", "Name"),
+            TryReadString(item, "Option", "Reward", "Entry", "Card", "Model"),
+            TryReadString(TryGetMemberValue(item, "Option"), "Title", "Label", "Name", "Description"),
+            TryReadString(TryGetMemberValue(item, "Reward"), "Description", "Title", "Label", "Name"),
+            TryReadString(TryGetMemberValue(item, "Entry"), "Title", "Description", "Name"),
+            TryReadString(TryGetMemberValue(item, "Card"), "CardName", "Name", "DisplayName", "Id", "CardId"),
+            TryReadString(TryGetMemberValue(item, "Model"), "CardName", "Name", "DisplayName", "Id", "CardId"),
+            TryReadString(item, "Id", "CardId"));
+    }
+
+    private static string? TryResolveChoiceValue(object item)
+    {
+        return FirstNonEmpty(
+            TryReadString(item, "Value", "Id", "CardId", "Hotkey"),
+            TryReadString(TryGetMemberValue(item, "Option"), "Id", "Name", "Title"),
+            TryReadString(TryGetMemberValue(item, "Reward"), "Id", "Name", "Description"),
+            TryReadString(TryGetMemberValue(item, "Entry"), "Id", "Name"),
+            TryReadString(TryGetMemberValue(item, "Card"), "Id", "CardId", "Name"),
+            TryReadString(TryGetMemberValue(item, "Model"), "Id", "CardId", "Name"));
+    }
+
+    private static string? TryResolveChoiceDescription(object item)
+    {
+        return FirstNonEmpty(
+            TryReadString(item, "Description", "Tooltip", "Body"),
+            TryReadString(TryGetMemberValue(item, "Option"), "Description", "Body"),
+            TryReadString(TryGetMemberValue(item, "Reward"), "Description", "Body"),
+            TryReadString(TryGetMemberValue(item, "Entry"), "Description", "Body"),
+            TryReadString(TryGetMemberValue(item, "Card"), "Description", "Body"),
+            TryReadString(TryGetMemberValue(item, "Model"), "Description", "Body"));
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static string? TryConvertToDisplayString(object? value, int depth = 0)
+    {
+        if (value is null || depth > 4)
+        {
+            return null;
+        }
+
+        switch (value)
+        {
+            case string stringValue:
+                return NormalizeDisplayString(stringValue);
+            case char character:
+                return character.ToString();
+            case bool boolValue:
+                return boolValue ? "true" : "false";
+            case byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal:
+                return Convert.ToString(value, CultureInfo.InvariantCulture);
+            case Enum enumValue:
+                return NormalizeDisplayString(enumValue.ToString());
+        }
+
+        var type = value.GetType();
+        var typeName = type.FullName ?? type.Name;
+
+        if (typeName.Contains("LocString", StringComparison.OrdinalIgnoreCase))
+        {
+            return FirstNonEmpty(
+                TryConvertToDisplayString(TryInvokeMethod(value, "GetFormattedText"), depth + 1),
+                TryConvertToDisplayString(TryInvokeMethod(value, "GetRawText"), depth + 1),
+                TryConvertToDisplayString(TryGetMemberValue(value, "Text"), depth + 1),
+                TryConvertToDisplayString(TryGetMemberValue(value, "Value"), depth + 1),
+                TryConvertToDisplayString(TryGetMemberValue(value, "Key"), depth + 1));
+        }
+
+        foreach (var methodName in new[] { "GetFormattedText", "GetRawText", "GetParsedText", "GetText" })
+        {
+            var invoked = TryInvokeMethod(value, methodName);
+            var rendered = TryConvertToDisplayString(invoked, depth + 1);
+            if (!string.IsNullOrWhiteSpace(rendered))
+            {
+                return rendered;
+            }
+        }
+
+        foreach (var memberName in new[]
+                 {
+                     "Text",
+                     "BbcodeText",
+                     "DisplayedText",
+                     "TooltipText",
+                     "Label",
+                     "Title",
+                     "Description",
+                     "OptionName",
+                     "DisplayName",
+                     "CardName",
+                     "Value",
+                     "Name",
+                     "Key",
+                     "Id",
+                 })
+        {
+            var nested = TryGetMemberValue(value, memberName);
+            if (nested is null || ReferenceEquals(nested, value))
+            {
+                continue;
+            }
+
+            var rendered = TryConvertToDisplayString(nested, depth + 1);
+            if (!string.IsNullOrWhiteSpace(rendered))
+            {
+                return rendered;
+            }
+        }
+
+        return NormalizeDisplayString(value.ToString(), typeName, type.Name);
+    }
+
+    private static string? NormalizeDisplayString(string? value, params string[] disallowedTypeNames)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return null;
+        }
+
+        if (normalized.StartsWith('<')
+            && normalized.EndsWith('>')
+            && normalized.Contains('#', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (normalized.StartsWith("System.Collections", StringComparison.Ordinal)
+            || normalized.StartsWith("MegaCrit.", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        if (disallowedTypeNames.Any(typeName => string.Equals(normalized, typeName, StringComparison.Ordinal)))
+        {
+            return null;
+        }
+
+        return normalized;
     }
 
     private static IEnumerable<object> ExpandEnumerable(object? candidate)

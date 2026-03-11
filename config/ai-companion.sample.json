@@ -18,7 +18,7 @@
     "enabled": true,
     "discoveryMode": true,
     "scenePollingEnabled": true,
-    "scenePollingIntervalMs": 1000,
+    "scenePollingIntervalMs": 250,
     "scenePollingMaxNodes": 256,
     "duplicateSuppressionMs": 250,
     "snapshotWriteThrottleMs": 150,

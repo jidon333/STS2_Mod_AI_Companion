@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Sts2AiCompanion.Host;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
@@ -54,6 +55,19 @@ try
                 var result = LiveSmokeCommands.Inspect(configuration, lineCount);
                 PrintJson(result);
                 return 0;
+            }
+
+        case "analyze-live-once":
+            {
+                await using var host = new CompanionHost(configuration, workspaceRoot);
+                await host.RefreshAsync().ConfigureAwait(false);
+                var triggered = await host.RequestManualAdviceAsync().ConfigureAwait(false);
+                PrintJson(new
+                {
+                    Triggered = triggered,
+                    Snapshot = host.CurrentSnapshot,
+                });
+                return triggered ? 0 : 1;
             }
 
         case "inspect-godot-log":
@@ -361,6 +375,7 @@ static void WriteUsage()
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- show-live-export-layout [--config path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- prepare-live-smoke [--config path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-live-export [--config path] [--tail 20]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- analyze-live-once [--config path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-godot-log [--config path] [--lines 200]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- extract-static-knowledge [--config path] [--knowledge-root path] [--godot-exe path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-static-knowledge [--knowledge-root path]");

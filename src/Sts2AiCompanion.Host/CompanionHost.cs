@@ -65,6 +65,11 @@ public sealed class CompanionHost : IAsyncDisposable
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
+    public Task RefreshAsync(CancellationToken cancellationToken = default)
+    {
+        return PollOnceAsync(cancellationToken);
+    }
+
     public async Task StopAsync()
     {
         if (_loopCts is null || _loopTask is null)
@@ -250,6 +255,8 @@ public sealed class CompanionHost : IAsyncDisposable
             {
                 WriteJson(paths.CodexSessionPath!, _sessionState);
             }
+
+            PublishSnapshot(CreateSnapshot("running", $"Advice generated for {trigger.Kind}."));
         }
         finally
         {

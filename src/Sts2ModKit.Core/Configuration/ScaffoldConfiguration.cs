@@ -167,7 +167,7 @@ public sealed record LiveExportOptions
 
     public bool ScenePollingEnabled { get; init; } = true;
 
-    public int ScenePollingIntervalMs { get; init; } = 1000;
+    public int ScenePollingIntervalMs { get; init; } = 250;
 
     public int ScenePollingMaxNodes { get; init; } = 256;
 

@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Sts2AiCompanion.Host\Sts2AiCompanion.Host.csproj" />
     <ProjectReference Include="..\Sts2ModKit.Core\Sts2ModKit.Core.csproj" />
     <ProjectReference Include="..\Sts2ModAiCompanion.Mod\Sts2ModAiCompanion.Mod.csproj" />
   </ItemGroup>

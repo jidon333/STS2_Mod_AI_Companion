@@ -1,124 +1,162 @@
-# 실제 플레이 기준 런타임 흐름
+# 실제 플레이 런타임 흐름
 
-이 문서는 `게임을 켠 뒤 이 저장소의 각 구성 요소가 실제로 어떤 순서로 움직이는가`를 설명합니다.
+이 문서는 게임을 켰을 때부터 외부 조언 앱이 정보를 읽고 advice artifact를 남기기까지 실제로 어떤 흐름으로 움직이는지 설명합니다.
 
-## 1. 앱을 먼저 켰을 때
+## 1. 사용자가 외부 앱을 켭니다
 
-사용자가 WPF 앱을 먼저 켜면 `ShellViewModel`이 `CompanionHost`를 올립니다.
+WPF 앱을 먼저 실행하면 내부적으로 `CompanionHost`가 같이 올라옵니다.
 
-이때 실제로 일어나는 것:
+이때 Host가 하는 일:
 
-- Host polling loop 시작
-- live export 폴더 대기
-- assistant catalog 로드 준비
-- Codex CLI 경로와 companion artifact 루트 확인
+- live export 경로 확인
+- assistant catalog 로드
+- polling loop 시작
+- companion artifact root 준비
+- Codex CLI 경로 확인
 
-이 상태는 `대기 중`이며, 아직 live export가 없으면 advice는 생성되지 않습니다.
+이 시점 상태는 보통 `waiting-live-export` 또는 `running`이지만, 아직 게임이 안 켜졌으면 advice는 생성되지 않습니다.
 
-## 2. 게임을 실행했을 때
+## 2. 사용자가 게임을 실행합니다
 
-게임이 Steam을 통해 실행되면, `mods` 폴더의 `.pck + .dll` 조합으로 모드가 로드됩니다.
+게임은 반드시 Steam URI로 실행합니다.
 
-여기서 native mod는 다음 일을 합니다.
+```powershell
+cmd /c start "" "steam://rungameid/2868840"
+```
 
-- Harmony 패치 등록
-- runtime exporter 초기화
-- 현재 화면과 player/root manager 탐색
-- live export 파일 생성 준비
+게임이 켜지면 모드가 로드되고 runtime exporter가 초기화됩니다.
 
-이 단계가 실패하면 `godot.log`와 `runtime log`에 바로 흔적이 남습니다.
+exporter가 하는 일:
 
-## 3. 메인 메뉴에 도달했을 때
+- Harmony patch 대상 선택
+- runtime identity / hook summary 로그 기록
+- scene polling 시작
+- live export 파일 4종 생성 / 갱신
 
-현재까지 실증된 기준점이 여기입니다.
+현재까지는 main menu까지 이 흐름이 실제로 확인됐습니다.
 
-- exporter가 main menu를 감지합니다.
-- `events.ndjson`, `state.latest.json`, `state.latest.txt`, `session.json`이 생성됩니다.
-- Host는 이 변화를 감지하고 현재 화면이 main menu임을 앱에 반영합니다.
+## 3. main menu에 도달하면
 
-이 시점에서는 강한 조언보다는 연결 상태와 현재 화면 인식이 핵심입니다.
+현재까지 실증된 기준선이 여기입니다.
 
-## 4. 런을 시작했을 때
+이 시점에 확인된 것:
 
-이후부터는 조언 시스템이 본격적으로 의미를 갖습니다.
+- `events.ndjson`
+- `state.latest.json`
+- `state.latest.txt`
+- `session.json`
 
-- run id가 생깁니다.
-- deck, relic, potion, HP, gold, floor 같은 상태가 snapshot에 반영됩니다.
-- Host는 run 전용 artifact 폴더를 준비합니다.
-- bounded knowledge slice를 만들 준비를 합니다.
-- Codex 세션을 생성하거나 이어붙일 준비를 합니다.
+Host는 이 파일을 읽고 현재 화면을 main menu로 표시할 수 있습니다.
 
-## 5. 보상 / 이벤트 / 상점 / 휴식 화면에서
+## 4. run을 시작하면
 
-Phase 1에서 가장 중요한 순간입니다.
+run이 시작되면 exporter는 현재 run의 상태를 snapshot으로 기록하고, Host는 새 run artifact root를 준비합니다.
 
-- exporter가 현재 화면과 choices를 읽습니다.
-- Host는 현재 choices와 정적 지식 카탈로그를 매칭합니다.
-- `AdvicePromptBuilder`가 prompt pack을 만듭니다.
-- `CodexCliClient`가 추천 선택과 이유를 요청합니다.
-- WPF 앱이 추천과 근거를 보여줍니다.
+관련 산출물:
 
-즉, 실제 사용자 경험은 “게임 옆 창에서 현재 선택지에 대한 조언이 뜨는 것”입니다.
+- `artifacts/companion/current-run.json`
+- `artifacts/companion/<run-id>/live-mirror/`
+- `artifacts/companion/<run-id>/prompt-packs/`
+- `artifacts/companion/<run-id>/advice.ndjson`
+- `artifacts/companion/<run-id>/advice.latest.json`
+- `artifacts/companion/<run-id>/advice.latest.md`
+- `artifacts/companion/<run-id>/host-status.json`
 
-## 6. 전투 시작 / 턴 시작에서
+현재는 `sessionId`를 안정적으로 잡지 못해서 `codex-session.json`은 항상 생성된다고 볼 수 없습니다.
 
-전투 중에는 매 프레임 추적을 하지 않습니다.
+## 5. 고가치 화면에서 무엇이 일어나야 하는가
 
-- 전투 시작
-- 턴 시작
-- 중요한 choice 경계
+목표 화면:
 
-이 경계에서만 상태를 다시 읽고 조언을 갱신합니다.
+- reward
+- event
+- shop
+- rest-site
+- combat start / turn start
 
-## 7. 런 종료에서
+이 화면에 도달하면 이상적인 흐름은 아래입니다.
 
-- Host는 run summary를 정리합니다.
-- advice 기록과 prompt pack을 artifact로 남깁니다.
-- 앱은 다음 런을 기다리는 상태로 돌아갑니다.
+1. exporter가 해당 화면을 명시적으로 분류
+2. `currentChoices`를 사람이 읽는 라벨로 추출
+3. Host가 trigger를 감지
+4. knowledge slice를 구성
+5. prompt pack을 저장
+6. Codex에 조언 요청
+7. advice artifact 저장
+8. WPF에 최신 advice 표시
 
-## 8. 현재 UI에서 실제로 할 수 있는 수동 조작
+## 6. 현재 실제로 확인된 gameplay 관련 상태
 
-현재 WPF에는 아래 버튼이 있습니다.
+실제 artifact / runtime log 기준으로 확인된 것:
+
+- reward / event / rest / shop hook observed
+- `choice-list-presented` prompt pack 생성
+- `analyze-live-once` manual advice 성공
+
+아직 다시 확인해야 하는 것:
+
+- 최신 extractor 기준 reward / event / shop / rest 라벨이 사람이 읽는 텍스트로 잘 잡히는지
+- automatic advice가 UTF-8 수정 이후 새 trigger에서 `ok`로 생성되는지
+- gameplay 중 session tracking이 실제로 이어 붙는지
+
+## 7. manual advice와 automatic advice의 차이
+
+현재 상태를 정확히 나누면:
+
+### manual advice
+
+성공했습니다.
 
 - `Analyze Now`
-  - 현재 상태 기준 즉시 수동 advice 요청
-- `Retry Last`
-  - 현재 구현에서는 `Analyze Now`와 같은 경로로 다시 요청
-- `Pause Auto Advice` / `Resume Auto Advice`
-  - 자동 trigger on/off
-- `Refresh Knowledge`
-  - 현재 snapshot/knowledge 표시 갱신
-- `Open Artifacts`
-  - 현재 run 또는 companion root 열기
+- `dotnet run --project src\Sts2ModKit.Tool -- analyze-live-once`
 
-## 9. 현재 실증된 것과 아직 남은 것
+이 경로는 실제 Codex 응답을 받아 `advice.latest.json` / `advice.latest.md`를 생성합니다.
 
-### 실증된 것
+### automatic advice
 
-- main menu까지의 live export 생성
-- 정적 카탈로그 생성
-- Host/WPF 빌드
-- prompt/knowledge 계약 self-test
+이전에는 degraded였습니다.
 
-### 아직 남은 것
+원인:
 
-- reward/event/shop/rest/combat에서 choices가 실제로 안정적으로 잡히는지
-- Codex advice가 실제 gameplay run에서 자동으로 생성되는지
-- WPF가 그 결과를 실제 플레이 중 보여주는지
+- prompt stdin이 invalid UTF-8로 들어가면서 Codex CLI가 비어 있는 응답을 반환
 
-## 10. 이 문서를 어떤 코드와 같이 보면 좋은가
+현재:
 
-- mod 쪽 흐름: `src/Sts2ModAiCompanion.Mod/Runtime`
-- live export 계약: `docs/REALTIME_EXTRACTION.md`
-- 로드 체인 전체: `docs/development/LOAD_CHAIN.md`
-- 구조 안내: `docs/development/REPO_STRUCTURE.md`
-- 사용자 시나리오: `docs/development/WPF_USER_FLOW.md`
+- UTF-8 인코딩 강제와 sanitize 경로를 넣었습니다.
+- 하지만 수정 이후의 fresh gameplay trigger를 아직 다시 만들지 못했습니다.
 
-## 2026-03-11 플레이 흐름 보강 메모
+따라서 auto advice는 “수정 완료, 재검증 대기” 상태입니다.
 
-실제 플레이 중 조언 경로는 이제 아래 두 축을 함께 봅니다.
+## 8. Codex session 상태
 
-- 실시간 축: `state.latest.json`, `state.latest.txt`, `events.ndjson`, `session.json`
-- 정적 지식 축: `artifacts/knowledge/assistant/*.json`, `catalog.assistant.json`
+현재 중요한 사실:
 
-즉, 이벤트/상점/보상 화면에서 조언이 생성될 때는 현재 선택지와 함께 해당 카드/유물/이벤트 설명 본문도 같이 참조하는 구조를 목표로 합니다.
+- Codex CLI 호출은 성공
+- advice artifact 생성은 성공
+- `sessionId`는 아직 `null`
+
+즉 현재는 “Codex와 실제 대화해 조언을 받는 것”은 되지만, “런마다 세션을 생성해서 계속 이어 붙이는 것”은 아직 완성되지 않았습니다.
+
+## 9. 지금 다음 플레이에서 무엇을 검증해야 하는가
+
+다음 짧은 검증 런에서 확인할 항목:
+
+1. reward / event / shop / rest 중 최소 2개 화면에서 `screen`이 올바르게 분류되는지
+2. `currentChoices` 라벨이 `RichTextLabel#...` 같은 객체명이 아니라 실제 텍스트로 잡히는지
+3. auto advice가 `degraded`가 아니라 `ok`로 저장되는지
+4. 가능하면 `sessionId`가 채워지는지
+
+## 10. 관련 코드 위치
+
+- exporter / extractor
+  - `src/Sts2ModAiCompanion.Mod/Runtime`
+- live export 계약
+  - `docs/REALTIME_EXTRACTION.md`
+- Host / advice path
+  - `src/Sts2AiCompanion.Host`
+- WPF UI
+  - `src/Sts2AiCompanion.Wpf`
+- gameplay 관련 상태 문서
+  - `docs/development/PROJECT_STATUS.md`
+- 사용자 흐름
+  - `docs/development/WPF_USER_FLOW.md`

@@ -30,6 +30,8 @@ Run("localization scanner extracts card title and description from binary text",
 Run("localization scan merges into canonical card entries", TestLocalizationKnowledgeMerge, failures);
 Run("smoke diagnostics surface startup patch failures", TestSmokeDiagnostics, failures);
 Run("runtime reflection invoker supports optional parameters", TestRuntimeReflectionOptionalParameters, failures);
+Run("runtime reflection string extraction resolves nested label text", TestRuntimeReflectionStringExtraction, failures);
+Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
 Run("companion path resolver keeps per-run artifacts under companion root", TestCompanionPathResolver, failures);
 Run("knowledge catalog service builds a bounded relevant slice", TestKnowledgeCatalogService, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
@@ -941,6 +943,42 @@ static void TestRuntimeReflectionOptionalParameters()
     Assert(string.Equals(child?.ToString(), "child-3-False", StringComparison.Ordinal), "Expected optional bool parameter to default to false when omitted.");
 }
 
+static void TestRuntimeReflectionStringExtraction()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("TryReadString", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static, null, new[] { typeof(object), typeof(string[]) }, null);
+    Assert(method is not null, "Expected private TryReadString helper.");
+
+    var button = new FakeChoiceButton
+    {
+        Label = new FakeLabel { Text = "보상 선택" },
+        Description = new FakeLocString("카드를 선택하세요."),
+        Id = "reward-choice",
+    };
+
+    var label = method!.Invoke(null, new object?[] { button, new[] { "Label", "Id" } }) as string;
+    var description = method.Invoke(null, new object?[] { button, new[] { "Description" } }) as string;
+
+    Assert(label == "보상 선택", "Expected nested label text to resolve.");
+    Assert(description == "카드를 선택하세요.", "Expected LocString.GetFormattedText() to be used for descriptions.");
+}
+
+static void TestRuntimeReflectionScreenResolution()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("ResolveScreen", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private ResolveScreen helper.");
+
+    var roots = new List<object> { new FakeScreenState { RoomType = "CombatRoom" } };
+    var resolved = method!.Invoke(null, new object?[] { null, roots, new[] { "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen" } }) as string;
+
+    Assert(resolved == "rewards", "Expected overlay reward screen to win over room-type combat fallback.");
+}
+
 static void TestCompanionPathResolver()
 {
     var configuration = ScaffoldConfiguration.CreateLocalDefault() with
@@ -1213,6 +1251,40 @@ file sealed class OptionalParameterProbe
     {
         return $"child-{index}-{includeInternal}";
     }
+}
+
+file sealed class FakeChoiceButton
+{
+    public object? Label { get; init; }
+
+    public object? Description { get; init; }
+
+    public string? Id { get; init; }
+}
+
+file sealed class FakeLabel
+{
+    public string? Text { get; init; }
+}
+
+file sealed class FakeLocString
+{
+    private readonly string text;
+
+    public FakeLocString(string text)
+    {
+        this.text = text;
+    }
+
+    public string GetFormattedText()
+    {
+        return text;
+    }
+}
+
+file sealed class FakeScreenState
+{
+    public string? RoomType { get; init; }
 }
 
 sealed class FakeProbe : IFileStateProbe

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -32,8 +33,9 @@ public sealed class CodexCliClient : ICodexSessionClient
         string? sessionId,
         CancellationToken cancellationToken)
     {
-        var schemaPath = Path.GetTempFileName();
-        var outputPath = Path.GetTempFileName();
+        var schemaPath = Path.Combine(Path.GetTempPath(), $"sts2-codex-schema-{Guid.NewGuid():N}.json");
+        var outputPath = Path.Combine(Path.GetTempPath(), $"sts2-codex-output-{Guid.NewGuid():N}.json");
+        var sanitizedPrompt = SanitizePrompt(prompt);
         try
         {
             await File.WriteAllTextAsync(schemaPath, BuildSchema(), cancellationToken).ConfigureAwait(false);
@@ -45,18 +47,43 @@ public sealed class CodexCliClient : ICodexSessionClient
             };
 
             process.Start();
-            await process.StandardInput.WriteAsync(prompt).ConfigureAwait(false);
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.StandardInput.WriteAsync(sanitizedPrompt).ConfigureAwait(false);
             process.StandardInput.Close();
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
             var resolvedSessionId = sessionId ?? ResolveCreatedSessionId(before);
+            var standardOutput = await stdoutTask.ConfigureAwait(false);
+            var standardError = await stderrTask.ConfigureAwait(false);
             var rawOutput = File.Exists(outputPath)
                 ? await File.ReadAllTextAsync(outputPath, cancellationToken).ConfigureAwait(false)
                 : string.Empty;
+            if (string.IsNullOrWhiteSpace(rawOutput))
+            {
+                rawOutput = ExtractJsonObject(standardOutput) ?? string.Empty;
+            }
 
             if (process.ExitCode != 0)
             {
-                return (CreateDegradedResponse(inputPack, resolvedSessionId, $"Codex CLI exited with code {process.ExitCode}.", rawOutput), resolvedSessionId);
+                var failureMessage = $"Codex CLI exited with code {process.ExitCode}.";
+                if (!string.IsNullOrWhiteSpace(standardError))
+                {
+                    failureMessage += $" stderr: {TrimDiagnosticText(standardError)}";
+                }
+
+                return (CreateDegradedResponse(inputPack, resolvedSessionId, failureMessage, rawOutput), resolvedSessionId);
+            }
+
+            if (string.IsNullOrWhiteSpace(rawOutput))
+            {
+                var emptyMessage = "Codex returned an empty response.";
+                if (!string.IsNullOrWhiteSpace(standardError))
+                {
+                    emptyMessage += $" stderr: {TrimDiagnosticText(standardError)}";
+                }
+
+                return (CreateDegradedResponse(inputPack, resolvedSessionId, emptyMessage, rawOutput), resolvedSessionId);
             }
 
             try
@@ -105,16 +132,25 @@ public sealed class CodexCliClient : ICodexSessionClient
 
     private ProcessStartInfo CreateStartInfo(string? sessionId, string schemaPath, string outputPath)
     {
+        var launch = ResolveCodexLaunch();
         var startInfo = new ProcessStartInfo
         {
-            FileName = _configuration.Assistant.CodexCommand,
+            FileName = launch.FileName,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = _workspaceRoot,
         };
+
+        foreach (var prefixArgument in launch.ArgumentPrefix)
+        {
+            startInfo.ArgumentList.Add(prefixArgument);
+        }
 
         startInfo.ArgumentList.Add("exec");
         startInfo.ArgumentList.Add("-C");
@@ -131,6 +167,79 @@ public sealed class CodexCliClient : ICodexSessionClient
 
         startInfo.ArgumentList.Add("-");
         return startInfo;
+    }
+
+    private (string FileName, IReadOnlyList<string> ArgumentPrefix) ResolveCodexLaunch()
+    {
+        var configured = _configuration.Assistant.CodexCommand;
+        var resolved = ResolveCommandPath(configured) ?? configured;
+
+        if (OperatingSystem.IsWindows()
+            && (resolved.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase)
+                || resolved.EndsWith(".bat", StringComparison.OrdinalIgnoreCase)))
+        {
+            return (Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", new[] { "/d", "/c", resolved });
+        }
+
+        return (resolved, Array.Empty<string>());
+    }
+
+    private static string? ResolveCommandPath(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return null;
+        }
+
+        if (Path.IsPathRooted(command)
+            || command.Contains(Path.DirectorySeparatorChar)
+            || command.Contains(Path.AltDirectorySeparatorChar))
+        {
+            return File.Exists(command) ? command : null;
+        }
+
+        var pathValue = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(pathValue))
+        {
+            return null;
+        }
+
+        var extensions = OperatingSystem.IsWindows()
+            ? ExpandPathExtensions(command)
+            : new[] { string.Empty };
+
+        foreach (var directory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            foreach (var extension in extensions)
+            {
+                var candidate = Path.Combine(directory, command + extension);
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string> ExpandPathExtensions(string command)
+    {
+        if (Path.HasExtension(command))
+        {
+            return new[] { string.Empty };
+        }
+
+        var pathExt = Environment.GetEnvironmentVariable("PATHEXT");
+        var extensions = string.IsNullOrWhiteSpace(pathExt)
+            ? new[] { ".exe", ".cmd", ".bat" }
+            : pathExt.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        return new[] { string.Empty }
+            .Concat(extensions
+                .Select(extension => extension.StartsWith('.') ? extension : "." + extension)
+                .Distinct(StringComparer.OrdinalIgnoreCase))
+            .ToArray();
     }
 
     private string? ResolveCreatedSessionId(IReadOnlySet<string> before)
@@ -191,6 +300,72 @@ public sealed class CodexCliClient : ICodexSessionClient
             inputPack.TriggerKind,
             sessionId,
             rawOutput);
+    }
+
+    private static string? ExtractJsonObject(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var start = text.IndexOf('{');
+        var end = text.LastIndexOf('}');
+        if (start < 0 || end <= start)
+        {
+            return null;
+        }
+
+        return text[start..(end + 1)];
+    }
+
+    private static string TrimDiagnosticText(string text)
+    {
+        var compact = text
+            .Replace("\r\n", " ", StringComparison.Ordinal)
+            .Replace('\n', ' ')
+            .Trim();
+        return compact.Length <= 400
+            ? compact
+            : compact[..400] + "...";
+    }
+
+    private static string SanitizePrompt(string prompt)
+    {
+        if (string.IsNullOrEmpty(prompt))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(prompt.Length);
+        for (var index = 0; index < prompt.Length; index += 1)
+        {
+            var character = prompt[index];
+            if (char.IsSurrogate(character))
+            {
+                if (char.IsHighSurrogate(character)
+                    && index + 1 < prompt.Length
+                    && char.IsLowSurrogate(prompt[index + 1]))
+                {
+                    builder.Append(character);
+                    builder.Append(prompt[index + 1]);
+                    index += 1;
+                    continue;
+                }
+
+                builder.Append('\uFFFD');
+                continue;
+            }
+
+            if (char.IsControl(character) && character is not '\r' and not '\n' and not '\t')
+            {
+                continue;
+            }
+
+            builder.Append(character);
+        }
+
+        return builder.ToString();
     }
 
     private static void SafeDelete(string path)
