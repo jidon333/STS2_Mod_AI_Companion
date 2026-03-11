@@ -59,6 +59,11 @@ internal sealed record GameReleaseInfo(
     DateTimeOffset? Date,
     string? Branch);
 
+internal sealed record ObservedKnowledgeInput(
+    string SourceId,
+    LiveExportSnapshot? Snapshot,
+    IReadOnlyList<LiveExportEventEnvelope> Events);
+
 internal static class StaticKnowledgeCommands
 {
     public static StaticKnowledgeExtractionResult Extract(ScaffoldConfiguration configuration, string knowledgeRoot)
@@ -142,9 +147,8 @@ internal static class StaticKnowledgeCommands
         var warnings = new List<string>();
         var steps = new List<StaticKnowledgePipelineStep>();
 
-        var snapshot = TryReadJson<LiveExportSnapshot>(layout.SnapshotPath);
-        var events = ReadNdjson<LiveExportEventEnvelope>(layout.EventsPath, warnings);
-        if (snapshot is null && events.Count == 0)
+        var observedInputs = ReadObservedInputs(configuration, knowledgeRoot, layout, warnings);
+        if (observedInputs.All(input => input.Snapshot is null && input.Events.Count == 0))
         {
             warnings.Add("No live export snapshot or events were available. The knowledge catalog may contain only source-derived canonical entries.");
         }
@@ -153,8 +157,9 @@ internal static class StaticKnowledgeCommands
         var releaseInfo = TryReadJson<GameReleaseInfo>(releaseInfoPath);
         var atlasStats = ReadAtlasStats(Path.Combine(configuration.GamePaths.UserDataRoot, "logs", "godot.log"));
         atlasStats["source"] = source;
-        atlasStats["eventsLoaded"] = events.Count.ToString();
-        atlasStats["snapshotLoaded"] = (snapshot is not null).ToString();
+        atlasStats["eventsLoaded"] = observedInputs.Sum(input => input.Events.Count).ToString();
+        atlasStats["snapshotLoaded"] = observedInputs.Any(input => input.Snapshot is not null).ToString();
+        atlasStats["observedSources"] = observedInputs.Count.ToString();
 
         var metadata = new StaticKnowledgeMetadata(
             releaseInfo?.Version,
@@ -169,8 +174,9 @@ internal static class StaticKnowledgeCommands
             {
                 ["releaseVersion"] = releaseInfo?.Version,
                 ["releaseCommit"] = releaseInfo?.Commit,
-                ["eventsLoaded"] = events.Count.ToString(),
-                ["snapshotLoaded"] = (snapshot is not null).ToString(),
+                ["eventsLoaded"] = observedInputs.Sum(input => input.Events.Count).ToString(),
+                ["snapshotLoaded"] = observedInputs.Any(input => input.Snapshot is not null).ToString(),
+                ["observedSources"] = observedInputs.Count.ToString(),
             },
             Array.Empty<string>()));
 
@@ -237,17 +243,26 @@ internal static class StaticKnowledgeCommands
             localizationWarnings));
         seedCatalog = StaticKnowledgeCatalogBuilder.MergeLocalization(seedCatalog, localizationScan, metadata);
 
-        var observedCatalog = StaticKnowledgeCatalogBuilder.BuildFromObserved(null, snapshot, events, metadata);
+        StaticKnowledgeCatalog? observedCatalog = null;
+        foreach (var input in observedInputs)
+        {
+            observedCatalog = StaticKnowledgeCatalogBuilder.BuildFromObserved(observedCatalog, input.Snapshot, input.Events, metadata);
+        }
+        observedCatalog ??= StaticKnowledgeCatalog.CreateEmpty();
         WriteJson(observedMergePath, observedCatalog);
         steps.Add(new StaticKnowledgePipelineStep(
             "observed-merge",
-            (snapshot is null && events.Count == 0) ? "warning" : "completed",
+            observedInputs.All(input => input.Snapshot is null && input.Events.Count == 0) ? "warning" : "completed",
             observedMergePath,
             ToStringMap(BuildCounts(observedCatalog)),
-            snapshot is null && events.Count == 0
+            observedInputs.All(input => input.Snapshot is null && input.Events.Count == 0)
                 ? new[] { "No live snapshot or events were available for observed-merge." }
                 : Array.Empty<string>()));
-        var catalog = StaticKnowledgeCatalogBuilder.BuildFromObserved(seedCatalog, snapshot, events, metadata);
+        var catalog = seedCatalog;
+        foreach (var input in observedInputs)
+        {
+            catalog = StaticKnowledgeCatalogBuilder.BuildFromObserved(catalog, input.Snapshot, input.Events, metadata);
+        }
         var assistantCatalog = StaticKnowledgeCatalogBuilder.BuildAssistantCatalog(catalog);
         steps.Add(new StaticKnowledgePipelineStep(
             "catalog-build",
@@ -352,6 +367,55 @@ internal static class StaticKnowledgeCommands
 
         var info = new FileInfo(path);
         return new StaticKnowledgeSourceFile(kind, path, true, info.Length, info.LastWriteTimeUtc);
+    }
+
+    private static IReadOnlyList<ObservedKnowledgeInput> ReadObservedInputs(
+        ScaffoldConfiguration configuration,
+        string knowledgeRoot,
+        LiveExportLayout layout,
+        ICollection<string> warnings)
+    {
+        var inputs = new List<ObservedKnowledgeInput>
+        {
+            new(
+                "live-root",
+                TryReadJson<LiveExportSnapshot>(layout.SnapshotPath),
+                ReadNdjson<LiveExportEventEnvelope>(layout.EventsPath, warnings)),
+        };
+
+        var artifactsRoot = Directory.GetParent(knowledgeRoot)?.FullName;
+        if (string.IsNullOrWhiteSpace(artifactsRoot))
+        {
+            return inputs;
+        }
+
+        var companionRoot = Path.Combine(artifactsRoot, configuration.Assistant.CompanionArtifactsRelativeRoot);
+        if (!Directory.Exists(companionRoot))
+        {
+            return inputs;
+        }
+
+        foreach (var runDirectory in Directory.EnumerateDirectories(companionRoot))
+        {
+            var liveMirrorRoot = Path.Combine(runDirectory, "live-mirror");
+            if (!Directory.Exists(liveMirrorRoot))
+            {
+                continue;
+            }
+
+            var snapshotPath = Path.Combine(liveMirrorRoot, "state.latest.json");
+            var eventsPath = Path.Combine(liveMirrorRoot, "events.ndjson");
+            var snapshot = TryReadJson<LiveExportSnapshot>(snapshotPath);
+            var events = ReadNdjson<LiveExportEventEnvelope>(eventsPath, warnings);
+            if (snapshot is null && events.Count == 0)
+            {
+                continue;
+            }
+
+            inputs.Add(new(Path.GetFileName(runDirectory), snapshot, events));
+        }
+
+        return inputs;
     }
 
     private static object BuildCounts(StaticKnowledgeCatalog catalog)

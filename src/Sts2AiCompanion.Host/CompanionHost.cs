@@ -256,6 +256,8 @@ public sealed class CompanionHost : IAsyncDisposable
                 WriteJson(paths.CodexSessionPath!, _sessionState);
             }
 
+            MirrorLiveArtifacts(runState);
+
             PublishSnapshot(CreateSnapshot("running", $"Advice generated for {trigger.Kind}."));
         }
         finally

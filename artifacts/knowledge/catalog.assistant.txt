@@ -1,5 +1,5 @@
 metadata
-generated_at: 2026-03-11T09:31:19.0775166+00:00
+generated_at: 2026-03-11T13:11:15.8016239+00:00
 release_version: v0.98.3
 release_commit: cb602cef
 release_date: 2026-03-09T19:21:00.0000000-07:00
@@ -16,7 +16,8 @@ atlas:relic_atlas: 336
 atlas:relic_outline_atlas: 336
 atlas:stats_screen_atlas: 16
 atlas:ui_atlas: 102
-eventsLoaded: 104
+eventsLoaded: 3627
+observedSources: 4
 snapshotLoaded: True
 source: extract-static-knowledge
 

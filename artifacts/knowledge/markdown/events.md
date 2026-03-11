@@ -1,6 +1,6 @@
 # 이벤트
 
-- 전체 항목 수: 58
+- 전체 항목 수: 62
 - 설명 본문이 채워진 항목: 57
 - L10N 키 또는 제목이 연결된 항목: 58
 - 선택지/옵션 정보가 있는 항목: 56
@@ -1561,6 +1561,46 @@
 - 모델 클래스: `MegaCrit.Sts2.Core.Models.Events.FakeMerchant`
 - 리소스 경로: `res://scenes/events/custom/fake_merchant.tscn!`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### Observed Event
+
+- ID: `event-265c6e8061f7`
+- 그룹/풀 추정: 미분류
+- 플레이 중 참조 시점: 이벤트 방 제목/본문 파악 시 참조
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:event-screen-opened`
+
+### Observed Event
+
+- ID: `event-26e6a7ca7618`
+- 그룹/풀 추정: 미분류
+- 플레이 중 참조 시점: 이벤트 방 제목/본문 파악 시 참조
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:event-screen-opened`
+
+### Observed Event
+
+- ID: `event-40b5da66bab4`
+- 그룹/풀 추정: 미분류
+- 플레이 중 참조 시점: 이벤트 방 제목/본문 파악 시 참조
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:event-screen-opened`
+
+### Observed Event
+
+- ID: `event-8be3ce008286`
+- 그룹/풀 추정: 미분류
+- 플레이 중 참조 시점: 이벤트 방 제목/본문 파악 시 참조
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:event-screen-opened`
 
 ### 아키텍트
 

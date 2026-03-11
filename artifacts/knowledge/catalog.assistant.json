@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-11T09:31:19.0775166+00:00",
+  "generatedAt": "2026-03-11T13:11:15.8016239+00:00",
   "metadata": {
     "releaseVersion": "v0.98.3",
     "releaseCommit": "cb602cef",
@@ -19,8 +19,9 @@
       "atlas:era_atlas": "27",
       "atlas:controller_atlas": "112",
       "source": "extract-static-knowledge",
-      "eventsLoaded": "104",
-      "snapshotLoaded": "True"
+      "eventsLoaded": "3627",
+      "snapshotLoaded": "True",
+      "observedSources": "4"
     }
   },
   "cards": [

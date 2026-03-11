@@ -32,9 +32,11 @@ Run("smoke diagnostics surface startup patch failures", TestSmokeDiagnostics, fa
 Run("runtime reflection invoker supports optional parameters", TestRuntimeReflectionOptionalParameters, failures);
 Run("runtime reflection string extraction resolves nested label text", TestRuntimeReflectionStringExtraction, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
+Run("live export tracker preserves high-value state across partial observations", TestLiveExportTrackerPartialMerge, failures);
 Run("companion path resolver keeps per-run artifacts under companion root", TestCompanionPathResolver, failures);
 Run("knowledge catalog service builds a bounded relevant slice", TestKnowledgeCatalogService, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
+Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
 
 if (failures.Count == 0)
 {
@@ -979,6 +981,65 @@ static void TestRuntimeReflectionScreenResolution()
     Assert(resolved == "rewards", "Expected overlay reward screen to win over room-type combat fallback.");
 }
 
+static void TestLiveExportTrackerPartialMerge()
+{
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
+    var seed = new LiveExportObservation(
+        "choice-list-presented",
+        DateTimeOffset.UtcNow.AddSeconds(-1),
+        "run-001",
+        "active",
+        "rest-site",
+        1,
+        12,
+        new LiveExportPlayerSummary("Ironclad", 55, 80, 123, 3, new Dictionary<string, string?>()),
+        new[]
+        {
+            new LiveExportCardSummary("Strike", "CARD.STRIKE", 1, "Attack", false),
+        },
+        new[] { "RELIC.BURNING_BLOOD" },
+        new[] { "POTION.STRENGTH_POTION" },
+        new[]
+        {
+            new LiveExportChoiceSummary("choice", "휴식", "rest", null),
+            new LiveExportChoiceSummary("choice", "강화", "smith", null),
+        },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("Rest Site", "RestSite", false, null),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>());
+    var first = tracker.Apply(seed).Snapshot;
+
+    var partialPoll = new LiveExportObservation(
+        "runtime-poll",
+        DateTimeOffset.UtcNow,
+        "run-001",
+        null,
+        "combat",
+        null,
+        null,
+        new LiveExportPlayerSummary(null, null, null, null, null, new Dictionary<string, string?>()),
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        Array.Empty<LiveExportChoiceSummary>(),
+        new[]
+        {
+            "state extraction is partial; core run data was not resolved from live objects.",
+            "no visible choices resolved for this observation.",
+        },
+        new LiveExportEncounterSummary(null, null, true, null),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>());
+    var second = tracker.Apply(partialPoll).Snapshot;
+
+    Assert(second.CurrentScreen == "rest-site", "Expected high-value rest-site screen to survive immediate runtime-poll fallback.");
+    Assert(second.Player.CurrentHp == first.Player.CurrentHp && second.Player.Gold == first.Player.Gold, "Expected partial player observation not to clear resolved hp/gold.");
+    Assert(second.Relics.SequenceEqual(first.Relics, StringComparer.Ordinal), "Expected partial runtime poll not to clear relics.");
+    Assert(second.Potions.SequenceEqual(first.Potions, StringComparer.Ordinal), "Expected partial runtime poll not to clear potions.");
+    Assert(second.CurrentChoices.Select(choice => choice.Label).SequenceEqual(first.CurrentChoices.Select(choice => choice.Label), StringComparer.Ordinal), "Expected unresolved choice poll not to clear visible choices.");
+}
+
 static void TestCompanionPathResolver()
 {
     var configuration = ScaffoldConfiguration.CreateLocalDefault() with
@@ -1157,6 +1218,27 @@ static void TestAdvicePromptBuilder()
     Assert(prompt.Contains("current_state_summary:", StringComparison.Ordinal), "Expected prompt to include the state summary section.");
     Assert(prompt.Contains("knowledge_slice:", StringComparison.Ordinal), "Expected prompt to include the knowledge slice section.");
     Assert(prompt.Contains("response_instructions:", StringComparison.Ordinal), "Expected prompt to include the response instructions section.");
+}
+
+static void TestCodexCliTraceParser()
+{
+    var clientType = typeof(CodexCliClient);
+    var method = clientType.GetMethod("ParseExecTrace", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private ParseExecTrace helper.");
+
+    const string trace = """
+    {"type":"thread.started","thread_id":"019cdcfc-aefb-76c1-92e7-d36d9d89d3cb"}
+    {"type":"turn.started"}
+    {"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"{\"headline\":\"h\",\"summary\":\"s\",\"recommendedAction\":\"a\",\"recommendedChoiceLabel\":null,\"reasoningBullets\":[],\"riskNotes\":[],\"confidence\":null,\"knowledgeRefs\":[]}"}} 
+    {"type":"turn.completed"}
+    """;
+
+    var parsed = method!.Invoke(null, new object?[] { trace });
+    var threadId = parsed?.GetType().GetProperty("ThreadId")?.GetValue(parsed) as string;
+    var lastAgentMessageJson = parsed?.GetType().GetProperty("LastAgentMessageJson")?.GetValue(parsed) as string;
+
+    Assert(threadId == "019cdcfc-aefb-76c1-92e7-d36d9d89d3cb", "Expected thread id to be extracted from JSONL events.");
+    Assert(!string.IsNullOrWhiteSpace(lastAgentMessageJson) && lastAgentMessageJson.Contains("\"headline\":\"h\"", StringComparison.Ordinal), "Expected final agent message JSON to be captured from item.completed events.");
 }
 
 static void Assert(bool condition, string message)

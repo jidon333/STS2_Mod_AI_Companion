@@ -47,6 +47,7 @@ Phase 1의 구조는 `게임 내부 exporter + 외부 정적 지식 파이프라
 
 - `assembly-scan`, `pck-inventory`, `localization-scan`은 넓게 수집하는 raw/intermediate 계층
 - `strict-domain-parse`는 실제 디컴파일된 모델 소스 기준으로 cards/relics/potions/events/shops/rewards/keywords canonical seed를 만드는 계층
+- `observed-merge`는 live export와 `artifacts/companion/*/live-mirror`에서 관찰된 실제 플레이 데이터를 canonical 지식에 보강하는 계층
 - `catalog.latest.*`, `catalog.assistant.*`, `assistant/*.json`, `markdown/*.md`는 최종 소비 계층
 
 산출물은 `artifacts/knowledge` 아래에 저장됩니다.
@@ -62,6 +63,7 @@ Phase 1의 구조는 `게임 내부 exporter + 외부 정적 지식 파이프라
 - knowledge slice 선택
 - prompt pack 생성
 - Codex CLI 호출
+- JSON event stream에서 `thread.started`를 읽어 `sessionId` 캡처
 - advice artifact 저장
 
 ## 5. 외부 WPF 앱

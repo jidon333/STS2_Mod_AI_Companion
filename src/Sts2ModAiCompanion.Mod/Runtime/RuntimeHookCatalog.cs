@@ -34,14 +34,14 @@ internal static class RuntimeHookCatalog
         new("combat", "turn-ended", "MegaCrit.Sts2.Core.Combat.CombatState", new[] { "EndTurn", "FinishTurn" }, "combat"),
         new("screen", "map-node-entered", "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen", new[] { "Open", "Setup" }, "map"),
         new("screen", "reward-screen-opened", "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen", new[] { "ShowScreen", "_Ready" }, "rewards"),
-        new("screen", "reward-screen-opened", "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen", new[] { "ShowScreen", "_Ready" }, "rewards"),
+        new("screen", "reward-screen-opened", "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen", new[] { "ShowScreen", "_Ready", "SetRewards" }, "rewards"),
         new("screen", "choice-list-presented", "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NChooseACardSelectionScreen", new[] { "Open", "Setup" }, "card-choice"),
         new("screen", "choice-list-presented", "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NDeckUpgradeSelectScreen", new[] { "Open", "Setup" }, "upgrade"),
         new("screen", "choice-list-presented", "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NDeckTransformSelectScreen", new[] { "Open", "Setup" }, "transform"),
         new("screen", "event-screen-opened", "MegaCrit.Sts2.Core.Nodes.Events.NEventLayout", new[] { "_EnterTree", "SetEvent" }, "event"),
         new("screen", "event-screen-opened", "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom", new[] { "Create", "_Ready" }, "event"),
         new("screen", "choice-list-presented", "MegaCrit.Sts2.Core.Nodes.Rooms.NRestSiteRoom", new[] { "Create", "_Ready", "UpdateRestSiteOptions" }, "rest-site"),
-        new("screen", "choice-list-presented", "MegaCrit.Sts2.Core.Nodes.Screens.Shops.NMerchantInventory", new[] { "Open", "Setup", "Fill" }, "shop"),
+        new("screen", "choice-list-presented", "MegaCrit.Sts2.Core.Nodes.Screens.Shops.NMerchantInventory", new[] { "Initialize", "Open", "Setup", "Fill" }, "shop"),
     };
 
     public static IReadOnlyCollection<MethodBase> GetTargetMethods()

@@ -62,7 +62,7 @@ run이 시작되면 exporter는 현재 run의 상태를 snapshot으로 기록하
 - `artifacts/companion/<run-id>/advice.latest.md`
 - `artifacts/companion/<run-id>/host-status.json`
 
-현재는 `sessionId`를 안정적으로 잡지 못해서 `codex-session.json`은 항상 생성된다고 볼 수 없습니다.
+현재 기준으로는 manual advice 경로에서 `sessionId`를 캡처하고 `codex-session.json`까지 생성합니다. 아직 gameplay 자동 trigger에서 같은 세션을 안정적으로 이어 붙이는지는 재검증이 필요합니다.
 
 ## 5. 고가치 화면에서 무엇이 일어나야 하는가
 
@@ -92,6 +92,8 @@ run이 시작되면 exporter는 현재 run의 상태를 snapshot으로 기록하
 - reward / event / rest / shop hook observed
 - `choice-list-presented` prompt pack 생성
 - `analyze-live-once` manual advice 성공
+- `current-run.json`에 `sessionId` 반영
+- `codex-session.json` 생성
 
 아직 다시 확인해야 하는 것:
 
@@ -133,9 +135,9 @@ run이 시작되면 exporter는 현재 run의 상태를 snapshot으로 기록하
 
 - Codex CLI 호출은 성공
 - advice artifact 생성은 성공
-- `sessionId`는 아직 `null`
+- manual advice 경로에서는 `sessionId` 캡처가 성공
 
-즉 현재는 “Codex와 실제 대화해 조언을 받는 것”은 되지만, “런마다 세션을 생성해서 계속 이어 붙이는 것”은 아직 완성되지 않았습니다.
+즉 현재는 “Codex와 실제 대화해 조언을 받고 manual path에서 run 세션을 기록하는 것”은 되지만, “실제 gameplay trigger에서도 같은 세션을 안정적으로 이어 붙이는 것”은 아직 완성되지 않았습니다.
 
 ## 9. 지금 다음 플레이에서 무엇을 검증해야 하는가
 
@@ -144,7 +146,7 @@ run이 시작되면 exporter는 현재 run의 상태를 snapshot으로 기록하
 1. reward / event / shop / rest 중 최소 2개 화면에서 `screen`이 올바르게 분류되는지
 2. `currentChoices` 라벨이 `RichTextLabel#...` 같은 객체명이 아니라 실제 텍스트로 잡히는지
 3. auto advice가 `degraded`가 아니라 `ok`로 저장되는지
-4. 가능하면 `sessionId`가 채워지는지
+4. gameplay-triggered advice에서도 기존 `sessionId`를 이어 쓰는지
 
 ## 10. 관련 코드 위치
 

@@ -53,15 +53,20 @@ public sealed class CodexCliClient : ICodexSessionClient
             process.StandardInput.Close();
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
-            var resolvedSessionId = sessionId ?? ResolveCreatedSessionId(before);
             var standardOutput = await stdoutTask.ConfigureAwait(false);
             var standardError = await stderrTask.ConfigureAwait(false);
+            var execTrace = ParseExecTrace(standardOutput);
+            var resolvedSessionId = sessionId
+                ?? execTrace.ThreadId
+                ?? ResolveCreatedSessionId(before);
             var rawOutput = File.Exists(outputPath)
                 ? await File.ReadAllTextAsync(outputPath, cancellationToken).ConfigureAwait(false)
                 : string.Empty;
             if (string.IsNullOrWhiteSpace(rawOutput))
             {
-                rawOutput = ExtractJsonObject(standardOutput) ?? string.Empty;
+                rawOutput = execTrace.LastAgentMessageJson
+                    ?? ExtractJsonObject(standardOutput)
+                    ?? string.Empty;
             }
 
             if (process.ExitCode != 0)
@@ -155,6 +160,7 @@ public sealed class CodexCliClient : ICodexSessionClient
         startInfo.ArgumentList.Add("exec");
         startInfo.ArgumentList.Add("-C");
         startInfo.ArgumentList.Add(_workspaceRoot);
+        startInfo.ArgumentList.Add("--json");
         startInfo.ArgumentList.Add("--output-schema");
         startInfo.ArgumentList.Add(schemaPath);
         startInfo.ArgumentList.Add("-o");
@@ -330,6 +336,64 @@ public sealed class CodexCliClient : ICodexSessionClient
             : compact[..400] + "...";
     }
 
+    private static CodexExecTrace ParseExecTrace(string? standardOutput)
+    {
+        if (string.IsNullOrWhiteSpace(standardOutput))
+        {
+            return CodexExecTrace.Empty;
+        }
+
+        string? threadId = null;
+        string? lastAgentMessageJson = null;
+
+        foreach (var rawLine in standardOutput.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (string.IsNullOrWhiteSpace(rawLine) || !rawLine.TrimStart().StartsWith('{'))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(rawLine);
+                var root = document.RootElement;
+                if (!root.TryGetProperty("type", out var typeElement))
+                {
+                    continue;
+                }
+
+                var eventType = typeElement.GetString();
+                if (string.Equals(eventType, "thread.started", StringComparison.Ordinal)
+                    && root.TryGetProperty("thread_id", out var threadIdElement))
+                {
+                    threadId = threadIdElement.GetString();
+                    continue;
+                }
+
+                if (!string.Equals(eventType, "item.completed", StringComparison.Ordinal)
+                    || !root.TryGetProperty("item", out var itemElement)
+                    || !itemElement.TryGetProperty("type", out var itemTypeElement)
+                    || !string.Equals(itemTypeElement.GetString(), "agent_message", StringComparison.Ordinal)
+                    || !itemElement.TryGetProperty("text", out var textElement))
+                {
+                    continue;
+                }
+
+                var text = textElement.GetString();
+                if (!string.IsNullOrWhiteSpace(text) && text.TrimStart().StartsWith('{'))
+                {
+                    lastAgentMessageJson = text;
+                }
+            }
+            catch (JsonException)
+            {
+                // Ignore malformed progress/event lines from the CLI.
+            }
+        }
+
+        return new CodexExecTrace(threadId, lastAgentMessageJson);
+    }
+
     private static string SanitizePrompt(string prompt)
     {
         if (string.IsNullOrEmpty(prompt))
@@ -425,6 +489,13 @@ public sealed class CodexCliClient : ICodexSessionClient
         string Id,
         string? ThreadName,
         DateTimeOffset? UpdatedAt);
+
+    private sealed record CodexExecTrace(
+        string? ThreadId,
+        string? LastAgentMessageJson)
+    {
+        public static CodexExecTrace Empty { get; } = new(null, null);
+    }
 
     private sealed record CodexAdviceContract(
         string? Headline,

@@ -27,6 +27,8 @@ Slay the Spire 2의 현재 게임 상태를 게임 밖으로 안전하게 꺼내
 - manual advice 경로 동작
   - `Analyze Now`
   - `dotnet run --project src\Sts2ModKit.Tool -- analyze-live-once`
+- manual advice 실행 시 `sessionId` 캡처와 `codex-session.json` 생성 확인
+- historical companion `live-mirror`를 반영한 `observed-merge` 동작 확인
 - reward / event / rest / shop hook observed
 
 아직 gameplay 기준으로 끝까지 닫히지 않은 항목:
@@ -34,9 +36,9 @@ Slay the Spire 2의 현재 게임 상태를 게임 밖으로 안전하게 꺼내
 - reward / event / shop / rest / combat start / turn start 화면의 실제 live smoke
 - gameplay 중 `currentChoices`가 모든 고가치 화면에서 안정적으로 잡히는지
 - automatic advice가 실제 gameplay trigger에서 `ok`로 생성되는지
-- run-scoped Codex session 생성 / 재사용 추적
+- gameplay trigger에서도 run-scoped Codex session이 안정적으로 재사용되는지
 
-즉, 지금은 “정적 지식 + exporter + manual advice + UI 뼈대”까지는 확인됐고, 다음 핵심 과제는 “실제 플레이 한 판에서 auto advice가 붙는지”입니다.
+즉, 지금은 “정적 지식 + exporter + manual advice + session capture + UI 뼈대”까지는 확인됐고, 다음 핵심 과제는 “실제 플레이 한 판에서 auto advice와 gameplay session reuse가 붙는지”입니다.
 
 ## 빠른 시작
 
@@ -113,13 +115,13 @@ dotnet run --project src\Sts2AiCompanion.Wpf
 
 현재 canonical 기준 counts:
 
-- cards: `576`
-- relics: `288`
-- potions: `63`
-- events: `58`
+- cards: `595`
+- relics: `296`
+- potions: `68`
+- events: `62`
 - shops: `5`
-- rewards: `7`
-- keywords: `262`
+- rewards: `11`
+- keywords: `264`
 
 현재 localization coverage:
 
@@ -179,13 +181,14 @@ companion artifacts:
 - Codex CLI 호출: 성공
 - manual advice JSON/Markdown 생성: 성공
 - WPF / tool에서 manual advice 사용: 가능
+- manual advice 실행 시 `current-run.json`과 `codex-session.json`에 `sessionId` 반영: 성공
 
 아직 확정되지 않은 것은 아래입니다.
 
 - automatic advice가 UTF-8 수정 이후 fresh gameplay trigger에서 성공하는지
-- `sessionId`를 안정적으로 잡아 run-scoped Codex session을 이어 붙일 수 있는지
+- gameplay-triggered advice에서도 run-scoped Codex session을 이어 붙일 수 있는지
 
-즉, 현재는 “Codex와 실제로 대화해 조언을 받는 것”은 되지만, “런 단위 세션 생성 / 재사용”은 아직 닫히지 않았습니다.
+즉, 현재는 “Codex와 실제로 대화해 조언을 받고 manual path에서 session을 기록하는 것”은 되지만, “실제 gameplay trigger까지 포함한 런 단위 세션 재사용”은 아직 닫히지 않았습니다.
 
 ## 저장소 구조
 

@@ -162,7 +162,13 @@ internal static class RuntimeSnapshotReflectionExtractor
         var potions = ExtractStringList(roots, config.LiveExport.MaxChoiceEntries, "Potions", "OwnedPotions", "PotionSlots");
         var choices = ExtractChoices(instance, args, roots, config.LiveExport.MaxChoiceEntries);
         var encounter = ExtractEncounter(roots);
-        var screen = ResolveScreen(screenOverride, roots, screenCandidates);
+        var rootTypeSummary = string.Join(
+            " ",
+            roots
+                .Select(root => root.GetType().FullName ?? root.GetType().Name)
+                .Distinct(StringComparer.Ordinal)
+                .Take(96));
+        var screen = ResolveScreen(screenOverride, roots, new[] { rootTypeSummary }.Concat(screenCandidates).ToArray());
         if (string.Equals(screen, "unknown", StringComparison.Ordinal)
             && encounter?.InCombat == true)
         {
@@ -476,7 +482,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         foreach (var root in roots)
         {
             AddIfUseful(choiceRoots, root);
-            AddChoiceCandidate(candidateItems, root);
+            AddChoiceCandidate(candidateItems, root, maxDepth: 2);
         }
 
         foreach (var root in roots)
@@ -504,11 +510,11 @@ internal static class RuntimeSnapshotReflectionExtractor
             {
                 var candidate = TryGetMemberValue(root, memberName);
                 AddIfUseful(choiceRoots, candidate);
-                AddChoiceCandidate(candidateItems, candidate);
+                AddChoiceCandidate(candidateItems, candidate, maxDepth: 3);
                 foreach (var item in ExpandEnumerable(candidate))
                 {
                     AddIfUseful(choiceRoots, item);
-                    AddIfUseful(candidateItems, item);
+                    AddChoiceCandidate(candidateItems, item, maxDepth: 2);
                 }
             }
         }
@@ -1151,17 +1157,68 @@ internal static class RuntimeSnapshotReflectionExtractor
         target.Add(candidate);
     }
 
-    private static void AddChoiceCandidate(ICollection<object> target, object? candidate)
+    private static void AddChoiceCandidate(ICollection<object> target, object? candidate, int maxDepth)
     {
-        AddIfUseful(target, candidate);
         if (candidate is null)
         {
             return;
         }
 
-        foreach (var child in TryEnumerateChildren(candidate).Take(48))
+        var queue = new Queue<(object Item, int Depth)>();
+        var seen = new HashSet<int>();
+        queue.Enqueue((candidate, 0));
+
+        while (queue.Count > 0)
         {
-            AddIfUseful(target, child);
+            var (item, depth) = queue.Dequeue();
+            if (!seen.Add(RuntimeHelpers.GetHashCode(item)))
+            {
+                continue;
+            }
+
+            AddIfUseful(target, item);
+            if (depth >= maxDepth)
+            {
+                continue;
+            }
+
+            foreach (var memberName in new[]
+                     {
+                         "Option",
+                         "Reward",
+                         "Entry",
+                         "Card",
+                         "Model",
+                         "Title",
+                         "Label",
+                         "Choices",
+                         "Options",
+                         "Rewards",
+                         "Buttons",
+                         "RewardButtons",
+                         "RewardAlternatives",
+                         "CurrentOptions",
+                     })
+            {
+                var nested = TryGetMemberValue(item, memberName);
+                if (nested is null)
+                {
+                    continue;
+                }
+
+                foreach (var expanded in ExpandEnumerable(nested).Prepend(nested))
+                {
+                    if (expanded is not null and not string)
+                    {
+                        queue.Enqueue((expanded, depth + 1));
+                    }
+                }
+            }
+
+            foreach (var child in TryEnumerateChildren(item).Take(64))
+            {
+                queue.Enqueue((child, depth + 1));
+            }
         }
     }
 
@@ -1192,6 +1249,8 @@ internal static class RuntimeSnapshotReflectionExtractor
                || typeName.Contains("Option", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Merchant", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Slot", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Choice", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Card", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Potion", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Relic", StringComparison.OrdinalIgnoreCase)
@@ -1208,9 +1267,11 @@ internal static class RuntimeSnapshotReflectionExtractor
             TryReadString(item, "Option", "Reward", "Entry", "Card", "Model"),
             TryReadString(TryGetMemberValue(item, "Option"), "Title", "Label", "Name", "Description"),
             TryReadString(TryGetMemberValue(item, "Reward"), "Description", "Title", "Label", "Name"),
-            TryReadString(TryGetMemberValue(item, "Entry"), "Title", "Description", "Name"),
+            TryReadString(TryGetMemberValue(item, "Entry"), "DisplayName", "Title", "Description", "Name"),
             TryReadString(TryGetMemberValue(item, "Card"), "CardName", "Name", "DisplayName", "Id", "CardId"),
             TryReadString(TryGetMemberValue(item, "Model"), "CardName", "Name", "DisplayName", "Id", "CardId"),
+            TryReadString(TryGetMemberValue(item, "Title"), "Text", "Value"),
+            TryReadString(TryGetMemberValue(item, "Label"), "Text", "Value"),
             TryReadString(item, "Id", "CardId"));
     }
 
@@ -1231,7 +1292,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             TryReadString(item, "Description", "Tooltip", "Body"),
             TryReadString(TryGetMemberValue(item, "Option"), "Description", "Body"),
             TryReadString(TryGetMemberValue(item, "Reward"), "Description", "Body"),
-            TryReadString(TryGetMemberValue(item, "Entry"), "Description", "Body"),
+            TryReadString(TryGetMemberValue(item, "Entry"), "DisplayName", "Description", "Body"),
             TryReadString(TryGetMemberValue(item, "Card"), "Description", "Body"),
             TryReadString(TryGetMemberValue(item, "Model"), "Description", "Body"));
     }

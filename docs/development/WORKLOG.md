@@ -73,13 +73,23 @@
 - prompt sanitize 경로를 추가해 invalid UTF-8 degraded를 줄이도록 했습니다.
 - `analyze-live-once` 경로를 추가했습니다.
 - `CompanionHost`는 manual advice 생성 직후 snapshot을 다시 publish하게 했습니다.
+- Codex JSON event stream에서 `thread.started`를 읽어 `sessionId`를 캡처하도록 바꿨습니다.
+- manual advice 실행 시 `current-run.json`과 `codex-session.json`에 `sessionId`가 반영되는 것까지 확인했습니다.
 
-## 13. 현재 기준 결론
+## 13. state merge / observed-merge 보강
+
+- partial runtime-poll이 고가치 화면을 바로 `combat` / `unknown`으로 덮어쓰지 않도록 state merge를 보강했습니다.
+- partial observation이 빈 deck / relic / potion / player 상태로 이전 상태를 지워버리지 않도록 merge 규칙을 추가했습니다.
+- `extract-static-knowledge`가 현재 live root뿐 아니라 `artifacts/companion/*/live-mirror`의 historical observed data도 함께 읽도록 확장했습니다.
+- 그 결과 `observed-merge`가 비어 있지 않게 되었고, card-added / relic-gained / potion-changed / reward-screen-opened / event-screen-opened 관찰값이 카탈로그에 반영되기 시작했습니다.
+
+## 14. 현재 기준 결론
 
 - manual advice: 성공
 - exporter startup: 정상
 - high-value hook observed: 확인
+- manual path session capture: 성공
 - automatic advice after UTF-8 fix: 재검증 필요
-- run-scoped Codex session tracking: 미완료
+- gameplay-triggered session reuse: 미완료
 
-즉 지금 단계의 핵심 병목은 정적 지식이 아니라 `실제 gameplay high-value 화면에서 auto advice와 session tracking을 닫는 것`입니다.
+즉 지금 단계의 핵심 병목은 정적 지식이 아니라 `실제 gameplay high-value 화면에서 auto advice와 gameplay session reuse를 닫는 것`입니다.

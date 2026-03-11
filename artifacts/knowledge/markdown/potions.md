@@ -1,6 +1,6 @@
 # 포션
 
-- 전체 항목 수: 63
+- 전체 항목 수: 68
 - 설명 본문이 채워진 항목: 63
 - L10N 키 또는 제목이 연결된 항목: 63
 - 선택지/옵션 정보가 있는 항목: 0
@@ -1231,4 +1231,54 @@
 - 모델 클래스: `MegaCrit.Sts2.Core.Models.Potions.StrengthPotion`
 - 리소스 경로: `res://images/potions/strength_potion.png|`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### POTION.ATTACK_POTION
+
+- ID: `potion-attack-potion`
+- 그룹/풀 추정: 포션 관련 항목
+- 플레이 중 참조 시점: 전투 보상, 상점 구매, 현재 포션 슬롯 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:potion-changed`
+
+### POTION.DEXTERITY_POTION
+
+- ID: `potion-dexterity-potion`
+- 그룹/풀 추정: 포션 관련 항목
+- 플레이 중 참조 시점: 전투 보상, 상점 구매, 현재 포션 슬롯 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:potion-changed`
+
+### POTION.FAIRY_IN_A_BOTTLE
+
+- ID: `potion-fairy-in-a-bottle`
+- 그룹/풀 추정: 포션 관련 항목
+- 플레이 중 참조 시점: 전투 보상, 상점 구매, 현재 포션 슬롯 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:potion-changed`
+
+### POTION.SKILL_POTION
+
+- ID: `potion-skill-potion`
+- 그룹/풀 추정: 포션 관련 항목
+- 플레이 중 참조 시점: 전투 보상, 상점 구매, 현재 포션 슬롯 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:potion-changed`
+
+### POTION.WEAK_POTION
+
+- ID: `potion-weak-potion`
+- 그룹/풀 추정: 포션 관련 항목
+- 플레이 중 참조 시점: 전투 보상, 상점 구매, 현재 포션 슬롯 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:potion-changed`
 

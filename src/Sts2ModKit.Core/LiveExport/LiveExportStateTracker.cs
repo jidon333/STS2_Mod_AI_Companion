@@ -61,22 +61,14 @@ public sealed class LiveExportStateTracker
     private LiveExportSnapshot MergeSnapshot(LiveExportSnapshot previous, LiveExportObservation observation)
     {
         var runId = Coalesce(observation.RunId, previous.RunId);
-        var screen = Coalesce(observation.Screen, previous.CurrentScreen, "unknown");
-        var player = observation.Player ?? previous.Player;
-        var deck = observation.Deck is null
-            ? previous.Deck
-            : observation.Deck.Take(_options.MaxDeckEntries).ToArray();
-        var relics = observation.Relics is null
-            ? previous.Relics
-            : observation.Relics.ToArray();
-        var potions = observation.Potions is null
-            ? previous.Potions
-            : observation.Potions.ToArray();
-        var choices = observation.Choices is null
-            ? previous.CurrentChoices
-            : observation.Choices.Take(_options.MaxChoiceEntries).ToArray();
+        var screen = MergeScreen(previous, observation);
+        var player = MergePlayer(previous.Player, observation.Player);
+        var deck = MergeCards(previous.Deck, observation.Deck, observation);
+        var relics = MergeStrings(previous.Relics, observation.Relics, observation);
+        var potions = MergeStrings(previous.Potions, observation.Potions, observation);
+        var choices = MergeChoices(previous.CurrentChoices, observation.Choices, observation, previous.CurrentScreen, screen);
         var warnings = MergeWarnings(previous.Warnings, observation.Warnings);
-        var encounter = observation.Encounter ?? previous.Encounter;
+        var encounter = MergeEncounter(previous.Encounter, observation.Encounter, observation);
 
         var recentChanges = previous.RecentChanges
             .Concat(DescribeDiff(previous, screen, player, deck, relics, potions, choices, observation.TriggerKind))
@@ -376,5 +368,161 @@ public sealed class LiveExportStateTracker
     private static string Coalesce(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+    }
+
+    private static string MergeScreen(LiveExportSnapshot previous, LiveExportObservation observation)
+    {
+        var incoming = Coalesce(observation.Screen, previous.CurrentScreen, "unknown");
+        if (!string.Equals(observation.TriggerKind, "runtime-poll", StringComparison.Ordinal))
+        {
+            return incoming;
+        }
+
+        if (!IsStickyHighValueScreen(previous.CurrentScreen)
+            || !IsFallbackScreen(incoming)
+            || observation.ObservedAt - previous.CapturedAt > TimeSpan.FromSeconds(2))
+        {
+            return incoming;
+        }
+
+        return previous.CurrentScreen;
+    }
+
+    private static LiveExportPlayerSummary MergePlayer(LiveExportPlayerSummary previous, LiveExportPlayerSummary? incoming)
+    {
+        if (incoming is null)
+        {
+            return previous;
+        }
+
+        var resources = new Dictionary<string, string?>(previous.Resources, StringComparer.OrdinalIgnoreCase);
+        foreach (var resource in incoming.Resources)
+        {
+            if (!string.IsNullOrWhiteSpace(resource.Value))
+            {
+                resources[resource.Key] = resource.Value;
+            }
+        }
+
+        return new LiveExportPlayerSummary(
+            incoming.Name ?? previous.Name,
+            incoming.CurrentHp ?? previous.CurrentHp,
+            incoming.MaxHp ?? previous.MaxHp,
+            incoming.Gold ?? previous.Gold,
+            incoming.Energy ?? previous.Energy,
+            resources);
+    }
+
+    private IReadOnlyList<LiveExportCardSummary> MergeCards(
+        IReadOnlyList<LiveExportCardSummary> previous,
+        IReadOnlyList<LiveExportCardSummary>? incoming,
+        LiveExportObservation observation)
+    {
+        if (incoming is null)
+        {
+            return previous;
+        }
+
+        if (incoming.Count == 0 && ShouldPreservePreviousCollection(previous.Count, observation))
+        {
+            return previous;
+        }
+
+        return incoming.Take(_options.MaxDeckEntries).ToArray();
+    }
+
+    private static IReadOnlyList<string> MergeStrings(
+        IReadOnlyList<string> previous,
+        IReadOnlyList<string>? incoming,
+        LiveExportObservation observation)
+    {
+        if (incoming is null)
+        {
+            return previous;
+        }
+
+        if (incoming.Count == 0 && ShouldPreservePreviousCollection(previous.Count, observation))
+        {
+            return previous;
+        }
+
+        return incoming.ToArray();
+    }
+
+    private IReadOnlyList<LiveExportChoiceSummary> MergeChoices(
+        IReadOnlyList<LiveExportChoiceSummary> previous,
+        IReadOnlyList<LiveExportChoiceSummary>? incoming,
+        LiveExportObservation observation,
+        string previousScreen,
+        string nextScreen)
+    {
+        if (incoming is null)
+        {
+            return previous;
+        }
+
+        if (incoming.Count == 0
+            && previous.Count > 0
+            && IsChoiceLikeScreen(previousScreen)
+            && (string.Equals(previousScreen, nextScreen, StringComparison.Ordinal)
+                || (string.Equals(observation.TriggerKind, "runtime-poll", StringComparison.Ordinal) && IsFallbackScreen(nextScreen)))
+            && HasChoiceResolutionWarning(observation))
+        {
+            return previous;
+        }
+
+        return incoming.Take(_options.MaxChoiceEntries).ToArray();
+    }
+
+    private static LiveExportEncounterSummary? MergeEncounter(
+        LiveExportEncounterSummary? previous,
+        LiveExportEncounterSummary? incoming,
+        LiveExportObservation observation)
+    {
+        if (incoming is null)
+        {
+            return previous;
+        }
+
+        if (HasPartialStateWarning(observation))
+        {
+            return new LiveExportEncounterSummary(
+                incoming.Name ?? previous?.Name,
+                incoming.Kind ?? previous?.Kind,
+                incoming.InCombat ?? previous?.InCombat,
+                incoming.Turn ?? previous?.Turn);
+        }
+
+        return incoming;
+    }
+
+    private static bool HasPartialStateWarning(LiveExportObservation observation)
+    {
+        return observation.Warnings?.Any(warning => warning.Contains("core run data was not resolved", StringComparison.OrdinalIgnoreCase)) == true;
+    }
+
+    private static bool HasChoiceResolutionWarning(LiveExportObservation observation)
+    {
+        return observation.Warnings?.Any(warning => warning.Contains("no visible choices resolved", StringComparison.OrdinalIgnoreCase)) == true;
+    }
+
+    private static bool ShouldPreservePreviousCollection(int previousCount, LiveExportObservation observation)
+    {
+        return previousCount > 0 && HasPartialStateWarning(observation);
+    }
+
+    private static bool IsStickyHighValueScreen(string screen)
+    {
+        return screen is "rewards" or "event" or "rest-site" or "shop" or "card-choice" or "upgrade" or "transform";
+    }
+
+    private static bool IsChoiceLikeScreen(string screen)
+    {
+        return IsStickyHighValueScreen(screen);
+    }
+
+    private static bool IsFallbackScreen(string screen)
+    {
+        return screen is "" or "unknown" or "combat" or "map";
     }
 }

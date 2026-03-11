@@ -1,6 +1,6 @@
 # 유물
 
-- 전체 항목 수: 288
+- 전체 항목 수: 296
 - 설명 본문이 채워진 항목: 285
 - L10N 키 또는 제목이 연결된 항목: 285
 - 선택지/옵션 정보가 있는 항목: 0
@@ -5179,6 +5179,86 @@
 - 모델 클래스: `MegaCrit.Sts2.Core.Models.Relics.DarkstonePeriapt`
 - 리소스 경로: `res://images/relics/darkstone_periapt.pngt`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### RELIC.BURNING_BLOOD
+
+- ID: `relic-burning-blood`
+- 그룹/풀 추정: relic
+- 플레이 중 참조 시점: 유물 보상, 이벤트 보상, 현재 유물 목록 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:relic-gained`
+
+### RELIC.HAPPY_FLOWER
+
+- ID: `relic-happy-flower`
+- 그룹/풀 추정: relic
+- 플레이 중 참조 시점: 유물 보상, 이벤트 보상, 현재 유물 목록 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:relic-gained`
+
+### RELIC.LEAD_PAPERWEIGHT
+
+- ID: `relic-lead-paperweight`
+- 그룹/풀 추정: relic
+- 플레이 중 참조 시점: 유물 보상, 이벤트 보상, 현재 유물 목록 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:relic-gained`
+
+### RELIC.LIZARD_TAIL
+
+- ID: `relic-lizard-tail`
+- 그룹/풀 추정: relic
+- 플레이 중 참조 시점: 유물 보상, 이벤트 보상, 현재 유물 목록 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:relic-gained`
+
+### RELIC.MANGO
+
+- ID: `relic-mango`
+- 그룹/풀 추정: relic
+- 플레이 중 참조 시점: 유물 보상, 이벤트 보상, 현재 유물 목록 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:relic-gained`
+
+### RELIC.NUTRITIOUS_SOUP
+
+- ID: `relic-nutritious-soup`
+- 그룹/풀 추정: relic-gained
+- 플레이 중 참조 시점: 유물 보상, 이벤트 보상, 현재 유물 목록 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:relic-gained`
+
+### RELIC.SELF_FORMING_CLAY
+
+- ID: `relic-self-forming-clay`
+- 그룹/풀 추정: relic
+- 플레이 중 참조 시점: 유물 보상, 이벤트 보상, 현재 유물 목록 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:relic-gained`
+
+### RELIC.WAR_PAINT
+
+- ID: `relic-war-paint`
+- 그룹/풀 추정: relic-gained
+- 플레이 중 참조 시점: 유물 보상, 이벤트 보상, 현재 유물 목록 해석
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:relic-gained`
 
 ### Fake Merchants Rug
 
