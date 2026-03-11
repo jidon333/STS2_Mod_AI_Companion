@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-03-11T04:46:07.7826516+00:00",
+  "metadata": {
+    "releaseVersion": "v0.98.3",
+    "releaseCommit": "cb602cef",
+    "releaseDate": "2026-03-09T19:21:00-07:00",
+    "primaryLocale": "kor",
+    "description": "AI companion-oriented static knowledge exports with localized titles, descriptions, options, and structural hints."
+  },
+  "counts": {
+    "cards": 1388,
+    "relics": 682,
+    "potions": 176,
+    "events": 306,
+    "shops": 129,
+    "rewards": 53,
+    "keywords": 866
+  },
+  "files": {
+    "cards": "cards.json",
+    "relics": "relics.json",
+    "potions": "potions.json",
+    "events": "events.json",
+    "shops": "shops.json",
+    "rewards": "rewards.json",
+    "keywords": "keywords.json"
+  },
+  "provenance": {
+    "primarySources": [
+      "release-scan",
+      "assembly-scan",
+      "pck-inventory",
+      "localization-scan",
+      "observed-merge"
+    ],
+    "externalCrossCheckHints": [
+      "https://spire-codex.com/"
+    ],
+    "notes": [
+      "Use localized description fields first when reasoning about cards, relics, events, shops, rewards, and keywords.",
+      "Use modelClass/resourcePath/sourceFileHint as structural backup when localized text is incomplete.",
+      "Cross-check live currentChoices and live state against these static exports before making advice."
+    ]
+  }
+}

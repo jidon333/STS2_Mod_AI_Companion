@@ -1,0 +1,133 @@
+metadata
+generated_at: 2026-03-11T04:46:07.7826516+00:00
+release_version: v0.98.3
+release_commit: cb602cef
+release_date: 2026-03-09T19:21:00.0000000-07:00
+atlas:card_atlas: 840
+atlas:compressed: 45
+atlas:controller_atlas: 112
+atlas:epoch_atlas: 57
+atlas:era_atlas: 27
+atlas:intent_atlas: 310
+atlas:potion_atlas: 63
+atlas:potion_outline_atlas: 63
+atlas:power_atlas: 268
+atlas:relic_atlas: 336
+atlas:relic_outline_atlas: 336
+atlas:stats_screen_atlas: 16
+atlas:ui_atlas: 102
+eventsLoaded: 104
+snapshotLoaded: True
+source: extract-static-knowledge
+
+cards
+count: 1388
+- 你好世界 [megacrit-sts2-core-models-cards-helloworld] source=localization-scan tags=l10n, localized-card, type-candidate description=내 턴 시작 시, 무작위 일반 카드를 1장 [gold]손[/gold]으로 가져옵니다.
+- 空无 [megacrit-sts2-core-models-cards-null] source=localization-scan tags=l10n, localized-card, type-candidate description=피해를 {Damage:diff()} 줍니다. [gold]약화[/gold]를 {WeakPower:diff()} 부여합니다. [gold]암흑[/go...
+- 超越光速 [megacrit-sts2-core-models-cards-ftl] source=localization-scan tags=l10n, localized-card, type-candidate description=피해를 {Damage:diff()} 줍니다. 이번 턴에 카드를 {PlayMax:diff()}장보다 적게 사용했다면, 카드를 1장 뽑습니다.
+- 가로막기 [megacrit-sts2-core-models-cards-intercept] source=localization-scan tags=l10n, localized-card, type-candidate description=[gold]방어도[/gold]를 {Block:diff()} 얻습니다. 이번 턴 동안 다른 플레이어가 받아야 하는 모든 공격의 목표를 자신으로 변...
+- 가속 이탈 [megacrit-sts2-core-models-cards-boostaway] source=localization-scan tags=l10n, localized-card, type-candidate description=[gold]방어도[/gold]를 {Block:diff()} 얻습니다. [gold]버린 카드 더미[/gold]에 [gold]어지러움[/gold]을...
+- 갈가리 찢기 [megacrit-sts2-core-models-cards-tearasunder] source=localization-scan tags=l10n, localized-card, type-candidate description=피해를 {Damage:diff()} 줍니다. 이번 전투 동안 체력을 잃은 횟수만큼 반복합니다.{InCombat: ({CalculatedHits:...
+- 갈취 [megacrit-sts2-core-models-cards-pillage] source=localization-scan tags=l10n, localized-card, type-candidate description=피해를 {Damage:diff()} 줍니다. 공격이 아닌 카드를 뽑을 때까지 카드를 뽑습니다.
+- 감마 세례 [megacrit-sts2-core-models-cards-gammablast] source=localization-scan tags=l10n, localized-card, type-candidate description=피해를 {Damage:diff()} 줍니다. [gold]약화[/gold]를 {WeakPower:diff()} 부여합니다. [gold]취약[/go...
+- 감염 [megacrit-sts2-core-models-cards-infection] source=localization-scan tags=l10n, localized-card, type-candidate description=내 턴 종료 시 이 카드가 [gold]손[/gold]에 있다면, 피해를 {Damage:diff()} 받습니다.
+- 강령의 극의 [megacrit-sts2-core-models-cards-necromastery] source=localization-scan tags=l10n, localized-card, type-candidate description=[gold]소환[/gold] {Summon:diff()}. [gold]골골이[/gold]가 체력을 잃을 때마다, 모든 적이 동일한 만큼의 체력을...
+- 강령회 [megacrit-sts2-core-models-cards-seance] source=localization-scan tags=l10n, localized-card, type-candidate description=[gold]뽑을 카드 더미[/gold]의 카드를 1장 [gold]{IfUpgraded:show:영혼+|영혼}[/gold]으로 변화시킵니다.
+- 강철의 섬광 [megacrit-sts2-core-models-cards-flashofsteel] source=localization-scan tags=l10n, localized-card, type-candidate description=피해를 {Damage:diff()} 줍니다. 카드를 1장 뽑습니다.
+... 1376 more
+
+relics
+count: 682
+- 가마솥 [megacrit-sts2-core-models-relics-cauldron] source=localization-scan tags=l10n, localized-relic, type-candidate description=획득 시, 무작위 포션을 [blue]{Potions}[/blue]개 생성합니다.
+- 가시 박힌 건틀릿 [megacrit-sts2-core-models-relics-spikedgauntlets] source=localization-scan tags=l10n, localized-relic, type-candidate description=매 턴 시작 시, {Energy:energyIcons()}를 얻습니다. 파워 카드의 비용이 [blue]1[/blue] {energyPrefix:...
+- 감정 칩 [megacrit-sts2-core-models-relics-emotionchip] source=localization-scan tags=l10n, localized-relic, type-candidate description=이전 턴 동안 체력을 잃었다면, 내 턴 시작 시 모든 구체의 지속 효과를 발동시킵니다.
+- 검술 안내서 [megacrit-sts2-core-models-relics-fencingmanual] source=localization-scan tags=l10n, localized-relic, type-candidate description=매 전투 시작 시, [gold]단조[/gold] [blue]{Forge}[/blue].
+- 검은 별 [megacrit-sts2-core-models-relics-blackstar] source=localization-scan tags=l10n, localized-relic, type-candidate description=[gold]엘리트[/gold]가 보상으로 주는 유물이 1개 증가합니다.
+- 게임용 말 [megacrit-sts2-core-models-relics-gamepiece] source=localization-scan tags=l10n, localized-relic, type-candidate description=파워 카드를 사용할 때마다, 카드를 [blue]{Cards}[/blue]장 뽑습니다.
+- 고기 써는 칼 [megacrit-sts2-core-models-relics-meatcleaver] source=localization-scan tags=l10n, localized-relic, type-candidate description=휴식 장소에서 [gold]요리[/gold]를 할 수 있습니다.
+- 고깃덩어리 [megacrit-sts2-core-models-relics-meatonthebone] source=localization-scan tags=l10n, localized-relic, type-candidate description=매 전투 종료 시 남은 체력이 [blue]{HpThreshold}%[/blue] 이하라면, 체력을 [green]{Heal}[/green] 회복합...
+- 고대의 이빨 [megacrit-sts2-core-models-relics-archaictooth] source=localization-scan tags=l10n, localized-relic, type-candidate description=획득 시, {StarterCard.StringValue:cond:[gold]{StarterCard}[/gold]을(를) [gold]{Ancien...
+- 고동치는 잔여물 [megacrit-sts2-core-models-relics-beatingremnant] source=localization-scan tags=l10n, localized-relic, type-candidate description=내가 한 턴에 잃는 체력이 [blue]20[/blue]을 넘을 수 없습니다.
+- 공구함 [megacrit-sts2-core-models-relics-toolbox] source=localization-scan tags=l10n, localized-relic, type-candidate description=매 전투 시작 시, 무작위 무색 카드 [blue]{Cards}[/blue]장 중 [blue]1[/blue]장을 선택해 [gold]손[/gold]...
+- 공명하는 트라이앵글 [megacrit-sts2-core-models-relics-ringingtriangle] source=localization-scan tags=l10n, localized-relic, type-candidate description=매 전투마다 첫 턴에 [gold]손[/gold]에 있는 카드를 [gold]보존[/gold]합니다.
+... 670 more
+
+potions
+count: 176
+- 강장제 [megacrit-sts2-core-models-potions-fortifier] source=localization-scan tags=l10n, localized-potion, type-candidate description=[gold]방어도[/gold]를 3배로 만듭니다.
+- 거대화 포션 [megacrit-sts2-core-models-potions-gigantificationpotion] source=localization-scan tags=l10n, localized-potion, type-candidate description=다음에 사용하는 공격 카드의 피해량이 3배로 증가합니다.
+- 공격 포션 [megacrit-sts2-core-models-potions-attackpotion] source=localization-scan tags=l10n, localized-potion, type-candidate description=무작위 공격 카드 [blue]3[/blue]장 중 [blue]1[/blue]장을 선택해 [gold]손[/gold]으로 가져옵니다. 이번 턴 동안...
+- 과일 주스 [megacrit-sts2-core-models-potions-fruitjuice] source=localization-scan tags=l10n, localized-potion, type-candidate description=최대 체력을 [blue]{MaxHp}[/blue] 얻습니다.
+- 광기의 손길 [megacrit-sts2-core-models-potions-touchofinsanity] source=localization-scan tags=l10n, localized-potion, type-candidate description=[gold]손[/gold]에서 카드를 1장 선택합니다. 이번 전투 동안 그 카드를 비용 없이 사용할 수 있습니다.
+- 광휘의 팅크 [megacrit-sts2-core-models-potions-radianttincture] source=localization-scan tags=l10n, localized-potion, type-candidate description={Energy:energyIcons()}를 얻습니다. 다음 [blue]{RadiancePower}[/blue]턴 동안 추가로 {energyPre...
+- 교활함 포션 [megacrit-sts2-core-models-potions-cunningpotion] source=localization-scan tags=l10n, localized-potion, type-candidate description=[gold]강화[/gold]된 [gold]단도[/gold]를 [blue]{Cards}[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- 구식 포션 [megacrit-sts2-core-models-potions-deprecatedpotion] source=localization-scan tags=l10n, localized-potion, type-candidate description=이 포션은 게임에서 삭제되었습니다.
+- 구울 항아리 [megacrit-sts2-core-models-potions-potofghouls] source=localization-scan tags=l10n, localized-potion, type-candidate description=[gold]영혼[/gold]을 [blue]{Cards}[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- 단지 속의 유령 [megacrit-sts2-core-models-potions-ghostinajar] source=localization-scan tags=l10n, localized-potion, type-candidate description=[gold]불가침[/gold]을 [blue]1[/blue] 얻습니다.
+- 도박꾼의 영액 [megacrit-sts2-core-models-potions-gamblersbrew] source=localization-scan tags=l10n, localized-potion, type-candidate description=원하는 만큼 카드를 버리고 버린 만큼 카드를 뽑습니다.
+- 딱정벌레 주스 [megacrit-sts2-core-models-potions-beetlejuice] source=localization-scan tags=l10n, localized-potion, type-candidate description={Repeat:choose(1):다음 턴에|다음 [blue]{}[/blue]턴 동안} 적이 가하는 공격의 피해량이 [blue]{DamageDec...
+... 164 more
+
+events
+count: 306
+- 땜질 시간 [megacrit-sts2-core-models-events-tinkertime] source=localization-scan tags=l10n, localized-event, type-candidate options=13 description=당신은 [red][sine]끝도 없이 넘쳐나는 시체들[/sine][/red]을 헤쳐나가던 도중, 각양각색의 잔해를 뒤적거리고 있는 [orange...
+- 무한의 컨베이어 [megacrit-sts2-core-models-events-endlessconveyor] source=localization-scan tags=l10n, localized-event, type-candidate options=11 description=당신은 한 오두막집에 들어섭니다. 밝지만 뒤틀린 표지판에는 다음과 같은 내용이 적혀 있습니다: [aqua]“끝없는 만찬 - 배고픈 만큼 계산하세...
+- 미끄러운 다리 [megacrit-sts2-core-models-events-slipperybridge] source=localization-scan tags=l10n, localized-event, type-candidate options=10 description=무너져 내릴 듯한 나무 다리를 건너던 도중, [blue][jitter]갑작스럽게 폭우[/jitter][/blue]가 쏟아집니다. [purple]...
+- 재판 [megacrit-sts2-core-models-events-trial] source=localization-scan tags=l10n, localized-event, type-candidate options=10 description=당신은 거대한 건물로 들어가는 사람들의 줄에 합류합니다.  [gold]황금빛 아치[/gold]를 지나자 나팔 소리가 요란하게 울려 퍼지고 [ji...
+- 웡고스에 오신 것을 환영합니다 [megacrit-sts2-core-models-events-welcometowongos] source=localization-scan tags=l10n, localized-event, type-candidate options=7 description=“웡고스에 오신 걸 환영합니다. 원하시는 상품을 웡타스틱한 가격으로 제공합니다.” 당신이 여태 만난 점원 중 가장 무기력한 점원이 말합니다....
+- 자기계발서 [megacrit-sts2-core-models-events-selfhelpbook] source=localization-scan tags=l10n, localized-event, type-candidate options=7 description=바닥에는 책 한 권이 놓여있습니다. “첨탑을 정복하기 위한 3가지 방법”  책의 표면은 [red]피로 뒤덮여[/red] 있었기 때문에, 굉장히...
+- 진리의 석판 [megacrit-sts2-core-models-events-tabletoftruth] source=localization-scan tags=l10n, localized-event, type-candidate options=7 description=당신은 두 명의 [blue]혈족 수호자[/blue]를 쓰러뜨리고, 그들이 지키고 있던 보관실 안으로 들어갑니다.  방 안에는 [purple][s...
+- 거대한 꽃 [megacrit-sts2-core-models-events-colossalflower] source=localization-scan tags=l10n, localized-event, type-candidate options=6 description=[red][jitter]산처럼 쌓인 뼈무더기[/jitter][/red] 꼭대기에, [green]거대한 꽃[/green] 하나가 자라나 있습니다....
+- 다채로운 철학자들 [megacrit-sts2-core-models-events-colorfulphilosophers] source=localization-scan tags=l10n, localized-event, type-candidate options=6 description=당신의 눈앞에 꽤나 멋진 광경이 펼쳐집니다. 당신은 우뚝 서있는 세 가지 색의 동상들이 단상에 서서, 색채의 철학적 의미에 관해 [jitter]...
+- 포션의 미래? [megacrit-sts2-core-events-custom-crystalsphereevent-crystalspherecell] source=localization-scan tags=l10n, localized-event, type-candidate options=6 description=모퉁이를 도는 순간 희미한 진동이 느껴지고, 거대한 회전 장치가 당신의 눈앞에 모습을 드러냅니다! 여러 개의 투입구가 있어, 액체를 고도로 압축...
+- 물에 잠긴 기록실 [megacrit-sts2-core-models-events-waterloggedscriptorium] source=localization-scan tags=l10n, localized-event, type-candidate options=5 description=당신은 어두컴컴한 통로를 헤쳐 나아가던 중, 작은 가게에서 일하고 있는 [aqua]수척한 인물[/aqua]을 우연히 발견합니다. 무수히 많은 선...
+- 장로 랜위드 [megacrit-sts2-core-models-events-ranwidtheelder] source=localization-scan tags=l10n, localized-event, type-candidate options=5 description=당신이 [purple]지금까지 본 사람 중 가장 나이가 많은 사람[/purple]이 당신에게 다가옵니다. [sine]“또 만났네요... 저잖아요...
+... 294 more
+
+shops
+count: 129
+- 미지 [megacrit-sts2-core-entities-merchant-merchantentry] source=localization-scan tags=l10n, localized-shop, type-candidate description=미지의 방입니다.  이벤트나 적, 상점, 보물을 마주칠 수 있습니다.
+- 유물 던지기 [megacrit-sts2-core-models-monsters-fakemerchantmonster] source=localization-scan tags=l10n, localized-shop, type-candidate description=제 값을 치르게 해주지...
+- 카드 제거 서비스 [merchant] source=localization-scan tags=l10n, localized-shop, member-candidate description=덱에서 카드를 1장 제거합니다. 남은 도전 동안 이 서비스의 비용이 [blue]{Amount}[/blue] 증가합니다.
+- 휴식 [megacrit-sts2-core-entities-merchant-purchasestatus] source=localization-scan tags=l10n, localized-shop, type-candidate description=이 방에 들러 약간의 체력을 [green]회복[/green]하거나 카드를 [gold]강화[/gold]해보세요.
+- 휴식 장소 [megacrit-sts2-core-entities-merchant-merchantinventory] source=localization-scan tags=l10n, localized-shop, type-candidate description=이 방에 들러 약간의 체력을 [green]회복[/green]하거나 카드를 [gold]강화[/gold]해보세요.
+- "filename": "fake merchants rug [filename----fake-merchants-rug-png] source=pck-inventory tags=resource-path
+- defect merchant [res---scenes-merchant-characters-defect-merchant-tscnl] source=pck-inventory tags=resource-path
+- defect merchant skel data [animations-merchant-defect-defect-merchant-skel-data-tres] source=pck-inventory tags=resource-path
+- defect shop [atlas-data---defect-shop-png-nsize-2017-459-nfilter-linear-linear-nscale-0-29-nbinder-bolt-nbounds-1231-154-38-96-noffsets-0-1-38-97-nblender-blender-blur-nbounds-1530-155-152-140-noffsets-0-0-153-140-nblender-blender-core-nbounds-329-106-161-351-nblender-blender-edge-1-nbounds-1065-149-70-117-noffsets-1-2-71-119-nrotate-90-nblender-blender-edge-2-nbounds-1183-252-61-205-noffsets-0-0-61-211-nblender-blender-hline-nbounds-1184-153-97-45-nrotate-90-nblender-blender-thick-1-nbounds-492-127-77-330-noffsets-25-0-110-336-nblender-blender-thick-2-nbounds-958-221-110-236-noffsets-0-100-111-336-nblender-blender-whisp-1-nbounds-571-136-126-321-nblender-blender-whisp-2-nbounds-846-171-110-286-nbod-nbounds-1070-250-207-111-nrotate-90-ncastfist-l-nbounds-1764-240-94-88-nrotate-90-ncastfist-r-nbounds-1271-147-110-95-nrotate-90-ncowl-1-nbounds-699-146-311-145-nrotate-90-ncowl-2-nbounds-1562-8-145-113-noffsets-4-0-149-113-nrotate-90-ncowl-back-nbounds-2-104-353-325-noffsets-10-0-372-325-nrotate-90-ndeathspark-deathspark00-nbounds-1943-250-63-70-noffsets-13-4-87-87-nrotate-90-ndeathspark-deathspark01-nbounds-1854-191-77-86-noffsets-4-1-87-87-nrotate-90-ndeathspark-deathspark02-nbounds-1830-112-77-85-noffsets-6-0-87-87-nrotate-90-neye-nbounds-1873-394-63-93-nrotate-90-neye-shine-nbounds-846-149-20-62-nrotate-90-nglow1-nbounds-1848-6-50-51-noffsets-2-3-55-57-nglow2-nbounds-1942-151-47-56-noffsets-3-3-52-62-nrotate-90-nglow3-nbounds-1900-12-45-42-noffsets-3-3-51-48-nrotate-90-nglow4-nbounds-1968-393-47-64-noffsets-2-3-52-70-nhead-nbounds-1423-5-145-137-nrotate-90-nhip-nbounds-1784-364-93-87-noffsets-2-0-95-87-nrotate-90-nhip-joint-bottom-nbounds-1944-13-44-44-nhip-joint-top-nbounds-1848-59-51-51-nl-foot-nbounds-1764-156-82-64-nrotate-90-nl-hand-nbounds-97-3-107-99-nl-leg-bottom-nbounds-1562-318-139-131-nrotate-90-nl-leg-middle-nbounds-1695-336-87-121-nr-leg-middle-nbounds-1695-336-87-121-nl-leg-top-nbounds-299-5-104-97-nl-lower-arm-nbounds-1677-13-92-140-noffsets-0-0-92-155-nl-toe-left-nbounds-1917-105-76-44-nl-toe-middle-nbounds-1771-73-81-55-nrotate-90-nl-toe-right-nbounds-1901-59-76-44-nl-upper-arm-nbounds-1444-297-116-160-noffsets-0-0-118-162-nneck-nbounds-1873-322-87-70-norb-nbounds-1246-259-198-196-noffsets-2-2-202-201-nrotate-90-norb-patch-nbounds-1444-264-44-31-noffsets-0-0-44-33-norb-shine-nbounds-655-3-162-131-norb-sparkles-nbounds-1684-188-128-78-nrotate-90-npipe-1-nbounds-958-147-72-105-nrotate-90-npipe-2-nbounds-1942-200-48-65-nrotate-90-nr-foot-nbounds-1962-315-76-52-noffsets-1-0-77-53-nrotate-90-nr-hand-nbounds-206-4-98-91-nrotate-90-nr-leg-bottom-nbounds-543-2-110-123-nr-leg-top-nbounds-2-2-93-100-noffsets-0-0-94-100-nr-lower-arm-nbounds-405-3-101-136-noffsets-0-0-101-145-nrotate-90-nr-toe-left-nbounds-1771-20-75-51-nr-toe-right-nbounds-1854-270-87-50-nr-upper-arm-nbounds-1368-152-105-160-nrotate-90-nroundspark-nbounds-492-114-11-11-nshadow-nbounds-819-3-602-141-noffsets-1-2-603-144-n---normal-texture-prefix---n---source-path---res---animations-merchant-defect-defect-shop-atlas---specular-texture-prefix---s] source=pck-inventory tags=resource-path
+- defect shop.atlas 3f96406f9a6da27430b19860989128f7 [path--res----godot-imported-defect-shop-atlas-3f96406f9a6da27430b19860989128f7-spatlas] source=pck-inventory tags=resource-path
+- defect shop.png [animations-merchant-defect-defect-shop-png-import] source=pck-inventory tags=resource-path
+- defect shop.png 7cd1b216490239388e248fe3de753032 [godot-imported-defect-shop-png-7cd1b216490239388e248fe3de753032-ctex] source=pck-inventory tags=resource-path
+... 117 more
+
+rewards
+count: 53
+- 연결된 보상 [megacrit-sts2-core-rewards-linkedrewardset] source=localization-scan tags=l10n, localized-reward, type-candidate description=이 세트에서 [blue]1[/blue]개의 보상만을 선택할 수 있습니다.
+- 카드 보상 [megacrit-sts2-core-rewards-goldreward] source=localization-scan tags=l10n, localized-reward, type-candidate description=무작위 카드 [blue]3[/blue]장으로 구성된 팩입니다. 카드를 [blue]1[/blue]장 선택해 [gold]덱[/gold]에 추가할 수...
+- combat reward ftue [res---scenes-ftue-combat-reward-ftue-tscn] source=pck-inventory tags=resource-path
+- GoldReward [res---src-core-rewards-goldreward-cs] source=pck-inventory tags=resource-path
+- linked reward set [scenes-rewards-linked-reward-set-tscn] source=pck-inventory tags=resource-path
+- linked reward set.tscn4 [res---scenes-rewards-linked-reward-set-tscn4] source=pck-inventory tags=resource-path
+- Method Name [megacrit-sts2-core-nodes-rewards-nlinkedrewardset-methodname] source=assembly-scan tags=type-candidate
+- Method Name [megacrit-sts2-core-nodes-rewards-nrewardbutton-methodname] source=assembly-scan tags=type-candidate
+- MockNoRewardsEncounter [res---src-core-models-encounters-mocks-mocknorewardsencounter-csj] source=pck-inventory tags=resource-path
+- NCombatRewardFtue [ext-resource-type--script--uid--uid---d13k30jb0a6y3--path--res---src-core-nodes-ftue-ncombatrewardftue-cs--id--1-y1psv] source=pck-inventory tags=resource-path
+- NLinked Reward Set [megacrit-sts2-core-nodes-rewards-nlinkedrewardset] source=localization-scan tags=l10n, localized-reward, type-candidate
+- NLinkedRewardSet [ext-resource-type--script--uid--uid---dfo4vvwsghqch--path--res---src-core-nodes-rewards-nlinkedrewardset-cs--id--1-w71mv] source=pck-inventory tags=resource-path
+... 41 more
+
+keywords
+count: 866
+- 희망의 등불 [megacrit-sts2-core-monstermoves-intents-buffintent] source=localization-scan tags=l10n, localized-keyword, type-candidate description=내 턴 동안 [gold]방어도[/gold]를 얻을 때마다, 다른 플레이어가 그 절반만큼 [gold]방어도[/gold]를 얻습니다.
+- 힘 [megacrit-sts2-core-monstermoves-intents-attackintent] source=localization-scan tags=l10n, localized-keyword, type-candidate description=힘은 공격 카드의 피해량을 증가시킵니다.
+- 힘 지배 [megacrit-sts2-core-monstermoves-intents-abstractintent] source=localization-scan tags=l10n, localized-keyword, type-candidate description=처치 시, 빼앗은 모든 [gold]힘[/gold]이 플레이어에게 돌아갑니다.
+- "filename": "intent buff [filename----intent-buff-png] source=pck-inventory tags=resource-path
+- "filename": "intent death blow [filename----intent-death-blow-png] source=pck-inventory tags=resource-path
+- "filename": "intent debuff [filename----intent-debuff-png] source=pck-inventory tags=resource-path
+- "filename": "intent defend [filename----intent-defend-png] source=pck-inventory tags=resource-path
+- "filename": "intent escape [filename----intent-escape-png] source=pck-inventory tags=resource-path
+- "filename": "intent heal [filename----intent-heal-png] source=pck-inventory tags=resource-path
+- "filename": "intent hidden [filename----intent-hidden-png] source=pck-inventory tags=resource-path
+- "filename": "intent sleep [filename----intent-sleep-png] source=pck-inventory tags=resource-path
+- "filename": "intent stun [filename----intent-stun-png] source=pck-inventory tags=resource-path
+... 854 more

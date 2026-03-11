@@ -1,3 +1,4 @@
+using System.Text;
 using Sts2AiCompanion.Host;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Diagnostics;
@@ -24,6 +25,8 @@ Run("live export deduplicator suppresses duplicate observations", TestLiveExport
 Run("live export summary contains required sections", TestLiveExportSummaryFormatting, failures);
 Run("live export replay stays deterministic", TestLiveExportReplayDeterminism, failures);
 Run("static knowledge builder merges observed snapshot data", TestStaticKnowledgeCatalogBuilder, failures);
+Run("localization scanner extracts card title and description from binary text", TestLocalizationKnowledgeScanner, failures);
+Run("localization scan merges into canonical card entries", TestLocalizationKnowledgeMerge, failures);
 Run("smoke diagnostics surface startup patch failures", TestSmokeDiagnostics, failures);
 Run("runtime reflection invoker supports optional parameters", TestRuntimeReflectionOptionalParameters, failures);
 Run("companion path resolver keeps per-run artifacts under companion root", TestCompanionPathResolver, failures);
@@ -468,6 +471,129 @@ static void TestStaticKnowledgeCatalogBuilder()
     Assert(catalog.Potions.Any(entry => entry.Name == "Swift Potion"), "Expected observed potions to appear in the catalog.");
     Assert(catalog.Shops.Any(entry => entry.Options.Any(option => option.Label == "Pommel Strike")), "Expected observed shop choices to produce a shop catalog entry.");
     Assert(catalog.Keywords.Any(entry => entry.Name == "attack"), "Expected card type keywords to be captured.");
+}
+
+static void TestLocalizationKnowledgeScanner()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var path = Path.Combine(root, "synthetic.pck");
+        var payload = """
+        localization/eng/cards.json
+        "ACROBATICS.title": "Acrobatics",
+        "ACROBATICS.description": "Draw 3 cards.",
+        localization/kor/cards.json
+        "ACROBATICS.title": "곡예",
+        "ACROBATICS.description": "카드를 3장 뽑습니다.",
+        localization/kor/card_library.json
+        "ACROBATICS.selectionScreenPrompt": "카드를 고르세요."
+        """;
+        File.WriteAllText(path, payload, new UTF8Encoding(false));
+
+        var seedCatalog = new StaticKnowledgeCatalog(
+            DateTimeOffset.UtcNow,
+            new StaticKnowledgeMetadata("v-test", "commit", DateTimeOffset.UtcNow, new Dictionary<string, string?>()),
+            new[]
+            {
+                new StaticKnowledgeEntry(
+                    "megacrit-sts2-core-models-cards-acrobatics",
+                    "Acrobatics",
+                    "assembly-scan",
+                    false,
+                    null,
+                    new[] { "type-candidate" },
+                    new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["fullName"] = "MegaCrit.Sts2.Core.Models.Cards.Acrobatics",
+                    },
+                    Array.Empty<StaticKnowledgeOption>()),
+            },
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>());
+        var scan = LocalizationKnowledgeScanner.Scan(path, seedCatalog, out var warnings);
+
+        Assert(warnings.Count == 0, "Synthetic localization scan should not emit warnings.");
+        Assert(scan.Cards.Count == 1, $"Expected one localized card but received {scan.Cards.Count}.");
+        Assert(scan.Cards[0].PreferredLocale == "kor", "Expected Korean localization to win when available.");
+        Assert(scan.Cards[0].Title == "곡예", "Expected Korean card title.");
+        Assert(scan.Cards[0].Description == "카드를 3장 뽑습니다.", "Expected Korean card description.");
+        Assert(scan.Cards[0].SelectionScreenPrompt == "카드를 고르세요.", "Expected selection screen prompt.");
+        Assert(scan.Cards[0].EnglishTitle == "Acrobatics", "Expected English fallback title to be preserved.");
+        Assert(scan.Cards[0].EnglishDescription == "Draw 3 cards.", "Expected English fallback description to be preserved.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestLocalizationKnowledgeMerge()
+{
+    var metadata = new StaticKnowledgeMetadata("v-test", "commit", DateTimeOffset.UtcNow, new Dictionary<string, string?>());
+    var baseline = new StaticKnowledgeCatalog(
+        DateTimeOffset.UtcNow,
+        metadata,
+        new[]
+        {
+            new StaticKnowledgeEntry(
+                "megacrit-sts2-core-models-cards-acrobatics",
+                "Acrobatics",
+                "assembly-scan",
+                false,
+                "MegaCrit.Sts2.Core.Models.Cards.Acrobatics",
+                new[] { "type-candidate" },
+                new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["fullName"] = "MegaCrit.Sts2.Core.Models.Cards.Acrobatics",
+                    ["resourcePath"] = "res://src/Core/Models/Cards/Acrobatics.cs",
+                },
+                Array.Empty<StaticKnowledgeOption>()),
+        },
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>());
+
+    var scan = new StaticKnowledgeLocalizationScan(
+        DateTimeOffset.UtcNow,
+        "synthetic",
+        new[]
+        {
+            new StaticKnowledgeLocalizationCardEntry(
+                "ACROBATICS",
+                "kor",
+                "곡예",
+                "카드를 3장 뽑습니다.",
+                "카드를 고르세요.",
+                "Acrobatics",
+                "Draw 3 cards.",
+                new[] { "localization/kor/cards.json", "localization/eng/cards.json" },
+                new[] { "eng", "kor" }),
+        },
+        Array.Empty<StaticKnowledgeLocalizationEntry>(),
+        Array.Empty<StaticKnowledgeLocalizationEntry>(),
+        Array.Empty<StaticKnowledgeLocalizationEntry>(),
+        Array.Empty<StaticKnowledgeLocalizationEntry>(),
+        Array.Empty<StaticKnowledgeLocalizationEntry>(),
+        Array.Empty<StaticKnowledgeLocalizationEntry>(),
+        new Dictionary<string, string?>(),
+        Array.Empty<string>());
+
+    var merged = StaticKnowledgeCatalogBuilder.MergeCardLocalization(baseline, scan, metadata);
+    var card = merged.Cards.Single();
+
+    Assert(card.Name == "곡예", "Expected localization merge to replace the display title.");
+    Assert(card.Source == "localization-scan", "Expected localization merge to promote the card source.");
+    Assert(card.Attributes.TryGetValue("description", out var description) && description == "카드를 3장 뽑습니다.", "Expected localized description attribute.");
+    Assert(card.Attributes.TryGetValue("selectionScreenPrompt", out var selectionPrompt) && selectionPrompt == "카드를 고르세요.", "Expected localized prompt attribute.");
+    Assert(card.Attributes.TryGetValue("englishTitle", out var englishTitle) && englishTitle == "Acrobatics", "Expected English fallback title.");
 }
 
 static void TestSmokeDiagnostics()

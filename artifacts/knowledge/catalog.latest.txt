@@ -1,5 +1,5 @@
 metadata
-generated_at: 2026-03-10T23:59:27.0748240+00:00
+generated_at: 2026-03-11T04:46:07.7826516+00:00
 release_version: v0.98.3
 release_commit: cb602cef
 release_date: 2026-03-09T19:21:00.0000000-07:00
@@ -21,7 +21,7 @@ snapshotLoaded: True
 source: extract-static-knowledge
 
 cards
-count: 6635
+count: 7748
 - "filename": "draw cards next turn power [filename----draw-cards-next-turn-power-png] source=pck-inventory tags=resource-path
 - "filename": "intent card debuff [filename----intent-card-debuff-png] source=pck-inventory tags=resource-path
 - "filename": "intent status card [filename----intent-status-card-png] source=pck-inventory tags=resource-path
@@ -32,9 +32,9 @@ count: 6635
 - "image": "card atlas 1 [image----card-atlas-1-png] source=pck-inventory tags=resource-path
 - "image": "card atlas 2 [image----card-atlas-2-png] source=pck-inventory tags=resource-path
 - %[ [res---images-packed-card-portraits-regent-devastate-png] source=pck-inventory tags=resource-path
+- 2배의 피해 [double-damage-power] source=localization-scan tags=l10n, localized-card description=이번 턴에 가하는 공격의 피해량이 2배가 됩니다.
 - 9 [res---images-packed-card-portraits-defect-strike-defect-pngaq-9] source=pck-inventory tags=resource-path
-- <2>  Card Info Ctor Param Init [2---cardinfoctorparaminit] source=assembly-scan tags=member-candidate
-... 6623 more
+... 7736 more
 
 relics
 count: 2366

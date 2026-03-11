@@ -19,7 +19,7 @@ public sealed class KnowledgeCatalogService
 
     public StaticKnowledgeCatalog ReloadIfChanged()
     {
-        var path = Path.Combine(_knowledgeRoot, "catalog.latest.json");
+        var path = ResolveCatalogPath();
         if (!File.Exists(path))
         {
             _catalog = StaticKnowledgeCatalog.CreateEmpty();
@@ -177,5 +177,16 @@ public sealed class KnowledgeCatalogService
             .Select(character => char.IsLetterOrDigit(character) ? character : '-')
             .ToArray())
             .Trim('-');
+    }
+
+    private string ResolveCatalogPath()
+    {
+        var assistantPath = Path.Combine(_knowledgeRoot, "catalog.assistant.json");
+        if (File.Exists(assistantPath))
+        {
+            return assistantPath;
+        }
+
+        return Path.Combine(_knowledgeRoot, "catalog.latest.json");
     }
 }

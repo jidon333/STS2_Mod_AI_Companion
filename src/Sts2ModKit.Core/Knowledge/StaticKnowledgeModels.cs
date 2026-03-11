@@ -30,6 +30,45 @@ public sealed record StaticKnowledgePipelineStep(
     IReadOnlyDictionary<string, string?> Stats,
     IReadOnlyList<string> Warnings);
 
+public sealed record StaticKnowledgeLocalizationCardEntry(
+    string KeyStem,
+    string PreferredLocale,
+    string? Title,
+    string? Description,
+    string? SelectionScreenPrompt,
+    string? EnglishTitle,
+    string? EnglishDescription,
+    IReadOnlyList<string> SourceFileHints,
+    IReadOnlyList<string> Locales);
+
+public sealed record StaticKnowledgeLocalizationEntry(
+    string Domain,
+    string KeyStem,
+    string PreferredLocale,
+    string? Title,
+    string? Description,
+    string? Flavor,
+    string? SelectionScreenPrompt,
+    string? EnglishTitle,
+    string? EnglishDescription,
+    IReadOnlyList<StaticKnowledgeOption> Options,
+    IReadOnlyDictionary<string, string?> Attributes,
+    IReadOnlyList<string> SourceFileHints,
+    IReadOnlyList<string> Locales);
+
+public sealed record StaticKnowledgeLocalizationScan(
+    DateTimeOffset GeneratedAt,
+    string SourcePath,
+    IReadOnlyList<StaticKnowledgeLocalizationCardEntry> Cards,
+    IReadOnlyList<StaticKnowledgeLocalizationEntry> Relics,
+    IReadOnlyList<StaticKnowledgeLocalizationEntry> Potions,
+    IReadOnlyList<StaticKnowledgeLocalizationEntry> Events,
+    IReadOnlyList<StaticKnowledgeLocalizationEntry> Shops,
+    IReadOnlyList<StaticKnowledgeLocalizationEntry> Rewards,
+    IReadOnlyList<StaticKnowledgeLocalizationEntry> Keywords,
+    IReadOnlyDictionary<string, string?> Stats,
+    IReadOnlyList<string> Warnings);
+
 public sealed record StaticKnowledgeMetadata(
     string? ReleaseVersion,
     string? ReleaseCommit,

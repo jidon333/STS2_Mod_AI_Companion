@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-10T23:59:27.0779873+00:00",
+  "generatedAt": "2026-03-11T04:46:07.8094789+00:00",
   "knowledgeRoot": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge",
   "metadata": {
     "releaseVersion": "v0.98.3",
@@ -85,29 +85,36 @@
       "kind": "catalog-previous",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\catalog.latest.json",
       "exists": true,
-      "size": 6779108,
-      "lastWriteTime": "2026-03-10T23:57:46.452732+00:00"
+      "size": 9153108,
+      "lastWriteTime": "2026-03-11T04:44:40.668204+00:00"
     },
     {
       "kind": "assembly-scan",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\assembly-scan.json",
       "exists": true,
       "size": 2945234,
-      "lastWriteTime": "2026-03-10T23:58:36.8900516+00:00"
+      "lastWriteTime": "2026-03-11T04:44:51.6980259+00:00"
     },
     {
       "kind": "pck-inventory",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\pck-inventory.json",
       "exists": true,
       "size": 3834265,
-      "lastWriteTime": "2026-03-10T23:59:27.0246619+00:00"
+      "lastWriteTime": "2026-03-11T04:45:47.9479732+00:00"
+    },
+    {
+      "kind": "localization-scan",
+      "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\localization-scan.json",
+      "exists": true,
+      "size": 1384945,
+      "lastWriteTime": "2026-03-11T04:45:57.7681812+00:00"
     },
     {
       "kind": "observed-merge",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\observed-merge.json",
       "exists": true,
       "size": 922,
-      "lastWriteTime": "2026-03-10T23:59:27.0276634+00:00"
+      "lastWriteTime": "2026-03-11T04:46:07.7794406+00:00"
     }
   ],
   "steps": [
@@ -156,6 +163,33 @@
       ]
     },
     {
+      "name": "localization-scan",
+      "status": "completed",
+      "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\localization-scan.json",
+      "stats": {
+        "cards": "572",
+        "titles": "557",
+        "descriptions": "538",
+        "selectionPrompts": "35",
+        "koreanPreferred": "572",
+        "englishPreferred": "0",
+        "relics": "291",
+        "relicDescriptions": "289",
+        "potions": "75",
+        "potionDescriptions": "70",
+        "events": "197",
+        "eventDescriptions": "95",
+        "eventOptions": "203",
+        "shops": "21",
+        "shopDescriptions": "18",
+        "rewards": "3",
+        "rewardDescriptions": "2",
+        "keywords": "270",
+        "keywordDescriptions": "263"
+      },
+      "warnings": []
+    },
+    {
       "name": "observed-merge",
       "status": "completed",
       "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\observed-merge.json",
@@ -175,7 +209,7 @@
       "status": "completed",
       "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\catalog.latest.json",
       "stats": {
-        "cards": "6635",
+        "cards": "7748",
         "relics": "2366",
         "potions": "1078",
         "events": "1411",

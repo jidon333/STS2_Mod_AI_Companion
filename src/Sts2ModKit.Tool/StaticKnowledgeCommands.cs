@@ -9,10 +9,14 @@ namespace Sts2ModKit.Tool;
 internal sealed record StaticKnowledgeExtractionResult(
     string KnowledgeRoot,
     string CatalogPath,
+    string AssistantCatalogPath,
     string SummaryPath,
+    string AssistantSummaryPath,
+    string AssistantRoot,
     string SourceManifestPath,
     string AssemblyScanPath,
     string PckInventoryPath,
+    string LocalizationScanPath,
     string ObservedMergePath,
     string MarkdownRoot,
     string MarkdownOverviewPath,
@@ -23,16 +27,22 @@ internal sealed record StaticKnowledgeExtractionResult(
 internal sealed record StaticKnowledgeInspectionResult(
     string KnowledgeRoot,
     bool CatalogExists,
+    bool AssistantCatalogExists,
     bool SummaryExists,
+    bool AssistantSummaryExists,
+    bool AssistantRootExists,
     bool SourceManifestExists,
     bool AssemblyScanExists,
     bool PckInventoryExists,
+    bool LocalizationScanExists,
     bool ObservedMergeExists,
     bool MarkdownExists,
+    string AssistantRoot,
     string MarkdownRoot,
     object? Metadata,
     object? Counts,
     object? SourceCounts,
+    object? LocalizationStats,
     IReadOnlyList<StaticKnowledgePipelineStep> Steps,
     IReadOnlyList<string> SampleCards,
     IReadOnlyList<string> SampleRelics,
@@ -59,32 +69,43 @@ internal static class StaticKnowledgeCommands
     public static StaticKnowledgeInspectionResult Inspect(string knowledgeRoot)
     {
         var catalogPath = Path.Combine(knowledgeRoot, "catalog.latest.json");
+        var assistantCatalogPath = Path.Combine(knowledgeRoot, "catalog.assistant.json");
         var summaryPath = Path.Combine(knowledgeRoot, "catalog.latest.txt");
+        var assistantSummaryPath = Path.Combine(knowledgeRoot, "catalog.assistant.txt");
+        var assistantRoot = Path.Combine(knowledgeRoot, "assistant");
         var sourceManifestPath = Path.Combine(knowledgeRoot, "source-manifest.json");
         var assemblyScanPath = Path.Combine(knowledgeRoot, "assembly-scan.json");
         var pckInventoryPath = Path.Combine(knowledgeRoot, "pck-inventory.json");
+        var localizationScanPath = Path.Combine(knowledgeRoot, "localization-scan.json");
         var observedMergePath = Path.Combine(knowledgeRoot, "observed-merge.json");
         var markdownRoot = Path.Combine(knowledgeRoot, "markdown");
         var catalog = TryReadJson<StaticKnowledgeCatalog>(catalogPath);
         var sourceManifest = TryReadJson<StaticKnowledgeSourceManifest>(sourceManifestPath);
+        var localizationScan = TryReadJson<StaticKnowledgeLocalizationScan>(localizationScanPath);
 
         return new StaticKnowledgeInspectionResult(
             knowledgeRoot,
             File.Exists(catalogPath),
+            File.Exists(assistantCatalogPath),
             File.Exists(summaryPath),
+            File.Exists(assistantSummaryPath),
+            Directory.Exists(assistantRoot),
             File.Exists(sourceManifestPath),
             File.Exists(assemblyScanPath),
             File.Exists(pckInventoryPath),
+            File.Exists(localizationScanPath),
             File.Exists(observedMergePath),
             Directory.Exists(markdownRoot),
+            assistantRoot,
             markdownRoot,
             catalog?.Metadata ?? sourceManifest?.Metadata,
             catalog is null ? null : BuildCounts(catalog),
             catalog is null ? null : BuildSourceCounts(catalog),
+            localizationScan is null ? null : BuildLocalizationCounts(localizationScan),
             sourceManifest?.Steps ?? Array.Empty<StaticKnowledgePipelineStep>(),
-            catalog?.Cards.Take(8).Select(entry => entry.Name).ToArray() ?? Array.Empty<string>(),
-            catalog?.Relics.Take(8).Select(entry => entry.Name).ToArray() ?? Array.Empty<string>(),
-            catalog?.Events.Take(8).Select(entry => entry.Name).ToArray() ?? Array.Empty<string>());
+            catalog is null ? Array.Empty<string>() : BuildSampleEntries(catalog.Cards),
+            catalog is null ? Array.Empty<string>() : BuildSampleEntries(catalog.Relics),
+            catalog is null ? Array.Empty<string>() : BuildSampleEntries(catalog.Events));
     }
 
     private static StaticKnowledgeExtractionResult ExtractInternal(ScaffoldConfiguration configuration, string knowledgeRoot, string source)
@@ -93,10 +114,14 @@ internal static class StaticKnowledgeCommands
 
         var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
         var catalogPath = Path.Combine(knowledgeRoot, "catalog.latest.json");
+        var assistantCatalogPath = Path.Combine(knowledgeRoot, "catalog.assistant.json");
         var summaryPath = Path.Combine(knowledgeRoot, "catalog.latest.txt");
+        var assistantSummaryPath = Path.Combine(knowledgeRoot, "catalog.assistant.txt");
+        var assistantRoot = Path.Combine(knowledgeRoot, "assistant");
         var sourceManifestPath = Path.Combine(knowledgeRoot, "source-manifest.json");
         var assemblyScanPath = Path.Combine(knowledgeRoot, "assembly-scan.json");
         var pckInventoryPath = Path.Combine(knowledgeRoot, "pck-inventory.json");
+        var localizationScanPath = Path.Combine(knowledgeRoot, "localization-scan.json");
         var observedMergePath = Path.Combine(knowledgeRoot, "observed-merge.json");
         var markdownRoot = Path.Combine(knowledgeRoot, "markdown");
         var markdownOverviewPath = Path.Combine(markdownRoot, "README.md");
@@ -166,6 +191,18 @@ internal static class StaticKnowledgeCommands
             ToStringMap(BuildCounts(pckCatalog)),
             pckWarnings));
 
+        var seedCatalog = StaticKnowledgeCatalogBuilder.MergeCatalogs(metadata, baseline, assemblyCatalog, pckCatalog);
+        var localizationScan = LocalizationKnowledgeScanner.Scan(pckPath, seedCatalog, out var localizationWarnings);
+        warnings.AddRange(localizationWarnings);
+        WriteJson(localizationScanPath, localizationScan);
+        steps.Add(new StaticKnowledgePipelineStep(
+            "localization-scan",
+            localizationWarnings.Count == 0 ? "completed" : "warning",
+            localizationScanPath,
+            ToStringMap(BuildLocalizationCounts(localizationScan)),
+            localizationWarnings));
+        seedCatalog = StaticKnowledgeCatalogBuilder.MergeLocalization(seedCatalog, localizationScan, metadata);
+
         var observedCatalog = StaticKnowledgeCatalogBuilder.BuildFromObserved(null, snapshot, events, metadata);
         WriteJson(observedMergePath, observedCatalog);
         steps.Add(new StaticKnowledgePipelineStep(
@@ -176,9 +213,8 @@ internal static class StaticKnowledgeCommands
             snapshot is null && events.Count == 0
                 ? new[] { "No live snapshot or events were available for observed-merge." }
                 : Array.Empty<string>()));
-
-        var seedCatalog = StaticKnowledgeCatalogBuilder.MergeCatalogs(metadata, baseline, assemblyCatalog, pckCatalog);
         var catalog = StaticKnowledgeCatalogBuilder.BuildFromObserved(seedCatalog, snapshot, events, metadata);
+        var assistantCatalog = StaticKnowledgeCatalogBuilder.BuildAssistantCatalog(catalog);
         steps.Add(new StaticKnowledgePipelineStep(
             "catalog-build",
             "completed",
@@ -190,22 +226,29 @@ internal static class StaticKnowledgeCommands
             DateTimeOffset.UtcNow,
             knowledgeRoot,
             metadata,
-            BuildSourceFiles(configuration, layout, catalogPath, assemblyScanPath, pckInventoryPath, observedMergePath),
+            BuildSourceFiles(configuration, layout, catalogPath, assemblyScanPath, pckInventoryPath, localizationScanPath, observedMergePath),
             steps,
             warnings);
 
         WriteJson(catalogPath, catalog);
         File.WriteAllText(summaryPath, StaticKnowledgeSummaryFormatter.Format(catalog));
+        WriteJson(assistantCatalogPath, assistantCatalog);
+        File.WriteAllText(assistantSummaryPath, StaticKnowledgeSummaryFormatter.Format(assistantCatalog));
+        AssistantKnowledgeExportWriter.Write(assistantRoot, assistantCatalog);
         WriteJson(sourceManifestPath, sourceManifest);
         StaticKnowledgeMarkdownReportFormatter.WriteReports(markdownRoot, catalog, sourceManifest);
 
         return new StaticKnowledgeExtractionResult(
             knowledgeRoot,
             catalogPath,
+            assistantCatalogPath,
             summaryPath,
+            assistantSummaryPath,
+            assistantRoot,
             sourceManifestPath,
             assemblyScanPath,
             pckInventoryPath,
+            localizationScanPath,
             observedMergePath,
             markdownRoot,
             markdownOverviewPath,
@@ -220,6 +263,7 @@ internal static class StaticKnowledgeCommands
         string catalogPath,
         string assemblyScanPath,
         string pckInventoryPath,
+        string localizationScanPath,
         string observedMergePath)
     {
         var gameRoot = configuration.GamePaths.GameDirectory;
@@ -237,6 +281,7 @@ internal static class StaticKnowledgeCommands
             DescribeSourceFile("catalog-previous", catalogPath),
             DescribeSourceFile("assembly-scan", assemblyScanPath),
             DescribeSourceFile("pck-inventory", pckInventoryPath),
+            DescribeSourceFile("localization-scan", localizationScanPath),
             DescribeSourceFile("observed-merge", observedMergePath),
         };
     }
@@ -280,6 +325,68 @@ internal static class StaticKnowledgeCommands
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
 
         return groups;
+    }
+
+    private static object BuildLocalizationCounts(StaticKnowledgeLocalizationScan scan)
+    {
+        return new
+        {
+            cards = scan.Cards.Count,
+            titles = scan.Cards.Count(card => !string.IsNullOrWhiteSpace(card.Title)),
+            descriptions = scan.Cards.Count(card => !string.IsNullOrWhiteSpace(card.Description)),
+            selectionPrompts = scan.Cards.Count(card => !string.IsNullOrWhiteSpace(card.SelectionScreenPrompt)),
+            koreanPreferred = scan.Cards.Count(card => string.Equals(card.PreferredLocale, "kor", StringComparison.OrdinalIgnoreCase)),
+            englishPreferred = scan.Cards.Count(card => string.Equals(card.PreferredLocale, "eng", StringComparison.OrdinalIgnoreCase)),
+            relics = scan.Relics.Count,
+            relicDescriptions = scan.Relics.Count(entry => !string.IsNullOrWhiteSpace(entry.Description)),
+            potions = scan.Potions.Count,
+            potionDescriptions = scan.Potions.Count(entry => !string.IsNullOrWhiteSpace(entry.Description)),
+            events = scan.Events.Count,
+            eventDescriptions = scan.Events.Count(entry => !string.IsNullOrWhiteSpace(entry.Description)),
+            eventOptions = scan.Events.Sum(entry => entry.Options.Count),
+            shops = scan.Shops.Count,
+            shopDescriptions = scan.Shops.Count(entry => !string.IsNullOrWhiteSpace(entry.Description)),
+            rewards = scan.Rewards.Count,
+            rewardDescriptions = scan.Rewards.Count(entry => !string.IsNullOrWhiteSpace(entry.Description)),
+            keywords = scan.Keywords.Count,
+            keywordDescriptions = scan.Keywords.Count(entry => !string.IsNullOrWhiteSpace(entry.Description)),
+        };
+    }
+
+    private static IReadOnlyList<string> BuildSampleEntries(IReadOnlyList<StaticKnowledgeEntry> entries)
+    {
+        return entries
+            .OrderByDescending(entry => !string.IsNullOrWhiteSpace(TryReadAttribute(entry, "description")))
+            .ThenByDescending(entry => string.Equals(entry.Source, "localization-scan", StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(entry => !string.IsNullOrWhiteSpace(TryReadAttribute(entry, "fullName")))
+            .ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .Select(entry =>
+            {
+                var description = TryReadAttribute(entry, "description");
+                return string.IsNullOrWhiteSpace(description)
+                    ? entry.Name
+                    : $"{entry.Name}: {TrimForSample(description!, 72)}";
+            })
+            .ToArray();
+    }
+
+    private static string? TryReadAttribute(StaticKnowledgeEntry entry, string key)
+    {
+        return entry.Attributes.TryGetValue(key, out var value)
+            ? value
+            : null;
+    }
+
+    private static string TrimForSample(string value, int maxLength)
+    {
+        var collapsed = value
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Trim();
+        return collapsed.Length <= maxLength
+            ? collapsed
+            : $"{collapsed[..maxLength].TrimEnd()}...";
     }
 
     private static IReadOnlyDictionary<string, string?> ToStringMap(object counts)

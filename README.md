@@ -55,6 +55,7 @@ dotnet run --project src\Sts2ModKit.Tool -- inspect-static-knowledge
 ```
 
 생성 결과는 `artifacts\knowledge\` 아래의 JSON과 `artifacts\knowledge\markdown\` 아래의 사람이 읽는 Markdown 리포트에서 함께 확인할 수 있습니다.
+Markdown 리포트는 `PLAY_GUIDE.md`와 카테고리별 문서를 통해, 이 데이터가 실제 플레이 중 어디에서 쓰이는지도 함께 설명합니다.
 
 6. live smoke가 필요하면 snapshot부터 시작합니다.
 
@@ -97,6 +98,24 @@ dotnet run --project src\Sts2AiCompanion.Wpf
 - `docs\SMOKE_TEST_CHECKLIST.md`
 - `docs\BACKUP_AND_ROLLBACK.md`
 - `docs\development\README.md`
+- `docs\development\GAMEPLAY_RUNTIME_FLOW.md`
 - `docs\development\REPO_STRUCTURE.md`
 
 개발 과정과 트러블슈팅, 초보자용 설명은 `docs\development\` 아래에 한글로 정리합니다.
+
+## 2026-03-11 정적 지식/L10N 갱신 메모
+
+- `artifacts/knowledge/localization-scan.json` 기준으로 카드뿐 아니라 유물, 포션, 이벤트, 상점, 보상, 키워드까지 L10N 추출이 실제로 연결됩니다.
+- 최신 `inspect-static-knowledge` 기준 localization coverage는 다음과 같습니다.
+  - cards: 572 / descriptions: 538 / selection prompts: 35
+  - relics: 291 / descriptions: 289
+  - potions: 75 / descriptions: 70
+  - events: 197 / descriptions: 95 / options: 203
+  - shops: 21 / descriptions: 18
+  - rewards: 3 / descriptions: 2
+  - keywords: 270 / descriptions: 263
+- AI 전용 산출물은 `artifacts/knowledge/assistant/` 아래에 따로 생성됩니다.
+  - `cards.json`, `relics.json`, `potions.json`, `events.json`, `shops.json`, `rewards.json`, `keywords.json`, `index.json`
+- 이 assistant JSON은 한국어 설명, 선택지, 모델 클래스, 리소스 경로, L10N key, source file hint를 함께 담도록 맞춰져 있습니다.
+- 외부 교차검증 힌트로는 `https://spire-codex.com/` 구조를 참고하되, 현재 저장소의 canonical source는 게임 설치본에서 직접 추출한 로컬 산출물입니다.
+- 참고 내용과 반영 범위는 `docs/development/SPIRE_CODEX_REFERENCE.md`에 따로 정리했습니다.

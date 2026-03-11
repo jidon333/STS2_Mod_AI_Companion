@@ -78,6 +78,88 @@ public static class StaticKnowledgeCatalogBuilder
             SortEntries(keywords.Values));
     }
 
+    public static StaticKnowledgeCatalog MergeLocalization(
+        StaticKnowledgeCatalog baseline,
+        StaticKnowledgeLocalizationScan localizationScan,
+        StaticKnowledgeMetadata metadata)
+    {
+        var cards = CreateMap(baseline.Cards);
+        var relics = CreateMap(baseline.Relics);
+        var potions = CreateMap(baseline.Potions);
+        var events = CreateMap(baseline.Events);
+        var shops = CreateMap(baseline.Shops);
+        var rewards = CreateMap(baseline.Rewards);
+        var keywords = CreateMap(baseline.Keywords);
+
+        foreach (var localizationCard in localizationScan.Cards)
+        {
+            MergeLocalizationCard(cards, localizationCard);
+        }
+
+        foreach (var entry in localizationScan.Relics)
+        {
+            MergeLocalizationEntry(relics, entry, "relic", ".Relics.", "/relic");
+        }
+
+        foreach (var entry in localizationScan.Potions)
+        {
+            MergeLocalizationEntry(potions, entry, "potion", ".Potions.", "/potion");
+        }
+
+        foreach (var entry in localizationScan.Events)
+        {
+            MergeLocalizationEntry(events, entry, "event", ".Events.", "/event");
+        }
+
+        foreach (var entry in localizationScan.Shops)
+        {
+            MergeLocalizationEntry(shops, entry, "shop", ".Merchant.", "/merchant");
+        }
+
+        foreach (var entry in localizationScan.Rewards)
+        {
+            MergeLocalizationEntry(rewards, entry, "reward", ".Reward", "/reward");
+        }
+
+        foreach (var entry in localizationScan.Keywords)
+        {
+            MergeLocalizationEntry(keywords, entry, "keyword", ".Intent", "/intent");
+        }
+
+        return new StaticKnowledgeCatalog(
+            DateTimeOffset.UtcNow,
+            metadata,
+            SortEntries(cards.Values),
+            SortEntries(relics.Values),
+            SortEntries(potions.Values),
+            SortEntries(events.Values),
+            SortEntries(shops.Values),
+            SortEntries(rewards.Values),
+            SortEntries(keywords.Values));
+    }
+
+    public static StaticKnowledgeCatalog MergeCardLocalization(
+        StaticKnowledgeCatalog baseline,
+        StaticKnowledgeLocalizationScan localizationScan,
+        StaticKnowledgeMetadata metadata)
+    {
+        return MergeLocalization(baseline, localizationScan, metadata);
+    }
+
+    public static StaticKnowledgeCatalog BuildAssistantCatalog(StaticKnowledgeCatalog catalog)
+    {
+        return new StaticKnowledgeCatalog(
+            catalog.GeneratedAt,
+            catalog.Metadata,
+            BuildAssistantSection(catalog.Cards, "card"),
+            BuildAssistantSection(catalog.Relics, "relic"),
+            BuildAssistantSection(catalog.Potions, "potion"),
+            BuildAssistantSection(catalog.Events, "event"),
+            BuildAssistantSection(catalog.Shops, "shop"),
+            BuildAssistantSection(catalog.Rewards, "reward"),
+            BuildAssistantSection(catalog.Keywords, "keyword"));
+    }
+
     private static void MergeSnapshot(
         LiveExportSnapshot snapshot,
         IDictionary<string, StaticKnowledgeEntry> cards,
@@ -261,6 +343,254 @@ public static class StaticKnowledgeCatalogBuilder
         }
     }
 
+    private static void MergeLocalizationCard(
+        IDictionary<string, StaticKnowledgeEntry> cards,
+        StaticKnowledgeLocalizationCardEntry localizationCard)
+    {
+        var matchId = FindBestCardMatch(cards.Values, localizationCard);
+        var id = matchId ?? NormalizeId(localizationCard.KeyStem);
+        cards.TryGetValue(id, out var existing);
+
+        var attributes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (existing is not null)
+        {
+            foreach (var attribute in existing.Attributes)
+            {
+                attributes[attribute.Key] = attribute.Value;
+            }
+        }
+
+        attributes["l10nKey"] = localizationCard.KeyStem;
+        attributes["preferredLocale"] = localizationCard.PreferredLocale;
+        attributes["title"] = localizationCard.Title;
+        attributes["description"] = localizationCard.Description;
+        attributes["selectionScreenPrompt"] = localizationCard.SelectionScreenPrompt;
+        attributes["englishTitle"] = localizationCard.EnglishTitle;
+        attributes["englishDescription"] = localizationCard.EnglishDescription;
+        attributes["sourceFileHint"] = localizationCard.SourceFileHints.Count == 0
+            ? null
+            : string.Join(" | ", localizationCard.SourceFileHints);
+        attributes["sourceLocales"] = localizationCard.Locales.Count == 0
+            ? localizationCard.PreferredLocale
+            : string.Join(" | ", localizationCard.Locales);
+
+        var tags = (existing?.Tags ?? Array.Empty<string>())
+            .Concat(new[] { "localized-card", "l10n" })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        cards[id] = new StaticKnowledgeEntry(
+            id,
+            localizationCard.Title ?? existing?.Name ?? PrettifyStem(localizationCard.KeyStem),
+            "localization-scan",
+            existing?.Observed == true,
+            localizationCard.Description ?? existing?.RawText ?? localizationCard.Title,
+            tags,
+            attributes,
+            existing?.Options ?? Array.Empty<StaticKnowledgeOption>());
+    }
+
+    private static void MergeLocalizationEntry(
+        IDictionary<string, StaticKnowledgeEntry> target,
+        StaticKnowledgeLocalizationEntry localizationEntry,
+        string domainTag,
+        string fullNameHint,
+        string resourceHint)
+    {
+        var matchId = FindBestMatch(target.Values, localizationEntry, fullNameHint, resourceHint);
+        var id = matchId ?? NormalizeId(localizationEntry.KeyStem);
+        target.TryGetValue(id, out var existing);
+
+        var attributes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (existing is not null)
+        {
+            foreach (var attribute in existing.Attributes)
+            {
+                attributes[attribute.Key] = attribute.Value;
+            }
+        }
+
+        attributes["l10nDomain"] = localizationEntry.Domain;
+        attributes["l10nKey"] = localizationEntry.KeyStem;
+        attributes["preferredLocale"] = localizationEntry.PreferredLocale;
+        attributes["title"] = localizationEntry.Title;
+        attributes["description"] = localizationEntry.Description;
+        attributes["flavor"] = localizationEntry.Flavor;
+        attributes["selectionScreenPrompt"] = localizationEntry.SelectionScreenPrompt;
+        attributes["englishTitle"] = localizationEntry.EnglishTitle;
+        attributes["englishDescription"] = localizationEntry.EnglishDescription;
+        attributes["sourceFileHint"] = localizationEntry.SourceFileHints.Count == 0
+            ? null
+            : string.Join(" | ", localizationEntry.SourceFileHints);
+        attributes["sourceLocales"] = localizationEntry.Locales.Count == 0
+            ? localizationEntry.PreferredLocale
+            : string.Join(" | ", localizationEntry.Locales);
+
+        foreach (var attribute in localizationEntry.Attributes)
+        {
+            if (!string.IsNullOrWhiteSpace(attribute.Value))
+            {
+                attributes[attribute.Key] = attribute.Value;
+            }
+        }
+
+        var tags = (existing?.Tags ?? Array.Empty<string>())
+            .Concat(new[] { $"localized-{domainTag}", "l10n" })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        target[id] = new StaticKnowledgeEntry(
+            id,
+            localizationEntry.Title ?? existing?.Name ?? PrettifyStem(localizationEntry.KeyStem),
+            "localization-scan",
+            existing?.Observed == true,
+            localizationEntry.Description ?? localizationEntry.Flavor ?? existing?.RawText ?? localizationEntry.Title,
+            tags,
+            attributes,
+            MergeOptions(existing?.Options, localizationEntry.Options));
+    }
+
+    private static string? FindBestCardMatch(
+        IEnumerable<StaticKnowledgeEntry> cards,
+        StaticKnowledgeLocalizationCardEntry localizationCard)
+    {
+        var normalizedStem = NormalizeForKnowledgeMatch(localizationCard.KeyStem);
+        StaticKnowledgeEntry? best = null;
+        var bestScore = 0;
+        foreach (var entry in cards)
+        {
+            var score = ScoreCardMatch(entry, normalizedStem);
+            if (score <= bestScore)
+            {
+                continue;
+            }
+
+            bestScore = score;
+            best = entry;
+        }
+
+        return best?.Id;
+    }
+
+    private static int ScoreCardMatch(StaticKnowledgeEntry entry, string normalizedStem)
+    {
+        return ScoreEntryMatch(entry, normalizedStem, ".Cards.", "/card");
+    }
+
+    private static string? FindBestMatch(
+        IEnumerable<StaticKnowledgeEntry> entries,
+        StaticKnowledgeLocalizationEntry localizationEntry,
+        string fullNameHint,
+        string resourceHint)
+    {
+        var normalizedStem = NormalizeForKnowledgeMatch(localizationEntry.KeyStem);
+        StaticKnowledgeEntry? best = null;
+        var bestScore = 0;
+        foreach (var entry in entries)
+        {
+            var score = ScoreEntryMatch(entry, normalizedStem, fullNameHint, resourceHint);
+            if (score <= bestScore)
+            {
+                continue;
+            }
+
+            bestScore = score;
+            best = entry;
+        }
+
+        return best?.Id;
+    }
+
+    private static int ScoreEntryMatch(
+        StaticKnowledgeEntry entry,
+        string normalizedStem,
+        string fullNameHint,
+        string resourceHint)
+    {
+        var bestScore = 0;
+
+        if (NormalizeForKnowledgeMatch(entry.Name) == normalizedStem)
+        {
+            bestScore = Math.Max(bestScore, 70);
+        }
+
+        if (NormalizeForKnowledgeMatch(entry.Id) == normalizedStem)
+        {
+            bestScore = Math.Max(bestScore, 45);
+        }
+
+        if (entry.Attributes.TryGetValue("l10nKey", out var l10nKey) && NormalizeForKnowledgeMatch(l10nKey) == normalizedStem)
+        {
+            bestScore = Math.Max(bestScore, 120);
+        }
+
+        if (entry.Attributes.TryGetValue("fullName", out var fullName) && !string.IsNullOrWhiteSpace(fullName))
+        {
+            var typeName = fullName.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+            if (NormalizeForKnowledgeMatch(typeName) == normalizedStem)
+            {
+                bestScore = Math.Max(bestScore, 110);
+            }
+
+            if (!string.IsNullOrWhiteSpace(fullNameHint) && fullName.Contains(fullNameHint, StringComparison.OrdinalIgnoreCase))
+            {
+                bestScore += 10;
+            }
+
+            if (fullName.Contains('<', StringComparison.Ordinal) || fullName.Contains('+', StringComparison.Ordinal))
+            {
+                bestScore -= 20;
+            }
+        }
+
+        if (entry.Attributes.TryGetValue("resourcePath", out var resourcePath) && !string.IsNullOrWhiteSpace(resourcePath))
+        {
+            var normalizedPath = resourcePath.Replace('\\', '/');
+            var fileName = Path.GetFileNameWithoutExtension(normalizedPath);
+            if (NormalizeForKnowledgeMatch(fileName) == normalizedStem)
+            {
+                bestScore = Math.Max(bestScore, 90);
+            }
+
+            if (!string.IsNullOrWhiteSpace(resourceHint) && normalizedPath.Contains(resourceHint, StringComparison.OrdinalIgnoreCase))
+            {
+                bestScore += 8;
+            }
+
+            if (normalizedPath.EndsWith(".import", StringComparison.OrdinalIgnoreCase))
+            {
+                bestScore -= 5;
+            }
+        }
+
+        return bestScore;
+    }
+
+    private static string NormalizeForKnowledgeMatch(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return new string(value
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToLowerInvariant)
+            .ToArray());
+    }
+
+    private static string PrettifyStem(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Unknown";
+        }
+
+        return value.Replace('_', ' ').Trim();
+    }
+
     private static IReadOnlyDictionary<string, string?> EnvelopeAttributes(LiveExportEventEnvelope envelope)
     {
         return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
@@ -377,6 +707,220 @@ public static class StaticKnowledgeCatalogBuilder
         }
 
         return merged.Values.OrderBy(option => option.Label, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static IReadOnlyList<StaticKnowledgeEntry> BuildAssistantSection(IReadOnlyList<StaticKnowledgeEntry> entries, string domain)
+    {
+        return entries
+            .Where(entry => MatchesAssistantDomain(entry, domain))
+            .Where(entry => HasAssistantValue(entry, domain))
+            .GroupBy(entry => BuildAssistantGroupingKey(entry), StringComparer.OrdinalIgnoreCase)
+            .Select(group => SelectBestAssistantEntry(group, domain))
+            .OrderByDescending(entry => entry.Observed)
+            .ThenByDescending(entry => entry.Options.Count)
+            .ThenByDescending(entry => !string.IsNullOrWhiteSpace(ReadAttribute(entry, "description")))
+            .ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static bool HasAssistantValue(StaticKnowledgeEntry entry, string domain)
+    {
+        if (LooksCompilerGenerated(entry))
+        {
+            return false;
+        }
+
+        if (entry.Observed || entry.Options.Count > 0)
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ReadAttribute(entry, "description"))
+            || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "title"))
+            || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "flavor")))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ReadAttribute(entry, "fullName")))
+        {
+            return true;
+        }
+
+        var resourcePath = ReadAttribute(entry, "resourcePath");
+        if (string.IsNullOrWhiteSpace(resourcePath))
+        {
+            return false;
+        }
+
+        return domain switch
+        {
+            "card" => resourcePath.Contains("/card_portraits/", StringComparison.OrdinalIgnoreCase)
+                      || resourcePath.Contains("/Models/Cards/", StringComparison.OrdinalIgnoreCase),
+            "relic" => resourcePath.Contains("/relic", StringComparison.OrdinalIgnoreCase),
+            "potion" => resourcePath.Contains("/potion", StringComparison.OrdinalIgnoreCase),
+            "event" => resourcePath.Contains("/event", StringComparison.OrdinalIgnoreCase),
+            "shop" => resourcePath.Contains("merchant", StringComparison.OrdinalIgnoreCase)
+                      || resourcePath.Contains("shop", StringComparison.OrdinalIgnoreCase),
+            "reward" => resourcePath.Contains("reward", StringComparison.OrdinalIgnoreCase)
+                        || resourcePath.Contains("card_selection", StringComparison.OrdinalIgnoreCase),
+            "keyword" => resourcePath.Contains("intent", StringComparison.OrdinalIgnoreCase)
+                         || resourcePath.Contains("keyword", StringComparison.OrdinalIgnoreCase),
+            _ => false,
+        };
+    }
+
+    private static string BuildAssistantGroupingKey(StaticKnowledgeEntry entry)
+    {
+        return NormalizeForKnowledgeMatch(
+            ReadAttribute(entry, "l10nKey")
+            ?? ResolveTypeName(entry)
+            ?? entry.Name
+            ?? entry.Id);
+    }
+
+    private static StaticKnowledgeEntry SelectBestAssistantEntry(IEnumerable<StaticKnowledgeEntry> group, string domain)
+    {
+        return group
+            .OrderByDescending(entry => ScoreAssistantEntry(entry, domain))
+            .ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .First();
+    }
+
+    private static int ScoreAssistantEntry(StaticKnowledgeEntry entry, string domain)
+    {
+        var score = 0;
+        if (entry.Observed)
+        {
+            score += 200;
+        }
+
+        if (string.Equals(entry.Source, "localization-scan", StringComparison.OrdinalIgnoreCase))
+        {
+            score += 120;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ReadAttribute(entry, "description")))
+        {
+            score += 100;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ReadAttribute(entry, "title")))
+        {
+            score += 50;
+        }
+
+        if (entry.Options.Count > 0)
+        {
+            score += 80;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ReadAttribute(entry, "fullName")))
+        {
+            score += 30;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ReadAttribute(entry, "resourcePath")))
+        {
+            score += 20;
+        }
+
+        if (entry.Name.StartsWith("\"", StringComparison.Ordinal)
+            || entry.Name.StartsWith("<", StringComparison.Ordinal)
+            || entry.Name.Contains("filename", StringComparison.OrdinalIgnoreCase)
+            || entry.Name.Contains("image", StringComparison.OrdinalIgnoreCase))
+        {
+            score -= 50;
+        }
+
+        if (LooksCompilerGenerated(entry))
+        {
+            score -= 120;
+        }
+
+        if (!MatchesAssistantDomain(entry, domain))
+        {
+            score -= 200;
+        }
+
+        return score;
+    }
+
+    private static bool MatchesAssistantDomain(StaticKnowledgeEntry entry, string domain)
+    {
+        var l10nDomain = ReadAttribute(entry, "l10nDomain");
+        if (string.Equals(l10nDomain, domain, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var fullName = ReadAttribute(entry, "fullName");
+        var resourcePath = ReadAttribute(entry, "resourcePath");
+        return domain switch
+        {
+            "card" => ContainsAny(fullName, ".Cards.", ".DualWieldCards.")
+                      || ContainsAny(resourcePath, "/Models/Cards/", "/card_portraits/"),
+            "relic" => ContainsAny(fullName, ".Relics.")
+                       || ContainsAny(resourcePath, "/Models/Relics/", "/images/relics/", "/relics/"),
+            "potion" => ContainsAny(fullName, ".Potions.")
+                        || ContainsAny(resourcePath, "/Models/Potions/", "/images/potions/", "/potions/"),
+            "event" => ContainsAny(fullName, ".Events.")
+                       || ContainsAny(resourcePath, "/Models/Events/", "/events/"),
+            "shop" => ContainsAny(fullName, ".Merchant.")
+                      || ContainsAny(resourcePath, "merchant", "shop", "rest_site"),
+            "reward" => ContainsAny(fullName, ".Rewards.")
+                        || ContainsAny(resourcePath, "reward", "card_selection"),
+            "keyword" => ContainsAny(fullName, ".Powers.", ".Intents.")
+                         || ContainsAny(resourcePath, "intent", "keyword"),
+            _ => false,
+        };
+    }
+
+    private static bool LooksCompilerGenerated(StaticKnowledgeEntry entry)
+    {
+        var fullName = ReadAttribute(entry, "fullName");
+        return (!string.IsNullOrWhiteSpace(entry.Name)
+                && (entry.Name.StartsWith("<", StringComparison.Ordinal)
+                    || string.Equals(entry.Name, "<>c", StringComparison.OrdinalIgnoreCase)
+                    || entry.Name.Contains("|", StringComparison.Ordinal)))
+               || (!string.IsNullOrWhiteSpace(fullName)
+                   && (fullName.Contains('<', StringComparison.Ordinal)
+                       || fullName.Contains("+<>", StringComparison.Ordinal)
+                       || fullName.Contains("|", StringComparison.Ordinal)));
+    }
+
+    private static string? ResolveTypeName(StaticKnowledgeEntry entry)
+    {
+        var fullName = ReadAttribute(entry, "fullName");
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            return null;
+        }
+
+        var typeName = fullName.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+        if (string.IsNullOrWhiteSpace(typeName) || typeName.Contains('<', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return typeName;
+    }
+
+    private static bool ContainsAny(string? value, params string[] needles)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return needles.Any(needle => value.Contains(needle, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? ReadAttribute(StaticKnowledgeEntry entry, string key)
+    {
+        return entry.Attributes.TryGetValue(key, out var value)
+            ? value
+            : null;
     }
 
     private static Dictionary<string, StaticKnowledgeEntry> CreateMap(IReadOnlyList<StaticKnowledgeEntry>? entries)
