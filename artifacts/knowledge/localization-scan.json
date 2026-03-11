@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-03-11T04:45:57.7505173+00:00",
+  "generatedAt": "2026-03-11T08:00:39.3627149+00:00",
   "sourcePath": "D:\\Program Files (x86)\\Steam\\steamapps\\common\\Slay the Spire 2\\SlayTheSpire2.pck",
   "cards": [
     {
-      "keyStem": "ASHWATER",
+      "keyStem": "FTL",
       "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "[gold]\uC18C\uBA78[/gold]\uC2DC\uD0AC \uCE74\uB4DC\uB97C \uC6D0\uD558\uB294 \uB9CC\uD07C \uC120\uD0DD\uD558\uC138\uC694.",
+      "title": "FTL",
+      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n\uC774\uBC88 \uD134\uC5D0 \uCE74\uB4DC\uB97C {PlayMax:diff()}\uC7A5\uBCF4\uB2E4 \uC801\uAC8C \uC0AC\uC6A9\uD588\uB2E4\uBA74, \uCE74\uB4DC\uB97C 1\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
       "sourceFileHints": [
@@ -24,284 +24,11 @@
       ]
     },
     {
-      "keyStem": "CHOICES_PARADOX",
+      "keyStem": "HELLO_WORLD",
       "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "CLAWS",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "[gold]\uD560\uD034\uAE30[/gold]\uB85C [gold]\uBCC0\uD654[/gold]\uC2DC\uD0AC \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "COMBAT_REWARD_CARD_REMOVAL",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uB371\uC5D0\uC11C \uC81C\uAC70\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "DOLLYS_MIRROR",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "[gold]\uBCF5\uC0AC[/gold]\uD560 \uCE74\uB4DC\uB97C [blue]1[/blue]\uC7A5 \uC120\uD0DD\uD558\uC138\uC694",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "DROPLET_OF_PRECOGNITION",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "FOREGONE_CONCLUSION_POWER",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C{Amount:choose(1):| {}\uC7A5} \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "GAMBLERS_BREW",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uAD50\uCCB4\uD560 \uCE74\uB4DC\uB97C \uC6D0\uD558\uB294 \uB9CC\uD07C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "GAMBLING_CHIP",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uAD50\uCCB4\uD560 \uCE74\uB4DC\uB97C \uC6D0\uD558\uB294 \uB9CC\uD07C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "LIQUID_MEMORIES",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "SEA_GLASS",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC6D0\uD558\uB294 \uB9CC\uD07C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "SHINY_STRIKE",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "STRATAGEM_POWER",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C{Amount:choose(1):| {}\uC7A5} \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "TOUCH_OF_INSANITY",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uBE44\uC6A9\uC744 \uC5C6\uC568 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "WELL_LAID_PLANS_POWER",
-      "preferredLocale": "kor",
-      "title": null,
-      "description": null,
-      "selectionScreenPrompt": "\uBCF4\uC874\uD560 \uCE74\uB4DC\uB97C{Amount:choose(1):| {}\uC7A5} \uC120\uD0DD\uD558\uC138\uC694.",
+      "title": "HELLO WORLD",
+      "description": "\uB0B4 \uD134 \uC2DC\uC791 \uC2DC, \uBB34\uC791\uC704 \uC77C\uBC18 \uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
       "sourceFileHints": [
@@ -320,29 +47,8 @@
     {
       "keyStem": "NULL",
       "preferredLocale": "kor",
-      "title": "\u7A7A\u65E0",
+      "title": "NULL",
       "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n[gold]\uC57D\uD654[/gold]\uB97C {WeakPower:diff()} \uBD80\uC5EC\uD569\uB2C8\uB2E4.\n[gold]\uC554\uD751[/gold]\uC744 1\uBC88 [gold]\uC601\uCC3D[/gold]\uD569\uB2C8\uB2E4.",
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "FTL",
-      "preferredLocale": "kor",
-      "title": "\u8D85\u8D8A\u5149\u901F",
-      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n\uC774\uBC88 \uD134\uC5D0 \uCE74\uB4DC\uB97C {PlayMax:diff()}\uC7A5\uBCF4\uB2E4 \uC801\uAC8C \uC0AC\uC6A9\uD588\uB2E4\uBA74, \uCE74\uB4DC\uB97C 1\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -385,132 +91,6 @@
       "preferredLocale": "kor",
       "title": "\uAC00\uC18D \uC774\uD0C8",
       "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.\n[gold]\uBC84\uB9B0 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0 [gold]\uC5B4\uC9C0\uB7EC\uC6C0[/gold]\uC744 1\uC7A5 \uC11E\uC5B4 \uB123\uC2B5\uB2C8\uB2E4.",
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "MOCK_ATTACK_CARD",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uACF5\uACA9 \uCE74\uB4DC",
-      "description": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "MOCK_STATUS_CARD",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uC0C1\uD0DC\uC774\uC0C1 \uCE74\uB4DC",
-      "description": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "MOCK_SKILL_CARD",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uC2A4\uD0AC \uCE74\uB4DC",
-      "description": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "MOCK_CURSE_CARD",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uC800\uC8FC \uCE74\uB4DC",
-      "description": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "MOCK_QUEST_CARD",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uD018\uC2A4\uD2B8 \uCE74\uB4DC",
-      "description": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "MOCK_POWER_CARD",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uD30C\uC6CC \uCE74\uB4DC",
-      "description": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -906,6 +486,27 @@
       ]
     },
     {
+      "keyStem": "CLASH",
+      "preferredLocale": "kor",
+      "title": "\uACA9\uB3CC",
+      "description": "[gold]\uC190[/gold]\uC5D0 \uC788\uB294 \uBAA8\uB4E0 \uCE74\uB4DC\uAC00 \uACF5\uACA9 \uCE74\uB4DC\uC77C \uB54C\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.\n\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "SPUR",
       "preferredLocale": "kor",
       "title": "\uACA9\uB824",
@@ -969,6 +570,27 @@
       ]
     },
     {
+      "keyStem": "ENLIGHTENMENT",
+      "preferredLocale": "kor",
+      "title": "\uACC4\uBABD",
+      "description": "\uC774\uBC88 {IfUpgraded:show:\uC804\uD22C|\uD134} \uB3D9\uC548, [gold]\uC190[/gold]\uC5D0 \uC788\uB294 \uBAA8\uB4E0 \uCE74\uB4DC\uC758 \uBE44\uC6A9\uC774 1\uB85C \uAC10\uC18C\uD569\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "CALCULATED_GAMBLE",
       "preferredLocale": "kor",
       "title": "\uACC4\uC0B0\uB41C \uB3C4\uBC15",
@@ -994,6 +616,27 @@
       "preferredLocale": "kor",
       "title": "\uACE0\uB3D9\uCE58\uB294 \uB3C4\uB07C",
       "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n\uB2E4\uC74C \uD134 \uC2DC\uC791 \uC2DC, \uC774 \uCE74\uB4DC\uB97C [gold]\uC190[/gold]\uC73C\uB85C \uB2E4\uC2DC \uAC00\uC838\uC635\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "TORIC_TOUGHNESS",
+      "preferredLocale": "kor",
+      "title": "\uACE0\uB9AC\uD615 \uAC15\uC778\uD568",
+      "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.\n\uB2E4\uC74C {Turns:diff()}\uD134 \uB3D9\uC548, \uD134 \uC2DC\uC791 \uC2DC [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -1221,6 +864,27 @@
       ]
     },
     {
+      "keyStem": "FEEDING_FRENZY",
+      "preferredLocale": "kor",
+      "title": "\uAD11\uB780\uC758 \uD3EC\uC2DD",
+      "description": "\uC774\uBC88 \uD134 \uB3D9\uC548 [gold]\uD798[/gold]\uC744 {StrengthPower:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "SWEEPING_BEAM",
       "preferredLocale": "kor",
       "title": "\uAD11\uC120 \uD729\uC4F8\uAE30",
@@ -1351,27 +1015,6 @@
       "preferredLocale": "kor",
       "title": "\uAD6C\uB974\uAE30",
       "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.\n\uB2E4\uC74C \uD134\uC5D0, [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "keyStem": "DEPRECATED_CARD",
-      "preferredLocale": "kor",
-      "title": "\uAD6C\uC2DD \uCE74\uB4DC",
-      "description": "\uC774 \uCE74\uB4DC\uB294 \uAC8C\uC784\uC5D0\uC11C \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -2208,6 +1851,27 @@
       ]
     },
     {
+      "keyStem": "RIP_AND_TEAR",
+      "preferredLocale": "kor",
+      "title": "\uB0A0\uB6F0\uAE30",
+      "description": "\uBB34\uC791\uC704 \uC801\uC5D0\uAC8C \uD53C\uD574\uB97C {Damage:diff()}\uB9CC\uD07C 2\uBC88 \uC90D\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "AFTERLIFE",
       "preferredLocale": "kor",
       "title": "\uB0B4\uC138",
@@ -2401,6 +2065,27 @@
       "preferredLocale": "kor",
       "title": "\uB2A5\uC219",
       "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.\n\uCE74\uB4DC\uB97C 1\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "NEOWS_FURY",
+      "preferredLocale": "kor",
+      "title": "\uB2C8\uC624\uC6B0\uC758 \uACA9\uBD84",
+      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n[gold]\uBC84\uB9B0 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0\uC11C \uBB34\uC791\uC704 \uCE74\uB4DC\uB97C {Cards:choose(1):1\uC7A5|{:diff()}\uC7A5} [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -3048,6 +2733,27 @@
       ]
     },
     {
+      "keyStem": "REBOUND",
+      "preferredLocale": "kor",
+      "title": "\uB418\uB3CC\uB9AC\uAE30",
+      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n\uC774\uBC88 \uD134\uC5D0 \uB2E4\uC74C\uC73C\uB85C \uC0AC\uC6A9\uD558\uB294 \uCE74\uB4DC\uB97C [gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold] \uB9E8 \uC704\uC5D0 \uB193\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "BEAT_DOWN",
       "preferredLocale": "kor",
       "title": "\uB450\uB4E4\uACA8 \uD328\uAE30",
@@ -3304,6 +3010,27 @@
       "preferredLocale": "kor",
       "title": "\uB85C\uCF13 \uD380\uCE58",
       "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n\uCE74\uB4DC\uB97C {Cards:diff()}\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.\n\uC0C1\uD0DC\uC774\uC0C1 \uCE74\uB4DC\uB97C \uC0DD\uC131 \uC2DC, \uC774\uBC88 \uD134 \uB3D9\uC548 \uC774 \uCE74\uB4DC\uC758 \uBE44\uC6A9\uC774 0 {energyPrefix:energyIcons(1)}\uC73C\uB85C \uAC10\uC18C\uD569\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "CALTROPS",
+      "preferredLocale": "kor",
+      "title": "\uB9C8\uB984\uC1E0",
+      "description": "\uACF5\uACA9\uC744 \uBC1B\uC744 \uB54C\uB9C8\uB2E4, \uACF5\uACA9\uD55C \uC801\uC5D0\uAC8C \uD53C\uD574\uB97C {ThornsPower:diff()} \uC90D\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -3993,6 +3720,27 @@
       ]
     },
     {
+      "keyStem": "EXTERMINATE",
+      "preferredLocale": "kor",
+      "title": "\uBC15\uBA78",
+      "description": "\uBAA8\uB4E0 \uC801\uC5D0\uAC8C \uD53C\uD574\uB97C {Damage:diff()}\uB9CC\uD07C {Repeat:diff()}\uBC88 \uC90D\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "BREAK",
       "preferredLocale": "kor",
       "title": "\uBC15\uC0B4",
@@ -4249,6 +3997,27 @@
       "preferredLocale": "kor",
       "title": "\uBC29\uCD9C",
       "description": "\uC774\uBC88 \uD134\uC5D0 {Stars:starIcons()}\uC744 \uC5BB\uC740 \uD69F\uC218\uB9CC\uD07C \uBAA8\uB4E0 \uC801\uC5D0\uAC8C \uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.{InCombat:\n({CalculatedHits:diff()}\uBC88 \uC801\uC911\uD569\uB2C8\uB2E4)|}",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "DISTRACTION",
+      "preferredLocale": "kor",
+      "title": "\uBC29\uD574",
+      "description": "\uBB34\uC791\uC704 \uC2A4\uD0AC \uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4. \uC774\uBC88 \uD134 \uB3D9\uC548 \uADF8 \uCE74\uB4DC\uB97C \uBE44\uC6A9 \uC5C6\uC774 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -5316,27 +5085,6 @@
       ]
     },
     {
-      "keyStem": "RESERVES",
-      "preferredLocale": "kor",
-      "title": "\uBE44\uCD95\uBB3C",
-      "description": "\uCE74\uB4DC \uC0AC\uC6A9\uC744 \uC704\uD55C {energyPrefix:energyIcons(1)}\uAC00 \uBD80\uC871\uD55C \uACBD\uC6B0, {energyPrefix:energyIcons(1)}\uB9C8\uB2E4 2{singleStarIcon}\uC774 \uB300\uC2E0 \uC0AC\uC6A9\uB429\uB2C8\uB2E4.",
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
       "keyStem": "BIG_BANG",
       "preferredLocale": "kor",
       "title": "\uBE45\uBC45",
@@ -5761,6 +5509,27 @@
       "preferredLocale": "kor",
       "title": "\uC0DD\uC874\uC790",
       "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.\n\uCE74\uB4DC\uB97C 1\uC7A5 \uBC84\uB9BD\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "BYRD_SWOOP",
+      "preferredLocale": "kor",
+      "title": "\uC100 \uAE09\uC2B5",
+      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -6429,6 +6198,27 @@
       ]
     },
     {
+      "keyStem": "STACK",
+      "preferredLocale": "kor",
+      "title": "\uC2A4\uD0DD",
+      "description": "[gold]\uBC84\uB9B0 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0 \uC788\uB294 \uCE74\uB4DC\uC758 \uC218{IfUpgraded:show: \u002B{CalculationBase}|}\uB9CC\uD07C [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.{InCombat:\n([gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {CalculatedBlock:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.)|}",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "SPECTRUM_SHIFT",
       "preferredLocale": "kor",
       "title": "\uC2A4\uD399\uD2B8\uB7FC \uC774\uB3D9",
@@ -6517,6 +6307,27 @@
       "preferredLocale": "kor",
       "title": "\uC2E0\uAE30\uB8E8",
       "description": "\uBAA8\uB4E0 \uC801\uC5D0\uAC8C \uBD80\uC5EC\uB41C [gold]\uC911\uB3C5[/gold]\uACFC \uB3D9\uC77C\uD55C \uB9CC\uD07C\uC758 [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.{InCombat:\n([gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {CalculatedBlock:diff()} \uC5BB\uC2B5\uB2C8\uB2E4)|}",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "APOTHEOSIS",
+      "preferredLocale": "kor",
+      "title": "\uC2E0\uC131",
+      "description": "\uBAA8\uB4E0 \uCE74\uB4DC\uB97C [gold]\uAC15\uD654[/gold]\uD569\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -6765,10 +6576,52 @@
       ]
     },
     {
+      "keyStem": "RELAX",
+      "preferredLocale": "kor",
+      "title": "\uC548\uC2DD",
+      "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.\n\uB2E4\uC74C \uD134\uC5D0, \uCE74\uB4DC\uB97C {Cards:diff()}\uC7A5 \uBF51\uACE0 {Energy:energyIcons()}\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "ASSASSINATE",
       "preferredLocale": "kor",
       "title": "\uC554\uC0B4",
       "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n[gold]\uCDE8\uC57D[/gold]\uC744 {VulnerablePower:diff()} \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "OUTMANEUVER",
+      "preferredLocale": "kor",
+      "title": "\uC555\uB3C4",
+      "description": "\uB2E4\uC74C \uD134\uC5D0, {Energy:energyIcons()}\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -7206,10 +7059,52 @@
       ]
     },
     {
+      "keyStem": "WISH",
+      "preferredLocale": "kor",
+      "title": "\uC5FC\uC6D0",
+      "description": "[gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0\uC11C \uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
+      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "ETERNAL_ARMOR",
       "preferredLocale": "kor",
       "title": "\uC601\uC6D0\uC758 \uAC11\uC637",
       "description": "[gold]\uD310\uAE08[/gold]\uC744 {PlatingPower:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "APPARITION",
+      "preferredLocale": "kor",
+      "title": "\uC601\uCCB4\uD654",
+      "description": "[gold]\uBD88\uAC00\uCE68[/gold]\uC744 {IntangiblePower:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -7904,6 +7799,27 @@
       "title": "\uC758\uC2EC",
       "description": "\uB0B4 \uD134 \uC885\uB8CC \uC2DC \uC774 \uCE74\uB4DC\uAC00 [gold]\uC190[/gold]\uC5D0 \uC788\uB2E4\uBA74, [gold]\uC57D\uD654[/gold]\uB97C {WeakPower:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "DUAL_WIELD",
+      "preferredLocale": "kor",
+      "title": "\uC774\uB3C4\uB958",
+      "description": "\uACF5\uACA9\uC774\uB098 \uD30C\uC6CC \uCE74\uB4DC\uB97C 1\uC7A5 \uC120\uD0DD\uD569\uB2C8\uB2E4. \uADF8 \uCE74\uB4DC\uC758 \uBCF5\uC0AC\uBCF8\uC744 {IfUpgraded:show:{Cards}\uC7A5|1\uC7A5} [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
+      "selectionScreenPrompt": "\uBCF5\uC0AC\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694",
       "englishTitle": null,
       "englishDescription": null,
       "sourceFileHints": [
@@ -9537,6 +9453,27 @@
       ]
     },
     {
+      "keyStem": "SQUASH",
+      "preferredLocale": "kor",
+      "title": "\uC9D3\uB204\uB974\uAE30",
+      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n[gold]\uCDE8\uC57D[/gold]\uC744 {VulnerablePower:diff()} \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "STOMP",
       "preferredLocale": "kor",
       "title": "\uC9D3\uBC1F\uAE30",
@@ -9562,6 +9499,27 @@
       "preferredLocale": "kor",
       "title": "\uC9D5\uBC8C",
       "description": "[gold]\uC885\uB9D0[/gold]\uC744 {DoomPower:diff()} \uBD80\uC5EC\uD569\uB2C8\uB2E4.\n\uCE74\uB4DC\uB97C {Cards:diff()}\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "PECK",
+      "preferredLocale": "kor",
+      "title": "\uCABC\uAE30",
+      "description": "\uD53C\uD574\uB97C {Damage:diff()}\uB9CC\uD07C {Repeat:diff()}\uBC88 \uC90D\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -9625,6 +9583,48 @@
       "preferredLocale": "kor",
       "title": "\uCC29\uC218",
       "description": "\uB2E4\uB978 \uCE90\uB9AD\uD130\uC758 \uBB34\uC791\uC704{IfUpgraded:show: [gold]\uAC15\uD654[/gold]\uB41C} \uACF5\uACA9 \uCE74\uB4DC 3\uC7A5 \uC911 1\uC7A5\uC744 \uC120\uD0DD\uD574 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4. \uC774\uBC88 \uD134 \uB3D9\uC548 \uADF8 \uCE74\uB4DC\uB97C \uBE44\uC6A9 \uC5C6\uC774 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "BRIGHTEST_FLAME",
+      "preferredLocale": "kor",
+      "title": "\uCC2C\uB780\uD55C \uBD88\uAF43",
+      "description": "{Energy:energyIcons()}\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.\n\uCE74\uB4DC\uB97C {Cards:diff()}\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.\n\uCD5C\uB300 \uCCB4\uB825\uC744 {MaxHp:diff()} \uC783\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "ENTRENCH",
+      "preferredLocale": "kor",
+      "title": "\uCC38\uD638",
+      "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uAC00 2\uBC30\uAC00 \uB429\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -10402,6 +10402,27 @@
       "preferredLocale": "kor",
       "title": "\uD0C4\uC131 \uD50C\uB77C\uC2A4\uD06C",
       "description": "\uBB34\uC791\uC704 \uC801\uC5D0\uAC8C [gold]\uC911\uB3C5[/gold]\uC744 {PoisonPower:diff()}\uB9CC\uD07C {Repeat:diff()}\uBC88 \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "METAMORPHOSIS",
+      "preferredLocale": "kor",
+      "title": "\uD0C8\uBC14\uAFC8",
+      "description": "[gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0 \uBB34\uC791\uC704 \uACF5\uACA9 \uCE74\uB4DC\uB97C {Cards:diff()}\uC7A5 \uCD94\uAC00\uD569\uB2C8\uB2E4. \uC774\uBC88 \uC804\uD22C \uB3D9\uC548 \uADF8 \uCE74\uB4DC\uB4E4\uC744 \uBE44\uC6A9 \uC5C6\uC774 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -11385,6 +11406,27 @@
       ]
     },
     {
+      "keyStem": "MAUL",
+      "preferredLocale": "kor",
+      "title": "\uD560\uD034\uAE30",
+      "description": "\uD53C\uD574\uB97C {Damage:diff()}\uB9CC\uD07C 2\uBC88 \uC90D\uB2C8\uB2E4.\n\uC774\uBC88 \uC804\uD22C \uB3D9\uC548 \uBAA8\uB4E0 \uD560\uD034\uAE30 \uCE74\uB4DC\uC758 \uD53C\uD574\uB7C9\uC774 {Increase:diff()} \uC99D\uAC00\uD569\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "SYNTHESIS",
       "preferredLocale": "kor",
       "title": "\uD569\uC131",
@@ -11578,6 +11620,27 @@
       "preferredLocale": "kor",
       "title": "\uD61C\uC131",
       "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n[gold]\uC57D\uD654[/gold]\uB97C {WeakPower:diff()} \uBD80\uC5EC\uD569\uB2C8\uB2E4.\n[gold]\uCDE8\uC57D[/gold]\uC744 {VulnerablePower:diff()} \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "WHISTLE",
+      "preferredLocale": "kor",
+      "title": "\uD638\uAC01 \uBD88\uAE30",
+      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n\uC801\uC744 [gold]\uAE30\uC808[/gold]\uC2DC\uD0B5\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -12018,44 +12081,6 @@
   "relics": [
     {
       "domain": "relic",
-      "keyStem": "RELIC_HISTORY",
-      "preferredLocale": "eng",
-      "title": null,
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [],
-      "locales": []
-    },
-    {
-      "domain": "relic",
-      "keyStem": "RELIC_RARITY",
-      "preferredLocale": "eng",
-      "title": null,
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [],
-      "locales": []
-    },
-    {
-      "domain": "relic",
       "keyStem": "CAULDRON",
       "preferredLocale": "kor",
       "title": "\uAC00\uB9C8\uC1A5",
@@ -12433,35 +12458,6 @@
     },
     {
       "domain": "relic",
-      "keyStem": "MEDICAL_KIT",
-      "preferredLocale": "kor",
-      "title": "\uAD6C\uAE09 \uC0C1\uC790",
-      "description": "[gold]\uC0C1\uD0DC\uC774\uC0C1[/gold] \uCE74\uB4DC\uB97C \uC0AC\uC6A9\uD560 \uC218 \uC788\uAC8C \uB429\uB2C8\uB2E4. [gold]\uC0C1\uD0DC\uC774\uC0C1[/gold] \uCE74\uB4DC\uB294 \uC0AC\uC6A9 \uC2DC \uC18C\uBA78\uD569\uB2C8\uB2E4.",
-      "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "relic",
       "keyStem": "BOUND_PHYLACTERY",
       "preferredLocale": "kor",
       "title": "\uAD6C\uC18D\uB41C \uC131\uBB3C\uD568",
@@ -12495,35 +12491,6 @@
       "preferredLocale": "kor",
       "title": "\uAD6C\uC2AC \uC8FC\uBA38\uB2C8",
       "description": "\uB9E4 \uC804\uD22C \uC2DC\uC791 \uC2DC, \uBAA8\uB4E0 \uC801\uC5D0\uAC8C [gold]\uCDE8\uC57D[/gold]\uC744 [blue]{VulnerablePower}[/blue] \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
-      "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "relic",
-      "keyStem": "DEPRECATED_RELIC",
-      "preferredLocale": "kor",
-      "title": "\uAD6C\uC2DD \uC720\uBB3C",
-      "description": "\uC774 \uC720\uBB3C\uC740 \uB354 \uC774\uC0C1 \uAC8C\uC784\uC5D0 \uB4F1\uC7A5\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. \uADF8\uC800 \uC720\uC0B0\uC73C\uB85C\uC11C \uC774\uACF3\uC5D0 \uB0A8\uC544\uC788\uC744 \uBFD0\uC785\uB2C8\uB2E4.",
       "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -13308,7 +13275,7 @@
       "title": "\uB3C4\uBC15\uC6A9 \uCE69",
       "description": "\uB9E4 \uC804\uD22C \uC2DC\uC791 \uC2DC, \uC6D0\uD558\uB294 \uB9CC\uD07C \uCE74\uB4DC\uB97C \uBC84\uB9AC\uACE0 \uBC84\uB9B0 \uB9CC\uD07C \uCE74\uB4DC\uB97C \uBF51\uC2B5\uB2C8\uB2E4.",
       "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uAD50\uCCB4\uD560 \uCE74\uB4DC\uB97C \uC6D0\uD558\uB294 \uB9CC\uD07C \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -13366,7 +13333,7 @@
       "title": "\uB3CC\uB9AC\uC758 \uAC70\uC6B8",
       "description": "\uD68D\uB4DD \uC2DC, [gold]\uB371[/gold]\uC5D0 \uC788\uB294 \uCE74\uB4DC\uC758 \uBCF5\uC0AC\uBCF8\uC744 1\uC7A5 \uC5BB\uC2B5\uB2C8\uB2E4.",
       "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "[gold]\uBCF5\uC0AC[/gold]\uD560 \uCE74\uB4DC\uB97C [blue]1[/blue]\uC7A5 \uC120\uD0DD\uD558\uC138\uC694",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -14352,7 +14319,7 @@
       "title": "\uBC14\uB2E4 \uC720\uB9AC",
       "description": "{Character.StringValue:cond:[gold]{}[/gold]\uC758 \uCE74\uB4DC\uB97C|\uB2E4\uB978 \uCE90\uB9AD\uD130\uC758 \uCE74\uB4DC\uB97C} [blue]{Cards}[/blue]\uC7A5 \uBD05\uB2C8\uB2E4. \uC6D0\uD558\uB294 \uB9CC\uD07C \uC120\uD0DD\uD574 [gold]\uB371[/gold]\uC5D0 \uCD94\uAC00\uD569\uB2C8\uB2E4.",
       "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC6D0\uD558\uB294 \uB9CC\uD07C \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -15744,7 +15711,7 @@
       "title": "\uC120\uD0DD\uC758 \uC5ED\uC124",
       "description": "\uB9E4 \uC804\uD22C \uC2DC\uC791 \uC2DC, \uBB34\uC791\uC704 \uCE74\uB4DC [blue]{Cards}[/blue]\uC7A5 \uC911 [blue]1[/blue]\uC7A5\uC744 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4. \uC120\uD0DD\uD55C \uCE74\uB4DC\uC5D0 [gold]\uBCF4\uC874[/gold]\uC744 \uCD94\uAC00\uD569\uB2C8\uB2E4.",
       "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -15950,35 +15917,6 @@
       "selectionScreenPrompt": null,
       "englishTitle": "Kunai",
       "englishDescription": "Tek turda her [blue]{Cards}[/blue] Sald\u0131r\u0131 kart\u0131 oynad\u0131\u011F\u0131nda [blue]{DexterityPower}[/blue] [gold]\u00C7eviklik[/gold] elde et.",
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "relic",
-      "keyStem": "MYSTERIOUS_COCOON",
-      "preferredLocale": "kor",
-      "title": "\uC218\uC218\uAED8\uB07C\uC758 \uACE0\uCE58",
-      "description": "\uACBD\uD5D8\uCE58\uB97C [blue]{Experience}[/blue] \uC5BB\uC740 \uD6C4, [gold]\uD6C8\uB828 \uD0C0\uACA9[/gold]\uC744 [gold]\uAFF0\uB6AB\uAE30[/gold]\uB85C \uBCC0\uD654\uC2DC\uD0B5\uB2C8\uB2E4.",
-      "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
       "options": [],
       "attributes": {
         "unlockInfo": null,
@@ -17653,35 +17591,6 @@
     },
     {
       "domain": "relic",
-      "keyStem": "INK_BOTTLE",
-      "preferredLocale": "kor",
-      "title": "\uC789\uD06C\uBCD1",
-      "description": "\uCE74\uB4DC\uB97C [blue]{CardThreshold}[/blue]\uC7A5 \uC0AC\uC6A9\uD560 \uB54C\uB9C8\uB2E4, \uCE74\uB4DC\uB97C [blue]{Cards}[/blue]\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.",
-      "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "relic",
       "keyStem": "FORGOTTEN_SOUL",
       "preferredLocale": "kor",
       "title": "\uC78A\uD78C \uC601\uD63C",
@@ -18876,7 +18785,7 @@
       "title": "\uD074\uB85C",
       "description": "\uD68D\uB4DD \uC2DC, \uCD5C\uB300 [blue]{Cards}[/blue]\uC7A5\uC758 \uCE74\uB4DC\uB97C [gold]\uD560\uD034\uAE30[/gold]\uB85C [gold]\uBCC0\uD654[/gold]\uC2DC\uD0B5\uB2C8\uB2E4.",
       "flavor": "[red]\uC774 \uC720\uBB3C\uC5D0 \uAD00\uD55C \uC790\uC138\uD55C \uB0B4\uC6A9\uC740 \uCD94\uD6C4 \uACF5\uAC1C\uB420 \uC608\uC815\uC785\uB2C8\uB2E4...[/red]",
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "[gold]\uD560\uD034\uAE30[/gold]\uB85C [gold]\uBCC0\uD654[/gold]\uC2DC\uD0AC \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -20441,7 +20350,7 @@
       "domain": "potion",
       "keyStem": "ENTRY_POTION",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "ENTRY POTION",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -20460,7 +20369,7 @@
       "domain": "potion",
       "keyStem": "MULTIPLAYER_EXPANDED_STATE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "MULTIPLAYER EXPANDED STATE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -20479,7 +20388,7 @@
       "domain": "potion",
       "keyStem": "POTION_POPUP",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "POTION POPUP",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -20498,7 +20407,7 @@
       "domain": "potion",
       "keyStem": "POTION_RARITY",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "POTION RARITY",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -20517,7 +20426,7 @@
       "domain": "potion",
       "keyStem": "UNLOCK_TEXT",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "UNLOCK TEXT",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -20655,7 +20564,7 @@
       "title": "\uAD11\uAE30\uC758 \uC190\uAE38",
       "description": "[gold]\uC190[/gold]\uC5D0\uC11C \uCE74\uB4DC\uB97C 1\uC7A5 \uC120\uD0DD\uD569\uB2C8\uB2E4. \uC774\uBC88 \uC804\uD22C \uB3D9\uC548 \uADF8 \uCE74\uB4DC\uB97C \uBE44\uC6A9 \uC5C6\uC774 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
       "flavor": null,
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uBE44\uC6A9\uC744 \uC5C6\uC568 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -20829,7 +20738,7 @@
       "title": "\uB3C4\uBC15\uAFBC\uC758 \uC601\uC561",
       "description": "\uC6D0\uD558\uB294 \uB9CC\uD07C \uCE74\uB4DC\uB97C \uBC84\uB9AC\uACE0 \uBC84\uB9B0 \uB9CC\uD07C \uCE74\uB4DC\uB97C \uBF51\uC2B5\uB2C8\uB2E4.",
       "flavor": null,
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uAD50\uCCB4\uD560 \uCE74\uB4DC\uB97C \uC6D0\uD558\uB294 \uB9CC\uD07C \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -21699,7 +21608,7 @@
       "title": "\uC561\uC0C1 \uAE30\uC5B5",
       "description": "[gold]\uBC84\uB9B0 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0\uC11C \uCE74\uB4DC\uB97C 1\uC7A5 \uC120\uD0DD\uD574 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4. \uC774\uBC88 \uD134 \uB3D9\uC548 \uADF8 \uCE74\uB4DC\uC758 \uBE44\uC6A9\uC774 [blue]0[/blue] {energyPrefix:energyIcons(1)}\uC774 \uB429\uB2C8\uB2E4.",
       "flavor": null,
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -21902,7 +21811,7 @@
       "title": "\uC608\uACAC\uC758 \uBC29\uC6B8",
       "description": "[gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0\uC11C \uCE74\uB4DC\uB97C 1\uC7A5 \uC120\uD0DD\uD574 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
       "flavor": null,
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -22076,7 +21985,7 @@
       "title": "\uC7BF\uBB3C",
       "description": "[gold]\uC190[/gold]\uC5D0 \uC788\uB294 \uCE74\uB4DC\uB97C \uC6D0\uD558\uB294 \uB9CC\uD07C [gold]\uC18C\uBA78[/gold]\uC2DC\uD0B5\uB2C8\uB2E4.",
       "flavor": null,
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "[gold]\uC18C\uBA78[/gold]\uC2DC\uD0AC \uCE74\uB4DC\uB97C \uC6D0\uD558\uB294 \uB9CC\uD07C \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -22568,7 +22477,30 @@
       "domain": "event",
       "keyStem": "AXEBOTS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "AXEBOTS NORMAL",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null,
+        "pageCount": null,
+        "optionCount": null,
+        "pageSummary": null,
+        "talkPreview": null
+      },
+      "sourceFileHints": [],
+      "locales": []
+    },
+    {
+      "domain": "event",
+      "keyStem": "BATTLEWORN_DUMMY_EVENT_ENCOUNTER",
+      "preferredLocale": "eng",
+      "title": "BATTLEWORN DUMMY EVENT ENCOUNTER",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22591,7 +22523,7 @@
       "domain": "event",
       "keyStem": "BOWLBUGS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "BOWLBUGS NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22614,7 +22546,7 @@
       "domain": "event",
       "keyStem": "BOWLBUGS_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "BOWLBUGS WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22637,7 +22569,7 @@
       "domain": "event",
       "keyStem": "BYGONE_EFFIGY_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "BYGONE EFFIGY ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22660,7 +22592,7 @@
       "domain": "event",
       "keyStem": "BYRDONIS_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "BYRDONIS ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22683,7 +22615,7 @@
       "domain": "event",
       "keyStem": "CEREMONIAL_BEAST_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "CEREMONIAL BEAST BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22706,7 +22638,7 @@
       "domain": "event",
       "keyStem": "CHOMPERS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "CHOMPERS NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22729,7 +22661,7 @@
       "domain": "event",
       "keyStem": "CONSTRUCT_MENAGERIE_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "CONSTRUCT MENAGERIE NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22752,7 +22684,7 @@
       "domain": "event",
       "keyStem": "CORPSE_SLUGS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "CORPSE SLUGS NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22775,7 +22707,7 @@
       "domain": "event",
       "keyStem": "CORPSE_SLUGS_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "CORPSE SLUGS WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22798,7 +22730,7 @@
       "domain": "event",
       "keyStem": "CUBEX_CONSTRUCT_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "CUBEX CONSTRUCT NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22821,7 +22753,7 @@
       "domain": "event",
       "keyStem": "CULTISTS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "CULTISTS NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22844,7 +22776,30 @@
       "domain": "event",
       "keyStem": "DECIMILLIPEDE_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "DECIMILLIPEDE ELITE",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null,
+        "pageCount": null,
+        "optionCount": null,
+        "pageSummary": null,
+        "talkPreview": null
+      },
+      "sourceFileHints": [],
+      "locales": []
+    },
+    {
+      "domain": "event",
+      "keyStem": "DENSE_VEGETATION_EVENT_ENCOUNTER",
+      "preferredLocale": "eng",
+      "title": "DENSE VEGETATION EVENT ENCOUNTER",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22867,7 +22822,7 @@
       "domain": "event",
       "keyStem": "DEPRECATED_ENCOUNTER",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "DEPRECATED ENCOUNTER",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22888,9 +22843,42 @@
     },
     {
       "domain": "event",
+      "keyStem": "DEPRECATED_EVENT",
+      "preferredLocale": "cjk",
+      "title": "DEPRECATED EVENT",
+      "description": "\u8FD9\u4E2A\u4E8B\u4EF6\u5DF2\u7ECF\u4ECE\u6E38\u620F\u4E2D\u88AB\u79FB\u9664\u4E86\u3002",
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null,
+        "pageCount": "1",
+        "optionCount": null,
+        "pageSummary": "INITIAL: \u8FD9\u4E2A\u4E8B\u4EF6\u5DF2\u7ECF\u4ECE\u6E38\u620F\u4E2D\u88AB\u79FB\u9664\u4E86\u3002",
+        "talkPreview": null
+      },
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "domain": "event",
       "keyStem": "DEVOTED_SCULPTOR_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "DEVOTED SCULPTOR WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22913,7 +22901,7 @@
       "domain": "event",
       "keyStem": "DOORMAKER_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "DOORMAKER BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22936,7 +22924,7 @@
       "domain": "event",
       "keyStem": "ENTOMANCER_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "ENTOMANCER ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22959,7 +22947,7 @@
       "domain": "event",
       "keyStem": "EXOSKELETONS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "EXOSKELETONS NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -22982,7 +22970,7 @@
       "domain": "event",
       "keyStem": "EXOSKELETONS_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "EXOSKELETONS WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23005,7 +22993,30 @@
       "domain": "event",
       "keyStem": "FABRICATOR_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "FABRICATOR NORMAL",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null,
+        "pageCount": null,
+        "optionCount": null,
+        "pageSummary": null,
+        "talkPreview": null
+      },
+      "sourceFileHints": [],
+      "locales": []
+    },
+    {
+      "domain": "event",
+      "keyStem": "FAKE_MERCHANT_EVENT_ENCOUNTER",
+      "preferredLocale": "eng",
+      "title": "FAKE MERCHANT EVENT ENCOUNTER",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23028,7 +23039,7 @@
       "domain": "event",
       "keyStem": "FLYCONID_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "FLYCONID NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23051,7 +23062,7 @@
       "domain": "event",
       "keyStem": "FLYCONID_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "FLYCONID WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23074,7 +23085,7 @@
       "domain": "event",
       "keyStem": "FOGMOG_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "FOGMOG NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23097,7 +23108,7 @@
       "domain": "event",
       "keyStem": "FOSSIL_STALKER_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "FOSSIL STALKER NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23120,7 +23131,7 @@
       "domain": "event",
       "keyStem": "FROG_KNIGHT_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "FROG KNIGHT NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23143,7 +23154,7 @@
       "domain": "event",
       "keyStem": "FUZZY_WURM_CRAWLER_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "FUZZY WURM CRAWLER WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23166,7 +23177,7 @@
       "domain": "event",
       "keyStem": "GENERIC",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "GENERIC",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23189,7 +23200,7 @@
       "domain": "event",
       "keyStem": "GLOBE_HEAD_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "GLOBE HEAD NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23212,7 +23223,7 @@
       "domain": "event",
       "keyStem": "GREMLIN_MERC_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "GREMLIN MERC NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23235,7 +23246,7 @@
       "domain": "event",
       "keyStem": "HAUNTED_SHIP_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "HAUNTED SHIP NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23258,7 +23269,7 @@
       "domain": "event",
       "keyStem": "HUNTER_KILLER_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "HUNTER KILLER NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23281,7 +23292,7 @@
       "domain": "event",
       "keyStem": "INFESTED_PRISMS_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "INFESTED PRISMS ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23304,7 +23315,7 @@
       "domain": "event",
       "keyStem": "INKLETS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "INKLETS NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23327,7 +23338,7 @@
       "domain": "event",
       "keyStem": "KAISER_CRAB_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "KAISER CRAB BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23350,7 +23361,7 @@
       "domain": "event",
       "keyStem": "KNIGHTS_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "KNIGHTS ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23373,7 +23384,7 @@
       "domain": "event",
       "keyStem": "KNOWLEDGE_DEMON_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "KNOWLEDGE DEMON BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23396,7 +23407,7 @@
       "domain": "event",
       "keyStem": "LAGAVULIN_MATRIARCH_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "LAGAVULIN MATRIARCH BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23419,7 +23430,7 @@
       "domain": "event",
       "keyStem": "LIVING_FOG_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "LIVING FOG NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23442,7 +23453,7 @@
       "domain": "event",
       "keyStem": "LOUSE_PROGENITOR_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "LOUSE PROGENITOR NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23465,7 +23476,7 @@
       "domain": "event",
       "keyStem": "MAWLER_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "MAWLER NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23488,7 +23499,7 @@
       "domain": "event",
       "keyStem": "MECHA_KNIGHT_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "MECHA KNIGHT ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23511,7 +23522,7 @@
       "domain": "event",
       "keyStem": "MERCHANT",
       "preferredLocale": "kor",
-      "title": null,
+      "title": "MERCHANT",
       "description": "\uADF8\uB798\uC560\uC560, \uBC14\uB85C \uADF8\uAC70\uC5D0\uC694!",
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23542,9 +23553,75 @@
     },
     {
       "domain": "event",
+      "keyStem": "MOCK_EVENT_MODEL",
+      "preferredLocale": "cjk",
+      "title": "MOCK EVENT MODEL",
+      "description": "\u8FD9\u662F\u4E00\u4EF6\u6837\u54C1\u4E8B\u4EF6\u3002",
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [
+        {
+          "id": "mockeventmodelinitialtest",
+          "label": "\u6837\u54C1\u9009\u9879",
+          "description": "\u8FD9\u662F\u4E00\u4E2A\u6837\u54C1\u9009\u9879\u3002",
+          "attributes": {
+            "page": "INITIAL",
+            "optionKey": "TEST"
+          }
+        }
+      ],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null,
+        "pageCount": "1",
+        "optionCount": "1",
+        "pageSummary": "INITIAL: \u8FD9\u662F\u4E00\u4EF6\u6837\u54C1\u4E8B\u4EF6\u3002",
+        "talkPreview": null
+      },
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "domain": "event",
+      "keyStem": "MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER",
+      "preferredLocale": "eng",
+      "title": "MYSTERIOUS KNIGHT EVENT ENCOUNTER",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null,
+        "pageCount": null,
+        "optionCount": null,
+        "pageSummary": null,
+        "talkPreview": null
+      },
+      "sourceFileHints": [],
+      "locales": []
+    },
+    {
+      "domain": "event",
       "keyStem": "MYTES_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "MYTES NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23567,7 +23644,7 @@
       "domain": "event",
       "keyStem": "NIBBITS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "NIBBITS NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23590,7 +23667,7 @@
       "domain": "event",
       "keyStem": "NIBBITS_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "NIBBITS WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23611,9 +23688,52 @@
     },
     {
       "domain": "event",
+      "keyStem": "OROBAS",
+      "preferredLocale": "cjk",
+      "title": "OROBAS",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [
+        {
+          "id": "orobasinitialoptionpool3locked",
+          "label": "\u9501\u5B9A",
+          "description": "\u4F60\u6CA1\u6709\u521D\u59CB\u9057\u7269\u6216\u5361\u724C\u3002",
+          "attributes": {
+            "page": "INITIAL",
+            "optionKey": "OPTION_POOL_3_LOCKED"
+          }
+        }
+      ],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null,
+        "pageCount": null,
+        "optionCount": "1",
+        "pageSummary": null,
+        "talkPreview": null
+      },
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "domain": "event",
       "keyStem": "OVERGROWTH_CRAWLERS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "OVERGROWTH CRAWLERS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23636,7 +23756,7 @@
       "domain": "event",
       "keyStem": "OVERGROWTH_WILDLIFE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "OVERGROWTH WILDLIFE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23659,7 +23779,7 @@
       "domain": "event",
       "keyStem": "OVICOPTER_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "OVICOPTER NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23682,7 +23802,7 @@
       "domain": "event",
       "keyStem": "OWL_MAGISTRATE_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "OWL MAGISTRATE NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23705,7 +23825,7 @@
       "domain": "event",
       "keyStem": "PHANTASMAL_GARDENERS_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "PHANTASMAL GARDENERS ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23728,7 +23848,7 @@
       "domain": "event",
       "keyStem": "PHROG_PARASITE_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "PHROG PARASITE ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23751,7 +23871,30 @@
       "domain": "event",
       "keyStem": "PUNCH_CONSTRUCT_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "PUNCH CONSTRUCT NORMAL",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null,
+        "pageCount": null,
+        "optionCount": null,
+        "pageSummary": null,
+        "talkPreview": null
+      },
+      "sourceFileHints": [],
+      "locales": []
+    },
+    {
+      "domain": "event",
+      "keyStem": "PUNCH_OFF_EVENT_ENCOUNTER",
+      "preferredLocale": "eng",
+      "title": "PUNCH OFF EVENT ENCOUNTER",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23774,7 +23917,7 @@
       "domain": "event",
       "keyStem": "QUEEN_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "QUEEN BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23797,7 +23940,7 @@
       "domain": "event",
       "keyStem": "RUBY_RAIDERS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "RUBY RAIDERS NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23820,7 +23963,7 @@
       "domain": "event",
       "keyStem": "SCROLLS_OF_BITING_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SCROLLS OF BITING NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23843,7 +23986,7 @@
       "domain": "event",
       "keyStem": "SCROLLS_OF_BITING_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SCROLLS OF BITING WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23866,7 +24009,7 @@
       "domain": "event",
       "keyStem": "SEAPUNK_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SEAPUNK WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23889,7 +24032,7 @@
       "domain": "event",
       "keyStem": "SEWER_CLAM_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SEWER CLAM NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23912,7 +24055,7 @@
       "domain": "event",
       "keyStem": "SHRINKER_BEETLE_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SHRINKER BEETLE WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23935,7 +24078,7 @@
       "domain": "event",
       "keyStem": "SKULKING_COLONY_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SKULKING COLONY ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23958,7 +24101,7 @@
       "domain": "event",
       "keyStem": "SLIMED_BERSERKER_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SLIMED BERSERKER NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -23981,7 +24124,7 @@
       "domain": "event",
       "keyStem": "SLIMES_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SLIMES NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24004,7 +24147,7 @@
       "domain": "event",
       "keyStem": "SLIMES_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SLIMES WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24027,7 +24170,7 @@
       "domain": "event",
       "keyStem": "SLITHERING_STRANGLER_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SLITHERING STRANGLER NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24050,7 +24193,7 @@
       "domain": "event",
       "keyStem": "SLUDGE_SPINNER_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SLUDGE SPINNER WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24073,7 +24216,7 @@
       "domain": "event",
       "keyStem": "SLUMBERING_BEETLE_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SLUMBERING BEETLE NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24096,7 +24239,7 @@
       "domain": "event",
       "keyStem": "SNAPPING_JAXFRUIT_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SNAPPING JAXFRUIT NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24119,7 +24262,7 @@
       "domain": "event",
       "keyStem": "SOUL_FYSH_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SOUL FYSH BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24142,7 +24285,7 @@
       "domain": "event",
       "keyStem": "SOUL_NEXUS_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SOUL NEXUS ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24165,7 +24308,7 @@
       "domain": "event",
       "keyStem": "SPINY_TOAD_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "SPINY TOAD NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24188,7 +24331,7 @@
       "domain": "event",
       "keyStem": "TERROR_EEL_ELITE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "TERROR EEL ELITE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24211,7 +24354,7 @@
       "domain": "event",
       "keyStem": "TEST_SUBJECT_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "TEST SUBJECT BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24232,10 +24375,10 @@
     },
     {
       "domain": "event",
-      "keyStem": "EVENT4_EPOCH",
-      "preferredLocale": "latin",
-      "title": "The TODO",
-      "description": "TODO",
+      "keyStem": "THE_ARCHITECT_EVENT_ENCOUNTER",
+      "preferredLocale": "eng",
+      "title": "THE ARCHITECT EVENT ENCOUNTER",
+      "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -24250,20 +24393,14 @@
         "pageSummary": null,
         "talkPreview": null
       },
-      "sourceFileHints": [
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "latin",
-        "unknown"
-      ]
+      "sourceFileHints": [],
+      "locales": []
     },
     {
       "domain": "event",
       "keyStem": "THE_INSATIABLE_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "THE INSATIABLE BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24286,7 +24423,7 @@
       "domain": "event",
       "keyStem": "THE_KIN_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "THE KIN BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24309,7 +24446,7 @@
       "domain": "event",
       "keyStem": "THE_LOST_AND_FORGOTTEN_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "THE LOST AND FORGOTTEN NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24332,7 +24469,7 @@
       "domain": "event",
       "keyStem": "THE_OBSCURA_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "THE OBSCURA NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24355,7 +24492,7 @@
       "domain": "event",
       "keyStem": "THIEVING_HOPPER_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "THIEVING HOPPER WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24378,7 +24515,7 @@
       "domain": "event",
       "keyStem": "TOADPOLES_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "TOADPOLES NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24401,7 +24538,7 @@
       "domain": "event",
       "keyStem": "TOADPOLES_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "TOADPOLES WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24424,7 +24561,7 @@
       "domain": "event",
       "keyStem": "TUNNELER_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "TUNNELER NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24447,7 +24584,7 @@
       "domain": "event",
       "keyStem": "TUNNELER_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "TUNNELER WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24470,7 +24607,7 @@
       "domain": "event",
       "keyStem": "TURRET_OPERATOR_WEAK",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "TURRET OPERATOR WEAK",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24493,7 +24630,7 @@
       "domain": "event",
       "keyStem": "TWO_TAILED_RATS_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "TWO TAILED RATS NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24516,7 +24653,7 @@
       "domain": "event",
       "keyStem": "VANTOM_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "VANTOM BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24539,7 +24676,7 @@
       "domain": "event",
       "keyStem": "VINE_SHAMBLER_NORMAL",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "VINE SHAMBLER NORMAL",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24562,7 +24699,7 @@
       "domain": "event",
       "keyStem": "WATERFALL_GIANT_BOSS",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "WATERFALL GIANT BOSS",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -24580,39 +24717,6 @@
       },
       "sourceFileHints": [],
       "locales": []
-    },
-    {
-      "domain": "event",
-      "keyStem": "HELLO_WORLD",
-      "preferredLocale": "kor",
-      "title": "\u4F60\u597D\u4E16\u754C",
-      "description": "\uB0B4 \uD134 \uC2DC\uC791 \uC2DC, \uBB34\uC791\uC704 \uC77C\uBC18 \uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
     },
     {
       "domain": "event",
@@ -24703,82 +24807,6 @@
         "pageCount": "3",
         "optionCount": "2",
         "pageSummary": "FIRST_CHEST: \uB124, [gold]\uACE8\uB4DC[/gold]\uAC00 \uB4E4\uC5B4 \uC788\uB124\uC694. | INITIAL: \uAE38\uC744 \uB530\uB77C\uAC00\uB358 \uB2F9\uC2E0\uC740, \uC77C\uBD80\uAC00 \uBB3C\uC5D0 \uC7A0\uAE34 \uC800\uC7A5\uACE0\uB97C \uBC1C\uACAC\uD569\uB2C8\uB2E4.\n[gold]\uC0C1\uC790[/gold]\uB294 [blue]2[/blue]\uAC1C\uAC00 \uC788\uC9C0\uB9CC, \uAE08\uBC29\uC774\uB77C\uB3C4 [jitter][purple]\uB9DD\uAC00\uC838\uBC84\uB9B4 \uB4EF\uD55C \uC5F4\uC1E0[/purple][/jitter]\uB294 [blue]1[/blue]\uAC1C \uBFD0\uC785\uB2C8\uB2E4.\n\n[gold]\uCCAB \uBC88\uC9F8 \uC0C1\uC790:[/gold] \uD754\uB4E4\uC5B4\uBCF4\uB2C8 \uB538\uB791\uAC70\uB9AC\uB294 \uC18C\uB9AC\uAC00 \uB0A9\uB2C8\uB2E4. \uC57D\uAC04\uC758 \uACE8\uB4DC\uAC00 \uB4E4\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.\n[gold]\uB450 \uBC88\uC9F8 \uC0C1\uC790:[/gold] \uAC70\uB300\uD558\uACE0 \uD654\uB824\uD55C \uC0C1\uC790\uB85C, \uBA85\uBC31\uD788 [red]\uC800\uC8FC\uBC1B\uC558\uC2B5\uB2C8\uB2E4[/red]. \uB9CE\uC740 \uACE8\uB4DC\uAC00 \uC788\uC2B5\uB2C8\uB2E4! | SECOND_CHEST: \uC774\uB807\uAC8C \uB9CE\uC740 [gold]\uACE8\uB4DC[/gold]\uAC00 \uBAA8\uC5EC\uC788\uB294 \uAC74 \uC0DD\uC804 \uCC98\uC74C \uBCF4\uB294 \uAD11\uACBD\uC785\uB2C8\uB2E4!\n\n[sine][/sine][blue]\uC0C1\uC778[/blue][sine]\uC774 \uD30C\uB294 \uBB3C\uAC74\uB4E4\uC744 \uC804\uBD80 \uC0AC\uBC84\uB9B4 \uC218\uB3C4 \uC788\uC744 \uAC83 \uAC19\uC2B5\uB2C8\uB2E4...[/sine]\n{Monologue}\n[sine]\uC704\uD5D8\uD55C \uBD88\uB7C9\uBC30\uB4E4\uC740 \uB3C8\uC73C\uB85C \uBB3C\uB7EC\uB098\uAC8C \uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4...[/sine]\n\n\uD558\uC9C0\uB9CC [red][sine]\uBCD1\uC801\uC778 \uD0D0\uC695[/sine][/red]\uC740 \uC601\uC6D0\uD788 \uB2F9\uC2E0\uC758 \uB9C8\uC74C\uC18D\uC5D0 \uB0A8\uC744 \uAC83\uC785\uB2C8\uB2E4...",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "MOCK_EVENT_MODEL",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uC774\uBCA4\uD2B8",
-      "description": "\uAC00\uC9DC \uC774\uBCA4\uD2B8\uC785\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [
-        {
-          "id": "mockeventmodelinitialtest",
-          "label": "\uAC00\uC9DC \uC120\uD0DD\uC9C0",
-          "description": "\uAC00\uC9DC \uC120\uD0DD\uC9C0\uC785\uB2C8\uB2E4.",
-          "attributes": {
-            "page": "INITIAL",
-            "optionKey": "TEST"
-          }
-        }
-      ],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": "1",
-        "optionCount": "1",
-        "pageSummary": "INITIAL: \uAC00\uC9DC \uC774\uBCA4\uD2B8\uC785\uB2C8\uB2E4.",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "MOCK_PREVENT_DEATH_POWER",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uC8FD\uC74C \uBC29\uC9C0",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -24988,105 +25016,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "CLASH",
-      "preferredLocale": "kor",
-      "title": "\uACA9\uB3CC",
-      "description": "[gold]\uC190[/gold]\uC5D0 \uC788\uB294 \uBAA8\uB4E0 \uCE74\uB4DC\uAC00 \uACF5\uACA9 \uCE74\uB4DC\uC77C \uB54C\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.\n\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "ENLIGHTENMENT",
-      "preferredLocale": "kor",
-      "title": "\uACC4\uBABD",
-      "description": "\uC774\uBC88 {IfUpgraded:show:\uC804\uD22C|\uD134} \uB3D9\uC548, [gold]\uC190[/gold]\uC5D0 \uC788\uB294 \uBAA8\uB4E0 \uCE74\uB4DC\uC758 \uBE44\uC6A9\uC774 1\uB85C \uAC10\uC18C\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "TORIC_TOUGHNESS",
-      "preferredLocale": "kor",
-      "title": "\uACE0\uB9AC\uD615 \uAC15\uC778\uD568",
-      "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.\n\uB2E4\uC74C {Turns:diff()}\uD134 \uB3D9\uC548, \uD134 \uC2DC\uC791 \uC2DC [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "ZEN_WEAVER",
       "preferredLocale": "kor",
       "title": "\uACE0\uC694\uB97C \uC9DC\uB294 \uAC70\uBBF8",
@@ -25218,138 +25147,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "FEEDING_FRENZY",
-      "preferredLocale": "kor",
-      "title": "\uAD11\uB780\uC758 \uD3EC\uC2DD",
-      "description": "\uC774\uBC88 \uD134 \uB3D9\uC548 [gold]\uD798[/gold]\uC744 {StrengthPower:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "EVENT1_EPOCH",
-      "preferredLocale": "kor",
-      "title": "\uAD11\uC2E0\uC790\uB4E4",
-      "description": "[jitter]\u201C\uAE4C\uC545... \uAE4C\uC545 \uAE4C\uC545!!\u201D[/jitter]\n\uC815\uB9D0 \uAD74\uC695\uC801\uC778 \uD328\uBC30\uC600\uC2B5\uB2C8\uB2E4... \uADF8\uB4E4\uC758 \uC608\uBC30 \uC7A5\uC18C\uC640 \uC81C\uBB3C\uC740 \uAC10\uB2F9\uD560 \uC218 \uC5C6\uB294 \uCE68\uC785\uC790\uB4E4\uC5D0 \uC758\uD574 \uBA87 \uBC88\uC774\uACE0 \uD6FC\uC190\uB418\uC5C8\uC2B5\uB2C8\uB2E4.\n\n[blue]\uB9C8\uC798\uB808\uC2A4[/blue]\uAC00 \uC6B0\uB9AC\uB97C \uBC84\uB9B0 \uAC78\uAE4C\uC694?\n\n\uBC8C\uB808\uB4E4\uC758 \uAC1C\uCCB4 \uC218\uAC00 \uAE09\uC99D\uD558\uBA74\uC11C, [gold]\uCCA8\uD0D1[/gold] \uB0B4\uBD80\uC758 \uC2DD\uB7C9\uC740 \uC810\uC810 \uBD80\uC871\uD574\uC84C\uC2B5\uB2C8\uB2E4. [blue]\uBB34\uB9AC[/blue]\uB294 [gold]\uCCA8\uD0D1[/gold]\uC758 \uB354 \uC544\uB798 \uCE35\uC73C\uB85C \uB3C4\uB9DD\uCCD0, [green][sine]\uD574\uCD08[/sine][/green]\uC640 [purple][jitter]\uD558\uC218\uAD6C\uC758 \uC0DD\uBB3C\uB4E4[/jitter][/purple]\uB85C \uADFC\uADFC\uD788 \uC0B4\uC544\uAC00\uACE0 \uC788\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "DEPRECATED_EVENT",
-      "preferredLocale": "kor",
-      "title": "\uAD6C\uC2DD \uC774\uBCA4\uD2B8",
-      "description": "\uC774 \uC774\uBCA4\uD2B8\uB294 \uAC8C\uC784\uC5D0\uC11C \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": "1",
-        "optionCount": null,
-        "pageSummary": "INITIAL: \uC774 \uC774\uBCA4\uD2B8\uB294 \uAC8C\uC784\uC5D0\uC11C \uC0AD\uC81C\uB418\uC5C8\uC2B5\uB2C8\uB2E4.",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "PUNCH_OFF_EVENT_ENCOUNTER",
-      "preferredLocale": "kor",
-      "title": "\uAD8C\uD22C\uD615 \uAD6C\uC870\uCCB4\uB4E4",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "LOST_WISP",
       "preferredLocale": "kor",
       "title": "\uAE38 \uC783\uC740 \uC704\uC2B5",
@@ -25394,39 +25191,6 @@
         "pageCount": "3",
         "optionCount": "3",
         "pageSummary": "CLAIM: \uB2F9\uC2E0\uC740 \uC870\uC2EC\uC2A4\uB7FD\uAC8C [orange]\uC704\uC2B5[/orange]\uC5D0\uAC8C \uB2E4\uAC00\uAC11\uB2C8\uB2E4...\n\uAC00\uAE4C\uC774 \uB2E4\uAC00\uAC08\uC218\uB85D, \uC704\uC2B5\uC740 \uB2F9\uC2E0\uC758 \uC874\uC7AC\uC5D0 \uC810\uC810 \uB354 \uACA9\uD558\uAC8C \uBC18\uC751\uD569\uB2C8\uB2E4.\n\n\uB2F9\uC2E0\uC740 \uC190\uC774 \uB2FF\uC744 \uAC70\uB9AC\uC5D0\uC11C [orange]\uC704\uC2B5[/orange]\uC744 \uBD99\uC7A1\uC73C\uB824\uACE0 \uD588\uC9C0\uB9CC, \uC704\uC2B5\uC740 [red][jitter]\uB728\uAC70\uC6B4 \uC99D\uAE30\uC640 \uBD88\uAF43\uC744 \uBFDC\uC5B4\uB0B4 \uB2F9\uC2E0\uC5D0\uAC8C \uD654\uC0C1\uC744 \uC785\uD799\uB2C8\uB2E4![/jitter][/red]\n\n\uB2F9\uC2E0\uC740 \uACE0\uD1B5 \uC18D\uC5D0\uC11C\uB3C4 [jitter]\uD5C8\uC6B0\uC801\uAC70\uB9AC\uBA70 \uB354\uB4EC\uC5B4\uB304[/jitter] \uB05D\uC5D0, \uACB0\uAD6D \uADF8 \uC0DD\uBB3C\uC744 \uAD74\uBCF5\uC2DC\uD0B5\uB2C8\uB2E4. [orange]\uC704\uC2B5[/orange]\uC740 \uACB0\uAD6D \uD328\uBC30\uB97C \uC778\uC815\uD558\uACE0, \uB2F9\uC2E0\uC744 \uC0C8\uB85C\uC6B4 \uC8FC\uC778\uC73C\uB85C \uBC1B\uC544\uB4E4\uC785\uB2C8\uB2E4. | INITIAL: \uC800 \uBA40\uB9AC \uAE30\uC774\uD55C \uAD11\uACBD\uC774 \uBCF4\uC785\uB2C8\uB2E4. [sine][red]\uC8FD\uC740 \uACE4\uCDA9\uB4E4\uC758 \uC0AC\uCCB4[/red][/sine]\uAC00 \uC0B0\uB354\uBBF8\uCC98\uB7FC \uC313\uC5EC \uC788\uACE0, \uADF8 \uD55C\uAC00\uC6B4\uB370\uC5D0\uB294 [orange]\uC791\uC740 \uBE5B\uB098\uB294 \uBA3C\uC9C0[/orange]\uCC98\uB7FC \uBCF4\uC774\uB294 \uBB34\uC5B8\uAC00\uAC00 \uC788\uC2B5\uB2C8\uB2E4.\n\uADF8 \uBA3C\uC9C0\uB294 \uC628\uAC16 \uBC8C\uB808\uB97C \uD6A8\uACFC\uC801\uC73C\uB85C \uC720\uC778\uD558\uACE0 \uC788\uB294 \uAC83\uCC98\uB7FC \uBCF4\uC600\uC73C\uB098, \uB3CC\uC5F0 \uBD88\uAF43\uC744 \uB0B4\uBFDC\uC5B4\uB300\uACE0 \uC788\uC2B5\uB2C8\uB2E4!\n\n\uB2F9\uC2E0\uC740 \uC870\uC0AC\uB97C \uC704\uD574 \uB354 \uAC00\uAE4C\uC774 \uB2E4\uAC00\uAC11\uB2C8\uB2E4. | SEARCH: \uB2F9\uC2E0\uC740 \uADF8 \uAF2C\uB9C8 \uCE5C\uAD6C\uB97C \uB0B4\uBC84\uB824\uB450\uAE30\uB85C \uD588\uC2B5\uB2C8\uB2E4. \uAC74\uB4DC\uB9AC\uC9C0 \uC54A\uB294 \uAC8C \uC88B\uACA0\uB124\uC694!\n\n\uC8FC\uBCC0\uC5D0 \uB531\uD788 \uB208\uC5D0 \uB744\uB294 \uAC74 \uC5C6\uC9C0\uB9CC, \uC8FD\uC740 \uBC8C\uB808\uB4E4 \uC0AC\uC774\uC5D0 \uC57D\uAC04\uC758 [gold]\uACE8\uB4DC[/gold]\uAC00 \uD769\uC5B4\uC838 \uC788\uB294 \uAC83\uC744 \uBC1C\uACAC\uD588\uC2B5\uB2C8\uB2E4.\n\uC65C\uC778\uC9C0\uB294 \uAD81\uAE08\uD574\uD558\uC9C0 \uC54A\uAE30\uB85C \uD569\uB2C8\uB2E4.",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "DENSE_VEGETATION_EVENT_ENCOUNTER",
-      "preferredLocale": "kor",
-      "title": "\uAFC8\uD2C0\uBC8C\uB808\uB4E4",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -25636,72 +25400,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "RIP_AND_TEAR",
-      "preferredLocale": "kor",
-      "title": "\uB0A0\uB6F0\uAE30",
-      "description": "\uBB34\uC791\uC704 \uC801\uC5D0\uAC8C \uD53C\uD574\uB97C {Damage:diff()}\uB9CC\uD07C 2\uBC88 \uC90D\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "NONUPEIPE",
-      "preferredLocale": "kor",
-      "title": "\uB178\uB204\uD30C\uC774\uD398",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": "Nonupeipe",
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "BRAIN_LEECH",
       "preferredLocale": "kor",
       "title": "\uB1CC \uAC70\uBA38\uB9AC",
@@ -25737,105 +25435,6 @@
         "pageCount": "3",
         "optionCount": "2",
         "pageSummary": "INITIAL: [jitter]*\uD479*[/jitter]\n\n\uB2F9\uC2E0\uC758 \uBA38\uB9AC \uC704\uCABD\uC5D0 \uB0A0\uCE74\uB85C\uC6B4 \uD1B5\uC99D\uC774 \uC2A4\uCE58\uACE0, \uD55C \uC0DD\uAC01\uC774 \uB2F9\uC2E0\uC758 \uB9C8\uC74C\uC744 \uD30C\uACE0\uB4ED\uB2C8\uB2E4.\n\n[purple][sine]\u201C\uC9C0\uC2DD\uC744 \uACF5\uC720\uD558\uACA0\uB098???\u201D[/sine][/purple]\n\n\uB2F9\uC2E0\uC740 \uC5B4\uB5BB\uAC8C \uD574\uC57C \uD560\uC9C0 \uD655\uC2E0\uC774 \uC11C\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4... | RIP: \uB2F9\uC2E0\uC740 [jitter]\uBA38\uB9AC\uC5D0\uC11C \uAC70\uBA38\uB9AC\uB97C \uACA9\uB82C\uD558\uAC8C \uB72F\uC5B4\uB0B8 \uB4A4[/jitter] \uC800 \uBA40\uB9AC \uB358\uC838\uBC84\uB838\uC2B5\uB2C8\uB2E4!\n\n\uBA38\uB9BF\uC18D\uC5D0\uC11C\uB294 \uBAA9\uC18C\uB9AC\uAC00 \uB4E4\uB824\uC635\uB2C8\uB2E4:\n[purple][sine]\u201C\uC548\uB3FC\uC560\uC560\uC560\uC560\uC560\uC560\uC560\uC560\uC560\uC560\uC560\uC560\uC560\uC560....\u201D | SHARE_KNOWLEDGE: [purple][sine]\u201C\uC774 \uC5BC\uB9C8\uB098 \uC0AC\uCE58\uC2A4\uB7FD\uAC8C \uD559\uAD6C\uC801\uC778, \uBBF8\uB85C\uC640\uB3C4 \uAC19\uC740 \uC0AC\uACE0\uC778\uAC00!\n\uB450\uB1CC\uC758 \uC591\uC2DD\uC774 \uB420 \uB9CC\uD55C \uCC38\uB41C \uC9C0\uC801 \uD48D\uC694\uC758 \uD5A5\uC5F0\uC774\uB85C\uB2E4!\u201D[/sine][/purple].\n\n\uB9CC\uC871\uD55C \uB4EF\uD55C \uADF8 \uC0DD\uBA85\uCCB4\uB294, \uBA38\uB9AC\uC5D0\uC11C \uD280\uC5B4\uB098\uC640 \uAE30\uC5B4\uAC00 \uBC84\uB9BD\uB2C8\uB2E4.\n\uB2F9\uC2E0\uC740 [blue]\uC5B4\uC548\uC774 \uBC99\uBC99\uD574\uC84C\uC2B5\uB2C8\uB2E4[/blue].",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "NEOW",
-      "preferredLocale": "kor",
-      "title": "\uB2C8\uC624\uC6B0",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": "Neow",
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "NEOWS_FURY",
-      "preferredLocale": "kor",
-      "title": "\uB2C8\uC624\uC6B0\uC758 \uACA9\uBD84",
-      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n[gold]\uBC84\uB9B0 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0\uC11C \uBB34\uC791\uC704 \uCE74\uB4DC\uB97C {Cards:choose(1):1\uC7A5|{:diff()}\uC7A5} [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "DARV",
-      "preferredLocale": "kor",
-      "title": "\uB2E4\uBE0C",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": "Darv",
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -25924,72 +25523,6 @@
         "pageCount": "2",
         "optionCount": "6",
         "pageSummary": "DONE: \uB2F9\uC2E0\uC758 \uC758\uACAC\uC740 \uBC1B\uC544\uB4E4\uC5EC\uC9C0\uC9C0 \uC54A\uB294 \uAC83\uC73C\uB85C \uBCF4\uC774\uBA70, \uB3D9\uC0C1\uB4E4\uC740 \uB05D\uC5C6\uB294 \uB17C\uC7C1\uC744 \uC774\uC5B4 \uB098\uAC11\uB2C8\uB2E4. | INITIAL: \uB2F9\uC2E0\uC758 \uB208\uC55E\uC5D0 \uAF64\uB098 \uBA4B\uC9C4 \uAD11\uACBD\uC774 \uD3BC\uCCD0\uC9D1\uB2C8\uB2E4.\n\uB2F9\uC2E0\uC740 \uC6B0\uB69D \uC11C\uC788\uB294 \uC138 \uAC00\uC9C0 \uC0C9\uC758 \uB3D9\uC0C1\uB4E4\uC774 \uB2E8\uC0C1\uC5D0 \uC11C\uC11C, \uC0C9\uCC44\uC758 \uCCA0\uD559\uC801 \uC758\uBBF8\uC5D0 \uAD00\uD574 [jitter][red]\uC5F4\uB764 \uD1A0\uB860[/red][/jitter]\uC744 \uBC8C\uC774\uACE0 \uC788\uB294 \uBAA8\uC2B5\uC744 \uBAA9\uACA9\uD569\uB2C8\uB2E4.\n\n\uB17C\uC7C1\uC744 \uB4E3\uACE0 \uC788\uC790\uB2C8, \uD604\uC7AC \uADF8\uB4E4\uC5D0\uAC8C \uC788\uC5B4 \uAC00\uC7A5 \uC911\uC694\uD55C \uC758\uBB38\uC740 \uC9C4\uC2E4\uB85C [gold]\uAC00\uC7A5 \uC704\uB300\uD55C[/gold] \uC0C9\uC740 \uC5B4\uB5A4 \uC0C9\uC778\uAC00\uC5D0 \uAD00\uD55C \uAC83\uC73C\uB85C \uBCF4\uC785\uB2C8\uB2E4.\n\n\uB2F9\uC2E0\uB3C4 \uC2A4\uC2A4\uB85C \uC0DD\uAC01\uD558\uB294 \uBC14\uB97C \uADF8\uB4E4\uC5D0\uAC8C \uB9D0\uD569\uB2C8\uB2E4.",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "EVENT2_EPOCH",
-      "preferredLocale": "kor",
-      "title": "\uB3CC\uC544\uC624\uB2E4",
-      "description": "\uACE0\uB300\uC758 \uC874\uC7AC\uB4E4\uC740 \uC790\uC2E0\uB4E4\uC758 \uC740\uC2E0\uCC98\uB97C \uBC97\uC5B4\uB098, [gold]\uCCA8\uD0D1[/gold]\uC744 \uD5A5\uD574 \uB098\uC544\uAC14\uC2B5\uB2C8\uB2E4...\n\n\uADF8\uB4E4\uC774 \uADF8 \uCD95\uBCF5\uC744 \uBC1B\uC740 \uC9C0\uB3C4 \uB108\uBB34 \uC624\uB79C \uC2DC\uAC04\uC774 \uD758\uB800\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "REBOUND",
-      "preferredLocale": "kor",
-      "title": "\uB418\uB3CC\uB9AC\uAE30",
-      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n\uC774\uBC88 \uD134\uC5D0 \uB2E4\uC74C\uC73C\uB85C \uC0AC\uC6A9\uD558\uB294 \uCE74\uB4DC\uB97C [gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold] \uB9E8 \uC704\uC5D0 \uB193\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -26211,39 +25744,6 @@
         "pageCount": "2",
         "optionCount": "4",
         "pageSummary": "INITIAL: \uB2F9\uC2E0\uC740 \uD76C\uBBF8\uD558\uAC8C \uBE5B\uB098\uB294 \uC5F4\uC1E0\uB97C \uBC1C\uACAC\uD558\uACE0, \uC5F4\uC1E0\uB97C \uC9D1\uC5B4 \uB4E4\uAE30 \uC704\uD574 \uB2E4\uAC00\uAC11\uB2C8\uB2E4.\n\n\u201C\uADF8 \uC5F4\uC1E0\uB97C \uCC3E\uC73C\uB7EC \uC0AC\uBC29\uD314\uBC29 \uB4A4\uC9C0\uACE0 \uC788\uC5C8\uB2E4\uB124! \uD639\uC2DC \uC2E4\uB840\uAC00 \uC544\uB2C8\uB77C\uBA74...\u201D\n\n\uC870\uAE08 \uADC0\uCC2E\uC544 \uBCF4\uC774\uB294 \uC0AC\uB78C\uC774\uAE34 \uD558\uC9C0\uB9CC, \uD568\uBD80\uB85C \uB2E8\uC815 \uC9D3\uB294 \uAC74 \uC88B\uC9C0 \uC54A\uC744 \uAC83 \uAC19\uC2B5\uB2C8\uB2E4. | KEEP_THE_KEY: \uB0AF\uC120 \uC0AC\uB78C\uC740 \uC0B4\uAE30 \uC5B4\uB9B0 \uC2DC\uC120\uC73C\uB85C \uB2F9\uC2E0\uC744 \uBC14\uB77C\uBD05\uB2C8\uB2E4. \uC5F4\uC1E0\uB97C \uAC00\uC9C0\uACE0 \uC774\uACF3\uC744 \uB5A0\uB0A0 \uC218 \uC788\uB294 \uAC74 \uC624\uC9C1 \uD55C \uBA85\uBFD0\uC778 \uAC83 \uAC19\uC2B5\uB2C8\uB2E4.",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "CALTROPS",
-      "preferredLocale": "kor",
-      "title": "\uB9C8\uB984\uC1E0",
-      "description": "\uACF5\uACA9\uC744 \uBC1B\uC744 \uB54C\uB9C8\uB2E4, \uACF5\uACA9\uD55C \uC801\uC5D0\uAC8C \uD53C\uD574\uB97C {ThornsPower:diff()} \uC90D\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -26580,171 +26080,6 @@
         "pageCount": "9",
         "optionCount": "10",
         "pageSummary": "HOLD_ON_0: [jitter]\uB2F9\uC2E0\uC740 \uBC84\uD2F0\uACE0 \uC788\uC2B5\uB2C8\uB2E4![/jitter] | HOLD_ON_1: \uACC4\uC18D... \uBC84\uD2F0\uACE0... [jitter]\uC788\uC2B5\uB2C8\uB2E4\uC544\uC544!!!![/jitter] | HOLD_ON_2: [sine]\uC544\uC544\uC544\uC544\uC544!?!!![/sine]",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "UNKNOWN",
-      "preferredLocale": "kor",
-      "title": "\uBBF8\uC9C0",
-      "description": "\uC774 \uC801\uC758 \uC758\uB3C4\uB294 [gold]\uC54C \uC218 \uC5C6\uC2B5\uB2C8\uB2E4[/gold].",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "ROOM_UNKNOWN_EVENT",
-      "preferredLocale": "kor",
-      "title": "\uBBF8\uC9C0 - \uC774\uBCA4\uD2B8",
-      "description": "\uC774\uBCA4\uD2B8\uB97C \uD3EC\uD568\uD558\uACE0 \uC788\uB294, \uC774\uC804\uC5D0\uB294 \uC54C \uC218 \uC5C6\uC5C8\uB358 \uBC29\uC785\uB2C8\uB2E4.\n\n\uC774 \uBC29\uC5D0\uC11C\uB294 \uD2B9\uC774\uD55C \uC77C\uB4E4\uC774 \uBC1C\uC0DD\uD569\uB2C8\uB2E4...",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "VAKUU",
-      "preferredLocale": "kor",
-      "title": "\uBC14\uCFE0",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": "Vakuu",
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "EXTERMINATE",
-      "preferredLocale": "kor",
-      "title": "\uBC15\uBA78",
-      "description": "\uBAA8\uB4E0 \uC801\uC5D0\uAC8C \uD53C\uD574\uB97C {Damage:diff()}\uB9CC\uD07C {Repeat:diff()}\uBC88 \uC90D\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "DISTRACTION",
-      "preferredLocale": "kor",
-      "title": "\uBC29\uD574",
-      "description": "\uBB34\uC791\uC704 \uC2A4\uD0AC \uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4. \uC774\uBC88 \uD134 \uB3D9\uC548 \uADF8 \uCE74\uB4DC\uB97C \uBE44\uC6A9 \uC5C6\uC774 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -27187,39 +26522,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "FAKE_MERCHANT_EVENT_ENCOUNTER",
-      "preferredLocale": "kor",
-      "title": "\uC0C1?\uC778",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "FAKE_MERCHANT",
       "preferredLocale": "kor",
       "title": "\uC0C1?\uC778",
@@ -27288,39 +26590,6 @@
         "pageCount": "3",
         "optionCount": "2",
         "pageSummary": "BATHE: \uB2F9\uC2E0\uC740 \uBBF8\uBB18\uD55C [red][sine]\uBD88\uC548\uAC10\uC744 \uB290\uB07C\uBA70[/sine][/red] \uC0D8\uC744 \uBE60\uC838 \uB098\uC654\uC2B5\uB2C8\uB2E4.\n\n\uD558\uC9C0\uB9CC \uC608\uC0C1\uC678\uB85C \uC0C1\uCF8C\uD55C \uAE30\uBD84\uC774 \uB4ED\uB2C8\uB2E4. | BOTTLE: \uC774\uD1A0\uB85D [sine][aqua]\uC544\uB984\uB2E4\uC6B4 \uBB3C[/aqua][/sine]\uC5D0 \uBAB8\uC744 \uB2F4\uADFC\uB2E4\uB294 \uC0AC\uC2E4\uC774 \uC660\uC9C0 \uAEBC\uB9BC\uCE59\uD569\uB2C8\uB2E4\u2026 \uB2F9\uC2E0\uC740 \uADF8 \uB300\uC2E0 \uC57D\uAC04\uC758 \uBB3C\uC744 \uBCD1\uC5D0 \uB2F4\uC544\uAC00\uAE30\uB85C \uD588\uC2B5\uB2C8\uB2E4.\n\n\uBD84\uBA85 \uC4F8\uBAA8\uAC00 \uC788\uACA0\uC8E0. | INITIAL: [jitter]\uB0AE\uAC8C \uC6B8\uB9AC\uB294 \uC18C\uB9AC[/jitter]\uC758 \uADFC\uC6D0\uC744 \uB530\uB77C\uAC00\uB358 \uB2F9\uC2E0\uC740 \uACE0\uC694\uD55C \uC0D8 \uC55E\uC5D0 \uC774\uB974\uB800\uACE0, \uADF8 \uC0D8\uC758 \uBAA8\uC2B5\uC5D0 \uB9E4\uB8CC\uB429\uB2C8\uB2E4. [sine][aqua]\uC5D0\uBA54\uB784\uB4DC\uBE5B \uB179\uC0C9[/aqua][/sine]\uC758 \uBB3C\uC5D0\uB294 [sine][gold]\uBE5B\uB098\uB294 \uC54C\uAC31\uC774[/gold][/sine]\uB4E4\uC774 \uBAA8\uC5EC \uC788\uC2B5\uB2C8\uB2E4.\n\n\uC0D8\uC774 \uB2F9\uC2E0\uC744 \uC720\uD639\uD558\uACE0 \uC788\uB294 \uB4EF\uD569\uB2C8\uB2E4. \uC124\uB9C8 \uBB34\uC2A8 \uBB38\uC81C\uB77C\uB3C4 \uC788\uACA0\uC5B4\uC694?",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "BYRD_SWOOP",
-      "preferredLocale": "kor",
-      "title": "\uC100 \uAE09\uC2B5",
-      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -27442,39 +26711,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER",
-      "preferredLocale": "kor",
-      "title": "\uC218\uC218\uAED8\uB07C\uC758 \uAE30\uC0AC",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "CRYSTAL_SPHERE",
       "preferredLocale": "kor",
       "title": "\uC218\uC815\uAD6C",
@@ -27510,72 +26746,6 @@
         "pageCount": "4",
         "optionCount": "2",
         "pageSummary": "FINISH: \uC0AC\uC0C9\uC744 \uB9C8\uCE5C\uB2E4 | INITIAL: [sine][blue]\u201C\uB2F9\uC2E0\uC774 \uC62C \uAC83\uC744 \uC54C\uACE0 \uC788\uC5C8\uC2B5\uB2C8\uB2E4...!\u201D[/blue][/sine]\n\n[purple]\uC2E0\uBE44\uB85C\uC6B4 \uC624\uB450\uB9C9[/purple]\uC5D0 \uB4E4\uC5B4\uC11C\uC790 [jitter]\uD0C1\uD55C[/jitter] \uBAA9\uC18C\uB9AC\uC758 \uC874\uC7AC\uAC00 \uB2F9\uC2E0\uC744 \uBD80\uB985\uB2C8\uB2E4.\n\n[sine][blue]\u201C\uB2F9\uC2E0\uC758 \uC6B4\uBA85\uC774 \uB2F9\uC2E0\uC744 \uC774\uACF3\uC73C\uB85C \uC774\uB04C\uC5C8\uC2B5\uB2C8\uB2E4. \uB2F9\uC2E0\uC758 \uBBF8\uB798\uC640 \uC6B4\uBA85\uC744 \uBC1D\uD600\uB0B4\uC57C\uB9CC \uC6B0\uB9AC \uBAA8\uB450\uAC00 \uAD6C\uC6D0\uBC1B\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4!!\u201D[/blue][/sine]\n\u201C\uC88B\uC544\uC694, \uC5EC\uAE30\uAC00 [gold]\uC218\uC815\uAD6C \uC810\uC220[/gold]\uC5D0\uC11C \uACE0\uB97C \uC218 \uC788\uB294 \uD56D\uBAA9\uB4E4\uC785\uB2C8\uB2E4. \uC5EC\uAE30 \uBA74\uCC45 \uC11C\uB958\uC5D0\uB3C4 \uC11C\uBA85\uD574\uC8FC\uC2DC\uACE0.\u201D \uC810\uC220\uAC00\uB294 \uD39C\uACFC \uC591\uD53C\uC9C0\uB97C \uAEBC\uB0B4\uBA70 \uB9D0\uD569\uB2C8\uB2E4. | PAYMENT_PLAN: \uBD84\uD560 \uB0A9\uBD80",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "STACK",
-      "preferredLocale": "kor",
-      "title": "\uC2A4\uD0DD",
-      "description": "[gold]\uBC84\uB9B0 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0 \uC788\uB294 \uCE74\uB4DC\uC758 \uC218{IfUpgraded:show: \u002B{CalculationBase}|}\uB9CC\uD07C [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.{InCombat:\n([gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {CalculatedBlock:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.)|}",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "APOTHEOSIS",
-      "preferredLocale": "kor",
-      "title": "\uC2E0\uC131",
-      "description": "\uBAA8\uB4E0 \uCE74\uB4DC\uB97C [gold]\uAC15\uD654[/gold]\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -27748,138 +26918,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "THE_ARCHITECT_EVENT_ENCOUNTER",
-      "preferredLocale": "kor",
-      "title": "\uC544\uD0A4\uD14D\uD2B8",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "RELAX",
-      "preferredLocale": "kor",
-      "title": "\uC548\uC2DD",
-      "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.\n\uB2E4\uC74C \uD134\uC5D0, \uCE74\uB4DC\uB97C {Cards:diff()}\uC7A5 \uBF51\uACE0 {Energy:energyIcons()}\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "OUTMANEUVER",
-      "preferredLocale": "kor",
-      "title": "\uC555\uB3C4",
-      "description": "\uB2E4\uC74C \uD134\uC5D0, {Energy:energyIcons()}\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "WISH",
-      "preferredLocale": "kor",
-      "title": "\uC5FC\uC6D0",
-      "description": "[gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0\uC11C \uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "STONE_OF_ALL_TIME",
       "preferredLocale": "kor",
       "title": "\uC601\uC6D0\uC758 \uB3CC",
@@ -27933,82 +26971,6 @@
         "pageCount": "3",
         "optionCount": "4",
         "pageSummary": "INITIAL: \uBC84\uB824\uC9C4 \uC548\uB730 \uD55C\uBCF5\uD310\uC5D0 \uAC70\uB300\uD55C \uBC14\uC704 \uD558\uB098\uAC00 \uB193\uC5EC \uC788\uC2B5\uB2C8\uB2E4.\n\n\uBA85\uD310\uC5D0\uB294 \uC774\uB807\uAC8C \uC801\uD600 \uC788\uC2B5\uB2C8\uB2E4:\n[gold][b]\uC601\uC6D0\uC758 \uB3CC[/b][/gold].\n\n\uBC14\uC704\uC758 \uC874\uC7AC\uAC10\uACFC \uD615\uD0DC, \uADF8\uB9AC\uACE0 \uC7A5\uC2DD\uB4E4\uC740, \uC774 \uC548\uB730\uC774 \uB3CC\uC758 \uC8FC\uBCC0\uC744 \uB530\uB77C \uC9C0\uC5B4\uC84C\uC73C\uBA70, [blue]\uB3CC[/blue]\uC740 \uC774\uACF3\uC5D0\uC11C \uB2E8 \uD55C \uBC88\uB3C4 \uC6C0\uC9C1\uC778 \uC801\uC774 \uC5C6\uC74C\uC744 \uB098\uD0C0\uB0C5\uB2C8\uB2E4. | LIFT: \uB2F9\uC2E0\uC740 [gold]{DrinkRandomPotion}[/gold] \uBCD1\uC744 \uB0B4\uB824\uB193\uC740 \uB4A4, [jitter]\uC628 \uD798\uC744 \uB2E4\uD574 \uBC14\uC704\uB97C \uB4E4\uC5B4\uC62C\uB838\uC2B5\uB2C8\uB2E4[/jitter]!!\n\n\uC544\uBB34 \uC77C\uB3C4 \uC77C\uC5B4\uB098\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. | PUSH: \uB2F9\uC2E0\uC740 \uAC00\uC9C0\uACE0 \uC788\uB294 \uBAA8\uB4E0 \uD798\uC744 \uC950\uC5B4\uC9DC\uB0B4 \uBC14\uC704\uB97C [jitter]\uD798\uCC28\uAC8C \uBC00\uC5C8\uC2B5\uB2C8\uB2E4[/jitter]!!\n\n\uC544\uBB34 \uC77C\uB3C4 \uC77C\uC5B4\uB098\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4.",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "APPARITION",
-      "preferredLocale": "kor",
-      "title": "\uC601\uCCB4\uD654",
-      "description": "[gold]\uBD88\uAC00\uCE68[/gold]\uC744 {IntangiblePower:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "OROBAS",
-      "preferredLocale": "kor",
-      "title": "\uC624\uB85C\uBC14\uC2A4",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": "Orobas",
-      "englishDescription": null,
-      "options": [
-        {
-          "id": "orobasinitialoptionpool3locked",
-          "label": "\uC7A0\uAE40",
-          "description": "\uC2DC\uC791 \uC720\uBB3C\uC774\uB098 \uCE74\uB4DC\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4.",
-          "attributes": {
-            "page": "INITIAL",
-            "optionKey": "OPTION_POOL_3_LOCKED"
-          }
-        }
-      ],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": "1",
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -28245,39 +27207,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "DEADLY_EVENTS",
-      "preferredLocale": "kor",
-      "title": "\uC704\uD5D8\uCC9C\uB9CC\uD55C \uC774\uBCA4\uD2B8",
-      "description": "\uBBF8\uC9C0 \uBC29\uC5D0 \uC774\uC81C \uC5D8\uB9AC\uD2B8\uAC00 \uB4F1\uC7A5\uD560 \uC218 \uC788\uAC8C \uB418\uC9C0\uB9CC, \uBCF4\uBB3C \uBC29\uC774 \uB4F1\uC7A5\uD560 \uD655\uB960\uB3C4 \uC99D\uAC00\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "RELIC_TRADER",
       "preferredLocale": "kor",
       "title": "\uC720\uBB3C \uC0C1\uC778",
@@ -28426,105 +27355,6 @@
         "pageCount": "3",
         "optionCount": "2",
         "pageSummary": "INITIAL: \uADFC\uCC98\uC758 \uAD6C\uBA4D\uC5D0\uC11C \uAC11\uC790\uAE30, [gold]\uBCF4\uBB3C\uC774 \uB2F4\uAE34 \uC218\uC0C1\uD55C \uC790\uB8E8[/gold]\uC640 \uBA85\uBC31\uD788 [purple]\uC800\uC8FC\uBC1B\uC740 \uC720\uBB3C[/purple]\uC744 \uC6C0\uCF1C\uC9C4 \uC190\uC774 \uD280\uC5B4\uB098\uC635\uB2C8\uB2E4.\n\n[jitter][blue]\u0022\uC774\uAC70... \uC544\uB2D8 \uC800\uAC70?\u0022[/blue][/jitter]\n\uB0A0\uCE74\uB86D\uAC8C \uAE01\uC5B4\uB300\uB294 \uBAA9\uC18C\uB9AC\uAC00 \uC544\uB798\uCABD\uC5D0\uC11C \uC18D\uC0AD\uC785\uB2C8\uB2E4. | ORNATE: \uB2F9\uC2E0\uC740 [purple]\uC800\uC8FC\uBC1B\uC740 \uC720\uBB3C[/purple]\uC744 \uC6C0\uCF1C\uC950\uC5C8\uC2B5\uB2C8\uB2E4. \uC720\uBB3C\uC744 \uC6C0\uCF1C\uC950\uB294 \uC21C\uAC04, \uB2F9\uC2E0\uC758 \uC190\uC5D0 \uC218\uAC11\uC774 \uCC44\uC6CC\uC9D1\uB2C8\uB2E4.\n\n\uB9C8\uCE58 [blue][sine]\uC720\uB839\uC774 \uB0B4\uB294 \uB4EF\uD55C \uC6C3\uC74C\uC18C\uB9AC[/sine][/blue]\uC640 \uD568\uAED8 \uB208\uBD80\uC2E0 [orange]\uBD88\uAF43\uACFC \uC5F0\uAE30[/orange]\uAC00 \uB2F9\uC2E0\uC758 \uC2DC\uC57C\uB97C \uAC00\uB4DD \uCC44\uC6C1\uB2C8\uB2E4!\n\n\uAD6C\uBA4D\uACFC \uD314\uC740 \uC0AC\uB77C\uC838\uBC84\uB838\uC2B5\uB2C8\uB2E4. | PLAIN: \uB2F9\uC2E0\uC774 \uBCF4\uBB3C \uC790\uB8E8\uB97C \uC6C0\uCF1C\uC950\uB294 \uC21C\uAC04, [blue][jitter]\uC138 \uBC88\uC9F8 \uC190[/jitter][/blue]\uC774 \uB098\uD0C0\uB098 \uB2F9\uC2E0\uC744 \uBD99\uC7A1\uC2B5\uB2C8\uB2E4!!\n\n[red][jitter]\uD55C\uBC14\uD0D5 \uBAB8\uC2F8\uC6C0[/jitter][/red]\uC744 \uBC8C\uC774\uACE0 \uB098\uC11C\uC57C \uC138 \uBC88\uC9F8 \uC190\uC740 \uB2F9\uC2E0\uC744 \uB193\uC558\uACE0\u2014\uD314\uACFC \uAD6C\uBA4D\uC740 \uAC11\uC790\uAE30 \uC0AC\uB77C\uC838\uBC84\uB838\uC2B5\uB2C8\uB2E4.",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "DUAL_WIELD",
-      "preferredLocale": "kor",
-      "title": "\uC774\uB3C4\uB958",
-      "description": "\uACF5\uACA9\uC774\uB098 \uD30C\uC6CC \uCE74\uB4DC\uB97C 1\uC7A5 \uC120\uD0DD\uD569\uB2C8\uB2E4. \uADF8 \uCE74\uB4DC\uC758 \uBCF5\uC0AC\uBCF8\uC744 {IfUpgraded:show:{Cards}\uC7A5|1\uC7A5} [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "EVENT",
-      "preferredLocale": "kor",
-      "title": "\uC774\uBCA4\uD2B8",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "ROOM_EVENT",
-      "preferredLocale": "kor",
-      "title": "\uC774\uBCA4\uD2B8",
-      "description": "\uC774 \uBC29\uC5D0\uC11C\uB294 \uD2B9\uC774\uD55C \uC77C\uB4E4\uC774 \uBC1C\uC0DD\uD569\uB2C8\uB2E4...",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -29077,39 +27907,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "BATTLEWORN_DUMMY_EVENT_ENCOUNTER",
-      "preferredLocale": "kor",
-      "title": "\uC804\uD22C\uB85C \uC190\uC0C1\uB41C \uD6C8\uB828 \uC778\uD615",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "BATTLEWORN_DUMMY",
       "preferredLocale": "kor",
       "title": "\uC804\uD22C\uB85C \uC190\uC0C1\uB41C \uD6C8\uB828 \uC778\uD615",
@@ -29372,72 +28169,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "SQUASH",
-      "preferredLocale": "kor",
-      "title": "\uC9D3\uB204\uB974\uAE30",
-      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n[gold]\uCDE8\uC57D[/gold]\uC744 {VulnerablePower:diff()} \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "PECK",
-      "preferredLocale": "kor",
-      "title": "\uCABC\uAE30",
-      "description": "\uD53C\uD574\uB97C {Damage:diff()}\uB9CC\uD07C {Repeat:diff()}\uBC88 \uC90D\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "TEA_MASTER",
       "preferredLocale": "kor",
       "title": "\uCC28\uC758 \uBA85\uC778",
@@ -29500,105 +28231,6 @@
         "pageCount": "3",
         "optionCount": "5",
         "pageSummary": "DONE: [blue]\uCC28\uC758 \uBA85\uC778[/blue]\uC740 \uB2F9\uC2E0\uC758 \uC694\uCCAD\uC744 \uBC1B\uC544\uB4E4\uC774\uACE0, \uACE7\uBC14\uB85C \uC900\uBE44\uB97C \uC2DC\uC791\uD569\uB2C8\uB2E4.\n\n[gold]1.[/gold] \uC22F\uC774 \uCC44\uC6CC\uC9C4 \uBB3C\uBCD1\uC5D0 \uB4E0 \uBB3C\uC744 \uC8FC\uC804\uC790\uC5D0 \uBD93\uC2B5\uB2C8\uB2E4.\n[gold]2.[/gold] \uC801\uC808\uD55C [purple]\uBCF4\uB78F\uBE5B \uBD88\uAF43[/purple]\uC73C\uB85C \uC8FC\uC804\uC790\uB97C \uAC00\uC5F4\uD569\uB2C8\uB2E4.\n[gold]3.[/gold] \uBB3C\uC774 \uB053\uAE30 \uC804\uC5D0, \uCC3B\uC78E \uD55C \uC2A4\uD47C\uC744 \uC8FC\uC804\uC790\uC5D0 \uB123\uC2B5\uB2C8\uB2E4.\n[gold]4.[/gold] \uBD88\uC744 \uB044\uACE0, \uB9AC\uB4DC\uBBF8\uCEEC\uD55C \uBC15\uC218\uB85C \uC2DC\uAC04\uC744 \uC7BD\uB2C8\uB2E4.\n[gold]5.[/gold] \uC8FC\uC804\uC790\uB97C \uB192\uAC8C \uB4E4\uC5B4\uC62C\uB9B0 \uB4A4, \uC790\uADF8\uB9C8\uD55C \uCEF5\uC5D0 \uCC28\uB97C \uC815\uD655\uD788 \uBD80\uC5B4 \uB123\uC2B5\uB2C8\uB2E4.\n\n[green][sine]\u201C\uCC28 \uB098\uC654\uC2B5\uB2C8\uB2E4.\u201D[/sine][/green] | INITIAL: \uBD88\uBE5B\uC774 \uD76C\uBBF8\uD558\uAC8C \uBE44\uCE58\uB294 \uC624\uB450\uB9C9\uC5D0 \uC6B0\uC5F0\uD788 \uB4E4\uC5B4\uAC04 \uB2F9\uC2E0\uC740, \uAE30\uC774\uD560 \uC815\uB3C4\uB85C \uB2E4\uC591\uD55C \uCC28\uB4E4\uB85C \uAC00\uB4DD \uCC2C \uB108\uBB34\uB098\uB3C4 \uD3C9\uC628\uD55C \uACF5\uAC04\uC5D0 \uBE60\uC838\uB4ED\uB2C8\uB2E4.\n\n\uC624\uB450\uB9C9 \uC548\uC5D0 \uC788\uB358 \uB0A8\uC790\uB294 \uC544\uBB34 \uB9D0 \uC5C6\uC774 \uD558\uB098 \uAC19\uC774 [gold]\uACE0\uAC00[/gold]\uC758 \uAC00\uACA9\uD45C\uAC00 \uBD99\uC5B4\uC788\uB294 \uB2E4\uC591\uD55C [green]\uCC28[/green]\uB4E4\uC744 \uAC00\uB9AC\uD0B5\uB2C8\uB2E4. | TEA_OF_DISCOURTESY: \uB2F9\uC2E0\uC740 \uC815\uC911\uD558\uAC8C \uCC28\uB97C \uAC70\uC808\uD588\uACE0\u2014\n\n[jitter][red]*\uCF85*[/red][/jitter]\n\n\uB4A4\uC5D0 \uC788\uB358 \uBB38\uC774 \uCF85\uD558\uACE0 \uB2EB\uD799\uB2C8\uB2E4. [blue]\uCC28\uC758 \uBA85\uC778[/blue]\uC740 \uC7A0\uC2DC \uB3D9\uC548 \uB2F9\uC2E0\uC744 \uCCD0\uB2E4\uBCF4\uB2E4, \uD749\uCE21\uD558\uAC8C \uC0DD\uAE34 \uCEF5 \uD558\uB098\uB97C \uB2F9\uC2E0\uC5D0\uAC8C \uC120\uBB3C\uD569\uB2C8\uB2E4.\n\uC624, \uC774 \uCC28\uB294 \uBB34\uB840\uD55C \uC0AC\uB78C\uB4E4\uC5D0\uAC8C \uB0B4\uC5B4\uC9C0\uB294 \uCC28\uC785\uB2C8\uB2E4...",
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "BRIGHTEST_FLAME",
-      "preferredLocale": "kor",
-      "title": "\uCC2C\uB780\uD55C \uBD88\uAF43",
-      "description": "{Energy:energyIcons()}\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.\n\uCE74\uB4DC\uB97C {Cards:diff()}\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.\n\uCD5C\uB300 \uCCB4\uB825\uC744 {MaxHp:diff()} \uC783\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "ENTRENCH",
-      "preferredLocale": "kor",
-      "title": "\uCC38\uD638",
-      "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uAC00 2\uBC30\uAC00 \uB429\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "EVENT3_EPOCH",
-      "preferredLocale": "kor",
-      "title": "\uCCA8\uD0D1",
-      "description": "\uADF8 \uBFCC\uB9AC\uB4E4\uC740 \uB354 \uC774\uC0C1 [orange]\uD504\uB9AC\uC628[/orange]\uC73C\uB85C\uBD80\uD130 \uC591\uBD84\uC744 \uB04C\uC5B4\uC62C \uC218 \uC5C6\uC5C8\uACE0, [gold]\uACE0\uB300\uC758 \uB098\uBB34\uB4E4[/gold]\uC740 \uC2DC\uB4E4\uC5B4 \uC8FD\uC5B4\uAC00\uAE30 \uC2DC\uC791\uD588\uC2B5\uB2C8\uB2E4\u2026 \uD55C\uB54C\uB294 \uC544\uB984\uB2E4\uC6E0\uB358 \uC232\uB3C4 \uACB0\uAD6D \uC601\uC6D0\uC758 \uBB34\uAC8C \uC55E\uC5D0 \uBB34\uB108\uC838 \uB0B4\uB9AC\uACE0 \uB9D0\uC558\uC2B5\uB2C8\uB2E4.\n\n\uB2C8\uC624\uC6B0\uC758 \uB098\uBB34\uC870\uCC28\uB3C4 \uAC00\uC9C0\uC640 \uD478\uB978 \uC78E\uC744 \uC783\uC5C8\uACE0, \uB9C8\uC9C0\uB9C9\uC73C\uB85C \uB0A8\uC740 \uB098\uBB34\uB294 \uB354 \uC774\uC0C1 \uB098\uBB34\uB77C \uCE6D\uD560 \uC218 \uC5C6\uC5C8\uC2B5\uB2C8\uB2E4.\n\uADF8\uB4E4\uC740 \uADF8\uAC83\uC5D0 \uC774\uB984\uC744 \uBD99\uC600\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
         "talkPreview": null
       },
       "sourceFileHints": [
@@ -29720,171 +28352,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "TANX",
-      "preferredLocale": "kor",
-      "title": "\uD0C4\uC2A4",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": "Tanx",
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "METAMORPHOSIS",
-      "preferredLocale": "kor",
-      "title": "\uD0C8\uBC14\uAFC8",
-      "description": "[gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0 \uBB34\uC791\uC704 \uACF5\uACA9 \uCE74\uB4DC\uB97C {Cards:diff()}\uC7A5 \uCD94\uAC00\uD569\uB2C8\uB2E4. \uC774\uBC88 \uC804\uD22C \uB3D9\uC548 \uADF8 \uCE74\uB4DC\uB4E4\uC744 \uBE44\uC6A9 \uC5C6\uC774 \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "DISCOVER_ALL_EVENTS",
-      "preferredLocale": "kor",
-      "title": "\uD0D0\uD5D8\uAC00",
-      "description": "\uBAA8\uB4E0 \uC774\uBCA4\uD2B8\uB97C \uB9CC\uB098\uBCF4\uC138\uC694.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "TEZCATARA",
-      "preferredLocale": "kor",
-      "title": "\uD14C\uC988\uCE74\uD0C0\uB77C",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": "Tezcatara",
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "PAEL",
-      "preferredLocale": "kor",
-      "title": "\uD30C\uC5D8",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": "Pael",
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "POTION_COURIER",
       "preferredLocale": "kor",
       "title": "\uD3EC\uC158 \uBC30\uB2EC\uC6D0",
@@ -29980,72 +28447,6 @@
     },
     {
       "domain": "event",
-      "keyStem": "MAUL",
-      "preferredLocale": "kor",
-      "title": "\uD560\uD034\uAE30",
-      "description": "\uD53C\uD574\uB97C {Damage:diff()}\uB9CC\uD07C 2\uBC88 \uC90D\uB2C8\uB2E4.\n\uC774\uBC88 \uC804\uD22C \uB3D9\uC548 \uBAA8\uB4E0 \uD560\uD034\uAE30 \uCE74\uB4DC\uC758 \uD53C\uD574\uB7C9\uC774 {Increase:diff()} \uC99D\uAC00\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
-      "keyStem": "WHISTLE",
-      "preferredLocale": "kor",
-      "title": "\uD638\uAC01 \uBD88\uAE30",
-      "description": "\uD53C\uD574\uB97C {Damage:diff()} \uC90D\uB2C8\uB2E4.\n\uC801\uC744 [gold]\uAE30\uC808[/gold]\uC2DC\uD0B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null,
-        "pageCount": null,
-        "optionCount": null,
-        "pageSummary": null,
-        "talkPreview": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "event",
       "keyStem": "AROMA_OF_CHAOS",
       "preferredLocale": "kor",
       "title": "\uD63C\uB3C8\uC758 \uD5A5\uAE30",
@@ -30102,7 +28503,7 @@
       "domain": "shop",
       "keyStem": "BADGE",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "BADGE",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -30119,29 +28520,10 @@
     },
     {
       "domain": "shop",
-      "keyStem": "NIGHT_TERRORS",
-      "preferredLocale": "eng",
-      "title": null,
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [],
-      "locales": []
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_ANCIENT",
+      "keyStem": "LEGEND_UNKNOWN",
       "preferredLocale": "kor",
-      "title": "\uACE0\uB300\uC758 \uC874\uC7AC",
-      "description": "\uC774 \uBC29\uC5D0\uB294 \uACE0\uB300\uC758 \uC874\uC7AC\uB4E4\uC774 \uBA38\uBB34\uB974\uACE0 \uC788\uC2B5\uB2C8\uB2E4.\n\n\uACE0\uB300\uC758 \uC874\uC7AC\uB4E4\uC740 \uB180\uB77C\uC6B4 \uBCF4\uB108\uC2A4\uC640 \uBCF4\uBB3C, \uC9C0\uC2DD\uC744 \uC81C\uACF5\uD569\uB2C8\uB2E4.",
+      "title": "LEGEND UNKNOWN",
+      "description": "\uBBF8\uC9C0\uC758 \uBC29\uC785\uB2C8\uB2E4.\n\n\uC774\uBCA4\uD2B8\uB098 \uC801, \uC0C1\uC810, \uBCF4\uBB3C\uC744 \uB9C8\uC8FC\uCE60 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -30167,10 +28549,48 @@
     },
     {
       "domain": "shop",
-      "keyStem": "LEGEND_UNKNOWN",
+      "keyStem": "NIGHT_TERRORS",
+      "preferredLocale": "eng",
+      "title": "NIGHT TERRORS",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null
+      },
+      "sourceFileHints": [],
+      "locales": []
+    },
+    {
+      "domain": "shop",
+      "keyStem": "RELIC_RARITY",
+      "preferredLocale": "eng",
+      "title": "RELIC RARITY",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null
+      },
+      "sourceFileHints": [],
+      "locales": []
+    },
+    {
+      "domain": "shop",
+      "keyStem": "LEGEND_ANCIENT",
       "preferredLocale": "kor",
-      "title": "\uBBF8\uC9C0",
-      "description": "\uBBF8\uC9C0\uC758 \uBC29\uC785\uB2C8\uB2E4.\n\n\uC774\uBCA4\uD2B8\uB098 \uC801, \uC0C1\uC810, \uBCF4\uBB3C\uC744 \uB9C8\uC8FC\uCE60 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
+      "title": "\uACE0\uB300\uC758 \uC874\uC7AC",
+      "description": "\uC774 \uBC29\uC5D0\uB294 \uACE0\uB300\uC758 \uC874\uC7AC\uB4E4\uC774 \uBA38\uBB34\uB974\uACE0 \uC788\uC2B5\uB2C8\uB2E4.\n\n\uACE0\uB300\uC758 \uC874\uC7AC\uB4E4\uC740 \uB180\uB77C\uC6B4 \uBCF4\uB108\uC2A4\uC640 \uBCF4\uBB3C, \uC9C0\uC2DD\uC744 \uC81C\uACF5\uD569\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -30316,6 +28736,35 @@
       "preferredLocale": "kor",
       "title": "\uBCF4\uC2A4",
       "description": "\uD574\uB2F9 \uC9C0\uC5ED\uC5D0\uC11C \uAC00\uC7A5 \uC704\uD5D8\uD55C \uC801\uC785\uB2C8\uB2E4.\n\n\uBCF4\uC2A4\uB97C \uCC98\uCE58 \uC2DC \uB2E4\uC74C \uB9C9\uC73C\uB85C \uC9C4\uD589\uD560 \uC218 \uC788\uAC8C \uB429\uB2C8\uB2E4.",
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null
+      },
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "domain": "shop",
+      "keyStem": "FAKE_MERCHANT_EVENT_ENCOUNTER",
+      "preferredLocale": "kor",
+      "title": "\uC0C1?\uC778",
+      "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -30691,9 +29140,38 @@
   "rewards": [
     {
       "domain": "reward",
+      "keyStem": "COMBAT_REWARD_CARD_REMOVAL",
+      "preferredLocale": "kor",
+      "title": "COMBAT REWARD CARD REMOVAL",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": "\uB371\uC5D0\uC11C \uC81C\uAC70\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null
+      },
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "domain": "reward",
       "keyStem": "HISTORY_ENTRY",
       "preferredLocale": "eng",
-      "title": null,
+      "title": "HISTORY ENTRY",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -30799,9 +29277,38 @@
     },
     {
       "domain": "keyword",
+      "keyStem": "HELLO_WORLD_POWER",
+      "preferredLocale": "kor",
+      "title": "HELLO WORLD POWER",
+      "description": "\uB0B4 \uD134 \uC2DC\uC791 \uC2DC, \uBB34\uC791\uC704 \uC77C\uBC18 \uCE74\uB4DC\uB97C [blue]1[/blue]\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null
+      },
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "domain": "keyword",
       "keyStem": "TEMPORARY_DEXTERITY_POWER",
       "preferredLocale": "kor",
-      "title": null,
+      "title": "TEMPORARY DEXTERITY POWER",
       "description": "\uC774\uBC88 \uD134\uC774 \uB05D\uB098\uAE30 \uC804\uAE4C\uC9C0 [gold]\uBBFC\uCCA9[/gold]\uC744 \uC5BB\uC2B5\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -30830,7 +29337,7 @@
       "domain": "keyword",
       "keyStem": "TEMPORARY_FOCUS_POWER",
       "preferredLocale": "kor",
-      "title": null,
+      "title": "TEMPORARY FOCUS POWER",
       "description": "\uC774\uBC88 \uD134\uC774 \uB05D\uB098\uAE30 \uC804\uAE4C\uC9C0 [gold]\uBC00\uC9D1[/gold]\uC744 \uC5BB\uC2B5\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -30859,37 +29366,8 @@
       "domain": "keyword",
       "keyStem": "TEMPORARY_STRENGTH_POWER",
       "preferredLocale": "kor",
-      "title": null,
+      "title": "TEMPORARY STRENGTH POWER",
       "description": "\uC774\uBC88 \uD134\uC774 \uB05D\uB098\uAE30 \uC804\uAE4C\uC9C0 [gold]\uD798[/gold]\uC744 \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "HELLO_WORLD_POWER",
-      "preferredLocale": "kor",
-      "title": "\u4F60\u597D\u4E16\u754C",
-      "description": "\uB0B4 \uD134 \uC2DC\uC791 \uC2DC, \uBB34\uC791\uC704 \uC77C\uBC18 \uCE74\uB4DC\uB97C [blue]1[/blue]\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -31121,6 +29599,35 @@
       "keyStem": "MOCK_MODIFY_ENERGY_COST_POWER",
       "preferredLocale": "kor",
       "title": "\uAC00\uC9DC \uC5D0\uB108\uC9C0 \uBE44\uC6A9 \uC870\uC815",
+      "description": null,
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null
+      },
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "domain": "keyword",
+      "keyStem": "MOCK_PREVENT_DEATH_POWER",
+      "preferredLocale": "kor",
+      "title": "\uAC00\uC9DC \uC8FD\uC74C \uBC29\uC9C0",
       "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
@@ -31848,7 +30355,7 @@
       "title": "\uAD1C\uCC2E\uC740 \uC804\uB7B5",
       "description": "\uB0B4 \uD134 \uC885\uB8CC \uC2DC, \uCE74\uB4DC\uB97C \uCD5C\uB300 [blue]1[/blue]\uC7A5\uAE4C\uC9C0 [gold]\uBCF4\uC874[/gold]\uD569\uB2C8\uB2E4.",
       "flavor": null,
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uBCF4\uC874\uD560 \uCE74\uB4DC\uB97C{Amount:choose(1):| {}\uC7A5} \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -33587,6 +32094,35 @@
       "preferredLocale": "kor",
       "title": "\uBBF8\uB048\uAC70\uB9BC",
       "description": "\uC774 \uC0DD\uBB3C\uC774 \uB2E4\uC74C\uC5D0 \uCCB4\uB825\uC744 \uC783\uC744 \uC2DC, [blue]1[/blue]\uB9CC \uC783\uC2B5\uB2C8\uB2E4.",
+      "flavor": null,
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "options": [],
+      "attributes": {
+        "unlockInfo": null,
+        "notePreview": null,
+        "noteCount": null
+      },
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "domain": "keyword",
+      "keyStem": "UNKNOWN",
+      "preferredLocale": "kor",
+      "title": "\uBBF8\uC9C0",
+      "description": "\uC774 \uC801\uC758 \uC758\uB3C4\uB294 [gold]\uC54C \uC218 \uC5C6\uC2B5\uB2C8\uB2E4[/gold].",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -37416,7 +35952,7 @@
       "title": "\uCC45\uB7B5",
       "description": "[gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold]\uB97C \uC11E\uC744 \uB54C\uB9C8\uB2E4, \uCE74\uB4DC\uB97C [blue]1[/blue]\uC7A5 \uC120\uD0DD\uD574 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
       "flavor": null,
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C{Amount:choose(1):| {}\uC7A5} \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -38112,7 +36648,7 @@
       "title": "\uD544\uC5F0\uC801\uC778 \uACB0\uACFC",
       "description": "\uB2E4\uC74C \uD134\uC5D0, [gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0\uC11C \uCE74\uB4DC\uB97C [blue]3[/blue]\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
       "flavor": null,
-      "selectionScreenPrompt": null,
+      "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C{Amount:choose(1):| {}\uC7A5} \uC120\uD0DD\uD558\uC138\uC694.",
       "englishTitle": null,
       "englishDescription": null,
       "options": [],
@@ -38601,26 +37137,26 @@
   ],
   "stats": {
     "mode": "utf8-streaming-string-scan",
-    "rawMatchCount": "47544",
-    "cards": "572",
-    "cardTitles": "557",
-    "cardDescriptions": "538",
-    "cardSelectionPrompts": "35",
-    "cardKoreanPreferred": "572",
+    "rawMatchCount": "46800",
+    "cards": "575",
+    "cardTitles": "575",
+    "cardDescriptions": "562",
+    "cardSelectionPrompts": "22",
+    "cardKoreanPreferred": "575",
     "cardEnglishPreferred": "0",
-    "relics": "291",
-    "relicDescriptions": "289",
+    "relics": "285",
+    "relicDescriptions": "285",
     "potions": "75",
     "potionDescriptions": "70",
-    "events": "197",
-    "eventDescriptions": "95",
+    "events": "153",
+    "eventDescriptions": "60",
     "eventOptions": "203",
-    "shops": "21",
+    "shops": "23",
     "shopDescriptions": "18",
-    "rewards": "3",
+    "rewards": "4",
     "rewardDescriptions": "2",
-    "keywords": "270",
-    "keywordDescriptions": "263"
+    "keywords": "272",
+    "keywordDescriptions": "264"
   },
   "warnings": []
 }

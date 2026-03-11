@@ -475,6 +475,15 @@ public static class StaticKnowledgeMarkdownReportFormatter
             builder.AppendLine($"- {K("\\uC124\\uBA85 \\uC0C1\\uD0DC")}: {item.AbilityStatus}");
             builder.AppendLine($"- {K("\\uD575\\uC2EC \\uC124\\uBA85")}: {item.Description}");
 
+            if (item.DetailLines.Count > 0)
+            {
+                builder.AppendLine($"- {K("\\uAD6C\\uC870 \\uC815\\uBCF4")}:");
+                foreach (var detailLine in item.DetailLines)
+                {
+                    builder.AppendLine($"  - {detailLine}");
+                }
+            }
+
             if (!string.IsNullOrWhiteSpace(item.SelectionPrompt))
             {
                 builder.AppendLine($"- {K("\\uC120\\uD0DD \\uD504\\uB86C\\uD504\\uD2B8")}: {item.SelectionPrompt}");
@@ -582,6 +591,7 @@ public static class StaticKnowledgeMarkdownReportFormatter
             SanitizeSingleLine(ReadAttribute(entry, "notePreview")),
             SanitizeSingleLine(ReadAttribute(entry, "pageSummary")),
             SanitizeSingleLine(ReadAttribute(entry, "talkPreview")),
+            BuildDetailLines(entry, domain),
             entry.Observed,
             entry.Source,
             ReadAttribute(entry, "preferredLocale"),
@@ -592,6 +602,47 @@ public static class StaticKnowledgeMarkdownReportFormatter
             BuildEnglishFallback(englishTitle, englishDescription),
             HasLocalization(entry),
             HasStructuredDescription(entry));
+    }
+
+    private static IReadOnlyList<string> BuildDetailLines(StaticKnowledgeEntry entry, string domain)
+    {
+        var details = new List<string>();
+
+        void AddIfPresent(string label, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                details.Add($"{label}: {value}");
+            }
+        }
+
+        if (domain == "cards")
+        {
+            AddIfPresent(K("\\uCF54\\uC2A4\\uD2B8"), ReadAttribute(entry, "cost"));
+            AddIfPresent(K("\\uC720\\uD615"), ReadAttribute(entry, "type"));
+            AddIfPresent(K("\\uD76C\\uADC0\\uB3C4"), ReadAttribute(entry, "rarity"));
+            AddIfPresent(K("\\uB300\\uC0C1"), ReadAttribute(entry, "target"));
+            AddIfPresent(K("\\uCE74\\uB4DC \\uD480"), ReadAttribute(entry, "pool") ?? ReadAttribute(entry, "color"));
+            AddIfPresent(K("\\uAC15\\uD654 \\uC694\\uC57D"), ReadAttribute(entry, "upgradeSummary"));
+        }
+        else if (domain == "relics")
+        {
+            AddIfPresent(K("\\uD76C\\uADC0\\uB3C4"), ReadAttribute(entry, "rarity"));
+            AddIfPresent(K("\\uD480"), ReadAttribute(entry, "pool"));
+        }
+        else if (domain == "potions")
+        {
+            AddIfPresent(K("\\uD76C\\uADC0\\uB3C4"), ReadAttribute(entry, "rarity"));
+            AddIfPresent(K("\\uC0AC\\uC6A9 \\uC81C\\uC57D"), ReadAttribute(entry, "usage"));
+            AddIfPresent(K("\\uB300\\uC0C1"), ReadAttribute(entry, "target"));
+        }
+        else if (domain == "events")
+        {
+            AddIfPresent(K("\\uD398\\uC774\\uC9C0 \\uD0A4 \\uC218"), ReadAttribute(entry, "pageKeyCount"));
+            AddIfPresent(K("\\uC120\\uD0DD\\uC9C0 \\uD0A4 \\uC218"), ReadAttribute(entry, "optionKeyCount"));
+        }
+
+        return details;
     }
 
     private static string BuildDescription(StaticKnowledgeEntry entry)
@@ -891,6 +942,7 @@ internal sealed record KnowledgeReportItem(
     string? NotePreview,
     string? PageSummary,
     string? TalkPreview,
+    IReadOnlyList<string> DetailLines,
     bool Observed,
     string Source,
     string? PreferredLocale,

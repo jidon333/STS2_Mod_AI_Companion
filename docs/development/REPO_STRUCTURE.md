@@ -9,10 +9,6 @@
 1. 게임의 `mods` 폴더에서 `.pck + .dll` 조합으로 native mod가 로드됩니다.
 2. 모드 안의 runtime exporter가 현재 화면, 덱, 유물, 포션, 선택지 같은 상태를 읽습니다.
 3. 읽어낸 결과를 live export 파일 4종으로 씁니다.
-   - `events.ndjson`
-   - `state.latest.json`
-   - `state.latest.txt`
-   - `session.json`
 4. 외부 Host가 이 파일 변화를 감시합니다.
 5. Host는 정적 지식 카탈로그와 현재 live 상태를 합쳐서 AI 입력을 만듭니다.
 6. WPF 앱이 현재 상태와 AI 조언을 사용자에게 보여줍니다.
@@ -46,10 +42,6 @@
   - `Runtime/RuntimeHookCatalog.cs`
   - `Runtime/RuntimeExportContext.cs`
   - `Runtime/RuntimeSnapshotReflectionExtractor.cs`
-- 이 폴더를 볼 때의 질문
-  - 메인 메뉴를 왜 못 읽는가
-  - 보상/이벤트/상점/휴식/전투 시작을 왜 못 잡는가
-  - 어떤 데이터를 live export로 내보내는가
 
 ### `src/Sts2ModKit.Core`
 
@@ -65,10 +57,6 @@
   - `Knowledge/`
   - `Diagnostics/`
   - `Planning/`
-- 이 폴더를 볼 때의 질문
-  - `state.latest.json` 구조는 무엇인가
-  - static knowledge는 어떻게 합쳐지는가
-  - smoke 결과를 어떻게 판정하는가
 
 ### `src/Sts2ModKit.Tool`
 
@@ -83,9 +71,6 @@
   - `inspect-live-export`
   - `extract-static-knowledge`
   - `inspect-static-knowledge`
-- 이 폴더를 볼 때의 질문
-  - smoke test를 어떤 순서로 돌려야 하는가
-  - 정적 분석 산출물은 어떻게 생성되는가
 
 ### `src/Sts2ModKit.SelfTest`
 
@@ -94,9 +79,8 @@
 - 플레이 전 역할
   - snapshot/restore 회귀 방지
   - live export writer 회귀 방지
+  - knowledge pipeline 회귀 방지
   - prompt pack/knowledge slice 회귀 방지
-- 이 폴더를 볼 때의 질문
-  - 지금 바꾼 코드가 최소 계약을 깨지는 않았는가
 
 ### `src/Sts2AiCompanion.Host`
 
@@ -108,9 +92,6 @@
   - prompt pack 생성
   - Codex CLI 호출
   - advice artifact 저장
-- 이 폴더를 볼 때의 질문
-  - 어떤 화면에서 AI 호출이 트리거되는가
-  - 어떤 live 상태와 어떤 정적 지식이 prompt에 들어가는가
 
 ### `src/Sts2AiCompanion.Wpf`
 
@@ -120,9 +101,6 @@
   - 현재 화면, 덱, 유물, 포션, 최근 변화 표시
   - AI 조언 표시
   - `Analyze Now` 같은 수동 조작 제공
-- 이 폴더를 볼 때의 질문
-- 사용자는 어떤 화면을 보게 되는가
-- 조언이 실패해도 상태 표시는 계속 되는가
 
 ### `src/Sts2Speed.Tool`
 
@@ -130,7 +108,6 @@
 
 - 현재 AI Companion의 핵심 실행 경로에는 포함되지 않습니다.
 - 즉 `모드 로드 -> live export -> Host -> WPF` 아키텍처의 주 구성 요소는 아닙니다.
-- 저장소 안에 존재하더라도 현재 문서화와 검증의 주 대상은 아닙니다.
 
 ## 3. `artifacts/`는 실제로 무엇을 담는가
 
@@ -138,20 +115,24 @@
 
 정적 분석 결과입니다.
 
-- `catalog.latest.json`
-  - 기계가 읽는 canonical 카탈로그
-- `catalog.latest.txt`
-  - 빠르게 훑는 텍스트 요약
+- `decompile-scan.json`
+  - 디컴파일 캐시 메타데이터
+- `decompiled/`
+  - `sts2.dll` 디컴파일 결과
+- `strict-domain-scan.json`
+  - cards/relics/potions/events strict parser 결과
 - `assembly-scan.json`
-  - DLL 메타데이터 기반 후보
+  - DLL 메타데이터 기반 raw 후보
 - `pck-inventory.json`
-  - PCK 문자열 스캔 기반 후보
+  - PCK 문자열/리소스 기반 raw 후보
+- `localization-scan.json`
+  - PCK localization 복구 결과
 - `observed-merge.json`
-  - 실플레이 관찰 결과 병합본
+  - 실플레이 관찰 병합 결과
+- `catalog.latest.json`
+  - 사람이 검증하기 좋은 canonical 카탈로그
 - `catalog.assistant.json`
-  - AI가 직접 읽는 우선 catalog
-- `catalog.assistant.txt`
-  - AI용 catalog 요약
+  - AI가 직접 읽는 compact 카탈로그
 - `assistant/`
   - domain별 assistant export와 provenance index
 - `markdown/`
@@ -159,8 +140,8 @@
 
 중요:
 
-- 여기 있는 내용은 전부 실플레이 검증 완료본이 아닙니다.
-- `무엇이 존재하는가`와 `어디에 연결되는가`를 먼저 파악하는 용도입니다.
+- `cards/relics/potions/events`는 strict parser 기반 canonical입니다.
+- `shops/rewards/keywords`는 아직 broad raw seed 의존이 커서 후속 정규화 대상입니다.
 - Host는 현재 `catalog.assistant.json`을 우선 읽습니다.
 
 ### `artifacts/companion`
@@ -171,8 +152,6 @@
 - latest advice
 - advice history
 - run별 live mirror
-
-이 폴더를 보면 “AI가 실제로 무엇을 보고 어떤 답을 냈는가”를 추적할 수 있습니다.
 
 ### `artifacts/snapshots`
 
@@ -212,10 +191,11 @@ smoke test 전 백업본입니다.
 
 ### 정적 분석 리포트가 이상할 때
 
-1. `assembly-scan.json`
-2. `pck-inventory.json`
-3. `observed-merge.json`
-4. `src/Sts2ModKit.Core/Knowledge`
+1. `strict-domain-scan.json`
+2. `localization-scan.json`
+3. `catalog.latest.json`
+4. `catalog.assistant.json`
+5. `src/Sts2ModKit.Core/Knowledge`
 
 ## 5. 처음 코드를 읽는 순서
 
@@ -226,27 +206,18 @@ smoke test 전 백업본입니다.
 5. `src/Sts2ModAiCompanion.Mod/Runtime/RuntimeExportContext.cs`
 6. `src/Sts2ModAiCompanion.Mod/Runtime/RuntimeSnapshotReflectionExtractor.cs`
 7. `src/Sts2ModKit.Tool/Program.cs`
-8. `src/Sts2AiCompanion.Host/CompanionHost.cs`
-9. `src/Sts2AiCompanion.Wpf/ShellViewModel.cs`
+8. `src/Sts2ModKit.Core/Knowledge/StrictDomainKnowledgeScanner.cs`
+9. `src/Sts2AiCompanion.Host/CompanionHost.cs`
+10. `src/Sts2AiCompanion.Wpf/ShellViewModel.cs`
 
 ## 6. 지금 실제로 어디까지 됐는가
 
 - 검증된 것
   - 모드 빌드
   - self-test
-  - 정적 지식 카탈로그 생성
+  - strict parser 기반 정적 지식 카탈로그 생성
   - 메인 메뉴까지의 live export 기본 동작
 - 아직 남은 것
   - reward/event/shop/rest/combat 고가치 화면 실증
   - current choices 실플레이 교차 검증
   - WPF + Host + Codex의 실제 gameplay end-to-end 검증
-
-이 문서를 읽고 나면 “이 저장소가 어떤 폴더를 갖고 있는가”보다 먼저 “플레이 중 어떤 흐름을 구현하려는 저장소인가”가 머리에 들어와야 합니다.
-
-## 2026-03-11 구조 보강 메모
-
-- `artifacts/knowledge/markdown/`는 사람이 읽는 정적 지식 리포트 루트입니다.
-- `artifacts/knowledge/assistant/`는 AI가 직접 읽는 정적 지식 export 루트입니다.
-- 두 폴더는 같은 `catalog.latest.json` 계열을 바탕으로 생성되지만, 목적이 다릅니다.
-  - markdown: 사람이 카드/유물/이벤트/상점 설명을 읽고 교차검증하는 용도
-  - assistant: Host/Codex/WPF가 바로 지식 slice를 만들 때 읽는 용도

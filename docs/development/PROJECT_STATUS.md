@@ -3,24 +3,24 @@
 기준 시점:
 
 - 날짜: `2026-03-11`
-- 기준 게임 버전: `STS2 v0.98.3`
-- 기준 도구 체인: `Godot 4.5.1`, `.NET 7`
+- 게임 버전: `STS2 v0.98.3`
+- 기준 추출 체인: `Godot 4.5.1`, `.NET 7`, `ilspycmd 8.2`
 
-이 문서는 `docs/development` 아래에서 가장 먼저 보는 현재 상태 문서입니다. 현재 구현 범위, 실제로 검증된 것, 아직 코드만 있고 실플레이로 닫히지 않은 것, 다음 우선순위를 한 번에 정리합니다.
+이 문서는 “지금 실제로 어디까지 구현되고 검증됐는가”를 한 번에 보는 상태 문서입니다.
 
 ## 1. 현재 저장소의 중심
 
-현재 저장소의 중심은 아래 5개입니다.
+현재 저장소의 중심 기능은 아래 다섯 가지입니다.
 
-1. 게임 내부에서 동작하는 read-only native exporter
-2. exporter가 남기는 live export 파일 4종
-3. 오프라인 정적 지식 추출 파이프라인
-4. 외부 Host + Codex backend
-5. WPF 기반 AI 조언 앱
+1. 게임 내부 `read-only native exporter`
+2. live export 파일 4종
+3. strict parser 기반 정적 지식 추출
+4. 외부 `Host + Codex backend`
+5. 사용자용 `WPF 조언 앱`
 
-즉 목표는 `게임을 대신 플레이하는 모드`가 아니라 `플레이 중인 사람에게 외부 창에서 조언을 주는 어시스턴트`입니다.
+즉 목표는 “게임을 대신 플레이하는 모드”가 아니라 “플레이 중인 사람에게 게임 밖에서 조언을 주는 외부 어시스턴트”입니다.
 
-## 2. 현재 확인된 것
+## 2. 현재 검증된 것
 
 ### 2.1 빌드와 기본 검증
 
@@ -33,7 +33,7 @@
 
 ### 2.2 runtime exporter
 
-현재 실증된 범위:
+실제로 확인된 범위:
 
 - 모드 로드
 - Harmony startup failure 제거
@@ -44,7 +44,7 @@
   - `session.json`
 - scene polling 기반 상태 갱신
 
-아직 실플레이 smoke로 닫히지 않은 범위:
+아직 gameplay smoke로 닫지 못한 범위:
 
 - reward
 - event
@@ -53,45 +53,47 @@
 - combat start
 - turn start
 
-즉 exporter는 `메인 메뉴까지는 산다`가 현재 확정 상태이고, 고가치 gameplay 화면은 다음 smoke에서 닫아야 합니다.
+즉 exporter는 “메인 메뉴까지 살아 있다”는 점은 확인됐지만, 고가치 gameplay 화면 coverage는 아직 미실증입니다.
 
 ### 2.3 정적 지식 추출
 
 현재 파이프라인:
 
 1. `release-scan`
-2. `assembly-scan`
-3. `pck-inventory`
-4. `localization-scan`
-5. `observed-merge`
-6. `catalog-build`
+2. `decompile-scan`
+3. `assembly-scan`
+4. `pck-inventory`
+5. `strict-domain-parse`
+6. `localization-scan`
+7. `observed-merge`
+8. `catalog-build`
 
-최신 `inspect-static-knowledge` 기준 localization coverage:
+현재 canonical counts:
 
-- cards: `572` / descriptions: `538` / selection prompts: `35`
-- relics: `291` / descriptions: `289`
+- cards: `576`
+- relics: `288`
+- potions: `63`
+- events: `58`
+- shops: `438`
+- rewards: `292`
+- keywords: `2027`
+
+현재 해석:
+
+- `cards/relics/potions/events`는 strict parser 기반이라 canonical로 볼 수 있습니다.
+- `shops/rewards/keywords`는 아직 broad seed 의존이 커서 노이즈가 남아 있습니다.
+
+현재 localization coverage:
+
+- cards: `575` / descriptions: `562` / selection prompts: `22`
+- relics: `285` / descriptions: `285`
 - potions: `75` / descriptions: `70`
-- events: `197` / descriptions: `95` / options: `203`
-- shops: `21` / descriptions: `18`
-- rewards: `3` / descriptions: `2`
-- keywords: `270` / descriptions: `263`
+- events: `153` / descriptions: `60` / options: `203`
+- shops: `23` / descriptions: `18`
+- rewards: `4` / descriptions: `2`
+- keywords: `272` / descriptions: `264`
 
-전체 inventory count는 여전히 큽니다.
-
-- cards: `7748`
-- relics: `2366`
-- potions: `1078`
-- events: `1411`
-- shops: `417`
-- rewards: `288`
-- keywords: `1758`
-
-해석 원칙:
-
-- 큰 inventory count는 `후보가 많다`는 뜻이지 `바로 AI 입력에 100% 신뢰로 넣어도 된다`는 뜻은 아닙니다.
-- 실제 판단에 바로 쓰기 좋은 계층은 `localization-scan`과 `assistant export`입니다.
-
-현재 AI가 우선적으로 읽는 산출물:
+AI가 우선 읽는 산출물:
 
 - `artifacts/knowledge/catalog.assistant.json`
 - `artifacts/knowledge/catalog.assistant.txt`
@@ -104,22 +106,22 @@
 - `artifacts/knowledge/assistant/rewards.json`
 - `artifacts/knowledge/assistant/keywords.json`
 
-`KnowledgeCatalogService`는 현재 `catalog.assistant.json`이 있으면 그것을 우선 로드하고, 없을 때만 `catalog.latest.json`으로 내려갑니다.
+`KnowledgeCatalogService`는 `catalog.assistant.json`을 우선 로드하고, 없을 때만 `catalog.latest.json`으로 내려갑니다.
 
 ### 2.4 Host / WPF
 
-현재 코드상 존재:
+코드 기준으로 존재하고 빌드되는 것:
 
 - `src/Sts2AiCompanion.Host`
 - `src/Sts2AiCompanion.Wpf`
 
-현재 코드상 확인된 것:
+현재 코드에서 확인된 역할:
 
-- `CompanionHost`가 live export polling loop를 올립니다.
-- `KnowledgeCatalogService`가 assistant catalog를 reload하고 bounded knowledge slice를 만듭니다.
-- `AdvicePromptBuilder`가 `AdviceInputPack`과 markdown advice를 생성합니다.
-- `CodexCliClient`가 Codex session create/resume 흐름을 담당합니다.
-- WPF는 현재 상태, 현재 화면, choices, recent events, knowledge entries, latest advice를 표시합니다.
+- `CompanionHost`가 live export polling loop 수행
+- `KnowledgeCatalogService`가 assistant catalog reload와 knowledge slice 선택 수행
+- `AdvicePromptBuilder`가 `AdviceInputPack`과 markdown advice 생성
+- `CodexCliClient`가 Codex 세션 create/resume 실행
+- WPF가 현재 상태, current screen, choices, recent events, knowledge entries, latest advice 표시
 - WPF 버튼:
   - `Analyze Now`
   - `Pause/Resume Auto Advice`
@@ -127,58 +129,56 @@
   - `Refresh Knowledge`
   - `Open Artifacts`
 
-아직 실플레이로 닫히지 않은 것:
+아직 gameplay로 닫지 못한 것:
 
-- actual gameplay live export에 붙은 상태에서 auto advice
-- `Analyze Now`와 `Retry Last`의 실플레이 end-to-end
-- run 종료 summary와 artifact 보존의 실사용 흐름
+- actual gameplay live export와 연결된 auto advice
+- `Analyze Now` / `Retry Last`의 gameplay end-to-end
+- run 종료 summary와 artifact 보존의 실제 흐름
 
-## 3. 사용자 관점에서 지금 가능한 것
+## 3. 지금 사용자 관점에서 가능한 것
 
 현재 상태를 사용자 시나리오로 요약하면:
 
-- 게임을 켜면 mod/exporter가 main menu까지 live export를 만들 수 있습니다.
-- 외부 앱 구조는 이미 존재하고 빌드됩니다.
-- 정적 지식 카탈로그에서는 카드뿐 아니라 유물, 포션, 이벤트, 상점, 키워드 일부 설명도 읽을 수 있습니다.
-- assistant export는 AI가 읽기 쉬운 형태로 따로 생성됩니다.
+- 게임을 켜면 mod/exporter가 main menu까지 live export를 만든다.
+- 외부 Host/WPF 구조는 코드로 존재하고 빌드된다.
+- 정적 지식 카탈로그는 카드/유물/포션/이벤트의 실제 설명까지 상당 부분 포함한다.
+- assistant export는 AI가 직접 읽기 쉬운 구조로 생성된다.
 
-하지만 아직 아래는 `코드상 준비됨`이지 `실플레이로 증명됨`은 아닙니다.
+하지만 아래는 아직 “코드가 준비됐다” 수준이지 gameplay로 완전히 닫히지 않았습니다.
 
-- reward/event/shop/rest/combat advice
-- gameplay 중 `currentChoices` 기반 자동 조언
-- WPF가 실제 gameplay run에 붙어 advice를 안정적으로 보여주는 흐름
+- reward/event/shop/rest/combat 자동 advice
+- gameplay 중 `currentChoices` 기반 조언
+- WPF가 실제 live gameplay에 붙어 안정적으로 조언을 보여주는 흐름
 
-## 4. 현재 최우선 남은 일
+## 4. 최우선 다음 작업
 
-우선순위는 아래 순서로 고정합니다.
+우선순위:
 
-1. high-value gameplay smoke 재개
+1. high-value gameplay smoke 확대
 2. `currentChoices` 실증
 3. WPF + Host + Codex의 실제 gameplay 연결 검증
-4. relic / event / shop localization 확장과 정규화
+4. `shops/rewards/keywords` strict 정규화
 5. replay 기반 무인 acceptance harness
 
-## 5. 현재 가장 큰 리스크
+## 5. 현재 리스크
 
 ### 5.1 exporter coverage 리스크
 
-main menu 이후 gameplay 고가치 화면이 아직 충분히 실증되지 않았습니다.
+main menu 이후 gameplay 고가치 화면은 아직 충분히 실증되지 않았습니다.
 
 ### 5.2 knowledge noise 리스크
 
-catalog 전체 수치는 크지만, 그중 상당수는 여전히 assembly/pck seed입니다.
+`shops/rewards/keywords`는 아직 canonical strict parser가 없어, AI 입력에 바로 쓰기엔 보수적 필터가 더 필요합니다.
 
-### 5.3 locale/fallback 리스크
+### 5.3 description resolver 리스크
 
-한국어 우선 경로는 많이 좋아졌지만, 영어 fallback과 locale 경계는 아직 보수적으로 처리됩니다.
+일부 카드/유물 설명에는 SmartFormat placeholder가 완전히 풀리지 않고 남습니다.
 
 ### 5.4 end-to-end 리스크
 
-Host/WPF/Codex는 코드상 연결돼 있지만 실제 gameplay run에서 자동 조언까지 닫힌 상태는 아닙니다.
+Host/WPF/Codex는 코드로 연결돼 있지만, 실제 gameplay run에서 자동 조언까지 닫힌 상태는 아닙니다.
 
 ## 6. 다음 검증 순서
-
-실작업은 아래 순서를 따릅니다.
 
 1. `dotnet build STS2_Mod_AI_Companion.sln`
 2. `dotnet run --project src\Sts2ModKit.SelfTest --no-build`
@@ -192,6 +192,6 @@ Host/WPF/Codex는 코드상 연결돼 있지만 실제 gameplay run에서 자동
    - `inspect-godot-log`
    - `inspect-live-export`
 
-## 7. 한 줄 상태 요약
+## 7. 한 줄 요약
 
-현재 저장소는 `main menu까지 살아 있는 exporter + 다도메인 L10N이 붙기 시작한 정적 지식 파이프라인 + 실제 gameplay smoke가 남은 외부 AI 조언 앱` 상태입니다.
+현재 저장소는 `main menu까지 살아 있는 exporter + strict parser 기반 정적 지식 파이프라인 + 외부 Host/WPF 조언 앱 뼈대`까지는 확보한 상태이고, 다음 핵심은 `실제 gameplay high-value 화면과 AI 조언 end-to-end를 실증하는 것`입니다.

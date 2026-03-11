@@ -30,6 +30,17 @@ public sealed record StaticKnowledgePipelineStep(
     IReadOnlyDictionary<string, string?> Stats,
     IReadOnlyList<string> Warnings);
 
+public sealed record StaticKnowledgeDecompileScan(
+    DateTimeOffset GeneratedAt,
+    string SourceAssemblyPath,
+    string DecompiledRoot,
+    string ToolPath,
+    string ToolVersion,
+    string Fingerprint,
+    bool UsedCache,
+    IReadOnlyDictionary<string, string?> Stats,
+    IReadOnlyList<string> Warnings);
+
 public sealed record StaticKnowledgeLocalizationCardEntry(
     string KeyStem,
     string PreferredLocale,

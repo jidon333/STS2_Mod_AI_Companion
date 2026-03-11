@@ -1,8 +1,8 @@
 # 키워드/의도
 
-- 전체 항목 수: 1758
-- 설명 본문이 채워진 항목: 3
-- L10N 키 또는 제목이 연결된 항목: 3
+- 전체 항목 수: 2027
+- 설명 본문이 채워진 항목: 264
+- L10N 키 또는 제목이 연결된 항목: 272
 - 선택지/옵션 정보가 있는 항목: 0
 
 ## 이 섹션이 도와주는 플레이 장면
@@ -30,10 +30,3410 @@
 
 ## 항목 목록
 
+### 2배의 피해
+
+- ID: `double-damage-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 가하는 공격의 피해량이 2배가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DOUBLE_DAMAGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### HELLO WORLD POWER
+
+- ID: `hello-world-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 무작위 일반 카드를 [blue]1[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HELLO_WORLD_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### TEMPORARY DEXTERITY POWER
+
+- ID: `temporary-dexterity-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴이 끝나기 전까지 [gold]민첩[/gold]을 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TEMPORARY_DEXTERITY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### TEMPORARY FOCUS POWER
+
+- ID: `temporary-focus-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴이 끝나기 전까지 [gold]밀집[/gold]을 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TEMPORARY_FOCUS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### TEMPORARY STRENGTH POWER
+
+- ID: `temporary-strength-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴이 끝나기 전까지 [gold]힘[/gold]을 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TEMPORARY_STRENGTH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 가로막기
+
+- ID: `intercept-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다른 플레이어를 엄호하고 있습니다. 대상 아군이 받아야 하는 모든 공격의 목표를 자신으로 변경합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `INTERCEPT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 가시
+
+- ID: `thorns-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 공격에 적중 시, 공격자에게 피해를 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `THORNS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 갈아엎기
+
+- ID: `plow-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물의 체력이 처음으로 [blue]150[/blue] 이하로 떨어질 시, 대상이 [gold]기절[/gold] 상태가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PLOW_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 감염됨
+
+- ID: `infested-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 사망 시, 무언가를... 소환합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `INFESTED_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 강도
+
+- ID: `heist-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 사망 시, 빼앗은 모든 [gold]골드[/gold]를 반환합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HEIST_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 강령의 극의
+
+- ID: `necro-mastery-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]골골이[/gold]가 체력을 잃을 때마다, 모든 적이 동일한 만큼의 체력을 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `NECRO_MASTERY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 개선
+
+- ID: `improvement-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 전투 종료 시, 무작위 카드를 1장 [gold]강화[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `IMPROVEMENT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 개인 군락
+
+- ID: `personal-hive-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 적이 공격 카드에 적중당할 때마다, [gold]뽑을 카드 더미[/gold]에 [gold]어지러움[/gold]을 섞어 넣습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PERSONAL_HIVE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 거대화
+
+- ID: `gigantification-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음에 사용하는 공격 카드의 피해량이 3배가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `GIGANTIFICATION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 거상
+
+- ID: `colossus-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 [gold]취약[/gold] 상태의 적에게서 받는 피해량이 [blue]50%[/blue] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `COLOSSUS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 검성
+
+- ID: `sword-sage-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]군주의 칼날[/gold]의 비용이 [blue]1[/blue] 증가합니다. [gold]군주의 칼날[/gold]이 이제 [blue]1[/blue]번 추가로 적중합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SWORD_SAGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 겁쟁이
+
+- ID: `skittish-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 이 생물이 처음으로 공격을 받을 때, [gold]방어도[/gold]를 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SKITTISH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 격노
+
+- ID: `rage-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 공격 카드를 사용할 때마다, [gold]방어도[/gold]를 [blue]3[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RAGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 격분
+
+- ID: `enrage-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 스킬 카드를 사용할 때마다, [gold]힘[/gold]을 [blue]2[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ENRAGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 경계 태세
+
+- ID: `sentry-mode-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]훑어보기[/gold]를 [blue]1[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SENTRY_MODE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 고리형 강인함
+
+- ID: `toric-toughness-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 [blue]2[/blue]턴 동안, 턴 시작 시 [gold]방어도[/gold]를 [blue]5[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TORIC_TOUGHNESS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 고전압
+
+- ID: `high-voltage-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물의 턴 시작 시, [gold]힘[/gold]을 [blue]2[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HIGH_VOLTAGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 고정시키기
+
+- ID: `fasten-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 수비 카드를 통해 얻는 [gold]방어도[/gold]가 [blue]4[/blue] 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FASTEN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 고철을 보물로
+
+- ID: `trash-to-treasure-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 상태이상 카드를 생성할 때마다, 무작위 구체를 [blue]1[/blue]개 [gold]영창[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TRASH_TO_TREASURE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 고통스러운 찌르기
+
+- ID: `painful-stabs-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내가 막히지 않은 공격 피해를 받을 때마다, [gold]버린 카드 더미[/gold]에 [gold]부상[/gold]을 [blue]1[/blue]장 섞어 넣습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PAINFUL_STABS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 공격성
+
+- ID: `aggression-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]버린 카드 더미[/gold]에서 무작위 공격 카드를 1장 [gold]손[/gold]으로 가져오고 남은 전투 동안 [gold]강화[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `AGGRESSION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 공명
+
+- ID: `ringing-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에는 카드를 [blue]1[/blue]장만 낼 수 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RINGING_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 공허의 부름
+
+- ID: `call-of-the-void-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 무작위 카드를 [blue]1[/blue]장 [gold]손[/gold]으로 가져옵니다. 그 카드가 [gold]휘발성[/gold]을 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CALL_OF_THE_VOID_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 공허의 형상
+
+- ID: `void-form-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 처음으로 내는 카드 [blue]2[/blue]장이 비용 없이 사용됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `VOID_FORM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 광휘
+
+- ID: `radiance-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴에 추가로 [gold]에너지[/gold]를 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RADIANCE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 괜찮은 전략
+
+- ID: `well-laid-plans-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 종료 시, 카드를 최대 [blue]1[/blue]장까지 [gold]보존[/gold]합니다.
+- 선택 프롬프트: 보존할 카드를{Amount:choose(1):| {}장} 선택하세요.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `WELL_LAID_PLANS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 괴성
+
+- ID: `shriek-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물의 체력이 처음으로 [blue]50%[/blue] 이하로 떨어질 시, 대상이 [gold]기절[/gold] 상태가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SHRIEK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 구렁이의 형상
+
+- ID: `serpent-form-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 사용할 때마다, 무작위 적에게 피해를 [blue]4[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SERPENT_FORM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 군주의 시선
+
+- ID: `monarchs-gaze-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 적을 공격할 때마다, 대상 적이 이번 턴 동안 [gold]힘[/gold]을 [blue]1[/blue] 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MONARCHS_GAZE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 굴뚝
+
+- ID: `smokestack-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 상태이상 카드를 생성할 때마다, 모든 적에게 피해를 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SMOKESTACK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 굴러가는 바위
+
+- ID: `rolling-boulder-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 모든 적에게 피해를 [blue]5[/blue] 주고 이 효과의 피해량이 [blue]5[/blue] 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ROLLING_BOULDER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 굶주림
+
+- ID: `ravenous-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 적이 사망 시, 시체 민달팽이가 그 적을 즉시 먹어치우며 [gold]기절[/gold] 상태가 되고, [gold]힘[/gold]을 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RAVENOUS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 권역
+
+- ID: `demesne-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]에너지[/gold]를 [blue]1[/blue] 얻고 카드를 추가로 [blue]1[/blue]장 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DEMESNE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 궤도
+
+- ID: `orbit-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 에너지를 [blue]4[/blue] 소모할 때마다, 에너지를 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ORBIT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 그래플링
+
+- ID: `grapple-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 [gold]방어도[/gold]를 얻을 때마다, 대상 적에게 피해를 [blue]5[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `GRAPPLE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 그림자 걸음
+
+- ID: `shadow-step-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴에, 공격 카드의 피해량이 2배가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SHADOW_STEP_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 그림자 소모
+
+- ID: `consuming-shadow-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 종료 시, 가장 왼쪽의 구체를 [gold]발현[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CONSUMING_SHADOW_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 그림자 은신
+
+- ID: `shadowmeld-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴 동안 얻는 [gold]방어도[/gold]가 2배가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SHADOWMELD_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 금지된 마도서
+
+- ID: `forbidden-grimoire-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 전투 종료 시, [gold]덱[/gold]에서 카드를 1장 제거합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FORBIDDEN_GRIMOIRE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 기계학습
+
+- ID: `machine-learning-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 카드를 추가로 [blue]1[/blue]장 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MACHINE_LEARNING_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 기력 흡수
+
+- ID: `drain-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 피해를 {Damage:diff()} 줍니다.
+[gold]버린 카드 더미[/gold]에 있는 무작위 카드를 {Cards:diff()}장 [gold]강화[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DRAIN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 꽃게의 격노
+
+- ID: `crab-rage-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 아군이 죽을 시, 이 생물이 [gold]힘[/gold]을 [blue]5[/blue], [gold]방어도[/gold]를 [blue]99[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CRAB_RAGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 나태
+
+- ID: `sloth-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 카드를 최대 [blue]3[/blue]장까지만 사용할 수 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SLOTH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 날 세우기
+
+- ID: `seeking-edge-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]군주의 칼날[/gold]이 이제 모든 적을 대상으로 합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SEEKING_EDGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 날갯짓
+
+- ID: `flutter-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 공격 카드를 통해 받는 피해량이 [gold]50%[/gold] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FLUTTER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 날아오르기
+
+- ID: `soar-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 착지 전까지 공격으로 받는 피해량이 [gold]50%[/gold] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SOAR_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 냉각재
+
+- ID: `coolant-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 영창된 구체의 종류 하나당 [gold]방어도[/gold]를 [blue]3[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `COOLANT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 네메시스
+
+- ID: `nemesis-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 두 턴마다 턴 종료 시, [gold]불가침[/gold]을 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `NEMESIS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 능지처참
+
+- ID: `a-thousand-cuts-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 사용할 때마다, 모든 적에게 피해를 [blue]1[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `A_THOUSAND_CUTS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 다음 턴 방어도
+
+- ID: `block-next-turn-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴 시작 시, [gold]방어도[/gold]를 [blue]4[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BLOCK_NEXT_TURN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 다음 턴 별
+
+- ID: `star-next-turn-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴에 {singleStarIcon}을 1 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `STAR_NEXT_TURN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 다음 턴 소환
+
+- ID: `summon-next-turn-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴 시작 시, [gold]소환[/gold] [blue]2[/blue].
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SUMMON_NEXT_TURN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 다음 턴 에너지
+
+- ID: `energy-next-turn-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴에 [gold]에너지[/gold]를 추가로 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ENERGY_NEXT_TURN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 다음 턴 카드 뽑기
+
+- ID: `draw-cards-next-turn-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴 시작 시, 카드를 추가로 [blue]1[/blue]장 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DRAW_CARDS_NEXT_TURN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 다이아몬드 왕관
+
+- ID: `diamond-diadem-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 적이 가하는 공격의 피해량이 [blue]50%[/blue] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DIAMOND_DIADEM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 단단한 껍질
+
+- ID: `hardened-shell-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물은 한 턴에 체력을 [blue]20[/blue] 이상 잃을 수 없습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HARDENED_SHELL_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 대혼란
+
+- ID: `mayhem-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]뽑을 카드 더미[/gold] 맨 위의 카드를 사용합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MAYHEM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 덮쳐!
+
+- ID: `sic-em-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 [gold]골골이[/gold]가 이 적을 공격할 때마다, [gold]소환[/gold] [blue]3[/blue].
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SIC_EM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 도둑질
+
+- ID: `thievery-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 공격 시 [gold]골드[/gold]를 빼앗습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `THIEVERY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 도망칠 수 없다
+
+- ID: `no-escape-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [blue]3[/blue]턴 종료 시, [gold]종말[/gold]을 [blue]50[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `NO_ESCAPE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 도발
+
+- ID: `taunt-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 적이 당신을 공격 시, 공격한 적에게 [gold]취약[/gold]을 [blue]1[/blue] 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TAUNT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 독 바르기
+
+- ID: `envenom-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 막히지 않은 공격 피해를 줄 때마다, [gold]중독[/gold]을 [blue]1[/blue] 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ENVENOM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 독백
+
+- ID: `monologue-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 카드를 사용할 때마다, 이번 턴 동안 [gold]힘[/gold]을 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MONOLOGUE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 독재
+
+- ID: `tyranny-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 카드를 1장 뽑고 [gold]손[/gold]에 있는 카드를 1장 [gold]소멸[/gold]시킵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TYRANNY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 되돌리기
+
+- ID: `rebound-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 다음으로 사용하는 카드를 [gold]뽑을 카드 더미[/gold] 맨 위에 놓습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `REBOUND_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 둔화
+
+- ID: `slow-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 사용할 때마다, 이번 턴 동안 대상 적이 공격 카드를 통해 받는 피해량이 [blue]10%[/blue] 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SLOW_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 뒤얽힘
+
+- ID: `tangled-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴 동안 공격 카드의 [gold]에너지[/gold] 비용이 [blue]1[/blue] 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TANGLED_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 때려눕히기
+
+- ID: `knockdown-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물이 이번 턴에 다른 플레이어로부터 받는 피해량이 [blue]{Amount}[/blue]배가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `KNOCKDOWN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 로열티
+
+- ID: `royalties-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 전투 종료 시, [gold]골드[/gold]를 [blue]25[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ROYALTIES_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 마법 폭탄
+
+- ID: `magic-bomb-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 종료 시 피해를 [blue]20[/blue] 받습니다. 이 효과는 마법 기사가 사망 시 사라집니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MAGIC_BOMB_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 망각
+
+- ID: `oblivion-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 사용할 때마다, 이 적이 [gold]종말[/gold]을 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `OBLIVION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 망치질 시간
+
+- ID: `hammer-time-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]단조[/gold]할 때마다, 모든 아군이 [gold]단조[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HAMMER_TIME_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 매달기
+
+- ID: `hang-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 모든 [gold]매달기[/gold] 카드가 이 적에게 가하는 피해량이 [blue]2[/blue]배로 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HANG_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 메아리의 형상
+
+- ID: `echo-form-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 처음으로 사용하는 카드가 1번 추가로 사용됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ECHO_FORM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 명확성
+
+- ID: `clarity-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴 시작 시, 카드를 추가로 [blue]1[/blue]장 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CLARITY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 모래 구덩이
+
+- ID: `sandpit-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 탐이 사용하는 파워입니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SANDPIT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 목 조르기
+
+- ID: `strangle-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 카드를 사용할 때마다, 이 적이 체력을 [blue]2[/blue] 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `STRANGLE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 몸 말기
+
+- ID: `curl-up-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 피해를 입을 시, 몸을 말고 방어도를 얻습니다. (전투당 한 번)
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CURL_UP_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 무감각
+
+- ID: `feel-no-pain-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드가 소멸될 때마다, [gold]방어도[/gold]를 [blue]3[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FEEL_NO_PAIN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 무기고
+
+- ID: `arsenal-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 무색 카드를 사용할 때마다, [gold]힘[/gold]을 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ARSENAL_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 무료 공격
+
+- ID: `free-attack-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음에 사용하는 공격 카드의 비용이 [blue]0[/blue] {energyPrefix:energyIcons(1)}이 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FREE_ATTACK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 무료 스킬
+
+- ID: `free-skill-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음에 사용하는 스킬 카드의 비용이 [blue]0[/blue] {energyPrefix:energyIcons(1)}이 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FREE_SKILL_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 무료 파워
+
+- ID: `free-power-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음에 사용하는 파워 카드의 비용이 [blue]0[/blue] {energyPrefix:energyIcons(1)}이 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FREE_POWER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 무한의 검날
+
+- ID: `infinite-blades-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]단도[/gold]를 1장 [gold]손[/gold]으로 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `INFINITE_BLADES_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 문 공개
+
+- ID: `door-revival-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 문 공개 메커니즘을 위한 내부 파워.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DOOR_REVIVAL_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 미끈거림
+
+- ID: `slippery-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물이 다음에 체력을 잃을 시, [blue]1[/blue]만 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SLIPPERY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 미지
+
+- ID: `images-packed-intents-summon-intent-summon-07-png-import0`
+- 그룹/풀 추정: 키워드, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 적의 의도는 [gold]알 수 없습니다[/gold].
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `UNKNOWN`
+- 리소스 경로: `images/packed/intents/summon/intent_summon_07.png.import0/`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 민첩
+
+- ID: `dexterity-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 민첩은 카드를 통해 얻는 [gold]방어도[/gold]를 증가시킵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DEXTERITY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 민첩 감소
+
+- ID: `dexterity-down-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴 종료 시, [gold]민첩[/gold]을 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DEXTERITY_DOWN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 밀집
+
+- ID: `focus-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 구체들의 효율이 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FOCUS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 바리케이드
+
+- ID: `barricade-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물의 턴 시작 시 [gold]방어도[/gold]가 사라지지 않습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BARRICADE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 반복
+
+- ID: `loop-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 다음 구체의 지속 능력을 발동시킵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LOOP_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 반사
+
+- ID: `reflect-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 막은 공격 피해가 공격한 적에게 반사됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `REFLECT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 반사하는 요새
+
+- ID: `reflective-fortress-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 공격을 완전히 [gold]방어[/gold] 할 때마다, 방어한 피해량을 공격자에게 반사합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `REFLECTIVE_FORTRESS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 발병
+
+- ID: `outbreak-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]중독[/gold]을 [blue]10[/blue]번 부여할 때마다, 모든 적에게 피해를 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `OUTBREAK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 방벽
+
+- ID: `rampart-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 플레이어의 턴 시작 시, 포탑 사수가 [gold]방어도[/gold]를 [blue]25[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RAMPART_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 방어 불가
+
+- ID: `no-block-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 통해 [gold]방어도[/gold]를 얻을 수 없습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `NO_BLOCK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 방어도
+
+- ID: `block`
+- 그룹/풀 추정: 키워드, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴까지 피해를 방어합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BLOCK`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 방열판
+
+- ID: `heatsinks-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 파워 카드를 사용할 때마다, 카드를 [blue]1[/blue]장 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HEATSINKS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 버퍼
+
+- ID: `buffer-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음에 체력을 잃는 것을 막아줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BUFFER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 벼락
+
+- ID: `thunder-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]전기[/gold]를 [gold]발현[/gold]할 때마다, 적중한 적에게 피해를 [blue]8[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `THUNDER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 별의 아이
+
+- ID: `child-of-the-stars-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 소모한 {singleStarIcon}당 [gold]방어도[/gold]를 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CHILD_OF_THE_STARS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 보호됨
+
+- ID: `guarded-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 적에게 받는 피해가 절반이 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `GUARDED_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 복사
+
+- ID: `duplication-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음에 사용하는 카드가 1번 추가로 사용됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DUPLICATION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 봉인된 왕좌
+
+- ID: `the-sealed-throne-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 사용할 때마다, {singleStarIcon}을 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `THE_SEALED_THRONE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 부식성 파도
+
+- ID: `corrosive-wave-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 카드를 뽑을 때마다, 모든 적에게 [gold]중독[/gold]을 [blue]2[/blue] 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CORROSIVE_WAVE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 부화
+
+- ID: `hatch-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: X턴 후에 부화합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HATCH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 분해
+
+- ID: `disintegration-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 종료 시, 피해를 [blue]5[/blue] 받습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DISINTEGRATION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 불가침
+
+- ID: `intangible-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴 동안 받는 모든 피해와 체력 손실이 [blue]1[/blue]로 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `INTANGIBLE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 불균형
+
+- ID: `imbalanced-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 어떤 플레이어에 의해서든 이 생물의 공격이 완전히 막힌다면, 대상이 [gold]기절[/gold] 상태가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `IMBALANCED_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 불바다
+
+- ID: `inferno-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 체력을 [blue]1[/blue] 잃습니다. 내 턴 동안 체력을 잃을 때마다, 모든 적에게 피해를 [blue]4[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `INFERNO_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 불의 심장
+
+- ID: `pyre-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴 시작 시, [gold]에너지[/gold]를 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PYRE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 블랙홀
+
+- ID: `black-hole-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: {singleStarIcon}을 소모하거나 얻을 때마다, 모든 적에게 피해를 [blue]3[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BLACK_HOLE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 비애
+
+- ID: `melancholy-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]종말[/gold]이 부여될 때마다, 추가로 [blue]2[/blue] 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MELANCHOLY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 비열함
+
+- ID: `sneaky-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다른 플레이어가 적을 공격할 때마다, [gold]방어도[/gold]를 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SNEAKY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 비축물
+
+- ID: `reserves-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드 사용을 위한 [gold]에너지[/gold]가 부족한 경우, [gold]에너지[/gold]마다 2{singleStarIcon}이 대신 사용됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RESERVES_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 비행 점프
+
+- ID: `winged-jump-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 모든 적에게 [gold]취약[/gold]을 [blue]1[/blue] 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `WINGED_JUMP_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 뼈 읽기
+
+- ID: `read-the-bones-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]소환[/gold]할 때마다, 카드를 1장 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `READ_THE_BONES_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 뽑기 불가
+
+- ID: `no-draw-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 더 이상 카드를 뽑을 수 없습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `NO_DRAW_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 사냥
+
+- ID: `the-hunt-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 전투 종료 시 카드 보상을 추가로 [blue]1[/blue]번 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `THE_HUNT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 사신의 형상
+
+- ID: `reaper-form-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 공격 카드로 피해를 줄 때마다, 그와 동일한 만큼의 [gold]종말[/gold]을 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `REAPER_FORM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 살신성인
+
+- ID: `die-for-you-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]골골이[/gold]가 모든 막히지 않은 공격 피해를 받아냅니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DIE_FOR_YOU_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 살점 재주
+
+- ID: `sleight-of-flesh-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 적에게 해로운 효과를 부여할 때마다, 대상 적이 피해를 [blue]13[/blue] 받습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SLEIGHT_OF_FLESH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 생명 삼키기
+
+- ID: `devour-life-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]영혼[/gold]을 사용할 때마다, [gold]소환[/gold] [blue]1[/blue].
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DEVOUR_LIFE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 생명의 불꽃
+
+- ID: `vital-spark-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 적이 매 턴마다 처음으로 공격 피해를 받을 시, 공격자가 [gold]에너지[/gold]를 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `VITAL_SPARK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 서류 폭풍
+
+- ID: `pagestorm-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]휘발성[/gold] 카드를 뽑을 때마다, 카드를 [blue]1[/blue]장 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PAGESTORM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 서브루틴
+
+- ID: `subroutine-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 파워 카드를 사용할 때마다, {energyPrefix:energyIcons(1)}를 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SUBROUTINE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 서프라이즈
+
+- ID: `surprise-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물은 뭔가 이상해 보입니다...
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SURPRISE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 석회화
+
+- ID: `calcify-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]골골이[/gold]가 가하는 공격의 피해량이 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CALCIFY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 설계의 대가
+
+- ID: `master-planner-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 스킬 카드를 사용 시, 그 카드가 [gold]교활[/gold]을 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MASTER_PLANNER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 속도 지배
+
+- ID: `possess-speed-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 처치 시, 빼앗은 모든 [gold]민첩[/gold]이 플레이어에게 돌아갑니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `POSSESS_SPEED_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 속박의 사슬
+
+- ID: `chains-of-binding-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 처음으로 뽑는 카드 [blue]3[/blue]장에 [gold]구속[/gold]의 고난이 부여됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CHAINS_OF_BINDING_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 손상
+
+- ID: `frail-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 손상 상태인 동안, 카드를 통해 얻는 [gold]방어도[/gold]가 [blue]25%[/blue] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FRAIL_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 손패 보존
+
+- ID: `retain-hand-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 [blue]2[/blue]턴 동안, [gold]손[/gold]에 있는 카드들을 [gold]보존[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RETAIN_HAND_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 쇄도
+
+- ID: `stampede-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 종료 시, [gold]손[/gold]에 있는 무작위 공격 카드 [blue]1[/blue]장을 무작위 적에게 사용합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `STAMPEDE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 쇠락
+
+- ID: `debilitate-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 [blue]2[/blue]턴 동안 [gold]취약[/gold]과 [gold]약화[/gold]의 효과가 2배가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DEBILITATE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 쇠퇴
+
+- ID: `waste-away-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 얻는 [gold]에너지[/gold]가 [blue]1[/blue] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `WASTE_AWAY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 수면
+
+- ID: `asleep-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: TODO
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ASLEEP_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 수의
+
+- ID: `shroud-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]종말[/gold]을 부여할 때마다, [gold]방어도[/gold]를 [blue]3[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SHROUD_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 숙면
+
+- ID: `slumber-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 턴이 경과하거나 체력을 잃는 것이 3번 발생 시, 깨어납니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SLUMBER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 순회
+
+- ID: `iteration-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 처음으로 [gold]상태이상[/gold] 카드를 뽑을 시, 추가로 카드를 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ITERATION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 스펙트럼 이동
+
+- ID: `spectrum-shift-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 무작위 무색 카드를 [blue]1[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SPECTRUM_SHIFT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 스피너
+
+- ID: `spinner-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]유리[/gold]를 [blue]1[/blue]번 [gold]영창[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SPINNER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 스피드스터
+
+- ID: `speedster-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 동안 카드를 뽑을 때마다, 모든 적에게 피해를 [blue]1[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SPEEDSTER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 슬쩍하기
+
+- ID: `swipe-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 적을 처치 시, 빼앗긴 카드를 돌려받습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SWIPE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 시간 제한
+
+- ID: `battleworn-dummy-time-limit-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 전투로 손상된 훈련 인형을 쓰러뜨릴 수 있는 턴이 [blue]3[/blue]턴 남았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BATTLEWORN_DUMMY_TIME_LIMIT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 신축성
+
+- ID: `contractility-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴에, [gold]방어도[/gold]를 [blue]0[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CONTRACTILITY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 신호 증폭
+
+- ID: `signal-boost-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음에 사용하는 파워 카드가 1번 추가로 사용됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SIGNAL_BOOST_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 씨뿌리기
+
+- ID: `sow-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 [gold]손[/gold]에 있는 무작위 카드를 [blue]1[/blue]장 [gold]보존[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SOW_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 악랄함
+
+- ID: `cruelty-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 취약 상태의 적이 받는 피해가 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CRUELTY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 악마의 형상
+
+- ID: `demon-form-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]힘[/gold]을 [blue]2[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DEMON_FORM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 악몽
+
+- ID: `nightmare-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴에 선택한 카드를 [blue]3[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `NIGHTMARE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 압축
+
+- ID: `shrink-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 3턴 동안 이 생물이 가하는 공격의 피해량이 [blue]30%[/blue] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SHRINK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 야성
+
+- ID: `feral-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 처음으로 비용이 0{energyPrefix:energyIcons(1)}인 공격 카드를 사용 시, 그 카드를 [gold]손[/gold]으로 다시 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FERAL_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 약화
+
+- ID: `weak-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 약화 상태인 생물의 공격은 가하는 피해량이 [blue]25%[/blue] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `WEAK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 어둠의 포옹
+
+- ID: `dark-embrace-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드가 [gold]소멸[/gold]될 때마다, 카드를 [blue]1[/blue]장 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DARK_EMBRACE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 엄호
+
+- ID: `covered-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 아군의 엄호를 받습니다. 당신에게 가해지는 모든 공격이 대상 아군에게 옮겨집니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `COVERED_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 에너지
+
+- ID: `energy`
+- 그룹/풀 추정: 키워드, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 에너지는 [gold]손[/gold]에서 카드를 사용하는 데에 소모됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ENERGY`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 에너지
+
+- ID: `energy-count`
+- 그룹/풀 추정: 키워드, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 현재 에너지 ({energyPrefix:energyIcons(1)}) 수치입니다. 카드를 사용하려면 카드 왼쪽 상단에 표시되는 만큼의 {energyPrefix:energyIcons(1)}가 필요합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ENERGY_COUNT`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 엔트로피
+
+- ID: `entropy-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]손[/gold]에 있는 카드를 [blue]1[/blue]장 [gold]변화[/gold]시킵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ENTROPY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 연무
+
+- ID: `smoggy-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 한 턴에 스킬 카드를 [blue]1[/blue]장만 사용할 수 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SMOGGY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 연약함
+
+- ID: `tender-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 사용할 때마다, 이번 턴 동안 [gold]힘[/gold]을 [blue]1[/blue] 잃고 [gold]민첩[/gold]을 [blue]1[/blue] 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TENDER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 영역 동물
+
+- ID: `territorial-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 대상의 턴 종료 시, [gold]힘[/gold]을 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TERRITORIAL_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 영혼의 힘
+
+- ID: `souls-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 카드는 [gold]소멸[/gold]을 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SOULS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 예리한 날
+
+- ID: `sharp-edge-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]단도[/gold]를 생성할 때마다, 그 단도를 [gold]강화[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SHARP_EDGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 예측 불허 판결
+
+- ID: `decree-of-entropy-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 무작위 [gold]강화된[/gold] 카드를 [blue]1[/blue]장 손으로 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DECREE_OF_ENTROPY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 요지부동
+
+- ID: `unmovable-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 처음으로 카드를 통해 얻는 [gold]방어도[/gold]가 2배가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `UNMOVABLE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 용광로
+
+- ID: `furnace-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]단조[/gold] [blue]5[/blue].
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FURNACE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 우박 폭풍
+
+- ID: `hailstorm-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 종료 시 [gold]냉기[/gold]를 보유하고 있다면, 모든 적에게 피해를 [blue]6[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HAILSTORM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 우정
+
+- ID: `friendship-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴 시작 시, [gold]에너지[/gold]를 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FRIENDSHIP_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 원상 복구 판결
+
+- ID: `decree-of-unmaking-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 적에게 피해를 줄 때마다, 대상 적에게 무작위 해로운 효과를 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DECREE_OF_UNMAKING_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 원투 펀치
+
+- ID: `one-two-punch-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 다음에 사용하는 공격 카드가 두 번 사용됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ONE_TWO_PUNCH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 위축
+
+- ID: `dampen-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 마법 기사가 살아있는 동안, 모든 카드가 [gold]열화[/gold]됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DAMPEN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 위풍당당
+
+- ID: `panache-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 카드를 [blue]5[/blue] 장 사용 시, 모든 적에게 피해를 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PANACHE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 유독 가스
+
+- ID: `noxious-fumes-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 모든 적에게 [gold]중독[/gold]을 [blue]2[/blue] 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `NOXIOUS_FUMES_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 유령의 형상
+
+- ID: `wraith-form-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]민첩[/gold]을 [blue]1[/blue] 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `WRAITH_FORM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 의식
+
+- ID: `ritual-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 종료 시, [gold]힘[/gold]을 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RITUAL_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 인공물
+
+- ID: `artifact-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 해로운 효과를 [gold]무효화[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ARTIFACT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 인지 편향
+
+- ID: `biased-cognition-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]밀집[/gold]을 [blue]1[/blue] 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BIASED_COGNITION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 잉크 칼날
+
+- ID: `blade-of-ink-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 공격 카드를 사용할 때마다, 이번 턴 동안 [gold]힘[/gold]을 [blue]2[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BLADE_OF_INK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 자가 형성 점토
+
+- ID: `self-forming-clay-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴에 [gold]방어도[/gold]를 [blue]3[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SELF_FORMING_CLAY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 자동화
+
+- ID: `automation-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 [blue]10[/blue]장 뽑을 때마다, [gold]에너지[/gold]를 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `AUTOMATION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 작업 도구
+
+- ID: `tools-of-the-trade-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 카드를 [blue]1[/blue]장 뽑고 카드를 [blue]1[/blue]장 버립니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TOOLS_OF_THE_TRADE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 잔상
+
+- ID: `afterimage-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 사용할 때마다, [gold]방어도[/gold]를 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `AFTERIMAGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 잠복
+
+- ID: `burrowed-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물의 턴 시작 시 [gold]방어도[/gold]가 사라지지 않습니다. 모든 [gold]방어도[/gold]가 사라질 시 [gold]기절[/gold] 상태가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BURROWED_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 장막 관통자
+
+- ID: `veilpiercer-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음에 사용하는 [gold]휘발성 카드[/gold]의 비용이 [blue]0[/blue]이 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `VEILPIERCER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 재고
+
+- ID: `stock-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 사망 시, 그 장소에 새로운 잘라봇을 소환합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `STOCK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 재부착
+
+- ID: `reattach-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다른 부위가 살아있다면, [blue]2[/blue]턴 후에 [blue]25[/blue]의 체력으로 부활합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `REATTACH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 재생
+
+- ID: `regen-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]재생[/gold]은 내 턴 종료 시 체력을 회복시킵니다. 매 턴마다 [gold]재생[/gold]이 [blue]1[/blue] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `REGEN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 재앙
+
+- ID: `calamity-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 공격 카드를 사용할 때마다, 무작위 공격 카드를 1장 [gold]손[/gold]으로 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CALAMITY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 잿빛 혼령
+
+- ID: `spirit-of-ash-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]휘발성[/gold] 카드를 사용할 때마다, [gold]방어도[/gold]를 [blue]4[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SPIRIT_OF_ASH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 저글링
+
+- ID: `juggling-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 세 번째로 사용하는 공격 카드의 복사본을 1장 [gold]손[/gold]으로 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `JUGGLING_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 적응
+
+- ID: `adaptation-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]방어도[/gold]를 얻을 때마다, 이번 턴 동안 [gold]민첩[/gold]을 [blue]3[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ADAPTATION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 적응력
+
+- ID: `adaptable-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물은 처치될 시 더 강력한 모습으로 부활합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ADAPTABLE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 전기 자극
+
+- ID: `galvanic-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 파워 카드에 [gold]전기 자극[/gold]의 고난이 부여됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `GALVANIC_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 전투의 북소리
+
+- ID: `drum-of-battle-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]뽑을 카드 더미[/gold] 맨 위의 {Amount:choose(1):카드를|카드를 [blue]{}[/blue]장} [gold]소멸[/gold]시킵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DRUM_OF_BATTLE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 절대적인 힘
+
+- ID: `juggernaut-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]방어도[/gold]를 얻을 때마다, 무작위 적에게 피해를 [blue]5[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `JUGGERNAUT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 절망
+
+- ID: `despair-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 부여하는 [gold]종말[/gold] [blue]1[/blue]마다, [gold]방어도[/gold]를 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DESPAIR_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 정밀
+
+- ID: `accuracy-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]단도[/gold]의 피해량이 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ACCURACY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 정복자
+
+- ID: `conqueror-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴 동안 대상 적이 [gold]군주의 칼날[/gold]로 받는 피해량이 2배가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CONQUEROR_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 정신 오염
+
+- ID: `mind-rot-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 카드를 [blue]1[/blue]장 적게 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MIND_ROT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 정신 폭주
+
+- ID: `neurosurge-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 자신에게 [gold]종말[/gold]을 [blue]3[/blue] 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `NEUROSURGE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 조이기
+
+- ID: `constrict-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 미끈거리는 교살마가 살아있는 동안, 턴 종료 시 피해를 [blue]1[/blue] 받습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CONSTRICT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 종말
+
+- ID: `doom-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 적의 턴 종료 시 적의 체력이 종말 이하라면, 사망합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DOOM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 종언
+
+- ID: `demise-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 대상의 턴 종료 시, 이 생물이 체력을 X 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DEMISE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 종이 베기
+
+- ID: `paper-cuts-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물에게서 막히지 않은 공격 피해를 받을 때마다, [gold]최대 체력[/gold]을 [blue]1[/blue] 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PAPER_CUTS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 주술
+
+- ID: `hex-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 유령 기사가 살아있는 동안, 모든 카드에 [gold]휘발성[/gold]이 추가됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HEX_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 죽음의 무도
+
+- ID: `danse-macabre-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 에너지 비용이 [blue]2[/blue] 이상인 카드를 사용할 때마다, [gold]방어도[/gold]를 [blue]7[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `DANSE_MACABRE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 준비 시간
+
+- ID: `prep-time-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, [gold]활력[/gold]을 [blue]4[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PREP_TIME_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 중독
+
+- ID: `poison-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 중독된 생물은 자신의 턴 시작 시 체력을 잃습니다. 매 턴마다 중독이 [blue]1[/blue] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `POISON_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 중력
+
+- ID: `gravity-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 카드를 사용할 때마다, 모든 적에게 피해를 [blue]2[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `GRAVITY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 증기 분출
+
+- ID: `steam-eruption-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 사망한다면, 다음 내 턴 종료 시 피해를 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `STEAM_ERUPTION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 지옥검무
+
+- ID: `hellraiser-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이름에 "타격"이 포함된 카드를 뽑을 때마다, 무작위 적에게 사용합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HELLRAISER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 질긴 생존력
+
+- ID: `hard-to-kill-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]갑각충[/gold]이 받는 모든 피해와 체력 손실이 [blue]9[/blue]로 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HARD_TO_KILL_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 창백한 푸른 점
+
+- ID: `pale-blue-dot-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 한 턴에 카드를 특정 횟수 이상 사용했다면, 다음 턴 시작 시 카드를 추가로 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PALE_BLUE_DOT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 창세
+
+- ID: `genesis-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, {singleStarIcon}을 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `GENESIS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 창의적인 인공지능
+
+- ID: `creative-ai-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 무작위 파워 카드를 1장 [gold]손[/gold]으로 가져옵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CREATIVE_AI_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 창조의 기둥
+
+- ID: `pillar-of-creation-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 생성할 때마다, [gold]방어도[/gold]를 [blue]5[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PILLAR_OF_CREATION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 책략
+
+- ID: `stratagem-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]뽑을 카드 더미[/gold]를 섞을 때마다, 카드를 [blue]1[/blue]장 선택해 [gold]손[/gold]으로 가져옵니다.
+- 선택 프롬프트: 손으로 가져올 카드를{Amount:choose(1):| {}장} 선택하세요.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `STRATAGEM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 쳐내기
+
+- ID: `parry-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]군주의 칼날[/gold]을 사용할 때마다, [gold]방어도[/gold]를 [blue]8[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PARRY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 촉진제
+
+- ID: `accelerant-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]중독[/gold]이 1번 추가로 발동합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ACCELERANT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 추적
+
+- ID: `tracking-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]약화[/gold] 상태의 적이 공격 카드로 받는 피해가 [blue]2[/blue]배가 됩니다..
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TRACKING_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 출몰
+
+- ID: `haunt-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]영혼[/gold]을 사용할 때마다, 무작위 적이 체력을 [blue]3[/blue] 잃습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `HAUNT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 취약
+
+- ID: `vulnerable-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 취약 상태인 생물은 공격을 통해 받는 피해량이 [blue]50%[/blue] 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `VULNERABLE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 측면 공격
+
+- ID: `flanking-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 다른 아군이 이 적에게 가하는 피해량이 [blue]2배[/blue]가 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FLANKING_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 치사성
+
+- ID: `lethality-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 처음으로 사용하는 공격 카드의 피해량이 50% 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LETHALITY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 카운트다운
+
+- ID: `countdown-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 무작위 적에게 [gold]종말[/gold]을 [blue]6[/blue] 부여합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `COUNTDOWN_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 칼날 부채
+
+- ID: `fan-of-knives-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]단도[/gold]가 모든 적을 대상으로 합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FAN_OF_KNIVES_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 타락
+
+- ID: `corruption-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 스킬 카드의 비용이 [blue]0[/blue]이 됩니다.
+스킬 카드를 사용할 때마다 그 카드를 [gold]소멸[/gold]시킵니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CORRUPTION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 탈출의 명수
+
+- ID: `escape-artist-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 4턴 후에 전투를 떠납니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ESCAPE_ARTIST_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 태그 팀
+
+- ID: `tag-team-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다른 플레이어가 다음에 대상 적에게 사용하는 공격이 {Amount:choose(1):1번 추가로 사용됩니다.|[blue]{}[/blue]번 추가로 사용됩니다}.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TAG_TEAM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 탱커
+
+- ID: `tank-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 적에게 받는 피해가 2배가 됩니다. 아군이 적에게 받는 피해가 절반이 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `TANK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 통솔력
+
+- ID: `leadership-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다른 모든 아군이 가하는 피해량이 [blue]1[/blue] 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LEADERSHIP_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 파열
+
+- ID: `rupture-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 동안 체력을 잃을 때마다, [gold]힘[/gold]을 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RUPTURE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 판금
+
+- ID: `plating-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 종료 시, [gold]방어도[/gold]를 획득합니다. [gold]판금[/gold]은 내 턴 시작 시 [blue]1[/blue] 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PLATING_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 포석
+
+- ID: `the-gambit-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 전투 동안 막히지 않은 공격 피해를 받는다면, 사망합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `THE_GAMBIT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 포악함
+
+- ID: `vicious-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]취약[/gold]을 부여할 때마다, 카드를 [blue]1[/blue]장 뽑습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `VICIOUS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 포위됨
+
+- ID: `surrounded-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 뒤에서의 공격으로 받는 피해가 [blue]50%[/blue] 증가합니다. 목표를 지정하는 카드나 포션을 사용해 향하는 방향을 변경할 수 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SURROUNDED_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 폭주
+
+- ID: `burst-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 다음에 사용하는 스킬 카드가 추가로 사용됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BURST_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 폭탄
+
+- ID: `the-bomb-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [blue]3[/blue]턴 후 턴 종료 시, 모든 적에게 피해를 [blue]40[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `THE_BOMB_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 폭풍
+
+- ID: `storm-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 파워 카드를 사용할 때마다, [gold]전기[/gold]를 [blue]1[/blue]번 [gold]영창[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `STORM_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 피뢰침
+
+- ID: `lightning-rod-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 [blue]2[/blue]턴 동안 턴 시작 시, [gold]전기[/gold]를 [blue]1[/blue]번 [gold]영창[/gold]합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LIGHTNING_ROD_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 필연적인 결과
+
+- ID: `foregone-conclusion-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴에, [gold]뽑을 카드 더미[/gold]에서 카드를 [blue]3[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- 선택 프롬프트: 손으로 가져올 카드를{Amount:choose(1):| {}장} 선택하세요.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FOREGONE_CONCLUSION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 핏빛 망토
+
+- ID: `crimson-mantle-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 내 턴 시작 시, 체력을 잃고 [gold]방어도[/gold]를 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CRIMSON_MANTLE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 하수인
+
+- ID: `minion-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 하수인들은 우두머리가 죽을 시 전투를 포기합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MINION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 향수
+
+- ID: `nostalgia-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 매 턴마다 처음으로 사용하는 공격이나 스킬 카드를 [gold]뽑을 카드 더미[/gold] 맨 위에 놓습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `NOSTALGIA_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 호기심
+
+- ID: `curious-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 파워 카드의 비용이 [blue]1[/blue] {energyPrefix:energyIcons(1)} 감소합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CURIOUS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 혼란
+
+- ID: `confused-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 카드를 뽑을 때마다 카드의 비용이 [blue]0[/blue]부터 [blue]3[/blue]의 무작위 값으로 설정됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `CONFUSED_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 화염 장벽
+
+- ID: `flame-barrier-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이번 턴에 공격을 받을 때마다, 공격한 적에게 피해를 [blue]4[/blue] 줍니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FLAME_BARRIER_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 환상
+
+- ID: `illusion-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 사망 시, 다음 턴에 체력이 가득 찬 상태로 부활합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ILLUSION_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 환영검
+
+- ID: `phantom-blades-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: [gold]단도[/gold]가 [gold]보존[/gold]을 얻습니다.
+매 턴마다 처음으로 사용하는 [gold]단도[/gold]의 피해량이 [blue]9[/blue] 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `PHANTOM_BLADES_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 활력
+
+- ID: `vigor-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 공격의 피해량이 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `VIGOR_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 후방 공격
+
+- ID: `back-attack-left-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 당신의 뒤쪽에서 공격 시 가하는 피해량이 [blue]50%[/blue] 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BACK_ATTACK_LEFT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 후방 공격
+
+- ID: `back-attack-right-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 당신의 뒤쪽에서 공격 시 가하는 피해량이 [blue]50%[/blue] 증가합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BACK_ATTACK_RIGHT_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 흐릿함
+
+- ID: `blur-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 다음 턴 시작 시 [gold]방어도[/gold]가 사라지지 않습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `BLUR_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 흡입
+
+- ID: `suck-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 생물이 막히지 않은 공격 피해를 줄 때마다, [gold]힘[/gold]을 [blue]1[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `SUCK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
 ### 희망의 등불
 
-- ID: `megacrit-sts2-core-monstermoves-intents-buffintent`
-- 그룹/풀 추정: 의도/Intent, 설명 확보
+- ID: `beacon-of-hope-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
 - 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
 - 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
 - 핵심 설명: 내 턴 동안 [gold]방어도[/gold]를 얻을 때마다, 다른 플레이어가 그 절반만큼 [gold]방어도[/gold]를 얻습니다.
@@ -41,13 +3441,12 @@
 - 주요 소스: `localization-scan`
 - 선호 locale: `kor`
 - L10N key: `BEACON_OF_HOPE_POWER`
-- 모델 클래스: `MegaCrit.Sts2.Core.MonsterMoves.Intents.BuffIntent`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
 ### 힘
 
-- ID: `megacrit-sts2-core-monstermoves-intents-attackintent`
-- 그룹/풀 추정: 의도/Intent, 설명 확보
+- ID: `strength-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
 - 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
 - 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
 - 핵심 설명: 힘은 공격 카드의 피해량을 증가시킵니다.
@@ -55,13 +3454,12 @@
 - 주요 소스: `localization-scan`
 - 선호 locale: `kor`
 - L10N key: `STRENGTH_POWER`
-- 모델 클래스: `MegaCrit.Sts2.Core.MonsterMoves.Intents.AttackIntent`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
 ### 힘 지배
 
-- ID: `megacrit-sts2-core-monstermoves-intents-abstractintent`
-- 그룹/풀 추정: 의도/Intent, 설명 확보
+- ID: `possess-strength-power`
+- 그룹/풀 추정: 상태이상/버프, 설명 확보
 - 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
 - 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
 - 핵심 설명: 처치 시, 빼앗은 모든 [gold]힘[/gold]이 플레이어에게 돌아갑니다.
@@ -69,7 +3467,6 @@
 - 주요 소스: `localization-scan`
 - 선호 locale: `kor`
 - L10N key: `POSSESS_STRENGTH_POWER`
-- 모델 클래스: `MegaCrit.Sts2.Core.MonsterMoves.Intents.AbstractIntent`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
 ### "filename": "intent buff
@@ -1070,26 +4467,6 @@
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
 
-### <Get Elite Encounters>b  38 0
-
-- ID: `geteliteencounters-b--38-0`
-- 그룹/풀 추정: 키워드
-- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
-- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
-- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
-- 관찰 로그 반영: 아니오
-- 주요 소스: `assembly-scan`
-
-### <Get Elite Encounters>b  38 1
-
-- ID: `geteliteencounters-b--38-1`
-- 그룹/풀 추정: 키워드
-- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
-- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
-- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
-- 관찰 로그 반영: 아니오
-- 주요 소스: `assembly-scan`
-
 ### <Get Elite Encounters>b  39 0
 
 - ID: `geteliteencounters-b--39-0`
@@ -1332,6 +4709,17 @@
 - 주요 소스: `assembly-scan`
 - 모델 클래스: `MegaCrit.Sts2.Core.Nodes.Combat.NCreature+<RefreshIntents>d__72`
 
+### Abstract Intent
+
+- ID: `megacrit-sts2-core-monstermoves-intents-abstractintent`
+- 그룹/풀 추정: 의도/Intent
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `assembly-scan`
+- 모델 클래스: `MegaCrit.Sts2.Core.MonsterMoves.Intents.AbstractIntent`
+
 ### AbstractIntent
 
 - ID: `res---src-core-monstermoves-intents-abstractintent-cs`
@@ -1423,6 +4811,17 @@
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
 
+### Attack Intent
+
+- ID: `megacrit-sts2-core-monstermoves-intents-attackintent`
+- 그룹/풀 추정: 의도/Intent
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `assembly-scan`
+- 모델 클래스: `MegaCrit.Sts2.Core.MonsterMoves.Intents.AttackIntent`
+
 ### AttackIntent
 
 - ID: `res---src-core-monstermoves-intents-attackintent-cs3`
@@ -1496,6 +4895,17 @@
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
 - 모델 클래스: `MegaCrit.Sts2.Core.Models.Encounters.BowlbugsWeak`
+
+### Buff Intent
+
+- ID: `megacrit-sts2-core-monstermoves-intents-buffintent`
+- 그룹/풀 추정: 의도/Intent
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `assembly-scan`
+- 모델 클래스: `MegaCrit.Sts2.Core.MonsterMoves.Intents.BuffIntent`
 
 ### BuffIntent
 
@@ -19046,17 +22456,6 @@
 
 ### Unknown
 
-- ID: `images-packed-intents-summon-intent-summon-07-png-import0`
-- 그룹/풀 추정: 키워드
-- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
-- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
-- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
-- 관찰 로그 반영: 아니오
-- 주요 소스: `pck-inventory`
-- 리소스 경로: `images/packed/intents/summon/intent_summon_07.png.import0/`
-
-### Unknown
-
 - ID: `res---images-packed-intents-buff-intent-buff-25-png`
 - 그룹/풀 추정: 키워드
 - 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
@@ -19174,4 +22573,108 @@
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
 - 모델 클래스: `MegaCrit.Sts2.Core.Models.Encounters.WaterfallGiantBoss`
+
+### 가짜 공격 시 방어도 획득
+
+- ID: `mock-gain-block-on-attack-power`
+- 그룹/풀 추정: 상태이상/버프
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MOCK_GAIN_BLOCK_ON_ATTACK_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 가짜 무료 카드
+
+- ID: `mock-free-cards-power`
+- 그룹/풀 추정: 상태이상/버프
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MOCK_FREE_CARDS_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 가짜 별 비용 조정
+
+- ID: `mock-modify-star-cost-power`
+- 그룹/풀 추정: 상태이상/버프
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MOCK_MODIFY_STAR_COST_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 가짜 부활
+
+- ID: `mock-revive-power`
+- 그룹/풀 추정: 상태이상/버프
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MOCK_REVIVE_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 가짜 사용 시 카드 복제
+
+- ID: `mock-clone-cards-on-play-power`
+- 그룹/풀 추정: 상태이상/버프
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MOCK_CLONE_CARDS_ON_PLAY_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 가짜 에너지 비용 조정
+
+- ID: `mock-modify-energy-cost-power`
+- 그룹/풀 추정: 상태이상/버프
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MOCK_MODIFY_ENERGY_COST_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 가짜 죽음 방지
+
+- ID: `mock-prevent-death-power`
+- 그룹/풀 추정: 상태이상/버프
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MOCK_PREVENT_DEATH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 가짜 죽음에 면역
+
+- ID: `mock-invincible-on-death-power`
+- 그룹/풀 추정: 상태이상/버프
+- 플레이 중 참조 시점: 카드 문구, 상태 이상, Intent 해석 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `MOCK_INVINCIBLE_ON_DEATH_POWER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 

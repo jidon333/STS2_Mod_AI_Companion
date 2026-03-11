@@ -29,19 +29,21 @@
 
 ## 전체 수량
 
-- 카드: 7748 (설명 1505, L10N 1723)
-- 유물: 2366 (설명 289, L10N 291)
-- 포션: 1078 (설명 68, L10N 70)
-- 이벤트: 1411 (설명 91, L10N 107)
-- 상점: 417 (설명 5, L10N 6)
-- 보상: 288 (설명 2, L10N 3)
-- 키워드/의도: 1758 (설명 3, L10N 3)
+- 카드: 576 (설명 562, L10N 575)
+- 유물: 288 (설명 285, L10N 285)
+- 포션: 63 (설명 63, L10N 63)
+- 이벤트: 58 (설명 57, L10N 58)
+- 상점: 438 (설명 18, L10N 23)
+- 보상: 292 (설명 2, L10N 4)
+- 키워드/의도: 2027 (설명 264, L10N 272)
 
 ## 파이프라인 상태
 
 - `release-scan`: `completed`
+- `decompile-scan`: `completed`
 - `assembly-scan`: `completed`
 - `pck-inventory`: `warning` / 경고 1건
+- `strict-domain-parse`: `completed`
 - `localization-scan`: `completed`
 - `observed-merge`: `completed`
 - `catalog-build`: `completed`

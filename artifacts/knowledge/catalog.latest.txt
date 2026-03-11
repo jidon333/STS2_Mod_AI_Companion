@@ -1,5 +1,5 @@
 metadata
-generated_at: 2026-03-11T04:46:07.7826516+00:00
+generated_at: 2026-03-11T08:00:40.9656974+00:00
 release_version: v0.98.3
 release_commit: cb602cef
 release_date: 2026-03-09T19:21:00.0000000-07:00
@@ -21,71 +21,71 @@ snapshotLoaded: True
 source: extract-static-knowledge
 
 cards
-count: 7748
-- "filename": "draw cards next turn power [filename----draw-cards-next-turn-power-png] source=pck-inventory tags=resource-path
-- "filename": "intent card debuff [filename----intent-card-debuff-png] source=pck-inventory tags=resource-path
-- "filename": "intent status card [filename----intent-status-card-png] source=pck-inventory tags=resource-path
-- "filename": "membership card [filename----membership-card-png] source=pck-inventory tags=resource-path
-- "filename": "stats bluecards [filename----stats-bluecards-png] source=pck-inventory tags=resource-path
-- "filename": "stats cards [filename----stats-cards-png] source=pck-inventory tags=resource-path
-- "image": "card atlas 0 [image----card-atlas-0-png] source=pck-inventory tags=resource-path
-- "image": "card atlas 1 [image----card-atlas-1-png] source=pck-inventory tags=resource-path
-- "image": "card atlas 2 [image----card-atlas-2-png] source=pck-inventory tags=resource-path
-- %[ [res---images-packed-card-portraits-regent-devastate-png] source=pck-inventory tags=resource-path
-- 2배의 피해 [double-damage-power] source=localization-scan tags=l10n, localized-card description=이번 턴에 가하는 공격의 피해량이 2배가 됩니다.
-- 9 [res---images-packed-card-portraits-defect-strike-defect-pngaq-9] source=pck-inventory tags=resource-path
-... 7736 more
+count: 576
+- Drain Power [megacrit-sts2-core-models-cards-drainpower] source=strict-domain-parse tags=strict-card, strict-model
+- FTL [megacrit-sts2-core-models-cards-ftl] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 5 줍니다. 이번 턴에 카드를 {PlayMax:diff()}장보다 적게 사용했다면, 카드를 1장 뽑습니다.
+- HELLO WORLD [megacrit-sts2-core-models-cards-helloworld] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=내 턴 시작 시, 무작위 일반 카드를 1장 [gold]손[/gold]으로 가져옵니다.
+- NULL [megacrit-sts2-core-models-cards-null] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 10 줍니다. [gold]약화[/gold]를 2 부여합니다. [gold]암흑[/gold]을 1번 [gold]영창[/gold]합니다.
+- 가로막기 [megacrit-sts2-core-models-cards-intercept] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=[gold]방어도[/gold]를 9 얻습니다. 이번 턴 동안 다른 플레이어가 받아야 하는 모든 공격의 목표를 자신으로 변경합니다.
+- 가속 이탈 [megacrit-sts2-core-models-cards-boostaway] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=[gold]방어도[/gold]를 6 얻습니다. [gold]버린 카드 더미[/gold]에 [gold]어지러움[/gold]을 1장 섞어 넣습니다.
+- 갈가리 찢기 [megacrit-sts2-core-models-cards-tearasunder] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 5 줍니다. 이번 전투 동안 체력을 잃은 횟수만큼 반복합니다.{InCombat: ({CalculatedHits:diff()}번 적중합니다...
+- 갈취 [megacrit-sts2-core-models-cards-pillage] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 6 줍니다. 공격이 아닌 카드를 뽑을 때까지 카드를 뽑습니다.
+- 감마 세례 [megacrit-sts2-core-models-cards-gammablast] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 13 줍니다. [gold]약화[/gold]를 2 부여합니다. [gold]취약[/gold]을 2 부여합니다.
+- 감염 [megacrit-sts2-core-models-cards-infection] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=내 턴 종료 시 이 카드가 [gold]손[/gold]에 있다면, 피해를 3 받습니다.
+- 강령의 극의 [megacrit-sts2-core-models-cards-necromastery] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=[gold]소환[/gold] {Summon:diff()}. [gold]골골이[/gold]가 체력을 잃을 때마다, 모든 적이 동일한 만큼의 체력을...
+- 강령회 [megacrit-sts2-core-models-cards-seance] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=[gold]뽑을 카드 더미[/gold]의 카드를 1장 [gold]{IfUpgraded:show:영혼+|영혼}[/gold]으로 변화시킵니다.
+... 564 more
 
 relics
-count: 2366
-- "filename": "relic1 epoch [filename----relic1-epoch-png] source=pck-inventory tags=resource-path
-- "filename": "relic2 epoch [filename----relic2-epoch-png] source=pck-inventory tags=resource-path
-- "filename": "relic3 epoch [filename----relic3-epoch-png] source=pck-inventory tags=resource-path
-- "filename": "relic4 epoch [filename----relic4-epoch-png] source=pck-inventory tags=resource-path
-- "filename": "relic5 epoch [filename----relic5-epoch-png] source=pck-inventory tags=resource-path
-- "image": "relic atlas [image----relic-atlas-png] source=pck-inventory tags=resource-path
-- "image": "relic outline atlas [image----relic-outline-atlas-png] source=pck-inventory tags=resource-path
-- <10>  Relic Info Ctor Param Init [10---relicinfoctorparaminit] source=assembly-scan tags=member-candidate
-- <<Relic Option>g  On Chosen|0>d [megacrit-sts2-core-models-ancienteventmodel---c--displayclass69-0---relicoption-g--onchosen-0-d] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-devconsole-consolecommands-relicconsolecmd---c] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-entities-merchant-merchantrelicentry---c] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-models-events-darv-validrelicset---c] source=assembly-scan tags=type-candidate
-... 2354 more
+count: 288
+- Fake Merchants Rug [megacrit-sts2-core-models-relics-fakemerchantsrug] source=strict-domain-parse tags=strict-relic, strict-model
+- Lost Wisp [megacrit-sts2-core-models-relics-lostwisp] source=strict-domain-parse tags=strict-relic, strict-model
+- Potion Belt [megacrit-sts2-core-models-relics-potionbelt] source=strict-domain-parse tags=strict-relic, strict-model
+- 가마솥 [megacrit-sts2-core-models-relics-cauldron] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=획득 시, 무작위 포션을 [blue]{Potions}[/blue]개 생성합니다.
+- 가시 박힌 건틀릿 [megacrit-sts2-core-models-relics-spikedgauntlets] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=매 턴 시작 시, 1를 얻습니다. 파워 카드의 비용이 [blue]1[/blue] {energyPrefix:energyIcons(1)} 증가합니다...
+- 감정 칩 [megacrit-sts2-core-models-relics-emotionchip] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=이전 턴 동안 체력을 잃었다면, 내 턴 시작 시 모든 구체의 지속 효과를 발동시킵니다.
+- 검술 안내서 [megacrit-sts2-core-models-relics-fencingmanual] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=매 전투 시작 시, [gold]단조[/gold] [blue]{Forge}[/blue].
+- 검은 별 [megacrit-sts2-core-models-relics-blackstar] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=[gold]엘리트[/gold]가 보상으로 주는 유물이 1개 증가합니다.
+- 게임용 말 [megacrit-sts2-core-models-relics-gamepiece] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=파워 카드를 사용할 때마다, 카드를 [blue]1[/blue]장 뽑습니다.
+- 고기 써는 칼 [megacrit-sts2-core-models-relics-meatcleaver] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=휴식 장소에서 [gold]요리[/gold]를 할 수 있습니다.
+- 고깃덩어리 [megacrit-sts2-core-models-relics-meatonthebone] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=매 전투 종료 시 남은 체력이 [blue]{HpThreshold}%[/blue] 이하라면, 체력을 [green]12[/green] 회복합니다.
+- 고대의 이빨 [megacrit-sts2-core-models-relics-archaictooth] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=획득 시, {StarterCard.StringValue:cond:[gold]{StarterCard}[/gold]을(를) [gold]{Ancien...
+... 276 more
 
 potions
-count: 1078
-- "filename": "attack potion [filename----attack-potion-png] source=pck-inventory tags=resource-path
-- "filename": "block potion [filename----block-potion-png] source=pck-inventory tags=resource-path
-- "filename": "blood potion [filename----blood-potion-png] source=pck-inventory tags=resource-path
-- "filename": "colorless potion [filename----colorless-potion-png] source=pck-inventory tags=resource-path
-- "filename": "cunning potion [filename----cunning-potion-png] source=pck-inventory tags=resource-path
-- "filename": "dexterity potion [filename----dexterity-potion-png] source=pck-inventory tags=resource-path
-- "filename": "energy potion [filename----energy-potion-png] source=pck-inventory tags=resource-path
-- "filename": "fire potion [filename----fire-potion-png] source=pck-inventory tags=resource-path
-- "filename": "flex potion [filename----flex-potion-png] source=pck-inventory tags=resource-path
-- "filename": "flex potion power [filename----flex-potion-power-png] source=pck-inventory tags=resource-path
-- "filename": "focus potion [filename----focus-potion-png] source=pck-inventory tags=resource-path
-- "filename": "foul potion [filename----foul-potion-png] source=pck-inventory tags=resource-path
-... 1066 more
+count: 63
+- 강장제 [megacrit-sts2-core-models-potions-fortifier] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=[gold]방어도[/gold]를 3배로 만듭니다.
+- 거대화 포션 [megacrit-sts2-core-models-potions-gigantificationpotion] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=다음에 사용하는 공격 카드의 피해량이 3배로 증가합니다.
+- 공격 포션 [megacrit-sts2-core-models-potions-attackpotion] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=무작위 공격 카드 [blue]3[/blue]장 중 [blue]1[/blue]장을 선택해 [gold]손[/gold]으로 가져옵니다. 이번 턴 동안...
+- 과일 주스 [megacrit-sts2-core-models-potions-fruitjuice] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=최대 체력을 [blue]5[/blue] 얻습니다.
+- 광기의 손길 [megacrit-sts2-core-models-potions-touchofinsanity] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=[gold]손[/gold]에서 카드를 1장 선택합니다. 이번 전투 동안 그 카드를 비용 없이 사용할 수 있습니다.
+- 광휘의 팅크 [megacrit-sts2-core-models-potions-radianttincture] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=1를 얻습니다. 다음 [blue]3[/blue]턴 동안 추가로 {energyPrefix:energyIcons(1)}를 얻습니다.
+- 교활함 포션 [megacrit-sts2-core-models-potions-cunningpotion] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=[gold]강화[/gold]된 [gold]단도[/gold]를 [blue]3[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- 구울 항아리 [megacrit-sts2-core-models-potions-potofghouls] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=[gold]영혼[/gold]을 [blue]2[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- 단지 속의 유령 [megacrit-sts2-core-models-potions-ghostinajar] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=[gold]불가침[/gold]을 [blue]1[/blue] 얻습니다.
+- 도박꾼의 영액 [megacrit-sts2-core-models-potions-gamblersbrew] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=원하는 만큼 카드를 버리고 버린 만큼 카드를 뽑습니다.
+- 딱정벌레 주스 [megacrit-sts2-core-models-potions-beetlejuice] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description={Repeat:choose(1):다음 턴에|다음 [blue]{}[/blue]턴 동안} 적이 가하는 공격의 피해량이 [blue]{DamageDec...
+- 마잘레스의 선물 [megacrit-sts2-core-models-potions-mazalethsgift] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=[gold]의식[/gold]을 [blue]1[/blue] 얻습니다.
+... 51 more
 
 events
-count: 1411
-- "filename": "event1 epoch [filename----event1-epoch-png] source=pck-inventory tags=resource-path
-- "filename": "event2 epoch [filename----event2-epoch-png] source=pck-inventory tags=resource-path
-- "filename": "event3 epoch [filename----event3-epoch-png] source=pck-inventory tags=resource-path
-- <0>  Event Or Deprecated [0---eventordeprecated] source=assembly-scan tags=member-candidate
-- <6>  Event Info Ctor Param Init [6---eventinfoctorparaminit] source=assembly-scan tags=member-candidate
-- <<Generate Initial Options>b  0>d [megacrit-sts2-core-models-events-ranwidtheelder---c--displayclass18-0---generateinitialoptions-b--0-d] source=assembly-scan tags=type-candidate
-- <<Generate Initial Options>b  2>d [megacrit-sts2-core-models-events-ranwidtheelder---c--displayclass18-0---generateinitialoptions-b--2-d] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-autoslay-handlers-rooms-eventroomhandler---c] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-devconsole-consolecommands-eventconsolecmd---c] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-events-custom-crystalsphereevent-crystalsphereminigame---c] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-models-events-amalgamator---c] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-models-events-battleworndummy---c] source=assembly-scan tags=type-candidate
-... 1399 more
+count: 58
+- 가라앉는 등대 [megacrit-sts2-core-models-events-drowningbeacon] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=2 description=바위와 잔잔한 물로 이루어진 초현실적인 풍경을 지나자, 당신은 [purple]빛과 반대되는 무언가[/purple]를 뿜어대고 있는 [sine]가...
+- 가라앉은 보물 [megacrit-sts2-core-models-events-sunkentreasury] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=2 description=길을 따라가던 당신은, 일부가 물에 잠긴 저장고를 발견합니다. [gold]상자[/gold]는 [blue]2[/blue]개가 있지만, 금방이라도...
+- 감염된 자동인형 [megacrit-sts2-core-models-events-infestedautomaton] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=2 description=[red]작동을 멈춘 로봇들[/red]로 가득한 방이 있습니다.  고독한 자동인형 하나가 [sine][aqua]희미하게 빛나는 핵[/aqua][...
+- 거대한 꽃 [megacrit-sts2-core-models-events-colossalflower] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=6 description=[red][jitter]산처럼 쌓인 뼈무더기[/jitter][/red] 꼭대기에, [green]거대한 꽃[/green] 하나가 자라나 있습니다....
+- 거울에 비치다 다치비 에울거 [megacrit-sts2-core-models-events-reflections] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=2 description=이건 뭘까요? 이곳은 뭔가 이상한 느낌이 듭니다... [sine]...다니듭 이낌느 한상이 가뭔 은곳이 ?요까뭘 건이[/sine]
+- 고요를 짜는 거미 [megacrit-sts2-core-models-events-zenweaver] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=4 description=당신은 거미줄에 걸려, [jitter][red]공황[/red][/jitter] 상태에 빠졌습니다! 하지만 곧, [sine][blue]평온의 파도...
+- 공생체 [megacrit-sts2-core-models-events-symbiote] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=3 description=당신은 길을 나아가던 도중 우연히, 형태가 일정치 않은 한 검은색 덩어리를 발견합니다. 당신은 그 덩어리가 굉장히 오래되었고, 극도로 사악한 존...
+- 길 잃은 위습 [megacrit-sts2-core-models-events-lostwisp] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=3 description=[gold]파워[/gold] 카드를 사용할 때마다, 모든 적에게 피해를 [blue]{Damage}[/blue] 줍니다.
+- 나무 조각 [megacrit-sts2-core-models-events-woodcarvings] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=4 description=당신은 먼지가 쌓인 상자를 열고, 정교한 형태의 나무 조각 3개를 발견했습니다:  새, 뱀, 그리고... 고리?  근처에 있던 받침대에는 조각의...
+- 나선형 소용돌이 [megacrit-sts2-core-models-events-spiralingwhirlpool] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=3 description=당신은 우연히 [aqua][sine]거대한 나선형 소용돌이[/sine][/aqua]를 발견했습니다. 물은 아름답게 소용돌이치고, 나선형 무늬가...
+- 난타전 [megacrit-sts2-core-models-events-punchoff] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=3 description=[gold]권투형 구조체[/gold] 두 마리가 서로 격렬하게 치고받고 있는 가운데, 둘 사이에 보물이 놓여 있는 모습이 보입니다...  슬쩍...
+- 뇌 거머리 [megacrit-sts2-core-models-events-brainleech] source=localization-scan tags=l10n, localized-event, strict-event, strict-model options=2 description=[jitter]*푹*[/jitter]  당신의 머리 위쪽에 날카로운 통증이 스치고, 한 생각이 당신의 마음을 파고듭니다.  [purple][si...
+... 46 more
 
 shops
-count: 417
+count: 438
 - "filename": "fake merchants rug [filename----fake-merchants-rug-png] source=pck-inventory tags=resource-path
 - <1>  On Steam Workshop Item Installed [1---onsteamworkshopiteminstalled] source=assembly-scan tags=member-candidate
 - <>c [megacrit-sts2-core-autoslay-handlers-rooms-shoproomhandler---c] source=assembly-scan tags=type-candidate
@@ -98,10 +98,10 @@ count: 417
 - <Create For Merchant>b  3 0 [createformerchant-b--3-0] source=assembly-scan tags=member-candidate
 - <Create For Merchant>b  4 0 [createformerchant-b--4-0] source=assembly-scan tags=member-candidate
 - <Do Open Animation>d  32 [megacrit-sts2-core-nodes-screens-shops-nmerchantinventory--doopenanimation-d--32] source=assembly-scan tags=type-candidate
-... 405 more
+... 426 more
 
 rewards
-count: 288
+count: 292
 - <>c [megacrit-sts2-core-rewards-linkedrewardset---c] source=assembly-scan tags=type-candidate
 - <>c [megacrit-sts2-core-rewards-rewardsset---c] source=assembly-scan tags=type-candidate
 - <>c  Display Class38 0 [megacrit-sts2-core-nodes-screens-nrewardsscreen---c--displayclass38-0] source=assembly-scan tags=type-candidate
@@ -114,10 +114,10 @@ count: 288
 - <Create Dictionary UInt64 List Serializable Reward>b  470 0 [create-dictionaryuint64listserializablereward-b--470-0] source=assembly-scan tags=member-candidate
 - <Create For Reward>b  13 0 [createforreward-b--13-0] source=assembly-scan tags=member-candidate
 - <Create For Reward>b  13 1 [createforreward-b--13-1] source=assembly-scan tags=member-candidate
-... 276 more
+... 280 more
 
 keywords
-count: 1758
+count: 2027
 - "filename": "intent buff [filename----intent-buff-png] source=pck-inventory tags=resource-path
 - "filename": "intent death blow [filename----intent-death-blow-png] source=pck-inventory tags=resource-path
 - "filename": "intent debuff [filename----intent-debuff-png] source=pck-inventory tags=resource-path
@@ -130,4 +130,4 @@ count: 1758
 - "filename": "intent summon [filename----intent-summon-png] source=pck-inventory tags=resource-path
 - "filename": "intent unknown [filename----intent-unknown-png] source=pck-inventory tags=resource-path
 - "image": "intent atlas [image----intent-atlas-png] source=pck-inventory tags=resource-path
-... 1746 more
+... 2015 more

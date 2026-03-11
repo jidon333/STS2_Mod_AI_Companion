@@ -16,7 +16,7 @@ cmd /c start "" "steam://rungameid/2868840"
 
 게임 설치 폴더 아래의 `mods` 폴더를 스캔해서 `.pck`와 같은 basename의 `.dll`을 찾습니다.
 
-현재 AI Companion 패키지는 아래 느슨한 구성으로 배포됩니다.
+현재 AI Companion 패키지는 아래 구성으로 배포됩니다.
 
 - `sts2-mod-ai-companion.pck`
 - `sts2-mod-ai-companion.dll`
@@ -27,7 +27,7 @@ cmd /c start "" "steam://rungameid/2868840"
 
 모드 payload가 로드되면 runtime config를 읽고 Harmony 훅을 적용합니다.
 
-이 단계에서 중요한 진단 정보는 아래 두 곳에 남습니다.
+이 단계의 주요 진단 로그:
 
 - `%AppData%\SlayTheSpire2\logs\godot.log`
 - 게임 `mods` 폴더의 `sts2-mod-ai-companion.runtime.log`
@@ -56,22 +56,39 @@ exporter가 정상 동작하면 아래 파일이 생깁니다.
 
 ## 6. static knowledge pipeline
 
-개발자 툴은 별도로 게임 리소스와 DLL에서 정적 지식을 뽑아냅니다.
+개발자 툴은 별도로 게임 DLL과 PCK에서 정적 지식을 뽑아냅니다.
 
-산출물은 `artifacts/knowledge/` 아래에 저장됩니다.
+현재 단계:
+
+- `release-scan`
+- `decompile-scan`
+- `assembly-scan`
+- `pck-inventory`
+- `strict-domain-parse`
+- `localization-scan`
+- `observed-merge`
+- `catalog-build`
+
+주요 산출물:
 
 - `catalog.latest.json`
 - `catalog.latest.txt`
 - `source-manifest.json`
+- `decompile-scan.json`
+- `strict-domain-scan.json`
 - `assembly-scan.json`
 - `pck-inventory.json`
+- `localization-scan.json`
 - `observed-merge.json`
+- `catalog.assistant.json`
+- `assistant/*.json`
+- `markdown/*.md`
 
-## 7. 외부 host가 live export를 감시
+## 7. 외부 Host가 live export를 감시
 
 `Sts2AiCompanion.Host`는 현재 live export를 polling으로 읽습니다.
 
-host가 하는 일:
+Host가 하는 일:
 
 - run 경계 감지
 - 최근 이벤트 tail 유지
@@ -82,7 +99,7 @@ host가 하는 일:
 
 ## 8. WPF 앱이 최종 사용자 표면
 
-`Sts2AiCompanion.Wpf`는 host를 같은 프로세스에서 띄우고, 아래를 표시합니다.
+`Sts2AiCompanion.Wpf`는 Host를 같은 프로세스에서 띄우고, 아래를 표시합니다.
 
 - 현재 상태
 - 최근 선택지

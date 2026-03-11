@@ -1,8 +1,8 @@
 # 상점
 
-- 전체 항목 수: 417
-- 설명 본문이 채워진 항목: 5
-- L10N 키 또는 제목이 연결된 항목: 6
+- 전체 항목 수: 438
+- 설명 본문이 채워진 항목: 18
+- L10N 키 또는 제목이 연결된 항목: 23
 - 선택지/옵션 정보가 있는 항목: 0
 
 ## 이 섹션이 도와주는 플레이 장면
@@ -29,9 +29,9 @@
 
 ## 항목 목록
 
-### 미지
+### LEGEND UNKNOWN
 
-- ID: `megacrit-sts2-core-entities-merchant-merchantentry`
+- ID: `legend-unknown`
 - 그룹/풀 추정: 상점/UI
 - 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
 - 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
@@ -42,7 +42,148 @@
 - 주요 소스: `localization-scan`
 - 선호 locale: `kor`
 - L10N key: `LEGEND_UNKNOWN`
-- 모델 클래스: `MegaCrit.Sts2.Core.Entities.Merchant.MerchantEntry`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 고대의 존재
+
+- ID: `legend-ancient`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 방에는 고대의 존재들이 머무르고 있습니다.
+
+고대의 존재들은 놀라운 보너스와 보물, 지식을 제공합니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LEGEND_ANCIENT`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 미지 - 상인
+
+- ID: `room-unknown-merchant`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 신비로운 상인이 위치한, 이전에는 알 수 없었던 방입니다.
+
+열심히 모은 [gold]골드[/gold]를 여기에서 사용해보세요!
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ROOM_UNKNOWN_MERCHANT`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 민첩 회복
+
+- ID: `restore-dexterity`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 대상의 턴 종료 시, [gold]민첩[/gold]을 [blue]9[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RESTORE_DEXTERITY`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 밀집 회복
+
+- ID: `restore-focus`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 대상의 턴 종료 시, [gold]밀집[/gold]을 [blue]9[/blue] 얻습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `RESTORE_FOCUS`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 보물 방
+
+- ID: `legend-treasure`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 모두가 탐내는 이 방에서는 [gold]유물[/gold]과 [gold]골드[/gold]를 얻을 수 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LEGEND_TREASURE`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 보스
+
+- ID: `legend-boss`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 해당 지역에서 가장 위험한 적입니다.
+
+보스를 처치 시 다음 막으로 진행할 수 있게 됩니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LEGEND_BOSS`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 상인
+
+- ID: `legend-merchant`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 방에서는 신비로운 상인이 자신의 물건들을 판매합니다.
+
+열심히 모은 [gold]골드[/gold]를 여기에서 사용해보세요!
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LEGEND_MERCHANT`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 상인의 양?탄자
+
+- ID: `fake-merchants-rug`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 초라한 모조품. 아무 효과도 없습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FAKE_MERCHANTS_RUG`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 상점
+
+- ID: `room-merchant`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 방에서는 신비로운 상인이 자신의 물건들을 판매합니다.
+
+열심히 모은 [gold]골드[/gold]를 여기에서 사용해보세요!
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `ROOM_MERCHANT`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 엘리트
+
+- ID: `legend-elite`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 방에는 강력한 적이 기다리고 있습니다.
+
+엘리트들을 처치 시 보상으로 [gold]유물[/gold]을 받을 수 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LEGEND_ELITE`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
 ### 유물 던지기
@@ -60,6 +201,45 @@
 - 모델 클래스: `MegaCrit.Sts2.Core.Models.Monsters.FakeMerchantMonster`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
+### 이벤트
+
+- ID: `legend-event`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 이 방에서는 특이한 일들이 발생합니다...
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LEGEND_EVENT`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 적
+
+- ID: `legend-enemy`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 적대적인 존재들이 기다리고 있는 방입니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LEGEND_ENEMY`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
+### 지도
+
+- ID: `legend-map`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
+- 핵심 설명: 시작 경로를 선택하세요.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `LEGEND_MAP`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
 ### 카드 제거 서비스
 
 - ID: `merchant`
@@ -75,7 +255,7 @@
 
 ### 휴식
 
-- ID: `megacrit-sts2-core-entities-merchant-purchasestatus`
+- ID: `legend-rest`
 - 그룹/풀 추정: 상점/UI
 - 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
 - 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
@@ -84,12 +264,11 @@
 - 주요 소스: `localization-scan`
 - 선호 locale: `kor`
 - L10N key: `LEGEND_REST`
-- 모델 클래스: `MegaCrit.Sts2.Core.Entities.Merchant.PurchaseStatus`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
 ### 휴식 장소
 
-- ID: `megacrit-sts2-core-entities-merchant-merchantinventory`
+- ID: `room-rest`
 - 그룹/풀 추정: 상점/UI
 - 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
 - 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
@@ -98,7 +277,6 @@
 - 주요 소스: `localization-scan`
 - 선호 locale: `kor`
 - L10N key: `ROOM_REST`
-- 모델 클래스: `MegaCrit.Sts2.Core.Entities.Merchant.MerchantInventory`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
 ### "filename": "fake merchants rug
@@ -407,6 +585,18 @@
 - 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
+
+### BADGE
+
+- ID: `badge`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `eng`
+- L10N key: `BADGE`
 
 ### base Shop Odds
 
@@ -1463,6 +1653,17 @@
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
 
+### Merchant Dialogue Set
+
+- ID: `megacrit-sts2-core-entities-merchant-merchantdialogueset`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `assembly-scan`
+- 모델 클래스: `MegaCrit.Sts2.Core.Entities.Merchant.MerchantDialogueSet`
+
 ### merchant Disappointment
 
 - ID: `merchantdisappointment`
@@ -1482,6 +1683,17 @@
 - 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
+
+### Merchant Entry
+
+- ID: `megacrit-sts2-core-entities-merchant-merchantentry`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `assembly-scan`
+- 모델 클래스: `MegaCrit.Sts2.Core.Entities.Merchant.MerchantEntry`
 
 ### merchant ftue
 
@@ -1588,6 +1800,17 @@
 - 관찰 로그 반영: 아니오
 - 주요 소스: `pck-inventory`
 - 리소스 경로: `[ext_resource type="PackedScene" uid="uid://cm4ocv4456kaq" path="res://scenes/merchant/merchant_inventory.tscn" id="22_d2e0r"]`
+
+### Merchant Inventory
+
+- ID: `megacrit-sts2-core-entities-merchant-merchantinventory`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `assembly-scan`
+- 모델 클래스: `MegaCrit.Sts2.Core.Entities.Merchant.MerchantInventory`
 
 ### merchant inventory
 
@@ -2492,6 +2715,18 @@
 - 주요 소스: `pck-inventory`
 - 리소스 경로: `res://src/Core/Nodes/Vfx/NFakeMerchantVfx.cs`
 
+### NIGHT TERRORS
+
+- ID: `night-terrors`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `eng`
+- L10N key: `NIGHT_TERRORS`
+
 ### NMerchant Button
 
 - ID: `megacrit-sts2-core-nodes-rooms-nmerchantbutton`
@@ -2992,6 +3227,17 @@
 - 주요 소스: `assembly-scan`
 - 모델 클래스: `MegaCrit.Sts2.Core.Nodes.Vfx.NFakeMerchantVfx+PropertyName`
 
+### Purchase Status
+
+- ID: `megacrit-sts2-core-entities-merchant-purchasestatus`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `assembly-scan`
+- 모델 클래스: `MegaCrit.Sts2.Core.Entities.Merchant.PurchaseStatus`
+
 ### Refresh Options
 
 - ID: `refreshoptions`
@@ -3144,6 +3390,18 @@
 - 관찰 로그 반영: 아니오
 - 주요 소스: `pck-inventory`
 - 리소스 경로: `path="res://.godot/imported/regent_shop.png-e988c5881b50293e1ab5a56cb92c600b.ctex"`
+
+### RELIC RARITY
+
+- ID: `relic-rarity`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `eng`
+- L10N key: `RELIC_RARITY`
 
 ### run summary merchant
 
@@ -4563,9 +4821,22 @@
 - 주요 소스: `pck-inventory`
 - 리소스 경로: `path.bptc="res://.godot/imported/unknown_shop.png-ba11abb73d5bed680456f57f47cb2052.bptc.ctex"`
 
+### 상?인
+
+- ID: `fake-merchant-event-encounter`
+- 그룹/풀 추정: 상점/UI
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `FAKE_MERCHANT_EVENT_ENCOUNTER`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
 ### 손씨름
 
-- ID: `megacrit-sts2-core-entities-merchant-merchantdialogueset`
+- ID: `the-arm`
 - 그룹/풀 추정: 상점/UI
 - 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
 - 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
@@ -4574,6 +4845,5 @@
 - 주요 소스: `localization-scan`
 - 선호 locale: `kor`
 - L10N key: `THE_ARM`
-- 모델 클래스: `MegaCrit.Sts2.Core.Entities.Merchant.MerchantDialogueSet`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 

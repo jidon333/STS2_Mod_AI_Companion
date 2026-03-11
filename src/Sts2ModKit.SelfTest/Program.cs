@@ -25,6 +25,7 @@ Run("live export deduplicator suppresses duplicate observations", TestLiveExport
 Run("live export summary contains required sections", TestLiveExportSummaryFormatting, failures);
 Run("live export replay stays deterministic", TestLiveExportReplayDeterminism, failures);
 Run("static knowledge builder merges observed snapshot data", TestStaticKnowledgeCatalogBuilder, failures);
+Run("strict domain scanner parses model-backed metadata", TestStrictDomainKnowledgeScanner, failures);
 Run("localization scanner extracts card title and description from binary text", TestLocalizationKnowledgeScanner, failures);
 Run("localization scan merges into canonical card entries", TestLocalizationKnowledgeMerge, failures);
 Run("smoke diagnostics surface startup patch failures", TestSmokeDiagnostics, failures);
@@ -473,6 +474,181 @@ static void TestStaticKnowledgeCatalogBuilder()
     Assert(catalog.Keywords.Any(entry => entry.Name == "attack"), "Expected card type keywords to be captured.");
 }
 
+static void TestStrictDomainKnowledgeScanner()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var modelsRoot = Path.Combine(root, "MegaCrit", "Sts2", "Core", "Models");
+        Directory.CreateDirectory(Path.Combine(modelsRoot, "Cards"));
+        Directory.CreateDirectory(Path.Combine(modelsRoot, "CardPools"));
+        Directory.CreateDirectory(Path.Combine(modelsRoot, "Relics"));
+        Directory.CreateDirectory(Path.Combine(modelsRoot, "RelicPools"));
+        Directory.CreateDirectory(Path.Combine(modelsRoot, "Potions"));
+        Directory.CreateDirectory(Path.Combine(modelsRoot, "Events"));
+
+        File.WriteAllText(
+            Path.Combine(modelsRoot, "Cards", "Bash.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Models.Cards;
+            public sealed class Bash : CardModel
+            {
+                protected override IEnumerable<DynamicVar> CanonicalVars => new DynamicVar[2]
+                {
+                    new DamageVar(8m, ValueProp.Move),
+                    new PowerVar<VulnerablePower>(2m)
+                };
+
+                public Bash()
+                    : base(2, CardType.Attack, CardRarity.Basic, TargetType.AnyEnemy)
+                {
+                }
+
+                protected override void OnUpgrade()
+                {
+                    base.DynamicVars.Damage.UpgradeValueBy(2m);
+                    base.DynamicVars.Vulnerable.UpgradeValueBy(1m);
+                }
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(modelsRoot, "CardPools", "IroncladCardPool.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Models.CardPools;
+            public sealed class IroncladCardPool : CardPoolModel
+            {
+                public override string Title => "ironclad";
+
+                protected override CardModel[] GenerateAllCards()
+                {
+                    return new CardModel[]
+                    {
+                        ModelDb.Card<Bash>()
+                    };
+                }
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(modelsRoot, "Relics", "Anchor.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Models.Relics;
+            public sealed class Anchor : RelicModel
+            {
+                public override RelicRarity Rarity => RelicRarity.Common;
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(modelsRoot, "RelicPools", "IroncladRelicPool.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Models.RelicPools;
+            public sealed class IroncladRelicPool : RelicPoolModel
+            {
+                public override string Title => "ironclad";
+
+                protected override RelicModel[] GenerateAllRelics()
+                {
+                    return new RelicModel[]
+                    {
+                        ModelDb.Relic<Anchor>()
+                    };
+                }
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(modelsRoot, "Potions", "SwiftPotion.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Models.Potions;
+            public sealed class SwiftPotion : PotionModel
+            {
+                public override PotionRarity Rarity => PotionRarity.Common;
+                public override PotionUsage Usage => PotionUsage.CombatOnly;
+                public override TargetType TargetType => TargetType.AnyPlayer;
+                protected override IEnumerable<DynamicVar> CanonicalVars => new DynamicVar[] { new CardsVar(3) };
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(modelsRoot, "Events", "AbyssalBaths.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Models.Events;
+            public sealed class AbyssalBaths : EventModel
+            {
+                protected override IReadOnlyList<EventOption> GenerateInitialOptions()
+                {
+                    return new EventOption[]
+                    {
+                        new EventOption(this, Immerse, "ABYSSAL_BATHS.pages.INITIAL.options.IMMERSE"),
+                        new EventOption(this, Abstain, "ABYSSAL_BATHS.pages.INITIAL.options.ABSTAIN")
+                    };
+                }
+
+                private Task Immerse()
+                {
+                    SetEventState(L10NLookup("ABYSSAL_BATHS.pages.IMMERSE.description"), new EventOption[]
+                    {
+                        new EventOption(this, Abstain, "ABYSSAL_BATHS.pages.ALL.options.EXIT_BATHS")
+                    });
+                    return Task.CompletedTask;
+                }
+
+                private Task Abstain() => Task.CompletedTask;
+            }
+            """);
+
+        var rawPckCatalog = new StaticKnowledgeCatalog(
+            DateTimeOffset.UtcNow,
+            new StaticKnowledgeMetadata("v-test", "commit", DateTimeOffset.UtcNow, new Dictionary<string, string?>()),
+            new[]
+            {
+                CreateResourceEntry("cards", "res://images/packed/card_portraits/ironclad/bash.png"),
+            },
+            new[]
+            {
+                CreateResourceEntry("relics", "res://images/relics/anchor.png"),
+            },
+            new[]
+            {
+                CreateResourceEntry("potions", "res://images/potions/swift_potion.png"),
+            },
+            new[]
+            {
+                CreateResourceEntry("events", "res://events/abyssal_baths.tscn"),
+            },
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>());
+
+        var metadata = new StaticKnowledgeMetadata("v-test", "commit", DateTimeOffset.UtcNow, new Dictionary<string, string?>());
+        var catalog = StrictDomainKnowledgeScanner.Scan(root, rawPckCatalog, metadata, out var warnings);
+
+        Assert(warnings.Count == 0, $"Strict parser should not emit warnings for a complete synthetic decompile root. Received: {string.Join(" | ", warnings)}");
+        var bash = catalog.Cards.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "Bash");
+        Assert(ReadAttribute(bash, "cost") == "2", "Expected card cost parsed from the CardModel base constructor.");
+        Assert(ReadAttribute(bash, "type") == "Attack", "Expected card type parsed from the CardModel base constructor.");
+        Assert(ReadAttribute(bash, "rarity") == "Basic", "Expected card rarity parsed from the CardModel base constructor.");
+        Assert(ReadAttribute(bash, "target") == "AnyEnemy", "Expected card target parsed from the CardModel base constructor.");
+        Assert(ReadAttribute(bash, "pool") == "ironclad", "Expected card pool parsed from CardPools.");
+        Assert(ReadAttribute(bash, "var.Damage") == "8", "Expected strict parser to capture canonical dynamic vars.");
+        Assert(ReadAttribute(bash, "upgradeSummary") == "Damage+2, Vulnerable+1", "Expected strict parser to capture upgrade hints.");
+
+        var anchor = catalog.Relics.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "Anchor");
+        Assert(ReadAttribute(anchor, "rarity") == "Common", "Expected relic rarity parsed from the model class.");
+        Assert(ReadAttribute(anchor, "pool") == "ironclad", "Expected relic pool parsed from RelicPools.");
+
+        var potion = catalog.Potions.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "SwiftPotion");
+        Assert(ReadAttribute(potion, "usage") == "CombatOnly", "Expected potion usage parsed from the model class.");
+        Assert(ReadAttribute(potion, "target") == "AnyPlayer", "Expected potion target parsed from the model class.");
+        Assert(ReadAttribute(potion, "var.Cards") == "3", "Expected potion canonical vars parsed.");
+
+        var abyssalBaths = catalog.Events.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "AbyssalBaths");
+        Assert(ReadAttribute(abyssalBaths, "optionKeyCount") == "3", "Expected event option keys parsed from EventOption constructor calls.");
+        Assert(ReadAttribute(abyssalBaths, "pageKeyCount") == "1", "Expected event page keys parsed from L10NLookup usage.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestLocalizationKnowledgeScanner()
 {
     var root = CreateTempDirectory();
@@ -551,6 +727,9 @@ static void TestLocalizationKnowledgeMerge()
                 {
                     ["fullName"] = "MegaCrit.Sts2.Core.Models.Cards.Acrobatics",
                     ["resourcePath"] = "res://src/Core/Models/Cards/Acrobatics.cs",
+                    ["strictDomain"] = "card",
+                    ["strictModel"] = "true",
+                    ["var.Cards"] = "3",
                 },
                 Array.Empty<StaticKnowledgeOption>()),
         },
@@ -570,10 +749,20 @@ static void TestLocalizationKnowledgeMerge()
                 "ACROBATICS",
                 "kor",
                 "곡예",
-                "카드를 3장 뽑습니다.",
+                "카드를 {Cards:diff()}장 뽑습니다.",
                 "카드를 고르세요.",
                 "Acrobatics",
-                "Draw 3 cards.",
+                "Draw {Cards:diff()} cards.",
+                new[] { "localization/kor/cards.json", "localization/eng/cards.json" },
+                new[] { "eng", "kor" }),
+            new StaticKnowledgeLocalizationCardEntry(
+                "OPTION_HEAL",
+                "kor",
+                "휴식",
+                "최대 체력의 30%만큼 회복합니다.",
+                null,
+                "Rest",
+                "Heal 30% of your max HP.",
                 new[] { "localization/kor/cards.json", "localization/eng/cards.json" },
                 new[] { "eng", "kor" }),
         },
@@ -589,11 +778,12 @@ static void TestLocalizationKnowledgeMerge()
     var merged = StaticKnowledgeCatalogBuilder.MergeCardLocalization(baseline, scan, metadata);
     var card = merged.Cards.Single();
 
-    Assert(card.Name == "곡예", "Expected localization merge to replace the display title.");
+    Assert(card.Name == "곡예", $"Expected localization merge to replace the display title but received '{card.Name}'.");
     Assert(card.Source == "localization-scan", "Expected localization merge to promote the card source.");
-    Assert(card.Attributes.TryGetValue("description", out var description) && description == "카드를 3장 뽑습니다.", "Expected localized description attribute.");
+    Assert(card.Attributes.TryGetValue("description", out var description) && description == "카드를 3장 뽑습니다.", $"Expected localized description attribute to resolve dynamic vars but received '{description}'.");
     Assert(card.Attributes.TryGetValue("selectionScreenPrompt", out var selectionPrompt) && selectionPrompt == "카드를 고르세요.", "Expected localized prompt attribute.");
     Assert(card.Attributes.TryGetValue("englishTitle", out var englishTitle) && englishTitle == "Acrobatics", "Expected English fallback title.");
+    Assert(merged.Cards.Count == 1, "Expected strict card localization merge to skip unmatched OPTION_* entries.");
 }
 
 static void TestSmokeDiagnostics()
@@ -826,6 +1016,29 @@ static void Assert(bool condition, string message)
     {
         throw new InvalidOperationException(message);
     }
+}
+
+static string? ReadAttribute(StaticKnowledgeEntry entry, string key)
+{
+    return entry.Attributes.TryGetValue(key, out var value)
+        ? value
+        : null;
+}
+
+static StaticKnowledgeEntry CreateResourceEntry(string domain, string resourcePath)
+{
+    return new StaticKnowledgeEntry(
+        resourcePath,
+        Path.GetFileNameWithoutExtension(resourcePath),
+        "pck-inventory",
+        false,
+        resourcePath,
+        new[] { domain },
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["resourcePath"] = resourcePath,
+        },
+        Array.Empty<StaticKnowledgeOption>());
 }
 
 static string CreateTempDirectory()

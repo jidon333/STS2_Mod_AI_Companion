@@ -14,6 +14,8 @@ internal sealed record StaticKnowledgeExtractionResult(
     string AssistantSummaryPath,
     string AssistantRoot,
     string SourceManifestPath,
+    string DecompileScanPath,
+    string StrictDomainScanPath,
     string AssemblyScanPath,
     string PckInventoryPath,
     string LocalizationScanPath,
@@ -32,6 +34,8 @@ internal sealed record StaticKnowledgeInspectionResult(
     bool AssistantSummaryExists,
     bool AssistantRootExists,
     bool SourceManifestExists,
+    bool DecompileScanExists,
+    bool StrictDomainScanExists,
     bool AssemblyScanExists,
     bool PckInventoryExists,
     bool LocalizationScanExists,
@@ -39,6 +43,7 @@ internal sealed record StaticKnowledgeInspectionResult(
     bool MarkdownExists,
     string AssistantRoot,
     string MarkdownRoot,
+    string DecompiledRoot,
     object? Metadata,
     object? Counts,
     object? SourceCounts,
@@ -74,6 +79,8 @@ internal static class StaticKnowledgeCommands
         var assistantSummaryPath = Path.Combine(knowledgeRoot, "catalog.assistant.txt");
         var assistantRoot = Path.Combine(knowledgeRoot, "assistant");
         var sourceManifestPath = Path.Combine(knowledgeRoot, "source-manifest.json");
+        var decompileScanPath = Path.Combine(knowledgeRoot, "decompile-scan.json");
+        var strictDomainScanPath = Path.Combine(knowledgeRoot, "strict-domain-scan.json");
         var assemblyScanPath = Path.Combine(knowledgeRoot, "assembly-scan.json");
         var pckInventoryPath = Path.Combine(knowledgeRoot, "pck-inventory.json");
         var localizationScanPath = Path.Combine(knowledgeRoot, "localization-scan.json");
@@ -82,6 +89,7 @@ internal static class StaticKnowledgeCommands
         var catalog = TryReadJson<StaticKnowledgeCatalog>(catalogPath);
         var sourceManifest = TryReadJson<StaticKnowledgeSourceManifest>(sourceManifestPath);
         var localizationScan = TryReadJson<StaticKnowledgeLocalizationScan>(localizationScanPath);
+        var decompileScan = TryReadJson<StaticKnowledgeDecompileScan>(decompileScanPath);
 
         return new StaticKnowledgeInspectionResult(
             knowledgeRoot,
@@ -91,6 +99,8 @@ internal static class StaticKnowledgeCommands
             File.Exists(assistantSummaryPath),
             Directory.Exists(assistantRoot),
             File.Exists(sourceManifestPath),
+            File.Exists(decompileScanPath),
+            File.Exists(strictDomainScanPath),
             File.Exists(assemblyScanPath),
             File.Exists(pckInventoryPath),
             File.Exists(localizationScanPath),
@@ -98,6 +108,7 @@ internal static class StaticKnowledgeCommands
             Directory.Exists(markdownRoot),
             assistantRoot,
             markdownRoot,
+            decompileScan?.DecompiledRoot ?? Path.Combine(knowledgeRoot, "decompiled"),
             catalog?.Metadata ?? sourceManifest?.Metadata,
             catalog is null ? null : BuildCounts(catalog),
             catalog is null ? null : BuildSourceCounts(catalog),
@@ -119,6 +130,9 @@ internal static class StaticKnowledgeCommands
         var assistantSummaryPath = Path.Combine(knowledgeRoot, "catalog.assistant.txt");
         var assistantRoot = Path.Combine(knowledgeRoot, "assistant");
         var sourceManifestPath = Path.Combine(knowledgeRoot, "source-manifest.json");
+        var decompileScanPath = Path.Combine(knowledgeRoot, "decompile-scan.json");
+        var strictDomainScanPath = Path.Combine(knowledgeRoot, "strict-domain-scan.json");
+        var decompiledRoot = Path.Combine(knowledgeRoot, "decompiled");
         var assemblyScanPath = Path.Combine(knowledgeRoot, "assembly-scan.json");
         var pckInventoryPath = Path.Combine(knowledgeRoot, "pck-inventory.json");
         var localizationScanPath = Path.Combine(knowledgeRoot, "localization-scan.json");
@@ -128,12 +142,11 @@ internal static class StaticKnowledgeCommands
         var warnings = new List<string>();
         var steps = new List<StaticKnowledgePipelineStep>();
 
-        var baseline = TryReadJson<StaticKnowledgeCatalog>(catalogPath);
         var snapshot = TryReadJson<LiveExportSnapshot>(layout.SnapshotPath);
         var events = ReadNdjson<LiveExportEventEnvelope>(layout.EventsPath, warnings);
         if (snapshot is null && events.Count == 0)
         {
-            warnings.Add("No live export snapshot or events were available. The knowledge catalog may contain only previously merged observations and source metadata.");
+            warnings.Add("No live export snapshot or events were available. The knowledge catalog may contain only source-derived canonical entries.");
         }
 
         var releaseInfoPath = Path.Combine(configuration.GamePaths.GameDirectory, "release_info.json");
@@ -163,6 +176,16 @@ internal static class StaticKnowledgeCommands
 
         var managedRoot = Path.Combine(configuration.GamePaths.GameDirectory, "data_sts2_windows_x86_64");
         var assemblyPath = Path.Combine(managedRoot, "sts2.dll");
+        var decompileScan = DecompileKnowledgeScanner.EnsureDecompiled(assemblyPath, decompiledRoot, out var decompileWarnings);
+        warnings.AddRange(decompileWarnings);
+        WriteJson(decompileScanPath, decompileScan);
+        steps.Add(new StaticKnowledgePipelineStep(
+            "decompile-scan",
+            decompileWarnings.Count == 0 ? "completed" : "warning",
+            decompileScanPath,
+            decompileScan.Stats,
+            decompileWarnings));
+
         var assemblyCatalog = AssemblyKnowledgeScanner.Scan(assemblyPath, managedRoot, metadata, out var assemblyWarnings);
         warnings.AddRange(assemblyWarnings);
         WriteJson(assemblyScanPath, assemblyCatalog);
@@ -191,7 +214,18 @@ internal static class StaticKnowledgeCommands
             ToStringMap(BuildCounts(pckCatalog)),
             pckWarnings));
 
-        var seedCatalog = StaticKnowledgeCatalogBuilder.MergeCatalogs(metadata, baseline, assemblyCatalog, pckCatalog);
+        var strictDomainCatalog = StrictDomainKnowledgeScanner.Scan(decompiledRoot, pckCatalog, metadata, out var strictWarnings);
+        warnings.AddRange(strictWarnings);
+        WriteJson(strictDomainScanPath, strictDomainCatalog);
+        steps.Add(new StaticKnowledgePipelineStep(
+            "strict-domain-parse",
+            strictWarnings.Count == 0 ? "completed" : "warning",
+            strictDomainScanPath,
+            ToStringMap(BuildCounts(strictDomainCatalog)),
+            strictWarnings));
+
+        var rawAuxiliaryCatalog = BuildAuxiliaryCatalog(metadata, assemblyCatalog, pckCatalog);
+        var seedCatalog = StaticKnowledgeCatalogBuilder.MergeCatalogs(metadata, strictDomainCatalog, rawAuxiliaryCatalog);
         var localizationScan = LocalizationKnowledgeScanner.Scan(pckPath, seedCatalog, out var localizationWarnings);
         warnings.AddRange(localizationWarnings);
         WriteJson(localizationScanPath, localizationScan);
@@ -226,7 +260,7 @@ internal static class StaticKnowledgeCommands
             DateTimeOffset.UtcNow,
             knowledgeRoot,
             metadata,
-            BuildSourceFiles(configuration, layout, catalogPath, assemblyScanPath, pckInventoryPath, localizationScanPath, observedMergePath),
+            BuildSourceFiles(configuration, layout, catalogPath, decompileScanPath, strictDomainScanPath, assemblyScanPath, pckInventoryPath, localizationScanPath, observedMergePath),
             steps,
             warnings);
 
@@ -246,6 +280,8 @@ internal static class StaticKnowledgeCommands
             assistantSummaryPath,
             assistantRoot,
             sourceManifestPath,
+            decompileScanPath,
+            strictDomainScanPath,
             assemblyScanPath,
             pckInventoryPath,
             localizationScanPath,
@@ -261,6 +297,8 @@ internal static class StaticKnowledgeCommands
         ScaffoldConfiguration configuration,
         LiveExportLayout layout,
         string catalogPath,
+        string decompileScanPath,
+        string strictDomainScanPath,
         string assemblyScanPath,
         string pckInventoryPath,
         string localizationScanPath,
@@ -279,11 +317,31 @@ internal static class StaticKnowledgeCommands
             DescribeSourceFile("live-summary", layout.SummaryPath),
             DescribeSourceFile("live-session", layout.SessionPath),
             DescribeSourceFile("catalog-previous", catalogPath),
+            DescribeSourceFile("decompile-scan", decompileScanPath),
+            DescribeSourceFile("strict-domain-scan", strictDomainScanPath),
             DescribeSourceFile("assembly-scan", assemblyScanPath),
             DescribeSourceFile("pck-inventory", pckInventoryPath),
             DescribeSourceFile("localization-scan", localizationScanPath),
             DescribeSourceFile("observed-merge", observedMergePath),
         };
+    }
+
+    private static StaticKnowledgeCatalog BuildAuxiliaryCatalog(
+        StaticKnowledgeMetadata metadata,
+        StaticKnowledgeCatalog assemblyCatalog,
+        StaticKnowledgeCatalog pckCatalog)
+    {
+        var merged = StaticKnowledgeCatalogBuilder.MergeCatalogs(metadata, assemblyCatalog, pckCatalog);
+        return new StaticKnowledgeCatalog(
+            DateTimeOffset.UtcNow,
+            metadata,
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            merged.Shops,
+            merged.Rewards,
+            merged.Keywords);
     }
 
     private static StaticKnowledgeSourceFile DescribeSourceFile(string kind, string path)

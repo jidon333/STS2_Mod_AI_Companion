@@ -98,17 +98,17 @@ public static class StaticKnowledgeCatalogBuilder
 
         foreach (var entry in localizationScan.Relics)
         {
-            MergeLocalizationEntry(relics, entry, "relic", ".Relics.", "/relic");
+            MergeLocalizationEntry(relics, entry, "relic", ".Relics.", "/relic", allowCreateWhenUnmatched: false);
         }
 
         foreach (var entry in localizationScan.Potions)
         {
-            MergeLocalizationEntry(potions, entry, "potion", ".Potions.", "/potion");
+            MergeLocalizationEntry(potions, entry, "potion", ".Potions.", "/potion", allowCreateWhenUnmatched: false);
         }
 
         foreach (var entry in localizationScan.Events)
         {
-            MergeLocalizationEntry(events, entry, "event", ".Events.", "/event");
+            MergeLocalizationEntry(events, entry, "event", ".Events.", "/event", allowCreateWhenUnmatched: false);
         }
 
         foreach (var entry in localizationScan.Shops)
@@ -348,25 +348,36 @@ public static class StaticKnowledgeCatalogBuilder
         StaticKnowledgeLocalizationCardEntry localizationCard)
     {
         var matchId = FindBestCardMatch(cards.Values, localizationCard);
-        var id = matchId ?? NormalizeId(localizationCard.KeyStem);
-        cards.TryGetValue(id, out var existing);
-
-        var attributes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        if (existing is not null)
+        if (string.IsNullOrWhiteSpace(matchId))
         {
-            foreach (var attribute in existing.Attributes)
-            {
-                attributes[attribute.Key] = attribute.Value;
-            }
+            return;
         }
 
+        var id = matchId;
+        cards.TryGetValue(id, out var existing);
+        if (existing is null)
+        {
+            return;
+        }
+
+        var attributes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var attribute in existing.Attributes)
+        {
+            attributes[attribute.Key] = attribute.Value;
+        }
+
+        var resolvedDescription = LocalizedDescriptionResolver.Resolve(localizationCard.Description, attributes);
+        var resolvedSelectionPrompt = LocalizedDescriptionResolver.Resolve(localizationCard.SelectionScreenPrompt, attributes);
+        var resolvedEnglishDescription = LocalizedDescriptionResolver.Resolve(localizationCard.EnglishDescription, attributes);
         attributes["l10nKey"] = localizationCard.KeyStem;
         attributes["preferredLocale"] = localizationCard.PreferredLocale;
         attributes["title"] = localizationCard.Title;
-        attributes["description"] = localizationCard.Description;
-        attributes["selectionScreenPrompt"] = localizationCard.SelectionScreenPrompt;
+        attributes["descriptionRaw"] = localizationCard.Description;
+        attributes["description"] = resolvedDescription ?? localizationCard.Description;
+        attributes["selectionScreenPrompt"] = resolvedSelectionPrompt ?? localizationCard.SelectionScreenPrompt;
         attributes["englishTitle"] = localizationCard.EnglishTitle;
-        attributes["englishDescription"] = localizationCard.EnglishDescription;
+        attributes["englishDescriptionRaw"] = localizationCard.EnglishDescription;
+        attributes["englishDescription"] = resolvedEnglishDescription ?? localizationCard.EnglishDescription;
         attributes["sourceFileHint"] = localizationCard.SourceFileHints.Count == 0
             ? null
             : string.Join(" | ", localizationCard.SourceFileHints);
@@ -382,13 +393,13 @@ public static class StaticKnowledgeCatalogBuilder
 
         cards[id] = new StaticKnowledgeEntry(
             id,
-            localizationCard.Title ?? existing?.Name ?? PrettifyStem(localizationCard.KeyStem),
+            localizationCard.Title ?? existing!.Name ?? PrettifyStem(localizationCard.KeyStem),
             "localization-scan",
-            existing?.Observed == true,
-            localizationCard.Description ?? existing?.RawText ?? localizationCard.Title,
+            existing!.Observed,
+            resolvedDescription ?? localizationCard.Description ?? existing!.RawText ?? localizationCard.Title,
             tags,
             attributes,
-            existing?.Options ?? Array.Empty<StaticKnowledgeOption>());
+            existing!.Options);
     }
 
     private static void MergeLocalizationEntry(
@@ -396,9 +407,15 @@ public static class StaticKnowledgeCatalogBuilder
         StaticKnowledgeLocalizationEntry localizationEntry,
         string domainTag,
         string fullNameHint,
-        string resourceHint)
+        string resourceHint,
+        bool allowCreateWhenUnmatched = true)
     {
         var matchId = FindBestMatch(target.Values, localizationEntry, fullNameHint, resourceHint);
+        if (string.IsNullOrWhiteSpace(matchId) && !allowCreateWhenUnmatched)
+        {
+            return;
+        }
+
         var id = matchId ?? NormalizeId(localizationEntry.KeyStem);
         target.TryGetValue(id, out var existing);
 
@@ -411,15 +428,22 @@ public static class StaticKnowledgeCatalogBuilder
             }
         }
 
+        var resolvedDescription = LocalizedDescriptionResolver.Resolve(localizationEntry.Description, attributes);
+        var resolvedFlavor = LocalizedDescriptionResolver.Resolve(localizationEntry.Flavor, attributes);
+        var resolvedPrompt = LocalizedDescriptionResolver.Resolve(localizationEntry.SelectionScreenPrompt, attributes);
+        var resolvedEnglishDescription = LocalizedDescriptionResolver.Resolve(localizationEntry.EnglishDescription, attributes);
         attributes["l10nDomain"] = localizationEntry.Domain;
         attributes["l10nKey"] = localizationEntry.KeyStem;
         attributes["preferredLocale"] = localizationEntry.PreferredLocale;
         attributes["title"] = localizationEntry.Title;
-        attributes["description"] = localizationEntry.Description;
-        attributes["flavor"] = localizationEntry.Flavor;
-        attributes["selectionScreenPrompt"] = localizationEntry.SelectionScreenPrompt;
+        attributes["descriptionRaw"] = localizationEntry.Description;
+        attributes["description"] = resolvedDescription ?? localizationEntry.Description;
+        attributes["flavorRaw"] = localizationEntry.Flavor;
+        attributes["flavor"] = resolvedFlavor ?? localizationEntry.Flavor;
+        attributes["selectionScreenPrompt"] = resolvedPrompt ?? localizationEntry.SelectionScreenPrompt;
         attributes["englishTitle"] = localizationEntry.EnglishTitle;
-        attributes["englishDescription"] = localizationEntry.EnglishDescription;
+        attributes["englishDescriptionRaw"] = localizationEntry.EnglishDescription;
+        attributes["englishDescription"] = resolvedEnglishDescription ?? localizationEntry.EnglishDescription;
         attributes["sourceFileHint"] = localizationEntry.SourceFileHints.Count == 0
             ? null
             : string.Join(" | ", localizationEntry.SourceFileHints);
@@ -446,7 +470,7 @@ public static class StaticKnowledgeCatalogBuilder
             localizationEntry.Title ?? existing?.Name ?? PrettifyStem(localizationEntry.KeyStem),
             "localization-scan",
             existing?.Observed == true,
-            localizationEntry.Description ?? localizationEntry.Flavor ?? existing?.RawText ?? localizationEntry.Title,
+            resolvedDescription ?? resolvedFlavor ?? localizationEntry.Description ?? localizationEntry.Flavor ?? existing?.RawText ?? localizationEntry.Title,
             tags,
             attributes,
             MergeOptions(existing?.Options, localizationEntry.Options));
@@ -510,20 +534,24 @@ public static class StaticKnowledgeCatalogBuilder
         string resourceHint)
     {
         var bestScore = 0;
+        var hasStemMatch = false;
 
         if (NormalizeForKnowledgeMatch(entry.Name) == normalizedStem)
         {
             bestScore = Math.Max(bestScore, 70);
+            hasStemMatch = true;
         }
 
         if (NormalizeForKnowledgeMatch(entry.Id) == normalizedStem)
         {
             bestScore = Math.Max(bestScore, 45);
+            hasStemMatch = true;
         }
 
         if (entry.Attributes.TryGetValue("l10nKey", out var l10nKey) && NormalizeForKnowledgeMatch(l10nKey) == normalizedStem)
         {
             bestScore = Math.Max(bestScore, 120);
+            hasStemMatch = true;
         }
 
         if (entry.Attributes.TryGetValue("fullName", out var fullName) && !string.IsNullOrWhiteSpace(fullName))
@@ -532,9 +560,10 @@ public static class StaticKnowledgeCatalogBuilder
             if (NormalizeForKnowledgeMatch(typeName) == normalizedStem)
             {
                 bestScore = Math.Max(bestScore, 110);
+                hasStemMatch = true;
             }
 
-            if (!string.IsNullOrWhiteSpace(fullNameHint) && fullName.Contains(fullNameHint, StringComparison.OrdinalIgnoreCase))
+            if (hasStemMatch && !string.IsNullOrWhiteSpace(fullNameHint) && fullName.Contains(fullNameHint, StringComparison.OrdinalIgnoreCase))
             {
                 bestScore += 10;
             }
@@ -552,9 +581,10 @@ public static class StaticKnowledgeCatalogBuilder
             if (NormalizeForKnowledgeMatch(fileName) == normalizedStem)
             {
                 bestScore = Math.Max(bestScore, 90);
+                hasStemMatch = true;
             }
 
-            if (!string.IsNullOrWhiteSpace(resourceHint) && normalizedPath.Contains(resourceHint, StringComparison.OrdinalIgnoreCase))
+            if (hasStemMatch && !string.IsNullOrWhiteSpace(resourceHint) && normalizedPath.Contains(resourceHint, StringComparison.OrdinalIgnoreCase))
             {
                 bestScore += 8;
             }

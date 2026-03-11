@@ -1,5 +1,7 @@
 # 아키텍처
 
+Phase 1의 구조는 `게임 내부 exporter + 외부 정적 지식 파이프라인 + Host/Codex backend + WPF UI`입니다.
+
 ## 1. 게임 내부: native STS2 모드
 
 게임 프로세스 안에 로드되는 작은 shell입니다.
@@ -30,25 +32,26 @@
 
 게임 외부에서는 정적 지식도 별도로 추출합니다.
 
-주요 단계:
+현재 단계:
 
 - `release-scan`
+- `decompile-scan`
 - `assembly-scan`
 - `pck-inventory`
+- `strict-domain-parse`
 - `localization-scan`
 - `observed-merge`
 - `catalog-build`
 
+역할 구분:
+
+- `assembly-scan`, `pck-inventory`, `localization-scan`은 넓게 수집하는 raw/intermediate 계층
+- `strict-domain-parse`는 실제 디컴파일된 모델 소스 기준으로 cards/relics/potions/events canonical seed를 만드는 계층
+- `catalog.latest.*`, `catalog.assistant.*`, `assistant/*.json`, `markdown/*.md`는 최종 소비 계층
+
 산출물은 `artifacts/knowledge` 아래에 저장됩니다.
 
-중요:
-
-- 사람이 읽는 markdown 리포트와
-- AI가 직접 읽는 `catalog.assistant.*`, `assistant/*.json`
-
-을 따로 생성합니다.
-
-## 4. 외부 host
+## 4. 외부 Host
 
 `Sts2AiCompanion.Host`는 live export와 knowledge catalog를 묶어 Codex 요청 단위로 정리하는 레이어입니다.
 

@@ -1,64 +1,95 @@
 # 정적 지식 추출
 
-이 문서는 `extract-static-knowledge`가 현재 무엇을 읽고, 어떤 산출물을 만들며, 어디까지 신뢰할 수 있는지를 설명합니다.
+이 문서는 `extract-static-knowledge`가 무엇을 읽고 어떤 중간 산출물과 최종 산출물을 만드는지 설명합니다.
+
+핵심 원칙은 두 가지입니다.
+
+- raw/intermediate는 넓게 수집한다.
+- 사람이 읽는 canonical과 AI가 읽는 assistant export는 엄격하게 정규화한다.
 
 ## 1. 왜 정적 지식이 필요한가
 
-실시간 exporter만으로는 다음 정보가 부족합니다.
+runtime exporter만으로는 아래 정보가 부족합니다.
 
-- 현재 보이는 카드/유물/포션/이벤트/상점 문구의 의미
-- 선택지에 붙어 있는 설명 본문과 키워드 의미
-- 현재 화면에서 AI가 참조해야 할 배경 지식
+- 카드, 유물, 포션, 이벤트의 설명 본문
+- 이벤트 페이지와 옵션 문장
+- 상점/보상/키워드의 배경 지식
+- 현재 선택지와 관련된 사전 지식
 
-그래서 AI 조언은 두 층을 같이 씁니다.
+그래서 AI 조언은 아래 두 층을 함께 사용합니다.
 
-- 실시간 상태: 현재 화면, 현재 선택지, 현재 덱/유물/포션, 최근 변화
-- 정적 지식: 카드 설명, 유물 설명, 이벤트 페이지/옵션 문장, 상점 서비스 문구, 키워드 의미
+- 실시간 상태: 현재 화면, 현재 선택지, 덱, 유물, 포션, 최근 변화
+- 정적 지식: 카드/유물/포션/이벤트/키워드 설명과 구조 정보
 
 ## 2. 현재 파이프라인
 
-`extract-static-knowledge`는 현재 아래 순서로 동작합니다.
+현재 `extract-static-knowledge`는 아래 순서로 동작합니다.
 
 1. `release-scan`
-2. `assembly-scan`
-3. `pck-inventory`
-4. `localization-scan`
-5. `observed-merge`
-6. `catalog-build`
+2. `decompile-scan`
+3. `assembly-scan`
+4. `pck-inventory`
+5. `strict-domain-parse`
+6. `localization-scan`
+7. `observed-merge`
+8. `catalog-build`
 
 ### 2.1 release-scan
 
 입력:
 
 - `release_info.json`
-- Godot atlas 통계
+- atlas 통계
 - 현재 live artifact 존재 여부
 
 역할:
 
-- 게임 버전/커밋 기록
-- 추출 시점 메타데이터 기록
-- 이후 catalog provenance의 기준점 제공
+- 게임 버전, 커밋, 추출 시점 메타데이터 기록
+- 이후 모든 산출물 provenance의 기준 제공
 
-### 2.2 assembly-scan
+### 2.2 decompile-scan
 
 입력:
 
 - `data_sts2_windows_x86_64/sts2.dll`
+
+역할:
+
+- `ilspycmd`로 `sts2.dll`을 C# 소스로 디컴파일
+- `artifacts/knowledge/decompiled/`에 캐시
+- 이후 strict parser가 실제 `Models/*` 소스를 읽을 수 있게 준비
+
+현재 목적:
+
+- `substring match` 대신 실제 모델 클래스 기반 파싱으로 넘어가기 위한 기반
+
+주요 산출물:
+
+- `artifacts/knowledge/decompile-scan.json`
+- `artifacts/knowledge/decompiled/`
+
+### 2.3 assembly-scan
+
+입력:
+
+- `sts2.dll`
 - 인접 managed DLL
 
 역할:
 
-- `MetadataLoadContext`로 managed metadata를 읽습니다.
-- 카드/유물/포션/이벤트/상점/보상/키워드 관련 타입 후보를 모읍니다.
-- 모델 클래스명, 네임스페이스, 멤버 seed를 만듭니다.
+- `MetadataLoadContext`로 메타데이터를 읽어 넓은 후보군을 수집
+- 타입명, 네임스페이스, 멤버명, enum seed를 모음
 
 중요:
 
-- 이 단계는 `구조 후보`를 만드는 단계입니다.
-- 설명 본문이 없는 seed가 많이 남는 것은 정상입니다.
+- 이 단계는 canonical 분류기가 아닙니다.
+- raw candidate를 모으는 단계입니다.
 
-### 2.3 pck-inventory
+주요 산출물:
+
+- `artifacts/knowledge/assembly-scan.json`
+
+### 2.4 pck-inventory
 
 입력:
 
@@ -66,63 +97,109 @@
 
 역할:
 
-- PCK 바이너리에서 리소스 경로 문자열을 공격적으로 스캔합니다.
-- `res://...`, `localization/...`, `images/...`, `src/...` 흔적을 수집합니다.
-- 카드 초상화, 모델 소스 경로, localization 파일 힌트를 seed로 남깁니다.
+- PCK 전체를 완전 언팩하지 않고 문자열과 리소스 경로 흔적을 수집
+- portrait path, resource path, localization file hint를 넓게 모음
 
 중요:
 
-- 이 단계는 아직 `정식 PCK 완전 언팩`이 아닙니다.
-- 대신 빠르게 리소스 지도를 만드는 역할입니다.
+- 이 단계도 canonical 분류기가 아닙니다.
+- 여전히 raw/intermediate 계층입니다.
 
-### 2.4 localization-scan
+주요 산출물:
 
-현재 지식 품질을 끌어올리는 핵심 단계입니다.
+- `artifacts/knowledge/pck-inventory.json`
+
+### 2.5 strict-domain-parse
 
 입력:
 
-- `SlayTheSpire2.pck`
-- 앞 단계에서 모은 seed catalog
+- `artifacts/knowledge/decompiled/`
+- raw resource path map
 
 역할:
 
-- PCK 전체를 UTF-8 스트리밍으로 읽습니다.
-- localization key/value 패턴을 직접 복구합니다.
-- 현재는 카드만이 아니라 아래 도메인을 함께 수집합니다.
+- 실제 디컴파일된 모델 소스 기준으로 canonical seed 생성
+- 아래 도메인을 엄격 분류
   - cards
   - relics
   - potions
   - events
-  - shops
-  - rewards
-  - keywords
 
-현재 복구하는 대표 필드:
+기준 디렉터리:
+
+- `MegaCrit.Sts2.Core.Models.Cards`
+- `MegaCrit.Sts2.Core.Models.CardPools`
+- `MegaCrit.Sts2.Core.Models.Relics`
+- `MegaCrit.Sts2.Core.Models.RelicPools`
+- `MegaCrit.Sts2.Core.Models.Potions`
+- `MegaCrit.Sts2.Core.Models.Events`
+
+이 단계에서 하는 일:
+
+- 카드 `base(cost, CardType, CardRarity, TargetType)` 읽기
+- 카드 pool/color 추정
+- 카드 동적 변수와 업그레이드 요약 추출
+- 유물 rarity/pool 추출
+- 포션 rarity/usage/target 추출
+- 이벤트 page/option key 추출
+
+중요:
+
+- `OPTION_*`, `*_BUTTON`, `*_POWER`, compiler-generated 타입은 cards canonical에 들어가지 않습니다.
+- 즉 이 단계가 noisy broad scan을 canonical 데이터로 바꾸는 핵심입니다.
+
+주요 산출물:
+
+- `artifacts/knowledge/strict-domain-scan.json`
+
+현재 최신 `inspect-static-knowledge` 기준 strict counts:
+
+- cards: `576`
+- relics: `288`
+- potions: `63`
+- events: `58`
+
+### 2.6 localization-scan
+
+입력:
+
+- `SlayTheSpire2.pck`
+- strict seed set
+
+역할:
+
+- PCK에서 localization key/value를 직접 복구
+- strict parser가 만든 canonical 엔트리에 본문을 병합
+
+현재 복구 대상:
 
 - `*.title`
 - `*.description`
 - `*.selectionScreenPrompt`
 - 이벤트 `pages.*.description`
 - 이벤트 `pages.*.options.*.title/description`
-- 일부 상점/보상/키워드 문구
+- 키워드, 상점, 보상 계열 일부 문구
 
-현재 최신 inspect 기준 localization coverage:
+중요:
 
-- cards: `572` / descriptions: `538` / selection prompts: `35`
-- relics: `291` / descriptions: `289`
+- 카드 L10N은 strict card seed에만 붙습니다.
+- 즉 `OPTION_HEAL` 같은 일반 문구가 더 이상 cards canonical을 오염시키지 않습니다.
+
+현재 최신 localization coverage:
+
+- cards: `575` / descriptions: `562` / selection prompts: `22`
+- relics: `285` / descriptions: `285`
 - potions: `75` / descriptions: `70`
-- events: `197` / descriptions: `95` / options: `203`
-- shops: `21` / descriptions: `18`
-- rewards: `3` / descriptions: `2`
-- keywords: `270` / descriptions: `263`
+- events: `153` / descriptions: `60` / options: `203`
+- shops: `23` / descriptions: `18`
+- rewards: `4` / descriptions: `2`
+- keywords: `272` / descriptions: `264`
 
-한계:
+주요 산출물:
 
-- locale 판별은 휴리스틱이 섞여 있습니다.
-- 영어 fallback은 아직 보수적으로 처리합니다.
-- 일부 domain은 카드만큼 깊게 정규화되지 않았습니다.
+- `artifacts/knowledge/localization-scan.json`
 
-### 2.5 observed-merge
+### 2.7 observed-merge
 
 입력:
 
@@ -131,42 +208,31 @@
 
 역할:
 
-- 실제 플레이에서 본 카드/유물/포션/이벤트/상점/보상 선택지를 병합합니다.
-- offline 후보와 gameplay 관찰을 연결합니다.
+- 실제 gameplay에서 관찰한 카드, 유물, 포션, 이벤트, 상점, 보상 선택지를 offline catalog에 병합
+- runtime과 offline 지식을 연결
 
 중요:
 
-- 이 단계의 품질은 high-value gameplay smoke coverage에 강하게 의존합니다.
-- reward/event/shop/rest/combat가 아직 충분히 실증되지 않으면 observed 데이터는 비어 있을 수 있습니다.
+- 현재는 gameplay high-value smoke가 아직 부족해서 `observed-merge`가 비어 있는 경우가 많습니다.
+- 이 단계는 exporter coverage가 넓어질수록 중요해집니다.
 
-### 2.6 catalog-build
+주요 산출물:
 
-최종 산출물:
+- `artifacts/knowledge/observed-merge.json`
+
+### 2.8 catalog-build
+
+역할:
+
+- raw/intermediate, strict parser, localization, observed merge 결과를 합쳐 최종 산출물 생성
+
+canonical 산출물:
 
 - `artifacts/knowledge/catalog.latest.json`
 - `artifacts/knowledge/catalog.latest.txt`
 - `artifacts/knowledge/source-manifest.json`
 
-중간 산출물:
-
-- `artifacts/knowledge/assembly-scan.json`
-- `artifacts/knowledge/pck-inventory.json`
-- `artifacts/knowledge/localization-scan.json`
-- `artifacts/knowledge/observed-merge.json`
-
-사람이 읽는 산출물:
-
-- `artifacts/knowledge/markdown/README.md`
-- `artifacts/knowledge/markdown/PLAY_GUIDE.md`
-- `artifacts/knowledge/markdown/cards.md`
-- `artifacts/knowledge/markdown/relics.md`
-- `artifacts/knowledge/markdown/potions.md`
-- `artifacts/knowledge/markdown/events.md`
-- `artifacts/knowledge/markdown/shops.md`
-- `artifacts/knowledge/markdown/rewards.md`
-- `artifacts/knowledge/markdown/keywords.md`
-
-AI가 읽는 산출물:
+assistant 산출물:
 
 - `artifacts/knowledge/catalog.assistant.json`
 - `artifacts/knowledge/catalog.assistant.txt`
@@ -179,61 +245,71 @@ AI가 읽는 산출물:
 - `artifacts/knowledge/assistant/rewards.json`
 - `artifacts/knowledge/assistant/keywords.json`
 
+사람용 산출물:
+
+- `artifacts/knowledge/markdown/README.md`
+- `artifacts/knowledge/markdown/PLAY_GUIDE.md`
+- `artifacts/knowledge/markdown/cards.md`
+- `artifacts/knowledge/markdown/relics.md`
+- `artifacts/knowledge/markdown/potions.md`
+- `artifacts/knowledge/markdown/events.md`
+- `artifacts/knowledge/markdown/shops.md`
+- `artifacts/knowledge/markdown/rewards.md`
+- `artifacts/knowledge/markdown/keywords.md`
+
+## 3. 현재 canonical과 raw의 구분
+
+### canonical로 신뢰해도 되는 쪽
+
+- cards
+- relics
+- potions
+- events
+
+이 도메인들은 strict-domain-parse를 seed로 쓰므로, 모델 클래스가 실제로 확인된 엔트리만 들어갑니다.
+
+### 아직 raw 성격이 강한 쪽
+
+- shops
+- rewards
+- keywords
+
+이 도메인들은 아직 broad assembly/pck seed 의존이 커서, count는 높지만 노이즈가 남아 있습니다.
+
+## 4. AI는 무엇을 읽는가
+
 `KnowledgeCatalogService`는 현재 `catalog.assistant.json`을 우선 로드합니다.
 
-## 3. 현재 어떤 정보가 실질적으로 들어오나
+assistant export에는 아래처럼 AI 조언에 직접 필요한 필드가 들어갑니다.
 
-현재 카드 엔트리는 아래 정보를 가질 수 있습니다.
+- `className`
+- `classId`
+- `strictDomain`
+- `strictModel`
+- `pool`
+- `color`
+- `cost`
+- `type`
+- `rarity`
+- `target`
+- `usage`
+- `dynamicVars`
+- `upgradeSummary`
 
-- 표시 이름
-- 설명 본문
-- 선택 화면 프롬프트
-- localization key stem
-- preferred locale
-- 모델 클래스
-- 카드 초상화/리소스 경로
-- observed 여부
+즉 AI는 raw candidate가 아니라, 더 작은 assistant 전용 지식 뷰를 읽습니다.
 
-현재 다른 domain도 같은 방향으로 확장되고 있습니다.
+## 5. 현재 한계
 
-- 유물: 제목 + 설명
-- 포션: 제목 + 설명
-- 이벤트: 제목 + 본문 + 페이지 + 옵션
-- 상점: 서비스 문구
-- 보상: 일부 설명
-- 키워드: 제목 + 설명
+- `shops/rewards/keywords`는 아직 strict canonical이 아닙니다.
+- 카드 설명에는 일부 unresolved placeholder가 남습니다.
+  - 예: `{PlayMax:diff()}`
+- `observed-merge`는 gameplay smoke coverage가 넓어져야 의미 있게 채워집니다.
 
-즉 현재 파이프라인은 더 이상 `카드만 설명이 있는 상태`가 아닙니다. 카드는 가장 풍부하지만, 유물/포션/이벤트/상점/키워드도 실제 설명 본문을 갖기 시작한 상태입니다.
+## 6. 다음 단계
 
-## 4. 신뢰도 해석 원칙
+우선순위:
 
-이 파이프라인이 만들어 내는 지식은 세 등급으로 봅니다.
-
-- 강한 신뢰: `localization-scan`으로 본문이 채워지고, gameplay 관찰과도 맞아떨어지는 항목
-- 중간 신뢰: assembly/pck 경로와 모델 클래스는 있으나 본문은 아직 불완전한 항목
-- 낮은 신뢰: 이름/경로 seed만 있고 localization 본문과 gameplay 관찰이 아직 없는 항목
-
-AI 조언은 앞으로 이 등급을 같이 참고해야 합니다.
-
-## 5. 현재 남아 있는 한계
-
-- 전체 inventory count는 여전히 seed/noise가 큽니다.
-- locale/fallback 품질은 아직 완전히 안정화되지 않았습니다.
-- event/shop/reward 정규화는 카드만큼 깊지 않습니다.
-- `observed-merge`는 gameplay smoke가 늘어야 더 의미 있어집니다.
-
-## 6. 다음 확장 방향
-
-우선순위는 아래 순서입니다.
-
-1. relic / potion / event / shop 정규화 보강
-2. gameplay에서 관찰된 선택지와 offline catalog를 더 강하게 매칭
-3. locale/file 경계를 더 정확히 복구
-4. 필요하면 PCK file-entry reader를 추가
-
-## 7. 외부 참고 원칙
-
-외부 참고 힌트는 `https://spire-codex.com/` 구조를 참고하되, canonical truth는 현재 저장소가 게임 설치본에서 직접 뽑은 JSON/markdown/assistant export입니다.
-
-- `Spire Codex` 참고 내용과 현재 저장소에 반영한 범위는 `SPIRE_CODEX_REFERENCE.md`에 따로 정리합니다.
-- 외부 사이트는 교차검증 힌트이지 source of truth가 아닙니다.
+1. `shops/rewards/keywords` strict 정규화
+2. SmartFormat/description resolver 보강
+3. gameplay에서 관찰한 `currentChoices`와 canonical catalog 교차검증
+4. high-value gameplay smoke 확대

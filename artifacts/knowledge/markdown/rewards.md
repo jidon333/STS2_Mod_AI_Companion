@@ -1,8 +1,8 @@
 # 보상
 
-- 전체 항목 수: 288
+- 전체 항목 수: 292
 - 설명 본문이 채워진 항목: 2
-- L10N 키 또는 제목이 연결된 항목: 3
+- L10N 키 또는 제목이 연결된 항목: 4
 - 선택지/옵션 정보가 있는 항목: 0
 
 ## 이 섹션이 도와주는 플레이 장면
@@ -31,7 +31,7 @@
 
 ### 연결된 보상
 
-- ID: `megacrit-sts2-core-rewards-linkedrewardset`
+- ID: `linked-rewards`
 - 그룹/풀 추정: 보상/UI
 - 플레이 중 참조 시점: 보상 화면에서 선택지 비교 시 참조
 - 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
@@ -40,12 +40,11 @@
 - 주요 소스: `localization-scan`
 - 선호 locale: `kor`
 - L10N key: `LINKED_REWARDS`
-- 모델 클래스: `MegaCrit.Sts2.Core.Rewards.LinkedRewardSet`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
 ### 카드 보상
 
-- ID: `megacrit-sts2-core-rewards-goldreward`
+- ID: `card-reward`
 - 그룹/풀 추정: 보상/UI
 - 플레이 중 참조 시점: 보상 화면에서 선택지 비교 시 참조
 - 설명 상태: 한국어 또는 영어 설명 본문까지 연결된 상태입니다.
@@ -54,7 +53,6 @@
 - 주요 소스: `localization-scan`
 - 선호 locale: `kor`
 - L10N key: `CARD_REWARD`
-- 모델 클래스: `MegaCrit.Sts2.Core.Rewards.GoldReward`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
 ### <>c
@@ -1096,6 +1094,20 @@
 - 주요 소스: `assembly-scan`
 - 모델 클래스: `MegaCrit.Sts2.Core.Multiplayer.Game.RewardSynchronizer+BufferedMessage`
 
+### COMBAT REWARD CARD REMOVAL
+
+- ID: `combat-reward-card-removal`
+- 그룹/풀 추정: 보상/UI
+- 플레이 중 참조 시점: 보상 화면에서 선택지 비교 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 선택 프롬프트: 덱에서 제거할 카드를 선택하세요.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `kor`
+- L10N key: `COMBAT_REWARD_CARD_REMOVAL`
+- 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
+
 ### combat reward ftue
 
 - ID: `res---scenes-ftue-combat-reward-ftue-tscn`
@@ -1338,6 +1350,17 @@
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
 
+### Gold Reward
+
+- ID: `megacrit-sts2-core-rewards-goldreward`
+- 그룹/풀 추정: 보상/UI
+- 플레이 중 참조 시점: 보상 화면에서 선택지 비교 시 참조
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `assembly-scan`
+- 모델 클래스: `MegaCrit.Sts2.Core.Rewards.GoldReward`
+
 ### GoldReward
 
 - ID: `res---src-core-rewards-goldreward-cs`
@@ -1358,6 +1381,18 @@
 - 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
+
+### HISTORY ENTRY
+
+- ID: `history-entry`
+- 그룹/풀 추정: 보상/UI
+- 플레이 중 참조 시점: 보상 화면에서 선택지 비교 시 참조
+- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
+- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `localization-scan`
+- 선호 locale: `eng`
+- L10N key: `HISTORY_ENTRY`
 
 ### is Debug Slow Rewards
 
@@ -1388,6 +1423,17 @@
 - 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
 - 관찰 로그 반영: 아니오
 - 주요 소스: `assembly-scan`
+
+### Linked Reward Set
+
+- ID: `megacrit-sts2-core-rewards-linkedrewardset`
+- 그룹/풀 추정: 보상/UI
+- 플레이 중 참조 시점: 보상 화면에서 선택지 비교 시 참조
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
+- 관찰 로그 반영: 아니오
+- 주요 소스: `assembly-scan`
+- 모델 클래스: `MegaCrit.Sts2.Core.Rewards.LinkedRewardSet`
 
 ### linked reward set
 
@@ -1576,12 +1622,10 @@
 - ID: `megacrit-sts2-core-nodes-rewards-nlinkedrewardset`
 - 그룹/풀 추정: 보상/UI
 - 플레이 중 참조 시점: 보상 화면에서 선택지 비교 시 참조
-- 설명 상태: 이름은 L10N과 연결되었지만, 설명 본문 확보가 더 필요합니다.
-- 핵심 설명: 이름과 L10N 키는 연결되었지만, 효과 설명 본문은 아직 비어 있습니다.
+- 설명 상태: 모델 클래스, 리소스 경로, 관찰 힌트 수준의 구조 정보만 연결된 상태입니다.
+- 핵심 설명: 구조 정보는 확인되었지만, 플레이 효과를 설명할 본문은 아직 확보되지 않았습니다.
 - 관찰 로그 반영: 아니오
-- 주요 소스: `localization-scan`
-- 선호 locale: `eng`
-- L10N key: `HISTORY_ENTRY`
+- 주요 소스: `assembly-scan`
 - 모델 클래스: `MegaCrit.Sts2.Core.Nodes.Rewards.NLinkedRewardSet`
 
 ### NLinkedRewardSet

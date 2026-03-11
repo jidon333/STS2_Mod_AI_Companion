@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-11T04:46:07.7826516+00:00",
+  "generatedAt": "2026-03-11T08:00:40.9656974+00:00",
   "metadata": {
     "releaseVersion": "v0.98.3",
     "releaseCommit": "cb602cef",
@@ -8,13 +8,13 @@
     "description": "AI companion-oriented static knowledge exports with localized titles, descriptions, options, and structural hints."
   },
   "counts": {
-    "cards": 1388,
-    "relics": 682,
-    "potions": 176,
-    "events": 306,
-    "shops": 129,
-    "rewards": 53,
-    "keywords": 866
+    "cards": 576,
+    "relics": 288,
+    "potions": 63,
+    "events": 58,
+    "shops": 147,
+    "rewards": 54,
+    "keywords": 1134
   },
   "files": {
     "cards": "cards.json",
@@ -28,6 +28,8 @@
   "provenance": {
     "primarySources": [
       "release-scan",
+      "decompile-scan",
+      "strict-domain-parse",
       "assembly-scan",
       "pck-inventory",
       "localization-scan",

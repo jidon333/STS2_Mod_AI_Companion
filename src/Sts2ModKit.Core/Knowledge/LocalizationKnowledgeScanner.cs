@@ -377,7 +377,8 @@ public static class LocalizationKnowledgeScanner
             return "event";
         }
 
-        if (field.Equals("selectionScreenPrompt", StringComparison.OrdinalIgnoreCase))
+        if (field.Equals("selectionScreenPrompt", StringComparison.OrdinalIgnoreCase)
+            && seeds.Cards.Contains(normalizedStem))
         {
             return "card";
         }
@@ -447,20 +448,20 @@ public static class LocalizationKnowledgeScanner
         if (fileNameHint.Equals("cards.json", StringComparison.OrdinalIgnoreCase)
             || fileNameHint.Equals("card_library.json", StringComparison.OrdinalIgnoreCase))
         {
-            return "card";
+            return seeds.Cards.Contains(normalizedStem) ? "card" : null;
         }
 
         if (fileNameHint.Equals("relics.json", StringComparison.OrdinalIgnoreCase)
             || fileNameHint.Equals("relic_collection.json", StringComparison.OrdinalIgnoreCase)
             || fileNameHint.Equals("inspect_relic_screen.json", StringComparison.OrdinalIgnoreCase))
         {
-            return "relic";
+            return seeds.Relics.Contains(normalizedStem) ? "relic" : null;
         }
 
         if (fileNameHint.Equals("potions.json", StringComparison.OrdinalIgnoreCase)
             || fileNameHint.Equals("potion_lab.json", StringComparison.OrdinalIgnoreCase))
         {
-            return "potion";
+            return seeds.Potions.Contains(normalizedStem) ? "potion" : null;
         }
 
         if (fileNameHint.Equals("card_keywords.json", StringComparison.OrdinalIgnoreCase)
@@ -862,15 +863,19 @@ public static class LocalizationKnowledgeScanner
         {
             var preferredLocale = ChoosePreferredLocale();
             var notes = GetNotes(preferredLocale);
-            var description = GetField(preferredLocale, "description")
-                ?? GetField(preferredLocale, "flavor")
-                ?? GetField("eng", "description")
-                ?? GetAnyField("description")
+            var title = SelectPreferredField(preferredLocale, "title", fallbackToStem: true);
+            var description = SelectPreferredField(preferredLocale, "description")
+                ?? SelectPreferredField(preferredLocale, "flavor")
                 ?? notes.FirstOrDefault();
+            var flavor = SelectPreferredField(preferredLocale, "flavor");
+            var selectionScreenPrompt = SelectPreferredField(preferredLocale, "selectionScreenPrompt");
+            var unlockInfo = SelectPreferredField(preferredLocale, "unlockInfo");
+            var englishTitle = FindEnglishField("title");
+            var englishDescription = FindEnglishField("description");
 
             var attributes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
-                ["unlockInfo"] = GetField(preferredLocale, "unlockInfo") ?? GetField("eng", "unlockInfo") ?? GetAnyField("unlockInfo"),
+                ["unlockInfo"] = unlockInfo,
                 ["notePreview"] = notes.Count == 0 ? null : string.Join(" | ", notes.Take(4)),
                 ["noteCount"] = notes.Count == 0 ? null : notes.Count.ToString(),
             };
@@ -879,12 +884,12 @@ public static class LocalizationKnowledgeScanner
                 domainOverride,
                 KeyStem,
                 preferredLocale,
-                GetField(preferredLocale, "title") ?? GetField("eng", "title") ?? GetAnyField("title"),
+                title,
                 description,
-                GetField(preferredLocale, "flavor") ?? GetField("eng", "flavor") ?? GetAnyField("flavor"),
-                GetField(preferredLocale, "selectionScreenPrompt") ?? GetField("eng", "selectionScreenPrompt") ?? GetAnyField("selectionScreenPrompt"),
-                FindEnglishField("title"),
-                FindEnglishField("description"),
+                flavor,
+                selectionScreenPrompt,
+                englishTitle,
+                englishDescription,
                 Array.Empty<StaticKnowledgeOption>(),
                 attributes,
                 _sourceFileHints.ToArray(),
@@ -939,14 +944,62 @@ public static class LocalizationKnowledgeScanner
             return null;
         }
 
+        protected string? SelectPreferredField(string preferredLocale, string field, bool fallbackToStem = false)
+        {
+            var direct = GetField(preferredLocale, field);
+            if (IsLocaleCompatibleValue(preferredLocale, field, direct))
+            {
+                return direct;
+            }
+
+            var english = FindEnglishField(field);
+            if (!string.IsNullOrWhiteSpace(english))
+            {
+                return english;
+            }
+
+            if (fallbackToStem && field.Equals("title", StringComparison.OrdinalIgnoreCase))
+            {
+                return PrettifyStem(KeyStem);
+            }
+
+            return GetAnyField(field);
+        }
+
+        private static bool IsLocaleCompatibleValue(string preferredLocale, string field, string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            if (!field.Equals("title", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(preferredLocale, "kor", StringComparison.OrdinalIgnoreCase))
+            {
+                return !ContainsCjkWithoutHangul(value) || ContainsHangul(value);
+            }
+
+            if (string.Equals(preferredLocale, "eng", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(preferredLocale, "latin", StringComparison.OrdinalIgnoreCase))
+            {
+                return !ContainsCjkWithoutHangul(value) || LooksMostlyLatin(value);
+            }
+
+            return true;
+        }
+
         private string ChoosePreferredLocale()
         {
-            if (_locales.Contains("kor"))
+            if (_locales.Contains("kor") && HasMeaningfulLocaleData("kor"))
             {
                 return "kor";
             }
 
-            if (_locales.Contains("eng"))
+            if (_locales.Contains("eng") && HasMeaningfulLocaleData("eng"))
             {
                 return "eng";
             }
@@ -954,13 +1007,23 @@ public static class LocalizationKnowledgeScanner
             foreach (var locale in _locales)
             {
                 if (string.Equals(locale, "latin", StringComparison.OrdinalIgnoreCase)
+                    && HasMeaningfulLocaleData(locale)
                     && NormalizeMatchKey(GetField(locale, "title")) == NormalizeMatchKey(KeyStem))
                 {
                     return locale;
                 }
             }
 
-            return _locales.FirstOrDefault() ?? "eng";
+            return _locales.FirstOrDefault(HasMeaningfulLocaleData) ?? _locales.FirstOrDefault() ?? "eng";
+        }
+
+        private bool HasMeaningfulLocaleData(string locale)
+        {
+            return !string.IsNullOrWhiteSpace(GetField(locale, "title"))
+                   || !string.IsNullOrWhiteSpace(GetField(locale, "description"))
+                   || !string.IsNullOrWhiteSpace(GetField(locale, "flavor"))
+                   || !string.IsNullOrWhiteSpace(GetField(locale, "selectionScreenPrompt"))
+                   || GetNotes(locale).Count > 0;
         }
     }
 
