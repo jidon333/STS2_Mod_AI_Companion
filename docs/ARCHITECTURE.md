@@ -46,7 +46,7 @@ Phase 1의 구조는 `게임 내부 exporter + 외부 정적 지식 파이프라
 역할 구분:
 
 - `assembly-scan`, `pck-inventory`, `localization-scan`은 넓게 수집하는 raw/intermediate 계층
-- `strict-domain-parse`는 실제 디컴파일된 모델 소스 기준으로 cards/relics/potions/events canonical seed를 만드는 계층
+- `strict-domain-parse`는 실제 디컴파일된 모델 소스 기준으로 cards/relics/potions/events/shops/rewards/keywords canonical seed를 만드는 계층
 - `catalog.latest.*`, `catalog.assistant.*`, `assistant/*.json`, `markdown/*.md`는 최종 소비 계층
 
 산출물은 `artifacts/knowledge` 아래에 저장됩니다.

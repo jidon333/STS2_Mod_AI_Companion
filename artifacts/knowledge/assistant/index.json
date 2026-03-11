@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-11T08:00:40.9656974+00:00",
+  "generatedAt": "2026-03-11T09:31:19.0775166+00:00",
   "metadata": {
     "releaseVersion": "v0.98.3",
     "releaseCommit": "cb602cef",
@@ -12,9 +12,9 @@
     "relics": 288,
     "potions": 63,
     "events": 58,
-    "shops": 147,
-    "rewards": 54,
-    "keywords": 1134
+    "shops": 5,
+    "rewards": 7,
+    "keywords": 262
   },
   "files": {
     "cards": "cards.json",

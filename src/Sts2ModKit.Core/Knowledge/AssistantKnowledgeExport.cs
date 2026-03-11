@@ -99,7 +99,7 @@ public static class AssistantKnowledgeExportWriter
                 source = entry.Source,
                 tags = entry.Tags,
                 title = ReadAttribute(entry, "title") ?? entry.Name,
-                description = ReadAttribute(entry, "description") ?? ReadAttribute(entry, "flavor") ?? entry.RawText,
+                description = ResolveDescription(entry),
                 selectionScreenPrompt = ReadAttribute(entry, "selectionScreenPrompt"),
                 englishTitle = ReadAttribute(entry, "englishTitle"),
                 englishDescription = ReadAttribute(entry, "englishDescription"),
@@ -110,6 +110,7 @@ public static class AssistantKnowledgeExportWriter
                 classId = ReadAttribute(entry, "classId"),
                 strictDomain = ReadAttribute(entry, "strictDomain"),
                 strictModel = ReadAttribute(entry, "strictModel"),
+                matchKeys = ReadAttribute(entry, "matchKeys"),
                 pool = ReadAttribute(entry, "pool"),
                 color = ReadAttribute(entry, "color"),
                 cost = ReadAttribute(entry, "cost"),
@@ -117,6 +118,17 @@ public static class AssistantKnowledgeExportWriter
                 rarity = ReadAttribute(entry, "rarity"),
                 target = ReadAttribute(entry, "target"),
                 usage = ReadAttribute(entry, "usage"),
+                summary = ReadAttribute(entry, "summary"),
+                shopKind = ReadAttribute(entry, "shopKind"),
+                priceRule = ReadAttribute(entry, "priceRule"),
+                roomType = ReadAttribute(entry, "roomType"),
+                talkPrefix = ReadAttribute(entry, "talkPrefix"),
+                rewardType = ReadAttribute(entry, "rewardType"),
+                rewardsSetIndex = ReadAttribute(entry, "rewardsSetIndex"),
+                keywordKind = ReadAttribute(entry, "keywordKind"),
+                powerType = ReadAttribute(entry, "powerType"),
+                stackType = ReadAttribute(entry, "stackType"),
+                intentType = ReadAttribute(entry, "intentType"),
                 dynamicVars = ReadAttribute(entry, "dynamicVarsJson"),
                 upgradeSummary = ReadAttribute(entry, "upgradeSummary"),
                 resourcePath = ReadAttribute(entry, "resourcePath"),
@@ -135,6 +147,58 @@ public static class AssistantKnowledgeExportWriter
                 }).ToArray(),
             })
             .ToArray();
+    }
+
+    private static string? ResolveDescription(StaticKnowledgeEntry entry)
+    {
+        var description = ReadAttribute(entry, "description");
+        if (!LooksLikeSyntheticText(description, entry))
+        {
+            return description;
+        }
+
+        var flavor = ReadAttribute(entry, "flavor");
+        if (!string.IsNullOrWhiteSpace(flavor))
+        {
+            return flavor;
+        }
+
+        var summary = ReadAttribute(entry, "summary");
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            return summary;
+        }
+
+        return entry.RawText;
+    }
+
+    private static bool LooksLikeSyntheticText(string? value, StaticKnowledgeEntry entry)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        var normalizedValue = NormalizeSyntheticMatch(value);
+        var normalizedKey = NormalizeSyntheticMatch(ReadAttribute(entry, "l10nKey"));
+        if (!string.IsNullOrWhiteSpace(normalizedKey) && normalizedValue == normalizedKey)
+        {
+            return true;
+        }
+
+        var letters = value.Where(char.IsLetter).ToArray();
+        return value.Contains('_', StringComparison.Ordinal)
+               || (letters.Length > 0 && letters.All(character => character <= 127 && !char.IsLower(character)));
+    }
+
+    private static string NormalizeSyntheticMatch(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
     }
 
     private static string? ReadAttribute(StaticKnowledgeEntry entry, string key)

@@ -107,3 +107,33 @@
 3. high-value gameplay smoke 확대
 4. `currentChoices`와 canonical catalog의 gameplay 교차검증
 5. Host/WPF/Codex end-to-end gameplay 검증
+
+## 15. shops / rewards / keywords strict semantic 정규화 완료
+
+- `StrictDomainKnowledgeScanner`를 확장해 `shops`, `rewards`, `keywords`도 실제 디컴파일된 모델/의미 단위 기준으로 정규화했습니다.
+- `shops`는 `상점`, `카드 제거 서비스`, `카드/포션/유물 판매 슬롯` 5개 의미 단위만 남겼습니다.
+- `rewards`는 `카드/골드/포션/유물/카드 제거/특수 카드/연결 보상 세트` 7개 의미 단위만 남겼습니다.
+- `keywords`는 파워, 의도, 카드 키워드를 strict semantic entry로 재구성했습니다.
+- `LocalizationKnowledgeScanner`, `StaticKnowledgeCatalogBuilder`, `StaticKnowledgeFormatting`, `AssistantKnowledgeExport`도 함께 조정해 broad raw key가 canonical/assistant/markdown에 다시 들어오지 않게 막았습니다.
+
+최신 `inspect-static-knowledge` 기준:
+
+- cards: `576`
+- relics: `288`
+- potions: `63`
+- events: `58`
+- shops: `5`
+- rewards: `7`
+- keywords: `262`
+
+최신 localization coverage 기준:
+
+- cards: `582` / descriptions: `569` / selection prompts: `22`
+- relics: `285` / descriptions: `285`
+- potions: `75` / descriptions: `70`
+- events: `153` / descriptions: `60` / options: `203`
+- shops: `4` / descriptions: `4`
+- rewards: `3` / descriptions: `2`
+- keywords: `245` / descriptions: `245`
+
+이 단계 이후 `shops/rewards/keywords`의 남은 과제는 노이즈 제거가 아니라, 실제 gameplay 관찰값과의 교차 검증 및 coverage 확대입니다.

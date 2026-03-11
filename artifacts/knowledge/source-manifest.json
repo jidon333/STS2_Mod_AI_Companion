@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-11T08:00:40.9769166+00:00",
+  "generatedAt": "2026-03-11T09:31:19.0845114+00:00",
   "knowledgeRoot": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge",
   "metadata": {
     "releaseVersion": "v0.98.3",
@@ -85,50 +85,50 @@
       "kind": "catalog-previous",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\catalog.latest.json",
       "exists": true,
-      "size": 4092281,
-      "lastWriteTime": "2026-03-11T07:59:01.3967634+00:00"
+      "size": 3081317,
+      "lastWriteTime": "2026-03-11T08:40:05.1233005+00:00"
     },
     {
       "kind": "decompile-scan",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\decompile-scan.json",
       "exists": true,
       "size": 807,
-      "lastWriteTime": "2026-03-11T07:59:34.4025143+00:00"
+      "lastWriteTime": "2026-03-11T09:30:10.9612736+00:00"
     },
     {
       "kind": "strict-domain-scan",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\strict-domain-scan.json",
       "exists": true,
-      "size": 990734,
-      "lastWriteTime": "2026-03-11T08:00:29.8560115+00:00"
+      "size": 1316981,
+      "lastWriteTime": "2026-03-11T09:31:07.8825035+00:00"
     },
     {
       "kind": "assembly-scan",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\assembly-scan.json",
       "exists": true,
       "size": 2945234,
-      "lastWriteTime": "2026-03-11T07:59:35.3250796+00:00"
+      "lastWriteTime": "2026-03-11T09:30:11.6404409+00:00"
     },
     {
       "kind": "pck-inventory",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\pck-inventory.json",
       "exists": true,
       "size": 3834265,
-      "lastWriteTime": "2026-03-11T08:00:29.5733144+00:00"
+      "lastWriteTime": "2026-03-11T09:31:07.422892+00:00"
     },
     {
       "kind": "localization-scan",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\localization-scan.json",
       "exists": true,
-      "size": 1345654,
-      "lastWriteTime": "2026-03-11T08:00:39.3786462+00:00"
+      "size": 1312209,
+      "lastWriteTime": "2026-03-11T09:31:18.0844227+00:00"
     },
     {
       "kind": "observed-merge",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\observed-merge.json",
       "exists": true,
       "size": 922,
-      "lastWriteTime": "2026-03-11T08:00:40.9649264+00:00"
+      "lastWriteTime": "2026-03-11T09:31:19.0762311+00:00"
     }
   ],
   "steps": [
@@ -198,9 +198,9 @@
         "relics": "288",
         "potions": "63",
         "events": "58",
-        "shops": "0",
-        "rewards": "0",
-        "keywords": "0"
+        "shops": "5",
+        "rewards": "8",
+        "keywords": "262"
       },
       "warnings": []
     },
@@ -209,11 +209,11 @@
       "status": "completed",
       "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\localization-scan.json",
       "stats": {
-        "cards": "575",
-        "titles": "575",
-        "descriptions": "562",
+        "cards": "582",
+        "titles": "582",
+        "descriptions": "569",
         "selectionPrompts": "22",
-        "koreanPreferred": "575",
+        "koreanPreferred": "582",
         "englishPreferred": "0",
         "relics": "285",
         "relicDescriptions": "285",
@@ -222,12 +222,12 @@
         "events": "153",
         "eventDescriptions": "60",
         "eventOptions": "203",
-        "shops": "23",
-        "shopDescriptions": "18",
-        "rewards": "4",
+        "shops": "4",
+        "shopDescriptions": "4",
+        "rewards": "3",
         "rewardDescriptions": "2",
-        "keywords": "272",
-        "keywordDescriptions": "264"
+        "keywords": "245",
+        "keywordDescriptions": "245"
       },
       "warnings": []
     },
@@ -255,9 +255,9 @@
         "relics": "288",
         "potions": "63",
         "events": "58",
-        "shops": "438",
-        "rewards": "292",
-        "keywords": "2027"
+        "shops": "5",
+        "rewards": "7",
+        "keywords": "262"
       },
       "warnings": []
     }

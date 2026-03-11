@@ -388,17 +388,17 @@ public static class LocalizationKnowledgeScanner
             return "potion";
         }
 
-        if (LooksLikeKeywordKey(key, normalizedStem))
+        if (LooksLikeKeywordKey(key, normalizedStem, seeds))
         {
             return "keyword";
         }
 
-        if (LooksLikeShopKey(key, normalizedStem))
+        if (LooksLikeShopKey(key, normalizedStem, fileNameHint, seeds))
         {
             return "shop";
         }
 
-        if (LooksLikeRewardKey(key, normalizedStem))
+        if (LooksLikeRewardKey(key, normalizedStem, fileNameHint, seeds))
         {
             return "reward";
         }
@@ -433,16 +433,15 @@ public static class LocalizationKnowledgeScanner
             return "reward";
         }
 
-        if (fileNameHint.Equals("merchant_room.json", StringComparison.OrdinalIgnoreCase)
-            || fileNameHint.Equals("rest_site_ui.json", StringComparison.OrdinalIgnoreCase))
+        if (fileNameHint.Equals("merchant_room.json", StringComparison.OrdinalIgnoreCase))
         {
-            return "shop";
+            return seeds.Shops.Contains(normalizedStem) ? "shop" : null;
         }
 
         if (fileNameHint.Equals("card_reward_ui.json", StringComparison.OrdinalIgnoreCase)
             || fileNameHint.Equals("card_selection.json", StringComparison.OrdinalIgnoreCase))
         {
-            return "reward";
+            return seeds.Rewards.Contains(normalizedStem) ? "reward" : null;
         }
 
         if (fileNameHint.Equals("cards.json", StringComparison.OrdinalIgnoreCase)
@@ -467,20 +466,19 @@ public static class LocalizationKnowledgeScanner
         if (fileNameHint.Equals("card_keywords.json", StringComparison.OrdinalIgnoreCase)
             || fileNameHint.Equals("intents.json", StringComparison.OrdinalIgnoreCase))
         {
-            return "keyword";
+            return seeds.Keywords.Contains(normalizedStem) ? "keyword" : null;
         }
 
         if (key.Contains("MERCHANT", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("SHOP", StringComparison.OrdinalIgnoreCase)
-            || key.Contains("REST", StringComparison.OrdinalIgnoreCase))
+            || key.Contains("SHOP", StringComparison.OrdinalIgnoreCase))
         {
-            return "shop";
+            return seeds.Shops.Contains(normalizedStem) ? "shop" : null;
         }
 
         if (key.Contains("REWARD", StringComparison.OrdinalIgnoreCase)
             || key.Contains("CARD_SELECTION", StringComparison.OrdinalIgnoreCase))
         {
-            return "reward";
+            return seeds.Rewards.Contains(normalizedStem) ? "reward" : null;
         }
 
         return null;
@@ -520,6 +518,13 @@ public static class LocalizationKnowledgeScanner
             AddSeed(seeds, entry.Name);
             AddSeed(seeds, entry.Id);
             AddSeed(seeds, ReadAttribute(entry, "l10nKey"));
+            if (entry.Attributes.TryGetValue("matchKeys", out var matchKeys) && !string.IsNullOrWhiteSpace(matchKeys))
+            {
+                foreach (var matchKey in matchKeys.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    AddSeed(seeds, matchKey);
+                }
+            }
 
             if (entry.Attributes.TryGetValue("fullName", out var fullName) && !string.IsNullOrWhiteSpace(fullName))
             {
@@ -541,10 +546,16 @@ public static class LocalizationKnowledgeScanner
         var fullName = ReadAttribute(entry, "fullName");
         var resourcePath = ReadAttribute(entry, "resourcePath");
         var l10nDomain = ReadAttribute(entry, "l10nDomain");
+        var strictDomain = ReadAttribute(entry, "strictDomain");
         var upperName = entry.Name ?? string.Empty;
         var upperId = entry.Id ?? string.Empty;
 
         if (string.Equals(l10nDomain, domain, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(strictDomain, domain, StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
@@ -606,12 +617,12 @@ public static class LocalizationKnowledgeScanner
                && !key.Contains(".talk.", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool LooksLikeKeywordKey(string key, string normalizedStem)
+    private static bool LooksLikeKeywordKey(string key, string normalizedStem, SeedSets seeds)
     {
         if (normalizedStem.EndsWith("power", StringComparison.OrdinalIgnoreCase)
             || normalizedStem.EndsWith("intent", StringComparison.OrdinalIgnoreCase))
         {
-            return true;
+            return seeds.Keywords.Contains(normalizedStem);
         }
 
         return key.Equals("BLOCK.title", StringComparison.OrdinalIgnoreCase)
@@ -622,26 +633,39 @@ public static class LocalizationKnowledgeScanner
                || key.Equals("ENERGY_COUNT.description", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool LooksLikeShopKey(string key, string normalizedStem)
+    private static bool LooksLikeShopKey(string key, string normalizedStem, string fileNameHint, SeedSets seeds)
     {
-        if (normalizedStem.Contains("merchant", StringComparison.OrdinalIgnoreCase))
+        if (seeds.Shops.Contains(normalizedStem))
         {
             return true;
         }
 
+        if (!fileNameHint.Equals("merchant_room.json", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         return key.StartsWith("MERCHANT.", StringComparison.OrdinalIgnoreCase)
                || key.StartsWith("ROOM_MERCHANT.", StringComparison.OrdinalIgnoreCase)
-               || key.StartsWith("ROOM_UNKNOWN_MERCHANT.", StringComparison.OrdinalIgnoreCase)
-               || key.StartsWith("LEGEND_MERCHANT.", StringComparison.OrdinalIgnoreCase)
-               || key.Contains(".hoverTip.", StringComparison.OrdinalIgnoreCase);
+               || key.StartsWith("ROOM_UNKNOWN_MERCHANT.", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool LooksLikeRewardKey(string key, string normalizedStem)
+    private static bool LooksLikeRewardKey(string key, string normalizedStem, string fileNameHint, SeedSets seeds)
     {
-        return normalizedStem.Contains("reward", StringComparison.OrdinalIgnoreCase)
-               || key.StartsWith("CARD_SELECTION.", StringComparison.OrdinalIgnoreCase)
+        if (seeds.Rewards.Contains(normalizedStem))
+        {
+            return true;
+        }
+
+        if (!fileNameHint.Equals("card_reward_ui.json", StringComparison.OrdinalIgnoreCase)
+            && !fileNameHint.Equals("card_selection.json", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return key.StartsWith("CARD_SELECTION.", StringComparison.OrdinalIgnoreCase)
                || key.StartsWith("CARD_REWARD_UI.", StringComparison.OrdinalIgnoreCase)
-               || key.StartsWith("HISTORY_ENTRY.", StringComparison.OrdinalIgnoreCase);
+               || key.StartsWith("LINKED_REWARDS.", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AddSeed(ISet<string> target, string? value)

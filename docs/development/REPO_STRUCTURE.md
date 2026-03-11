@@ -120,7 +120,7 @@
 - `decompiled/`
   - `sts2.dll` 디컴파일 결과
 - `strict-domain-scan.json`
-  - cards/relics/potions/events strict parser 결과
+  - cards/relics/potions/events/shops/rewards/keywords strict parser 결과
 - `assembly-scan.json`
   - DLL 메타데이터 기반 raw 후보
 - `pck-inventory.json`
@@ -140,8 +140,9 @@
 
 중요:
 
-- `cards/relics/potions/events`는 strict parser 기반 canonical입니다.
-- `shops/rewards/keywords`는 아직 broad raw seed 의존이 커서 후속 정규화 대상입니다.
+- `cards/relics/potions/events/shops/rewards/keywords`는 모두 strict parser 기반 canonical입니다.
+- `shops`와 `rewards`는 상품/보상 시스템의 의미 단위를 정리한 결과이며, 실제 런마다 달라지는 배치 결과까지 뜻하지는 않습니다.
+- `keywords`는 파워, 의도, 카드 키워드를 strict semantic entry로 정리한 결과입니다.
 - Host는 현재 `catalog.assistant.json`을 우선 읽습니다.
 
 ### `artifacts/companion`

@@ -212,12 +212,12 @@ public static class StaticKnowledgeMarkdownReportFormatter
             {
                 K("\\uC0C1\\uC810 UI \\uBB38\\uAD6C"),
                 K("\\uCE74\\uB4DC \\uC81C\\uAC70 \\uC11C\\uBE44\\uC2A4 \\uC124\\uBA85"),
-                K("\\uC0C1\\uC778 \\uAD00\\uB828 \\uD150\\uD2B8"),
+                K("\\uC0C1\\uC778 \\uAD00\\uB828 \\uB300\\uC0AC \\uD78C\\uD2B8"),
             },
             new[]
             {
                 K("\\uC2E4\\uC81C \\uC0C1\\uD488 \\uD480"),
-                K("\\uAC00\\uACA9 \\uADDC\\uCE59"),
+                K("\\uB7F0\\uBCC4 \\uC0C1\\uD488 \\uBC30\\uCE58 \\uACB0\\uACFC"),
             },
             new[]
             {
@@ -641,6 +641,26 @@ public static class StaticKnowledgeMarkdownReportFormatter
             AddIfPresent(K("\\uD398\\uC774\\uC9C0 \\uD0A4 \\uC218"), ReadAttribute(entry, "pageKeyCount"));
             AddIfPresent(K("\\uC120\\uD0DD\\uC9C0 \\uD0A4 \\uC218"), ReadAttribute(entry, "optionKeyCount"));
         }
+        else if (domain == "shops")
+        {
+            AddIfPresent(K("\\uC0C1\\uC810 \\uD56D\\uBAA9 \\uC720\\uD615"), ReadAttribute(entry, "shopKind"));
+            AddIfPresent(K("\\uAC00\\uACA9 \\uADDC\\uCE59"), ReadAttribute(entry, "priceRule"));
+            AddIfPresent(K("\\uBC29 \\uC720\\uD615"), ReadAttribute(entry, "roomType"));
+            AddIfPresent(K("\\uB300\\uC0AC prefix"), ReadAttribute(entry, "talkPrefix"));
+        }
+        else if (domain == "rewards")
+        {
+            AddIfPresent(K("\\uBCF4\\uC0C1 \\uC720\\uD615"), ReadAttribute(entry, "rewardType"));
+            AddIfPresent(K("\\uBCF4\\uC0C1 \\uC138\\uD2B8 \\uC778\\uB371\\uC2A4"), ReadAttribute(entry, "rewardsSetIndex"));
+            AddIfPresent(K("\\uB9E4\\uCE6D \\uD0A4"), ReadAttribute(entry, "matchKeys"));
+        }
+        else if (domain == "keywords")
+        {
+            AddIfPresent(K("\\uD0A4\\uC6CC\\uB4DC \\uBD84\\uB958"), ReadAttribute(entry, "keywordKind"));
+            AddIfPresent(K("\\uD30C\\uC6CC \\uC720\\uD615"), ReadAttribute(entry, "powerType"));
+            AddIfPresent(K("\\uC2A4\\uD0DD \\uADDC\\uCE59"), ReadAttribute(entry, "stackType"));
+            AddIfPresent(K("\\uC758\\uB3C4 \\uC720\\uD615"), ReadAttribute(entry, "intentType"));
+        }
 
         return details;
     }
@@ -648,7 +668,7 @@ public static class StaticKnowledgeMarkdownReportFormatter
     private static string BuildDescription(StaticKnowledgeEntry entry)
     {
         var description = SanitizeParagraph(ReadAttribute(entry, "description"));
-        if (!string.IsNullOrWhiteSpace(description))
+        if (!string.IsNullOrWhiteSpace(description) && !LooksLikeSyntheticText(description!, entry))
         {
             return description!;
         }
@@ -669,6 +689,12 @@ public static class StaticKnowledgeMarkdownReportFormatter
         if (!string.IsNullOrWhiteSpace(notePreview))
         {
             return notePreview!;
+        }
+
+        var summary = SanitizeSingleLine(ReadAttribute(entry, "summary"));
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            return summary!;
         }
 
         var talkPreview = SanitizeSingleLine(ReadAttribute(entry, "talkPreview"));
@@ -697,11 +723,44 @@ public static class StaticKnowledgeMarkdownReportFormatter
         return K("\\uD604\\uC7AC \\uD56D\\uBAA9\\uC740 \\uC815\\uC801 \\uD6C4\\uBCF4\\uB85C\\uB9CC \\uC2DD\\uBCC4\\uB418\\uC5C8\\uACE0, \\uD50C\\uB808\\uC774 \\uC758\\uBBF8\\uB97C \\uD574\\uC11D\\uD560 \\uADFC\\uAC70\\uAC00 \\uBD80\\uC871\\uD569\\uB2C8\\uB2E4.");
     }
 
+    private static bool LooksLikeSyntheticText(string value, StaticKnowledgeEntry entry)
+    {
+        var normalizedValue = NormalizeSyntheticMatch(value);
+        if (string.IsNullOrWhiteSpace(normalizedValue))
+        {
+            return true;
+        }
+
+        var l10nKey = NormalizeSyntheticMatch(ReadAttribute(entry, "l10nKey"));
+        if (!string.IsNullOrWhiteSpace(l10nKey) && normalizedValue == l10nKey)
+        {
+            return true;
+        }
+
+        var title = NormalizeSyntheticMatch(ReadAttribute(entry, "title"));
+        if (!string.IsNullOrWhiteSpace(title) && normalizedValue == title)
+        {
+            return true;
+        }
+
+        var letters = value.Where(char.IsLetter).ToArray();
+        var uppercaseAsciiKeyLike = letters.Length > 0
+            && letters.All(character => character <= 127 && !char.IsLower(character));
+
+        return value.Contains('_', StringComparison.Ordinal)
+               || uppercaseAsciiKeyLike;
+    }
+
     private static string InferAbilityStatus(StaticKnowledgeEntry entry)
     {
         if (HasStructuredDescription(entry))
         {
             return K("\\uD55C\\uAD6D\\uC5B4 \\uB610\\uB294 \\uC601\\uC5B4 \\uC124\\uBA85 \\uBCF8\\uBB38\\uAE4C\\uC9C0 \\uC5F0\\uACB0\\uB41C \\uC0C1\\uD0DC\\uC785\\uB2C8\\uB2E4.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(ReadAttribute(entry, "summary")))
+        {
+            return K("\\uC2E4\\uC81C \\uBAA8\\uB378 \\uAD6C\\uC870\\uC640 \\uD50C\\uB808\\uC774 \\uADDC\\uCE59 \\uC694\\uC57D\\uAE4C\\uC9C0 \\uC815\\uB9AC\\uB41C \\uC0C1\\uD0DC\\uC785\\uB2C8\\uB2E4.");
         }
 
         if (entry.Options.Count > 0 || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "pageSummary")))
@@ -742,9 +801,11 @@ public static class StaticKnowledgeMarkdownReportFormatter
                 !string.IsNullOrWhiteSpace(ReadAttribute(entry, "pageSummary")) ? K("\\uD398\\uC774\\uC9C0 \\uBCF8\\uBB38 \\uD655\\uC778\\uB428") : null),
             "shops" => MergeGroup(
                 K("\\uC0C1\\uC810/UI"),
+                ReadAttribute(entry, "shopKind"),
                 entry.Options.Count > 0 ? K("\\uAD6C\\uB9E4 \\uD6C4\\uBCF4 \\uD655\\uC778\\uB428") : null),
             "rewards" => MergeGroup(
                 K("\\uBCF4\\uC0C1/UI"),
+                ReadAttribute(entry, "rewardType"),
                 entry.Options.Count > 0 ? K("\\uC120\\uD0DD\\uC9C0 \\uD655\\uC778\\uB428") : null),
             "keywords" => MergeGroup(
                 TryExtractKeywordGroup(entry),
@@ -764,8 +825,8 @@ public static class StaticKnowledgeMarkdownReportFormatter
                 ? K("\\uC774\\uBCA4\\uD2B8 \\uBCF8\\uBB38\\uACFC \\uC120\\uD0DD\\uC9C0 \\uBE44\\uAD50 \\uC2DC \\uCC38\\uC870")
                 : K("\\uC774\\uBCA4\\uD2B8 \\uBC29 \\uC81C\\uBAA9/\\uBCF8\\uBB38 \\uD30C\\uC545 \\uC2DC \\uCC38\\uC870"),
             "shops" => K("\\uC0C1\\uC810 \\uC9C4\\uC785 \\uD6C4 \\uCE74\\uB4DC/\\uC11C\\uBE44\\uC2A4 \\uBE44\\uAD50 \\uC2DC \\uCC38\\uC870"),
-            "rewards" => K("\\uBCF4\\uC0C1 \\uD654\\uBA74\\uC5D0\\uC11C \\uC120\\uD0DD\\uC9C0 \\uBE44\\uAD50 \\uC2DC \\uCC38\\uC870"),
-            "keywords" => K("\\uCE74\\uB4DC \\uBB38\\uAD6C, \\uC0C1\\uD0DC \\uC774\\uC0C1, Intent \\uD574\\uC11D \\uC2DC \\uCC38\\uC870"),
+            "rewards" => K("\\uBCF4\\uC0C1 \\uD654\\uBA74\\uC5D0\\uC11C \\uBCF4\\uC0C1 \\uC885\\uB958\\uC640 \\uC120\\uD0DD \\uAD6C\\uC870 \\uBE44\\uAD50 \\uC2DC \\uCC38\\uC870"),
+            "keywords" => K("\\uCE74\\uB4DC \\uBB38\\uAD6C, \\uD30C\\uC6CC, Intent \\uD574\\uC11D \\uC2DC \\uCC38\\uC870"),
             _ => K("\\uD50C\\uB808\\uC774 \\uCC38\\uACE0\\uC6A9"),
         };
     }
@@ -800,6 +861,22 @@ public static class StaticKnowledgeMarkdownReportFormatter
 
     private static string? TryExtractKeywordGroup(StaticKnowledgeEntry entry)
     {
+        var keywordKind = ReadAttribute(entry, "keywordKind");
+        if (string.Equals(keywordKind, "card-keyword", StringComparison.OrdinalIgnoreCase))
+        {
+            return K("\\uCE74\\uB4DC \\uD0A4\\uC6CC\\uB4DC");
+        }
+
+        if (string.Equals(keywordKind, "power", StringComparison.OrdinalIgnoreCase))
+        {
+            return K("\\uC0C1\\uD0DC\\uC774\\uC0C1/\\uBC84\\uD504");
+        }
+
+        if (string.Equals(keywordKind, "intent", StringComparison.OrdinalIgnoreCase))
+        {
+            return K("\\uC758\\uB3C4/Intent");
+        }
+
         var fullName = ReadAttribute(entry, "fullName") ?? string.Empty;
         var l10nKey = ReadAttribute(entry, "l10nKey") ?? string.Empty;
         if (fullName.Contains(".Intents.", StringComparison.OrdinalIgnoreCase) || l10nKey.EndsWith("_INTENT", StringComparison.OrdinalIgnoreCase))
@@ -849,7 +926,8 @@ public static class StaticKnowledgeMarkdownReportFormatter
                || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "flavor"))
                || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "pageSummary"))
                || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "notePreview"))
-               || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "talkPreview"));
+               || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "talkPreview"))
+               || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "summary"));
     }
 
     private static string? BuildEnglishFallback(string? englishTitle, string? englishDescription)
@@ -913,6 +991,16 @@ public static class StaticKnowledgeMarkdownReportFormatter
         return string.IsNullOrWhiteSpace(normalized)
             ? null
             : normalized;
+    }
+
+    private static string NormalizeSyntheticMatch(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return new string(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
     }
 
     private static string K(string escaped)

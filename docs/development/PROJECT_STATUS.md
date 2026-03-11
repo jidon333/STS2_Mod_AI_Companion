@@ -74,24 +74,26 @@
 - relics: `288`
 - potions: `63`
 - events: `58`
-- shops: `438`
-- rewards: `292`
-- keywords: `2027`
+- shops: `5`
+- rewards: `7`
+- keywords: `262`
 
 현재 해석:
 
-- `cards/relics/potions/events`는 strict parser 기반이라 canonical로 볼 수 있습니다.
-- `shops/rewards/keywords`는 아직 broad seed 의존이 커서 노이즈가 남아 있습니다.
+- `cards/relics/potions/events/shops/rewards/keywords`는 모두 strict parser 기반 canonical입니다.
+- `shops`는 상점의 실제 판매 결과가 아니라 `상점`, `카드 제거 서비스`, `카드/포션/유물 판매 슬롯` 같은 의미 단위를 정리한 값입니다.
+- `rewards`는 보상 시스템의 의미 단위만 strict semantic entity로 정리한 값입니다.
+- `keywords`는 파워, 의도, 카드 키워드를 strict semantic entry로 정리한 값입니다.
 
 현재 localization coverage:
 
-- cards: `575` / descriptions: `562` / selection prompts: `22`
+- cards: `582` / descriptions: `569` / selection prompts: `22`
 - relics: `285` / descriptions: `285`
 - potions: `75` / descriptions: `70`
 - events: `153` / descriptions: `60` / options: `203`
-- shops: `23` / descriptions: `18`
-- rewards: `4` / descriptions: `2`
-- keywords: `272` / descriptions: `264`
+- shops: `4` / descriptions: `4`
+- rewards: `3` / descriptions: `2`
+- keywords: `245` / descriptions: `245`
 
 AI가 우선 읽는 산출물:
 
@@ -157,7 +159,7 @@ AI가 우선 읽는 산출물:
 1. high-value gameplay smoke 확대
 2. `currentChoices` 실증
 3. WPF + Host + Codex의 실제 gameplay 연결 검증
-4. `shops/rewards/keywords` strict 정규화
+4. `shops/rewards/keywords`를 gameplay 관찰값과 교차 검증
 5. replay 기반 무인 acceptance harness
 
 ## 5. 현재 리스크
@@ -166,9 +168,9 @@ AI가 우선 읽는 산출물:
 
 main menu 이후 gameplay 고가치 화면은 아직 충분히 실증되지 않았습니다.
 
-### 5.2 knowledge noise 리스크
+### 5.2 knowledge coverage 리스크
 
-`shops/rewards/keywords`는 아직 canonical strict parser가 없어, AI 입력에 바로 쓰기엔 보수적 필터가 더 필요합니다.
+`shops/rewards/keywords`는 strict semantic canonical로 정리됐지만, 실제 런에서 어떤 상품/보상 조합과 선택지가 뜨는지는 gameplay 관찰이 더 필요합니다. 즉 노이즈보다 coverage와 runtime 교차 검증이 남은 과제입니다.
 
 ### 5.3 description resolver 리스크
 

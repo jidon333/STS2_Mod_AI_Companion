@@ -45,6 +45,9 @@
 - relics
 - potions
 - events
+- shops
+- rewards
+- keywords
 
 기준:
 
@@ -101,7 +104,7 @@ AI용:
 
 그래서 아직 차이가 있습니다.
 
-- `shops/rewards/keywords`는 아직 strict parser가 없습니다.
+- `shops/rewards/keywords`도 이제 strict semantic parser가 있지만, `shops/rewards`는 실제 런의 상품/보상 배치를 뜻하는 것이 아니라 시스템 의미 단위를 정리한 값입니다.
 - SmartFormat/description resolver는 현재 단순 버전입니다.
 - gameplay observed merge는 exporter coverage가 넓어져야 의미 있게 채워집니다.
 

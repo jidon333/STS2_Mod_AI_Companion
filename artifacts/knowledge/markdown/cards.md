@@ -33,7 +33,7 @@
 
 ## 항목 목록
 
-### FTL
+### Ftl
 
 - ID: `megacrit-sts2-core-models-cards-ftl`
 - 그룹/풀 추정: 디펙트, Attack, 코스트 0
@@ -56,7 +56,7 @@
 - 리소스 경로: `res://images/packed/card_portraits/defect/ftl.png`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
-### HELLO WORLD
+### Hello World
 
 - ID: `megacrit-sts2-core-models-cards-helloworld`
 - 그룹/풀 추정: Power, 코스트 1
@@ -77,7 +77,7 @@
 - 리소스 경로: `res://images/packed/card_portraits/event/beta/hello_world.png`
 - 추출 파일 힌트: `localization/cjk/ | localization/kor/ | localization/latin/ | localization/unknown/`
 
-### NULL
+### Null
 
 - ID: `megacrit-sts2-core-models-cards-null`
 - 그룹/풀 추정: 디펙트, Attack, 코스트 2

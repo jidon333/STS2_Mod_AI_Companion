@@ -1,5 +1,5 @@
 metadata
-generated_at: 2026-03-11T08:00:40.9656974+00:00
+generated_at: 2026-03-11T09:31:19.0775166+00:00
 release_version: v0.98.3
 release_commit: cb602cef
 release_date: 2026-03-09T19:21:00.0000000-07:00
@@ -23,9 +23,9 @@ source: extract-static-knowledge
 cards
 count: 576
 - Drain Power [megacrit-sts2-core-models-cards-drainpower] source=strict-domain-parse tags=strict-card, strict-model
-- FTL [megacrit-sts2-core-models-cards-ftl] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 5 줍니다. 이번 턴에 카드를 {PlayMax:diff()}장보다 적게 사용했다면, 카드를 1장 뽑습니다.
-- HELLO WORLD [megacrit-sts2-core-models-cards-helloworld] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=내 턴 시작 시, 무작위 일반 카드를 1장 [gold]손[/gold]으로 가져옵니다.
-- NULL [megacrit-sts2-core-models-cards-null] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 10 줍니다. [gold]약화[/gold]를 2 부여합니다. [gold]암흑[/gold]을 1번 [gold]영창[/gold]합니다.
+- Ftl [megacrit-sts2-core-models-cards-ftl] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 5 줍니다. 이번 턴에 카드를 {PlayMax:diff()}장보다 적게 사용했다면, 카드를 1장 뽑습니다.
+- Hello World [megacrit-sts2-core-models-cards-helloworld] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=내 턴 시작 시, 무작위 일반 카드를 1장 [gold]손[/gold]으로 가져옵니다.
+- Null [megacrit-sts2-core-models-cards-null] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 10 줍니다. [gold]약화[/gold]를 2 부여합니다. [gold]암흑[/gold]을 1번 [gold]영창[/gold]합니다.
 - 가로막기 [megacrit-sts2-core-models-cards-intercept] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=[gold]방어도[/gold]를 9 얻습니다. 이번 턴 동안 다른 플레이어가 받아야 하는 모든 공격의 목표를 자신으로 변경합니다.
 - 가속 이탈 [megacrit-sts2-core-models-cards-boostaway] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=[gold]방어도[/gold]를 6 얻습니다. [gold]버린 카드 더미[/gold]에 [gold]어지러움[/gold]을 1장 섞어 넣습니다.
 - 갈가리 찢기 [megacrit-sts2-core-models-cards-tearasunder] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 5 줍니다. 이번 전투 동안 체력을 잃은 횟수만큼 반복합니다.{InCombat: ({CalculatedHits:diff()}번 적중합니다...
@@ -85,49 +85,35 @@ count: 58
 ... 46 more
 
 shops
-count: 438
-- "filename": "fake merchants rug [filename----fake-merchants-rug-png] source=pck-inventory tags=resource-path
-- <1>  On Steam Workshop Item Installed [1---onsteamworkshopiteminstalled] source=assembly-scan tags=member-candidate
-- <>c [megacrit-sts2-core-autoslay-handlers-rooms-shoproomhandler---c] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-entities-merchant-merchantinventory---c] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-nodes-screens-shops-nmerchantinventory---c] source=assembly-scan tags=type-candidate
-- <>c  Display Class29 0 [megacrit-sts2-core-nodes-screens-shops-nmerchantinventory---c--displayclass29-0] source=assembly-scan tags=type-candidate
-- <>c  Display Class34 0 [megacrit-sts2-core-nodes-screens-shops-nmerchantinventory---c--displayclass34-0] source=assembly-scan tags=type-candidate
-- <Create For Merchant>b  1 [createformerchant-b--1] source=assembly-scan tags=member-candidate
-- <Create For Merchant>b  2 [createformerchant-b--2] source=assembly-scan tags=member-candidate
-- <Create For Merchant>b  3 0 [createformerchant-b--3-0] source=assembly-scan tags=member-candidate
-- <Create For Merchant>b  4 0 [createformerchant-b--4-0] source=assembly-scan tags=member-candidate
-- <Do Open Animation>d  32 [megacrit-sts2-core-nodes-screens-shops-nmerchantinventory--doopenanimation-d--32] source=assembly-scan tags=type-candidate
-... 426 more
+count: 5
+- 상점 [megacrit-sts2-core-rooms-merchantroom] source=localization-scan tags=l10n, localized-shop, room, strict-model, strict-shop description=이 방에서는 신비로운 상인이 자신의 물건들을 판매합니다.  열심히 모은 [gold]골드[/gold]를 여기에서 사용해보세요!
+- 유물 판매 슬롯 [megacrit-sts2-core-entities-merchant-merchantrelicentry] source=strict-domain-parse tags=strict-shop, strict-model
+- 카드 제거 서비스 [megacrit-sts2-core-entities-merchant-merchantcardremovalentry] source=localization-scan tags=l10n, localized-shop, strict-model, strict-shop description=덱에서 카드를 1장 제거합니다. 남은 도전 동안 이 서비스의 비용이 [blue]{Amount}[/blue] 증가합니다.
+- 카드 판매 슬롯 [megacrit-sts2-core-entities-merchant-merchantcardentry] source=strict-domain-parse tags=strict-shop, strict-model
+- 포션 판매 슬롯 [megacrit-sts2-core-entities-merchant-merchantpotionentry] source=strict-domain-parse tags=strict-shop, strict-model
 
 rewards
-count: 292
-- <>c [megacrit-sts2-core-rewards-linkedrewardset---c] source=assembly-scan tags=type-candidate
-- <>c [megacrit-sts2-core-rewards-rewardsset---c] source=assembly-scan tags=type-candidate
-- <>c  Display Class38 0 [megacrit-sts2-core-nodes-screens-nrewardsscreen---c--displayclass38-0] source=assembly-scan tags=type-candidate
-- <>c  Display Class4 0 [megacrit-sts2-core-autoslay-handlers-screens-rewardsscreenhandler---c--displayclass4-0] source=assembly-scan tags=type-candidate
-- <>c  Display Class4 1 [megacrit-sts2-core-autoslay-handlers-screens-rewardsscreenhandler---c--displayclass4-1] source=assembly-scan tags=type-candidate
-- <>O [megacrit-sts2-core-rewards-reward---o] source=assembly-scan tags=type-candidate
-- <After Modifying Rewards>d  48 [megacrit-sts2-core-hooks-hook--aftermodifyingrewards-d--48] source=assembly-scan tags=type-candidate
-- <After Reward Taken>d  66 [megacrit-sts2-core-hooks-hook--afterrewardtaken-d--66] source=assembly-scan tags=type-candidate
-- <Before Rewards Offered>d  65 [megacrit-sts2-core-hooks-hook--beforerewardsoffered-d--65] source=assembly-scan tags=type-candidate
-- <Create Dictionary UInt64 List Serializable Reward>b  470 0 [create-dictionaryuint64listserializablereward-b--470-0] source=assembly-scan tags=member-candidate
-- <Create For Reward>b  13 0 [createforreward-b--13-0] source=assembly-scan tags=member-candidate
-- <Create For Reward>b  13 1 [createforreward-b--13-1] source=assembly-scan tags=member-candidate
-... 280 more
+count: 7
+- 골드 보상 [megacrit-sts2-core-rewards-goldreward] source=strict-domain-parse tags=strict-reward, strict-model
+- 연결된 보상 [megacrit-sts2-core-rewards-linkedrewardset] source=localization-scan tags=l10n, localized-reward, reward-set, strict-model, strict-reward description=이 세트에서 [blue]1[/blue]개의 보상만을 선택할 수 있습니다.
+- 유물 보상 [megacrit-sts2-core-rewards-relicreward] source=strict-domain-parse tags=strict-reward, strict-model
+- 카드 보상 [megacrit-sts2-core-rewards-cardreward] source=localization-scan tags=l10n, localized-reward, strict-model, strict-reward description=무작위 카드 [blue]3[/blue]장으로 구성된 팩입니다. 카드를 [blue]1[/blue]장 선택해 [gold]덱[/gold]에 추가할 수...
+- 카드 제거 보상 [megacrit-sts2-core-rewards-cardremovalreward] source=localization-scan tags=l10n, localized-reward, strict-model, strict-reward
+- 특수 카드 보상 [megacrit-sts2-core-rewards-specialcardreward] source=strict-domain-parse tags=strict-reward, strict-model
+- 포션 보상 [megacrit-sts2-core-rewards-potionreward] source=strict-domain-parse tags=strict-reward, strict-model
 
 keywords
-count: 2027
-- "filename": "intent buff [filename----intent-buff-png] source=pck-inventory tags=resource-path
-- "filename": "intent death blow [filename----intent-death-blow-png] source=pck-inventory tags=resource-path
-- "filename": "intent debuff [filename----intent-debuff-png] source=pck-inventory tags=resource-path
-- "filename": "intent defend [filename----intent-defend-png] source=pck-inventory tags=resource-path
-- "filename": "intent escape [filename----intent-escape-png] source=pck-inventory tags=resource-path
-- "filename": "intent heal [filename----intent-heal-png] source=pck-inventory tags=resource-path
-- "filename": "intent hidden [filename----intent-hidden-png] source=pck-inventory tags=resource-path
-- "filename": "intent sleep [filename----intent-sleep-png] source=pck-inventory tags=resource-path
-- "filename": "intent stun [filename----intent-stun-png] source=pck-inventory tags=resource-path
-- "filename": "intent summon [filename----intent-summon-png] source=pck-inventory tags=resource-path
-- "filename": "intent unknown [filename----intent-unknown-png] source=pck-inventory tags=resource-path
-- "image": "intent atlas [image----intent-atlas-png] source=pck-inventory tags=resource-path
-... 2015 more
+count: 262
+- 2배의 피해 [megacrit-sts2-core-models-powers-doubledamagepower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=이번 턴에 가하는 공격의 피해량이 2배가 됩니다.
+- Eternal [megacrit-sts2-core-entities-cards-cardkeyword-eternal] source=strict-domain-parse tags=strict-keyword, strict-model, card-keyword
+- Ethereal [megacrit-sts2-core-entities-cards-cardkeyword-ethereal] source=strict-domain-parse tags=strict-keyword, strict-model, card-keyword
+- Exhaust [megacrit-sts2-core-entities-cards-cardkeyword-exhaust] source=strict-domain-parse tags=strict-keyword, strict-model, card-keyword
+- Hello World Power [megacrit-sts2-core-models-powers-helloworldpower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=내 턴 시작 시, 무작위 일반 카드를 [blue]1[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- Innate [megacrit-sts2-core-entities-cards-cardkeyword-innate] source=strict-domain-parse tags=strict-keyword, strict-model, card-keyword
+- Retain [megacrit-sts2-core-entities-cards-cardkeyword-retain] source=strict-domain-parse tags=strict-keyword, strict-model, card-keyword
+- Sly [megacrit-sts2-core-entities-cards-cardkeyword-sly] source=strict-domain-parse tags=strict-keyword, strict-model, card-keyword
+- Temporary Dexterity Power [megacrit-sts2-core-models-powers-temporarydexteritypower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=이번 턴이 끝나기 전까지 [gold]민첩[/gold]을 얻습니다.
+- Temporary Focus Power [megacrit-sts2-core-models-powers-temporaryfocuspower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=이번 턴이 끝나기 전까지 [gold]밀집[/gold]을 얻습니다.
+- Temporary Strength Power [megacrit-sts2-core-models-powers-temporarystrengthpower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=이번 턴이 끝나기 전까지 [gold]힘[/gold]을 얻습니다.
+- Unplayable [megacrit-sts2-core-entities-cards-cardkeyword-unplayable] source=strict-domain-parse tags=strict-keyword, strict-model, card-keyword
+... 250 more

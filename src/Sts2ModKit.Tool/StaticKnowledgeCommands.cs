@@ -331,7 +331,6 @@ internal static class StaticKnowledgeCommands
         StaticKnowledgeCatalog assemblyCatalog,
         StaticKnowledgeCatalog pckCatalog)
     {
-        var merged = StaticKnowledgeCatalogBuilder.MergeCatalogs(metadata, assemblyCatalog, pckCatalog);
         return new StaticKnowledgeCatalog(
             DateTimeOffset.UtcNow,
             metadata,
@@ -339,9 +338,9 @@ internal static class StaticKnowledgeCommands
             Array.Empty<StaticKnowledgeEntry>(),
             Array.Empty<StaticKnowledgeEntry>(),
             Array.Empty<StaticKnowledgeEntry>(),
-            merged.Shops,
-            merged.Rewards,
-            merged.Keywords);
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>());
     }
 
     private static StaticKnowledgeSourceFile DescribeSourceFile(string kind, string path)

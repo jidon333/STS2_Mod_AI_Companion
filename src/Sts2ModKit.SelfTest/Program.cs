@@ -486,6 +486,12 @@ static void TestStrictDomainKnowledgeScanner()
         Directory.CreateDirectory(Path.Combine(modelsRoot, "RelicPools"));
         Directory.CreateDirectory(Path.Combine(modelsRoot, "Potions"));
         Directory.CreateDirectory(Path.Combine(modelsRoot, "Events"));
+        Directory.CreateDirectory(Path.Combine(root, "MegaCrit", "Sts2", "Core", "Rewards"));
+        Directory.CreateDirectory(Path.Combine(root, "MegaCrit", "Sts2", "Core", "Entities", "Merchant"));
+        Directory.CreateDirectory(Path.Combine(root, "MegaCrit", "Sts2", "Core", "Rooms"));
+        Directory.CreateDirectory(Path.Combine(root, "MegaCrit", "Sts2", "Core", "Models", "Powers"));
+        Directory.CreateDirectory(Path.Combine(root, "MegaCrit", "Sts2", "Core", "MonsterMoves", "Intents"));
+        Directory.CreateDirectory(Path.Combine(root, "MegaCrit", "Sts2", "Core", "Entities", "Cards"));
 
         File.WriteAllText(
             Path.Combine(modelsRoot, "Cards", "Bash.cs"),
@@ -593,6 +599,86 @@ static void TestStrictDomainKnowledgeScanner()
                 private Task Abstain() => Task.CompletedTask;
             }
             """);
+        File.WriteAllText(
+            Path.Combine(root, "MegaCrit", "Sts2", "Core", "Entities", "Merchant", "MerchantCardRemovalEntry.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Entities.Merchant;
+            public sealed class MerchantCardRemovalEntry : MerchantEntry
+            {
+                public override bool IsStocked => true;
+
+                public override void CalcCost()
+                {
+                    _cost = 75 + 25 * _player.ExtraFields.CardShopRemovalsUsed;
+                }
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "MegaCrit", "Sts2", "Core", "Rooms", "MerchantRoom.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Rooms;
+            public class MerchantRoom : AbstractRoom
+            {
+                public static MerchantDialogueSet Dialogue
+                {
+                    get
+                    {
+                        LocTable table = LocManager.Instance.GetTable("merchant_room");
+                        IReadOnlyList<LocString> locStringsWithPrefix = table.GetLocStringsWithPrefix("MERCHANT.talk.");
+                        return MerchantDialogueSet.CreateFromLocStrings(locStringsWithPrefix);
+                    }
+                }
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "MegaCrit", "Sts2", "Core", "Rewards", "CardReward.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Rewards;
+            public class CardReward : Reward
+            {
+                protected override RewardType RewardType => RewardType.Card;
+                public override int RewardsSetIndex => 5;
+                public override LocString Description => new LocString("gameplay_ui", "COMBAT_REWARD_ADD_CARD");
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "MegaCrit", "Sts2", "Core", "Rewards", "LinkedRewardSet.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Rewards;
+            public class LinkedRewardSet
+            {
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "MegaCrit", "Sts2", "Core", "Models", "Powers", "HelloWorldPower.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Models.Powers;
+            public sealed class HelloWorldPower : PowerModel
+            {
+                public override PowerType Type => PowerType.Buff;
+                public override PowerStackType StackType => PowerStackType.Counter;
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "MegaCrit", "Sts2", "Core", "MonsterMoves", "Intents", "BuffIntent.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.MonsterMoves.Intents;
+            public class BuffIntent : AbstractIntent
+            {
+                public override IntentType IntentType => IntentType.Buff;
+            }
+            """);
+        File.WriteAllText(
+            Path.Combine(root, "MegaCrit", "Sts2", "Core", "Entities", "Cards", "CardKeyword.cs"),
+            """
+            namespace MegaCrit.Sts2.Core.Entities.Cards;
+            public enum CardKeyword
+            {
+                None,
+                Exhaust,
+                Ethereal
+            }
+            """);
 
         var rawPckCatalog = new StaticKnowledgeCatalog(
             DateTimeOffset.UtcNow,
@@ -642,6 +728,31 @@ static void TestStrictDomainKnowledgeScanner()
         var abyssalBaths = catalog.Events.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "AbyssalBaths");
         Assert(ReadAttribute(abyssalBaths, "optionKeyCount") == "3", "Expected event option keys parsed from EventOption constructor calls.");
         Assert(ReadAttribute(abyssalBaths, "pageKeyCount") == "1", "Expected event page keys parsed from L10NLookup usage.");
+
+        var merchantCardRemoval = catalog.Shops.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "MerchantCardRemovalEntry");
+        Assert(ReadAttribute(merchantCardRemoval, "shopKind") == "merchant-card-removal-service", "Expected strict shop parser to classify merchant card removal.");
+        Assert(ReadAttribute(merchantCardRemoval, "l10nKey") == "MERCHANT", "Expected strict shop parser to attach the merchant service L10N key.");
+
+        var merchantRoom = catalog.Shops.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "MerchantRoom");
+        Assert(ReadAttribute(merchantRoom, "roomType") == "Shop", "Expected strict shop parser to classify MerchantRoom as a shop room.");
+
+        var cardReward = catalog.Rewards.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "CardReward");
+        Assert(ReadAttribute(cardReward, "rewardType") == "Card", "Expected strict reward parser to capture reward type.");
+        Assert(ReadAttribute(cardReward, "l10nKey") == "COMBAT_REWARD_ADD_CARD", "Expected strict reward parser to capture reward description L10N key.");
+
+        var linkedRewardSet = catalog.Rewards.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "LinkedRewardSet");
+        Assert(ReadAttribute(linkedRewardSet, "l10nKey") == "LINKED_REWARDS", "Expected strict reward parser to keep linked reward set semantics.");
+
+        var helloWorldPower = catalog.Keywords.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "HelloWorldPower");
+        Assert(ReadAttribute(helloWorldPower, "keywordKind") == "power", "Expected strict keyword parser to classify powers.");
+        Assert(ReadAttribute(helloWorldPower, "l10nKey") == "HELLO_WORLD_POWER", "Expected strict keyword parser to seed power localization keys.");
+
+        var buffIntent = catalog.Keywords.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "BuffIntent");
+        Assert(ReadAttribute(buffIntent, "keywordKind") == "intent", "Expected strict keyword parser to classify intents.");
+        Assert(ReadAttribute(buffIntent, "intentType") == "Buff", "Expected strict keyword parser to capture intent type.");
+
+        var exhaustKeyword = catalog.Keywords.Single(entry => entry.Attributes.TryGetValue("className", out var value) && value == "Exhaust");
+        Assert(ReadAttribute(exhaustKeyword, "keywordKind") == "card-keyword", "Expected strict keyword parser to include enum-backed card keywords.");
     }
     finally
     {

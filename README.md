@@ -92,7 +92,7 @@ dotnet run --project src\Sts2AiCompanion.Wpf
 핵심 구분:
 
 - `assembly-scan`, `pck-inventory`, `localization-scan`은 넓게 수집하는 raw/intermediate 계층
-- `strict-domain-parse`는 실제 디컴파일 소스 기준으로 카드/유물/포션/이벤트 canonical seed를 만드는 계층
+- `strict-domain-parse`는 실제 디컴파일 소스 기준으로 카드/유물/포션/이벤트/상점/보상/키워드 canonical seed를 만드는 계층
 - `catalog.latest.*`, `catalog.assistant.*`, `assistant/*.json`, `markdown/*.md`는 사람이 읽거나 AI가 직접 읽는 최종 산출물
 
 `inspect-static-knowledge` 최신 기준:
@@ -101,21 +101,21 @@ dotnet run --project src\Sts2AiCompanion.Wpf
 - relics: `288`
 - potions: `63`
 - events: `58`
-- shops: `438`
-- rewards: `292`
-- keywords: `2027`
+- shops: `5`
+- rewards: `7`
+- keywords: `262`
 
-여기서 `cards/relics/potions/events`는 strict parser 기반 canonical 수치입니다. `shops/rewards/keywords`는 아직 broad raw seed가 많이 남아 있어 후속 정규화 대상입니다.
+여기서 `cards/relics/potions/events/shops/rewards/keywords`는 모두 strict parser와 localization merge를 거친 canonical 수치입니다. 다만 `shops/rewards`는 실제 런마다 달라지는 상품/보상 배치까지 뜻하는 것이 아니라, 상점과 보상 시스템의 의미 단위만 정리한 값입니다. `keywords`는 파워/의도/카드 키워드의 의미를 strict semantic entry로 정리한 값입니다.
 
 localization coverage 최신 기준:
 
-- cards: `575` / descriptions: `562` / selection prompts: `22`
+- cards: `582` / descriptions: `569` / selection prompts: `22`
 - relics: `285` / descriptions: `285`
 - potions: `75` / descriptions: `70`
 - events: `153` / descriptions: `60` / options: `203`
-- shops: `23` / descriptions: `18`
-- rewards: `4` / descriptions: `2`
-- keywords: `272` / descriptions: `264`
+- shops: `4` / descriptions: `4`
+- rewards: `3` / descriptions: `2`
+- keywords: `245` / descriptions: `245`
 
 ## 산출물 위치
 

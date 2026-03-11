@@ -113,17 +113,17 @@ public static class StaticKnowledgeCatalogBuilder
 
         foreach (var entry in localizationScan.Shops)
         {
-            MergeLocalizationEntry(shops, entry, "shop", ".Merchant.", "/merchant");
+            MergeLocalizationEntry(shops, entry, "shop", ".Merchant.", "/merchant", allowCreateWhenUnmatched: false);
         }
 
         foreach (var entry in localizationScan.Rewards)
         {
-            MergeLocalizationEntry(rewards, entry, "reward", ".Reward", "/reward");
+            MergeLocalizationEntry(rewards, entry, "reward", ".Reward", "/reward", allowCreateWhenUnmatched: false);
         }
 
         foreach (var entry in localizationScan.Keywords)
         {
-            MergeLocalizationEntry(keywords, entry, "keyword", ".Intent", "/intent");
+            MergeLocalizationEntry(keywords, entry, "keyword", string.Empty, string.Empty, allowCreateWhenUnmatched: false);
         }
 
         return new StaticKnowledgeCatalog(
@@ -369,9 +369,11 @@ public static class StaticKnowledgeCatalogBuilder
         var resolvedDescription = LocalizedDescriptionResolver.Resolve(localizationCard.Description, attributes);
         var resolvedSelectionPrompt = LocalizedDescriptionResolver.Resolve(localizationCard.SelectionScreenPrompt, attributes);
         var resolvedEnglishDescription = LocalizedDescriptionResolver.Resolve(localizationCard.EnglishDescription, attributes);
+        var resolvedTitle = ResolveLocalizedDisplayName(localizationCard.Title, existing!.Name, localizationCard.KeyStem);
         attributes["l10nKey"] = localizationCard.KeyStem;
         attributes["preferredLocale"] = localizationCard.PreferredLocale;
-        attributes["title"] = localizationCard.Title;
+        attributes["localizedTitleRaw"] = localizationCard.Title;
+        attributes["title"] = resolvedTitle;
         attributes["descriptionRaw"] = localizationCard.Description;
         attributes["description"] = resolvedDescription ?? localizationCard.Description;
         attributes["selectionScreenPrompt"] = resolvedSelectionPrompt ?? localizationCard.SelectionScreenPrompt;
@@ -393,7 +395,7 @@ public static class StaticKnowledgeCatalogBuilder
 
         cards[id] = new StaticKnowledgeEntry(
             id,
-            localizationCard.Title ?? existing!.Name ?? PrettifyStem(localizationCard.KeyStem),
+            resolvedTitle,
             "localization-scan",
             existing!.Observed,
             resolvedDescription ?? localizationCard.Description ?? existing!.RawText ?? localizationCard.Title,
@@ -432,10 +434,12 @@ public static class StaticKnowledgeCatalogBuilder
         var resolvedFlavor = LocalizedDescriptionResolver.Resolve(localizationEntry.Flavor, attributes);
         var resolvedPrompt = LocalizedDescriptionResolver.Resolve(localizationEntry.SelectionScreenPrompt, attributes);
         var resolvedEnglishDescription = LocalizedDescriptionResolver.Resolve(localizationEntry.EnglishDescription, attributes);
+        var resolvedTitle = ResolveLocalizedDisplayName(localizationEntry.Title, existing?.Name, localizationEntry.KeyStem);
         attributes["l10nDomain"] = localizationEntry.Domain;
         attributes["l10nKey"] = localizationEntry.KeyStem;
         attributes["preferredLocale"] = localizationEntry.PreferredLocale;
-        attributes["title"] = localizationEntry.Title;
+        attributes["localizedTitleRaw"] = localizationEntry.Title;
+        attributes["title"] = resolvedTitle;
         attributes["descriptionRaw"] = localizationEntry.Description;
         attributes["description"] = resolvedDescription ?? localizationEntry.Description;
         attributes["flavorRaw"] = localizationEntry.Flavor;
@@ -467,13 +471,71 @@ public static class StaticKnowledgeCatalogBuilder
 
         target[id] = new StaticKnowledgeEntry(
             id,
-            localizationEntry.Title ?? existing?.Name ?? PrettifyStem(localizationEntry.KeyStem),
+            resolvedTitle,
             "localization-scan",
             existing?.Observed == true,
             resolvedDescription ?? resolvedFlavor ?? localizationEntry.Description ?? localizationEntry.Flavor ?? existing?.RawText ?? localizationEntry.Title,
             tags,
             attributes,
             MergeOptions(existing?.Options, localizationEntry.Options));
+    }
+
+    private static string ResolveLocalizedDisplayName(string? localizedTitle, string? existingName, string keyStem)
+    {
+        if (!string.IsNullOrWhiteSpace(localizedTitle)
+            && !LooksLikeSyntheticLocalizedTitle(localizedTitle!, keyStem))
+        {
+            return localizedTitle!;
+        }
+
+        if (!string.IsNullOrWhiteSpace(existingName))
+        {
+            return existingName!;
+        }
+
+        return PrettifyStem(keyStem);
+    }
+
+    private static bool LooksLikeSyntheticLocalizedTitle(string title, string keyStem)
+    {
+        var normalizedTitle = NormalizeForKnowledgeMatch(title);
+        var normalizedStem = NormalizeForKnowledgeMatch(keyStem);
+        if (string.IsNullOrWhiteSpace(normalizedTitle))
+        {
+            return true;
+        }
+
+        if (normalizedTitle == normalizedStem)
+        {
+            return true;
+        }
+
+        if (title.Contains('_', StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var letters = title.Where(char.IsLetter).ToArray();
+        if (letters.Length == 0)
+        {
+            return false;
+        }
+
+        var upperOnly = letters.All(character => !char.IsLower(character));
+        return upperOnly && !ContainsHangul(title);
+    }
+
+    private static bool ContainsHangul(string value)
+    {
+        foreach (var character in value)
+        {
+            if (character >= '\uAC00' && character <= '\uD7A3')
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string? FindBestCardMatch(
@@ -552,6 +614,21 @@ public static class StaticKnowledgeCatalogBuilder
         {
             bestScore = Math.Max(bestScore, 120);
             hasStemMatch = true;
+        }
+
+        if (entry.Attributes.TryGetValue("matchKeys", out var matchKeys) && !string.IsNullOrWhiteSpace(matchKeys))
+        {
+            foreach (var matchKey in matchKeys.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (NormalizeForKnowledgeMatch(matchKey) != normalizedStem)
+                {
+                    continue;
+                }
+
+                bestScore = Math.Max(bestScore, 125);
+                hasStemMatch = true;
+                break;
+            }
         }
 
         if (entry.Attributes.TryGetValue("fullName", out var fullName) && !string.IsNullOrWhiteSpace(fullName))
@@ -765,6 +842,11 @@ public static class StaticKnowledgeCatalogBuilder
             return true;
         }
 
+        if (string.Equals(ReadAttribute(entry, "strictModel"), "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         if (!string.IsNullOrWhiteSpace(ReadAttribute(entry, "description"))
             || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "title"))
             || !string.IsNullOrWhiteSpace(ReadAttribute(entry, "flavor")))
@@ -880,6 +962,12 @@ public static class StaticKnowledgeCatalogBuilder
     {
         var l10nDomain = ReadAttribute(entry, "l10nDomain");
         if (string.Equals(l10nDomain, domain, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var strictDomain = ReadAttribute(entry, "strictDomain");
+        if (string.Equals(strictDomain, domain, StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-11T08:00:39.3627149+00:00",
+  "generatedAt": "2026-03-11T09:31:18.0708608+00:00",
   "sourcePath": "D:\\Program Files (x86)\\Steam\\steamapps\\common\\Slay the Spire 2\\SlayTheSpire2.pck",
   "cards": [
     {
@@ -973,6 +973,27 @@
       "preferredLocale": "kor",
       "title": "\uAD34\uC9DC \uACFC\uD559",
       "description": "{CardType:choose(Attack|Skill|Power):\uD53C\uD574\uB97C {Damage:diff()}{Violence: {ViolenceHits:\uB9CC\uD07C diff()}\uBC88|} \uC90D\uB2C8\uB2E4.|[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.|}{HasRider:{Sapping:\n[gold]\uC57D\uD654[/gold]\uB97C {SappingWeak:diff()} \uBD80\uC5EC\uD569\uB2C8\uB2E4.\n[gold]\uCDE8\uC57D[/gold]\uC744 {SappingVulnerable:diff()} \uBD80\uC5EC\uD569\uB2C8\uB2E4.|}{Choking:\n\uC774\uBC88 \uD134\uC5D0 \uCE74\uB4DC\uB97C \uC0AC\uC6A9\uD560 \uB54C\uB9C8\uB2E4, \uB300\uC0C1 \uC801\uC774 \uCCB4\uB825\uC744 {ChokingDamage:diff()} \uC783\uC2B5\uB2C8\uB2E4.|}{Energized:\n{EnergizedEnergy:energyIcons()}\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.|}{Wisdom:\n\uCE74\uB4DC\uB97C {WisdomCards:diff()}\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.|}{Chaos:\n\uBB34\uC791\uC704 \uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4. \uC774\uBC88 \uD134 \uB3D9\uC548 \uADF8 \uCE74\uB4DC\uC758 \uBE44\uC6A9\uC774 0 {energyPrefix:energyIcons(1)}\uC774 \uB429\uB2C8\uB2E4.|}{Expertise:[gold]\uD798[/gold]\uC744 {ExpertiseStrength:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.\n[gold]\uBBFC\uCCA9[/gold]\uC744 {ExpertiseDexterity:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.|}{Curious:\uD30C\uC6CC \uCE74\uB4DC\uC758 \uBE44\uC6A9\uC774 {CuriousReduction:diff()} {energyPrefix:energyIcons(1)} \uAC10\uC18C\uD569\uB2C8\uB2E4.|}{Improvement:\uC804\uD22C \uC885\uB8CC \uC2DC, \uBB34\uC791\uC704 \uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uAC15\uD654[/gold]\uD569\uB2C8\uB2E4.|}|{CardType:choose(Attack|Skill|Power):\n???|\n???|???}}",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "SLY",
+      "preferredLocale": "kor",
+      "title": "\uAD50\uD65C",
+      "description": "\uB0B4 \uD134\uC774 \uB05D\uB098\uAE30 \uC804\uC5D0 \uC774 \uCE74\uB4DC\uAC00 [gold]\uC190[/gold]\uC5D0\uC11C \uBC84\uB824\uC9C4\uB2E4\uBA74, \uBE44\uC6A9 \uC5C6\uC774 \uC0AC\uC6A9\uD569\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -4392,6 +4413,27 @@
       ]
     },
     {
+      "keyStem": "RETAIN",
+      "preferredLocale": "kor",
+      "title": "\uBCF4\uC874",
+      "description": "\uBCF4\uC874\uB41C \uCE74\uB4DC\uB294 \uD134 \uC885\uB8CC \uC2DC \uBC84\uB824\uC9C0\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "THE_SEALED_THRONE",
       "preferredLocale": "kor",
       "title": "\uBD09\uC778\uB41C \uC655\uC88C",
@@ -5316,6 +5358,27 @@
       ]
     },
     {
+      "keyStem": "UNPLAYABLE",
+      "preferredLocale": "kor",
+      "title": "\uC0AC\uC6A9\uBD88\uAC00",
+      "description": "\uC0AC\uC6A9\uBD88\uAC00 \uCE74\uB4DC\uB294 \uB0BC \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "SETUP_STRIKE",
       "preferredLocale": "kor",
       "title": "\uC0AC\uC804 \uD0C0\uACA9",
@@ -5694,6 +5757,27 @@
       ]
     },
     {
+      "keyStem": "INNATE",
+      "preferredLocale": "kor",
+      "title": "\uC120\uCC9C\uC131",
+      "description": "\uB9E4 \uC804\uD22C\uB9C8\uB2E4 \uC774 \uCE74\uB4DC\uB97C [gold]\uC190[/gold]\uC5D0 \uB4E0 \uC0C1\uD0DC\uB85C \uC2DC\uC791\uD569\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
       "keyStem": "MASTER_PLANNER",
       "preferredLocale": "kor",
       "title": "\uC124\uACC4\uC758 \uB300\uAC00",
@@ -5740,6 +5824,27 @@
       "preferredLocale": "kor",
       "title": "\uC131\uB300\uD55C \uB3C4\uBC15",
       "description": "{singleStarIcon}\uC744 {Stars:diff()} \uC5BB\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "EXHAUST",
+      "preferredLocale": "kor",
+      "title": "\uC18C\uBA78",
+      "description": "\uC804\uD22C\uAC00 \uB05D\uB0A0 \uB54C\uAE4C\uC9C0 \uC81C\uAC70\uB429\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -7064,6 +7169,27 @@
       "title": "\uC5FC\uC6D0",
       "description": "[gold]\uBF51\uC744 \uCE74\uB4DC \uB354\uBBF8[/gold]\uC5D0\uC11C \uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uC190[/gold]\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
       "selectionScreenPrompt": "\uC190\uC73C\uB85C \uAC00\uC838\uC62C \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "ETERNAL",
+      "preferredLocale": "kor",
+      "title": "\uC601\uAD6C",
+      "description": "[gold]\uB371[/gold]\uC5D0\uC11C \uC81C\uAC70\uD558\uAC70\uB098 \uBCC0\uD654\uC2DC\uD0AC \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
       "sourceFileHints": [
@@ -11935,6 +12061,27 @@
       "preferredLocale": "kor",
       "title": "\uD718\uAC08\uAE40",
       "description": "[gold]\uC190[/gold]\uC774 \uAC00\uB4DD \uCC30 \uB54C\uAE4C\uC9C0 \uCE74\uB4DC\uB97C \uBF51\uC2B5\uB2C8\uB2E4.",
+      "selectionScreenPrompt": null,
+      "englishTitle": null,
+      "englishDescription": null,
+      "sourceFileHints": [
+        "localization/cjk/",
+        "localization/kor/",
+        "localization/latin/",
+        "localization/unknown/"
+      ],
+      "locales": [
+        "cjk",
+        "kor",
+        "latin",
+        "unknown"
+      ]
+    },
+    {
+      "keyStem": "ETHEREAL",
+      "preferredLocale": "kor",
+      "title": "\uD718\uBC1C\uC131",
+      "description": "\uC774 \uCE74\uB4DC\uB294 \uC774\uBC88 \uD134 \uC885\uB8CC \uC2DC [gold]\uC190[/gold]\uC5D0 \uC788\uB2E4\uBA74, [gold]\uC18C\uBA78[/gold]\uD569\uB2C8\uB2E4.",
       "selectionScreenPrompt": null,
       "englishTitle": null,
       "englishDescription": null,
@@ -28501,299 +28648,10 @@
   "shops": [
     {
       "domain": "shop",
-      "keyStem": "BADGE",
-      "preferredLocale": "eng",
-      "title": "BADGE",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [],
-      "locales": []
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_UNKNOWN",
-      "preferredLocale": "kor",
-      "title": "LEGEND UNKNOWN",
-      "description": "\uBBF8\uC9C0\uC758 \uBC29\uC785\uB2C8\uB2E4.\n\n\uC774\uBCA4\uD2B8\uB098 \uC801, \uC0C1\uC810, \uBCF4\uBB3C\uC744 \uB9C8\uC8FC\uCE60 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "NIGHT_TERRORS",
-      "preferredLocale": "eng",
-      "title": "NIGHT TERRORS",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [],
-      "locales": []
-    },
-    {
-      "domain": "shop",
-      "keyStem": "RELIC_RARITY",
-      "preferredLocale": "eng",
-      "title": "RELIC RARITY",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [],
-      "locales": []
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_ANCIENT",
-      "preferredLocale": "kor",
-      "title": "\uACE0\uB300\uC758 \uC874\uC7AC",
-      "description": "\uC774 \uBC29\uC5D0\uB294 \uACE0\uB300\uC758 \uC874\uC7AC\uB4E4\uC774 \uBA38\uBB34\uB974\uACE0 \uC788\uC2B5\uB2C8\uB2E4.\n\n\uACE0\uB300\uC758 \uC874\uC7AC\uB4E4\uC740 \uB180\uB77C\uC6B4 \uBCF4\uB108\uC2A4\uC640 \uBCF4\uBB3C, \uC9C0\uC2DD\uC744 \uC81C\uACF5\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
       "keyStem": "ROOM_UNKNOWN_MERCHANT",
       "preferredLocale": "kor",
       "title": "\uBBF8\uC9C0 - \uC0C1\uC778",
       "description": "\uC2E0\uBE44\uB85C\uC6B4 \uC0C1\uC778\uC774 \uC704\uCE58\uD55C, \uC774\uC804\uC5D0\uB294 \uC54C \uC218 \uC5C6\uC5C8\uB358 \uBC29\uC785\uB2C8\uB2E4.\n\n\uC5F4\uC2EC\uD788 \uBAA8\uC740 [gold]\uACE8\uB4DC[/gold]\uB97C \uC5EC\uAE30\uC5D0\uC11C \uC0AC\uC6A9\uD574\uBCF4\uC138\uC694!",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "RESTORE_DEXTERITY",
-      "preferredLocale": "kor",
-      "title": "\uBBFC\uCCA9 \uD68C\uBCF5",
-      "description": "\uB300\uC0C1\uC758 \uD134 \uC885\uB8CC \uC2DC, [gold]\uBBFC\uCCA9[/gold]\uC744 [blue]9[/blue] \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "RESTORE_FOCUS",
-      "preferredLocale": "kor",
-      "title": "\uBC00\uC9D1 \uD68C\uBCF5",
-      "description": "\uB300\uC0C1\uC758 \uD134 \uC885\uB8CC \uC2DC, [gold]\uBC00\uC9D1[/gold]\uC744 [blue]9[/blue] \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_TREASURE",
-      "preferredLocale": "kor",
-      "title": "\uBCF4\uBB3C \uBC29",
-      "description": "\uBAA8\uB450\uAC00 \uD0D0\uB0B4\uB294 \uC774 \uBC29\uC5D0\uC11C\uB294 [gold]\uC720\uBB3C[/gold]\uACFC [gold]\uACE8\uB4DC[/gold]\uB97C \uC5BB\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_BOSS",
-      "preferredLocale": "kor",
-      "title": "\uBCF4\uC2A4",
-      "description": "\uD574\uB2F9 \uC9C0\uC5ED\uC5D0\uC11C \uAC00\uC7A5 \uC704\uD5D8\uD55C \uC801\uC785\uB2C8\uB2E4.\n\n\uBCF4\uC2A4\uB97C \uCC98\uCE58 \uC2DC \uB2E4\uC74C \uB9C9\uC73C\uB85C \uC9C4\uD589\uD560 \uC218 \uC788\uAC8C \uB429\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "FAKE_MERCHANT_EVENT_ENCOUNTER",
-      "preferredLocale": "kor",
-      "title": "\uC0C1?\uC778",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_MERCHANT",
-      "preferredLocale": "kor",
-      "title": "\uC0C1\uC778",
-      "description": "\uC774 \uBC29\uC5D0\uC11C\uB294 \uC2E0\uBE44\uB85C\uC6B4 \uC0C1\uC778\uC774 \uC790\uC2E0\uC758 \uBB3C\uAC74\uB4E4\uC744 \uD310\uB9E4\uD569\uB2C8\uB2E4.\n\n\uC5F4\uC2EC\uD788 \uBAA8\uC740 [gold]\uACE8\uB4DC[/gold]\uB97C \uC5EC\uAE30\uC5D0\uC11C \uC0AC\uC6A9\uD574\uBCF4\uC138\uC694!",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -28877,242 +28735,10 @@
     },
     {
       "domain": "shop",
-      "keyStem": "THE_ARM",
-      "preferredLocale": "kor",
-      "title": "\uC190\uC528\uB984",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_ELITE",
-      "preferredLocale": "kor",
-      "title": "\uC5D8\uB9AC\uD2B8",
-      "description": "\uC774 \uBC29\uC5D0\uB294 \uAC15\uB825\uD55C \uC801\uC774 \uAE30\uB2E4\uB9AC\uACE0 \uC788\uC2B5\uB2C8\uB2E4.\n\n\uC5D8\uB9AC\uD2B8\uB4E4\uC744 \uCC98\uCE58 \uC2DC \uBCF4\uC0C1\uC73C\uB85C [gold]\uC720\uBB3C[/gold]\uC744 \uBC1B\uC744 \uC218 \uC788\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "FAKE_MERCHANT_MONSTER",
-      "preferredLocale": "kor",
-      "title": "\uC720\uBB3C \uB358\uC9C0\uAE30",
-      "description": "\uC81C \uAC12\uC744 \uCE58\uB974\uAC8C \uD574\uC8FC\uC9C0...",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": "\uC81C \uAC12\uC744 \uCE58\uB974\uAC8C \uD574\uC8FC\uC9C0... | \uBB3C\uAD50\uAE30 \uBC25\uC774 \uB418\uAC8C \uD574\uC8FC\uB9C8! | \uCE74\uCE6D! | \uC190 \uB4E4\uC5B4!",
-        "noteCount": "5"
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_EVENT",
-      "preferredLocale": "kor",
-      "title": "\uC774\uBCA4\uD2B8",
-      "description": "\uC774 \uBC29\uC5D0\uC11C\uB294 \uD2B9\uC774\uD55C \uC77C\uB4E4\uC774 \uBC1C\uC0DD\uD569\uB2C8\uB2E4...",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_ENEMY",
-      "preferredLocale": "kor",
-      "title": "\uC801",
-      "description": "\uC801\uB300\uC801\uC778 \uC874\uC7AC\uB4E4\uC774 \uAE30\uB2E4\uB9AC\uACE0 \uC788\uB294 \uBC29\uC785\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_MAP",
-      "preferredLocale": "kor",
-      "title": "\uC9C0\uB3C4",
-      "description": "\uC2DC\uC791 \uACBD\uB85C\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
       "keyStem": "MERCHANT",
       "preferredLocale": "kor",
       "title": "\uCE74\uB4DC \uC81C\uAC70 \uC11C\uBE44\uC2A4",
       "description": "\uB371\uC5D0\uC11C \uCE74\uB4DC\uB97C 1\uC7A5 \uC81C\uAC70\uD569\uB2C8\uB2E4. \uB0A8\uC740 \uB3C4\uC804 \uB3D9\uC548 \uC774 \uC11C\uBE44\uC2A4\uC758 \uBE44\uC6A9\uC774 [blue]{Amount}[/blue] \uC99D\uAC00\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "LEGEND_REST",
-      "preferredLocale": "kor",
-      "title": "\uD734\uC2DD",
-      "description": "\uC774 \uBC29\uC5D0 \uB4E4\uB7EC \uC57D\uAC04\uC758 \uCCB4\uB825\uC744 [green]\uD68C\uBCF5[/green]\uD558\uAC70\uB098 \uCE74\uB4DC\uB97C [gold]\uAC15\uD654[/gold]\uD574\uBCF4\uC138\uC694.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "shop",
-      "keyStem": "ROOM_REST",
-      "preferredLocale": "kor",
-      "title": "\uD734\uC2DD \uC7A5\uC18C",
-      "description": "\uC774 \uBC29\uC5D0 \uB4E4\uB7EC \uC57D\uAC04\uC758 \uCCB4\uB825\uC744 [green]\uD68C\uBCF5[/green]\uD558\uAC70\uB098 \uCE74\uB4DC\uB97C [gold]\uAC15\uD654[/gold]\uD574\uBCF4\uC138\uC694.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -29166,25 +28792,6 @@
         "latin",
         "unknown"
       ]
-    },
-    {
-      "domain": "reward",
-      "keyStem": "HISTORY_ENTRY",
-      "preferredLocale": "eng",
-      "title": "HISTORY ENTRY",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [],
-      "locales": []
     },
     {
       "domain": "reward",
@@ -29426,238 +29033,6 @@
       "preferredLocale": "kor",
       "title": "\uAC00\uC2DC",
       "description": "\uACF5\uACA9\uC5D0 \uC801\uC911 \uC2DC, \uACF5\uACA9\uC790\uC5D0\uAC8C \uD53C\uD574\uB97C \uC90D\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "MOCK_GAIN_BLOCK_ON_ATTACK_POWER",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uACF5\uACA9 \uC2DC \uBC29\uC5B4\uB3C4 \uD68D\uB4DD",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "MOCK_FREE_CARDS_POWER",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uBB34\uB8CC \uCE74\uB4DC",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "MOCK_MODIFY_STAR_COST_POWER",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uBCC4 \uBE44\uC6A9 \uC870\uC815",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "MOCK_REVIVE_POWER",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uBD80\uD65C",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "MOCK_CLONE_CARDS_ON_PLAY_POWER",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uC0AC\uC6A9 \uC2DC \uCE74\uB4DC \uBCF5\uC81C",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "MOCK_MODIFY_ENERGY_COST_POWER",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uC5D0\uB108\uC9C0 \uBE44\uC6A9 \uC870\uC815",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "MOCK_PREVENT_DEATH_POWER",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uC8FD\uC74C \uBC29\uC9C0",
-      "description": null,
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "MOCK_INVINCIBLE_ON_DEATH_POWER",
-      "preferredLocale": "kor",
-      "title": "\uAC00\uC9DC \uC8FD\uC74C\uC5D0 \uBA74\uC5ED",
-      "description": null,
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -31017,35 +30392,6 @@
     },
     {
       "domain": "keyword",
-      "keyStem": "A_THOUSAND_CUTS_POWER",
-      "preferredLocale": "kor",
-      "title": "\uB2A5\uC9C0\uCC98\uCC38",
-      "description": "\uCE74\uB4DC\uB97C \uC0AC\uC6A9\uD560 \uB54C\uB9C8\uB2E4, \uBAA8\uB4E0 \uC801\uC5D0\uAC8C \uD53C\uD574\uB97C [blue]1[/blue] \uC90D\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
       "keyStem": "BLOCK_NEXT_TURN_POWER",
       "preferredLocale": "kor",
       "title": "\uB2E4\uC74C \uD134 \uBC29\uC5B4\uB3C4",
@@ -31311,64 +30657,6 @@
       "preferredLocale": "kor",
       "title": "\uB3C4\uB451\uC9C8",
       "description": "\uACF5\uACA9 \uC2DC [gold]\uACE8\uB4DC[/gold]\uB97C \uBE7C\uC557\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "NO_ESCAPE_POWER",
-      "preferredLocale": "kor",
-      "title": "\uB3C4\uB9DD\uCE60 \uC218 \uC5C6\uB2E4",
-      "description": "[blue]3[/blue]\uD134 \uC885\uB8CC \uC2DC, [gold]\uC885\uB9D0[/gold]\uC744 [blue]50[/blue] \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "TAUNT_POWER",
-      "preferredLocale": "kor",
-      "title": "\uB3C4\uBC1C",
-      "description": "\uC801\uC774 \uB2F9\uC2E0\uC744 \uACF5\uACA9 \uC2DC, \uACF5\uACA9\uD55C \uC801\uC5D0\uAC8C [gold]\uCDE8\uC57D[/gold]\uC744 [blue]1[/blue] \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -32119,68 +31407,10 @@
     },
     {
       "domain": "keyword",
-      "keyStem": "UNKNOWN",
-      "preferredLocale": "kor",
-      "title": "\uBBF8\uC9C0",
-      "description": "\uC774 \uC801\uC758 \uC758\uB3C4\uB294 [gold]\uC54C \uC218 \uC5C6\uC2B5\uB2C8\uB2E4[/gold].",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
       "keyStem": "DEXTERITY_POWER",
       "preferredLocale": "kor",
       "title": "\uBBFC\uCCA9",
       "description": "\uBBFC\uCCA9\uC740 \uCE74\uB4DC\uB97C \uD1B5\uD574 \uC5BB\uB294 [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C \uC99D\uAC00\uC2DC\uD0B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "DEXTERITY_DOWN_POWER",
-      "preferredLocale": "kor",
-      "title": "\uBBFC\uCCA9 \uAC10\uC18C",
-      "description": "\uC774\uBC88 \uD134 \uC885\uB8CC \uC2DC, [gold]\uBBFC\uCCA9[/gold]\uC744 \uC783\uC2B5\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -32322,35 +31552,6 @@
     },
     {
       "domain": "keyword",
-      "keyStem": "REFLECTIVE_FORTRESS_POWER",
-      "preferredLocale": "kor",
-      "title": "\uBC18\uC0AC\uD558\uB294 \uC694\uC0C8",
-      "description": "\uACF5\uACA9\uC744 \uC644\uC804\uD788 [gold]\uBC29\uC5B4[/gold] \uD560 \uB54C\uB9C8\uB2E4, \uBC29\uC5B4\uD55C \uD53C\uD574\uB7C9\uC744 \uACF5\uACA9\uC790\uC5D0\uAC8C \uBC18\uC0AC\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
       "keyStem": "OUTBREAK_POWER",
       "preferredLocale": "kor",
       "title": "\uBC1C\uBCD1",
@@ -32442,35 +31643,6 @@
       "preferredLocale": "kor",
       "title": "\uBC29\uC5B4\uB3C4",
       "description": "\uB2E4\uC74C \uD134\uAE4C\uC9C0 \uD53C\uD574\uB97C \uBC29\uC5B4\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "HEATSINKS_POWER",
-      "preferredLocale": "kor",
-      "title": "\uBC29\uC5F4\uD310",
-      "description": "\uD30C\uC6CC \uCE74\uB4DC\uB97C \uC0AC\uC6A9\uD560 \uB54C\uB9C8\uB2E4, \uCE74\uB4DC\uB97C [blue]1[/blue]\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -32902,126 +32074,10 @@
     },
     {
       "domain": "keyword",
-      "keyStem": "MELANCHOLY_POWER",
-      "preferredLocale": "kor",
-      "title": "\uBE44\uC560",
-      "description": "[gold]\uC885\uB9D0[/gold]\uC774 \uBD80\uC5EC\uB420 \uB54C\uB9C8\uB2E4, \uCD94\uAC00\uB85C [blue]2[/blue] \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
       "keyStem": "SNEAKY_POWER",
       "preferredLocale": "kor",
       "title": "\uBE44\uC5F4\uD568",
       "description": "\uB2E4\uB978 \uD50C\uB808\uC774\uC5B4\uAC00 \uC801\uC744 \uACF5\uACA9\uD560 \uB54C\uB9C8\uB2E4, [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "RESERVES_POWER",
-      "preferredLocale": "kor",
-      "title": "\uBE44\uCD95\uBB3C",
-      "description": "\uCE74\uB4DC \uC0AC\uC6A9\uC744 \uC704\uD55C [gold]\uC5D0\uB108\uC9C0[/gold]\uAC00 \uBD80\uC871\uD55C \uACBD\uC6B0, [gold]\uC5D0\uB108\uC9C0[/gold]\uB9C8\uB2E4 2{singleStarIcon}\uC774 \uB300\uC2E0 \uC0AC\uC6A9\uB429\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "WINGED_JUMP_POWER",
-      "preferredLocale": "kor",
-      "title": "\uBE44\uD589 \uC810\uD504",
-      "description": "\uB0B4 \uD134 \uC2DC\uC791 \uC2DC, \uBAA8\uB4E0 \uC801\uC5D0\uAC8C [gold]\uCDE8\uC57D[/gold]\uC744 [blue]1[/blue] \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "READ_THE_BONES_POWER",
-      "preferredLocale": "kor",
-      "title": "\uBF08 \uC77D\uAE30",
-      "description": "[gold]\uC18C\uD658[/gold]\uD560 \uB54C\uB9C8\uB2E4, \uCE74\uB4DC\uB97C 1\uC7A5 \uBF51\uC2B5\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -33859,68 +32915,10 @@
     },
     {
       "domain": "keyword",
-      "keyStem": "CONTRACTILITY_POWER",
-      "preferredLocale": "kor",
-      "title": "\uC2E0\uCD95\uC131",
-      "description": "\uB2E4\uC74C \uD134\uC5D0, [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C [blue]0[/blue] \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
       "keyStem": "SIGNAL_BOOST_POWER",
       "preferredLocale": "kor",
       "title": "\uC2E0\uD638 \uC99D\uD3ED",
       "description": "\uB2E4\uC74C\uC5D0 \uC0AC\uC6A9\uD558\uB294 \uD30C\uC6CC \uCE74\uB4DC\uAC00 1\uBC88 \uCD94\uAC00\uB85C \uC0AC\uC6A9\uB429\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "SOW_POWER",
-      "preferredLocale": "kor",
-      "title": "\uC528\uBFCC\uB9AC\uAE30",
-      "description": "\uC774\uBC88 \uD134\uC5D0 [gold]\uC190[/gold]\uC5D0 \uC788\uB294 \uBB34\uC791\uC704 \uCE74\uB4DC\uB97C [blue]1[/blue]\uC7A5 [gold]\uBCF4\uC874[/gold]\uD569\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -34352,93 +33350,6 @@
     },
     {
       "domain": "keyword",
-      "keyStem": "SOULS_POWER",
-      "preferredLocale": "kor",
-      "title": "\uC601\uD63C\uC758 \uD798",
-      "description": "\uC774 \uCE74\uB4DC\uB294 [gold]\uC18C\uBA78[/gold]\uC744 \uC783\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "SHARP_EDGE_POWER",
-      "preferredLocale": "kor",
-      "title": "\uC608\uB9AC\uD55C \uB0A0",
-      "description": "[gold]\uB2E8\uB3C4[/gold]\uB97C \uC0DD\uC131\uD560 \uB54C\uB9C8\uB2E4, \uADF8 \uB2E8\uB3C4\uB97C [gold]\uAC15\uD654[/gold]\uD569\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "DECREE_OF_ENTROPY_POWER",
-      "preferredLocale": "kor",
-      "title": "\uC608\uCE21 \uBD88\uD5C8 \uD310\uACB0",
-      "description": "\uB0B4 \uD134 \uC2DC\uC791 \uC2DC, \uBB34\uC791\uC704 [gold]\uAC15\uD654\uB41C[/gold] \uCE74\uB4DC\uB97C [blue]1[/blue]\uC7A5 \uC190\uC73C\uB85C \uAC00\uC838\uC635\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
       "keyStem": "UNMOVABLE_POWER",
       "preferredLocale": "kor",
       "title": "\uC694\uC9C0\uBD80\uB3D9",
@@ -34530,35 +33441,6 @@
       "preferredLocale": "kor",
       "title": "\uC6B0\uC815",
       "description": "\uB9E4 \uD134 \uC2DC\uC791 \uC2DC, [gold]\uC5D0\uB108\uC9C0[/gold]\uB97C [blue]1[/blue] \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "DECREE_OF_UNMAKING_POWER",
-      "preferredLocale": "kor",
-      "title": "\uC6D0\uC0C1 \uBCF5\uAD6C \uD310\uACB0",
-      "description": "\uC801\uC5D0\uAC8C \uD53C\uD574\uB97C \uC904 \uB54C\uB9C8\uB2E4, \uB300\uC0C1 \uC801\uC5D0\uAC8C \uBB34\uC791\uC704 \uD574\uB85C\uC6B4 \uD6A8\uACFC\uB97C \uBD80\uC5EC\uD569\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -35193,35 +34075,6 @@
     },
     {
       "domain": "keyword",
-      "keyStem": "ADAPTATION_POWER",
-      "preferredLocale": "kor",
-      "title": "\uC801\uC751",
-      "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C \uC5BB\uC744 \uB54C\uB9C8\uB2E4, \uC774\uBC88 \uD134 \uB3D9\uC548 [gold]\uBBFC\uCCA9[/gold]\uC744 [blue]3[/blue] \uC5BB\uC2B5\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
       "keyStem": "ADAPTABLE_POWER",
       "preferredLocale": "kor",
       "title": "\uC801\uC751\uB825",
@@ -35313,35 +34166,6 @@
       "preferredLocale": "kor",
       "title": "\uC808\uB300\uC801\uC778 \uD798",
       "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C \uC5BB\uC744 \uB54C\uB9C8\uB2E4, \uBB34\uC791\uC704 \uC801\uC5D0\uAC8C \uD53C\uD574\uB97C [blue]5[/blue] \uC90D\uB2C8\uB2E4.",
-      "flavor": null,
-      "selectionScreenPrompt": null,
-      "englishTitle": null,
-      "englishDescription": null,
-      "options": [],
-      "attributes": {
-        "unlockInfo": null,
-        "notePreview": null,
-        "noteCount": null
-      },
-      "sourceFileHints": [
-        "localization/cjk/",
-        "localization/kor/",
-        "localization/latin/",
-        "localization/unknown/"
-      ],
-      "locales": [
-        "cjk",
-        "kor",
-        "latin",
-        "unknown"
-      ]
-    },
-    {
-      "domain": "keyword",
-      "keyStem": "DESPAIR_POWER",
-      "preferredLocale": "kor",
-      "title": "\uC808\uB9DD",
-      "description": "\uBD80\uC5EC\uD558\uB294 [gold]\uC885\uB9D0[/gold] [blue]1[/blue]\uB9C8\uB2E4, [gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C [blue]1[/blue] \uC5BB\uC2B5\uB2C8\uB2E4.",
       "flavor": null,
       "selectionScreenPrompt": null,
       "englishTitle": null,
@@ -37137,12 +35961,12 @@
   ],
   "stats": {
     "mode": "utf8-streaming-string-scan",
-    "rawMatchCount": "46800",
-    "cards": "575",
-    "cardTitles": "575",
-    "cardDescriptions": "562",
+    "rawMatchCount": "45814",
+    "cards": "582",
+    "cardTitles": "582",
+    "cardDescriptions": "569",
     "cardSelectionPrompts": "22",
-    "cardKoreanPreferred": "575",
+    "cardKoreanPreferred": "582",
     "cardEnglishPreferred": "0",
     "relics": "285",
     "relicDescriptions": "285",
@@ -37151,12 +35975,12 @@
     "events": "153",
     "eventDescriptions": "60",
     "eventOptions": "203",
-    "shops": "23",
-    "shopDescriptions": "18",
-    "rewards": "4",
+    "shops": "4",
+    "shopDescriptions": "4",
+    "rewards": "3",
     "rewardDescriptions": "2",
-    "keywords": "272",
-    "keywordDescriptions": "264"
+    "keywords": "245",
+    "keywordDescriptions": "245"
   },
   "warnings": []
 }

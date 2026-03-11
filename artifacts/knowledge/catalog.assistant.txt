@@ -1,5 +1,5 @@
 metadata
-generated_at: 2026-03-11T08:00:40.9656974+00:00
+generated_at: 2026-03-11T09:31:19.0775166+00:00
 release_version: v0.98.3
 release_commit: cb602cef
 release_date: 2026-03-09T19:21:00.0000000-07:00
@@ -22,9 +22,9 @@ source: extract-static-knowledge
 
 cards
 count: 576
-- FTL [megacrit-sts2-core-models-cards-ftl] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 5 줍니다. 이번 턴에 카드를 {PlayMax:diff()}장보다 적게 사용했다면, 카드를 1장 뽑습니다.
-- HELLO WORLD [megacrit-sts2-core-models-cards-helloworld] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=내 턴 시작 시, 무작위 일반 카드를 1장 [gold]손[/gold]으로 가져옵니다.
-- NULL [megacrit-sts2-core-models-cards-null] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 10 줍니다. [gold]약화[/gold]를 2 부여합니다. [gold]암흑[/gold]을 1번 [gold]영창[/gold]합니다.
+- Ftl [megacrit-sts2-core-models-cards-ftl] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 5 줍니다. 이번 턴에 카드를 {PlayMax:diff()}장보다 적게 사용했다면, 카드를 1장 뽑습니다.
+- Hello World [megacrit-sts2-core-models-cards-helloworld] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=내 턴 시작 시, 무작위 일반 카드를 1장 [gold]손[/gold]으로 가져옵니다.
+- Null [megacrit-sts2-core-models-cards-null] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 10 줍니다. [gold]약화[/gold]를 2 부여합니다. [gold]암흑[/gold]을 1번 [gold]영창[/gold]합니다.
 - 가로막기 [megacrit-sts2-core-models-cards-intercept] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=[gold]방어도[/gold]를 9 얻습니다. 이번 턴 동안 다른 플레이어가 받아야 하는 모든 공격의 목표를 자신으로 변경합니다.
 - 가속 이탈 [megacrit-sts2-core-models-cards-boostaway] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=[gold]방어도[/gold]를 6 얻습니다. [gold]버린 카드 더미[/gold]에 [gold]어지러움[/gold]을 1장 섞어 넣습니다.
 - 갈가리 찢기 [megacrit-sts2-core-models-cards-tearasunder] source=localization-scan tags=l10n, localized-card, strict-card, strict-model description=피해를 5 줍니다. 이번 전투 동안 체력을 잃은 횟수만큼 반복합니다.{InCombat: ({CalculatedHits:diff()}번 적중합니다...
@@ -85,49 +85,35 @@ count: 58
 ... 46 more
 
 shops
-count: 147
-- LEGEND UNKNOWN [legend-unknown] source=localization-scan tags=l10n, localized-shop description=미지의 방입니다.  이벤트나 적, 상점, 보물을 마주칠 수 있습니다.
-- 고대의 존재 [legend-ancient] source=localization-scan tags=l10n, localized-shop description=이 방에는 고대의 존재들이 머무르고 있습니다.  고대의 존재들은 놀라운 보너스와 보물, 지식을 제공합니다.
-- 미지 - 상인 [room-unknown-merchant] source=localization-scan tags=l10n, localized-shop description=신비로운 상인이 위치한, 이전에는 알 수 없었던 방입니다.  열심히 모은 [gold]골드[/gold]를 여기에서 사용해보세요!
-- 민첩 회복 [restore-dexterity] source=localization-scan tags=l10n, localized-shop description=대상의 턴 종료 시, [gold]민첩[/gold]을 [blue]9[/blue] 얻습니다.
-- 밀집 회복 [restore-focus] source=localization-scan tags=l10n, localized-shop description=대상의 턴 종료 시, [gold]밀집[/gold]을 [blue]9[/blue] 얻습니다.
-- 보물 방 [legend-treasure] source=localization-scan tags=l10n, localized-shop description=모두가 탐내는 이 방에서는 [gold]유물[/gold]과 [gold]골드[/gold]를 얻을 수 있습니다.
-- 보스 [legend-boss] source=localization-scan tags=l10n, localized-shop description=해당 지역에서 가장 위험한 적입니다.  보스를 처치 시 다음 막으로 진행할 수 있게 됩니다.
-- 상인 [legend-merchant] source=localization-scan tags=l10n, localized-shop description=이 방에서는 신비로운 상인이 자신의 물건들을 판매합니다.  열심히 모은 [gold]골드[/gold]를 여기에서 사용해보세요!
-- 상인의 양?탄자 [fake-merchants-rug] source=localization-scan tags=l10n, localized-shop description=초라한 모조품. 아무 효과도 없습니다.
-- 상점 [room-merchant] source=localization-scan tags=l10n, localized-shop description=이 방에서는 신비로운 상인이 자신의 물건들을 판매합니다.  열심히 모은 [gold]골드[/gold]를 여기에서 사용해보세요!
-- 엘리트 [legend-elite] source=localization-scan tags=l10n, localized-shop description=이 방에는 강력한 적이 기다리고 있습니다.  엘리트들을 처치 시 보상으로 [gold]유물[/gold]을 받을 수 있습니다.
-- 유물 던지기 [megacrit-sts2-core-models-monsters-fakemerchantmonster] source=localization-scan tags=l10n, localized-shop, type-candidate description=제 값을 치르게 해주지...
-... 135 more
+count: 5
+- 상점 [megacrit-sts2-core-rooms-merchantroom] source=localization-scan tags=l10n, localized-shop, room, strict-model, strict-shop description=이 방에서는 신비로운 상인이 자신의 물건들을 판매합니다.  열심히 모은 [gold]골드[/gold]를 여기에서 사용해보세요!
+- 카드 제거 서비스 [megacrit-sts2-core-entities-merchant-merchantcardremovalentry] source=localization-scan tags=l10n, localized-shop, strict-model, strict-shop description=덱에서 카드를 1장 제거합니다. 남은 도전 동안 이 서비스의 비용이 [blue]{Amount}[/blue] 증가합니다.
+- 유물 판매 슬롯 [megacrit-sts2-core-entities-merchant-merchantrelicentry] source=strict-domain-parse tags=strict-shop, strict-model
+- 카드 판매 슬롯 [megacrit-sts2-core-entities-merchant-merchantcardentry] source=strict-domain-parse tags=strict-shop, strict-model
+- 포션 판매 슬롯 [megacrit-sts2-core-entities-merchant-merchantpotionentry] source=strict-domain-parse tags=strict-shop, strict-model
 
 rewards
-count: 54
-- 연결된 보상 [linked-rewards] source=localization-scan tags=l10n, localized-reward description=이 세트에서 [blue]1[/blue]개의 보상만을 선택할 수 있습니다.
-- 카드 보상 [card-reward] source=localization-scan tags=l10n, localized-reward description=무작위 카드 [blue]3[/blue]장으로 구성된 팩입니다. 카드를 [blue]1[/blue]장 선택해 [gold]덱[/gold]에 추가할 수...
-- COMBAT REWARD CARD REMOVAL [combat-reward-card-removal] source=localization-scan tags=l10n, localized-reward
-- combat reward ftue [res---scenes-ftue-combat-reward-ftue-tscn] source=pck-inventory tags=resource-path
-- Gold Reward [megacrit-sts2-core-rewards-goldreward] source=assembly-scan tags=type-candidate
-- HISTORY ENTRY [history-entry] source=localization-scan tags=l10n, localized-reward
-- Linked Reward Set [megacrit-sts2-core-rewards-linkedrewardset] source=assembly-scan tags=type-candidate
-- linked reward set.tscn4 [res---scenes-rewards-linked-reward-set-tscn4] source=pck-inventory tags=resource-path
-- Method Name [megacrit-sts2-core-nodes-rewards-nlinkedrewardset-methodname] source=assembly-scan tags=type-candidate
-- Method Name [megacrit-sts2-core-nodes-rewards-nrewardbutton-methodname] source=assembly-scan tags=type-candidate
-- MockNoRewardsEncounter [res---src-core-models-encounters-mocks-mocknorewardsencounter-csj] source=pck-inventory tags=resource-path
-- NCombatRewardFtue [ext-resource-type--script--uid--uid---d13k30jb0a6y3--path--res---src-core-nodes-ftue-ncombatrewardftue-cs--id--1-y1psv] source=pck-inventory tags=resource-path
-... 42 more
+count: 7
+- 연결된 보상 [megacrit-sts2-core-rewards-linkedrewardset] source=localization-scan tags=l10n, localized-reward, reward-set, strict-model, strict-reward description=이 세트에서 [blue]1[/blue]개의 보상만을 선택할 수 있습니다.
+- 카드 보상 [megacrit-sts2-core-rewards-cardreward] source=localization-scan tags=l10n, localized-reward, strict-model, strict-reward description=무작위 카드 [blue]3[/blue]장으로 구성된 팩입니다. 카드를 [blue]1[/blue]장 선택해 [gold]덱[/gold]에 추가할 수...
+- 골드 보상 [megacrit-sts2-core-rewards-goldreward] source=strict-domain-parse tags=strict-reward, strict-model
+- 유물 보상 [megacrit-sts2-core-rewards-relicreward] source=strict-domain-parse tags=strict-reward, strict-model
+- 카드 제거 보상 [megacrit-sts2-core-rewards-cardremovalreward] source=localization-scan tags=l10n, localized-reward, strict-model, strict-reward
+- 특수 카드 보상 [megacrit-sts2-core-rewards-specialcardreward] source=strict-domain-parse tags=strict-reward, strict-model
+- 포션 보상 [megacrit-sts2-core-rewards-potionreward] source=strict-domain-parse tags=strict-reward, strict-model
 
 keywords
-count: 1134
-- 2배의 피해 [double-damage-power] source=localization-scan tags=l10n, localized-keyword description=이번 턴에 가하는 공격의 피해량이 2배가 됩니다.
-- HELLO WORLD POWER [hello-world-power] source=localization-scan tags=l10n, localized-keyword description=내 턴 시작 시, 무작위 일반 카드를 [blue]1[/blue]장 [gold]손[/gold]으로 가져옵니다.
-- TEMPORARY DEXTERITY POWER [temporary-dexterity-power] source=localization-scan tags=l10n, localized-keyword description=이번 턴이 끝나기 전까지 [gold]민첩[/gold]을 얻습니다.
-- TEMPORARY FOCUS POWER [temporary-focus-power] source=localization-scan tags=l10n, localized-keyword description=이번 턴이 끝나기 전까지 [gold]밀집[/gold]을 얻습니다.
-- TEMPORARY STRENGTH POWER [temporary-strength-power] source=localization-scan tags=l10n, localized-keyword description=이번 턴이 끝나기 전까지 [gold]힘[/gold]을 얻습니다.
-- 가로막기 [intercept-power] source=localization-scan tags=l10n, localized-keyword description=다른 플레이어를 엄호하고 있습니다. 대상 아군이 받아야 하는 모든 공격의 목표를 자신으로 변경합니다.
-- 가시 [thorns-power] source=localization-scan tags=l10n, localized-keyword description=공격에 적중 시, 공격자에게 피해를 줍니다.
-- 갈아엎기 [plow-power] source=localization-scan tags=l10n, localized-keyword description=이 생물의 체력이 처음으로 [blue]150[/blue] 이하로 떨어질 시, 대상이 [gold]기절[/gold] 상태가 됩니다.
-- 감염됨 [infested-power] source=localization-scan tags=l10n, localized-keyword description=사망 시, 무언가를... 소환합니다.
-- 강도 [heist-power] source=localization-scan tags=l10n, localized-keyword description=사망 시, 빼앗은 모든 [gold]골드[/gold]를 반환합니다.
-- 강령의 극의 [necro-mastery-power] source=localization-scan tags=l10n, localized-keyword description=[gold]골골이[/gold]가 체력을 잃을 때마다, 모든 적이 동일한 만큼의 체력을 잃습니다.
-- 개선 [improvement-power] source=localization-scan tags=l10n, localized-keyword description=전투 종료 시, 무작위 카드를 1장 [gold]강화[/gold]합니다.
-... 1122 more
+count: 262
+- 2배의 피해 [megacrit-sts2-core-models-powers-doubledamagepower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=이번 턴에 가하는 공격의 피해량이 2배가 됩니다.
+- Hello World Power [megacrit-sts2-core-models-powers-helloworldpower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=내 턴 시작 시, 무작위 일반 카드를 [blue]1[/blue]장 [gold]손[/gold]으로 가져옵니다.
+- Temporary Dexterity Power [megacrit-sts2-core-models-powers-temporarydexteritypower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=이번 턴이 끝나기 전까지 [gold]민첩[/gold]을 얻습니다.
+- Temporary Focus Power [megacrit-sts2-core-models-powers-temporaryfocuspower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=이번 턴이 끝나기 전까지 [gold]밀집[/gold]을 얻습니다.
+- Temporary Strength Power [megacrit-sts2-core-models-powers-temporarystrengthpower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=이번 턴이 끝나기 전까지 [gold]힘[/gold]을 얻습니다.
+- 가로막기 [megacrit-sts2-core-models-powers-interceptpower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=다른 플레이어를 엄호하고 있습니다. 대상 아군이 받아야 하는 모든 공격의 목표를 자신으로 변경합니다.
+- 가시 [megacrit-sts2-core-models-powers-thornspower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=공격에 적중 시, 공격자에게 피해를 줍니다.
+- 갈아엎기 [megacrit-sts2-core-models-powers-plowpower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=이 생물의 체력이 처음으로 [blue]150[/blue] 이하로 떨어질 시, 대상이 [gold]기절[/gold] 상태가 됩니다.
+- 감염됨 [megacrit-sts2-core-models-powers-infestedpower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=사망 시, 무언가를... 소환합니다.
+- 강도 [megacrit-sts2-core-models-powers-heistpower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=사망 시, 빼앗은 모든 [gold]골드[/gold]를 반환합니다.
+- 강령의 극의 [megacrit-sts2-core-models-powers-necromasterypower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=[gold]골골이[/gold]가 체력을 잃을 때마다, 모든 적이 동일한 만큼의 체력을 잃습니다.
+- 개선 [megacrit-sts2-core-models-powers-improvementpower] source=localization-scan tags=l10n, localized-keyword, power, strict-keyword, strict-model description=전투 종료 시, 무작위 카드를 1장 [gold]강화[/gold]합니다.
+... 250 more

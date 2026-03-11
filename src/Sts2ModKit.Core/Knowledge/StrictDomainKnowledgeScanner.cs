@@ -9,6 +9,10 @@ public static class StrictDomainKnowledgeScanner
     private static readonly Regex RelicClassRegex = new(@"public\s+(?:abstract\s+|sealed\s+)?class\s+(?<name>[A-Za-z0-9_]+)\s*:\s*RelicModel", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex PotionClassRegex = new(@"public\s+(?:abstract\s+|sealed\s+)?class\s+(?<name>[A-Za-z0-9_]+)\s*:\s*PotionModel", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex EventClassRegex = new(@"public\s+(?:abstract\s+|sealed\s+)?class\s+(?<name>[A-Za-z0-9_]+)\s*:\s*EventModel", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex RewardClassRegex = new(@"public\s+(?:abstract\s+|sealed\s+)?class\s+(?<name>[A-Za-z0-9_]+)\s*:\s*Reward\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex MerchantClassRegex = new(@"public\s+(?:abstract\s+|sealed\s+)?class\s+(?<name>[A-Za-z0-9_]+)\s*:\s*MerchantEntry\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex PowerClassRegex = new(@"public\s+(?:abstract\s+|sealed\s+)?class\s+(?<name>[A-Za-z0-9_]+)\s*:\s*PowerModel\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex IntentClassRegex = new(@"public\s+(?:abstract\s+|sealed\s+)?class\s+(?<name>[A-Za-z0-9_]+)\s*:\s*(?:AbstractIntent|AttackIntent)\b", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex CardBaseRegex = new(@":\s*base\(\s*(?<cost>[^,\r\n]+?)\s*,\s*CardType\.(?<type>[A-Za-z0-9_]+)\s*,\s*CardRarity\.(?<rarity>[A-Za-z0-9_]+)\s*,\s*TargetType\.(?<target>[A-Za-z0-9_]+)\s*\)", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     private static readonly Regex DynamicVarRegex = new(@"new\s+(?<kind>[A-Za-z0-9_]+Var)(?:<(?<generic>[A-Za-z0-9_]+)>)?\(\s*(?<value>-?[0-9]+(?:\.[0-9]+)?m?)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex UpgradeRegex = new(@"base\.DynamicVars\.(?<name>[A-Za-z0-9_]+)\.UpgradeValueBy\((?<value>[^)]+)\)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -17,6 +21,14 @@ public static class StrictDomainKnowledgeScanner
     private static readonly Regex PotionRarityRegex = new(@"public\s+override\s+PotionRarity\s+Rarity\s*=>\s*PotionRarity\.(?<value>[A-Za-z0-9_]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex PotionUsageRegex = new(@"public\s+override\s+PotionUsage\s+Usage\s*=>\s*PotionUsage\.(?<value>[A-Za-z0-9_]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex PotionTargetRegex = new(@"public\s+override\s+TargetType\s+TargetType\s*=>\s*TargetType\.(?<value>[A-Za-z0-9_]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex RewardTypeRegex = new(@"protected\s+override\s+RewardType\s+RewardType\s*=>\s*RewardType\.(?<value>[A-Za-z0-9_]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex RewardsSetIndexRegex = new(@"public\s+override\s+int\s+RewardsSetIndex\s*=>\s*(?<value>[0-9]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex PowerTypeRegex = new(@"public\s+override\s+PowerType\s+Type\s*=>\s*PowerType\.(?<value>[A-Za-z0-9_]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex PowerStackTypeRegex = new(@"public\s+override\s+PowerStackType\s+StackType\s*=>\s*PowerStackType\.(?<value>[A-Za-z0-9_]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex IntentTypeRegex = new(@"public\s+override\s+IntentType\s+IntentType\s*=>\s*IntentType\.(?<value>[A-Za-z0-9_]+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex LocStringRegex = new(@"new\s+LocString\(\s*""(?<table>[^""]+)""\s*,\s*""(?<key>[^""]+)""\s*\)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex MerchantTalkPrefixRegex = new(@"GetLocStringsWithPrefix\(""(?<prefix>[^""]+)""\)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex StaticImagePathRegex = new(@"ImageHelper\.GetImagePath\(""(?<value>[^""]+)""\)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex EventOptionKeyRegex = new(@"""(?<value>[A-Z0-9_]+\.pages\.[A-Z0-9_]+\.options\.[A-Z0-9_]+)""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex EventPageKeyRegex = new(@"""(?<value>[A-Z0-9_]+\.pages\.[A-Z0-9_]+\.description)""", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -66,6 +78,9 @@ public static class StrictDomainKnowledgeScanner
             localWarnings,
             resourceIndex,
             poolMap: null);
+        var shops = ParseShopEntries(decompiledRoot, localWarnings);
+        var rewards = ParseRewardEntries(decompiledRoot, localWarnings);
+        var keywords = ParseKeywordEntries(decompiledRoot, localWarnings);
 
         warnings = localWarnings;
         return new StaticKnowledgeCatalog(
@@ -80,6 +95,9 @@ public static class StrictDomainKnowledgeScanner
                         ["strictRelicCount"] = relics.Count.ToString(),
                         ["strictPotionCount"] = potions.Count.ToString(),
                         ["strictEventCount"] = events.Count.ToString(),
+                        ["strictShopCount"] = shops.Count.ToString(),
+                        ["strictRewardCount"] = rewards.Count.ToString(),
+                        ["strictKeywordCount"] = keywords.Count.ToString(),
                     })
                     .GroupBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(group => group.Key, group => group.Last().Value, StringComparer.OrdinalIgnoreCase),
@@ -88,14 +106,21 @@ public static class StrictDomainKnowledgeScanner
             relics,
             potions,
             events,
-            Array.Empty<StaticKnowledgeEntry>(),
-            Array.Empty<StaticKnowledgeEntry>(),
-            Array.Empty<StaticKnowledgeEntry>());
+            shops,
+            rewards,
+            keywords);
     }
 
     private static string GetDomainDirectory(string decompiledRoot, string domain)
     {
         return Path.Combine(decompiledRoot, "MegaCrit", "Sts2", "Core", "Models", domain);
+    }
+
+    private static string GetCoreDirectory(string decompiledRoot, params string[] segments)
+    {
+        var parts = new List<string> { decompiledRoot, "MegaCrit", "Sts2", "Core" };
+        parts.AddRange(segments);
+        return Path.Combine(parts.ToArray());
     }
 
     private static IReadOnlyDictionary<string, string> ParsePoolMap(string directory, string modelKind, ICollection<string> warnings)
@@ -351,6 +376,499 @@ public static class StrictDomainKnowledgeScanner
             Array.Empty<StaticKnowledgeOption>());
     }
 
+    private static IReadOnlyList<StaticKnowledgeEntry> ParseShopEntries(string decompiledRoot, ICollection<string> warnings)
+    {
+        var entries = new List<StaticKnowledgeEntry>();
+        var merchantDirectory = GetCoreDirectory(decompiledRoot, "Entities", "Merchant");
+        if (!Directory.Exists(merchantDirectory))
+        {
+            warnings.Add($"Missing strict shop directory: {merchantDirectory}");
+        }
+        else
+        {
+            entries.AddRange(ParseDomainEntries(
+                merchantDirectory,
+                MerchantClassRegex,
+                ParseMerchantEntry,
+                warnings,
+                ResourceIndex.Empty,
+                poolMap: null));
+        }
+
+        var merchantRoomPath = GetCoreDirectory(decompiledRoot, "Rooms", "MerchantRoom.cs");
+        if (File.Exists(merchantRoomPath))
+        {
+            var content = File.ReadAllText(merchantRoomPath);
+            var entry = ParseMerchantRoomEntry(merchantRoomPath, content);
+            if (entry is not null)
+            {
+                entries.Add(entry);
+            }
+        }
+
+        return entries
+            .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static StaticKnowledgeEntry? ParseMerchantEntry(
+        string path,
+        string content,
+        string className,
+        ResourceIndex _,
+        IReadOnlyDictionary<string, string>? __)
+    {
+        if (string.Equals(className, "MerchantEntry", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var fullName = $"MegaCrit.Sts2.Core.Entities.Merchant.{className}";
+        var attributes = CreateBaseAttributes(path, fullName, className, resourcePath: null);
+        attributes["strictDomain"] = "shop";
+        attributes["strictModel"] = "true";
+        attributes["classId"] = ToLocalizationStem(className);
+
+        var shopKind = className switch
+        {
+            "MerchantCardEntry" => "merchant-card-entry",
+            "MerchantRelicEntry" => "merchant-relic-entry",
+            "MerchantPotionEntry" => "merchant-potion-entry",
+            "MerchantCardRemovalEntry" => "merchant-card-removal-service",
+            _ => "merchant-entry",
+        };
+        attributes["shopKind"] = shopKind;
+
+        switch (className)
+        {
+            case "MerchantCardEntry":
+                attributes["priceRule"] = "Common 50 / Uncommon 75 / Rare 150, colorless x1.15, sale 50% off, final merchant RNG 0.95-1.05.";
+                attributes["summary"] = "상점에서 카드 구매 슬롯을 담당합니다. 캐릭터 카드 5장과 무색 카드 2장을 채우고, 할인 상품 한 칸을 반값으로 표시합니다.";
+                break;
+            case "MerchantRelicEntry":
+                attributes["priceRule"] = "Relic merchant cost x merchant RNG 0.85-1.15.";
+                attributes["summary"] = "상점 유물 슬롯입니다. 일반/희귀 유물 2개와 상점 전용 유물 1개를 채웁니다.";
+                break;
+            case "MerchantPotionEntry":
+                attributes["priceRule"] = "Common 50 / Uncommon 75 / Rare 100, final merchant RNG 0.95-1.05.";
+                attributes["summary"] = "상점 포션 슬롯입니다. 전투 외 무작위 포션 3개를 배치합니다.";
+                break;
+            case "MerchantCardRemovalEntry":
+                attributes["priceRule"] = "Base 75, +25 per prior card removal in the run.";
+                attributes["summary"] = "덱에서 카드 1장을 제거하는 상점 서비스입니다. 사용 횟수가 늘수록 비용이 상승합니다.";
+                attributes["l10nKey"] = "MERCHANT";
+                attributes["matchKeys"] = "MERCHANT";
+                break;
+        }
+
+        return new StaticKnowledgeEntry(
+            NormalizeId(fullName),
+            className switch
+            {
+                "MerchantCardEntry" => "카드 판매 슬롯",
+                "MerchantRelicEntry" => "유물 판매 슬롯",
+                "MerchantPotionEntry" => "포션 판매 슬롯",
+                "MerchantCardRemovalEntry" => "카드 제거 서비스",
+                _ => PrettifyClassName(className),
+            },
+            "strict-domain-parse",
+            false,
+            null,
+            new[] { "strict-shop", "strict-model" },
+            attributes,
+            Array.Empty<StaticKnowledgeOption>());
+    }
+
+    private static StaticKnowledgeEntry? ParseMerchantRoomEntry(string path, string content)
+    {
+        const string className = "MerchantRoom";
+        var fullName = "MegaCrit.Sts2.Core.Rooms.MerchantRoom";
+        var attributes = CreateBaseAttributes(path, fullName, className, resourcePath: null);
+        attributes["strictDomain"] = "shop";
+        attributes["strictModel"] = "true";
+        attributes["classId"] = ToLocalizationStem(className);
+        attributes["shopKind"] = "merchant-room";
+        attributes["roomType"] = "Shop";
+        attributes["summary"] = "상점 방 자체를 나타냅니다. 진입 시 MerchantInventory를 생성하고 상점 UI와 대사를 준비합니다.";
+        attributes["matchKeys"] = "ROOM_MERCHANT | ROOM_UNKNOWN_MERCHANT";
+        attributes["l10nKey"] = "ROOM_MERCHANT";
+
+        var talkPrefix = MerchantTalkPrefixRegex.Match(content).Groups["prefix"].Value;
+        if (!string.IsNullOrWhiteSpace(talkPrefix))
+        {
+            attributes["talkPrefix"] = talkPrefix;
+        }
+
+        return new StaticKnowledgeEntry(
+            NormalizeId(fullName),
+            PrettifyClassName(className),
+            "strict-domain-parse",
+            false,
+            null,
+            new[] { "strict-shop", "strict-model", "room" },
+            attributes,
+            Array.Empty<StaticKnowledgeOption>());
+    }
+
+    private static IReadOnlyList<StaticKnowledgeEntry> ParseRewardEntries(string decompiledRoot, ICollection<string> warnings)
+    {
+        var entries = new List<StaticKnowledgeEntry>();
+        var rewardDirectory = GetCoreDirectory(decompiledRoot, "Rewards");
+        if (!Directory.Exists(rewardDirectory))
+        {
+            warnings.Add($"Missing strict reward directory: {rewardDirectory}");
+        }
+        else
+        {
+            entries.AddRange(ParseDomainEntries(
+                rewardDirectory,
+                RewardClassRegex,
+                ParseRewardEntry,
+                warnings,
+                ResourceIndex.Empty,
+                poolMap: null));
+
+            var linkedRewardSetPath = Path.Combine(rewardDirectory, "LinkedRewardSet.cs");
+            if (File.Exists(linkedRewardSetPath))
+            {
+                var entry = ParseLinkedRewardSetEntry(linkedRewardSetPath, File.ReadAllText(linkedRewardSetPath));
+                if (entry is not null)
+                {
+                    entries.Add(entry);
+                }
+            }
+        }
+
+        return entries
+            .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static StaticKnowledgeEntry? ParseRewardEntry(
+        string path,
+        string content,
+        string className,
+        ResourceIndex _,
+        IReadOnlyDictionary<string, string>? __)
+    {
+        if (string.Equals(className, "Reward", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var fullName = $"MegaCrit.Sts2.Core.Rewards.{className}";
+        var attributes = CreateBaseAttributes(path, fullName, className, ExtractFirstImagePath(content));
+        attributes["strictDomain"] = "reward";
+        attributes["strictModel"] = "true";
+        attributes["classId"] = ToLocalizationStem(className);
+
+        var rewardType = RewardTypeRegex.Match(content).Groups["value"].Value;
+        if (!string.IsNullOrWhiteSpace(rewardType))
+        {
+            attributes["rewardType"] = rewardType;
+        }
+
+        var rewardsSetIndex = RewardsSetIndexRegex.Match(content).Groups["value"].Value;
+        if (!string.IsNullOrWhiteSpace(rewardsSetIndex))
+        {
+            attributes["rewardsSetIndex"] = rewardsSetIndex;
+        }
+
+        var locKeys = LocStringRegex.Matches(content)
+            .Select(match => match.Groups["key"].Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        foreach (var alias in GetRewardAliases(className))
+        {
+            if (!locKeys.Contains(alias, StringComparer.OrdinalIgnoreCase))
+            {
+                locKeys.Add(alias);
+            }
+        }
+
+        if (locKeys.Count > 0)
+        {
+            attributes["l10nKey"] = locKeys[0];
+            attributes["matchKeys"] = string.Join(" | ", locKeys);
+        }
+
+        attributes["summary"] = className switch
+        {
+            "CardReward" => "전투/이벤트 이후 카드 보상 팩을 제시합니다.",
+            "GoldReward" => "골드 보상을 제시합니다. 훔쳐간 골드를 되찾는 변형도 포함됩니다.",
+            "PotionReward" => "포션 보상을 제시합니다.",
+            "RelicReward" => "유물 보상을 제시합니다.",
+            "CardRemovalReward" => "보상 화면에서 카드 제거 서비스를 제시합니다.",
+            "SpecialCardReward" => "특수 카드 단일 보상을 제시합니다.",
+            _ => "보상 화면에서 선택 가능한 보상 모델입니다.",
+        };
+
+        return new StaticKnowledgeEntry(
+            NormalizeId(fullName),
+            className switch
+            {
+                "CardReward" => "카드 보상",
+                "GoldReward" => "골드 보상",
+                "PotionReward" => "포션 보상",
+                "RelicReward" => "유물 보상",
+                "CardRemovalReward" => "카드 제거 보상",
+                "SpecialCardReward" => "특수 카드 보상",
+                _ => PrettifyClassName(className),
+            },
+            "strict-domain-parse",
+            false,
+            null,
+            new[] { "strict-reward", "strict-model" },
+            attributes,
+            Array.Empty<StaticKnowledgeOption>());
+    }
+
+    private static StaticKnowledgeEntry? ParseLinkedRewardSetEntry(string path, string content)
+    {
+        var fullName = "MegaCrit.Sts2.Core.Rewards.LinkedRewardSet";
+        var attributes = CreateBaseAttributes(path, fullName, "LinkedRewardSet", ExtractFirstImagePath(content));
+        attributes["strictDomain"] = "reward";
+        attributes["strictModel"] = "true";
+        attributes["classId"] = "LINKED_REWARD_SET";
+        attributes["rewardType"] = "LinkedSet";
+        attributes["l10nKey"] = "LINKED_REWARDS";
+        attributes["matchKeys"] = "LINKED_REWARDS";
+        attributes["summary"] = "여러 보상을 묶어 한 세트에서 하나만 고르게 하는 연결 보상 집합입니다.";
+
+        return new StaticKnowledgeEntry(
+            NormalizeId(fullName),
+            "연결 보상 세트",
+            "strict-domain-parse",
+            false,
+            null,
+            new[] { "strict-reward", "strict-model", "reward-set" },
+            attributes,
+            Array.Empty<StaticKnowledgeOption>());
+    }
+
+    private static IReadOnlyList<StaticKnowledgeEntry> ParseKeywordEntries(string decompiledRoot, ICollection<string> warnings)
+    {
+        var entries = new List<StaticKnowledgeEntry>();
+        var powersDirectory = GetCoreDirectory(decompiledRoot, "Models", "Powers");
+        if (!Directory.Exists(powersDirectory))
+        {
+            warnings.Add($"Missing strict keyword powers directory: {powersDirectory}");
+        }
+        else
+        {
+            entries.AddRange(ParseDomainEntries(
+                powersDirectory,
+                PowerClassRegex,
+                ParsePowerEntry,
+                warnings,
+                ResourceIndex.Empty,
+                poolMap: null));
+        }
+
+        var intentsDirectory = GetCoreDirectory(decompiledRoot, "MonsterMoves", "Intents");
+        if (!Directory.Exists(intentsDirectory))
+        {
+            warnings.Add($"Missing strict keyword intents directory: {intentsDirectory}");
+        }
+        else
+        {
+            entries.AddRange(ParseDomainEntries(
+                intentsDirectory,
+                IntentClassRegex,
+                ParseIntentEntry,
+                warnings,
+                ResourceIndex.Empty,
+                poolMap: null));
+        }
+
+        var cardKeywordPath = GetCoreDirectory(decompiledRoot, "Entities", "Cards", "CardKeyword.cs");
+        if (File.Exists(cardKeywordPath))
+        {
+            entries.AddRange(ParseCardKeywordEntries(cardKeywordPath));
+        }
+
+        return entries
+            .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static StaticKnowledgeEntry? ParsePowerEntry(
+        string path,
+        string content,
+        string className,
+        ResourceIndex _,
+        IReadOnlyDictionary<string, string>? __)
+    {
+        if (string.Equals(className, "PowerModel", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var fullName = $"MegaCrit.Sts2.Core.Models.Powers.{className}";
+        var attributes = CreateBaseAttributes(path, fullName, className, ExtractFirstImagePath(content));
+        attributes["strictDomain"] = "keyword";
+        attributes["strictModel"] = "true";
+        attributes["keywordKind"] = "power";
+        attributes["classId"] = ToLocalizationStem(className);
+        attributes["l10nKey"] = ToLocalizationStem(className);
+        attributes["matchKeys"] = ToLocalizationStem(className);
+
+        var powerType = PowerTypeRegex.Match(content).Groups["value"].Value;
+        if (!string.IsNullOrWhiteSpace(powerType))
+        {
+            attributes["powerType"] = powerType;
+        }
+
+        var stackType = PowerStackTypeRegex.Match(content).Groups["value"].Value;
+        if (!string.IsNullOrWhiteSpace(stackType))
+        {
+            attributes["stackType"] = stackType;
+        }
+
+        var powerSummaryParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(powerType))
+        {
+            powerSummaryParts.Add(powerType.Equals("Debuff", StringComparison.OrdinalIgnoreCase)
+                ? "전투 중 디버프성 상태를 나타냅니다."
+                : "전투 중 버프/지속 효과를 나타냅니다.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(stackType))
+        {
+            powerSummaryParts.Add($"스택 규칙은 {stackType}입니다.");
+        }
+
+        attributes["summary"] = powerSummaryParts.Count == 0
+            ? $"{PrettifyClassName(className)} 파워 모델입니다."
+            : $"{PrettifyClassName(className)} 파워 모델입니다. {string.Join(" ", powerSummaryParts)}";
+
+        return new StaticKnowledgeEntry(
+            NormalizeId(fullName),
+            PrettifyClassName(className),
+            "strict-domain-parse",
+            false,
+            null,
+            new[] { "strict-keyword", "strict-model", "power" },
+            attributes,
+            Array.Empty<StaticKnowledgeOption>());
+    }
+
+    private static StaticKnowledgeEntry? ParseIntentEntry(
+        string path,
+        string content,
+        string className,
+        ResourceIndex _,
+        IReadOnlyDictionary<string, string>? __)
+    {
+        if (string.Equals(className, "AbstractIntent", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(className, "AttackIntent", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var fullName = $"MegaCrit.Sts2.Core.MonsterMoves.Intents.{className}";
+        var attributes = CreateBaseAttributes(path, fullName, className, ExtractFirstImagePath(content));
+        attributes["strictDomain"] = "keyword";
+        attributes["strictModel"] = "true";
+        attributes["keywordKind"] = "intent";
+        attributes["classId"] = ToLocalizationStem(className);
+        attributes["l10nKey"] = ToLocalizationStem(className);
+        attributes["matchKeys"] = ToLocalizationStem(className);
+
+        var intentType = IntentTypeRegex.Match(content).Groups["value"].Value;
+        if (!string.IsNullOrWhiteSpace(intentType))
+        {
+            attributes["intentType"] = intentType;
+        }
+
+        attributes["summary"] = className switch
+        {
+            "BuffIntent" => "몬스터가 자신이나 아군에게 버프를 적용하려는 의도입니다.",
+            "CardDebuffIntent" => "몬스터가 상태 이상 카드나 핸드 교란성 디버프를 유발하려는 의도입니다.",
+            "DebuffIntent" => "몬스터가 약화, 취약, 힘 감소 같은 디버프를 걸려는 의도입니다.",
+            "DefendIntent" => "몬스터가 방어도나 보호 수단을 준비하는 의도입니다.",
+            "EscapeIntent" => "몬스터가 전투 이탈 또는 도주 행동을 준비하는 의도입니다.",
+            "HealIntent" => "몬스터가 체력을 회복하려는 의도입니다.",
+            "HiddenIntent" => "게임이 정확한 행동을 숨기고 있는 의도 상태입니다.",
+            "MultiAttackIntent" => "몬스터가 여러 번 적중하는 연속 공격을 준비하는 의도입니다.",
+            "SingleAttackIntent" => "몬스터가 단일 타격 공격을 준비하는 의도입니다.",
+            "SleepIntent" => "몬스터가 잠들었거나 대기 상태임을 나타내는 의도입니다.",
+            "StatusIntent" => "몬스터가 상태 카드 부여나 상태 이상 유발 행동을 준비하는 의도입니다.",
+            "StunIntent" => "몬스터가 기절 또는 행동 불능 상태임을 나타내는 의도입니다.",
+            "SummonIntent" => "몬스터가 다른 적이나 소환물을 불러내려는 의도입니다.",
+            "UnknownIntent" => "현재 파서가 구체 행동을 해석하지 못한 일반 의도입니다.",
+            _ => "몬스터 행동 아이콘과 intent 분류를 설명하는 모델입니다.",
+        };
+
+        return new StaticKnowledgeEntry(
+            NormalizeId(fullName),
+            className switch
+            {
+                "BuffIntent" => "버프 의도",
+                "CardDebuffIntent" => "상태 카드 디버프 의도",
+                "DebuffIntent" => "디버프 의도",
+                "DefendIntent" => "방어 의도",
+                "EscapeIntent" => "도주 의도",
+                "HealIntent" => "회복 의도",
+                "HiddenIntent" => "숨김 의도",
+                "MultiAttackIntent" => "연속 공격 의도",
+                "SingleAttackIntent" => "단일 공격 의도",
+                "SleepIntent" => "수면 의도",
+                "StatusIntent" => "상태 이상 의도",
+                "StunIntent" => "기절 의도",
+                "SummonIntent" => "소환 의도",
+                "UnknownIntent" => "알 수 없는 의도",
+                _ => PrettifyClassName(className),
+            },
+            "strict-domain-parse",
+            false,
+            null,
+            new[] { "strict-keyword", "strict-model", "intent" },
+            attributes,
+            Array.Empty<StaticKnowledgeOption>());
+    }
+
+    private static IReadOnlyList<StaticKnowledgeEntry> ParseCardKeywordEntries(string path)
+    {
+        var content = File.ReadAllText(path);
+        var enumBody = content[(content.IndexOf('{') + 1)..content.LastIndexOf('}')];
+        var values = enumBody
+            .Split(new[] { ',', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(value => value.Trim())
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Where(value => value != "None")
+            .Select(value => value.Split('=', StringSplitOptions.TrimEntries)[0].Trim())
+            .Where(value => !ShouldSkipType(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return values
+            .Select(value =>
+            {
+                var attributes = CreateBaseAttributes(path, "MegaCrit.Sts2.Core.Entities.Cards.CardKeyword", value, resourcePath: null);
+                attributes["strictDomain"] = "keyword";
+                attributes["strictModel"] = "true";
+                attributes["keywordKind"] = "card-keyword";
+                attributes["classId"] = ToLocalizationStem(value);
+                attributes["l10nKey"] = ToLocalizationStem(value);
+                attributes["matchKeys"] = ToLocalizationStem(value);
+                attributes["summary"] = "카드 본문에서 반복되는 규칙성 키워드입니다.";
+
+                return new StaticKnowledgeEntry(
+                    NormalizeId($"MegaCrit.Sts2.Core.Entities.Cards.CardKeyword.{value}"),
+                    PrettifyClassName(value),
+                    "strict-domain-parse",
+                    false,
+                    null,
+                    new[] { "strict-keyword", "strict-model", "card-keyword" },
+                    attributes,
+                    Array.Empty<StaticKnowledgeOption>());
+            })
+            .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     private static Dictionary<string, string?> CreateBaseAttributes(string path, string fullName, string className, string? resourcePath)
     {
         return new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
@@ -397,6 +915,27 @@ public static class StrictDomainKnowledgeScanner
         {
             attributes["upgradeSummary"] = string.Join(", ", upgrades);
         }
+    }
+
+    private static string? ExtractFirstImagePath(string content)
+    {
+        return StaticImagePathRegex.Matches(content)
+            .Select(match => match.Groups["value"].Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static IEnumerable<string> GetRewardAliases(string className)
+    {
+        return className switch
+        {
+            "CardReward" => new[] { "CARD_REWARD", "COMBAT_REWARD_ADD_CARD" },
+            "GoldReward" => new[] { "COMBAT_REWARD_GOLD", "COMBAT_REWARD_GOLD_STOLEN" },
+            "PotionReward" => new[] { "POTION_REWARD" },
+            "RelicReward" => new[] { "RELIC_REWARD" },
+            "CardRemovalReward" => new[] { "COMBAT_REWARD_CARD_REMOVAL" },
+            "SpecialCardReward" => new[] { "SPECIAL_CARD_REWARD" },
+            _ => Array.Empty<string>(),
+        };
     }
 
     private static string ResolveDynamicVarName(string kind, string generic)
@@ -454,6 +993,12 @@ public static class StrictDomainKnowledgeScanner
 
     private sealed class ResourceIndex
     {
+        public static ResourceIndex Empty { get; } = new(
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase));
+
         private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _cardPaths;
         private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _relicPaths;
         private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _potionPaths;
