@@ -83,6 +83,13 @@
 ## 2026-03-11 작업 로그 메모
 
 - StaticKnowledgeFormatting.cs를 전면 재작성해 generated markdown의 stale placeholder 문구를 제거했습니다.
+
+## 2026-03-11 문서 소스 동기화 감사
+
+- `docs/development` 전반을 다시 훑어 현재 소스 기준과 어긋난 수치와 서술을 정리했습니다.
+- `PROJECT_STATUS.md`에서 예전 localization 숫자(`1713`, `1501`)를 최신 `inspect-static-knowledge` 기준으로 교체했습니다.
+- `KNOWLEDGE_EXTRACTION.md`를 카드 중심 문서에서 다도메인 L10N + assistant export 문서로 재정리했습니다.
+- `AI_ASSISTANT_ARCHITECTURE.md`, `GAMEPLAY_RUNTIME_FLOW.md`, `WPF_USER_FLOW.md`에 실제 클래스와 버튼 기준 설명을 반영했습니다.
 - LocalizationKnowledgeScanner / catalog build 결과를 기준으로 유물, 포션, 이벤트, 상점, 키워드까지 L10N 연결 범위를 다시 점검했습니다.
 - `artifacts/knowledge/assistant/` export와 `assistant/index.json` metadata/provenance를 보강했습니다.
 - `inspect-static-knowledge` 기준 localization coverage를 문서에 반영했습니다.

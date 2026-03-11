@@ -121,8 +121,16 @@
   - AI 조언 표시
   - `Analyze Now` 같은 수동 조작 제공
 - 이 폴더를 볼 때의 질문
-  - 사용자는 어떤 화면을 보게 되는가
-  - 조언이 실패해도 상태 표시는 계속 되는가
+- 사용자는 어떤 화면을 보게 되는가
+- 조언이 실패해도 상태 표시는 계속 되는가
+
+### `src/Sts2Speed.Tool`
+
+현재 `src` 아래에는 `Sts2Speed.Tool`도 남아 있습니다.
+
+- 현재 AI Companion의 핵심 실행 경로에는 포함되지 않습니다.
+- 즉 `모드 로드 -> live export -> Host -> WPF` 아키텍처의 주 구성 요소는 아닙니다.
+- 저장소 안에 존재하더라도 현재 문서화와 검증의 주 대상은 아닙니다.
 
 ## 3. `artifacts/`는 실제로 무엇을 담는가
 
@@ -140,10 +148,20 @@
   - PCK 문자열 스캔 기반 후보
 - `observed-merge.json`
   - 실플레이 관찰 결과 병합본
+- `catalog.assistant.json`
+  - AI가 직접 읽는 우선 catalog
+- `catalog.assistant.txt`
+  - AI용 catalog 요약
+- `assistant/`
+  - domain별 assistant export와 provenance index
 - `markdown/`
   - 사람이 읽기 좋은 Markdown 리포트
 
-중요: 여기 있는 내용은 전부 실플레이 검증 완료본이 아닙니다. `무엇이 존재하는가`와 `어디에 연결되는가`를 먼저 파악하는 용도입니다.
+중요:
+
+- 여기 있는 내용은 전부 실플레이 검증 완료본이 아닙니다.
+- `무엇이 존재하는가`와 `어디에 연결되는가`를 먼저 파악하는 용도입니다.
+- Host는 현재 `catalog.assistant.json`을 우선 읽습니다.
 
 ### `artifacts/companion`
 

@@ -98,6 +98,7 @@ dotnet run --project src\Sts2AiCompanion.Wpf
 - `docs\SMOKE_TEST_CHECKLIST.md`
 - `docs\BACKUP_AND_ROLLBACK.md`
 - `docs\development\README.md`
+- `docs\development\PROJECT_STATUS.md`
 - `docs\development\GAMEPLAY_RUNTIME_FLOW.md`
 - `docs\development\REPO_STRUCTURE.md`
 

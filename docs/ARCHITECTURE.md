@@ -35,10 +35,18 @@
 - `release-scan`
 - `assembly-scan`
 - `pck-inventory`
+- `localization-scan`
 - `observed-merge`
 - `catalog-build`
 
 산출물은 `artifacts/knowledge` 아래에 저장됩니다.
+
+중요:
+
+- 사람이 읽는 markdown 리포트와
+- AI가 직접 읽는 `catalog.assistant.*`, `assistant/*.json`
+
+을 따로 생성합니다.
 
 ## 4. 외부 host
 

@@ -40,6 +40,14 @@
 - 문서는 가능한 한 경로, 명령, 로그 근거, 현재 한계를 함께 적습니다.
 - `docs/` 상위 문서는 현재 계약과 사용 절차를 설명하고, `docs/development/`는 구현 과정과 조사 기록을 설명합니다.
 
+현재 상태를 가장 빠르게 동기화해서 보려면 아래 3개를 기준 문서로 봅니다.
+
+- `PROJECT_STATUS.md`
+- `KNOWLEDGE_EXTRACTION.md`
+- `AI_ASSISTANT_ARCHITECTURE.md`
+
+`WORKLOG.md`와 `DETAILED_INVESTIGATION_LOG.md`는 역사 기록이므로, 현재 상태 판단은 위 기준 문서를 우선합니다.
+
 ## 최근 추가로 읽어둘 것
 
 - `artifacts/knowledge/markdown/README.md`

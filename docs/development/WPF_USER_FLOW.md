@@ -60,6 +60,8 @@ reward, event, shop, rest, combat start 같은 화면이 잡히면 앱의 중앙
 - 상태가 변했는데 다시 묻고 싶을 때
 - Codex 오류 이후 재시도하고 싶을 때
 
+현재 `Retry Last` 버튼도 있으며, 현재 구현에서는 `Analyze Now`와 같은 수동 advice 경로를 다시 호출합니다.
+
 ## 6. 자동 advice 일시정지
 
 `Pause Auto Advice`는 자동 트리거를 끄고, 사용자가 수동으로만 분석을 요청하고 싶을 때 씁니다.
@@ -78,7 +80,16 @@ reward, event, shop, rest, combat start 같은 화면이 잡히면 앱의 중앙
 - live mirror
 - host 상태
 
-## 8. 현재 사용자 흐름의 현실적인 상태
+## 8. knowledge 새로고침
+
+`Refresh Knowledge`는 live export와 현재 Host snapshot 기준 표시를 새로 읽어 화면에 다시 반영할 때 씁니다.
+
+중요:
+
+- 현재 구현에서 이 버튼은 새로운 Codex 호출을 강제하지 않습니다.
+- 즉 `수동 재분석`은 `Analyze Now` 또는 `Retry Last`가 담당하고, `Refresh Knowledge`는 표시 갱신에 가깝습니다.
+
+## 9. 현재 사용자 흐름의 현실적인 상태
 
 2026-03-11 기준으로 이 UI는 빌드 가능하고 host 계약도 연결되어 있습니다.
 

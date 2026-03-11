@@ -4,14 +4,16 @@
 
 ## 1. 앱을 먼저 켰을 때
 
-사용자가 WPF 앱을 먼저 켜면 앱은 아직 조언을 하지 않습니다.
+사용자가 WPF 앱을 먼저 켜면 `ShellViewModel`이 `CompanionHost`를 올립니다.
 
-- Host 서비스가 올라갑니다.
-- live export 폴더를 감시할 준비를 합니다.
-- 정적 지식 카탈로그를 읽습니다.
-- Codex CLI 설정과 artifact 경로를 확인합니다.
+이때 실제로 일어나는 것:
 
-이 상태는 `대기 중`입니다.
+- Host polling loop 시작
+- live export 폴더 대기
+- assistant catalog 로드 준비
+- Codex CLI 경로와 companion artifact 루트 확인
+
+이 상태는 `대기 중`이며, 아직 live export가 없으면 advice는 생성되지 않습니다.
 
 ## 2. 게임을 실행했을 때
 
@@ -43,6 +45,7 @@
 - run id가 생깁니다.
 - deck, relic, potion, HP, gold, floor 같은 상태가 snapshot에 반영됩니다.
 - Host는 run 전용 artifact 폴더를 준비합니다.
+- bounded knowledge slice를 만들 준비를 합니다.
 - Codex 세션을 생성하거나 이어붙일 준비를 합니다.
 
 ## 5. 보상 / 이벤트 / 상점 / 휴식 화면에서
@@ -51,8 +54,8 @@ Phase 1에서 가장 중요한 순간입니다.
 
 - exporter가 현재 화면과 choices를 읽습니다.
 - Host는 현재 choices와 정적 지식 카탈로그를 매칭합니다.
-- prompt pack을 만듭니다.
-- Codex가 추천 선택과 이유를 반환합니다.
+- `AdvicePromptBuilder`가 prompt pack을 만듭니다.
+- `CodexCliClient`가 추천 선택과 이유를 요청합니다.
 - WPF 앱이 추천과 근거를 보여줍니다.
 
 즉, 실제 사용자 경험은 “게임 옆 창에서 현재 선택지에 대한 조언이 뜨는 것”입니다.
@@ -73,7 +76,22 @@ Phase 1에서 가장 중요한 순간입니다.
 - advice 기록과 prompt pack을 artifact로 남깁니다.
 - 앱은 다음 런을 기다리는 상태로 돌아갑니다.
 
-## 8. 현재 실증된 것과 아직 남은 것
+## 8. 현재 UI에서 실제로 할 수 있는 수동 조작
+
+현재 WPF에는 아래 버튼이 있습니다.
+
+- `Analyze Now`
+  - 현재 상태 기준 즉시 수동 advice 요청
+- `Retry Last`
+  - 현재 구현에서는 `Analyze Now`와 같은 경로로 다시 요청
+- `Pause Auto Advice` / `Resume Auto Advice`
+  - 자동 trigger on/off
+- `Refresh Knowledge`
+  - 현재 snapshot/knowledge 표시 갱신
+- `Open Artifacts`
+  - 현재 run 또는 companion root 열기
+
+## 9. 현재 실증된 것과 아직 남은 것
 
 ### 실증된 것
 
@@ -88,7 +106,7 @@ Phase 1에서 가장 중요한 순간입니다.
 - Codex advice가 실제 gameplay run에서 자동으로 생성되는지
 - WPF가 그 결과를 실제 플레이 중 보여주는지
 
-## 9. 이 문서를 어떤 코드와 같이 보면 좋은가
+## 10. 이 문서를 어떤 코드와 같이 보면 좋은가
 
 - mod 쪽 흐름: `src/Sts2ModAiCompanion.Mod/Runtime`
 - live export 계약: `docs/REALTIME_EXTRACTION.md`
