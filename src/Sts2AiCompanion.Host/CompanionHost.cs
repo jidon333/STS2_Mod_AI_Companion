@@ -35,6 +35,7 @@ public sealed class CompanionHost : IAsyncDisposable
     private KnowledgeSlice? _latestKnowledgeSlice;
     private CompanionRunState? _currentRunState;
     private CodexSessionState? _sessionState;
+    private CompanionCollectorStatus? _latestCollectorStatus;
     private bool _autoAdviceEnabled;
 
     public CompanionHost(ScaffoldConfiguration configuration, string workspaceRoot, ICodexSessionClient? codexSessionClient = null)
@@ -46,7 +47,7 @@ public sealed class CompanionHost : IAsyncDisposable
         _promptBuilder = new AdvicePromptBuilder(configuration);
         _codexSessionClient = codexSessionClient ?? new CodexCliClient(configuration, workspaceRoot);
         _autoAdviceEnabled = configuration.Assistant.AutoAdviceEnabled;
-        CurrentSnapshot = CreateSnapshot("idle", "Waiting for live export.");
+        CurrentSnapshot = CreateSnapshot("idle", "실시간 추출을 기다리는 중입니다.");
     }
 
     public event EventHandler<CompanionHostSnapshot>? SnapshotChanged;
@@ -108,7 +109,7 @@ public sealed class CompanionHost : IAsyncDisposable
     public void SetAutoAdviceEnabled(bool enabled)
     {
         _autoAdviceEnabled = enabled;
-        PublishSnapshot(CreateSnapshot("running", enabled ? "Automatic advice is enabled." : "Automatic advice is paused."));
+        PublishSnapshot(CreateSnapshot("running", enabled ? "자동 조언이 켜져 있습니다." : "자동 조언이 일시중지되었습니다."));
     }
 
     public async ValueTask DisposeAsync()
@@ -138,7 +139,7 @@ public sealed class CompanionHost : IAsyncDisposable
 
             if (snapshot is null)
             {
-                PublishSnapshot(CreateSnapshot("waiting-live-export", "state.latest.json is not available yet."));
+                PublishSnapshot(CreateSnapshot("waiting-live-export", "아직 state.latest.json이 생성되지 않았습니다."));
                 return;
             }
 
@@ -170,8 +171,8 @@ public sealed class CompanionHost : IAsyncDisposable
                 await GenerateAdviceAsync(runState, autoTrigger, cancellationToken).ConfigureAwait(false);
             }
 
-            MirrorLiveArtifacts(runState);
-            PublishSnapshot(CreateSnapshot("running", "Monitoring live export updates."));
+            UpdateCollectorArtifacts(runState);
+            PublishSnapshot(CreateSnapshot("running", "실시간 추출 갱신을 감시 중입니다."));
         }
         catch (Exception exception)
         {
@@ -235,6 +236,14 @@ public sealed class CompanionHost : IAsyncDisposable
             var paths = EnsureRunArtifacts(runState.Snapshot.RunId);
             var promptPath = Path.Combine(paths.PromptPacksRoot!, $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{trigger.Kind}.json");
             WriteJson(promptPath, inputPack);
+            WriteCodexTrace(paths, new
+            {
+                kind = "request-started",
+                trigger = trigger.Kind,
+                manual = trigger.Manual,
+                requestedAt = trigger.RequestedAt,
+                existingSessionId = _sessionState?.SessionId,
+            });
 
             var (response, sessionId) = await _codexSessionClient.ExecuteAsync(inputPack, prompt, _sessionState?.SessionId, cancellationToken).ConfigureAwait(false);
             _latestAdvice = response;
@@ -255,10 +264,19 @@ public sealed class CompanionHost : IAsyncDisposable
             {
                 WriteJson(paths.CodexSessionPath!, _sessionState);
             }
+            WriteCodexTrace(paths, new
+            {
+                kind = "request-finished",
+                trigger = trigger.Kind,
+                manual = trigger.Manual,
+                status = response.Status,
+                generatedAt = response.GeneratedAt,
+                sessionId = _sessionState?.SessionId ?? sessionId,
+            });
 
-            MirrorLiveArtifacts(runState);
+            UpdateCollectorArtifacts(runState);
 
-            PublishSnapshot(CreateSnapshot("running", $"Advice generated for {trigger.Kind}."));
+            PublishSnapshot(CreateSnapshot("running", $"조언 생성 완료: {trigger.Kind}"));
         }
         finally
         {
@@ -266,9 +284,19 @@ public sealed class CompanionHost : IAsyncDisposable
         }
     }
 
-    private void MirrorLiveArtifacts(CompanionRunState runState)
+    private void UpdateCollectorArtifacts(CompanionRunState runState)
     {
         var paths = EnsureRunArtifacts(runState.Snapshot.RunId);
+        MirrorLiveArtifacts(runState, paths);
+        _latestCollectorStatus = BuildCollectorStatus(runState, paths);
+        if (_configuration.LiveExport.CollectorModeEnabled && paths.CollectorSummaryPath is not null)
+        {
+            WriteJson(paths.CollectorSummaryPath, BuildCollectorSummary(runState, paths, _latestCollectorStatus));
+        }
+    }
+
+    private void MirrorLiveArtifacts(CompanionRunState runState, CompanionArtifactPaths paths)
+    {
         if (paths.LiveMirrorRoot is null)
         {
             return;
@@ -279,6 +307,11 @@ public sealed class CompanionHost : IAsyncDisposable
         CopyIfExists(_layout.SummaryPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SummaryPath)));
         CopyIfExists(_layout.SessionPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SessionPath)));
         CopyIfExists(_layout.EventsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.EventsPath)));
+        CopyIfExists(_layout.RawObservationsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.RawObservationsPath)));
+        CopyIfExists(_layout.ScreenTransitionsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ScreenTransitionsPath)));
+        CopyIfExists(_layout.ChoiceCandidatesPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceCandidatesPath)));
+        CopyIfExists(_layout.ChoiceDecisionsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceDecisionsPath)));
+        CopyDirectoryIfExists(_layout.SemanticSnapshotsRoot, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SemanticSnapshotsRoot)));
         WriteJson(paths.CurrentRunStatePath, new
         {
             runId = runState.Snapshot.RunId,
@@ -286,6 +319,7 @@ public sealed class CompanionHost : IAsyncDisposable
             capturedAt = runState.Snapshot.CapturedAt,
             liveRoot = _layout.LiveRoot,
             sessionId = _sessionState?.SessionId,
+            collectorModeEnabled = _configuration.LiveExport.CollectorModeEnabled,
         });
     }
 
@@ -308,6 +342,11 @@ public sealed class CompanionHost : IAsyncDisposable
             Directory.CreateDirectory(paths.PromptPacksRoot);
         }
 
+        if (paths.AdviceRoot is not null)
+        {
+            Directory.CreateDirectory(paths.AdviceRoot);
+        }
+
         return paths;
     }
 
@@ -325,7 +364,7 @@ public sealed class CompanionHost : IAsyncDisposable
             message);
 
         WriteJson(paths.HostStatusPath, status);
-        return new CompanionHostSnapshot(status, _currentRunState, _latestAdvice, _latestKnowledgeSlice, paths);
+        return new CompanionHostSnapshot(status, _currentRunState, _latestAdvice, _latestKnowledgeSlice, _latestCollectorStatus, paths);
     }
 
     private void PublishSnapshot(CompanionHostSnapshot snapshot)
@@ -380,11 +419,159 @@ public sealed class CompanionHost : IAsyncDisposable
         return results.TakeLast(tailCount).ToArray();
     }
 
+    private CompanionCollectorStatus BuildCollectorStatus(CompanionRunState runState, CompanionArtifactPaths paths)
+    {
+        if (!_configuration.LiveExport.CollectorModeEnabled)
+        {
+            return new CompanionCollectorStatus(false, null, null, null, null, null, _sessionState?.SessionId, "collector mode disabled");
+        }
+
+        var latestDecision = ReadLastJsonObject(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceDecisionsPath));
+        var lastSemanticScreen = runState.RecentEvents
+            .LastOrDefault(IsSemanticEvent)?.Screen;
+        var activeEpisode = IsHighValueScreen(runState.Snapshot.CurrentScreen)
+            ? runState.Snapshot.CurrentScreen
+            : lastSemanticScreen;
+        var acceptedExtractorPath = TryReadNestedString(latestDecision, "decision", "extractorPath");
+        var acceptedCount = TryReadNestedInt(latestDecision, "decision", "acceptedCount");
+        var failureReason = TryReadNestedString(latestDecision, "decision", "failureReason");
+        var choiceStatus = acceptedCount > 0
+            ? $"resolved ({acceptedCount})"
+            : runState.Snapshot.CurrentChoices.Count > 0
+                ? $"resolved ({runState.Snapshot.CurrentChoices.Count})"
+                : latestDecision is not null
+                    ? "missing"
+                    : "not-seen";
+        var degradedReason = failureReason
+                             ?? (_latestAdvice is { Status: not "ok" } ? _latestAdvice.Summary : null);
+        var notes = string.Join(
+            Environment.NewLine,
+            new[]
+            {
+                $"collector mode: on",
+                $"latest semantic screen: {lastSemanticScreen ?? "none"}",
+                $"active screen episode: {activeEpisode ?? "none"}",
+                $"choice extraction: {choiceStatus}",
+                $"extractor path: {acceptedExtractorPath ?? "none"}",
+                $"last degraded reason: {degradedReason ?? "none"}",
+                $"session id: {_sessionState?.SessionId ?? "none"}",
+            });
+
+        return new CompanionCollectorStatus(
+            true,
+            activeEpisode,
+            lastSemanticScreen,
+            choiceStatus,
+            acceptedExtractorPath,
+            degradedReason,
+            _sessionState?.SessionId,
+            notes);
+    }
+
+    private CompanionCollectorSummary BuildCollectorSummary(
+        CompanionRunState runState,
+        CompanionArtifactPaths paths,
+        CompanionCollectorStatus? collectorStatus)
+    {
+        var liveMirrorRoot = paths.LiveMirrorRoot;
+        var transitions = ReadJsonLines(liveMirrorRoot, Path.GetFileName(_layout.ScreenTransitionsPath));
+        var decisions = ReadJsonLines(liveMirrorRoot, Path.GetFileName(_layout.ChoiceDecisionsPath));
+        var candidates = ReadJsonLines(liveMirrorRoot, Path.GetFileName(_layout.ChoiceCandidatesPath));
+        var adviceLog = paths.AdviceLogPath is not null && File.Exists(paths.AdviceLogPath)
+            ? ReadJsonLines(paths.AdviceLogPath)
+            : Array.Empty<JsonDocument>();
+
+        var timeline = transitions
+            .Select(document =>
+            {
+                var root = document.RootElement;
+                var before = TryReadString(root, "before") ?? "unknown";
+                var incoming = TryReadString(root, "incoming") ?? "unknown";
+                var after = TryReadString(root, "after") ?? "unknown";
+                var trigger = TryReadString(root, "triggerKind") ?? "unknown";
+                return $"{trigger}: {before} -> {after} (incoming={incoming})";
+            })
+            .TakeLast(24)
+            .ToArray();
+
+        var semanticCounts = runState.RecentEvents
+            .Where(IsSemanticEvent)
+            .GroupBy(evt => evt.Kind, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
+
+        var missingChoices = decisions
+            .Where(document => (TryReadNestedInt(document, "decision", "acceptedCount") ?? 0) == 0)
+            .Select(document =>
+            {
+                var screen = TryReadString(document.RootElement, "screen") ?? "unknown";
+                var extractor = TryReadNestedString(document, "decision", "extractorPath") ?? "unknown";
+                return $"{screen} via {extractor}";
+            })
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var placeholderLabels = candidates
+            .Where(document => string.Equals(TryReadNestedString(document, "candidate", "rejectReason"), "placeholder-label", StringComparison.Ordinal))
+            .Select(document => TryReadNestedString(document, "candidate", "label"))
+            .Where(label => !string.IsNullOrWhiteSpace(label))
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(label => label, StringComparer.Ordinal)
+            .Take(64)
+            .ToArray();
+
+        var autoAdviceFailures = adviceLog
+            .Where(document =>
+            {
+                var root = document.RootElement;
+                var status = TryReadString(root, "status");
+                var trigger = TryReadString(root, "triggerKind");
+                return !string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase)
+                       && !string.Equals(trigger, "manual", StringComparison.OrdinalIgnoreCase);
+            })
+            .Select(document =>
+            {
+                var root = document.RootElement;
+                return $"{TryReadString(root, "triggerKind") ?? "unknown"}: {TryReadString(root, "summary") ?? "degraded"}";
+            })
+            .TakeLast(12)
+            .ToArray();
+
+        var observedMergeCounts = ReadObservedMergeCounts();
+        var recommendedFixes = BuildRecommendedFixes(missingChoices, placeholderLabels, autoAdviceFailures, collectorStatus);
+
+        return new CompanionCollectorSummary(
+            runState.Snapshot.RunId,
+            DateTimeOffset.UtcNow,
+            timeline,
+            semanticCounts,
+            missingChoices,
+            placeholderLabels,
+            autoAdviceFailures,
+            collectorStatus?.SessionId is null ? "missing-session-id" : "session-tracked",
+            observedMergeCounts,
+            recommendedFixes);
+    }
+
     private static void CopyIfExists(string sourcePath, string destinationPath)
     {
         if (File.Exists(sourcePath))
         {
             File.Copy(sourcePath, destinationPath, overwrite: true);
+        }
+    }
+
+    private static void CopyDirectoryIfExists(string sourcePath, string destinationPath)
+    {
+        if (!Directory.Exists(sourcePath))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(destinationPath);
+        foreach (var file in Directory.GetFiles(sourcePath))
+        {
+            File.Copy(file, Path.Combine(destinationPath, Path.GetFileName(file)), overwrite: true);
         }
     }
 
@@ -408,5 +595,163 @@ public sealed class CompanionHost : IAsyncDisposable
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.AppendAllText(path, JsonSerializer.Serialize(value, _jsonOptions) + Environment.NewLine);
+    }
+
+    private void WriteCodexTrace(CompanionArtifactPaths paths, object trace)
+    {
+        if (!_configuration.LiveExport.CollectorModeEnabled || paths.CodexTracePath is null)
+        {
+            return;
+        }
+
+        AppendNdjson(paths.CodexTracePath, trace);
+    }
+
+    private IReadOnlyDictionary<string, int> ReadObservedMergeCounts()
+    {
+        var observedMergePath = Path.Combine(CompanionPathResolver.ResolveKnowledgeRoot(_configuration, _workspaceRoot), "observed-merge.json");
+        if (!File.Exists(observedMergePath))
+        {
+            return new Dictionary<string, int>(StringComparer.Ordinal);
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(observedMergePath));
+        var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in document.RootElement.EnumerateObject())
+        {
+            result[property.Name] = property.Value.ValueKind switch
+            {
+                JsonValueKind.Array => property.Value.GetArrayLength(),
+                JsonValueKind.Object => property.Value.EnumerateObject().Count(),
+                _ => 0,
+            };
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<string> BuildRecommendedFixes(
+        IReadOnlyList<string> missingChoices,
+        IReadOnlyList<string> placeholderLabels,
+        IReadOnlyList<string> autoAdviceFailures,
+        CompanionCollectorStatus? collectorStatus)
+    {
+        var fixes = new List<string>();
+        if (missingChoices.Count > 0)
+        {
+            fixes.Add("choice extractor가 비어 있는 화면부터 strict extractor 경로를 우선 보강하세요.");
+        }
+
+        if (placeholderLabels.Count > 0)
+        {
+            fixes.Add("placeholder UI 라벨이 여전히 남아 있으니 generic fallback 필터링을 더 강화하세요.");
+        }
+
+        if (autoAdviceFailures.Count > 0)
+        {
+            fixes.Add("auto advice degraded 원인을 prompt pack과 Codex trace에서 먼저 좁히세요.");
+        }
+
+        if (collectorStatus?.SessionId is null)
+        {
+            fixes.Add("gameplay trigger에서도 Codex session 재사용이 유지되는지 다시 확인하세요.");
+        }
+
+        if (fixes.Count == 0)
+        {
+            fixes.Add("collector summary 기준 blocker가 보이지 않으니 다음 high-value screen coverage를 늘리세요.");
+        }
+
+        return fixes;
+    }
+
+    private static bool IsSemanticEvent(LiveExportEventEnvelope envelope)
+    {
+        return envelope.Kind is "choice-list-presented"
+            or "reward-opened"
+            or "reward-screen-opened"
+            or "event-opened"
+            or "event-screen-opened"
+            or "shop-opened"
+            or "rest-opened";
+    }
+
+    private static bool IsHighValueScreen(string? screen)
+    {
+        return screen is "rewards" or "event" or "shop" or "rest-site" or "card-choice" or "upgrade" or "transform";
+    }
+
+    private static IReadOnlyList<JsonDocument> ReadJsonLines(string? directory, string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return Array.Empty<JsonDocument>();
+        }
+
+        return ReadJsonLines(Path.Combine(directory, fileName));
+    }
+
+    private static IReadOnlyList<JsonDocument> ReadJsonLines(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return Array.Empty<JsonDocument>();
+        }
+
+        var documents = new List<JsonDocument>();
+        foreach (var line in ReadAllLinesShared(path))
+        {
+            try
+            {
+                documents.Add(JsonDocument.Parse(line));
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return documents;
+    }
+
+    private static JsonDocument? ReadLastJsonObject(string? directory, string fileName)
+    {
+        var lines = ReadJsonLines(directory, fileName);
+        return lines.Count == 0 ? null : lines[^1];
+    }
+
+    private static string? TryReadString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+    }
+
+    private static string? TryReadNestedString(JsonDocument? document, string parentProperty, string propertyName)
+    {
+        if (document is null)
+        {
+            return null;
+        }
+
+        return document.RootElement.TryGetProperty(parentProperty, out var parent)
+               && parent.TryGetProperty(propertyName, out var property)
+               && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+    }
+
+    private static int? TryReadNestedInt(JsonDocument? document, string parentProperty, string propertyName)
+    {
+        if (document is null)
+        {
+            return null;
+        }
+
+        return document.RootElement.TryGetProperty(parentProperty, out var parent)
+               && parent.TryGetProperty(propertyName, out var property)
+               && property.ValueKind == JsonValueKind.Number
+               && property.TryGetInt32(out var value)
+            ? value
+            : null;
     }
 }

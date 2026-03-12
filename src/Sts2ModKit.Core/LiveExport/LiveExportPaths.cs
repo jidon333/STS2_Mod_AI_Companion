@@ -25,12 +25,20 @@ public static class LiveExportPathResolver
             Path.Combine(liveRoot, options.EventsFileName),
             Path.Combine(liveRoot, options.SnapshotFileName),
             Path.Combine(liveRoot, options.SummaryFileName),
-            Path.Combine(liveRoot, options.SessionFileName));
+            Path.Combine(liveRoot, options.SessionFileName))
+        {
+            RawObservationsPath = Path.Combine(liveRoot, options.RawObservationsFileName),
+            ScreenTransitionsPath = Path.Combine(liveRoot, options.ScreenTransitionsFileName),
+            ChoiceCandidatesPath = Path.Combine(liveRoot, options.ChoiceCandidatesFileName),
+            ChoiceDecisionsPath = Path.Combine(liveRoot, options.ChoiceDecisionsFileName),
+            SemanticSnapshotsRoot = Path.Combine(liveRoot, options.SemanticSnapshotsFolderName),
+        };
     }
 
     public static void EnsureDirectory(LiveExportLayout layout)
     {
         Directory.CreateDirectory(layout.LiveRoot);
+        Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
     }
 
     private static string CombineRelativeSegments(string root, string relativePath)

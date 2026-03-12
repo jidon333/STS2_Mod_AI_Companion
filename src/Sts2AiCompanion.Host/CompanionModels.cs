@@ -9,10 +9,13 @@ public sealed record CompanionArtifactPaths(
     string? RunRoot,
     string? LiveMirrorRoot,
     string? PromptPacksRoot,
+    string? AdviceRoot,
     string? AdviceLogPath,
     string? AdviceLatestJsonPath,
     string? AdviceLatestMarkdownPath,
     string? CodexSessionPath,
+    string? CodexTracePath,
+    string? CollectorSummaryPath,
     string HostStatusPath);
 
 public sealed record CompanionRunState(
@@ -85,7 +88,30 @@ public sealed record CompanionHostSnapshot(
     CompanionRunState? RunState,
     AdviceResponse? LatestAdvice,
     KnowledgeSlice? LatestKnowledgeSlice,
+    CompanionCollectorStatus? CollectorStatus,
     CompanionArtifactPaths Paths);
+
+public sealed record CompanionCollectorStatus(
+    bool Enabled,
+    string? ActiveScreenEpisode,
+    string? LastSemanticScreen,
+    string? ChoiceExtractionStatus,
+    string? LastAcceptedExtractorPath,
+    string? LastDegradedReason,
+    string? SessionId,
+    string Notes);
+
+public sealed record CompanionCollectorSummary(
+    string RunId,
+    DateTimeOffset GeneratedAt,
+    IReadOnlyList<string> SeenScreensTimeline,
+    IReadOnlyDictionary<string, int> SemanticEventCounts,
+    IReadOnlyList<string> ScreensWithMissingChoices,
+    IReadOnlyList<string> PlaceholderLabelsObserved,
+    IReadOnlyList<string> AutoAdviceFailures,
+    string SessionTrackingStatus,
+    IReadOnlyDictionary<string, int> ObservedMergeCounts,
+    IReadOnlyList<string> RecommendedNextFixes);
 
 internal sealed record SessionIndexEntry(
     string Id,

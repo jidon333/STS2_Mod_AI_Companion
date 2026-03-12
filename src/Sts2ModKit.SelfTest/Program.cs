@@ -33,6 +33,7 @@ Run("runtime reflection invoker supports optional parameters", TestRuntimeReflec
 Run("runtime reflection string extraction resolves nested label text", TestRuntimeReflectionStringExtraction, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
 Run("live export tracker preserves high-value state across partial observations", TestLiveExportTrackerPartialMerge, failures);
+Run("collector mode records screen episodes and choice diagnostics", TestLiveExportTrackerCollectorMode, failures);
 Run("companion path resolver keeps per-run artifacts under companion root", TestCompanionPathResolver, failures);
 Run("knowledge catalog service builds a bounded relevant slice", TestKnowledgeCatalogService, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
@@ -98,6 +99,11 @@ static void TestLiveExportPathResolver()
 
     Assert(layout.LiveRoot.EndsWith(Path.Combine("steam", configuration.GamePaths.SteamAccountId, "modded", "profile1", "ai_companion", "live"), StringComparison.OrdinalIgnoreCase), "Expected live export layout to use the modded profile path.");
     Assert(layout.EventsPath.EndsWith("events.ndjson", StringComparison.OrdinalIgnoreCase), "Expected NDJSON events path.");
+    Assert(layout.RawObservationsPath.EndsWith("raw-observations.ndjson", StringComparison.OrdinalIgnoreCase), "Expected collector raw observations path.");
+    Assert(layout.ScreenTransitionsPath.EndsWith("screen-transitions.ndjson", StringComparison.OrdinalIgnoreCase), "Expected collector screen transitions path.");
+    Assert(layout.ChoiceCandidatesPath.EndsWith("choice-candidates.ndjson", StringComparison.OrdinalIgnoreCase), "Expected collector choice candidates path.");
+    Assert(layout.ChoiceDecisionsPath.EndsWith("choice-decisions.ndjson", StringComparison.OrdinalIgnoreCase), "Expected collector choice decisions path.");
+    Assert(layout.SemanticSnapshotsRoot.EndsWith("semantic-snapshots", StringComparison.OrdinalIgnoreCase), "Expected semantic snapshots directory path.");
 }
 
 static void TestSnapshotPlanner()
@@ -1040,6 +1046,95 @@ static void TestLiveExportTrackerPartialMerge()
     Assert(second.CurrentChoices.Select(choice => choice.Label).SequenceEqual(first.CurrentChoices.Select(choice => choice.Label), StringComparer.Ordinal), "Expected unresolved choice poll not to clear visible choices.");
 }
 
+static void TestLiveExportTrackerCollectorMode()
+{
+    var tracker = new LiveExportStateTracker(new LiveExportStateTrackerOptions(16, 40, 10, true), @"C:\temp\live");
+    var semanticObservation = new LiveExportObservation(
+        "reward-screen-opened",
+        DateTimeOffset.UtcNow.AddSeconds(-1),
+        "run-collector",
+        "active",
+        "rewards",
+        1,
+        20,
+        new LiveExportPlayerSummary("Ironclad", 48, 80, 92, 3, new Dictionary<string, string?>()),
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("card", "강타", "BASH", "적에게 피해를 주고 취약을 겁니다."),
+            new LiveExportChoiceSummary("card", "수비", "DEFEND_R", "방어도를 얻습니다."),
+        },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("Combat Reward", "Reward", false, null),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>())
+    {
+        SemanticScreen = "rewards",
+        ChoiceCandidates = new[]
+        {
+            new LiveExportChoiceCandidate("reward._options", "RewardOption", "강타", "BASH", "적에게 피해를 주고 취약을 겁니다.", 100, true, null),
+            new LiveExportChoiceCandidate("generic.nodes", "BackButton", "BackButton", "BackButton", null, 0, false, "placeholder-label"),
+        },
+        ChoiceDecision = new LiveExportChoiceDecision(
+            "reward._options",
+            true,
+            2,
+            1,
+            "accepted-strict",
+            null,
+            new[] { "BackButton" }),
+    };
+
+    var firstBatch = tracker.Apply(semanticObservation);
+
+    Assert(firstBatch.CollectorStatus is not null && firstBatch.CollectorStatus.CollectorModeEnabled, "Expected collector mode status for collector-enabled tracker.");
+    var firstCollectorStatus = firstBatch.CollectorStatus!;
+    Assert(firstCollectorStatus.ActiveScreenEpisode == "rewards", "Expected semantic reward screen to start an active episode.");
+    Assert(firstCollectorStatus.LastSemanticScreen == "rewards", "Expected collector status to remember the latest semantic screen.");
+    Assert(firstCollectorStatus.LastAcceptedExtractorPath == "reward._options", "Expected collector status to remember the accepted extractor path.");
+    Assert(firstCollectorStatus.ChoiceExtractionStatus == "resolved (1)", "Expected collector status to report accepted choice count.");
+    Assert(firstBatch.ScreenTransitions.Count == 1 && firstBatch.ScreenTransitions[0].After == "rewards", "Expected collector mode to emit a screen transition for the semantic screen.");
+
+    var fallbackPoll = new LiveExportObservation(
+        "runtime-poll",
+        DateTimeOffset.UtcNow,
+        "run-collector",
+        "active",
+        "combat",
+        null,
+        null,
+        new LiveExportPlayerSummary(null, null, null, null, null, new Dictionary<string, string?>()),
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        Array.Empty<LiveExportChoiceSummary>(),
+        new[] { "no visible choices resolved for this observation." },
+        new LiveExportEncounterSummary("Battle", "Combat", true, 1),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>())
+    {
+        ChoiceDecision = new LiveExportChoiceDecision(
+            null,
+            false,
+            1,
+            0,
+            "fallback-missing",
+            "no visible choices resolved for this observation.",
+            new[] { "BackButton" }),
+    };
+
+    var secondBatch = tracker.Apply(fallbackPoll);
+
+    Assert(secondBatch.Snapshot.CurrentScreen == "rewards", "Expected collector merge to keep the reward episode active across a fallback runtime poll.");
+    Assert(secondBatch.ScreenTransitions.Count == 1 && secondBatch.ScreenTransitions[0].KeptPreviousScreen, "Expected collector transition log to mark when a previous semantic screen is kept.");
+    Assert(secondBatch.CollectorStatus is not null && secondBatch.CollectorStatus.ActiveScreenEpisode == "rewards", "Expected active screen episode to remain on rewards during fallback polls.");
+    var secondCollectorStatus = secondBatch.CollectorStatus!;
+    Assert(secondCollectorStatus.LastAcceptedExtractorPath == "reward._options", "Expected last accepted extractor path to persist across fallback polls.");
+    Assert(secondCollectorStatus.LastDegradedReason == "no visible choices resolved for this observation.", "Expected degraded reason to reflect the latest failed extraction.");
+}
+
 static void TestCompanionPathResolver()
 {
     var configuration = ScaffoldConfiguration.CreateLocalDefault() with
@@ -1060,6 +1155,10 @@ static void TestCompanionPathResolver()
     Assert(paths.RunRoot == Path.Combine(@"C:\workspace\repo", "artifacts", "companion", "run-001-alpha"), "Expected sanitized per-run directory.");
     Assert(paths.RunRoot is not null, "Expected the resolver to produce a run root for a non-empty run id.");
     Assert(paths.PromptPacksRoot == Path.Combine(paths.RunRoot!, "prompt-packs"), "Expected prompt pack directory under the run root.");
+    Assert(paths.AdviceRoot == Path.Combine(paths.RunRoot!, "advice"), "Expected advice directory under the run root.");
+    Assert(paths.CodexTracePath == Path.Combine(paths.RunRoot!, "codex-trace.ndjson"), "Expected codex trace path under the run root.");
+    Assert(paths.CollectorSummaryPath == Path.Combine(paths.RunRoot!, "collector-summary.json"), "Expected collector summary path under the run root.");
+    Assert(paths.HostStatusPath == Path.Combine(paths.RunRoot!, "host-status.json"), "Expected host status to live under the per-run root when run id is present.");
 }
 
 static void TestKnowledgeCatalogService()
@@ -1214,7 +1313,7 @@ static void TestAdvicePromptBuilder()
     var inputPack = builder.BuildInputPack(runState, trigger, slice);
     var prompt = builder.FormatPrompt(inputPack);
 
-    Assert(prompt.Contains("You are a Slay the Spire 2 advice assistant.", StringComparison.Ordinal), "Expected prompt preamble.");
+    Assert(prompt.Contains("당신은 Slay the Spire 2 조언 어시스턴트입니다.", StringComparison.Ordinal), "Expected prompt preamble.");
     Assert(prompt.Contains("current_state_summary:", StringComparison.Ordinal), "Expected prompt to include the state summary section.");
     Assert(prompt.Contains("knowledge_slice:", StringComparison.Ordinal), "Expected prompt to include the knowledge slice section.");
     Assert(prompt.Contains("response_instructions:", StringComparison.Ordinal), "Expected prompt to include the response instructions section.");

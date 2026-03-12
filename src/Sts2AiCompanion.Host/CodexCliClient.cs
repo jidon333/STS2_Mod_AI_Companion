@@ -105,9 +105,9 @@ public sealed class CodexCliClient : ICodexSessionClient
 
                 return (new AdviceResponse(
                     "ok",
-                    parsed.Headline ?? "AI advice",
-                    parsed.Summary ?? "The response did not include a summary.",
-                    parsed.RecommendedAction ?? "Re-check the current state before deciding.",
+                    parsed.Headline ?? "AI 조언",
+                    parsed.Summary ?? "응답에 요약이 포함되지 않았습니다.",
+                    parsed.RecommendedAction ?? "결정을 내리기 전에 현재 상태를 다시 확인하세요.",
                     parsed.RecommendedChoiceLabel,
                     parsed.ReasoningBullets ?? Array.Empty<string>(),
                     parsed.RiskNotes ?? Array.Empty<string>(),
@@ -293,11 +293,11 @@ public sealed class CodexCliClient : ICodexSessionClient
     {
         return new AdviceResponse(
             "degraded",
-            "Codex advice is unavailable",
+            "Codex 조언을 사용할 수 없습니다",
             message,
-            "Review the current state and choices manually.",
+            "현재 상태와 선택지를 직접 다시 확인하세요.",
             null,
-            new[] { "The Codex CLI failed or returned an invalid response." },
+            new[] { "Codex CLI가 실패했거나 잘못된 응답을 반환했습니다." },
             new[] { message },
             null,
             Array.Empty<string>(),

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-11T13:10:09.3053943+00:00",
+  "generatedAt": "2026-03-12T02:34:52.3467915+00:00",
   "metadata": {
     "releaseVersion": "v0.98.3",
     "releaseCommit": "cb602cef",
@@ -19,9 +19,9 @@
       "atlas:era_atlas": "27",
       "atlas:controller_atlas": "112",
       "source": "extract-static-knowledge",
-      "eventsLoaded": "3627",
+      "eventsLoaded": "31215",
       "snapshotLoaded": "True",
-      "observedSources": "4",
+      "observedSources": "9",
       "assemblyScanMode": "metadata-load-context",
       "assemblyScanRoot": "D:\\Program Files (x86)\\Steam\\steamapps\\common\\Slay the Spire 2\\data_sts2_windows_x86_64"
     }

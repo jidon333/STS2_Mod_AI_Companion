@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-11T13:11:15.7942296+00:00",
+  "generatedAt": "2026-03-12T02:35:56.3503357+00:00",
   "metadata": {
     "releaseVersion": "v0.98.3",
     "releaseCommit": "cb602cef",
@@ -19,9 +19,9 @@
       "atlas:era_atlas": "27",
       "atlas:controller_atlas": "112",
       "source": "extract-static-knowledge",
-      "eventsLoaded": "3627",
+      "eventsLoaded": "31215",
       "snapshotLoaded": "True",
-      "observedSources": "4"
+      "observedSources": "9"
     }
   },
   "cards": [
@@ -31,6 +31,21 @@
       "source": "live-event:card-added",
       "observed": true,
       "rawText": "CARD.BASH",
+      "tags": [
+        "card-added",
+        "card-removed"
+      ],
+      "attributes": {
+        "screen": "combat"
+      },
+      "options": []
+    },
+    {
+      "id": "card-bloodletting",
+      "name": "CARD.BLOODLETTING",
+      "source": "live-event:card-added",
+      "observed": true,
+      "rawText": "CARD.BLOODLETTING",
       "tags": [
         "card-added",
         "card-removed"
@@ -302,6 +317,21 @@
       "options": []
     },
     {
+      "id": "card-stone-armor",
+      "name": "CARD.STONE_ARMOR",
+      "source": "live-event:card-added",
+      "observed": true,
+      "rawText": "CARD.STONE_ARMOR",
+      "tags": [
+        "card-added",
+        "card-removed"
+      ],
+      "attributes": {
+        "screen": "combat"
+      },
+      "options": []
+    },
+    {
       "id": "card-strike-ironclad",
       "name": "CARD.STRIKE_IRONCLAD",
       "source": "live-event:card-added",
@@ -331,6 +361,62 @@
       ],
       "attributes": {
         "screen": "combat"
+      },
+      "options": []
+    },
+    {
+      "id": "cardpreviewcontainer",
+      "name": "CardPreviewContainer",
+      "source": "live-choice",
+      "observed": true,
+      "rawText": "CardPreviewContainer",
+      "tags": [
+        "choice"
+      ],
+      "attributes": {
+        "choiceKind": "card"
+      },
+      "options": []
+    },
+    {
+      "id": "eventcardpreviewcontainer",
+      "name": "EventCardPreviewContainer",
+      "source": "live-choice",
+      "observed": true,
+      "rawText": "EventCardPreviewContainer",
+      "tags": [
+        "choice"
+      ],
+      "attributes": {
+        "choiceKind": "card"
+      },
+      "options": []
+    },
+    {
+      "id": "gridcardpreviewcontainer",
+      "name": "GridCardPreviewContainer",
+      "source": "live-choice",
+      "observed": true,
+      "rawText": "GridCardPreviewContainer",
+      "tags": [
+        "choice"
+      ],
+      "attributes": {
+        "choiceKind": "card"
+      },
+      "options": []
+    },
+    {
+      "id": "messycardpreviewcontainer",
+      "name": "MessyCardPreviewContainer",
+      "source": "live-choice",
+      "observed": true,
+      "rawText": "MessyCardPreviewContainer",
+      "tags": [
+        "choice"
+      ],
+      "attributes": {
+        "choiceKind": "card"
       },
       "options": []
     }
@@ -423,11 +509,44 @@
       "observed": true,
       "rawText": "RELIC.NUTRITIOUS_SOUP",
       "tags": [
+        "relic",
         "relic-gained",
         "relic-lost"
       ],
       "attributes": {
-        "screen": "main-menu"
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "relic-pendulum",
+      "name": "RELIC.PENDULUM",
+      "source": "live-event:relic-gained",
+      "observed": true,
+      "rawText": "RELIC.PENDULUM",
+      "tags": [
+        "relic",
+        "relic-gained",
+        "relic-lost"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "relic-pollinous-core",
+      "name": "RELIC.POLLINOUS_CORE",
+      "source": "live-event:relic-gained",
+      "observed": true,
+      "rawText": "RELIC.POLLINOUS_CORE",
+      "tags": [
+        "relic",
+        "relic-gained",
+        "relic-lost"
+      ],
+      "attributes": {
+        "screen": "rewards"
       },
       "options": []
     },
@@ -454,11 +573,26 @@
       "observed": true,
       "rawText": "RELIC.WAR_PAINT",
       "tags": [
+        "relic",
         "relic-gained",
         "relic-lost"
       ],
       "attributes": {
-        "screen": "main-menu"
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "relicinventory",
+      "name": "RelicInventory",
+      "source": "live-choice",
+      "observed": true,
+      "rawText": "RelicInventory",
+      "tags": [
+        "choice"
+      ],
+      "attributes": {
+        "choiceKind": "relic"
       },
       "options": []
     }
@@ -586,6 +720,120 @@
   "shops": [],
   "rewards": [
     {
+      "id": "reward-03e5b74b6b09",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "BackButton|cardHoverTipContainer|SendButton|RelicInventory|CardPreviewContainer|GridCardPreviewContainer|EventCardPreviewContainer|MessyCardPreviewContainer|HappyCultist|Heart",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "backbutton",
+          "label": "BackButton",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "cardhovertipcontainer",
+          "label": "cardHoverTipContainer",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "cardpreviewcontainer",
+          "label": "CardPreviewContainer",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "eventcardpreviewcontainer",
+          "label": "EventCardPreviewContainer",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "gridcardpreviewcontainer",
+          "label": "GridCardPreviewContainer",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "happycultist",
+          "label": "HappyCultist",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "heart",
+          "label": "Heart",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "messycardpreviewcontainer",
+          "label": "MessyCardPreviewContainer",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "relicinventory",
+          "label": "RelicInventory",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "sendbutton",
+          "label": "SendButton",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-375f7fbeab2b",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uBD84\uB178|\uC0AC\uC804 \uD0C0\uACA9|\uCC9C\uB465|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD84\uB178",
+          "label": "\uBD84\uB178",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0AC\uC804-\uD0C0\uACA9",
+          "label": "\uC0AC\uC804 \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCC9C\uB465",
+          "label": "\uCC9C\uB465",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-425988603a25",
       "name": "Observed Reward",
       "source": "live-event:reward-screen-opened",
@@ -598,6 +846,86 @@
         "screen": "rewards"
       },
       "options": []
+    },
+    {
+      "id": "reward-43004418eff4",
+      "name": "Observed Reward",
+      "source": "live-event:reward-screen-opened",
+      "observed": true,
+      "rawText": "{\u0022method\u0022:\u0022_Ready\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022,\u0022choiceCount\u0022:2}",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "reward-45158a17cc50",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "RewardsScreen|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "rewardsscreen",
+          "label": "RewardsScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-4efa92d1d120",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "NCardRewardSelectionScreen|\uBD84\uB178|\uC0AC\uC804 \uD0C0\uACA9|\uCC9C\uB465",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD84\uB178",
+          "label": "\uBD84\uB178",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0AC\uC804-\uD0C0\uACA9",
+          "label": "\uC0AC\uC804 \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCC9C\uB465",
+          "label": "\uCC9C\uB465",
+          "description": null,
+          "attributes": {}
+        }
+      ]
     },
     {
       "id": "reward-6ae8506a4da3",
@@ -628,11 +956,296 @@
       "options": []
     },
     {
+      "id": "reward-c10ee1ed7c08",
+      "name": "Observed Reward",
+      "source": "live-event:reward-screen-opened",
+      "observed": true,
+      "rawText": "{\u0022method\u0022:\u0022_Ready\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022,\u0022choiceCount\u0022:4}",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "reward-c4314ef5a70c",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "BackButton|SendButton|RelicInventory|CardPreviewContainer|GridCardPreviewContainer|EventCardPreviewContainer|MessyCardPreviewContainer|HappyCultist|Heart|SlimeSad",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "backbutton",
+          "label": "BackButton",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "cardpreviewcontainer",
+          "label": "CardPreviewContainer",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "eventcardpreviewcontainer",
+          "label": "EventCardPreviewContainer",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "gridcardpreviewcontainer",
+          "label": "GridCardPreviewContainer",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "happycultist",
+          "label": "HappyCultist",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "heart",
+          "label": "Heart",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "messycardpreviewcontainer",
+          "label": "MessyCardPreviewContainer",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "relicinventory",
+          "label": "RelicInventory",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "sendbutton",
+          "label": "SendButton",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "slimesad",
+          "label": "SlimeSad",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-c8344097244f",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "17 \uACE8\uB4DC|\uD30C\uC6CC \uD3EC\uC158|\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.|RewardsScreen|\uB118\uAE30\uAE30|Potion|\uBD84\uB178",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "17-\uACE8\uB4DC",
+          "label": "17 \uACE8\uB4DC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "potion",
+          "label": "Potion",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "rewardsscreen",
+          "label": "RewardsScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB371\uC5D0-\uCD94\uAC00\uD560-\uCE74\uB4DC\uB97C-\uC120\uD0DD\uD558\uC138\uC694",
+          "label": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD84\uB178",
+          "label": "\uBD84\uB178",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD30C\uC6CC-\uD3EC\uC158",
+          "label": "\uD30C\uC6CC \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-cfcb71956165",
       "name": "Observed Reward",
       "source": "live-event:reward-screen-opened",
       "observed": true,
       "rawText": "{\u0022method\u0022:\u0022_Ready\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022}",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "reward-ea78714e4001",
+      "name": "Observed Reward",
+      "source": "live-snapshot",
+      "observed": true,
+      "rawText": "BackButton | SendButton | RelicInventory | CardPreviewContainer | GridCardPreviewContainer | EventCardPreviewContainer | MessyCardPreviewContainer | HappyCultist | Heart | SlimeSad",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "semanticKind": "runtime-poll",
+        "source": "scene-poll",
+        "currentSceneType": "MegaCrit.Sts2.Core.Nodes.NGame",
+        "sceneRootType": "Godot.Window",
+        "screen": "rewards",
+        "declaringType": "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+        "instanceType": "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen"
+      },
+      "options": [
+        {
+          "id": "backbutton",
+          "label": "BackButton",
+          "description": "BackButton",
+          "attributes": {
+            "kind": "choice",
+            "value": null
+          }
+        },
+        {
+          "id": "cardpreviewcontainer",
+          "label": "CardPreviewContainer",
+          "description": "CardPreviewContainer",
+          "attributes": {
+            "kind": "card",
+            "value": null
+          }
+        },
+        {
+          "id": "eventcardpreviewcontainer",
+          "label": "EventCardPreviewContainer",
+          "description": "EventCardPreviewContainer",
+          "attributes": {
+            "kind": "card",
+            "value": null
+          }
+        },
+        {
+          "id": "gridcardpreviewcontainer",
+          "label": "GridCardPreviewContainer",
+          "description": "GridCardPreviewContainer",
+          "attributes": {
+            "kind": "card",
+            "value": null
+          }
+        },
+        {
+          "id": "happycultist",
+          "label": "HappyCultist",
+          "description": "HappyCultist",
+          "attributes": {
+            "kind": "choice",
+            "value": null
+          }
+        },
+        {
+          "id": "heart",
+          "label": "Heart",
+          "description": "Heart",
+          "attributes": {
+            "kind": "choice",
+            "value": null
+          }
+        },
+        {
+          "id": "messycardpreviewcontainer",
+          "label": "MessyCardPreviewContainer",
+          "description": "MessyCardPreviewContainer",
+          "attributes": {
+            "kind": "card",
+            "value": null
+          }
+        },
+        {
+          "id": "relicinventory",
+          "label": "RelicInventory",
+          "description": "RelicInventory",
+          "attributes": {
+            "kind": "relic",
+            "value": null
+          }
+        },
+        {
+          "id": "sendbutton",
+          "label": "SendButton",
+          "description": "SendButton",
+          "attributes": {
+            "kind": "choice",
+            "value": null
+          }
+        },
+        {
+          "id": "slimesad",
+          "label": "SlimeSad",
+          "description": "SlimeSad",
+          "attributes": {
+            "kind": "choice",
+            "value": null
+          }
+        }
+      ]
+    },
+    {
+      "id": "reward-ea78b5939b19",
+      "name": "Observed Reward",
+      "source": "live-event:reward-screen-opened",
+      "observed": true,
+      "rawText": "{\u0022method\u0022:\u0022SetRewards\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022,\u0022choiceCount\u0022:10}",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "reward-ed277fbc1cda",
+      "name": "Observed Reward",
+      "source": "live-event:reward-screen-opened",
+      "observed": true,
+      "rawText": "{\u0022method\u0022:\u0022ShowScreen\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022,\u0022choiceCount\u0022:4}",
       "tags": [
         "reward"
       ],

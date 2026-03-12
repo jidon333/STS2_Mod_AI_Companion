@@ -7,6 +7,11 @@ public sealed class LiveExportStateTracker
     private readonly string _liveRoot;
     private LiveExportSnapshot _snapshot;
     private long _sequence;
+    private string? _activeScreenEpisode;
+    private DateTimeOffset? _activeScreenEpisodeStartedAt;
+    private string? _lastSemanticScreen;
+    private string? _lastAcceptedExtractorPath;
+    private string? _lastDegradedReason;
 
     public LiveExportStateTracker(LiveExportStateTrackerOptions options, string liveRoot, string? seedRunId = null)
     {
@@ -18,10 +23,13 @@ public sealed class LiveExportStateTracker
 
     public LiveExportBatch Apply(LiveExportObservation observation)
     {
+        var previousSnapshot = _snapshot;
         var nextSnapshot = MergeSnapshot(_snapshot, observation);
         var events = new List<LiveExportEventEnvelope>();
-        events.AddRange(BuildDerivedEvents(_snapshot, nextSnapshot, observation));
+        events.AddRange(BuildDerivedEvents(previousSnapshot, nextSnapshot, observation));
         events.Add(CreateEnvelope(observation.TriggerKind, nextSnapshot, observation.Payload, observation.ObservedAt));
+        var screenTransitions = BuildScreenTransitions(previousSnapshot, nextSnapshot, observation);
+        var collectorStatus = UpdateCollectorStatus(nextSnapshot, observation);
 
         _snapshot = nextSnapshot;
         var session = new LiveExportSession(
@@ -35,7 +43,12 @@ public sealed class LiveExportStateTracker
             observation.TriggerKind,
             nextSnapshot.CurrentScreen);
 
-        return new LiveExportBatch(nextSnapshot, session, events);
+        return new LiveExportBatch(nextSnapshot, session, events)
+        {
+            SourceObservation = observation,
+            ScreenTransitions = screenTransitions,
+            CollectorStatus = collectorStatus,
+        };
     }
 
     public LiveExportReplayResult Replay(IEnumerable<LiveExportObservation> observations)
@@ -56,6 +69,102 @@ public sealed class LiveExportStateTracker
         }
 
         return new LiveExportReplayResult(_snapshot, events, warnings);
+    }
+
+    private IReadOnlyList<LiveExportScreenTransition> BuildScreenTransitions(
+        LiveExportSnapshot previous,
+        LiveExportSnapshot next,
+        LiveExportObservation observation)
+    {
+        if (!_options.CollectorModeEnabled)
+        {
+            return Array.Empty<LiveExportScreenTransition>();
+        }
+
+        var incoming = Coalesce(observation.Screen, previous.CurrentScreen, "unknown");
+        var keptPrevious = string.Equals(next.CurrentScreen, previous.CurrentScreen, StringComparison.Ordinal)
+            && !string.Equals(incoming, next.CurrentScreen, StringComparison.Ordinal);
+        if (!keptPrevious
+            && string.Equals(previous.CurrentScreen, next.CurrentScreen, StringComparison.Ordinal)
+            && string.IsNullOrWhiteSpace(observation.SemanticScreen))
+        {
+            return Array.Empty<LiveExportScreenTransition>();
+        }
+
+        var reason = keptPrevious
+            ? "collector-kept-high-value-screen"
+            : string.Equals(previous.CurrentScreen, next.CurrentScreen, StringComparison.Ordinal)
+                ? "semantic-screen-confirmed"
+                : "screen-updated";
+
+        return new[]
+        {
+            new LiveExportScreenTransition(
+                observation.ObservedAt,
+                observation.TriggerKind,
+                previous.CurrentScreen,
+                incoming,
+                next.CurrentScreen,
+                reason,
+                keptPrevious),
+        };
+    }
+
+    private LiveExportCollectorStatus UpdateCollectorStatus(
+        LiveExportSnapshot snapshot,
+        LiveExportObservation observation)
+    {
+        if (!_options.CollectorModeEnabled)
+        {
+            return new LiveExportCollectorStatus(false, null, null, null, "disabled", null);
+        }
+
+        if (!string.IsNullOrWhiteSpace(observation.SemanticScreen))
+        {
+            _lastSemanticScreen = observation.SemanticScreen;
+            _activeScreenEpisode = observation.SemanticScreen;
+            _activeScreenEpisodeStartedAt = observation.ObservedAt;
+        }
+        else if (!string.IsNullOrWhiteSpace(snapshot.CurrentScreen) && !IsFallbackScreen(snapshot.CurrentScreen))
+        {
+            _activeScreenEpisode = snapshot.CurrentScreen;
+            _activeScreenEpisodeStartedAt ??= observation.ObservedAt;
+        }
+        else if (_activeScreenEpisodeStartedAt is not null
+                 && observation.ObservedAt - _activeScreenEpisodeStartedAt > TimeSpan.FromSeconds(15))
+        {
+            _activeScreenEpisode = null;
+            _activeScreenEpisodeStartedAt = null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(observation.ChoiceDecision?.ExtractorPath)
+            && observation.ChoiceDecision.AcceptedCount > 0)
+        {
+            _lastAcceptedExtractorPath = observation.ChoiceDecision.ExtractorPath;
+        }
+
+        var degradedReason = observation.ChoiceDecision?.FailureReason
+                             ?? observation.Warnings?.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(degradedReason))
+        {
+            _lastDegradedReason = degradedReason;
+        }
+
+        var choiceStatus = observation.ChoiceDecision switch
+        {
+            { AcceptedCount: > 0 } decision => $"resolved ({decision.AcceptedCount})",
+            { CandidateCount: > 0 } => "missing",
+            _ when observation.Choices?.Count > 0 => $"resolved ({observation.Choices.Count})",
+            _ => "not-seen",
+        };
+
+        return new LiveExportCollectorStatus(
+            true,
+            _activeScreenEpisode,
+            _lastSemanticScreen,
+            _lastAcceptedExtractorPath,
+            choiceStatus,
+            _lastDegradedReason);
     }
 
     private LiveExportSnapshot MergeSnapshot(LiveExportSnapshot previous, LiveExportObservation observation)
@@ -379,13 +488,20 @@ public sealed class LiveExportStateTracker
         }
 
         if (!IsStickyHighValueScreen(previous.CurrentScreen)
-            || !IsFallbackScreen(incoming)
-            || observation.ObservedAt - previous.CapturedAt > TimeSpan.FromSeconds(2))
+            || !IsFallbackScreen(incoming))
         {
             return incoming;
         }
 
-        return previous.CurrentScreen;
+        if (HasPartialStateWarning(observation)
+            || HasChoiceResolutionWarning(observation)
+            || (previous.CurrentChoices.Count > 0 && (observation.Choices?.Count ?? 0) == 0)
+            || observation.ObservedAt - previous.CapturedAt <= TimeSpan.FromSeconds(8))
+        {
+            return previous.CurrentScreen;
+        }
+
+        return incoming;
     }
 
     private static LiveExportPlayerSummary MergePlayer(LiveExportPlayerSummary previous, LiveExportPlayerSummary? incoming)

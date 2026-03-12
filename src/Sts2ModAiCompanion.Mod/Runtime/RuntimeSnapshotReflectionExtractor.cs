@@ -29,6 +29,60 @@ internal static class RuntimeSnapshotReflectionExtractor
         "Card",
     };
 
+    private static readonly string[] ChoiceMemberNames =
+    {
+        "Option",
+        "Reward",
+        "Entry",
+        "Card",
+        "Model",
+        "CardNode",
+        "CardModel",
+        "Choices",
+        "Options",
+        "Rewards",
+        "Buttons",
+        "RewardButtons",
+        "RewardAlternatives",
+        "CurrentOptions",
+        "Cards",
+        "MerchantSlots",
+        "Inventory",
+        "CharacterCardEntries",
+        "ColorlessCardEntries",
+        "RelicEntries",
+        "PotionEntries",
+        "CardRemovalEntry",
+        "_options",
+        "_extraOptions",
+        "_rewardButtons",
+        "_rewardAlternativesContainer",
+        "_cardRow",
+        "_characterCardContainer",
+        "_colorlessCardContainer",
+        "_relicContainer",
+        "_potionContainer",
+        "_cardRemovalNode",
+        "_slotsContainer",
+        "_label",
+        "_titleLabel",
+        "_descriptionLabel",
+    };
+
+    private static readonly HashSet<string> PlaceholderChoiceLabels = new(StringComparer.Ordinal)
+    {
+        "BackButton",
+        "SendButton",
+        "RelicInventory",
+        "CardPreviewContainer",
+        "GridCardPreviewContainer",
+        "EventCardPreviewContainer",
+        "MessyCardPreviewContainer",
+        "HappyCultist",
+        "Heart",
+        "SlimeSad",
+    };
+
     private sealed record RuntimeSceneProbe(
         string? SceneName,
         string? CurrentSceneType,
@@ -37,6 +91,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         int TraversedNodeCount,
         IReadOnlyList<string> VisibleNodeTypes,
         IReadOnlyList<string> InterestingNodeTypes);
+
+    private sealed record ChoiceExtractionResult(
+        IReadOnlyList<LiveExportChoiceSummary> Choices,
+        IReadOnlyList<LiveExportChoiceCandidate> Candidates,
+        LiveExportChoiceDecision Decision);
 
     public static LiveExportObservation Capture(
         RuntimeHookBinding binding,
@@ -160,7 +219,14 @@ internal static class RuntimeSnapshotReflectionExtractor
         var deck = ExtractDeck(roots, config.LiveExport.MaxDeckEntries);
         var relics = ExtractStringList(roots, config.LiveExport.MaxDeckEntries, "Relics", "OwnedRelics", "InventoryRelics");
         var potions = ExtractStringList(roots, config.LiveExport.MaxChoiceEntries, "Potions", "OwnedPotions", "PotionSlots");
-        var choices = ExtractChoices(instance, args, roots, config.LiveExport.MaxChoiceEntries);
+        var choiceResult = ExtractChoices(
+            triggerKind,
+            screenOverride,
+            instance,
+            args,
+            roots,
+            config.LiveExport.MaxChoiceEntries);
+        var choices = choiceResult.Choices;
         var encounter = ExtractEncounter(roots);
         var rootTypeSummary = string.Join(
             " ",
@@ -177,6 +243,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         var warnings = BuildWarnings(player, deck, relics, potions, choices);
 
         meta["screen"] = screen;
+        meta["rootTypeSummary"] = rootTypeSummary;
+        if (!string.IsNullOrWhiteSpace(choiceResult.Decision.ExtractorPath))
+        {
+            meta["choiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
+        }
 
         if (act is not null)
         {
@@ -209,7 +280,12 @@ internal static class RuntimeSnapshotReflectionExtractor
             warnings,
             encounter,
             payload,
-            meta);
+            meta)
+        {
+            ChoiceCandidates = choiceResult.Candidates,
+            ChoiceDecision = choiceResult.Decision,
+            SemanticScreen = IsSemanticHighValueScreen(triggerKind, screen) ? screen : null,
+        };
     }
 
     private static string? ResolveRunId(IReadOnlyList<object> roots)
@@ -457,7 +533,9 @@ internal static class RuntimeSnapshotReflectionExtractor
             .ToArray();
     }
 
-    private static IReadOnlyList<LiveExportChoiceSummary> ExtractChoices(
+    private static ChoiceExtractionResult ExtractChoices(
+        string triggerKind,
+        string? screenHint,
         object? instance,
         object?[]? args,
         IEnumerable<object> roots,
@@ -489,13 +567,6 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             foreach (var memberName in new[]
                      {
-                         "Choices",
-                         "Options",
-                         "Rewards",
-                         "Buttons",
-                         "CurrentOptions",
-                         "RewardButtons",
-                         "RewardAlternatives",
                          "Hand",
                          "HandCards",
                          "RewardContainer",
@@ -507,6 +578,18 @@ internal static class RuntimeSnapshotReflectionExtractor
                          "PotionContainer",
                          "CardRemovalNode",
                      })
+            {
+                var candidate = TryGetMemberValue(root, memberName);
+                AddIfUseful(choiceRoots, candidate);
+                AddChoiceCandidate(candidateItems, candidate, maxDepth: 3);
+                foreach (var item in ExpandEnumerable(candidate))
+                {
+                    AddIfUseful(choiceRoots, item);
+                    AddChoiceCandidate(candidateItems, item, maxDepth: 2);
+                }
+            }
+
+            foreach (var memberName in ChoiceMemberNames)
             {
                 var candidate = TryGetMemberValue(root, memberName);
                 AddIfUseful(choiceRoots, candidate);
@@ -533,20 +616,84 @@ internal static class RuntimeSnapshotReflectionExtractor
                      "HandCards",
                      "MerchantSlots",
                      "RewardButtons",
-                     "Buttons"))
+                     "Buttons",
+                     "Cards",
+                     "CharacterCardEntries",
+                     "ColorlessCardEntries",
+                     "RelicEntries",
+                     "PotionEntries",
+                     "_options",
+                     "_rewardButtons"))
         {
             AddIfUseful(candidateItems, item);
         }
 
-        var choices = candidateItems
-            .Select(TryCreateChoiceSummary)
-            .Where(choice => choice is not null)
-            .Cast<LiveExportChoiceSummary>()
-            .DistinctBy(choice => $"{choice.Kind}|{choice.Label}|{choice.Value}")
-            .Take(maxEntries)
-            .ToArray();
+        var strictAttempts = new List<ChoiceExtractionResult>();
 
-        return choices;
+        if (LooksLikeRewardContext(triggerKind, screenHint, choiceRoots))
+        {
+            strictAttempts.Add(
+                EvaluateChoiceSet(
+                    "reward",
+                    CollectRewardChoiceItems(choiceRoots),
+                    maxEntries,
+                    strictExtractor: true));
+        }
+
+        if (LooksLikeRestContext(triggerKind, screenHint, choiceRoots))
+        {
+            strictAttempts.Add(
+                EvaluateChoiceSet(
+                    "rest",
+                    CollectRestChoiceItems(choiceRoots),
+                    maxEntries,
+                    strictExtractor: true));
+        }
+
+        if (LooksLikeEventContext(triggerKind, screenHint, choiceRoots))
+        {
+            strictAttempts.Add(
+                EvaluateChoiceSet(
+                    "event",
+                    CollectEventChoiceItems(choiceRoots),
+                    maxEntries,
+                    strictExtractor: true));
+        }
+
+        if (LooksLikeShopContext(triggerKind, screenHint, choiceRoots))
+        {
+            strictAttempts.Add(
+                EvaluateChoiceSet(
+                    "shop",
+                    CollectShopChoiceItems(choiceRoots),
+                    maxEntries,
+                    strictExtractor: true));
+        }
+
+        var strictSuccess = strictAttempts.FirstOrDefault(result => result.Choices.Count > 0);
+        if (strictSuccess is not null)
+        {
+            return strictSuccess;
+        }
+
+        var generic = EvaluateChoiceSet("generic", candidateItems, maxEntries, strictExtractor: false);
+        if (strictAttempts.Count == 0)
+        {
+            return generic;
+        }
+
+        return generic with
+        {
+            Candidates = strictAttempts
+                .SelectMany(result => result.Candidates)
+                .Concat(generic.Candidates)
+                .Take(512)
+                .ToArray(),
+            Decision = generic.Decision with
+            {
+                FailureReason = JoinFailureReasons(strictAttempts.Select(result => result.Decision.FailureReason), generic.Decision.FailureReason),
+            },
+        };
     }
 
     private static LiveExportEncounterSummary? ExtractEncounter(IEnumerable<object> roots)
@@ -563,6 +710,253 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return new LiveExportEncounterSummary(name, kind, inCombat, turn);
+    }
+
+    private static ChoiceExtractionResult EvaluateChoiceSet(
+        string extractorPath,
+        IEnumerable<object> items,
+        int maxEntries,
+        bool strictExtractor)
+    {
+        var evaluated = items
+            .Where(item => item is not null)
+            .DistinctBy(item => RuntimeHelpers.GetHashCode(item))
+            .Select(item =>
+            {
+                var summary = TryCreateChoiceSummary(item);
+                var score = ScoreChoiceCandidate(item);
+                var label = summary?.Label ?? TryResolveChoiceLabel(item);
+                var description = summary?.Description ?? TryResolveChoiceDescription(item);
+                var value = summary?.Value ?? TryResolveChoiceValue(item);
+                var placeholder = summary is not null && LooksLikePlaceholderChoice(summary, score);
+                var rejectReason = summary is null
+                    ? "no-summary"
+                    : placeholder
+                        ? "placeholder-label"
+                        : null;
+
+                return new
+                {
+                    Item = item,
+                    Summary = summary,
+                    Score = score,
+                    Label = label,
+                    Description = description,
+                    Value = value,
+                    RejectReason = rejectReason,
+                };
+            })
+            .ToArray();
+
+        var selectedKeys = evaluated
+            .Where(entry => entry.Summary is not null && entry.RejectReason is null)
+            .Select(entry => (Summary: entry.Summary!, entry.Score))
+            .OrderByDescending(entry => entry.Score)
+            .ThenBy(entry => entry.Summary.Kind, StringComparer.Ordinal)
+            .ThenBy(entry => entry.Summary.Label, StringComparer.Ordinal)
+            .DistinctBy(entry => $"{entry.Summary.Kind}|{entry.Summary.Label}|{entry.Summary.Value}")
+            .Take(maxEntries)
+            .Select(entry => $"{entry.Summary.Kind}|{entry.Summary.Label}|{entry.Summary.Value}")
+            .ToHashSet(StringComparer.Ordinal);
+
+        var candidates = evaluated
+            .Select(entry =>
+            {
+                var accepted = entry.Summary is not null
+                    && selectedKeys.Contains($"{entry.Summary.Kind}|{entry.Summary.Label}|{entry.Summary.Value}");
+                var rejectReason = entry.RejectReason;
+                if (!accepted && rejectReason is null)
+                {
+                    rejectReason = "not-selected";
+                }
+
+                return new LiveExportChoiceCandidate(
+                    extractorPath,
+                    entry.Item.GetType().FullName ?? entry.Item.GetType().Name,
+                    entry.Label,
+                    entry.Value,
+                    entry.Description,
+                    entry.Score,
+                    accepted,
+                    rejectReason);
+            })
+            .ToArray();
+
+        var choices = evaluated
+            .Where(entry => entry.Summary is not null)
+            .Select(entry => entry.Summary!)
+            .Where(summary => selectedKeys.Contains($"{summary.Kind}|{summary.Label}|{summary.Value}"))
+            .ToArray();
+
+        var placeholders = candidates
+            .Where(candidate => string.Equals(candidate.RejectReason, "placeholder-label", StringComparison.Ordinal))
+            .Select(candidate => candidate.Label)
+            .Where(label => !string.IsNullOrWhiteSpace(label))
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(label => label, StringComparer.Ordinal)
+            .ToArray();
+
+        var outcome = choices.Length > 0 ? "accepted" : strictExtractor ? "strict-miss" : "missing";
+        var failureReason = choices.Length > 0
+            ? null
+            : strictExtractor
+                ? $"strict extractor '{extractorPath}' did not resolve any valid choices."
+                : "generic fallback did not resolve any valid choices.";
+
+        return new ChoiceExtractionResult(
+            choices,
+            candidates,
+            new LiveExportChoiceDecision(
+                extractorPath,
+                strictExtractor,
+                candidates.Length,
+                choices.Length,
+                outcome,
+                failureReason,
+                placeholders));
+    }
+
+    private static IEnumerable<object> CollectRewardChoiceItems(IEnumerable<object> choiceRoots)
+    {
+        return CollectChoiceItems(
+            choiceRoots,
+            "Reward",
+            "_options",
+            "_extraOptions",
+            "_rewardButtons",
+            "RewardButtons",
+            "Rewards",
+            "RewardAlternatives",
+            "_cardRow",
+            "_characterCardContainer",
+            "_colorlessCardContainer");
+    }
+
+    private static IEnumerable<object> CollectRestChoiceItems(IEnumerable<object> choiceRoots)
+    {
+        return CollectChoiceItems(
+            choiceRoots,
+            "Rest",
+            "Options",
+            "CurrentOptions",
+            "Buttons",
+            "_options",
+            "_restSiteOptions");
+    }
+
+    private static IEnumerable<object> CollectEventChoiceItems(IEnumerable<object> choiceRoots)
+    {
+        return CollectChoiceItems(
+            choiceRoots,
+            "Event",
+            "Options",
+            "Buttons",
+            "Choices",
+            "CurrentOptions",
+            "_options",
+            "_eventOptions",
+            "_optionButtons");
+    }
+
+    private static IEnumerable<object> CollectShopChoiceItems(IEnumerable<object> choiceRoots)
+    {
+        return CollectChoiceItems(
+            choiceRoots,
+            "Merchant",
+            "Inventory",
+            "MerchantSlots",
+            "CharacterCardEntries",
+            "ColorlessCardEntries",
+            "RelicEntries",
+            "PotionEntries",
+            "CardRemovalEntry",
+            "_slotsContainer");
+    }
+
+    private static IEnumerable<object> CollectChoiceItems(
+        IEnumerable<object> choiceRoots,
+        string typeHint,
+        params string[] memberNames)
+    {
+        var results = new List<object>();
+        foreach (var root in choiceRoots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (!typeName.Contains(typeHint, StringComparison.OrdinalIgnoreCase)
+                && memberNames.All(memberName => TryGetMemberValue(root, memberName) is null))
+            {
+                continue;
+            }
+
+            AddIfUseful(results, root);
+            foreach (var memberName in memberNames)
+            {
+                var value = TryGetMemberValue(root, memberName);
+                AddChoiceCandidate(results, value, maxDepth: 3);
+                foreach (var item in ExpandEnumerable(value))
+                {
+                    AddChoiceCandidate(results, item, maxDepth: 2);
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private static bool LooksLikeRewardContext(string triggerKind, string? screenHint, IEnumerable<object> roots)
+    {
+        return triggerKind.Contains("reward", StringComparison.OrdinalIgnoreCase)
+               || MatchesScreenHint(screenHint, "reward", "rewards")
+               || roots.Any(root => (root.GetType().FullName ?? root.GetType().Name).Contains("Reward", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool LooksLikeRestContext(string triggerKind, string? screenHint, IEnumerable<object> roots)
+    {
+        return triggerKind.Contains("rest", StringComparison.OrdinalIgnoreCase)
+               || MatchesScreenHint(screenHint, "rest", "rest-site", "campfire")
+               || roots.Any(root =>
+               {
+                   var typeName = root.GetType().FullName ?? root.GetType().Name;
+                   return typeName.Contains("Rest", StringComparison.OrdinalIgnoreCase)
+                          || typeName.Contains("Campfire", StringComparison.OrdinalIgnoreCase);
+               });
+    }
+
+    private static bool LooksLikeEventContext(string triggerKind, string? screenHint, IEnumerable<object> roots)
+    {
+        return triggerKind.Contains("event", StringComparison.OrdinalIgnoreCase)
+               || MatchesScreenHint(screenHint, "event")
+               || roots.Any(root => (root.GetType().FullName ?? root.GetType().Name).Contains("Event", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool LooksLikeShopContext(string triggerKind, string? screenHint, IEnumerable<object> roots)
+    {
+        return triggerKind.Contains("shop", StringComparison.OrdinalIgnoreCase)
+               || triggerKind.Contains("merchant", StringComparison.OrdinalIgnoreCase)
+               || MatchesScreenHint(screenHint, "shop")
+               || roots.Any(root =>
+               {
+                   var typeName = root.GetType().FullName ?? root.GetType().Name;
+                   return typeName.Contains("Shop", StringComparison.OrdinalIgnoreCase)
+                          || typeName.Contains("Merchant", StringComparison.OrdinalIgnoreCase);
+               });
+    }
+
+    private static bool MatchesScreenHint(string? screenHint, params string[] values)
+    {
+        return !string.IsNullOrWhiteSpace(screenHint)
+               && values.Any(value => string.Equals(screenHint, value, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? JoinFailureReasons(IEnumerable<string?> reasons, string? trailingReason)
+    {
+        var parts = reasons
+            .Append(trailingReason)
+            .Where(reason => !string.IsNullOrWhiteSpace(reason))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return parts.Length == 0 ? null : string.Join(" | ", parts);
     }
 
     private static object? TryResolveMainLoop()
@@ -759,6 +1153,20 @@ internal static class RuntimeSnapshotReflectionExtractor
             "runtime-poll" when encounter?.InCombat == true => "combat",
             _ => encounter?.InCombat == true ? "combat" : null,
         };
+    }
+
+    private static bool IsSemanticHighValueScreen(string triggerKind, string? screen)
+    {
+        if (triggerKind.Contains("reward", StringComparison.OrdinalIgnoreCase)
+            || triggerKind.Contains("event", StringComparison.OrdinalIgnoreCase)
+            || triggerKind.Contains("shop", StringComparison.OrdinalIgnoreCase)
+            || triggerKind.Contains("rest", StringComparison.OrdinalIgnoreCase)
+            || triggerKind.Contains("choice", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return screen is "rewards" or "event" or "shop" or "rest-site" or "card-choice" or "upgrade" or "transform";
     }
 
     private static string InferChoiceKind(string? typeName)
@@ -1184,21 +1592,26 @@ internal static class RuntimeSnapshotReflectionExtractor
 
             foreach (var memberName in new[]
                      {
-                         "Option",
-                         "Reward",
-                         "Entry",
-                         "Card",
-                         "Model",
                          "Title",
                          "Label",
-                         "Choices",
-                         "Options",
-                         "Rewards",
-                         "Buttons",
-                         "RewardButtons",
-                         "RewardAlternatives",
-                         "CurrentOptions",
                      })
+            {
+                var nested = TryGetMemberValue(item, memberName);
+                if (nested is null)
+                {
+                    continue;
+                }
+
+                foreach (var expanded in ExpandEnumerable(nested).Prepend(nested))
+                {
+                    if (expanded is not null and not string)
+                    {
+                        queue.Enqueue((expanded, depth + 1));
+                    }
+                }
+            }
+
+            foreach (var memberName in ChoiceMemberNames)
             {
                 var nested = TryGetMemberValue(item, memberName);
                 if (nested is null)
@@ -1245,6 +1658,13 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static bool LooksLikeChoiceCandidate(object item)
     {
         var typeName = item.GetType().FullName ?? item.GetType().Name;
+        if (typeName.Contains("Container", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Reaction", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Cursor", StringComparison.OrdinalIgnoreCase))
+        {
+            return HasMeaningfulChoiceData(item);
+        }
+
         return typeName.Contains("Button", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Option", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
@@ -1263,15 +1683,20 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static string? TryResolveChoiceLabel(object item)
     {
         return FirstNonEmpty(
-            TryReadString(item, "Label", "Title", "OptionName", "Text", "DisplayName", "CardName", "Name"),
-            TryReadString(item, "Option", "Reward", "Entry", "Card", "Model"),
+            TryReadString(TryGetMemberValue(item, "Card"), "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
+            TryReadString(TryGetMemberValue(item, "Model"), "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
+            TryReadString(TryGetMemberValue(item, "CardNode"), "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
+            TryReadString(TryGetMemberValue(item, "CardModel"), "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
             TryReadString(TryGetMemberValue(item, "Option"), "Title", "Label", "Name", "Description"),
             TryReadString(TryGetMemberValue(item, "Reward"), "Description", "Title", "Label", "Name"),
             TryReadString(TryGetMemberValue(item, "Entry"), "DisplayName", "Title", "Description", "Name"),
-            TryReadString(TryGetMemberValue(item, "Card"), "CardName", "Name", "DisplayName", "Id", "CardId"),
-            TryReadString(TryGetMemberValue(item, "Model"), "CardName", "Name", "DisplayName", "Id", "CardId"),
+            TryReadString(TryGetMemberValue(item, "_label"), "Text", "Value"),
+            TryReadString(TryGetMemberValue(item, "_titleLabel"), "Text", "Value"),
+            TryReadString(item, "Label", "Title", "OptionName", "Text", "DisplayName", "CardName", "Name"),
+            TryReadString(item, "Option", "Reward", "Entry", "Card", "Model"),
             TryReadString(TryGetMemberValue(item, "Title"), "Text", "Value"),
             TryReadString(TryGetMemberValue(item, "Label"), "Text", "Value"),
+            TryResolveNestedChoiceText(item, maxDepth: 2),
             TryReadString(item, "Id", "CardId"));
     }
 
@@ -1289,12 +1714,182 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static string? TryResolveChoiceDescription(object item)
     {
         return FirstNonEmpty(
+            TryReadString(TryGetMemberValue(item, "_label"), "Text", "Value"),
+            TryReadString(TryGetMemberValue(item, "_descriptionLabel"), "Text", "Value"),
             TryReadString(item, "Description", "Tooltip", "Body"),
             TryReadString(TryGetMemberValue(item, "Option"), "Description", "Body"),
             TryReadString(TryGetMemberValue(item, "Reward"), "Description", "Body"),
             TryReadString(TryGetMemberValue(item, "Entry"), "DisplayName", "Description", "Body"),
             TryReadString(TryGetMemberValue(item, "Card"), "Description", "Body"),
-            TryReadString(TryGetMemberValue(item, "Model"), "Description", "Body"));
+            TryReadString(TryGetMemberValue(item, "Model"), "Description", "Body"),
+            TryResolveNestedChoiceText(item, maxDepth: 3));
+    }
+
+    private static string? TryResolveNestedChoiceText(object? root, int maxDepth)
+    {
+        if (root is null || maxDepth < 0)
+        {
+            return null;
+        }
+
+        var queue = new Queue<(object Item, int Depth)>();
+        var seen = new HashSet<int>();
+        queue.Enqueue((root, 0));
+
+        while (queue.Count > 0)
+        {
+            var (item, depth) = queue.Dequeue();
+            if (!seen.Add(RuntimeHelpers.GetHashCode(item)))
+            {
+                continue;
+            }
+
+            foreach (var memberName in new[]
+                     {
+                         "Text",
+                         "BbcodeText",
+                         "DisplayedText",
+                         "TooltipText",
+                         "Description",
+                         "Body",
+                         "Label",
+                         "Title",
+                         "Value",
+                         "Name",
+                     })
+            {
+                var rendered = TryConvertToDisplayString(TryGetMemberValue(item, memberName));
+                if (!string.IsNullOrWhiteSpace(rendered))
+                {
+                    return rendered;
+                }
+            }
+
+            if (depth >= maxDepth)
+            {
+                continue;
+            }
+
+            foreach (var memberName in new[] { "Option", "Reward", "Entry", "Card", "Model", "Label", "Title" })
+            {
+                var nested = TryGetMemberValue(item, memberName);
+                if (nested is not null and not string)
+                {
+                    queue.Enqueue((nested, depth + 1));
+                }
+            }
+
+            foreach (var child in TryEnumerateChildren(item).Take(64))
+            {
+                queue.Enqueue((child, depth + 1));
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasMeaningfulChoiceData(object item)
+    {
+        return TryGetMemberValue(item, "Option") is not null
+               || TryGetMemberValue(item, "Reward") is not null
+               || TryGetMemberValue(item, "Entry") is not null
+               || TryGetMemberValue(item, "Card") is not null
+               || TryGetMemberValue(item, "Model") is not null
+               || TryGetMemberValue(item, "_options") is not null
+               || TryGetMemberValue(item, "_rewardButtons") is not null
+               || TryGetMemberValue(item, "Inventory") is not null;
+    }
+
+    private static bool LooksLikePlaceholderChoice(LiveExportChoiceSummary summary, int score)
+    {
+        if (score >= 6)
+        {
+            return false;
+        }
+
+        if (PlaceholderChoiceLabels.Contains(summary.Label))
+        {
+            return true;
+        }
+
+        if (summary.Label.IndexOf(' ') < 0
+            && summary.Label.IndexOfAny("._-".ToCharArray()) < 0
+            && (summary.Label.EndsWith("Button", StringComparison.Ordinal)
+                || summary.Label.EndsWith("Container", StringComparison.Ordinal)
+                || summary.Label.EndsWith("Inventory", StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int ScoreChoiceCandidate(object item)
+    {
+        var score = 0;
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        var label = TryResolveChoiceLabel(item);
+        var description = TryResolveChoiceDescription(item);
+        var value = TryResolveChoiceValue(item);
+
+        if (typeName.Contains("CardCreationResult", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("CardModel", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("NGridCardHolder", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("NCardReward", StringComparison.OrdinalIgnoreCase))
+        {
+            score += 8;
+        }
+
+        if (typeName.Contains("RewardButton", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("MerchantSlot", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("MerchantCard", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("MerchantRelic", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("MerchantPotion", StringComparison.OrdinalIgnoreCase))
+        {
+            score += 6;
+        }
+
+        if (TryGetMemberValue(item, "Card") is not null
+            || TryGetMemberValue(item, "Reward") is not null
+            || TryGetMemberValue(item, "Entry") is not null
+            || TryGetMemberValue(item, "_label") is not null)
+        {
+            score += 3;
+        }
+
+        if (!string.IsNullOrWhiteSpace(label))
+        {
+            score += 1;
+            if (label.Any(character => char.IsWhiteSpace(character) || character > 127))
+            {
+                score += 2;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(description) && !string.Equals(description, label, StringComparison.Ordinal))
+        {
+            score += 2;
+        }
+
+        if (!string.IsNullOrWhiteSpace(value) && !string.Equals(value, label, StringComparison.Ordinal))
+        {
+            score += 1;
+        }
+
+        if (typeName.Contains("Container", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Inventory", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Reaction", StringComparison.OrdinalIgnoreCase))
+        {
+            score -= 4;
+        }
+
+        if (!string.IsNullOrWhiteSpace(label) && PlaceholderChoiceLabels.Contains(label))
+        {
+            score -= 8;
+        }
+
+        return score;
     }
 
     private static string? FirstNonEmpty(params string?[] values)

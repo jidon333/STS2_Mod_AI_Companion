@@ -70,6 +70,48 @@ try
                 return triggered ? 0 : 1;
             }
 
+        case "collector-postprocess":
+            {
+                var godotLineCount = options.TryGetValue("--lines", out var lineRaw)
+                    && int.TryParse(lineRaw, out var parsedLines)
+                    ? parsedLines
+                    : 200;
+                var tailCount = options.TryGetValue("--tail", out var tailRaw)
+                    && int.TryParse(tailRaw, out var parsedTail)
+                    ? parsedTail
+                    : 40;
+                var knowledgeRoot = ResolveKnowledgeRoot(options, configuration, workspaceRoot);
+                await using (var host = new CompanionHost(configuration, workspaceRoot))
+                {
+                    await host.RefreshAsync().ConfigureAwait(false);
+                }
+                var godotResult = LiveSmokeCommands.InspectGodotLog(configuration, godotLineCount);
+                var liveResult = LiveSmokeCommands.Inspect(configuration, tailCount);
+                var knowledgeResult = StaticKnowledgeCommands.Extract(configuration, knowledgeRoot);
+
+                var companionPaths = CompanionPathResolver.Resolve(configuration, workspaceRoot, null);
+                var currentRunState = TryReadJsonDocument(companionPaths.CurrentRunStatePath);
+                var runId = currentRunState is null
+                    ? null
+                    : TryReadString(currentRunState.RootElement, "runId");
+                var runPaths = CompanionPathResolver.Resolve(configuration, workspaceRoot, runId);
+                var collectorSummary = runPaths.CollectorSummaryPath is null
+                    ? null
+                    : TryReadJsonDocument(runPaths.CollectorSummaryPath);
+
+                PrintJson(new
+                {
+                    CurrentRunStatePath = companionPaths.CurrentRunStatePath,
+                    RunId = runId,
+                    GodotLog = godotResult,
+                    LiveExport = liveResult,
+                    Knowledge = knowledgeResult,
+                    CollectorSummaryPath = runPaths.CollectorSummaryPath,
+                    CollectorSummary = collectorSummary?.RootElement,
+                });
+                return 0;
+            }
+
         case "inspect-godot-log":
             {
                 var lineCount = options.TryGetValue("--lines", out var lineRaw)
@@ -273,6 +315,25 @@ static string ResolveArtifactsRoot(ScaffoldConfiguration configuration, string w
     return Path.GetFullPath(configuration.GamePaths.ArtifactsRoot, workspaceRoot);
 }
 
+static JsonDocument? TryReadJsonDocument(string path)
+{
+    if (!File.Exists(path))
+    {
+        return null;
+    }
+
+    using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+    return JsonDocument.Parse(stream);
+}
+
+static string? TryReadString(JsonElement element, string propertyName)
+{
+    return element.TryGetProperty(propertyName, out var property)
+           && property.ValueKind == JsonValueKind.String
+        ? property.GetString()
+        : null;
+}
+
 static string ResolveKnowledgeRoot(
     IReadOnlyDictionary<string, string> options,
     ScaffoldConfiguration configuration,
@@ -376,6 +437,7 @@ static void WriteUsage()
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- prepare-live-smoke [--config path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-live-export [--config path] [--tail 20]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- analyze-live-once [--config path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- collector-postprocess [--config path] [--knowledge-root path] [--lines 200] [--tail 40]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-godot-log [--config path] [--lines 200]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- extract-static-knowledge [--config path] [--knowledge-root path] [--godot-exe path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-static-knowledge [--knowledge-root path]");

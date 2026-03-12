@@ -106,6 +106,8 @@ internal sealed class RuntimeExportWorker
     private readonly LiveExportDeduplicator _deduplicator;
     private readonly Thread _thread;
     private readonly Thread? _pollThread;
+    private long _collectorRecordsWritten;
+    private bool _collectorCapLogged;
 
     public RuntimeExportWorker(AiCompanionRuntimeConfig config, LiveExportLayout layout)
     {
@@ -116,7 +118,8 @@ internal sealed class RuntimeExportWorker
             new LiveExportStateTrackerOptions(
                 config.LiveExport.MaxRecentChanges,
                 config.LiveExport.MaxDeckEntries,
-                config.LiveExport.MaxChoiceEntries),
+                config.LiveExport.MaxChoiceEntries,
+                config.LiveExport.CollectorModeEnabled),
             layout.LiveRoot);
         _deduplicator = new LiveExportDeduplicator(TimeSpan.FromMilliseconds(config.LiveExport.DuplicateSuppressionMs));
         _thread = new Thread(Run)
@@ -208,12 +211,147 @@ internal sealed class RuntimeExportWorker
         LiveExportAtomicFileWriter.WriteAllTextAtomic(
             _layout.SessionPath,
             JsonSerializer.Serialize(batch.Session, PrettyJsonOptions));
+
+        WriteCollectorArtifacts(batch);
     }
 
     private void AppendEvent(LiveExportEventEnvelope envelope)
     {
         var json = JsonSerializer.Serialize(envelope, CompactJsonOptions);
         File.AppendAllText(_layout.EventsPath, json + Environment.NewLine);
+    }
+
+    private void WriteCollectorArtifacts(LiveExportBatch batch)
+    {
+        if (!_config.LiveExport.CollectorModeEnabled || batch.SourceObservation is null)
+        {
+            return;
+        }
+
+        if (TryReserveCollectorRecord())
+        {
+            AppendJsonLine(
+                _layout.RawObservationsPath,
+                new
+                {
+                    batch.SourceObservation.TriggerKind,
+                    batch.SourceObservation.ObservedAt,
+                    batch.SourceObservation.RunId,
+                    batch.SourceObservation.Screen,
+                    batch.SourceObservation.SemanticScreen,
+                    batch.SourceObservation.Warnings,
+                    batch.SourceObservation.Payload,
+                    batch.SourceObservation.Meta,
+                    batch.SourceObservation.ChoiceDecision,
+                });
+        }
+
+        foreach (var transition in batch.ScreenTransitions)
+        {
+            if (!TryReserveCollectorRecord())
+            {
+                break;
+            }
+
+            AppendJsonLine(_layout.ScreenTransitionsPath, transition);
+        }
+
+        foreach (var candidate in batch.SourceObservation.ChoiceCandidates)
+        {
+            if (!TryReserveCollectorRecord())
+            {
+                break;
+            }
+
+            AppendJsonLine(
+                _layout.ChoiceCandidatesPath,
+                new
+                {
+                    batch.SourceObservation.ObservedAt,
+                    batch.SourceObservation.TriggerKind,
+                    batch.SourceObservation.RunId,
+                    batch.SourceObservation.Screen,
+                    Candidate = candidate,
+                });
+        }
+
+        if (batch.SourceObservation.ChoiceDecision is not null && TryReserveCollectorRecord())
+        {
+            AppendJsonLine(
+                _layout.ChoiceDecisionsPath,
+                new
+                {
+                    batch.SourceObservation.ObservedAt,
+                    batch.SourceObservation.TriggerKind,
+                    batch.SourceObservation.RunId,
+                    batch.SourceObservation.Screen,
+                    Decision = batch.SourceObservation.ChoiceDecision,
+                });
+        }
+
+        if (_config.LiveExport.CollectorKeepSemanticSnapshots
+            && ShouldCaptureSemanticSnapshot(batch.SourceObservation, batch.Snapshot))
+        {
+            var safeKind = string.Concat(batch.SourceObservation.TriggerKind.Select(character =>
+                Path.GetInvalidFileNameChars().Contains(character) ? '-' : character));
+            var snapshotPath = Path.Combine(
+                _layout.SemanticSnapshotsRoot,
+                $"{batch.Events.Last().Seq:D6}-{safeKind}.json");
+            LiveExportAtomicFileWriter.WriteJsonAtomic(
+                snapshotPath,
+                new
+                {
+                    Observation = batch.SourceObservation,
+                    Snapshot = batch.Snapshot,
+                    CollectorStatus = batch.CollectorStatus,
+                },
+                PrettyJsonOptions);
+        }
+    }
+
+    private bool TryReserveCollectorRecord()
+    {
+        var limit = Math.Max(_config.LiveExport.CollectorMaxRawEvents, 0);
+        if (limit == 0)
+        {
+            return true;
+        }
+
+        if (_collectorRecordsWritten >= limit)
+        {
+            if (!_collectorCapLogged)
+            {
+                AiCompanionRuntimeLog.WriteLine($"collector raw event cap reached: {limit}");
+                _collectorCapLogged = true;
+            }
+
+            return false;
+        }
+
+        _collectorRecordsWritten += 1;
+        return true;
+    }
+
+    private static bool ShouldCaptureSemanticSnapshot(LiveExportObservation observation, LiveExportSnapshot snapshot)
+    {
+        if (!string.IsNullOrWhiteSpace(observation.SemanticScreen))
+        {
+            return true;
+        }
+
+        return observation.TriggerKind is "choice-list-presented"
+            or "reward-screen-opened"
+            or "event-screen-opened"
+            or "shop-opened"
+            or "rest-opened"
+            or "reward-opened"
+            || snapshot.CurrentScreen is "rewards" or "event" or "shop" or "rest-site";
+    }
+
+    private static void AppendJsonLine<T>(string path, T value)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.AppendAllText(path, JsonSerializer.Serialize(value, CompactJsonOptions) + Environment.NewLine);
     }
 
     private static JsonSerializerOptions CompactJsonOptions { get; } = new()

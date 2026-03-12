@@ -165,6 +165,12 @@ public sealed record LiveExportOptions
 
     public bool DiscoveryMode { get; init; } = true;
 
+    public bool CollectorModeEnabled { get; init; } = false;
+
+    public int CollectorMaxRawEvents { get; init; } = 4096;
+
+    public bool CollectorKeepSemanticSnapshots { get; init; } = true;
+
     public bool ScenePollingEnabled { get; init; } = true;
 
     public int ScenePollingIntervalMs { get; init; } = 250;
@@ -191,6 +197,16 @@ public sealed record LiveExportOptions
 
     public string SessionFileName { get; init; } = "session.json";
 
+    public string RawObservationsFileName { get; init; } = "raw-observations.ndjson";
+
+    public string ScreenTransitionsFileName { get; init; } = "screen-transitions.ndjson";
+
+    public string ChoiceCandidatesFileName { get; init; } = "choice-candidates.ndjson";
+
+    public string ChoiceDecisionsFileName { get; init; } = "choice-decisions.ndjson";
+
+    public string SemanticSnapshotsFolderName { get; init; } = "semantic-snapshots";
+
     public static LiveExportOptions Defaults { get; } = new();
 
     public LiveExportOptions With(PartialLiveExportOptions? partial)
@@ -204,6 +220,9 @@ public sealed record LiveExportOptions
         {
             Enabled = partial.Enabled ?? Enabled,
             DiscoveryMode = partial.DiscoveryMode ?? DiscoveryMode,
+            CollectorModeEnabled = partial.CollectorModeEnabled ?? CollectorModeEnabled,
+            CollectorMaxRawEvents = partial.CollectorMaxRawEvents ?? CollectorMaxRawEvents,
+            CollectorKeepSemanticSnapshots = partial.CollectorKeepSemanticSnapshots ?? CollectorKeepSemanticSnapshots,
             ScenePollingEnabled = partial.ScenePollingEnabled ?? ScenePollingEnabled,
             ScenePollingIntervalMs = partial.ScenePollingIntervalMs ?? ScenePollingIntervalMs,
             ScenePollingMaxNodes = partial.ScenePollingMaxNodes ?? ScenePollingMaxNodes,
@@ -217,6 +236,11 @@ public sealed record LiveExportOptions
             SnapshotFileName = partial.SnapshotFileName ?? SnapshotFileName,
             SummaryFileName = partial.SummaryFileName ?? SummaryFileName,
             SessionFileName = partial.SessionFileName ?? SessionFileName,
+            RawObservationsFileName = partial.RawObservationsFileName ?? RawObservationsFileName,
+            ScreenTransitionsFileName = partial.ScreenTransitionsFileName ?? ScreenTransitionsFileName,
+            ChoiceCandidatesFileName = partial.ChoiceCandidatesFileName ?? ChoiceCandidatesFileName,
+            ChoiceDecisionsFileName = partial.ChoiceDecisionsFileName ?? ChoiceDecisionsFileName,
+            SemanticSnapshotsFolderName = partial.SemanticSnapshotsFolderName ?? SemanticSnapshotsFolderName,
         };
     }
 }
@@ -226,6 +250,12 @@ public sealed record PartialLiveExportOptions
     public bool? Enabled { get; init; }
 
     public bool? DiscoveryMode { get; init; }
+
+    public bool? CollectorModeEnabled { get; init; }
+
+    public int? CollectorMaxRawEvents { get; init; }
+
+    public bool? CollectorKeepSemanticSnapshots { get; init; }
 
     public bool? ScenePollingEnabled { get; init; }
 
@@ -252,6 +282,16 @@ public sealed record PartialLiveExportOptions
     public string? SummaryFileName { get; init; }
 
     public string? SessionFileName { get; init; }
+
+    public string? RawObservationsFileName { get; init; }
+
+    public string? ScreenTransitionsFileName { get; init; }
+
+    public string? ChoiceCandidatesFileName { get; init; }
+
+    public string? ChoiceDecisionsFileName { get; init; }
+
+    public string? SemanticSnapshotsFolderName { get; init; }
 }
 
 public sealed record AssistantOptions

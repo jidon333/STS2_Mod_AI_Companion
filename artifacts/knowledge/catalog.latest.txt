@@ -1,5 +1,5 @@
 metadata
-generated_at: 2026-03-11T13:11:15.8016239+00:00
+generated_at: 2026-03-12T02:35:56.3639975+00:00
 release_version: v0.98.3
 release_commit: cb602cef
 release_date: 2026-03-09T19:21:00.0000000-07:00
@@ -16,14 +16,15 @@ atlas:relic_atlas: 336
 atlas:relic_outline_atlas: 336
 atlas:stats_screen_atlas: 16
 atlas:ui_atlas: 102
-eventsLoaded: 3627
-observedSources: 4
+eventsLoaded: 31215
+observedSources: 9
 snapshotLoaded: True
 source: extract-static-knowledge
 
 cards
-count: 595
+count: 601
 - CARD.BASH [card-bash] source=live-event:card-added tags=card-added, card-removed
+- CARD.BLOODLETTING [card-bloodletting] source=live-event:card-added tags=card-added, card-removed
 - CARD.DARK_SHACKLES [card-dark-shackles] source=live-event:card-added tags=card-added, card-removed, deck
 - CARD.DEFEND_IRONCLAD [card-defend-ironclad] source=live-event:card-added tags=card-added, card-removed, deck
 - CARD.DEMON_FORM [card-demon-form] source=live-event:card-added tags=card-added, card-removed
@@ -34,11 +35,10 @@ count: 595
 - CARD.IRON_WAVE [card-iron-wave] source=live-event:card-added tags=card-added, card-removed
 - CARD.JUGGLING [card-juggling] source=live-event:card-added tags=card-added, card-removed
 - CARD.MOLTEN_FIST [card-molten-fist] source=live-event:card-added tags=card-added, card-removed, deck
-- CARD.PERFECTED_STRIKE [card-perfected-strike] source=live-event:card-added tags=card-added, card-removed, deck
-... 583 more
+... 589 more
 
 relics
-count: 296
+count: 299
 - Fake Merchants Rug [megacrit-sts2-core-models-relics-fakemerchantsrug] source=strict-domain-parse tags=strict-relic, strict-model
 - Lost Wisp [megacrit-sts2-core-models-relics-lostwisp] source=strict-domain-parse tags=strict-relic, strict-model
 - Potion Belt [megacrit-sts2-core-models-relics-potionbelt] source=strict-domain-parse tags=strict-relic, strict-model
@@ -47,11 +47,11 @@ count: 296
 - RELIC.LEAD_PAPERWEIGHT [relic-lead-paperweight] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
 - RELIC.LIZARD_TAIL [relic-lizard-tail] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
 - RELIC.MANGO [relic-mango] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
-- RELIC.NUTRITIOUS_SOUP [relic-nutritious-soup] source=live-event:relic-gained tags=relic-gained, relic-lost
+- RELIC.NUTRITIOUS_SOUP [relic-nutritious-soup] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
+- RELIC.PENDULUM [relic-pendulum] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
+- RELIC.POLLINOUS_CORE [relic-pollinous-core] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
 - RELIC.SELF_FORMING_CLAY [relic-self-forming-clay] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
-- RELIC.WAR_PAINT [relic-war-paint] source=live-event:relic-gained tags=relic-gained, relic-lost
-- 가마솥 [megacrit-sts2-core-models-relics-cauldron] source=localization-scan tags=l10n, localized-relic, strict-model, strict-relic description=획득 시, 무작위 포션을 [blue]{Potions}[/blue]개 생성합니다.
-... 284 more
+... 287 more
 
 potions
 count: 68
@@ -94,18 +94,20 @@ count: 5
 - 포션 판매 슬롯 [megacrit-sts2-core-entities-merchant-merchantpotionentry] source=strict-domain-parse tags=strict-shop, strict-model
 
 rewards
-count: 11
+count: 22
+- Observed Reward [reward-03e5b74b6b09] source=live-event:choice-list-presented tags=reward options=10
+- Observed Reward [reward-375f7fbeab2b] source=live-event:choice-list-presented tags=reward options=4
 - Observed Reward [reward-425988603a25] source=live-event:reward-screen-opened tags=reward
+- Observed Reward [reward-43004418eff4] source=live-event:reward-screen-opened tags=reward
+- Observed Reward [reward-45158a17cc50] source=live-event:choice-list-presented tags=reward options=2
+- Observed Reward [reward-4efa92d1d120] source=live-event:choice-list-presented tags=reward options=4
 - Observed Reward [reward-6ae8506a4da3] source=live-event:reward-screen-opened tags=reward
 - Observed Reward [reward-794a69f27d89] source=live-event:reward-screen-opened tags=reward
+- Observed Reward [reward-c10ee1ed7c08] source=live-event:reward-screen-opened tags=reward
+- Observed Reward [reward-c4314ef5a70c] source=live-event:choice-list-presented tags=reward options=10
+- Observed Reward [reward-c8344097244f] source=live-event:choice-list-presented tags=reward options=7
 - Observed Reward [reward-cfcb71956165] source=live-event:reward-screen-opened tags=reward
-- 골드 보상 [megacrit-sts2-core-rewards-goldreward] source=strict-domain-parse tags=strict-reward, strict-model
-- 연결된 보상 [megacrit-sts2-core-rewards-linkedrewardset] source=localization-scan tags=l10n, localized-reward, reward-set, strict-model, strict-reward description=이 세트에서 [blue]1[/blue]개의 보상만을 선택할 수 있습니다.
-- 유물 보상 [megacrit-sts2-core-rewards-relicreward] source=strict-domain-parse tags=strict-reward, strict-model
-- 카드 보상 [megacrit-sts2-core-rewards-cardreward] source=localization-scan tags=l10n, localized-reward, strict-model, strict-reward description=무작위 카드 [blue]3[/blue]장으로 구성된 팩입니다. 카드를 [blue]1[/blue]장 선택해 [gold]덱[/gold]에 추가할 수...
-- 카드 제거 보상 [megacrit-sts2-core-rewards-cardremovalreward] source=localization-scan tags=l10n, localized-reward, strict-model, strict-reward
-- 특수 카드 보상 [megacrit-sts2-core-rewards-specialcardreward] source=strict-domain-parse tags=strict-reward, strict-model
-- 포션 보상 [megacrit-sts2-core-rewards-potionreward] source=strict-domain-parse tags=strict-reward, strict-model
+... 10 more
 
 keywords
 count: 264

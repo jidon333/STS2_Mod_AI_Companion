@@ -1,9 +1,9 @@
 # 보상
 
-- 전체 항목 수: 11
+- 전체 항목 수: 22
 - 설명 본문이 채워진 항목: 7
 - L10N 키 또는 제목이 연결된 항목: 7
-- 선택지/옵션 정보가 있는 항목: 0
+- 선택지/옵션 정보가 있는 항목: 7
 
 ## 이 섹션이 도와주는 플레이 장면
 
@@ -153,7 +153,135 @@
 
 ### Observed Reward
 
+- ID: `reward-03e5b74b6b09`
+- 그룹/풀 추정: 보상/UI, 선택지 확인됨
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 선택지 또는 페이지 단위 정보까지는 연결되었지만, 전체 설명 완성도는 더 다듬어야 합니다.
+- 핵심 설명: 선택지 정보는 확인되었지만 상세 설명 본문은 아직 비어 있습니다. BackButton, cardHoverTipContainer, CardPreviewContainer, EventCardPreviewContainer
+- 확인된 선택지:
+  - BackButton
+  - cardHoverTipContainer
+  - CardPreviewContainer
+  - EventCardPreviewContainer
+  - GridCardPreviewContainer
+  - HappyCultist
+  - Heart
+  - MessyCardPreviewContainer
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:choice-list-presented`
+
+### Observed Reward
+
+- ID: `reward-c4314ef5a70c`
+- 그룹/풀 추정: 보상/UI, 선택지 확인됨
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 선택지 또는 페이지 단위 정보까지는 연결되었지만, 전체 설명 완성도는 더 다듬어야 합니다.
+- 핵심 설명: 선택지 정보는 확인되었지만 상세 설명 본문은 아직 비어 있습니다. BackButton, CardPreviewContainer, EventCardPreviewContainer, GridCardPreviewContainer
+- 확인된 선택지:
+  - BackButton
+  - CardPreviewContainer
+  - EventCardPreviewContainer
+  - GridCardPreviewContainer
+  - HappyCultist
+  - Heart
+  - MessyCardPreviewContainer
+  - RelicInventory
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:choice-list-presented`
+
+### Observed Reward
+
+- ID: `reward-ea78714e4001`
+- 그룹/풀 추정: 보상/UI, 선택지 확인됨
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 선택지 또는 페이지 단위 정보까지는 연결되었지만, 전체 설명 완성도는 더 다듬어야 합니다.
+- 핵심 설명: 선택지 정보는 확인되었지만 상세 설명 본문은 아직 비어 있습니다. BackButton, CardPreviewContainer, EventCardPreviewContainer, GridCardPreviewContainer
+- 확인된 선택지:
+  - BackButton: BackButton
+  - CardPreviewContainer: CardPreviewContainer
+  - EventCardPreviewContainer: EventCardPreviewContainer
+  - GridCardPreviewContainer: GridCardPreviewContainer
+  - HappyCultist: HappyCultist
+  - Heart: Heart
+  - MessyCardPreviewContainer: MessyCardPreviewContainer
+  - RelicInventory: RelicInventory
+- 관찰 로그 반영: 예
+- 주요 소스: `live-snapshot`
+
+### Observed Reward
+
+- ID: `reward-c8344097244f`
+- 그룹/풀 추정: 보상/UI, 선택지 확인됨
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 선택지 또는 페이지 단위 정보까지는 연결되었지만, 전체 설명 완성도는 더 다듬어야 합니다.
+- 핵심 설명: 선택지 정보는 확인되었지만 상세 설명 본문은 아직 비어 있습니다. 17 골드, Potion, RewardsScreen, 넘기기
+- 확인된 선택지:
+  - 17 골드
+  - Potion
+  - RewardsScreen
+  - 넘기기
+  - 덱에 추가할 카드를 선택하세요.
+  - 분노
+  - 파워 포션
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:choice-list-presented`
+
+### Observed Reward
+
+- ID: `reward-375f7fbeab2b`
+- 그룹/풀 추정: 보상/UI, 선택지 확인됨
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 선택지 또는 페이지 단위 정보까지는 연결되었지만, 전체 설명 완성도는 더 다듬어야 합니다.
+- 핵심 설명: 선택지 정보는 확인되었지만 상세 설명 본문은 아직 비어 있습니다. 넘기기, 분노, 사전 타격, 천둥
+- 확인된 선택지:
+  - 넘기기
+  - 분노
+  - 사전 타격
+  - 천둥
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:choice-list-presented`
+
+### Observed Reward
+
+- ID: `reward-4efa92d1d120`
+- 그룹/풀 추정: 보상/UI, 선택지 확인됨
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 선택지 또는 페이지 단위 정보까지는 연결되었지만, 전체 설명 완성도는 더 다듬어야 합니다.
+- 핵심 설명: 선택지 정보는 확인되었지만 상세 설명 본문은 아직 비어 있습니다. NCardRewardSelectionScreen, 분노, 사전 타격, 천둥
+- 확인된 선택지:
+  - NCardRewardSelectionScreen
+  - 분노
+  - 사전 타격
+  - 천둥
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:choice-list-presented`
+
+### Observed Reward
+
+- ID: `reward-45158a17cc50`
+- 그룹/풀 추정: 보상/UI, 선택지 확인됨
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 선택지 또는 페이지 단위 정보까지는 연결되었지만, 전체 설명 완성도는 더 다듬어야 합니다.
+- 핵심 설명: 선택지 정보는 확인되었지만 상세 설명 본문은 아직 비어 있습니다. RewardsScreen, 넘기기
+- 확인된 선택지:
+  - RewardsScreen
+  - 넘기기
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:choice-list-presented`
+
+### Observed Reward
+
 - ID: `reward-425988603a25`
+- 그룹/풀 추정: 보상/UI
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:reward-screen-opened`
+
+### Observed Reward
+
+- ID: `reward-43004418eff4`
 - 그룹/풀 추정: 보상/UI
 - 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
 - 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
@@ -183,7 +311,37 @@
 
 ### Observed Reward
 
+- ID: `reward-c10ee1ed7c08`
+- 그룹/풀 추정: 보상/UI
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:reward-screen-opened`
+
+### Observed Reward
+
 - ID: `reward-cfcb71956165`
+- 그룹/풀 추정: 보상/UI
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:reward-screen-opened`
+
+### Observed Reward
+
+- ID: `reward-ea78b5939b19`
+- 그룹/풀 추정: 보상/UI
+- 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
+- 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.
+- 핵심 설명: 현재 항목은 정적 후보로만 식별되었고, 플레이 의미를 해석할 근거가 부족합니다.
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:reward-screen-opened`
+
+### Observed Reward
+
+- ID: `reward-ed277fbc1cda`
 - 그룹/풀 추정: 보상/UI
 - 플레이 중 참조 시점: 보상 화면에서 보상 종류와 선택 구조 비교 시 참조
 - 설명 상태: 플레이 해석에 필요한 정보가 아직 충분하지 않습니다.

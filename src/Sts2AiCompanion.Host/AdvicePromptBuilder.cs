@@ -28,17 +28,18 @@ public sealed class AdvicePromptBuilder
             runState.RecentEvents.TakeLast(_configuration.Assistant.RecentEventsCount).ToArray(),
             slice.Entries,
             slice.Reasons,
-            "You are a Slay the Spire 2 advice assistant. Do not automate gameplay or invent missing information. Use only the current state, recent events, and the provided knowledge slice.");
+            "당신은 Slay the Spire 2 조언 어시스턴트입니다. 게임 플레이를 자동화하지 말고, 없는 정보를 지어내지 말고, 현재 상태와 최근 이벤트와 제공된 지식 조각만 사용해 한국어로 답하세요.");
     }
 
     public string FormatPrompt(AdviceInputPack inputPack)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("You are a Slay the Spire 2 advice assistant.");
-        builder.AppendLine("- Do not automate gameplay.");
-        builder.AppendLine("- Base your answer only on the current state, current choices, recent events, and knowledge slice.");
-        builder.AppendLine("- If data is incomplete, say so instead of guessing.");
-        builder.AppendLine("- Follow the JSON schema exactly.");
+        builder.AppendLine("당신은 Slay the Spire 2 조언 어시스턴트입니다.");
+        builder.AppendLine("- 게임 플레이를 자동화하지 마세요.");
+        builder.AppendLine("- 현재 상태, 현재 선택지, 최근 이벤트, 관련 지식 조각만 근거로 사용하세요.");
+        builder.AppendLine("- 데이터가 부족하면 추측하지 말고 부족하다고 명시하세요.");
+        builder.AppendLine("- 반드시 한국어로 답하세요.");
+        builder.AppendLine("- JSON 스키마를 정확히 따르세요.");
         builder.AppendLine();
         builder.AppendLine($"trigger: {inputPack.TriggerKind}");
         builder.AppendLine($"manual: {inputPack.Manual}");
@@ -76,7 +77,7 @@ public sealed class AdvicePromptBuilder
 
             foreach (var option in entry.Options.Take(5))
             {
-                builder.AppendLine($"  option: {option.Label} :: {option.Description ?? "no details"}");
+                builder.AppendLine($"  option: {option.Label} :: {option.Description ?? "세부 정보 없음"}");
             }
         }
 
@@ -87,14 +88,14 @@ public sealed class AdvicePromptBuilder
 
         builder.AppendLine();
         builder.AppendLine("response_instructions:");
-        builder.AppendLine("- headline: one-line situation summary");
-        builder.AppendLine("- summary: 2-4 sentences of concise advice");
-        builder.AppendLine("- recommendedAction: the best next action right now");
-        builder.AppendLine("- recommendedChoiceLabel: the recommended choice label when choices are present");
-        builder.AppendLine("- reasoningBullets: 2-5 short reasons");
-        builder.AppendLine("- riskNotes: 0-3 uncertainty or risk notes");
-        builder.AppendLine("- confidence: number from 0.0 to 1.0");
-        builder.AppendLine("- knowledgeRefs: ids or names used as support");
+        builder.AppendLine("- headline: 현재 상황을 한 줄로 요약");
+        builder.AppendLine("- summary: 2~4문장의 간결한 조언");
+        builder.AppendLine("- recommendedAction: 지금 가장 좋은 다음 행동");
+        builder.AppendLine("- recommendedChoiceLabel: 선택지가 있을 때 추천 선택지 라벨");
+        builder.AppendLine("- reasoningBullets: 2~5개의 짧은 근거");
+        builder.AppendLine("- riskNotes: 0~3개의 불확실성 또는 리스크 메모");
+        builder.AppendLine("- confidence: 0.0에서 1.0 사이 숫자");
+        builder.AppendLine("- knowledgeRefs: 근거로 사용한 id 또는 이름");
         return builder.ToString().TrimEnd();
     }
 
@@ -108,25 +109,25 @@ public sealed class AdvicePromptBuilder
         builder.AppendLine($"- trigger: {response.TriggerKind}");
         builder.AppendLine($"- run_id: {response.RunId}");
         builder.AppendLine($"- recommended_action: {response.RecommendedAction}");
-        builder.AppendLine($"- recommended_choice: {response.RecommendedChoiceLabel ?? "none"}");
-        builder.AppendLine($"- confidence: {(response.Confidence?.ToString("0.00") ?? "unknown")}");
+        builder.AppendLine($"- recommended_choice: {response.RecommendedChoiceLabel ?? "없음"}");
+        builder.AppendLine($"- confidence: {(response.Confidence?.ToString("0.00") ?? "미상")}");
         builder.AppendLine();
-        builder.AppendLine("## Reasons");
-        foreach (var bullet in response.ReasoningBullets.DefaultIfEmpty("none"))
+        builder.AppendLine("## 근거");
+        foreach (var bullet in response.ReasoningBullets.DefaultIfEmpty("없음"))
         {
             builder.AppendLine($"- {bullet}");
         }
 
         builder.AppendLine();
-        builder.AppendLine("## Risks");
-        foreach (var note in response.RiskNotes.DefaultIfEmpty("none"))
+        builder.AppendLine("## 리스크");
+        foreach (var note in response.RiskNotes.DefaultIfEmpty("없음"))
         {
             builder.AppendLine($"- {note}");
         }
 
         builder.AppendLine();
-        builder.AppendLine("## Knowledge References");
-        foreach (var reference in response.KnowledgeRefs.DefaultIfEmpty("none"))
+        builder.AppendLine("## 참고 지식");
+        foreach (var reference in response.KnowledgeRefs.DefaultIfEmpty("없음"))
         {
             builder.AppendLine($"- {reference}");
         }

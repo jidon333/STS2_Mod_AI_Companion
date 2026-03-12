@@ -17,6 +17,9 @@
   "liveExport": {
     "enabled": true,
     "discoveryMode": true,
+    "collectorModeEnabled": false,
+    "collectorMaxRawEvents": 4096,
+    "collectorKeepSemanticSnapshots": true,
     "scenePollingEnabled": true,
     "scenePollingIntervalMs": 250,
     "scenePollingMaxNodes": 256,
@@ -29,7 +32,12 @@
     "eventsFileName": "events.ndjson",
     "snapshotFileName": "state.latest.json",
     "summaryFileName": "state.latest.txt",
-    "sessionFileName": "session.json"
+    "sessionFileName": "session.json",
+    "rawObservationsFileName": "raw-observations.ndjson",
+    "screenTransitionsFileName": "screen-transitions.ndjson",
+    "choiceCandidatesFileName": "choice-candidates.ndjson",
+    "choiceDecisionsFileName": "choice-decisions.ndjson",
+    "semanticSnapshotsFolderName": "semantic-snapshots"
   },
   "assistant": {
     "codexCommand": "codex",

@@ -8,7 +8,18 @@ public sealed record LiveExportLayout(
     string EventsPath,
     string SnapshotPath,
     string SummaryPath,
-    string SessionPath);
+    string SessionPath)
+{
+    public string RawObservationsPath { get; init; } = string.Empty;
+
+    public string ScreenTransitionsPath { get; init; } = string.Empty;
+
+    public string ChoiceCandidatesPath { get; init; } = string.Empty;
+
+    public string ChoiceDecisionsPath { get; init; } = string.Empty;
+
+    public string SemanticSnapshotsRoot { get; init; } = string.Empty;
+}
 
 public sealed record LiveExportPlayerSummary(
     string? Name,
@@ -39,6 +50,25 @@ public sealed record LiveExportChoiceSummary(
     string Label,
     string? Value,
     string? Description);
+
+public sealed record LiveExportChoiceCandidate(
+    string ExtractorPath,
+    string TypeName,
+    string? Label,
+    string? Value,
+    string? Description,
+    int Score,
+    bool Accepted,
+    string? RejectReason);
+
+public sealed record LiveExportChoiceDecision(
+    string? ExtractorPath,
+    bool UsedStrictExtractor,
+    int CandidateCount,
+    int AcceptedCount,
+    string Outcome,
+    string? FailureReason,
+    IReadOnlyList<string> PlaceholderLabels);
 
 public sealed record LiveExportEncounterSummary(
     string? Name,
@@ -114,6 +144,12 @@ public sealed record LiveExportObservation(
     IReadOnlyDictionary<string, object?> Payload,
     IReadOnlyDictionary<string, string?> Meta)
 {
+    public IReadOnlyList<LiveExportChoiceCandidate> ChoiceCandidates { get; init; } = Array.Empty<LiveExportChoiceCandidate>();
+
+    public LiveExportChoiceDecision? ChoiceDecision { get; init; }
+
+    public string? SemanticScreen { get; init; }
+
     public static LiveExportObservation Create(
         string triggerKind,
         string? screen = null,
@@ -153,7 +189,31 @@ public sealed record LiveExportSession(
 public sealed record LiveExportBatch(
     LiveExportSnapshot Snapshot,
     LiveExportSession Session,
-    IReadOnlyList<LiveExportEventEnvelope> Events);
+    IReadOnlyList<LiveExportEventEnvelope> Events)
+{
+    public LiveExportObservation? SourceObservation { get; init; }
+
+    public IReadOnlyList<LiveExportScreenTransition> ScreenTransitions { get; init; } = Array.Empty<LiveExportScreenTransition>();
+
+    public LiveExportCollectorStatus? CollectorStatus { get; init; }
+}
+
+public sealed record LiveExportScreenTransition(
+    DateTimeOffset ObservedAt,
+    string TriggerKind,
+    string Before,
+    string Incoming,
+    string After,
+    string Reason,
+    bool KeptPreviousScreen);
+
+public sealed record LiveExportCollectorStatus(
+    bool CollectorModeEnabled,
+    string? ActiveScreenEpisode,
+    string? LastSemanticScreen,
+    string? LastAcceptedExtractorPath,
+    string ChoiceExtractionStatus,
+    string? LastDegradedReason);
 
 public sealed record LiveExportTriggerDecision(
     bool ShouldTriggerCodex,
@@ -167,9 +227,10 @@ public sealed record LiveExportTriggerWindow(
 public sealed record LiveExportStateTrackerOptions(
     int MaxRecentChanges,
     int MaxDeckEntries,
-    int MaxChoiceEntries)
+    int MaxChoiceEntries,
+    bool CollectorModeEnabled)
 {
-    public static LiveExportStateTrackerOptions CreateDefault() => new(16, 40, 10);
+    public static LiveExportStateTrackerOptions CreateDefault() => new(16, 40, 10, false);
 }
 
 public sealed record LiveExportReplayResult(
