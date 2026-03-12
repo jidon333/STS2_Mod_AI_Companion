@@ -4,7 +4,11 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="STS2 AI 어시스턴트" Height="860" Width="1500" MinHeight="760" MinWidth="1280">
+        Title="STS2 AI 어시스턴트"
+        Height="860"
+        Width="1500"
+        MinHeight="760"
+        MinWidth="1280">
     <Window.Resources>
         <Style x:Key="ReadOnlyPanelTextBox" TargetType="TextBox">
             <Setter Property="IsReadOnly" Value="True" />
@@ -72,6 +76,7 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -79,10 +84,11 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="#143642" Text="AI 조언" />
-                    <TextBox Grid.Row="1" Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding AdviceOverviewText, Mode=OneWay}" />
-                    <TextBlock Grid.Row="2" Margin="0,10,0,0" FontWeight="SemiBold" Text="근거 / 리스크 / 최근 변화" />
-                    <TextBox Grid.Row="3" Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding AdviceDetailsText, Mode=OneWay}" />
-                    <TextBlock Grid.Row="4" Margin="0,10,0,0" HorizontalAlignment="Right" Text="{Binding ConfidenceLine}" />
+                    <TextBlock Grid.Row="1" Margin="0,10,0,0" FontWeight="SemiBold" Foreground="#7A3E00" Text="{Binding AnalysisStatusText}" />
+                    <TextBox Grid.Row="2" Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding AdviceOverviewText, Mode=OneWay}" />
+                    <TextBlock Grid.Row="3" Margin="0,10,0,0" FontWeight="SemiBold" Text="근거 / 리스크 / 부족한 정보 / 최근 변화" />
+                    <TextBox Grid.Row="4" Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding AdviceDetailsText, Mode=OneWay}" />
+                    <TextBlock Grid.Row="5" Margin="0,10,0,0" HorizontalAlignment="Right" Text="{Binding ConfidenceLine}" />
                 </Grid>
             </Border>
 
@@ -119,6 +125,20 @@
 
         <Border Grid.Row="2" Margin="18,0,18,18" Padding="14" CornerRadius="14" Background="#143642">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Stretch">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#F4F1DE" Text="모델" />
+                    <ComboBox Width="190"
+                              ItemsSource="{Binding AvailableModels}"
+                              SelectedItem="{Binding SelectedModelOption, Mode=OneWay}"
+                              SelectionChanged="ModelSelection_OnChanged" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" Foreground="#F4F1DE" Text="추론" />
+                    <ComboBox Width="160"
+                              ItemsSource="{Binding AvailableReasoningOptions}"
+                              SelectedItem="{Binding SelectedReasoningOption, Mode=OneWay}"
+                              SelectionChanged="ReasoningSelection_OnChanged" />
+                </StackPanel>
                 <Button Width="140" Height="40" Margin="0,0,8,0" Content="지금 분석" Click="AnalyzeNow_OnClick" />
                 <Button Width="160" Height="40" Margin="0,0,8,0" Content="{Binding AutoAdviceButtonText}" Click="ToggleAutoAdvice_OnClick" />
                 <Button Width="120" Height="40" Margin="0,0,8,0" Content="다시 시도" Click="RetryLast_OnClick" />

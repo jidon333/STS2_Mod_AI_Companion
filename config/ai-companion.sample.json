@@ -17,7 +17,7 @@
   "liveExport": {
     "enabled": true,
     "discoveryMode": true,
-    "collectorModeEnabled": false,
+    "collectorModeEnabled": true,
     "collectorMaxRawEvents": 4096,
     "collectorKeepSemanticSnapshots": true,
     "scenePollingEnabled": true,
@@ -41,6 +41,8 @@
   },
   "assistant": {
     "codexCommand": "codex",
+    "codexModel": "gpt-5.4",
+    "codexReasoningEffort": "xhigh",
     "optionalGodotExe": "C:\\\\Tools\\\\Godot_v4.5.1-stable_win64\\\\Godot_v4.5.1-stable_win64_console.exe",
     "autoAdviceEnabled": true,
     "livePollIntervalMs": 750,

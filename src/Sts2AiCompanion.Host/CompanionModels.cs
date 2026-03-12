@@ -59,6 +59,8 @@ public sealed record AdviceResponse(
     string? RecommendedChoiceLabel,
     IReadOnlyList<string> ReasoningBullets,
     IReadOnlyList<string> RiskNotes,
+    IReadOnlyList<string> MissingInformation,
+    IReadOnlyList<string> DecisionBlockers,
     double? Confidence,
     IReadOnlyList<string> KnowledgeRefs,
     DateTimeOffset GeneratedAt,
@@ -78,7 +80,12 @@ public sealed record CompanionHostStatus(
     bool LiveConnected,
     bool CodexAvailable,
     bool AutoAdviceEnabled,
+    bool AnalysisInProgress,
     string? RunId,
+    string? SelectedModel,
+    string? SelectedReasoningEffort,
+    string? AnalysisTriggerKind,
+    DateTimeOffset? AnalysisStartedAt,
     DateTimeOffset UpdatedAt,
     DateTimeOffset? LastAdviceAt,
     string Message);
@@ -109,6 +116,8 @@ public sealed record CompanionCollectorSummary(
     IReadOnlyList<string> ScreensWithMissingChoices,
     IReadOnlyList<string> PlaceholderLabelsObserved,
     IReadOnlyList<string> AutoAdviceFailures,
+    IReadOnlyList<string> MissingInformationObserved,
+    IReadOnlyList<string> DecisionBlockersObserved,
     string SessionTrackingStatus,
     IReadOnlyDictionary<string, int> ObservedMergeCounts,
     IReadOnlyList<string> RecommendedNextFixes);
@@ -124,5 +133,7 @@ public interface ICodexSessionClient
         AdviceInputPack inputPack,
         string prompt,
         string? sessionId,
+        string? modelOverride,
+        string? reasoningEffortOverride,
         CancellationToken cancellationToken);
 }

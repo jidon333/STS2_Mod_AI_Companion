@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Text;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,19 +31,24 @@ public sealed class CodexCliClient : ICodexSessionClient
         AdviceInputPack inputPack,
         string prompt,
         string? sessionId,
+        string? modelOverride,
+        string? reasoningEffortOverride,
         CancellationToken cancellationToken)
     {
         var schemaPath = Path.Combine(Path.GetTempPath(), $"sts2-codex-schema-{Guid.NewGuid():N}.json");
         var outputPath = Path.Combine(Path.GetTempPath(), $"sts2-codex-output-{Guid.NewGuid():N}.json");
         var sanitizedPrompt = SanitizePrompt(prompt);
+
         try
         {
             await File.WriteAllTextAsync(schemaPath, BuildSchema(), cancellationToken).ConfigureAwait(false);
-            var before = ReadSessionIndex().Select(entry => entry.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var before = ReadSessionIndex()
+                .Select(entry => entry.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             using var process = new Process
             {
-                StartInfo = CreateStartInfo(sessionId, schemaPath, outputPath),
+                StartInfo = CreateStartInfo(sessionId, modelOverride, reasoningEffortOverride, schemaPath, outputPath),
             };
 
             process.Start();
@@ -59,6 +64,7 @@ public sealed class CodexCliClient : ICodexSessionClient
             var resolvedSessionId = sessionId
                 ?? execTrace.ThreadId
                 ?? ResolveCreatedSessionId(before);
+
             var rawOutput = File.Exists(outputPath)
                 ? await File.ReadAllTextAsync(outputPath, cancellationToken).ConfigureAwait(false)
                 : string.Empty;
@@ -106,11 +112,13 @@ public sealed class CodexCliClient : ICodexSessionClient
                 return (new AdviceResponse(
                     "ok",
                     parsed.Headline ?? "AI 조언",
-                    parsed.Summary ?? "응답에 요약이 포함되지 않았습니다.",
-                    parsed.RecommendedAction ?? "결정을 내리기 전에 현재 상태를 다시 확인하세요.",
+                    parsed.Summary ?? "응답 요약이 비어 있습니다.",
+                    parsed.RecommendedAction ?? "현재 상태를 다시 확인하세요.",
                     parsed.RecommendedChoiceLabel,
                     parsed.ReasoningBullets ?? Array.Empty<string>(),
                     parsed.RiskNotes ?? Array.Empty<string>(),
+                    parsed.MissingInformation ?? Array.Empty<string>(),
+                    parsed.DecisionBlockers ?? Array.Empty<string>(),
                     parsed.Confidence,
                     parsed.KnowledgeRefs ?? Array.Empty<string>(),
                     DateTimeOffset.UtcNow,
@@ -135,7 +143,7 @@ public sealed class CodexCliClient : ICodexSessionClient
         }
     }
 
-    private ProcessStartInfo CreateStartInfo(string? sessionId, string schemaPath, string outputPath)
+    private ProcessStartInfo CreateStartInfo(string? sessionId, string? modelOverride, string? reasoningEffortOverride, string schemaPath, string outputPath)
     {
         var launch = ResolveCodexLaunch();
         var startInfo = new ProcessStartInfo
@@ -165,6 +173,24 @@ public sealed class CodexCliClient : ICodexSessionClient
         startInfo.ArgumentList.Add(schemaPath);
         startInfo.ArgumentList.Add("-o");
         startInfo.ArgumentList.Add(outputPath);
+        var selectedModel = string.IsNullOrWhiteSpace(modelOverride)
+            ? _configuration.Assistant.CodexModel
+            : modelOverride;
+        if (!string.IsNullOrWhiteSpace(selectedModel))
+        {
+            startInfo.ArgumentList.Add("-m");
+            startInfo.ArgumentList.Add(selectedModel!);
+        }
+
+        var selectedReasoningEffort = string.IsNullOrWhiteSpace(reasoningEffortOverride)
+            ? _configuration.Assistant.CodexReasoningEffort
+            : reasoningEffortOverride;
+        if (!string.IsNullOrWhiteSpace(selectedReasoningEffort))
+        {
+            startInfo.ArgumentList.Add("-c");
+            startInfo.ArgumentList.Add($"model_reasoning_effort=\"{selectedReasoningEffort}\"");
+        }
+
         if (!string.IsNullOrWhiteSpace(sessionId))
         {
             startInfo.ArgumentList.Add("resume");
@@ -295,9 +321,11 @@ public sealed class CodexCliClient : ICodexSessionClient
             "degraded",
             "Codex 조언을 사용할 수 없습니다",
             message,
-            "현재 상태와 선택지를 직접 다시 확인하세요.",
+            "현재 상태와 선택지를 다시 확인하세요.",
             null,
-            new[] { "Codex CLI가 실패했거나 잘못된 응답을 반환했습니다." },
+            new[] { "Codex CLI가 실패했거나 해석할 수 없는 응답을 반환했습니다." },
+            new[] { message },
+            Array.Empty<string>(),
             new[] { message },
             null,
             Array.Empty<string>(),
@@ -465,6 +493,14 @@ public sealed class CodexCliClient : ICodexSessionClient
               "type": "array",
               "items": { "type": "string" }
             },
+            "missingInformation": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "decisionBlockers": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
             "confidence": { "type": ["number", "null"] },
             "knowledgeRefs": {
               "type": "array",
@@ -478,6 +514,8 @@ public sealed class CodexCliClient : ICodexSessionClient
             "recommendedChoiceLabel",
             "reasoningBullets",
             "riskNotes",
+            "missingInformation",
+            "decisionBlockers",
             "confidence",
             "knowledgeRefs"
           ]
@@ -504,6 +542,8 @@ public sealed class CodexCliClient : ICodexSessionClient
         string? RecommendedChoiceLabel,
         IReadOnlyList<string>? ReasoningBullets,
         IReadOnlyList<string>? RiskNotes,
+        IReadOnlyList<string>? MissingInformation,
+        IReadOnlyList<string>? DecisionBlockers,
         double? Confidence,
         IReadOnlyList<string>? KnowledgeRefs);
 }

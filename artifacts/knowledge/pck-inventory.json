@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-12T02:35:45.4604628+00:00",
+  "generatedAt": "2026-03-12T04:30:42.482104+00:00",
   "metadata": {
     "releaseVersion": "v0.98.3",
     "releaseCommit": "cb602cef",
@@ -19,9 +19,9 @@
       "atlas:era_atlas": "27",
       "atlas:controller_atlas": "112",
       "source": "extract-static-knowledge",
-      "eventsLoaded": "31215",
+      "eventsLoaded": "33262",
       "snapshotLoaded": "True",
-      "observedSources": "9",
+      "observedSources": "11",
       "pckInventoryMode": "binary-string-scan",
       "pckResourcePathCount": "28871"
     }

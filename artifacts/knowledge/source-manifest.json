@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-12T02:35:56.3699509+00:00",
+  "generatedAt": "2026-03-12T04:30:53.0030309+00:00",
   "knowledgeRoot": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge",
   "metadata": {
     "releaseVersion": "v0.98.3",
@@ -20,9 +20,9 @@
       "atlas:era_atlas": "27",
       "atlas:controller_atlas": "112",
       "source": "extract-static-knowledge",
-      "eventsLoaded": "31215",
+      "eventsLoaded": "33262",
       "snapshotLoaded": "True",
-      "observedSources": "9"
+      "observedSources": "11"
     }
   },
   "sources": [
@@ -51,85 +51,85 @@
       "kind": "godot-log",
       "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\logs\\godot.log",
       "exists": true,
-      "size": 10318,
-      "lastWriteTime": "2026-03-12T00:22:22.0415179+00:00"
+      "size": 15973726,
+      "lastWriteTime": "2026-03-12T04:02:37.409662+00:00"
     },
     {
       "kind": "live-events",
       "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live\\events.ndjson",
       "exists": true,
-      "size": 13072256,
-      "lastWriteTime": "2026-03-12T00:22:21.8732074+00:00"
+      "size": 1086276,
+      "lastWriteTime": "2026-03-12T04:02:36.8037252+00:00"
     },
     {
       "kind": "live-snapshot",
       "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live\\state.latest.json",
       "exists": true,
-      "size": 1366,
-      "lastWriteTime": "2026-03-12T00:22:21.874207+00:00"
+      "size": 4645,
+      "lastWriteTime": "2026-03-12T04:02:36.8037252+00:00"
     },
     {
       "kind": "live-summary",
       "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live\\state.latest.txt",
       "exists": true,
-      "size": 967,
-      "lastWriteTime": "2026-03-12T00:22:21.8782062+00:00"
+      "size": 1091,
+      "lastWriteTime": "2026-03-12T04:02:36.8082401+00:00"
     },
     {
       "kind": "live-session",
       "path": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live\\session.json",
       "exists": true,
       "size": 430,
-      "lastWriteTime": "2026-03-12T00:22:21.881716+00:00"
+      "lastWriteTime": "2026-03-12T04:02:36.8122381+00:00"
     },
     {
       "kind": "catalog-previous",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\catalog.latest.json",
       "exists": true,
       "size": 3114316,
-      "lastWriteTime": "2026-03-12T02:34:11.1545788+00:00"
+      "lastWriteTime": "2026-03-12T02:35:56.3866307+00:00"
     },
     {
       "kind": "decompile-scan",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\decompile-scan.json",
       "exists": true,
-      "size": 806,
-      "lastWriteTime": "2026-03-12T02:34:51.7807033+00:00"
+      "size": 807,
+      "lastWriteTime": "2026-03-12T04:29:48.7342296+00:00"
     },
     {
       "kind": "strict-domain-scan",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\strict-domain-scan.json",
       "exists": true,
-      "size": 1317014,
-      "lastWriteTime": "2026-03-12T02:35:45.857879+00:00"
+      "size": 1317015,
+      "lastWriteTime": "2026-03-12T04:30:42.9566403+00:00"
     },
     {
       "kind": "assembly-scan",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\assembly-scan.json",
       "exists": true,
-      "size": 2945267,
-      "lastWriteTime": "2026-03-12T02:34:52.3931587+00:00"
+      "size": 2945266,
+      "lastWriteTime": "2026-03-12T04:29:49.4451758+00:00"
     },
     {
       "kind": "pck-inventory",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\pck-inventory.json",
       "exists": true,
       "size": 3834298,
-      "lastWriteTime": "2026-03-12T02:35:45.4813887+00:00"
+      "lastWriteTime": "2026-03-12T04:30:42.501761+00:00"
     },
     {
       "kind": "localization-scan",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\localization-scan.json",
       "exists": true,
-      "size": 1312208,
-      "lastWriteTime": "2026-03-12T02:35:55.4072495+00:00"
+      "size": 1312209,
+      "lastWriteTime": "2026-03-12T04:30:52.0876779+00:00"
     },
     {
       "kind": "observed-merge",
       "path": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\observed-merge.json",
       "exists": true,
-      "size": 33939,
-      "lastWriteTime": "2026-03-12T02:35:56.350292+00:00"
+      "size": 99700,
+      "lastWriteTime": "2026-03-12T04:30:52.9812468+00:00"
     }
   ],
   "steps": [
@@ -140,9 +140,9 @@
       "stats": {
         "releaseVersion": "v0.98.3",
         "releaseCommit": "cb602cef",
-        "eventsLoaded": "31215",
+        "eventsLoaded": "33262",
         "snapshotLoaded": "True",
-        "observedSources": "9"
+        "observedSources": "11"
       },
       "warnings": []
     },
@@ -238,12 +238,12 @@
       "status": "completed",
       "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\observed-merge.json",
       "stats": {
-        "cards": "25",
-        "relics": "11",
-        "potions": "5",
-        "events": "4",
+        "cards": "35",
+        "relics": "13",
+        "potions": "6",
+        "events": "19",
         "shops": "0",
-        "rewards": "15",
+        "rewards": "47",
         "keywords": "2"
       },
       "warnings": []
@@ -253,12 +253,12 @@
       "status": "completed",
       "outputPath": "C:\\Users\\jidon\\source\\repos\\STS2_Mod_AI_Companion\\artifacts\\knowledge\\catalog.latest.json",
       "stats": {
-        "cards": "601",
-        "relics": "299",
-        "potions": "68",
-        "events": "62",
+        "cards": "611",
+        "relics": "301",
+        "potions": "69",
+        "events": "77",
         "shops": "5",
-        "rewards": "22",
+        "rewards": "54",
         "keywords": "264"
       },
       "warnings": []

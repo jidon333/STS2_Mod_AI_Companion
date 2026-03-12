@@ -298,6 +298,10 @@ public sealed record AssistantOptions
 {
     public string CodexCommand { get; init; } = "codex";
 
+    public string? CodexModel { get; init; }
+
+    public string? CodexReasoningEffort { get; init; }
+
     public string? OptionalGodotExe { get; init; }
 
     public bool AutoAdviceEnabled { get; init; } = true;
@@ -328,6 +332,8 @@ public sealed record AssistantOptions
         return this with
         {
             CodexCommand = partial.CodexCommand ?? CodexCommand,
+            CodexModel = partial.CodexModel ?? CodexModel,
+            CodexReasoningEffort = partial.CodexReasoningEffort ?? CodexReasoningEffort,
             OptionalGodotExe = partial.OptionalGodotExe ?? OptionalGodotExe,
             AutoAdviceEnabled = partial.AutoAdviceEnabled ?? AutoAdviceEnabled,
             LivePollIntervalMs = partial.LivePollIntervalMs ?? LivePollIntervalMs,
@@ -344,6 +350,10 @@ public sealed record AssistantOptions
 public sealed record PartialAssistantOptions
 {
     public string? CodexCommand { get; init; }
+
+    public string? CodexModel { get; init; }
+
+    public string? CodexReasoningEffort { get; init; }
 
     public string? OptionalGodotExe { get; init; }
 

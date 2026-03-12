@@ -11,7 +11,7 @@ using Sts2ModKit.Core.LiveExport;
 
 namespace Sts2AiCompanion.Host;
 
-public sealed class CompanionHost : IAsyncDisposable
+public sealed partial class CompanionHost : IAsyncDisposable
 {
     private readonly ScaffoldConfiguration _configuration;
     private readonly string _workspaceRoot;
@@ -25,6 +25,11 @@ public sealed class CompanionHost : IAsyncDisposable
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true,
     };
+    private readonly JsonSerializerOptions _ndjsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false,
+    };
 
     private CancellationTokenSource? _loopCts;
     private Task? _loopTask;
@@ -37,6 +42,11 @@ public sealed class CompanionHost : IAsyncDisposable
     private CodexSessionState? _sessionState;
     private CompanionCollectorStatus? _latestCollectorStatus;
     private bool _autoAdviceEnabled;
+    private string? _selectedModel;
+    private string? _selectedReasoningEffort;
+    private DateTimeOffset? _analysisStartedAt;
+    private string? _analysisTriggerKind;
+    private string? _analysisMessage;
 
     public CompanionHost(ScaffoldConfiguration configuration, string workspaceRoot, ICodexSessionClient? codexSessionClient = null)
     {
@@ -47,6 +57,8 @@ public sealed class CompanionHost : IAsyncDisposable
         _promptBuilder = new AdvicePromptBuilder(configuration);
         _codexSessionClient = codexSessionClient ?? new CodexCliClient(configuration, workspaceRoot);
         _autoAdviceEnabled = configuration.Assistant.AutoAdviceEnabled;
+        _selectedModel = configuration.Assistant.CodexModel;
+        _selectedReasoningEffort = configuration.Assistant.CodexReasoningEffort;
         CurrentSnapshot = CreateSnapshot("idle", "실시간 추출을 기다리는 중입니다.");
     }
 
@@ -112,6 +124,22 @@ public sealed class CompanionHost : IAsyncDisposable
         PublishSnapshot(CreateSnapshot("running", enabled ? "자동 조언이 켜져 있습니다." : "자동 조언이 일시중지되었습니다."));
     }
 
+    public void SetSelectedModel(string? model)
+    {
+        _selectedModel = string.IsNullOrWhiteSpace(model) ? null : model.Trim();
+        PublishSnapshot(CreateSnapshot("running", _selectedModel is null
+            ? "기본 Codex 모델을 사용합니다."
+            : $"Codex 모델을 {_selectedModel}로 설정했습니다."));
+    }
+
+    public void SetSelectedReasoningEffort(string? reasoningEffort)
+    {
+        _selectedReasoningEffort = string.IsNullOrWhiteSpace(reasoningEffort) ? null : reasoningEffort.Trim();
+        PublishSnapshot(CreateSnapshot("running", _selectedReasoningEffort is null
+            ? "기본 추론 강도를 사용합니다."
+            : $"Codex 추론 강도를 {_selectedReasoningEffort}로 설정했습니다."));
+    }
+
     public async ValueTask DisposeAsync()
     {
         await StopAsync().ConfigureAwait(false);
@@ -153,7 +181,7 @@ public sealed class CompanionHost : IAsyncDisposable
             if (!string.Equals(_currentRunId, snapshot.RunId, StringComparison.Ordinal))
             {
                 _currentRunId = snapshot.RunId;
-                _sessionState = null;
+                _sessionState = TryReadExistingSessionState(snapshot.RunId);
                 _latestAdvice = null;
             }
 
@@ -226,6 +254,7 @@ public sealed class CompanionHost : IAsyncDisposable
 
         try
         {
+            BeginAnalysis(trigger);
             _latestKnowledgeSlice ??= _knowledgeCatalogService.BuildSlice(
                 runState,
                 _configuration.Assistant.MaxKnowledgeEntries,
@@ -245,7 +274,13 @@ public sealed class CompanionHost : IAsyncDisposable
                 existingSessionId = _sessionState?.SessionId,
             });
 
-            var (response, sessionId) = await _codexSessionClient.ExecuteAsync(inputPack, prompt, _sessionState?.SessionId, cancellationToken).ConfigureAwait(false);
+            var (response, sessionId) = await _codexSessionClient.ExecuteAsync(
+                inputPack,
+                prompt,
+                _sessionState?.SessionId,
+                _selectedModel,
+                _selectedReasoningEffort,
+                cancellationToken).ConfigureAwait(false);
             _latestAdvice = response;
             _lastAdviceAt = response.GeneratedAt;
             if (!string.IsNullOrWhiteSpace(sessionId))
@@ -272,11 +307,18 @@ public sealed class CompanionHost : IAsyncDisposable
                 status = response.Status,
                 generatedAt = response.GeneratedAt,
                 sessionId = _sessionState?.SessionId ?? sessionId,
+                missingInformation = response.MissingInformation,
+                decisionBlockers = response.DecisionBlockers,
             });
 
             UpdateCollectorArtifacts(runState);
-
+            EndAnalysis();
             PublishSnapshot(CreateSnapshot("running", $"조언 생성 완료: {trigger.Kind}"));
+        }
+        catch
+        {
+            EndAnalysis();
+            throw;
         }
         finally
         {
@@ -358,19 +400,57 @@ public sealed class CompanionHost : IAsyncDisposable
             _currentRunState is not null,
             true,
             _autoAdviceEnabled,
+            _analysisStartedAt is not null,
             _currentRunId,
+            _selectedModel,
+            _selectedReasoningEffort,
+            _analysisTriggerKind,
+            _analysisStartedAt,
             DateTimeOffset.UtcNow,
             _lastAdviceAt,
-            message);
+            _analysisMessage ?? message);
 
         WriteJson(paths.HostStatusPath, status);
         return new CompanionHostSnapshot(status, _currentRunState, _latestAdvice, _latestKnowledgeSlice, _latestCollectorStatus, paths);
+    }
+
+    private void BeginAnalysis(AdviceTrigger trigger)
+    {
+        _analysisStartedAt = DateTimeOffset.UtcNow;
+        _analysisTriggerKind = trigger.Kind;
+        _analysisMessage = $"AI 분석 중: {trigger.Kind}";
+        PublishSnapshot(CreateSnapshot("analyzing", _analysisMessage));
+    }
+
+    private void EndAnalysis()
+    {
+        _analysisStartedAt = null;
+        _analysisTriggerKind = null;
+        _analysisMessage = null;
     }
 
     private void PublishSnapshot(CompanionHostSnapshot snapshot)
     {
         CurrentSnapshot = snapshot;
         SnapshotChanged?.Invoke(this, snapshot);
+    }
+
+    private CodexSessionState? TryReadExistingSessionState(string runId)
+    {
+        var paths = CompanionPathResolver.Resolve(_configuration, _workspaceRoot, runId);
+        if (string.IsNullOrWhiteSpace(paths.CodexSessionPath) || !File.Exists(paths.CodexSessionPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            return TryReadJson<CodexSessionState>(paths.CodexSessionPath);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static T? TryReadJson<T>(string path)
@@ -443,6 +523,8 @@ public sealed class CompanionHost : IAsyncDisposable
                     ? "missing"
                     : "not-seen";
         var degradedReason = failureReason
+                             ?? _latestAdvice?.DecisionBlockers.FirstOrDefault()
+                             ?? _latestAdvice?.MissingInformation.FirstOrDefault()
                              ?? (_latestAdvice is { Status: not "ok" } ? _latestAdvice.Summary : null);
         var notes = string.Join(
             Environment.NewLine,
@@ -454,6 +536,8 @@ public sealed class CompanionHost : IAsyncDisposable
                 $"choice extraction: {choiceStatus}",
                 $"extractor path: {acceptedExtractorPath ?? "none"}",
                 $"last degraded reason: {degradedReason ?? "none"}",
+                $"missing information: {(_latestAdvice?.MissingInformation.Count > 0 ? string.Join(", ", _latestAdvice.MissingInformation.Take(4)) : "none")}",
+                $"decision blockers: {(_latestAdvice?.DecisionBlockers.Count > 0 ? string.Join(", ", _latestAdvice.DecisionBlockers.Take(4)) : "none")}",
                 $"session id: {_sessionState?.SessionId ?? "none"}",
             });
 
@@ -537,8 +621,30 @@ public sealed class CompanionHost : IAsyncDisposable
             .TakeLast(12)
             .ToArray();
 
+        var missingInformationObserved = adviceLog
+            .SelectMany(document => ReadStringArray(document.RootElement, "missingInformation"))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(64)
+            .ToArray();
+
+        var decisionBlockersObserved = adviceLog
+            .SelectMany(document => ReadStringArray(document.RootElement, "decisionBlockers"))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(64)
+            .ToArray();
+
         var observedMergeCounts = ReadObservedMergeCounts();
-        var recommendedFixes = BuildRecommendedFixes(missingChoices, placeholderLabels, autoAdviceFailures, collectorStatus);
+        var recommendedFixes = BuildRecommendedFixes(
+            missingChoices,
+            placeholderLabels,
+            autoAdviceFailures,
+            missingInformationObserved,
+            decisionBlockersObserved,
+            collectorStatus);
 
         return new CompanionCollectorSummary(
             runState.Snapshot.RunId,
@@ -548,6 +654,8 @@ public sealed class CompanionHost : IAsyncDisposable
             missingChoices,
             placeholderLabels,
             autoAdviceFailures,
+            missingInformationObserved,
+            decisionBlockersObserved,
             collectorStatus?.SessionId is null ? "missing-session-id" : "session-tracked",
             observedMergeCounts,
             recommendedFixes);
@@ -594,7 +702,7 @@ public sealed class CompanionHost : IAsyncDisposable
     private void AppendNdjson<T>(string path, T value)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.AppendAllText(path, JsonSerializer.Serialize(value, _jsonOptions) + Environment.NewLine);
+        File.AppendAllText(path, JsonSerializer.Serialize(value, _ndjsonOptions) + Environment.NewLine);
     }
 
     private void WriteCodexTrace(CompanionArtifactPaths paths, object trace)
@@ -634,6 +742,8 @@ public sealed class CompanionHost : IAsyncDisposable
         IReadOnlyList<string> missingChoices,
         IReadOnlyList<string> placeholderLabels,
         IReadOnlyList<string> autoAdviceFailures,
+        IReadOnlyList<string> missingInformationObserved,
+        IReadOnlyList<string> decisionBlockersObserved,
         CompanionCollectorStatus? collectorStatus)
     {
         var fixes = new List<string>();
@@ -698,8 +808,14 @@ public sealed class CompanionHost : IAsyncDisposable
             return Array.Empty<JsonDocument>();
         }
 
+        var content = TryReadAllText(path);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return Array.Empty<JsonDocument>();
+        }
+
         var documents = new List<JsonDocument>();
-        foreach (var line in ReadAllLinesShared(path))
+        foreach (var line in SplitJsonObjects(content))
         {
             try
             {
@@ -721,6 +837,11 @@ public sealed class CompanionHost : IAsyncDisposable
 
     private static string? TryReadString(JsonElement element, string propertyName)
     {
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
         return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
@@ -733,7 +854,9 @@ public sealed class CompanionHost : IAsyncDisposable
             return null;
         }
 
-        return document.RootElement.TryGetProperty(parentProperty, out var parent)
+        return document.RootElement.ValueKind == JsonValueKind.Object
+               && document.RootElement.TryGetProperty(parentProperty, out var parent)
+               && parent.ValueKind == JsonValueKind.Object
                && parent.TryGetProperty(propertyName, out var property)
                && property.ValueKind == JsonValueKind.String
             ? property.GetString()
@@ -747,7 +870,9 @@ public sealed class CompanionHost : IAsyncDisposable
             return null;
         }
 
-        return document.RootElement.TryGetProperty(parentProperty, out var parent)
+        return document.RootElement.ValueKind == JsonValueKind.Object
+               && document.RootElement.TryGetProperty(parentProperty, out var parent)
+               && parent.ValueKind == JsonValueKind.Object
                && parent.TryGetProperty(propertyName, out var property)
                && property.ValueKind == JsonValueKind.Number
                && property.TryGetInt32(out var value)

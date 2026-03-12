@@ -9,32 +9,63 @@ using System.Threading.Tasks;
 using System.Windows.Threading;
 using Sts2AiCompanion.Host;
 using Sts2ModKit.Core.Configuration;
+using Sts2ModKit.Core.Knowledge;
+using Sts2ModKit.Core.LiveExport;
 
 namespace Sts2AiCompanion.Wpf;
 
 public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
 {
+    private static readonly IReadOnlyDictionary<string, string?> ModelOptions = new Dictionary<string, string?>
+    {
+        ["기본값"] = null,
+        ["GPT-5.4"] = "gpt-5.4",
+        ["GPT-5.3-Codex"] = "gpt-5.3-codex",
+        ["GPT-5.3-Codex-Spark"] = "gpt-5.3-codex-spark",
+        ["GPT-5.2-Codex"] = "gpt-5.2-codex",
+        ["GPT-5.2"] = "gpt-5.2",
+        ["GPT-5.1-Codex-Max"] = "gpt-5.1-codex-max",
+        ["GPT-5.1-Codex-Mini"] = "gpt-5.1-codex-mini",
+    };
+
+    private static readonly IReadOnlyDictionary<string, string?> ReasoningOptions = new Dictionary<string, string?>
+    {
+        ["Low"] = "low",
+        ["Medium (default)"] = "medium",
+        ["High"] = "high",
+        ["Extra high"] = "xhigh",
+    };
+
     private Dispatcher? _dispatcher;
     private CompanionHost? _host;
+    private DispatcherTimer? _analysisTimer;
     private string _workspaceRoot = Directory.GetCurrentDirectory();
+    private bool _analysisInProgress;
+    private DateTimeOffset? _analysisStartedAt;
+    private string? _analysisTriggerKind;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public string StatusLine { get; private set; } = "실시간 추출을 기다리는 중입니다.";
+    public string StatusLine { get; private set; } = "실시간 추출 대기 중입니다.";
     public string RunLine { get; private set; } = "런: 없음";
-    public string ScreenLine { get; private set; } = "화면: 알 수 없음";
+    public string ScreenLine { get; private set; } = "화면: 확인 중";
     public string UpdatedLine { get; private set; } = "업데이트: -";
+    public string AnalysisStatusText { get; private set; } = "분석 상태: 대기 중";
     public string PlayerText { get; private set; } = "플레이어 상태가 아직 없습니다.";
-    public string DeckText { get; private set; } = "아직 덱 정보를 읽지 못했습니다.";
+    public string DeckText { get; private set; } = "덱 정보를 아직 읽지 못했습니다.";
     public string RelicsPotionsText { get; private set; } = "유물과 포션 정보가 아직 없습니다.";
     public string AdviceOverviewText { get; private set; } = "아직 조언이 없습니다.";
-    public string AdviceDetailsText { get; private set; } = "근거와 리스크가 아직 없습니다.";
+    public string AdviceDetailsText { get; private set; } = "근거와 리스크 정보가 아직 없습니다.";
     public string CurrentChoicesText { get; private set; } = "없음";
     public string RecentEventsText { get; private set; } = "없음";
     public string KnowledgeEntriesText { get; private set; } = "없음";
     public string CollectorNotesText { get; private set; } = "수집 런 진단 정보가 없습니다.";
     public string ConfidenceLine { get; private set; } = "신뢰도: -";
     public string AutoAdviceButtonText { get; private set; } = "자동 조언 일시중지";
+    public IReadOnlyList<string> AvailableModels => ModelOptions.Keys.ToArray();
+    public IReadOnlyList<string> AvailableReasoningOptions => ReasoningOptions.Keys.ToArray();
+    public string SelectedModelOption { get; private set; } = "기본값";
+    public string SelectedReasoningOption { get; private set; } = "Extra high";
     public bool AutoAdviceEnabled { get; private set; } = true;
 
     public async Task InitializeAsync(Dispatcher dispatcher)
@@ -45,6 +76,13 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         var configuration = ConfigurationLoader.LoadFromFile(configPath).Configuration;
         _host = new CompanionHost(configuration, _workspaceRoot);
         _host.SnapshotChanged += HostOnSnapshotChanged;
+
+        _analysisTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _analysisTimer.Tick += (_, _) => UpdateAnalysisStatusText();
+
         await _host.StartAsync().ConfigureAwait(false);
         Apply(_host.CurrentSnapshot);
     }
@@ -65,7 +103,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
 
         AutoAdviceEnabled = !AutoAdviceEnabled;
-        AutoAdviceButtonText = AutoAdviceEnabled ? "자동 조언 일시중지" : "자동 조언 재개";
+        AutoAdviceButtonText = AutoAdviceEnabled ? "자동 조언 일시중지" : "자동 조언 다시 켜기";
         _host.SetAutoAdviceEnabled(AutoAdviceEnabled);
         Notify(nameof(AutoAdviceButtonText));
     }
@@ -78,11 +116,26 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
+    public void SetSelectedModelOption(string? option)
+    {
+        SelectedModelOption = string.IsNullOrWhiteSpace(option) ? "기본값" : option!;
+        _host?.SetSelectedModel(ModelOptions.TryGetValue(SelectedModelOption, out var model) ? model : null);
+        Notify(nameof(SelectedModelOption));
+    }
+
+    public void SetSelectedReasoningOption(string? option)
+    {
+        SelectedReasoningOption = string.IsNullOrWhiteSpace(option) ? "Medium (default)" : option!;
+        _host?.SetSelectedReasoningEffort(ReasoningOptions.TryGetValue(SelectedReasoningOption, out var reasoning) ? reasoning : "medium");
+        Notify(nameof(SelectedReasoningOption));
+    }
+
     public void OpenArtifacts()
     {
         var target = _host?.CurrentSnapshot.Paths.RunRoot
                      ?? _host?.CurrentSnapshot.Paths.CompanionRoot
                      ?? Path.Combine(_workspaceRoot, "artifacts");
+
         Process.Start(new ProcessStartInfo
         {
             FileName = "explorer.exe",
@@ -93,6 +146,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_analysisTimer is not null)
+        {
+            _analysisTimer.Stop();
+            _analysisTimer = null;
+        }
+
         if (_host is not null)
         {
             _host.SnapshotChanged -= HostOnSnapshotChanged;
@@ -118,29 +177,58 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         ScreenLine = $"화면: {TranslateScreen(snapshot.RunState?.Snapshot.CurrentScreen)}";
         UpdatedLine = $"업데이트: {snapshot.Status.UpdatedAt:yyyy-MM-dd HH:mm:ss}";
         AutoAdviceEnabled = snapshot.Status.AutoAdviceEnabled;
-        AutoAdviceButtonText = AutoAdviceEnabled ? "자동 조언 일시중지" : "자동 조언 재개";
+        AutoAdviceButtonText = AutoAdviceEnabled ? "자동 조언 일시중지" : "자동 조언 다시 켜기";
+        SelectedModelOption = ToModelDisplay(snapshot.Status.SelectedModel);
+        SelectedReasoningOption = ToReasoningDisplay(snapshot.Status.SelectedReasoningEffort);
+
+        _analysisInProgress = snapshot.Status.AnalysisInProgress;
+        _analysisStartedAt = snapshot.Status.AnalysisStartedAt;
+        _analysisTriggerKind = snapshot.Status.AnalysisTriggerKind;
+        UpdateAnalysisStatusText();
 
         if (snapshot.RunState is not null)
         {
             var player = snapshot.RunState.Snapshot.Player;
-            PlayerText = JoinLines(new[]
-            {
-                $"이름: {player.Name ?? "미확인"}",
-                $"체력: {player.CurrentHp?.ToString() ?? "?"}/{player.MaxHp?.ToString() ?? "?"}",
-                $"골드: {player.Gold?.ToString() ?? "?"}",
-                $"에너지: {player.Energy?.ToString() ?? "?"}",
-            });
+            PlayerText = JoinLines(
+                new[]
+                {
+                    $"이름: {player.Name ?? "미확인"}",
+                    $"체력: {player.CurrentHp?.ToString() ?? "?"}/{player.MaxHp?.ToString() ?? "?"}",
+                    $"골드: {player.Gold?.ToString() ?? "?"}",
+                    $"에너지: {player.Energy?.ToString() ?? "?"}",
+                }.Concat(player.Resources.Select(pair => $"{pair.Key}: {pair.Value ?? "?"}")));
+
             DeckText = snapshot.RunState.Snapshot.Deck.Count == 0
-                ? "아직 덱 정보를 읽지 못했습니다."
-                : JoinLines(snapshot.RunState.Snapshot.Deck.Take(20).Select(card => $"- {card.Name}"));
+                ? "덱 정보를 아직 읽지 못했습니다."
+                : JoinLines(snapshot.RunState.Snapshot.Deck.Take(24).Select(card =>
+                {
+                    var parts = new List<string> { card.Name };
+                    if (card.Cost is not null)
+                    {
+                        parts.Add($"cost {card.Cost}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(card.Type))
+                    {
+                        parts.Add(card.Type!);
+                    }
+
+                    if (card.Upgraded == true)
+                    {
+                        parts.Add("강화");
+                    }
+
+                    return "- " + string.Join(" / ", parts);
+                }));
+
             RelicsPotionsText = JoinLines(new[]
             {
-                "유물:",
+                "유물",
                 snapshot.RunState.Snapshot.Relics.Count == 0
                     ? "- 없음"
                     : JoinLines(snapshot.RunState.Snapshot.Relics.Take(12).Select(relic => $"- {relic}")),
                 string.Empty,
-                "포션:",
+                "포션",
                 snapshot.RunState.Snapshot.Potions.Count == 0
                     ? "- 없음"
                     : JoinLines(snapshot.RunState.Snapshot.Potions.Take(8).Select(potion => $"- {potion}")),
@@ -149,7 +237,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         else
         {
             PlayerText = "플레이어 상태가 아직 없습니다.";
-            DeckText = "아직 덱 정보를 읽지 못했습니다.";
+            DeckText = "덱 정보를 아직 읽지 못했습니다.";
             RelicsPotionsText = "유물과 포션 정보가 아직 없습니다.";
         }
 
@@ -164,15 +252,22 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
                 $"권장 행동: {snapshot.LatestAdvice.RecommendedAction}",
                 $"권장 선택지: {snapshot.LatestAdvice.RecommendedChoiceLabel ?? "-"}",
             });
+
             AdviceDetailsText = JoinLines(new[]
             {
-                "근거:",
+                "근거",
                 FormatBulletSection(snapshot.LatestAdvice.ReasoningBullets),
                 string.Empty,
-                "리스크:",
+                "리스크",
                 FormatBulletSection(snapshot.LatestAdvice.RiskNotes),
                 string.Empty,
-                "최근 변화:",
+                "부족한 정보",
+                FormatBulletSection(snapshot.LatestAdvice.MissingInformation),
+                string.Empty,
+                "판단 차단 요인",
+                FormatBulletSection(snapshot.LatestAdvice.DecisionBlockers),
+                string.Empty,
+                "최근 변화",
                 FormatBulletSection(snapshot.RunState?.Snapshot.RecentChanges ?? Array.Empty<string>()),
             });
             ConfidenceLine = $"신뢰도: {snapshot.LatestAdvice.Confidence?.ToString("0.00") ?? "미상"}";
@@ -183,27 +278,64 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             {
                 "아직 조언이 없습니다.",
                 string.Empty,
-                "게임을 실행하거나 live export가 잡힌 뒤 '지금 분석'을 눌러 주세요.",
+                "게임을 실행했거나 live export가 붙은 뒤 '지금 분석'을 눌러 주세요.",
             });
-            AdviceDetailsText = "근거와 리스크가 아직 없습니다.";
+            AdviceDetailsText = "근거와 리스크 정보가 아직 없습니다.";
             ConfidenceLine = "신뢰도: -";
         }
 
         CurrentChoicesText = JoinLines(
-            (snapshot.RunState?.Snapshot.CurrentChoices ?? Array.Empty<Sts2ModKit.Core.LiveExport.LiveExportChoiceSummary>())
-            .Select(choice => $"[{TranslateChoiceKind(choice.Kind)}] {choice.Label} :: {choice.Description ?? choice.Value ?? "세부 정보 없음"}")
+            (snapshot.RunState?.Snapshot.CurrentChoices ?? Array.Empty<LiveExportChoiceSummary>())
+            .Select(choice => $"[{TranslateChoiceKind(choice.Kind)}] {choice.Label} :: {choice.Description ?? choice.Value ?? "추가 정보 없음"}")
             .DefaultIfEmpty("없음"));
+
         RecentEventsText = JoinLines(
-            (snapshot.RunState?.RecentEvents ?? Array.Empty<Sts2ModKit.Core.LiveExport.LiveExportEventEnvelope>())
+            (snapshot.RunState?.RecentEvents ?? Array.Empty<LiveExportEventEnvelope>())
             .Select(evt => $"{TranslateEventKind(evt.Kind)} @ {TranslateScreen(evt.Screen)} ({evt.Act?.ToString() ?? "?"}-{evt.Floor?.ToString() ?? "?"})")
             .DefaultIfEmpty("없음"));
+
         KnowledgeEntriesText = JoinLines(
-            (snapshot.LatestKnowledgeSlice?.Entries ?? Array.Empty<Sts2ModKit.Core.Knowledge.StaticKnowledgeEntry>())
+            (snapshot.LatestKnowledgeSlice?.Entries ?? Array.Empty<StaticKnowledgeEntry>())
             .Select(entry => $"{entry.Name} [출처: {TranslateSource(entry.Source)}]")
             .DefaultIfEmpty("없음"));
-        CollectorNotesText = snapshot.CollectorStatus?.Notes ?? "수집 런 모드가 비활성화되었습니다.";
+
+        CollectorNotesText = snapshot.CollectorStatus switch
+        {
+            null => "수집 런 진단 정보가 없습니다.",
+            { Enabled: false } => "수집 런 모드가 비활성화되어 있습니다.",
+            var collector => JoinLines(new[]
+            {
+                $"collector mode: {(collector.Enabled ? "on" : "off")}",
+                $"최근 semantic 화면: {TranslateScreen(collector.LastSemanticScreen)}",
+                $"화면 episode: {collector.ActiveScreenEpisode ?? "없음"}",
+                $"선택지 추출 상태: {collector.ChoiceExtractionStatus ?? "미상"}",
+                $"마지막 extractor 경로: {collector.LastAcceptedExtractorPath ?? "없음"}",
+                $"마지막 degraded 이유: {collector.LastDegradedReason ?? "없음"}",
+                $"session id: {collector.SessionId ?? "없음"}",
+                string.Empty,
+                collector.Notes,
+            }),
+        };
 
         NotifyAll();
+    }
+
+    private void UpdateAnalysisStatusText()
+    {
+        if (_analysisInProgress && _analysisStartedAt is not null)
+        {
+            _analysisTimer?.Start();
+            var elapsed = DateTimeOffset.UtcNow - _analysisStartedAt.Value;
+            var seconds = Math.Max(0, (int)elapsed.TotalSeconds);
+            AnalysisStatusText = $"분석중: {TranslateEventKind(_analysisTriggerKind)} ({seconds}초)";
+        }
+        else
+        {
+            _analysisTimer?.Stop();
+            AnalysisStatusText = "분석 상태: 대기 중";
+        }
+
+        Notify(nameof(AnalysisStatusText));
     }
 
     private static string JoinLines(IEnumerable<string> lines)
@@ -216,6 +348,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         return JoinLines(items.DefaultIfEmpty("없음").Select(item => $"- {item}"));
     }
 
+    private static string ToModelDisplay(string? model)
+    {
+        return ModelOptions.FirstOrDefault(pair => string.Equals(pair.Value, model, StringComparison.OrdinalIgnoreCase)).Key ?? "기본값";
+    }
+
+    private static string ToReasoningDisplay(string? reasoning)
+    {
+        return ReasoningOptions.FirstOrDefault(pair => string.Equals(pair.Value, reasoning, StringComparison.OrdinalIgnoreCase)).Key ?? "Medium (default)";
+    }
+
     private static string LocalizeStatusMessage(string? message)
     {
         return message switch
@@ -225,9 +367,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             "state.latest.json is not available yet." => "아직 state.latest.json이 생성되지 않았습니다.",
             "Monitoring live export updates." => "실시간 추출 갱신을 감시 중입니다.",
             "Automatic advice is enabled." => "자동 조언이 켜져 있습니다.",
-            "Automatic advice is paused." => "자동 조언이 일시중지되었습니다.",
+            "Automatic advice is paused." => "자동 조언이 일시중지되어 있습니다.",
             _ when message.StartsWith("Advice generated for ", StringComparison.Ordinal) =>
                 $"조언 생성 완료: {TranslateEventKind(message["Advice generated for ".Length..])}",
+            _ when message.StartsWith("AI 분석 중: ", StringComparison.Ordinal) =>
+                $"분석중: {TranslateEventKind(message["AI 분석 중: ".Length..])}",
             _ => message,
         };
     }
@@ -236,20 +380,22 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         return screen?.Trim().ToLowerInvariant() switch
         {
-            null or "" => "알 수 없음",
-            "unknown" => "알 수 없음",
+            null or "" => "확인 중",
+            "unknown" => "미확인",
             "main-menu" => "메인 메뉴",
             "combat" => "전투",
             "reward" or "rewards" => "보상",
             "event" => "이벤트",
             "shop" => "상점",
-            "rest" or "rest-site" => "휴식",
+            "rest" or "rest-site" or "campfire" => "휴식",
             "map" => "맵",
-            "campfire" => "휴식",
             "victory" => "승리",
             "death" => "패배",
             "character-select" => "캐릭터 선택",
-            _ => screen ?? "알 수 없음",
+            "card-choice" => "카드 선택",
+            "upgrade" => "강화",
+            "transform" => "변형",
+            _ => screen ?? "확인 중",
         };
     }
 
@@ -257,10 +403,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         return kind?.Trim().ToLowerInvariant() switch
         {
-            null or "" => "알 수 없음",
-            "runtime-poll" => "런타임 폴링",
+            null or "" => "미상",
+            "runtime-poll" => "주기 상태 수집",
             "screen-changed" => "화면 전환",
-            "choice-list-presented" => "선택지 표시",
+            "choice-list-presented" => "선택지 제시",
             "choice-selected" => "선택지 선택",
             "combat-started" => "전투 시작",
             "combat-ended" => "전투 종료",
@@ -276,8 +422,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             "run-ended" => "런 종료",
             "app-started" => "앱 시작",
             "app-stopped" => "앱 종료",
-            "save-persisted" => "저장 완료",
-            _ => kind ?? "알 수 없음",
+            "manual" => "수동 분석",
+            _ => kind ?? "미상",
         };
     }
 
@@ -309,7 +455,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             "assembly-scan" => "어셈블리 스캔",
             "pck-inventory" => "PCK 인벤토리",
             "observed-merge" => "관찰 병합",
-            "release-scan" => "릴리스 스캔",
+            "release-scan" => "릴리즈 스캔",
             _ => source ?? "미상",
         };
     }
@@ -336,6 +482,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         Notify(nameof(RunLine));
         Notify(nameof(ScreenLine));
         Notify(nameof(UpdatedLine));
+        Notify(nameof(AnalysisStatusText));
         Notify(nameof(PlayerText));
         Notify(nameof(DeckText));
         Notify(nameof(RelicsPotionsText));
@@ -347,6 +494,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         Notify(nameof(CollectorNotesText));
         Notify(nameof(ConfidenceLine));
         Notify(nameof(AutoAdviceButtonText));
+        Notify(nameof(SelectedModelOption));
+        Notify(nameof(SelectedReasoningOption));
     }
 
     private void Notify([CallerMemberName] string? propertyName = null)

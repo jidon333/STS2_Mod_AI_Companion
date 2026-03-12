@@ -72,7 +72,14 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static readonly HashSet<string> PlaceholderChoiceLabels = new(StringComparer.Ordinal)
     {
         "BackButton",
+        "Back",
         "SendButton",
+        "PlayQueue",
+        "Card",
+        "RewardsScreen",
+        "NCardRewardSelectionScreen",
+        "CardTrailIronclad",
+        "Hitbox",
         "RelicInventory",
         "CardPreviewContainer",
         "GridCardPreviewContainer",
@@ -1821,6 +1828,28 @@ internal static class RuntimeSnapshotReflectionExtractor
             return true;
         }
 
+        if (summary.Label.StartsWith("@Control@", StringComparison.Ordinal)
+            || summary.Label.StartsWith("@Node", StringComparison.Ordinal)
+            || summary.Label.StartsWith("@Node2D@", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (summary.Label.EndsWith("선택하세요.", StringComparison.Ordinal)
+            || summary.Label.EndsWith("선택해 주세요.", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (summary.Label.Equals("PlayQueue", StringComparison.Ordinal)
+            || summary.Label.Equals("CardTrailIronclad", StringComparison.Ordinal)
+            || summary.Label.Equals("RewardsScreen", StringComparison.Ordinal)
+            || summary.Label.Equals("NCardRewardSelectionScreen", StringComparison.Ordinal)
+            || summary.Label.Equals("Hitbox", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
         return false;
     }
 
@@ -1889,6 +1918,15 @@ internal static class RuntimeSnapshotReflectionExtractor
             score -= 8;
         }
 
+        if (!string.IsNullOrWhiteSpace(label)
+            && (label.StartsWith("@Control@", StringComparison.Ordinal)
+                || label.StartsWith("@Node", StringComparison.Ordinal)
+                || label.EndsWith("선택하세요.", StringComparison.Ordinal)
+                || label.EndsWith("선택해 주세요.", StringComparison.Ordinal)))
+        {
+            score -= 8;
+        }
+
         return score;
     }
 
@@ -1924,14 +1962,14 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (typeName.Contains("LocString", StringComparison.OrdinalIgnoreCase))
         {
             return FirstNonEmpty(
-                TryConvertToDisplayString(TryInvokeMethod(value, "GetFormattedText"), depth + 1),
                 TryConvertToDisplayString(TryInvokeMethod(value, "GetRawText"), depth + 1),
+                TryConvertToDisplayString(TryInvokeMethod(value, "GetFormattedText"), depth + 1),
                 TryConvertToDisplayString(TryGetMemberValue(value, "Text"), depth + 1),
                 TryConvertToDisplayString(TryGetMemberValue(value, "Value"), depth + 1),
                 TryConvertToDisplayString(TryGetMemberValue(value, "Key"), depth + 1));
         }
 
-        foreach (var methodName in new[] { "GetFormattedText", "GetRawText", "GetParsedText", "GetText" })
+        foreach (var methodName in new[] { "GetRawText", "GetParsedText", "GetText", "GetFormattedText" })
         {
             var invoked = TryInvokeMethod(value, methodName);
             var rendered = TryConvertToDisplayString(invoked, depth + 1);

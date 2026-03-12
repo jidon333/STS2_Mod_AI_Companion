@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 
 namespace Sts2AiCompanion.Wpf;
 
@@ -48,5 +49,21 @@ public partial class MainWindow : Window
     private void OpenArtifacts_OnClick(object sender, RoutedEventArgs e)
     {
         _viewModel.OpenArtifacts();
+    }
+
+    private void ModelSelection_OnChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox comboBox && comboBox.SelectedItem is string option)
+        {
+            _viewModel.SetSelectedModelOption(option);
+        }
+    }
+
+    private void ReasoningSelection_OnChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is ComboBox comboBox && comboBox.SelectedItem is string option)
+        {
+            _viewModel.SetSelectedReasoningOption(option);
+        }
     }
 }
