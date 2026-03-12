@@ -96,6 +96,8 @@ Host가 하는 일:
 - prompt pack 생성
 - Codex CLI 실행
 - advice artifact 저장
+- same run 기준 `codex-session.json` 세션 복구
+- high-priority automatic trigger latest-only coalescing
 
 ## 8. WPF 앱이 최종 사용자 표면
 
@@ -109,6 +111,13 @@ Host가 하는 일:
 
 즉, 사용자는 게임 안이 아니라 별도 창에서 조언을 보게 됩니다.
 
+추가로 WPF는 아래 동작도 제공합니다.
+
+- `Analyze Now`: 현재 snapshot 기준 새 prompt 생성
+- `Retry Last`: 마지막 prompt pack 재전송
+- 모델 / 추론 강도 선택
+- collector 진단 표시
+
 ## 9. 실패 시 어디를 봐야 하나
 
 1. `godot.log`
@@ -120,4 +129,4 @@ Host가 하는 일:
 4. `artifacts/knowledge`
    - knowledge pipeline 산출물
 5. `artifacts/companion`
-   - prompt pack, advice 결과, host 상태
+   - prompt pack, `advice/`, `codex-session.json`, `codex-trace.ndjson`, collector summary

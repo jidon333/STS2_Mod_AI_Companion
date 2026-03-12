@@ -4,7 +4,7 @@
 
 ## 1. 앱을 먼저 실행
 
-사용자는 `STS2 AI Companion` WPF 앱을 먼저 실행할 수 있습니다.
+사용자는 `STS2 AI 어시스턴트` WPF 앱을 먼저 실행할 수 있습니다.
 
 이때 보이는 기본 상태:
 
@@ -52,7 +52,7 @@ reward, event, shop, rest, combat start 같은 화면이 잡히면 앱의 중앙
 
 ## 5. 수동 분석
 
-사용자는 `Analyze Now` 버튼을 눌러 현재 상태에 대한 즉시 분석을 다시 요청할 수 있습니다.
+사용자는 `Analyze Now` 버튼을 눌러 현재 snapshot 기준으로 새 분석을 요청할 수 있습니다.
 
 이 기능은 아래 상황에 유용합니다.
 
@@ -60,7 +60,14 @@ reward, event, shop, rest, combat start 같은 화면이 잡히면 앱의 중앙
 - 상태가 변했는데 다시 묻고 싶을 때
 - Codex 오류 이후 재시도하고 싶을 때
 
-현재 `Retry Last` 버튼도 있으며, 현재 구현에서는 `Analyze Now`와 같은 수동 advice 경로를 다시 호출합니다.
+`Retry Last` 버튼은 다른 의미를 가집니다.
+
+- `Analyze Now`
+  - 현재 live snapshot과 현재 상태를 다시 읽어 새 prompt pack을 만듭니다.
+- `Retry Last`
+  - 마지막으로 저장된 prompt pack을 다시 Codex로 보냅니다.
+
+즉, 현재 상태가 이미 바뀌었다면 `Analyze Now`를, 직전 요청 자체를 다시 보내고 싶다면 `Retry Last`를 씁니다.
 
 ## 6. 자동 advice 일시정지
 
@@ -75,10 +82,12 @@ reward, event, shop, rest, combat start 같은 화면이 잡히면 앱의 중앙
 여기서 확인할 수 있는 것:
 
 - prompt pack
-- latest advice
-- advice 로그
+- `advice/` 폴더 아래 latest advice와 advice 로그
 - live mirror
 - host 상태
+- `codex-session.json`
+- `codex-trace.ndjson`
+- collector mode였다면 `collector-summary.json`
 
 ## 8. knowledge 새로고침
 
@@ -89,7 +98,21 @@ reward, event, shop, rest, combat start 같은 화면이 잡히면 앱의 중앙
 - 현재 구현에서 이 버튼은 새로운 Codex 호출을 강제하지 않습니다.
 - 즉 `수동 재분석`은 `Analyze Now` 또는 `Retry Last`가 담당하고, `Refresh Knowledge`는 표시 갱신에 가깝습니다.
 
-## 9. 현재 사용자 흐름의 현실적인 상태
+## 9. collector 진단 패널
+
+collector mode가 켜져 있으면 WPF 하단/우측 진단 영역에서 아래를 빠르게 볼 수 있습니다.
+
+- collector mode on/off
+- 현재 session id
+- 최근 semantic screen
+- current choices 추출 상태
+- last accepted extractor path
+- missing information / decision blockers 요약
+- 분석중 경과 시간
+
+이 정보는 사용자가 “지금 멈춰서 확인할 가치가 있는지”를 빠르게 판단하도록 돕습니다.
+
+## 10. 현재 사용자 흐름의 현실적인 상태
 
 2026-03-11 기준으로 이 UI는 빌드 가능하고 host 계약도 연결되어 있습니다.
 

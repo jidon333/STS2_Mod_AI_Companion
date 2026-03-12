@@ -61,11 +61,18 @@ dotnet run --project src\Sts2ModKit.Tool -- inspect-godot-log --lines 200
 dotnet run --project src\Sts2ModKit.Tool -- inspect-live-export --tail 20
 ```
 
+collector mode를 켰다면 플레이 후 아래도 바로 봅니다.
+
+```powershell
+dotnet run --project src\Sts2ModKit.Tool -- collector-postprocess --lines 200 --tail 40
+```
+
 ## 4. 빌드가 되는데 게임에서 안 되면 어디를 보나
 
 1. `%AppData%\SlayTheSpire2\logs\godot.log`
 2. 게임 `mods` 폴더의 `sts2-mod-ai-companion.runtime.log`
 3. `inspect-live-export`
+4. collector mode였다면 `collector-postprocess`
 
 ## 5. 작업 전 꼭 기억할 것
 
@@ -74,3 +81,6 @@ dotnet run --project src\Sts2ModKit.Tool -- inspect-live-export --tail 20
 - exporter는 read-only 경계를 지킵니다.
 - broad global 훅은 피합니다.
 - high-value 화면 smoke를 다시 돌리기 전에는 `deploy-native-package`를 다시 수행해야 할 수 있습니다.
+- `Analyze Now`와 `Retry Last`는 다릅니다.
+  - `Analyze Now`: 현재 상태 기준 새 분석
+  - `Retry Last`: 마지막 prompt pack 재전송

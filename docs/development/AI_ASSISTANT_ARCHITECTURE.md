@@ -135,9 +135,9 @@ Codex 응답 필드:
 
 Host는 이를 아래 artifact로 남깁니다.
 
-- `advice.latest.json`
-- `advice.latest.md`
-- `advice.ndjson`
+- `advice/advice.latest.json`
+- `advice/advice.latest.md`
+- `advice/advice.ndjson`
 - `codex-trace.ndjson`
 
 ## 8. session 정책
