@@ -10,14 +10,17 @@
 
 ## 1. 현재 저장소의 중심
 
-현재 저장소의 중심 기능은 아래 네 가지입니다.
+현재 저장소는 이제 단일 조언 앱이 아니라 `shared foundation + advisor mode + harness mode` 구조를 향해 재정렬되는 중입니다.
+
+현재 중심 기능은 아래 다섯 가지입니다.
 
 1. 게임 내부 `read-only runtime exporter`
 2. strict parser 기반 정적 지식 추출 파이프라인
-3. 외부 `Host + Codex` 조언 경로
-4. `WPF` 사용자 인터페이스
+3. 공통 run/session/artifact 및 collector foundation
+4. 외부 `Host + Codex` 조언 경로
+5. `WPF` 사용자 인터페이스
 
-즉 자동 플레이 모드가 아니라, 사람이 직접 플레이하는 동안 게임 밖에서 상태를 읽고 조언을 주는 외부 어시스턴트가 현재 목표입니다.
+최종 제품 비전은 여전히 사람이 직접 플레이하는 동안 게임 밖에서 상태를 읽고 조언을 주는 외부 어시스턴트입니다. 다만 개발/QA를 위해 같은 foundation 위에 test-only harness mode를 병렬로 추가하는 방향으로 구조를 바꾸고 있습니다.
 
 ## 2. 현재 검증된 것
 
@@ -81,6 +84,25 @@
 - `Retry Last`가 마지막 prompt pack 재전송으로 분리
 - WPF의 모델 / 추론 선택, 분석중 상태, 경과 시간 표시
 
+### 2.5 dual-mode 구조 골격
+
+이미 추가된 것:
+
+- `Sts2AiCompanion.Foundation`
+  - 공통 계약, 정규화 상태 모델, run/session/artifact foundation
+- `Sts2AiCompanion.Advisor`
+  - advisor 전용 orchestration façade
+- `Sts2AiCompanion.Harness`
+  - harness runner / policy / evaluator / replay 스켈레톤
+- `Sts2ModAiCompanion.HarnessBridge`
+  - test-only action ingress bridge 스켈레톤
+
+아직 남은 것:
+
+- 실제 action executor 구현
+- unattended scenario completion
+- harness acceptance loop 실증
+
 ## 3. 이번 단계에서 반영된 것
 
 ### 3.1 runtime 안정화
@@ -136,13 +158,24 @@ collector mode 코드는 들어갔고, `WriteJsonAtomic` 호환성 수정, share
 
 마지막 실제 플레이에서는 `Application Hang`이 기록됐습니다. disposed object polling, stale exporter worker failure, localization formatting failure가 같이 보였기 때문에, 다음 collector run에서 hang 직전 징후를 다시 수집해야 합니다.
 
+### 4.4 harness mode
+
+현재 harness는 구조와 계약만 들어간 상태입니다.
+
+- 아직 안 된 것
+  - bridge action execution
+  - scenario runner의 closed-loop 실제 진행
+  - recovery / evaluator / replay 실증
+- 즉 지금 단계는 `자동화가 가능한 구조`까지 온 것이고, `사람 없이 STS2 테스트를 완주`하는 단계는 다음 구현 대상입니다.
+
 ## 5. 현재 우선순위
 
 1. 최신 빌드 재배포 후 collector mode 수집 런 1회
 2. reward / event / shop / rest 중 최소 3개 화면 확보
 3. auto advice / session reuse / currentChoices / screen persistence 검증
 4. collector summary 기준 일괄 수정
+5. foundation에서 harness action / scenario / recovery 경로를 실제로 닫는 첫 PoC 구현
 
 ## 6. 한 줄 요약
 
-지금 저장소는 `정적 지식 + exporter + manual advice + session capture + collector diagnostics + WPF UI`까지는 닫혔고, 다음 병목은 `실제 gameplay high-value 화면에서 automatic advice와 session reuse를 안정적으로 끝까지 연결하는 것`입니다.
+지금 저장소는 `shared foundation + advisor surface`와 harness 골격까지 세워졌고, 다음 병목은 `실제 gameplay high-value 화면에서 automatic advice와 session reuse를 안정적으로 끝까지 연결하는 것`과 `test-only harness를 최소 시나리오 1개까지 실제 실행 가능하게 만드는 것`입니다.

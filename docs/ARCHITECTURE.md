@@ -1,6 +1,20 @@
 # 아키텍처
 
-Phase 1의 구조는 `게임 내부 exporter + 외부 정적 지식 파이프라인 + Host/Codex backend + WPF UI`입니다.
+Phase 1의 구조는 이제 `shared foundation + advisor mode + harness mode` 관점으로 읽습니다.
+
+- `shared foundation`
+  - 게임 내부 exporter
+  - 정적 지식 파이프라인
+  - 정규화 상태 / 세션 / 아티팩트 모델
+  - collector / diagnostics
+  - Codex 계약
+- `advisor mode`
+  - read-only 외부 조언 경로
+  - WPF 사용자 UI
+- `harness mode`
+  - test-only action / scenario / recovery / evaluation 경로
+
+최종 제품은 여전히 read-only advisor이고, harness는 이 제품을 빠르고 안정적으로 검증하기 위한 test-only 운영 모드입니다.
 
 ## 1. 게임 내부: native STS2 모드
 
@@ -52,7 +66,66 @@ Phase 1의 구조는 `게임 내부 exporter + 외부 정적 지식 파이프라
 
 산출물은 `artifacts/knowledge` 아래에 저장됩니다.
 
-## 4. 외부 Host
+## 4. 공통 foundation / advisor / harness 경계
+
+### 4.1 Shared Foundation
+
+공통 foundation은 human UI 없이도 machine-readable state를 제공해야 합니다.
+
+포함 대상:
+
+- runtime observation/export
+- semantic state normalization
+- static knowledge / knowledge slice
+- session lifecycle
+- collector / diagnostics
+- Codex prompt / response contracts
+- artifact model
+
+현재 구현상 주요 위치:
+
+- `src/Sts2ModKit.Core`
+- `src/Sts2ModAiCompanion.Mod`
+- `src/Sts2AiCompanion.Foundation`
+
+### 4.2 Advisor Mode
+
+advisor mode는 production read-only surface입니다.
+
+포함 대상:
+
+- advice orchestration
+- user-facing recommendation formatting
+- WPF presentation
+- `Analyze Now`, `Retry Last`, auto advice UX
+
+현재 구현상 주요 위치:
+
+- `src/Sts2AiCompanion.Advisor`
+- `src/Sts2AiCompanion.Wpf`
+- legacy compatibility를 위한 `src/Sts2AiCompanion.Host`
+
+### 4.3 Harness Mode
+
+harness mode는 test-only action-enabled 경로입니다.
+
+포함 대상:
+
+- scenario runner
+- action executor
+- recovery manager
+- acceptance evaluator
+- replay controller
+- test-only action ingress bridge
+
+현재 구현상 주요 위치:
+
+- `src/Sts2AiCompanion.Harness`
+- `src/Sts2ModAiCompanion.HarnessBridge`
+- `scenarios/`
+- `tests/replay-fixtures/`
+
+## 5. 외부 Host
 
 `Sts2AiCompanion.Host`는 live export와 knowledge catalog를 묶어 Codex 요청 단위로 정리하는 레이어입니다.
 
@@ -66,7 +139,7 @@ Phase 1의 구조는 `게임 내부 exporter + 외부 정적 지식 파이프라
 - JSON event stream에서 `thread.started`를 읽어 `sessionId` 캡처
 - advice artifact 저장
 
-## 5. 외부 WPF 앱
+## 6. 외부 WPF 앱
 
 `Sts2AiCompanion.Wpf`는 최종 사용자 표면입니다.
 
@@ -79,10 +152,11 @@ Phase 1의 구조는 `게임 내부 exporter + 외부 정적 지식 파이프라
 - 관련 knowledge slice
 - 최신 AI 조언
 
-## 6. 안전 경계
+## 7. 안전 경계
 
 - snapshot / restore 경로 유지
 - direct exe 대신 Steam URI 사용
 - read-only exporter 유지
 - 게임이 죽지 않아도 외부 앱은 죽을 수 있어야 함
 - 외부 앱이 죽어도 게임은 계속 진행 가능해야 함
+- harness action layer는 production build와 계약을 공유하지 않도록 분리

@@ -17,6 +17,15 @@
 
 ## 2. 실제 플레이 기준으로 보는 폴더 역할
 
+이 저장소는 이제 아래 세 층으로 읽는 것이 맞습니다.
+
+- `shared foundation`
+  - 공통 상태, 지식, 세션, 아티팩트, diagnostics
+- `advisor mode`
+  - 사용자용 read-only 조언 표면
+- `harness mode`
+  - test-only 자동 시나리오 / action / recovery / evaluation
+
 ### 루트
 
 - `README.md`
@@ -87,11 +96,53 @@
 외부 조언 어시스턴트의 backend입니다.
 
 - 플레이 중 역할
-  - live export 폴더 감시
-  - knowledge slice 선택
-  - prompt pack 생성
-  - Codex CLI 호출
-  - advice artifact 저장
+- live export 폴더 감시
+- knowledge slice 선택
+- prompt pack 생성
+- Codex CLI 호출
+- advice artifact 저장
+
+중요:
+
+- 현재는 legacy host와 shared/advisor 책임이 일부 섞여 있습니다.
+- 새 구조에서는 이 프로젝트를 점진적으로 축소하고, 공통 책임은 `Foundation`, advisor orchestration은 `Advisor`로 이동합니다.
+
+### `src/Sts2AiCompanion.Foundation`
+
+공통 foundation 계층입니다.
+
+- 역할
+  - 정규화 상태 계약
+  - harness action 계약
+  - run/session/artifact 공통 모델
+  - advisor/harness가 같은 vocabulary를 쓰도록 연결
+
+### `src/Sts2AiCompanion.Advisor`
+
+advisor mode orchestration 계층입니다.
+
+- 역할
+  - read-only 조언 흐름 중개
+  - WPF가 읽을 snapshot 제공
+  - `Analyze Now`, `Retry Last`, auto advice 같은 advisor 전용 동작 묶기
+
+### `src/Sts2AiCompanion.Harness`
+
+test harness 계층입니다.
+
+- 역할
+  - scenario runner
+  - action executor abstraction
+  - deterministic policy
+  - recovery / evaluation / replay
+
+### `src/Sts2ModAiCompanion.HarnessBridge`
+
+test-only in-mod action ingress 자리입니다.
+
+- 역할
+  - production read-only mod와 분리된 테스트용 action bridge
+  - harness mode에서만 쓰는 입력 경로
 
 ### `src/Sts2AiCompanion.Wpf`
 
@@ -154,6 +205,8 @@
 - advice history
 - run별 live mirror
 
+advisor mode 기준 산출물이며, harness mode에서는 별도로 `artifacts/harness` 아래에 run/evaluation/replay 산출물이 쌓이게 됩니다.
+
 ### `artifacts/snapshots`
 
 smoke test 전 백업본입니다.
@@ -164,6 +217,18 @@ smoke test 전 백업본입니다.
 ### `artifacts/native-package-layout`
 
 배포 전에 `.pck + .dll + runtime config` 조합이 어떻게 staging 되었는지 확인하는 폴더입니다.
+
+### `scenarios`
+
+harness mode 시나리오 정의 JSON 폴더입니다.
+
+예:
+
+- `smoke.ironclad.first-reward.json`
+
+### `tests/replay-fixtures`
+
+replay 기반 회귀 검증용 fixture 폴더입니다.
 
 ## 4. 플레이 중 문제가 나면 어디를 볼까
 

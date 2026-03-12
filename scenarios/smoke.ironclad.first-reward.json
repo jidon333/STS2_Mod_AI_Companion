@@ -1,0 +1,41 @@
+{
+  "id": "smoke.ironclad.first-reward",
+  "description": "아이언클래드로 새 런을 시작하고 첫 전투 보상까지 자동으로 진행하는 최소 하네스 시나리오",
+  "steps": [
+    {
+      "name": "main-menu",
+      "targetScene": "main-menu",
+      "actionKind": "click_button",
+      "targetLabel": "새 런 시작",
+      "expectedResult": "character-select"
+    },
+    {
+      "name": "choose-ironclad",
+      "targetScene": "character-select",
+      "actionKind": "click_button",
+      "targetLabel": "아이언클래드",
+      "expectedResult": "map"
+    },
+    {
+      "name": "first-map-node",
+      "targetScene": "map",
+      "actionKind": "choose_map_node",
+      "targetLabel": "첫 전투 노드",
+      "expectedResult": "combat"
+    },
+    {
+      "name": "combat-loop",
+      "targetScene": "combat",
+      "actionKind": "end_turn",
+      "targetLabel": null,
+      "expectedResult": "reward"
+    },
+    {
+      "name": "pick-first-reward",
+      "targetScene": "reward",
+      "actionKind": "choose_reward",
+      "targetLabel": "첫 번째 카드",
+      "expectedResult": "map"
+    }
+  ]
+}

@@ -1,8 +1,17 @@
 # AI 어시스턴트 아키텍처
 
-현재 Phase 1 구조는 아래 흐름으로 고정되어 있습니다.
+현재 Phase 1 구조는 dual-mode로 재해석합니다.
 
-`게임 내부 exporter -> live export -> CompanionHost -> KnowledgeCatalogService -> AdvicePromptBuilder -> CodexCliClient -> advice artifacts -> WPF`
+- `shared foundation`
+  - `게임 내부 exporter -> live export -> normalized state / knowledge / session / artifact foundation`
+- `advisor mode`
+  - `AdvisorCoordinator -> Codex reasoning -> advice artifacts -> WPF`
+- `harness mode`
+  - `ScenarioRunner -> ActionExecutor -> Recovery/Evaluation/Replay`
+
+즉 현재 advisor 경로는 아래 흐름으로 읽는 것이 맞습니다.
+
+`게임 내부 exporter -> live export -> Foundation state/knowledge/session -> AdvisorCoordinator -> CodexCliClient -> advice artifacts -> WPF`
 
 이 문서는 Host / Codex / WPF 경로를 설명합니다.
 
@@ -10,16 +19,41 @@
 
 1. 게임 내부 native mod가 상태를 수집한다.
 2. live export 파일을 기록한다.
-3. `CompanionHost`가 live export를 polling한다.
+3. foundation이 live export를 정규화 상태로 변환한다.
 4. `KnowledgeCatalogService`가 assistant catalog를 로드하고 relevant slice를 만든다.
-5. `AdvicePromptBuilder`가 `AdviceInputPack`과 prompt text를 만든다.
-6. `CodexCliClient`가 Codex CLI를 호출한다.
-7. 결과를 advice artifact로 남긴다.
-8. WPF가 최신 상태와 advice를 표시한다.
+5. `AdvisorCoordinator`가 read-only advisor orchestration을 수행한다.
+6. `AdvicePromptBuilder`가 `AdviceInputPack`과 prompt text를 만든다.
+7. `CodexCliClient`가 Codex CLI를 호출한다.
+8. 결과를 advice artifact로 남긴다.
+9. WPF가 최신 상태와 advice를 표시한다.
 
-## 2. Host 레이어 구성
+## 2. Foundation / Advisor 레이어 구성
 
-`src/Sts2AiCompanion.Host`의 주요 구성:
+현재 구조는 migration 중입니다.
+
+### 2.1 Shared Foundation
+
+주요 구성:
+
+- `Sts2AiCompanion.Foundation`
+  - `CompanionState`
+  - `HarnessAction`
+  - `RunSessionCoordinator`
+  - `ArtifactStore`
+  - `CompanionStateMapper`
+- `Sts2ModKit.Core`
+  - live export / knowledge / diagnostics / configuration
+
+### 2.2 Advisor Mode
+
+현재 advisor orchestration의 주요 구성:
+
+- `AdvisorCoordinator`
+  - live snapshot polling façade
+  - 수동 / 자동 / 재시도 요청 중개
+  - WPF가 읽기 쉬운 advisor snapshot 제공
+
+legacy 경로의 주요 구성:
 
 - `CompanionHost`
   - polling loop
@@ -37,6 +71,8 @@
   - Codex CLI 실행
   - JSON event stream 파싱
   - thread/session id 추출
+
+장기적으로는 `Sts2AiCompanion.Host`의 shared 성격 코드를 Foundation으로 옮기고, advisor orchestration만 별도 계층에 남기는 방향입니다.
 
 ## 3. 핵심 데이터 모델
 
@@ -206,10 +242,26 @@ WPF는 observer / advisor 표면입니다. 게임을 제어하지 않습니다.
 - `산출물 열기`
 - 모델 / 추론 강도 선택
 
-## 11. 현재 남은 과제
+## 11. Harness와의 관계
+
+advisor mode와 harness mode는 같은 foundation을 공유합니다.
+
+- 공통으로 쓰는 것
+  - `CompanionState`
+  - knowledge catalog / knowledge slice
+  - run/session/artifact vocabulary
+  - collector diagnostics
+- 분리되는 것
+  - advisor: read-only recommendation UX
+  - harness: test-only action execution, recovery, evaluation, replay
+
+즉 현재 WPF와 advisor 흐름은 최종 제품 표면이고, harness는 이를 빠르게 검증하기 위한 별도 mode입니다.
+
+## 12. 현재 남은 과제
 
 1. reward / event / shop / rest의 실제 선택지 텍스트 추출
 2. semantic screen 유지
 3. gameplay automatic advice 실증
 4. gameplay session reuse 실증
 5. AppHang 원인 축소
+6. harness bridge와 scenario runner를 실제 action loop로 닫기

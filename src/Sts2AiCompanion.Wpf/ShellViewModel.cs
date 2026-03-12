@@ -7,7 +7,8 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Threading;
-using Sts2AiCompanion.Host;
+using Sts2AiCompanion.Advisor;
+using Sts2AiCompanion.Foundation.Contracts;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
@@ -37,7 +38,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     };
 
     private Dispatcher? _dispatcher;
-    private CompanionHost? _host;
+    private AdvisorCoordinator? _host;
     private DispatcherTimer? _analysisTimer;
     private string _workspaceRoot = Directory.GetCurrentDirectory();
     private bool _analysisInProgress;
@@ -74,7 +75,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         _workspaceRoot = FindWorkspaceRoot(AppContext.BaseDirectory);
         var configPath = Path.Combine(_workspaceRoot, "config", "ai-companion.sample.json");
         var configuration = ConfigurationLoader.LoadFromFile(configPath).Configuration;
-        _host = new CompanionHost(configuration, _workspaceRoot);
+        _host = new AdvisorCoordinator(configuration, _workspaceRoot);
         _host.SnapshotChanged += HostOnSnapshotChanged;
 
         _analysisTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)

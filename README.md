@@ -9,6 +9,14 @@ Slay the Spire 2의 현재 게임 상태를 게임 밖으로 안전하게 추출
 - 외부 `Host + Codex` 조언 경로
 - `WPF` 기반 사용자 UI
 
+이제부터 이 저장소는 단일 advisor 앱만이 아니라, **shared foundation 위에 두 가지 운영 모드가 공존하는 시스템**으로 해석합니다.
+
+- `Production Mode`
+  - 사용자가 직접 플레이
+  - 외부 프로세스 advisor가 read-only로 상태를 읽고 조언
+- `Test Mode`
+  - 같은 foundation을 쓰되 test-only action layer로 자동 시나리오를 실행하는 harness
+
 이 프로젝트는 자동 플레이나 teammate AI를 만들지 않습니다. 사람은 직접 플레이하고, 어시스턴트는 현재 화면과 선택지를 해석해 조언만 제공합니다.
 
 ## 현재 되는 것
@@ -191,3 +199,5 @@ AI가 읽는 파일:
 - `docs/development/AI_ASSISTANT_ARCHITECTURE.md`
 - `docs/development/REPO_STRUCTURE.md`
 - `docs/development/SPIRE_CODEX_REFERENCE.md`
+- `docs/development/DUAL_MODE_ARCHITECTURE.md`
+- `docs/development/HARNESS_MODE.md`

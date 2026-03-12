@@ -104,3 +104,10 @@
 - gameplay session reuse: 최신 배포본 기준 실증 필요
 
 즉 현재 단계의 병목은 더 많은 정적 지식이 아니라, `실제 gameplay high-value 화면에서 auto advice와 session reuse를 끝까지 연결하는 것`입니다.
+
+## 16. dual-mode 구조 재정렬
+
+- 저장소를 `shared foundation + advisor mode + harness mode`로 재해석하는 상위 구조 문서를 추가했습니다.
+- `Sts2AiCompanion.Foundation`, `Sts2AiCompanion.Advisor`, `Sts2AiCompanion.Harness`, `Sts2ModAiCompanion.HarnessBridge` 프로젝트 골격을 추가했습니다.
+- WPF는 legacy host를 직접 보는 대신 advisor façade를 통해 붙도록 구조를 정리하기 시작했습니다.
+- harness는 아직 스켈레톤 단계이며, 다음 단계에서 test-only action executor와 첫 unattended scenario를 닫는 것이 목표입니다.
