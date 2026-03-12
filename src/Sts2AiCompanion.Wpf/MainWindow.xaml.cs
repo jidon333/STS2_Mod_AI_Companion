@@ -38,7 +38,7 @@ public partial class MainWindow : Window
 
     private async void RetryLast_OnClick(object sender, RoutedEventArgs e)
     {
-        await _viewModel.AnalyzeNowAsync();
+        await _viewModel.RetryLastAsync();
     }
 
     private void RefreshKnowledge_OnClick(object sender, RoutedEventArgs e)

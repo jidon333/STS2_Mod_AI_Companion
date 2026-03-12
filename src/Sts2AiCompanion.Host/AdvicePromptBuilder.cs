@@ -29,7 +29,8 @@ public sealed class AdvicePromptBuilder
             slice.Entries,
             slice.Reasons,
             "당신은 Slay the Spire 2 전략 조언 어시스턴트입니다. "
-            + "게임을 대신 플레이하지 말고, 입력에 없는 정보는 추정하지 말고, 현재 상태와 최근 이벤트, 관련 지식 조각만 근거로 판단하세요.");
+            + "게임을 대신 플레이하지 말고, 입력에 없는 정보는 추정하지 말고, "
+            + "현재 상태와 최근 이벤트, 관련 지식 조각만 근거로 판단하세요.");
     }
 
     public string FormatPrompt(AdviceInputPack inputPack)
@@ -90,7 +91,7 @@ public sealed class AdvicePromptBuilder
 
         builder.AppendLine();
         builder.AppendLine("response_instructions:");
-        builder.AppendLine("- headline: 현재 상황의 핵심을 한 줄로 요약");
+        builder.AppendLine("- headline: 현재 상황의 핵심 판단을 한 줄로 요약");
         builder.AppendLine("- summary: 2~4문장으로 현재 판단과 다음 확인 사항 설명");
         builder.AppendLine("- recommendedAction: 지금 가장 합리적인 다음 행동");
         builder.AppendLine("- recommendedChoiceLabel: 현재 선택지 중 추천이 있으면 정확한 이름, 없으면 null");

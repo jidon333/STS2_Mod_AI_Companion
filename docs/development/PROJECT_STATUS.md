@@ -2,11 +2,11 @@
 
 기준 시점:
 
-- 날짜: `2026-03-11`
+- 날짜: `2026-03-12`
 - 게임 버전: `STS2 v0.98.3`
-- 주요 툴체인: `Godot 4.5.1`, `.NET 7`, `ilspycmd 8.2`
+- 주요 도구: `Godot 4.5.1`, `.NET 7`, `ilspycmd 8.2`
 
-이 문서는 “지금 이 저장소가 실제로 어디까지 구현 / 검증됐는가”를 빠르게 보는 상태 문서입니다.
+이 문서는 저장소가 실제로 어디까지 구현 / 검증됐는지 빠르게 보는 상태 문서입니다.
 
 ## 1. 현재 저장소의 중심
 
@@ -17,7 +17,7 @@
 3. 외부 `Host + Codex` 조언 경로
 4. `WPF` 사용자 인터페이스
 
-즉 자동 플레이 모드가 아니라, 사람이 플레이하는 동안 게임 밖에서 상태를 읽고 조언을 주는 외부 어시스턴트가 현재 목표입니다.
+즉 자동 플레이 모드가 아니라, 사람이 직접 플레이하는 동안 게임 밖에서 상태를 읽고 조언을 주는 외부 어시스턴트가 현재 목표입니다.
 
 ## 2. 현재 검증된 것
 
@@ -29,24 +29,30 @@
 - `dotnet run --project src\Sts2ModKit.SelfTest --no-build`
 - `dotnet run --project src\Sts2ModKit.Tool -- extract-static-knowledge`
 - `dotnet run --project src\Sts2ModKit.Tool -- inspect-static-knowledge`
+- `dotnet run --project src\Sts2ModKit.Tool -- collector-postprocess --lines 10 --tail 5`
 
 ### 2.2 runtime exporter
 
-현재 실제로 확인된 범위:
+이미 확인된 범위:
 
 - 모드 로드
 - Harmony startup failure 제거
-- main menu까지 live export 생성
+- main menu 기준 live export 생성
   - `events.ndjson`
   - `state.latest.json`
   - `state.latest.txt`
   - `session.json`
 - reward / event / rest / shop hook observed
-- scene polling 기반 상태 갱신
+- collector mode 산출물 구조 추가
+  - `raw-observations.ndjson`
+  - `screen-transitions.ndjson`
+  - `choice-candidates.ndjson`
+  - `choice-decisions.ndjson`
+  - `semantic-snapshots`
 
 ### 2.3 정적 지식 파이프라인
 
-현재 canonical counts:
+현재 strict canonical 기준:
 
 - cards: `595`
 - relics: `296`
@@ -56,104 +62,87 @@
 - rewards: `11`
 - keywords: `264`
 
-현재 localization coverage:
+정적 지식은 이미 AI가 사용할 기본 사전 수준입니다. 현재 병목은 지식량이 아니라 gameplay 상태 추출과 자동 조언 안정성입니다.
 
-- cards: `582` / descriptions: `569` / selection prompts: `22`
-- relics: `285` / descriptions: `285`
-- potions: `75` / descriptions: `70`
-- events: `153` / descriptions: `60` / options: `203`
-- shops: `4` / descriptions: `4`
-- rewards: `3` / descriptions: `2`
-- keywords: `245` / descriptions: `245`
+### 2.4 Host / WPF / Codex
 
-### 2.4 Host / WPF
-
-코드와 self-test 기준으로 존재 / 동작이 확인된 것:
+이미 확인된 것:
 
 - `CompanionHost` polling loop
 - `KnowledgeCatalogService` knowledge slice 선택
 - `AdvicePromptBuilder` prompt pack / markdown 생성
-- `CodexCliClient` Codex CLI JSON 호출
-- WPF UI 상태 / choices / recent events / knowledge / advice 표시
+- `CodexCliClient` Codex CLI JSON 연동
+- WPF 상태 / 선택지 / recent events / knowledge / advice 표시
 - manual advice 경로
-  - `Analyze Now`
-  - `dotnet run --project src\Sts2ModKit.Tool -- analyze-live-once`
+  - WPF `Analyze Now`
+  - tool `analyze-live-once`
+- `sessionId` 캡처와 `codex-session.json` 저장
+- 같은 run 기준 host 재기동 후 세션 복구 경로 구현
+- `Retry Last`가 마지막 prompt pack 재전송으로 분리
+- WPF의 모델 / 추론 선택, 분석중 상태, 경과 시간 표시
 
-## 3. 이번 단계에서 새로 반영된 것
+## 3. 이번 단계에서 반영된 것
 
-### 3.1 gameplay extractor 보강
+### 3.1 runtime 안정화
 
-이번 턴에서 아래를 수정했습니다.
+- `LiveExportAtomicFileWriter.WriteJsonAtomic(...)` 호환 오버로드 추가
+- append-only 파일 기록을 `FileShare.ReadWrite|Delete` 기반 shared writer로 변경
+- exporter startup에 writer compatibility / core dll identity 로그 추가
+- deploy 단계에 SHA256 기반 stale-DLL 진단 추가
+- exporter startup identity에 mod/core DLL 정보와 writer compatibility를 추가
+- 배포 시 stale DLL 경고와 SHA256 검증 추가
 
-- overlay 화면이 `RoomType`보다 우선되도록 screen 판정 순서 조정
-- `currentChoices` 후보 수집 범위 확대
-  - `Choices`
-  - `RewardButtons`
-  - `RewardAlternatives`
-  - `Hand`
-  - `HandCards`
-  - UI child node
-  - `Option`, `Reward`, `Entry`, `Card`, `Model`
-- `LocString`, `MegaLabel`, `MegaRichTextLabel`, `RichTextLabel`, `Text`, `BbcodeText`에서 표시 문자열 추출
+### 3.2 자동 조언 스케줄링
 
-### 3.2 Host 수동 조언 경로 보강
+- high-priority automatic advice trigger를 coalesce
+- 런당 in-flight Codex 요청 1개 유지
+- `runtime-poll`은 automatic advice trigger 대상에서 제외
+- `Analyze Now`와 `Retry Last` 의미 분리
+  - `Analyze Now`: 현재 snapshot 기준 새 advice 생성
+  - `Retry Last`: 마지막 prompt pack 재전송
 
-- manual advice 생성 직후 snapshot을 다시 publish하도록 수정
-- `analyze-live-once` 실행 시 `host-status`와 latest snapshot에 `lastAdviceAt` / `Advice generated for manual.`가 즉시 반영되도록 수정
-- Codex JSON event stream에서 `thread.started`를 읽어 `sessionId`를 캡처하도록 수정
-- manual advice 실행 시 `current-run.json`과 `codex-session.json`에 `sessionId`가 반영되는 것 확인
+### 3.3 screen / choice / state merge
 
-### 3.3 self-test 회귀 추가
+- reward/event/rest/shop screen episode를 더 오래 유지
+- partial `runtime-poll`이 즉시 `combat`으로 덮지 못하도록 merge 강화
+- `currentChoices`를 high-value screen에서 더 오래 유지
+- non-authoritative player/deck overwrite 방지
+- reward/shop placeholder label 필터 강화
+- collector summary에 state regression, screen overwrite, knowledge usage, runtime fatal errors, apphang suspicion 추가
 
-새 self-test:
+### 3.4 UI / logging
 
-- nested label text extraction
-- overlay screen precedence
+- WPF 한글 UI 복구
+- 상태 패널 전부 복사 가능한 읽기 전용 텍스트 박스 유지
+- `분석중 / 재시도중 / 실패 / 취소 / 제한` 상태 구분
+- advice artifact / collector status에 `missingInformation`, `decisionBlockers`, `knowledge refs`, `knowledge usage count` 노출
 
-## 4. 현재 확인된 Codex 상태
+## 4. 현재 미검증 / 미완료
 
-현재 사실은 아래처럼 나뉩니다.
+### 4.1 gameplay end-to-end
 
-### 성공한 것
+아직 실제 gameplay 기준으로 끝까지 닫히지 않은 것:
 
-- Codex CLI 호출 자체
-- manual advice 응답 생성
-- `advice.latest.json`
-- `advice.latest.md`
-- `advice.ndjson`
+- reward / event / shop / rest에서 실제 선택지 텍스트 추출
+- reward / event / shop / rest에서 `currentScreen` 유지
+- automatic advice가 실제 gameplay trigger에서 `ok`로 생성되는지
+- gameplay trigger에서도 같은 `sessionId`가 재사용되는지
 
-### 아직 닫히지 않은 것
+### 4.2 최신 collector 산출물 실증
 
-- UTF-8 수정 이후 fresh automatic trigger 재검증
-- gameplay trigger에서도 run-scoped session이 안정적으로 이어 붙는지 확인
+collector mode 코드는 들어갔고, `WriteJsonAtomic` 호환성 수정, shared append writer, startup writer-compat logging, SHA256 deploy 진단도 모두 코드에 반영됐습니다. 다만 마지막 수집 런 로그는 구배포본 영향으로 ABI mismatch 흔적이 남아 있으므로, 최신 배포본 기준 실제 gameplay 재검증이 필요합니다.
 
-현재 기준으로는 manual advice 경로에서 `sessionId` 캡처와 `codex-session.json` 생성이 성공했습니다. 따라서 지금 단계의 정확한 표현은 “Codex 응답 생성과 manual path session 추적은 성공, gameplay trigger까지 포함한 run-scoped session 재사용은 미완료”입니다.
+### 4.3 AppHang
 
-## 5. 현재 남은 리스크
+마지막 실제 플레이에서는 `Application Hang`이 기록됐습니다. disposed object polling, stale exporter worker failure, localization formatting failure가 같이 보였기 때문에, 다음 collector run에서 hang 직전 징후를 다시 수집해야 합니다.
 
-### 5.1 gameplay smoke 리스크
+## 5. 현재 우선순위
 
-main menu 이후 gameplay high-value 화면은 아직 실제 한 판으로 끝까지 재검증하지 않았습니다.
+1. 최신 빌드 재배포 후 collector mode 수집 런 1회
+2. reward / event / shop / rest 중 최소 3개 화면 확보
+3. auto advice / session reuse / currentChoices / screen persistence 검증
+4. collector summary 기준 일괄 수정
 
-### 5.2 automatic advice 리스크
+## 6. 한 줄 요약
 
-이전 degraded 원인은 UTF-8 stdin 문제였고 코드는 수정됐습니다. 하지만 수정 이후의 새 `choice-list-presented` / `reward-screen-opened` trigger를 아직 다시 발생시키지 못해, automatic advice 성공은 재실증이 필요합니다.
-
-### 5.3 session tracking 리스크
-
-manual advice 경로는 `sessionId`를 캡처합니다. 다만 reward / event / shop / rest 같은 실제 gameplay trigger에서도 같은 세션을 안정적으로 이어 붙이는지는 아직 다시 확인하지 못했습니다.
-
-### 5.4 screen / choice 품질 리스크
-
-choice extraction은 좋아졌지만, reward / shop / rest 화면에서 라벨이 항상 완전히 사람 읽는 텍스트로 나오는지는 실제 gameplay smoke로 다시 확인해야 합니다.
-
-## 6. 다음 우선순위
-
-1. 실제 gameplay 한 판으로 reward / event / shop / rest / combat 중 최소 2개 이상 검증
-2. automatic advice 재검증
-3. Codex session id capture / resume 경로 보강
-4. observed-merge와 assistant lookup을 runtime choice와 교차 검증
-
-## 7. 한 줄 요약
-
-현재 저장소는 `strict 정적 지식 + exporter + manual advice + session capture + WPF 뼈대`까지는 실사용에 가깝게 올라왔고, 다음 병목은 `실제 gameplay high-value 화면에서 auto advice와 gameplay session reuse를 닫는 것`입니다.
+지금 저장소는 `정적 지식 + exporter + manual advice + session capture + collector diagnostics + WPF UI`까지는 닫혔고, 다음 병목은 `실제 gameplay high-value 화면에서 automatic advice와 session reuse를 안정적으로 끝까지 연결하는 것`입니다.

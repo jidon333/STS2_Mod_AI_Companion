@@ -85,6 +85,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         "GridCardPreviewContainer",
         "EventCardPreviewContainer",
         "MessyCardPreviewContainer",
+        "MerchantCardHolder",
+        "MerchantRelicHolder",
+        "MerchantPotionHolder",
         "HappyCultist",
         "Heart",
         "SlimeSad",
@@ -485,8 +488,34 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static LiveExportPlayerSummary ExtractPlayerSummary(IEnumerable<object> roots)
     {
-        var playerRoots = FindRoots(roots, "Player", "Character", "Hero", "Creature");
+        var playerRoots = roots
+            .SelectMany(root => new[]
+            {
+                root,
+                TryGetMemberValue(root, "Player"),
+                TryGetMemberValue(root, "Character"),
+                TryGetMemberValue(root, "Hero"),
+                TryGetMemberValue(root, "Creature"),
+            })
+            .Where(root => root is not null)
+            .Cast<object>()
+            .Where(IsAuthoritativePlayerRoot)
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        if (playerRoots.Length == 0)
+        {
+            playerRoots = FindRoots(roots, "Player", "Character", "Hero", "Creature")
+                .Where(IsAuthoritativePlayerRoot)
+                .DistinctBy(RuntimeHelpers.GetHashCode)
+                .ToArray();
+        }
+
         var name = TryReadString(playerRoots, "Name", "CharacterName", "DisplayName");
+        if (LooksLikeNonAuthoritativePlayerName(name))
+        {
+            name = null;
+        }
+
         var currentHp = TryReadInt(playerRoots, "CurrentHp", "CurrentHealth", "Hp", "Health");
         var maxHp = TryReadInt(playerRoots, "MaxHp", "MaxHealth", "HealthMax");
         var gold = TryReadInt(playerRoots, "Gold", "CurrentGold");
@@ -835,9 +864,8 @@ internal static class RuntimeSnapshotReflectionExtractor
             "RewardButtons",
             "Rewards",
             "RewardAlternatives",
-            "_cardRow",
-            "_characterCardContainer",
-            "_colorlessCardContainer");
+            "RewardOptions",
+            "ExtraOptions");
     }
 
     private static IEnumerable<object> CollectRestChoiceItems(IEnumerable<object> choiceRoots)
@@ -871,14 +899,16 @@ internal static class RuntimeSnapshotReflectionExtractor
         return CollectChoiceItems(
             choiceRoots,
             "Merchant",
-            "Inventory",
             "MerchantSlots",
             "CharacterCardEntries",
             "ColorlessCardEntries",
             "RelicEntries",
             "PotionEntries",
             "CardRemovalEntry",
-            "_slotsContainer");
+            "CardRemovalServiceEntry",
+            "RemovalEntry",
+            "ServiceEntries",
+            "ShopEntries");
     }
 
     private static IEnumerable<object> CollectChoiceItems(
@@ -896,14 +926,25 @@ internal static class RuntimeSnapshotReflectionExtractor
                 continue;
             }
 
-            AddIfUseful(results, root);
+            if (LooksLikeStrictChoiceRoot(root))
+            {
+                AddChoiceCandidate(results, root, maxDepth: 2);
+            }
+
             foreach (var memberName in memberNames)
             {
                 var value = TryGetMemberValue(root, memberName);
-                AddChoiceCandidate(results, value, maxDepth: 3);
+                if (LooksLikeStrictChoiceRoot(value))
+                {
+                    AddChoiceCandidate(results, value, maxDepth: 3);
+                }
+
                 foreach (var item in ExpandEnumerable(value))
                 {
-                    AddChoiceCandidate(results, item, maxDepth: 2);
+                    if (LooksLikeStrictChoiceRoot(item))
+                    {
+                        AddChoiceCandidate(results, item, maxDepth: 2);
+                    }
                 }
             }
         }
@@ -1597,6 +1638,12 @@ internal static class RuntimeSnapshotReflectionExtractor
                 continue;
             }
 
+            if (LooksLikePreviewLayoutOrContainerType(item.GetType().FullName ?? item.GetType().Name)
+                && !HasMeaningfulChoiceData(item))
+            {
+                continue;
+            }
+
             foreach (var memberName in new[]
                      {
                          "Title",
@@ -1665,46 +1712,42 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static bool LooksLikeChoiceCandidate(object item)
     {
         var typeName = item.GetType().FullName ?? item.GetType().Name;
-        if (typeName.Contains("Container", StringComparison.OrdinalIgnoreCase)
-            || typeName.Contains("Reaction", StringComparison.OrdinalIgnoreCase)
-            || typeName.Contains("Cursor", StringComparison.OrdinalIgnoreCase))
+        if (LooksLikePreviewLayoutOrContainerType(typeName))
         {
-            return HasMeaningfulChoiceData(item);
+            return HasMeaningfulChoiceData(item) && LooksLikeStrictChoiceRoot(item);
         }
 
-        return typeName.Contains("Button", StringComparison.OrdinalIgnoreCase)
-               || typeName.Contains("Option", StringComparison.OrdinalIgnoreCase)
-               || typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
-               || typeName.Contains("Merchant", StringComparison.OrdinalIgnoreCase)
-               || typeName.Contains("Slot", StringComparison.OrdinalIgnoreCase)
-               || typeName.Contains("Choice", StringComparison.OrdinalIgnoreCase)
-               || typeName.Contains("Card", StringComparison.OrdinalIgnoreCase)
-               || typeName.Contains("Potion", StringComparison.OrdinalIgnoreCase)
-               || typeName.Contains("Relic", StringComparison.OrdinalIgnoreCase)
-               || TryGetMemberValue(item, "Option") is not null
-               || TryGetMemberValue(item, "Reward") is not null
-               || TryGetMemberValue(item, "Entry") is not null
-               || TryGetMemberValue(item, "Card") is not null;
+        if (LooksLikeStrictChoiceRoot(item))
+        {
+            return true;
+        }
+
+        var label = TryResolveChoiceLabel(item);
+        return !string.IsNullOrWhiteSpace(label)
+               && !IsPlaceholderChoiceLabel(label)
+               && (typeName.Contains("Choice", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("Button", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("Option", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string? TryResolveChoiceLabel(object item)
     {
-        return FirstNonEmpty(
+        var label = FirstNonEmpty(
             TryReadString(TryGetMemberValue(item, "Card"), "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
             TryReadString(TryGetMemberValue(item, "Model"), "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
             TryReadString(TryGetMemberValue(item, "CardNode"), "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
             TryReadString(TryGetMemberValue(item, "CardModel"), "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
+            TryReadString(TryGetMemberValue(item, "Entry"), "DisplayName", "Title", "Name"),
             TryReadString(TryGetMemberValue(item, "Option"), "Title", "Label", "Name", "Description"),
             TryReadString(TryGetMemberValue(item, "Reward"), "Description", "Title", "Label", "Name"),
-            TryReadString(TryGetMemberValue(item, "Entry"), "DisplayName", "Title", "Description", "Name"),
             TryReadString(TryGetMemberValue(item, "_label"), "Text", "Value"),
             TryReadString(TryGetMemberValue(item, "_titleLabel"), "Text", "Value"),
-            TryReadString(item, "Label", "Title", "OptionName", "Text", "DisplayName", "CardName", "Name"),
-            TryReadString(item, "Option", "Reward", "Entry", "Card", "Model"),
+            TryReadString(item, "DisplayName", "CardName", "OptionName", "Title", "Label", "Text", "Name"),
             TryReadString(TryGetMemberValue(item, "Title"), "Text", "Value"),
             TryReadString(TryGetMemberValue(item, "Label"), "Text", "Value"),
             TryResolveNestedChoiceText(item, maxDepth: 2),
             TryReadString(item, "Id", "CardId"));
+        return IsPlaceholderChoiceLabel(label) ? null : label;
     }
 
     private static string? TryResolveChoiceValue(object item)
@@ -1747,6 +1790,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             var (item, depth) = queue.Dequeue();
             if (!seen.Add(RuntimeHelpers.GetHashCode(item)))
+            {
+                continue;
+            }
+
+            if (depth > 0 && LooksLikePreviewLayoutOrContainerType(item.GetType().FullName ?? item.GetType().Name))
             {
                 continue;
             }
@@ -1802,9 +1850,12 @@ internal static class RuntimeSnapshotReflectionExtractor
                || TryGetMemberValue(item, "Entry") is not null
                || TryGetMemberValue(item, "Card") is not null
                || TryGetMemberValue(item, "Model") is not null
-               || TryGetMemberValue(item, "_options") is not null
-               || TryGetMemberValue(item, "_rewardButtons") is not null
-               || TryGetMemberValue(item, "Inventory") is not null;
+               || TryGetMemberValue(item, "CardNode") is not null
+               || TryGetMemberValue(item, "CardModel") is not null
+               || TryGetMemberValue(item, "_label") is not null
+               || TryGetMemberValue(item, "_titleLabel") is not null
+               || TryGetMemberValue(item, "_descriptionLabel") is not null
+               || TryGetMemberValue(item, "Price") is not null;
     }
 
     private static bool LooksLikePlaceholderChoice(LiveExportChoiceSummary summary, int score)
@@ -1831,6 +1882,13 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (summary.Label.StartsWith("@Control@", StringComparison.Ordinal)
             || summary.Label.StartsWith("@Node", StringComparison.Ordinal)
             || summary.Label.StartsWith("@Node2D@", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (summary.Label.StartsWith("MerchantCardHolder", StringComparison.Ordinal)
+            || summary.Label.StartsWith("MerchantRelicHolder", StringComparison.Ordinal)
+            || summary.Label.StartsWith("MerchantPotionHolder", StringComparison.Ordinal))
         {
             return true;
         }
@@ -1882,9 +1940,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (TryGetMemberValue(item, "Card") is not null
             || TryGetMemberValue(item, "Reward") is not null
             || TryGetMemberValue(item, "Entry") is not null
+            || TryGetMemberValue(item, "Option") is not null
+            || TryGetMemberValue(item, "Model") is not null
             || TryGetMemberValue(item, "_label") is not null)
         {
-            score += 3;
+            score += 5;
         }
 
         if (!string.IsNullOrWhiteSpace(label))
@@ -1906,16 +1966,18 @@ internal static class RuntimeSnapshotReflectionExtractor
             score += 1;
         }
 
-        if (typeName.Contains("Container", StringComparison.OrdinalIgnoreCase)
-            || typeName.Contains("Inventory", StringComparison.OrdinalIgnoreCase)
-            || typeName.Contains("Reaction", StringComparison.OrdinalIgnoreCase))
-        {
-            score -= 4;
-        }
-
-        if (!string.IsNullOrWhiteSpace(label) && PlaceholderChoiceLabels.Contains(label))
+        if (LooksLikePreviewLayoutOrContainerType(typeName))
         {
             score -= 8;
+        }
+
+        if (typeName.Contains("Screen", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Layout", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Holder", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("BackButton", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("PlayQueue", StringComparison.OrdinalIgnoreCase))
+        {
+            score -= 10;
         }
 
         if (!string.IsNullOrWhiteSpace(label)
@@ -1933,6 +1995,143 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static string? FirstNonEmpty(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    private static bool LooksLikeStrictChoiceRoot(object? item)
+    {
+        if (item is null or string)
+        {
+            return false;
+        }
+
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        if (LooksLikePreviewLayoutOrContainerType(typeName))
+        {
+            return HasMeaningfulChoiceData(item)
+                   && (TryGetMemberValue(item, "Card") is not null
+                       || TryGetMemberValue(item, "Reward") is not null
+                       || TryGetMemberValue(item, "Entry") is not null
+                       || TryGetMemberValue(item, "Option") is not null
+                       || TryGetMemberValue(item, "Model") is not null);
+        }
+
+        return typeName.Contains("RewardButton", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("CardCreationResult", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("MerchantSlot", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("MerchantCard", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("MerchantRelic", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("MerchantPotion", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Option", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Entry", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Choice", StringComparison.OrdinalIgnoreCase)
+               || TryGetMemberValue(item, "Card") is not null
+               || TryGetMemberValue(item, "Reward") is not null
+               || TryGetMemberValue(item, "Entry") is not null
+               || TryGetMemberValue(item, "Option") is not null
+               || TryGetMemberValue(item, "Model") is not null;
+    }
+
+    private static bool LooksLikePreviewLayoutOrContainerType(string? typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+        {
+            return false;
+        }
+
+        return typeName.Contains("Preview", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Container", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Layout", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Inventory", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Reaction", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Hitbox", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Holder", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Cursor", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Trail", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("PlayQueue", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPlaceholderChoiceLabel(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        if (PlaceholderChoiceLabels.Contains(label))
+        {
+            return true;
+        }
+
+        if (label.IndexOf(' ') < 0
+            && label.IndexOfAny("._-".ToCharArray()) < 0
+            && (label.EndsWith("Button", StringComparison.Ordinal)
+                || label.EndsWith("Container", StringComparison.Ordinal)
+                || label.EndsWith("Inventory", StringComparison.Ordinal)
+                || label.EndsWith("Holder", StringComparison.Ordinal)
+                || label.EndsWith("Layout", StringComparison.Ordinal)
+                || label.EndsWith("Screen", StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        if (label.StartsWith("@Control@", StringComparison.Ordinal)
+            || label.StartsWith("@Node", StringComparison.Ordinal)
+            || label.StartsWith("@Node2D@", StringComparison.Ordinal)
+            || label.StartsWith("MerchantCardHolder", StringComparison.Ordinal)
+            || label.StartsWith("MerchantRelicHolder", StringComparison.Ordinal)
+            || label.StartsWith("MerchantPotionHolder", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (label.EndsWith("선택하세요.", StringComparison.Ordinal)
+            || label.EndsWith("선택해 주세요.", StringComparison.Ordinal)
+            || label.Equals("PlayQueue", StringComparison.Ordinal)
+            || label.Equals("CardTrailIronclad", StringComparison.Ordinal)
+            || label.Equals("RewardsScreen", StringComparison.Ordinal)
+            || label.Equals("NCardRewardSelectionScreen", StringComparison.Ordinal)
+            || label.Equals("Hitbox", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsAuthoritativePlayerRoot(object root)
+    {
+        var typeName = root.GetType().FullName ?? root.GetType().Name;
+        if (LooksLikePreviewLayoutOrContainerType(typeName)
+            || typeName.Contains("Screen", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Merchant", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Event", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Rest", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return typeName.Contains("Player", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Character", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Hero", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("Creature", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeNonAuthoritativePlayerName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.Contains("Screen", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Layout", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Container", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Holder", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Rewards", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Merchant", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Event", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? TryConvertToDisplayString(object? value, int depth = 0)
@@ -2055,20 +2254,36 @@ internal static class RuntimeSnapshotReflectionExtractor
     {
         if (candidate is null or string)
         {
-            yield break;
+            return Array.Empty<object>();
         }
 
         if (candidate is not System.Collections.IEnumerable enumerable)
         {
-            yield break;
+            return Array.Empty<object>();
         }
 
-        foreach (var item in enumerable)
+        var results = new List<object>();
+        System.Collections.IEnumerator? enumerator = null;
+        try
         {
-            if (item is not null)
+            enumerator = enumerable.GetEnumerator();
+            while (enumerator.MoveNext())
             {
-                yield return item;
+                if (enumerator.Current is not null)
+                {
+                    results.Add(enumerator.Current);
+                }
             }
         }
+        catch
+        {
+            return Array.Empty<object>();
+        }
+        finally
+        {
+            (enumerator as IDisposable)?.Dispose();
+        }
+
+        return results;
     }
 }

@@ -1,5 +1,5 @@
 metadata
-generated_at: 2026-03-12T04:30:52.9967220+00:00
+generated_at: 2026-03-12T09:03:52.3838785+00:00
 release_version: v0.98.3
 release_commit: cb602cef
 release_date: 2026-03-09T19:21:00.0000000-07:00
@@ -16,13 +16,13 @@ atlas:relic_atlas: 336
 atlas:relic_outline_atlas: 336
 atlas:stats_screen_atlas: 16
 atlas:ui_atlas: 102
-eventsLoaded: 33262
-observedSources: 11
+eventsLoaded: 36783
+observedSources: 12
 snapshotLoaded: True
 source: extract-static-knowledge
 
 cards
-count: 611
+count: 617
 - @Control@1477 [control-1477] source=live-choice tags=choice
 - @Control@1654 [control-1654] source=live-choice tags=choice
 - CARD.ANGER [card-anger] source=live-event:card-added tags=card-added, card-removed
@@ -30,47 +30,47 @@ count: 611
 - CARD.BASH [card-bash] source=live-event:card-added tags=card-added, card-removed
 - CARD.BLOODLETTING [card-bloodletting] source=live-event:card-added tags=card-added, card-removed
 - CARD.BODY_SLAM [card-body-slam] source=live-event:card-added tags=card-added, card-removed
+- CARD.BURNING_PACT [card-burning-pact] source=live-event:card-added tags=card-added, card-removed
 - CARD.CINDER [card-cinder] source=live-event:card-added tags=card-added, card-removed
+- CARD.COLOSSUS [card-colossus] source=live-event:card-added tags=card-added, card-removed
 - CARD.DARK_SHACKLES [card-dark-shackles] source=live-event:card-added tags=card-added, card-removed, deck
 - CARD.DEFEND_IRONCLAD [card-defend-ironclad] source=live-event:card-added tags=card-added, card-removed, choice, deck
-- CARD.DEMON_FORM [card-demon-form] source=live-event:card-added tags=card-added, card-removed
-- CARD.FEED [card-feed] source=live-event:card-added tags=card-added, card-removed
-... 599 more
+... 605 more
 
 relics
-count: 301
+count: 307
 - Fake Merchants Rug [megacrit-sts2-core-models-relics-fakemerchantsrug] source=strict-domain-parse tags=strict-relic, strict-model
 - Lost Wisp [megacrit-sts2-core-models-relics-lostwisp] source=strict-domain-parse tags=strict-relic, strict-model
 - Potion Belt [megacrit-sts2-core-models-relics-potionbelt] source=strict-domain-parse tags=strict-relic, strict-model
+- RELIC.AMETHYST_AUBERGINE [relic-amethyst-aubergine] source=live-relics tags=relic, relic-gained
+- RELIC.BELLOWS [relic-bellows] source=live-relics tags=relic, relic-gained
 - RELIC.BURNING_BLOOD [relic-burning-blood] source=live-relics tags=choice, relic, relic-gained, relic-lost
 - RELIC.CURSED_PEARL [relic-cursed-pearl] source=live-relics tags=choice, relic, relic-gained
 - RELIC.HAPPY_FLOWER [relic-happy-flower] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
 - RELIC.LEAD_PAPERWEIGHT [relic-lead-paperweight] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
 - RELIC.LIZARD_TAIL [relic-lizard-tail] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
 - RELIC.MANGO [relic-mango] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
-- RELIC.NUTRITIOUS_SOUP [relic-nutritious-soup] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
-- RELIC.PENDULUM [relic-pendulum] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
-- RELIC.POLLINOUS_CORE [relic-pollinous-core] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
-... 289 more
+- RELIC.NEW_LEAF [relic-new-leaf] source=live-relics tags=relic, relic-gained
+... 295 more
 
 potions
-count: 69
-- POTION.ATTACK_POTION [potion-attack-potion] source=live-potions tags=potion
-- POTION.DEXTERITY_POTION [potion-dexterity-potion] source=live-event:potion-changed tags=potion
+count: 70
+- POTION.ATTACK_POTION [potion-attack-potion] source=live-event:potion-changed tags=potion
+- POTION.CLARITY [potion-clarity] source=live-potions tags=potion
+- POTION.DEXTERITY_POTION [potion-dexterity-potion] source=live-potions tags=potion
 - POTION.FAIRY_IN_A_BOTTLE [potion-fairy-in-a-bottle] source=live-event:potion-changed tags=potion
 - POTION.FIRE_POTION [potion-fire-potion] source=live-potions tags=potion
 - POTION.SKILL_POTION [potion-skill-potion] source=live-event:potion-changed tags=potion
-- POTION.WEAK_POTION [potion-weak-potion] source=live-event:potion-changed tags=potion
+- POTION.WEAK_POTION [potion-weak-potion] source=live-potions tags=potion
 - 강장제 [megacrit-sts2-core-models-potions-fortifier] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=[gold]방어도[/gold]를 3배로 만듭니다.
 - 거대화 포션 [megacrit-sts2-core-models-potions-gigantificationpotion] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=다음에 사용하는 공격 카드의 피해량이 3배로 증가합니다.
 - 공격 포션 [megacrit-sts2-core-models-potions-attackpotion] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=무작위 공격 카드 [blue]3[/blue]장 중 [blue]1[/blue]장을 선택해 [gold]손[/gold]으로 가져옵니다. 이번 턴 동안...
 - 과일 주스 [megacrit-sts2-core-models-potions-fruitjuice] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=최대 체력을 [blue]5[/blue] 얻습니다.
 - 광기의 손길 [megacrit-sts2-core-models-potions-touchofinsanity] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=[gold]손[/gold]에서 카드를 1장 선택합니다. 이번 전투 동안 그 카드를 비용 없이 사용할 수 있습니다.
-- 광휘의 팅크 [megacrit-sts2-core-models-potions-radianttincture] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=1를 얻습니다. 다음 [blue]3[/blue]턴 동안 추가로 {energyPrefix:energyIcons(1)}를 얻습니다.
-... 57 more
+... 58 more
 
 events
-count: 77
+count: 85
 - Observed Event [event-00c8f2a30a9e] source=live-event:choice-list-presented tags=event options=10
 - Observed Event [event-021a374e4202] source=live-event:choice-list-presented tags=event options=9
 - Observed Event [event-038d71dc0b75] source=live-event:event-screen-opened tags=event
@@ -83,10 +83,12 @@ count: 77
 - Observed Event [event-26e6a7ca7618] source=live-event:event-screen-opened tags=event
 - Observed Event [event-40b5da66bab4] source=live-event:event-screen-opened tags=event
 - Observed Event [event-4210b7289309] source=live-event:choice-list-presented tags=event options=2
-... 65 more
+... 73 more
 
 shops
-count: 5
+count: 7
+- Observed Shop [shop-0ba1d9f30d29] source=live-event:choice-list-presented tags=shop options=10
+- Observed Shop [shop-b103cdee268d] source=live-event:choice-list-presented tags=shop options=10
 - 상점 [megacrit-sts2-core-rooms-merchantroom] source=localization-scan tags=l10n, localized-shop, room, strict-model, strict-shop description=이 방에서는 신비로운 상인이 자신의 물건들을 판매합니다.  열심히 모은 [gold]골드[/gold]를 여기에서 사용해보세요!
 - 유물 판매 슬롯 [megacrit-sts2-core-entities-merchant-merchantrelicentry] source=strict-domain-parse tags=strict-shop, strict-model
 - 카드 제거 서비스 [megacrit-sts2-core-entities-merchant-merchantcardremovalentry] source=localization-scan tags=l10n, localized-shop, strict-model, strict-shop description=덱에서 카드를 1장 제거합니다. 남은 도전 동안 이 서비스의 비용이 [blue]{Amount}[/blue] 증가합니다.
@@ -94,20 +96,20 @@ count: 5
 - 포션 판매 슬롯 [megacrit-sts2-core-entities-merchant-merchantpotionentry] source=strict-domain-parse tags=strict-shop, strict-model
 
 rewards
-count: 54
+count: 93
 - Observed Reward [reward-03e5b74b6b09] source=live-event:choice-list-presented tags=reward options=10
+- Observed Reward [reward-041fb087adc7] source=live-event:choice-list-presented tags=reward options=6
 - Observed Reward [reward-102f1c6e1cf7] source=live-event:choice-list-presented tags=reward options=6
 - Observed Reward [reward-16245c81e834] source=live-event:choice-list-presented tags=reward options=7
 - Observed Reward [reward-16efcaf12fe0] source=live-event:choice-list-presented tags=reward options=4
 - Observed Reward [reward-17072ab32cc5] source=live-event:choice-list-presented tags=reward options=10
 - Observed Reward [reward-1a4b0d487476] source=live-event:choice-list-presented tags=reward options=8
 - Observed Reward [reward-1cdaa820e306] source=live-event:choice-list-presented tags=reward options=4
+- Observed Reward [reward-1dbf41541f5c] source=live-event:choice-list-presented tags=reward options=6
+- Observed Reward [reward-1f9f85c7bb71] source=live-event:choice-list-presented tags=reward options=5
 - Observed Reward [reward-27e2ed8ed374] source=live-event:choice-list-presented tags=reward options=6
-- Observed Reward [reward-3723980c3715] source=live-event:choice-list-presented tags=reward options=7
-- Observed Reward [reward-375f7fbeab2b] source=live-event:choice-list-presented tags=reward options=4
-- Observed Reward [reward-425988603a25] source=live-event:reward-screen-opened tags=reward
-- Observed Reward [reward-43004418eff4] source=live-event:reward-screen-opened tags=reward
-... 42 more
+- Observed Reward [reward-2bf1222f880a] source=live-event:choice-list-presented tags=reward options=5
+... 81 more
 
 keywords
 count: 264

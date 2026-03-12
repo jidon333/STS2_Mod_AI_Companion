@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Threading;
+using System.Security.Cryptography;
 using Sts2ModKit.Core.Configuration;
 
 namespace Sts2ModKit.Core.LiveExport;
@@ -113,6 +115,11 @@ public static class LiveExportAtomicFileWriter
         File.Move(tempPath, path);
     }
 
+    public static void WriteJsonAtomic<T>(string path, T value)
+    {
+        WriteJsonAtomic(path, value, options: null);
+    }
+
     public static void WriteJsonAtomic<T>(string path, T value, JsonSerializerOptions? options = null)
     {
         options ??= new JsonSerializerOptions
@@ -122,5 +129,36 @@ public static class LiveExportAtomicFileWriter
         };
 
         WriteAllTextAtomic(path, JsonSerializer.Serialize(value, options));
+    }
+
+    public static void AppendAllTextShared(string path, string contents, int maxAttempts = 5, int retryDelayMs = 20)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        for (var attempt = 1; attempt <= Math.Max(1, maxAttempts); attempt += 1)
+        {
+            try
+            {
+                using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+                using var writer = new StreamWriter(stream);
+                writer.Write(contents);
+                return;
+            }
+            catch (IOException) when (attempt < maxAttempts)
+            {
+                Thread.Sleep(retryDelayMs);
+            }
+        }
+
+        using var fallbackStream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+        using var fallbackWriter = new StreamWriter(fallbackStream);
+        fallbackWriter.Write(contents);
+    }
+
+    public static string ComputeSha256(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var sha256 = SHA256.Create();
+        return Convert.ToHexString(sha256.ComputeHash(stream));
     }
 }

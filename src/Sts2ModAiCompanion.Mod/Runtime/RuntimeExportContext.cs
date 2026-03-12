@@ -46,9 +46,13 @@ internal static class RuntimeExportContext
 
             AiCompanionRuntimeLog.WriteLine($"runtime exporter initialized. live_root={layout.LiveRoot}");
             AiCompanionRuntimeLog.WriteLine(
-                $"runtime exporter config: discovery={config.LiveExport.DiscoveryMode} scene_polling={config.LiveExport.ScenePollingEnabled} interval_ms={config.LiveExport.ScenePollingIntervalMs} duplicate_suppression_ms={config.LiveExport.DuplicateSuppressionMs}");
+                $"runtime exporter config: discovery={config.LiveExport.DiscoveryMode} collector={config.LiveExport.CollectorModeEnabled} scene_polling={config.LiveExport.ScenePollingEnabled} interval_ms={config.LiveExport.ScenePollingIntervalMs} duplicate_suppression_ms={config.LiveExport.DuplicateSuppressionMs}");
             AiCompanionRuntimeLog.WriteLine(
                 $"runtime exporter identity: {AiCompanionRuntimeIdentity.DescribeExecutingAssembly()}");
+            AiCompanionRuntimeLog.WriteLine(
+                $"runtime exporter core identity: {AiCompanionRuntimeIdentity.DescribeCoreAssembly()}");
+            AiCompanionRuntimeLog.WriteLine(
+                $"runtime exporter writer compatibility: {AiCompanionRuntimeIdentity.DescribeWriterCompatibility()}");
             return true;
         }
     }
@@ -218,7 +222,7 @@ internal sealed class RuntimeExportWorker
     private void AppendEvent(LiveExportEventEnvelope envelope)
     {
         var json = JsonSerializer.Serialize(envelope, CompactJsonOptions);
-        File.AppendAllText(_layout.EventsPath, json + Environment.NewLine);
+        LiveExportAtomicFileWriter.AppendAllTextShared(_layout.EventsPath, json + Environment.NewLine);
     }
 
     private void WriteCollectorArtifacts(LiveExportBatch batch)
@@ -297,15 +301,16 @@ internal sealed class RuntimeExportWorker
             var snapshotPath = Path.Combine(
                 _layout.SemanticSnapshotsRoot,
                 $"{batch.Events.Last().Seq:D6}-{safeKind}.json");
-            LiveExportAtomicFileWriter.WriteJsonAtomic(
+            LiveExportAtomicFileWriter.WriteAllTextAtomic(
                 snapshotPath,
-                new
-                {
-                    Observation = batch.SourceObservation,
-                    Snapshot = batch.Snapshot,
-                    CollectorStatus = batch.CollectorStatus,
-                },
-                PrettyJsonOptions);
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        Observation = batch.SourceObservation,
+                        Snapshot = batch.Snapshot,
+                        CollectorStatus = batch.CollectorStatus,
+                    },
+                    PrettyJsonOptions));
         }
     }
 
@@ -351,7 +356,7 @@ internal sealed class RuntimeExportWorker
     private static void AppendJsonLine<T>(string path, T value)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.AppendAllText(path, JsonSerializer.Serialize(value, CompactJsonOptions) + Environment.NewLine);
+        LiveExportAtomicFileWriter.AppendAllTextShared(path, JsonSerializer.Serialize(value, CompactJsonOptions) + Environment.NewLine);
     }
 
     private static JsonSerializerOptions CompactJsonOptions { get; } = new()

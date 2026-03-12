@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModAiCompanion.Mod.Runtime;
@@ -114,6 +115,14 @@ public static partial class AiCompanionModEntryPoint
 
             files.Add(CopyNativeFile(packageRoot, assemblyName, sourcePath, "build-artifact"));
         }
+
+        var assemblyManifestPath = Path.Combine(packageRoot, "runtime-assembly-manifest.json");
+        File.WriteAllText(
+            assemblyManifestPath,
+            JsonSerializer.Serialize(
+                BuildRuntimeAssemblyManifest(packageRoot, primaryAssemblyTargetName, configuration),
+                JsonOptions));
+        files.Add(new NativePackageFile("runtime-assembly-manifest.json", assemblyManifestPath, "generated", "written"));
 
         var outputPckPath = Path.Combine(packageRoot, descriptor.PckName);
         var missingArtifacts = new List<MissingNativeArtifact>();
@@ -248,12 +257,33 @@ public static partial class AiCompanionModEntryPoint
         Directory.CreateDirectory(modsRoot);
         Directory.CreateDirectory(deployedRoot);
 
+        if (Process.GetProcessesByName("SlayTheSpire2").Length > 0)
+        {
+            warnings.Add("SlayTheSpire2.exe is running during deploy. A locked stale DLL can survive until the next restart.");
+        }
+
         foreach (var file in Directory.GetFiles(package.PackageRoot, "*", SearchOption.TopDirectoryOnly))
         {
             var fileName = Path.GetFileName(file);
             var destinationPath = Path.Combine(deployedRoot, fileName);
+            if (File.Exists(destinationPath))
+            {
+                File.Delete(destinationPath);
+            }
+
             File.Copy(file, destinationPath, overwrite: true);
             files.Add(new NativeDeploymentFile(file, destinationPath, "copied"));
+            var sourceHash = ComputeFileHash(file);
+            var deployedHash = ComputeFileHash(destinationPath);
+            if (!string.Equals(sourceHash, deployedHash, StringComparison.OrdinalIgnoreCase))
+            {
+                warnings.Add($"Deploy verification mismatch: {fileName} source={sourceHash} deployed={deployedHash}");
+            }
+
+            if (fileName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            {
+                warnings.Add($"Deploy verification: {fileName} hash={deployedHash}");
+            }
         }
 
         if (!files.Any(file => file.DestinationPath.EndsWith(".pck", StringComparison.OrdinalIgnoreCase)))
@@ -333,6 +363,49 @@ public static partial class AiCompanionModEntryPoint
         };
 
         return JsonSerializer.Serialize(runtimeConfig, JsonOptions);
+    }
+
+    private static string ComputeFileHash(string path)
+    {
+        using var stream = File.OpenRead(path);
+        using var sha256 = SHA256.Create();
+        return Convert.ToHexString(sha256.ComputeHash(stream));
+    }
+
+    private static object BuildRuntimeAssemblyManifest(
+        string packageRoot,
+        string primaryAssemblyTargetName,
+        ScaffoldConfiguration configuration)
+    {
+        return new
+        {
+            generatedAt = DateTimeOffset.UtcNow,
+            collectorModeEnabled = configuration.LiveExport.CollectorModeEnabled,
+            assemblies = new[]
+            {
+                DescribeAssemblyArtifact(packageRoot, primaryAssemblyTargetName),
+                DescribeAssemblyArtifact(packageRoot, "Sts2ModKit.Core.dll"),
+            }.Where(entry => entry is not null).ToArray(),
+        };
+    }
+
+    private static object? DescribeAssemblyArtifact(string packageRoot, string fileName)
+    {
+        var path = Path.Combine(packageRoot, fileName);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var fileInfo = new FileInfo(path);
+        return new
+        {
+            fileName,
+            path,
+            size = fileInfo.Length,
+            lastWriteUtc = fileInfo.LastWriteTimeUtc,
+            sha256 = ComputeFileHash(path),
+        };
     }
 
     private static void RecreateDirectory(string path)

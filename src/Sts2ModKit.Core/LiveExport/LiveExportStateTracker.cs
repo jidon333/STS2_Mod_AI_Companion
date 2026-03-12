@@ -81,7 +81,7 @@ public sealed class LiveExportStateTracker
             return Array.Empty<LiveExportScreenTransition>();
         }
 
-        var incoming = Coalesce(observation.Screen, previous.CurrentScreen, "unknown");
+        var incoming = Coalesce(observation.SemanticScreen, observation.Screen, previous.CurrentScreen, "unknown");
         var keptPrevious = string.Equals(next.CurrentScreen, previous.CurrentScreen, StringComparison.Ordinal)
             && !string.Equals(incoming, next.CurrentScreen, StringComparison.Ordinal);
         if (!keptPrevious
@@ -169,15 +169,20 @@ public sealed class LiveExportStateTracker
 
     private LiveExportSnapshot MergeSnapshot(LiveExportSnapshot previous, LiveExportObservation observation)
     {
+        var regressionWarnings = new List<string>();
         var runId = Coalesce(observation.RunId, previous.RunId);
         var screen = MergeScreen(previous, observation);
-        var player = MergePlayer(previous.Player, observation.Player);
-        var deck = MergeCards(previous.Deck, observation.Deck, observation);
-        var relics = MergeStrings(previous.Relics, observation.Relics, observation);
-        var potions = MergeStrings(previous.Potions, observation.Potions, observation);
-        var choices = MergeChoices(previous.CurrentChoices, observation.Choices, observation, previous.CurrentScreen, screen);
-        var warnings = MergeWarnings(previous.Warnings, observation.Warnings);
-        var encounter = MergeEncounter(previous.Encounter, observation.Encounter, observation);
+        var player = MergePlayer(previous.Player, observation.Player, screen, regressionWarnings);
+        var deck = MergeCards(previous.Deck, observation.Deck, observation, screen, "deck", regressionWarnings);
+        var relics = MergeStrings(previous.Relics, observation.Relics, observation, screen, "relics", regressionWarnings);
+        var potions = MergeStrings(previous.Potions, observation.Potions, observation, screen, "potions", regressionWarnings);
+        var choices = MergeChoices(previous.CurrentChoices, observation.Choices, observation, previous.CurrentScreen, screen, previous.CapturedAt);
+        var warnings = MergeWarnings(previous.Warnings, MergeWarnings(observation.Warnings, regressionWarnings));
+        var encounter = MergeEncounter(previous.Encounter, observation.Encounter, observation, screen, regressionWarnings);
+        if (IsStickyHighValueScreen(screen) && encounter?.InCombat == true)
+        {
+            warnings = MergeWarnings(warnings, new[] { $"state-regression: combat-conflict-with-screen:{screen}" });
+        }
 
         var recentChanges = previous.RecentChanges
             .Concat(DescribeDiff(previous, screen, player, deck, relics, potions, choices, observation.TriggerKind))
@@ -479,32 +484,41 @@ public sealed class LiveExportStateTracker
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
     }
 
-    private static string MergeScreen(LiveExportSnapshot previous, LiveExportObservation observation)
+    private string MergeScreen(LiveExportSnapshot previous, LiveExportObservation observation)
     {
-        var incoming = Coalesce(observation.Screen, previous.CurrentScreen, "unknown");
+        var incoming = Coalesce(observation.SemanticScreen, observation.Screen, previous.CurrentScreen, "unknown");
         if (!string.Equals(observation.TriggerKind, "runtime-poll", StringComparison.Ordinal))
         {
             return incoming;
         }
 
-        if (!IsStickyHighValueScreen(previous.CurrentScreen)
+        var stickyScreen = _activeScreenEpisode ?? previous.CurrentScreen;
+        if (!IsStickyHighValueScreen(stickyScreen)
             || !IsFallbackScreen(incoming))
         {
             return incoming;
         }
 
+        var withinEpisodeWindow = _activeScreenEpisodeStartedAt is not null
+                                  && observation.ObservedAt - _activeScreenEpisodeStartedAt <= TimeSpan.FromSeconds(45);
         if (HasPartialStateWarning(observation)
             || HasChoiceResolutionWarning(observation)
             || (previous.CurrentChoices.Count > 0 && (observation.Choices?.Count ?? 0) == 0)
-            || observation.ObservedAt - previous.CapturedAt <= TimeSpan.FromSeconds(8))
+            || (IsStickyHighValueScreen(previous.CurrentScreen) && observation.Encounter?.InCombat == true)
+            || withinEpisodeWindow
+            || observation.ObservedAt - previous.CapturedAt <= TimeSpan.FromSeconds(20))
         {
-            return previous.CurrentScreen;
+            return stickyScreen;
         }
 
         return incoming;
     }
 
-    private static LiveExportPlayerSummary MergePlayer(LiveExportPlayerSummary previous, LiveExportPlayerSummary? incoming)
+    private static LiveExportPlayerSummary MergePlayer(
+        LiveExportPlayerSummary previous,
+        LiveExportPlayerSummary? incoming,
+        string screen,
+        ICollection<string> regressionWarnings)
     {
         if (incoming is null)
         {
@@ -520,8 +534,17 @@ public sealed class LiveExportStateTracker
             }
         }
 
+        var incomingName = incoming.Name;
+        if (!string.IsNullOrWhiteSpace(incomingName)
+            && !IsAuthoritativePlayerName(incomingName, screen)
+            && !string.IsNullOrWhiteSpace(previous.Name))
+        {
+            regressionWarnings.Add($"state-regression: preserved-player-name over non-authoritative value {incomingName}");
+            incomingName = previous.Name;
+        }
+
         return new LiveExportPlayerSummary(
-            incoming.Name ?? previous.Name,
+            incomingName ?? previous.Name,
             incoming.CurrentHp ?? previous.CurrentHp,
             incoming.MaxHp ?? previous.MaxHp,
             incoming.Gold ?? previous.Gold,
@@ -532,15 +555,19 @@ public sealed class LiveExportStateTracker
     private IReadOnlyList<LiveExportCardSummary> MergeCards(
         IReadOnlyList<LiveExportCardSummary> previous,
         IReadOnlyList<LiveExportCardSummary>? incoming,
-        LiveExportObservation observation)
+        LiveExportObservation observation,
+        string screen,
+        string label,
+        ICollection<string> regressionWarnings)
     {
         if (incoming is null)
         {
             return previous;
         }
 
-        if (incoming.Count == 0 && ShouldPreservePreviousCollection(previous.Count, observation))
+        if (incoming.Count == 0 && ShouldPreservePreviousCollection(previous.Count, observation, screen))
         {
+            regressionWarnings.Add($"state-regression: preserved-{label}-from-empty");
             return previous;
         }
 
@@ -550,15 +577,19 @@ public sealed class LiveExportStateTracker
     private static IReadOnlyList<string> MergeStrings(
         IReadOnlyList<string> previous,
         IReadOnlyList<string>? incoming,
-        LiveExportObservation observation)
+        LiveExportObservation observation,
+        string screen,
+        string label,
+        ICollection<string> regressionWarnings)
     {
         if (incoming is null)
         {
             return previous;
         }
 
-        if (incoming.Count == 0 && ShouldPreservePreviousCollection(previous.Count, observation))
+        if (incoming.Count == 0 && ShouldPreservePreviousCollection(previous.Count, observation, screen))
         {
+            regressionWarnings.Add($"state-regression: preserved-{label}-from-empty");
             return previous;
         }
 
@@ -570,7 +601,8 @@ public sealed class LiveExportStateTracker
         IReadOnlyList<LiveExportChoiceSummary>? incoming,
         LiveExportObservation observation,
         string previousScreen,
-        string nextScreen)
+        string nextScreen,
+        DateTimeOffset previousCapturedAt)
     {
         if (incoming is null)
         {
@@ -579,10 +611,13 @@ public sealed class LiveExportStateTracker
 
         if (incoming.Count == 0
             && previous.Count > 0
-            && IsChoiceLikeScreen(previousScreen)
+            && (IsChoiceLikeScreen(previousScreen) || IsChoiceLikeScreen(nextScreen))
             && (string.Equals(previousScreen, nextScreen, StringComparison.Ordinal)
                 || (string.Equals(observation.TriggerKind, "runtime-poll", StringComparison.Ordinal) && IsFallbackScreen(nextScreen)))
-            && HasChoiceResolutionWarning(observation))
+            && (HasChoiceResolutionWarning(observation)
+                || string.Equals(observation.TriggerKind, "runtime-poll", StringComparison.Ordinal)
+                || !string.IsNullOrWhiteSpace(observation.SemanticScreen)
+                || observation.ObservedAt - previousCapturedAt <= TimeSpan.FromSeconds(20)))
         {
             return previous;
         }
@@ -593,7 +628,9 @@ public sealed class LiveExportStateTracker
     private static LiveExportEncounterSummary? MergeEncounter(
         LiveExportEncounterSummary? previous,
         LiveExportEncounterSummary? incoming,
-        LiveExportObservation observation)
+        LiveExportObservation observation,
+        string screen,
+        ICollection<string> regressionWarnings)
     {
         if (incoming is null)
         {
@@ -609,6 +646,20 @@ public sealed class LiveExportStateTracker
                 incoming.Turn ?? previous?.Turn);
         }
 
+        if (IsStickyHighValueScreen(screen)
+            && incoming.InCombat == true
+            && previous is not null
+            && previous.InCombat != true)
+        {
+            regressionWarnings.Add($"state-regression: preserved-encounter-over-combat-conflict:{screen}");
+            return previous with
+            {
+                Name = previous.Name ?? incoming.Name,
+                Kind = previous.Kind ?? incoming.Kind,
+                Turn = previous.Turn ?? incoming.Turn,
+            };
+        }
+
         return incoming;
     }
 
@@ -622,9 +673,12 @@ public sealed class LiveExportStateTracker
         return observation.Warnings?.Any(warning => warning.Contains("no visible choices resolved", StringComparison.OrdinalIgnoreCase)) == true;
     }
 
-    private static bool ShouldPreservePreviousCollection(int previousCount, LiveExportObservation observation)
+    private static bool ShouldPreservePreviousCollection(int previousCount, LiveExportObservation observation, string screen)
     {
-        return previousCount > 0 && HasPartialStateWarning(observation);
+        return previousCount > 0
+               && (HasPartialStateWarning(observation)
+                   || IsStickyHighValueScreen(screen)
+                   || !string.IsNullOrWhiteSpace(observation.SemanticScreen));
     }
 
     private static bool IsStickyHighValueScreen(string screen)
@@ -640,5 +694,26 @@ public sealed class LiveExportStateTracker
     private static bool IsFallbackScreen(string screen)
     {
         return screen is "" or "unknown" or "combat" or "map";
+    }
+
+    private static bool IsAuthoritativePlayerName(string incomingName, string screen)
+    {
+        if (string.IsNullOrWhiteSpace(incomingName))
+        {
+            return false;
+        }
+
+        if (string.Equals(incomingName, screen, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !incomingName.Contains("Screen", StringComparison.OrdinalIgnoreCase)
+               && !incomingName.Contains("Room", StringComparison.OrdinalIgnoreCase)
+               && !incomingName.Contains("Layout", StringComparison.OrdinalIgnoreCase)
+               && !incomingName.Contains("Rewards", StringComparison.OrdinalIgnoreCase)
+               && !incomingName.Contains("Merchant", StringComparison.OrdinalIgnoreCase)
+               && !incomingName.Contains("Holder", StringComparison.OrdinalIgnoreCase)
+               && !incomingName.Contains("Container", StringComparison.OrdinalIgnoreCase);
     }
 }

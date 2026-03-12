@@ -1,9 +1,9 @@
 # 상점
 
-- 전체 항목 수: 5
+- 전체 항목 수: 7
 - 설명 본문이 채워진 항목: 5
 - L10N 키 또는 제목이 연결된 항목: 2
-- 선택지/옵션 정보가 있는 항목: 0
+- 선택지/옵션 정보가 있는 항목: 2
 
 ## 이 섹션이 도와주는 플레이 장면
 
@@ -107,4 +107,42 @@
 - 관찰 로그 반영: 아니오
 - 주요 소스: `strict-domain-parse`
 - 모델 클래스: `MegaCrit.Sts2.Core.Entities.Merchant.MerchantPotionEntry`
+
+### Observed Shop
+
+- ID: `shop-0ba1d9f30d29`
+- 그룹/풀 추정: 상점/UI, 구매 후보 확인됨
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 선택지 또는 페이지 단위 정보까지는 연결되었지만, 전체 설명 완성도는 더 다듬어야 합니다.
+- 핵심 설명: 선택지 정보는 확인되었지만 상세 설명 본문은 아직 비어 있습니다. MerchantPotion, MerchantPotion2, MerchantPotion3, 도박꾼의 영액
+- 확인된 선택지:
+  - MerchantPotion
+  - MerchantPotion2
+  - MerchantPotion3
+  - 도박꾼의 영액
+  - 민첩 포션
+  - 병사의 스튜
+  - 숫돌
+  - 용과
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:choice-list-presented`
+
+### Observed Shop
+
+- ID: `shop-b103cdee268d`
+- 그룹/풀 추정: 상점/UI, 구매 후보 확인됨
+- 플레이 중 참조 시점: 상점 진입 후 카드/서비스 비교 시 참조
+- 설명 상태: 선택지 또는 페이지 단위 정보까지는 연결되었지만, 전체 설명 완성도는 더 다듬어야 합니다.
+- 핵심 설명: 선택지 정보는 확인되었지만 상세 설명 본문은 아직 비어 있습니다. MerchantCardHolder5, MerchantPotion, MerchantPotion2, 도박꾼의 영액
+- 확인된 선택지:
+  - MerchantCardHolder5
+  - MerchantPotion
+  - MerchantPotion2
+  - 도박꾼의 영액
+  - 민첩 포션
+  - 병사의 스튜
+  - 숫돌
+  - 용과
+- 관찰 로그 반영: 예
+- 주요 소스: `live-event:choice-list-presented`
 

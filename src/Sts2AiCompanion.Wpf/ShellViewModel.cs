@@ -95,6 +95,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
+    public async Task RetryLastAsync()
+    {
+        if (_host is not null)
+        {
+            await _host.RequestRetryLastAdviceAsync().ConfigureAwait(false);
+        }
+    }
+
     public void ToggleAutoAdvice()
     {
         if (_host is null)
@@ -184,7 +192,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         _analysisInProgress = snapshot.Status.AnalysisInProgress;
         _analysisStartedAt = snapshot.Status.AnalysisStartedAt;
         _analysisTriggerKind = snapshot.Status.AnalysisTriggerKind;
-        UpdateAnalysisStatusText();
+        UpdateAnalysisStatusText(snapshot.Status.State, snapshot.Status.Message);
 
         if (snapshot.RunState is not null)
         {
@@ -312,6 +320,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
                 $"마지막 extractor 경로: {collector.LastAcceptedExtractorPath ?? "없음"}",
                 $"마지막 degraded 이유: {collector.LastDegradedReason ?? "없음"}",
                 $"session id: {collector.SessionId ?? "없음"}",
+                $"지식 사용 개수: {collector.KnowledgeEntriesUsedCount}",
+                $"지식 사용 이유: {(collector.KnowledgeReasons.Count > 0 ? string.Join(", ", collector.KnowledgeReasons.Take(4)) : "없음")}",
+                $"지식 참조: {(collector.TopKnowledgeRefs.Count > 0 ? string.Join(", ", collector.TopKnowledgeRefs.Take(4)) : "없음")}",
+                $"부족한 정보: {(collector.MissingInformation.Count > 0 ? string.Join(", ", collector.MissingInformation.Take(4)) : "없음")}",
+                $"판단 차단 요인: {(collector.DecisionBlockers.Count > 0 ? string.Join(", ", collector.DecisionBlockers.Take(4)) : "없음")}",
                 string.Empty,
                 collector.Notes,
             }),
@@ -320,19 +333,29 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         NotifyAll();
     }
 
-    private void UpdateAnalysisStatusText()
+    private void UpdateAnalysisStatusText(string? state = null, string? message = null)
     {
         if (_analysisInProgress && _analysisStartedAt is not null)
         {
             _analysisTimer?.Start();
             var elapsed = DateTimeOffset.UtcNow - _analysisStartedAt.Value;
             var seconds = Math.Max(0, (int)elapsed.TotalSeconds);
-            AnalysisStatusText = $"분석중: {TranslateEventKind(_analysisTriggerKind)} ({seconds}초)";
+            var prefix = string.Equals(state, "retrying", StringComparison.OrdinalIgnoreCase)
+                ? "재시도중"
+                : "분석중";
+            AnalysisStatusText = $"{prefix}: {TranslateEventKind(_analysisTriggerKind)} ({seconds}초)";
         }
         else
         {
             _analysisTimer?.Stop();
-            AnalysisStatusText = "분석 상태: 대기 중";
+            AnalysisStatusText = state switch
+            {
+                "failed" => $"분석 실패: {message}",
+                "canceled" => $"분석 취소: {message}",
+                "degraded" => $"분석 제한: {message}",
+                "retrying" => "분석 상태: 재시도 대기",
+                _ => "분석 상태: 대기 중",
+            };
         }
 
         Notify(nameof(AnalysisStatusText));
@@ -370,8 +393,16 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             "Automatic advice is paused." => "자동 조언이 일시중지되어 있습니다.",
             _ when message.StartsWith("Advice generated for ", StringComparison.Ordinal) =>
                 $"조언 생성 완료: {TranslateEventKind(message["Advice generated for ".Length..])}",
-            _ when message.StartsWith("AI 분석 중: ", StringComparison.Ordinal) =>
-                $"분석중: {TranslateEventKind(message["AI 분석 중: ".Length..])}",
+            _ when message.StartsWith("AI analyzing: ", StringComparison.Ordinal) =>
+                $"분석중: {TranslateEventKind(message["AI analyzing: ".Length..])}",
+            _ when message.StartsWith("Retrying AI advice: ", StringComparison.Ordinal) =>
+                $"재시도중: {TranslateEventKind(message["Retrying AI advice: ".Length..])}",
+            _ when message.StartsWith("AI request canceled: ", StringComparison.Ordinal) =>
+                $"분석 취소: {TranslateEventKind(message["AI request canceled: ".Length..])}",
+            _ when message.StartsWith("AI advice degraded: ", StringComparison.Ordinal) =>
+                $"조언 제한: {message["AI advice degraded: ".Length..]}",
+            _ when message.StartsWith("AI request failed: ", StringComparison.Ordinal) =>
+                $"분석 실패: {message["AI request failed: ".Length..]}",
             _ => message,
         };
     }
@@ -423,6 +454,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             "app-started" => "앱 시작",
             "app-stopped" => "앱 종료",
             "manual" => "수동 분석",
+            "retry-last" => "마지막 요청 재시도",
             _ => kind ?? "미상",
         };
     }

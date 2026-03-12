@@ -31,7 +31,8 @@ public sealed record AdviceTrigger(
     bool Manual,
     bool BypassMinInterval,
     string Reason,
-    LiveExportEventEnvelope? SourceEvent);
+    LiveExportEventEnvelope? SourceEvent,
+    string? RetrySourcePromptPackPath = null);
 
 public sealed record KnowledgeSlice(
     IReadOnlyList<StaticKnowledgeEntry> Entries,
@@ -105,6 +106,11 @@ public sealed record CompanionCollectorStatus(
     string? ChoiceExtractionStatus,
     string? LastAcceptedExtractorPath,
     string? LastDegradedReason,
+    int KnowledgeEntriesUsedCount,
+    IReadOnlyList<string> KnowledgeReasons,
+    IReadOnlyList<string> TopKnowledgeRefs,
+    IReadOnlyList<string> MissingInformation,
+    IReadOnlyList<string> DecisionBlockers,
     string? SessionId,
     string Notes);
 
@@ -120,6 +126,13 @@ public sealed record CompanionCollectorSummary(
     IReadOnlyList<string> DecisionBlockersObserved,
     string SessionTrackingStatus,
     IReadOnlyDictionary<string, int> ObservedMergeCounts,
+    IReadOnlyList<string> RequestLatencySummary,
+    IReadOnlyList<string> DuplicateTriggerSummary,
+    IReadOnlyList<string> ScreenOverwriteSummary,
+    IReadOnlyList<string> StateRegressionSummary,
+    IReadOnlyList<string> KnowledgeUsageSummary,
+    IReadOnlyList<string> RuntimeFatalErrors,
+    IReadOnlyList<string> AppHangSuspicionIndicators,
     IReadOnlyList<string> RecommendedNextFixes);
 
 internal sealed record SessionIndexEntry(

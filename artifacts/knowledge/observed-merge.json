@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-12T04:30:52.9804007+00:00",
+  "generatedAt": "2026-03-12T09:03:52.3624849+00:00",
   "metadata": {
     "releaseVersion": "v0.98.3",
     "releaseCommit": "cb602cef",
@@ -19,9 +19,9 @@
       "atlas:era_atlas": "27",
       "atlas:controller_atlas": "112",
       "source": "extract-static-knowledge",
-      "eventsLoaded": "33262",
+      "eventsLoaded": "36783",
       "snapshotLoaded": "True",
-      "observedSources": "11"
+      "observedSources": "12"
     }
   },
   "cards": [
@@ -129,6 +129,21 @@
       "options": []
     },
     {
+      "id": "card-burning-pact",
+      "name": "CARD.BURNING_PACT",
+      "source": "live-event:card-added",
+      "observed": true,
+      "rawText": "CARD.BURNING_PACT",
+      "tags": [
+        "card-added",
+        "card-removed"
+      ],
+      "attributes": {
+        "screen": "combat"
+      },
+      "options": []
+    },
+    {
       "id": "card-cinder",
       "name": "CARD.CINDER",
       "source": "live-event:card-added",
@@ -140,6 +155,21 @@
       ],
       "attributes": {
         "screen": "event"
+      },
+      "options": []
+    },
+    {
+      "id": "card-colossus",
+      "name": "CARD.COLOSSUS",
+      "source": "live-event:card-added",
+      "observed": true,
+      "rawText": "CARD.COLOSSUS",
+      "tags": [
+        "card-added",
+        "card-removed"
+      ],
+      "attributes": {
+        "screen": "combat"
       },
       "options": []
     },
@@ -264,6 +294,21 @@
       "options": []
     },
     {
+      "id": "card-inflame",
+      "name": "CARD.INFLAME",
+      "source": "live-event:card-added",
+      "observed": true,
+      "rawText": "CARD.INFLAME",
+      "tags": [
+        "card-added",
+        "card-removed"
+      ],
+      "attributes": {
+        "screen": "combat"
+      },
+      "options": []
+    },
+    {
       "id": "card-iron-wave",
       "name": "CARD.IRON_WAVE",
       "source": "live-event:card-added",
@@ -375,6 +420,21 @@
       "options": []
     },
     {
+      "id": "card-setup-strike",
+      "name": "CARD.SETUP_STRIKE",
+      "source": "live-event:card-added",
+      "observed": true,
+      "rawText": "CARD.SETUP_STRIKE",
+      "tags": [
+        "card-added",
+        "card-removed"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": []
+    },
+    {
       "id": "card-shrug-it-off",
       "name": "CARD.SHRUG_IT_OFF",
       "source": "live-event:card-added",
@@ -389,6 +449,21 @@
         "screen": "combat",
         "type": "Skill",
         "upgraded": "False"
+      },
+      "options": []
+    },
+    {
+      "id": "card-spite",
+      "name": "CARD.SPITE",
+      "source": "live-event:card-added",
+      "observed": true,
+      "rawText": "CARD.SPITE",
+      "tags": [
+        "card-added",
+        "card-removed"
+      ],
+      "attributes": {
+        "screen": "combat"
       },
       "options": []
     },
@@ -449,6 +524,21 @@
       "source": "live-event:card-added",
       "observed": true,
       "rawText": "CARD.SWORD_BOOMERANG",
+      "tags": [
+        "card-added",
+        "card-removed"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": []
+    },
+    {
+      "id": "card-thunderclap",
+      "name": "CARD.THUNDERCLAP",
+      "source": "live-event:card-added",
+      "observed": true,
+      "rawText": "CARD.THUNDERCLAP",
       "tags": [
         "card-added",
         "card-removed"
@@ -577,6 +667,36 @@
   ],
   "relics": [
     {
+      "id": "relic-amethyst-aubergine",
+      "name": "RELIC.AMETHYST_AUBERGINE",
+      "source": "live-relics",
+      "observed": true,
+      "rawText": "RELIC.AMETHYST_AUBERGINE",
+      "tags": [
+        "relic",
+        "relic-gained"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "relic-bellows",
+      "name": "RELIC.BELLOWS",
+      "source": "live-relics",
+      "observed": true,
+      "rawText": "RELIC.BELLOWS",
+      "tags": [
+        "relic",
+        "relic-gained"
+      ],
+      "attributes": {
+        "screen": "combat"
+      },
+      "options": []
+    },
+    {
       "id": "relic-burning-blood",
       "name": "RELIC.BURNING_BLOOD",
       "source": "live-relics",
@@ -678,6 +798,21 @@
       "options": []
     },
     {
+      "id": "relic-new-leaf",
+      "name": "RELIC.NEW_LEAF",
+      "source": "live-relics",
+      "observed": true,
+      "rawText": "RELIC.NEW_LEAF",
+      "tags": [
+        "relic",
+        "relic-gained"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": []
+    },
+    {
       "id": "relic-nutritious-soup",
       "name": "RELIC.NUTRITIOUS_SOUP",
       "source": "live-event:relic-gained",
@@ -710,6 +845,21 @@
       "options": []
     },
     {
+      "id": "relic-permafrost",
+      "name": "RELIC.PERMAFROST",
+      "source": "live-relics",
+      "observed": true,
+      "rawText": "RELIC.PERMAFROST",
+      "tags": [
+        "relic",
+        "relic-gained"
+      ],
+      "attributes": {
+        "screen": "combat"
+      },
+      "options": []
+    },
+    {
       "id": "relic-pollinous-core",
       "name": "RELIC.POLLINOUS_CORE",
       "source": "live-event:relic-gained",
@@ -719,6 +869,21 @@
         "relic",
         "relic-gained",
         "relic-lost"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "relic-red-skull",
+      "name": "RELIC.RED_SKULL",
+      "source": "live-relics",
+      "observed": true,
+      "rawText": "RELIC.RED_SKULL",
+      "tags": [
+        "relic",
+        "relic-gained"
       ],
       "attributes": {
         "screen": "rewards"
@@ -757,6 +922,21 @@
       "options": []
     },
     {
+      "id": "relic-stone-calendar",
+      "name": "RELIC.STONE_CALENDAR",
+      "source": "live-relics",
+      "observed": true,
+      "rawText": "RELIC.STONE_CALENDAR",
+      "tags": [
+        "relic",
+        "relic-gained"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
       "id": "relic-war-paint",
       "name": "RELIC.WAR_PAINT",
       "source": "live-event:relic-gained",
@@ -791,7 +971,7 @@
     {
       "id": "potion-attack-potion",
       "name": "POTION.ATTACK_POTION",
-      "source": "live-potions",
+      "source": "live-event:potion-changed",
       "observed": true,
       "rawText": "POTION.ATTACK_POTION",
       "tags": [
@@ -801,9 +981,21 @@
       "options": []
     },
     {
+      "id": "potion-clarity",
+      "name": "POTION.CLARITY",
+      "source": "live-potions",
+      "observed": true,
+      "rawText": "POTION.CLARITY",
+      "tags": [
+        "potion"
+      ],
+      "attributes": {},
+      "options": []
+    },
+    {
       "id": "potion-dexterity-potion",
       "name": "POTION.DEXTERITY_POTION",
-      "source": "live-event:potion-changed",
+      "source": "live-potions",
       "observed": true,
       "rawText": "POTION.DEXTERITY_POTION",
       "tags": [
@@ -851,7 +1043,7 @@
     {
       "id": "potion-weak-potion",
       "name": "POTION.WEAK_POTION",
-      "source": "live-event:potion-changed",
+      "source": "live-potions",
       "observed": true,
       "rawText": "POTION.WEAK_POTION",
       "tags": [
@@ -1404,6 +1596,189 @@
       ]
     },
     {
+      "id": "event-62f5270d18c0",
+      "name": "Observed Event",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "NDeckTransformSelectScreen|\uBD88\uD0C0\uB294 \uD608\uC561|\uC0C8\uB85C\uC6B4 \uC78E|\uD0C0\uACA9|\uC218\uBE44",
+      "tags": [
+        "event"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": [
+        {
+          "id": "ndecktransformselectscreen",
+          "label": "NDeckTransformSelectScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC218\uBE44",
+          "label": "\uC218\uBE44",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD0C0\uACA9",
+          "label": "\uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "event-67c16c93195a",
+      "name": "Observed Event",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uBD88\uD0C0\uB294 \uD608\uC561|\uC0C8\uB85C\uC6B4 \uC78E|\uCCA0\uC758 \uD30C\uB3D9|\uBD84\uB178|\uC0AC\uD608|\uBD80\uBA54\uB791 \uCE7C\uB0A0|\uC0AC\uC804 \uD0C0\uACA9|\uC804\uD22C\uC7A5\uBE44|\uD758\uB824\uBCF4\uB0B4\uAE30|\uCC9C\uB465",
+      "tags": [
+        "event"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": [
+        {
+          "id": "\uBD80\uBA54\uB791-\uCE7C\uB0A0",
+          "label": "\uBD80\uBA54\uB791 \uCE7C\uB0A0",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD84\uB178",
+          "label": "\uBD84\uB178",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0AC\uC804-\uD0C0\uACA9",
+          "label": "\uC0AC\uC804 \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0AC\uD608",
+          "label": "\uC0AC\uD608",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCC9C\uB465",
+          "label": "\uCC9C\uB465",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCCA0\uC758-\uD30C\uB3D9",
+          "label": "\uCCA0\uC758 \uD30C\uB3D9",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD758\uB824\uBCF4\uB0B4\uAE30",
+          "label": "\uD758\uB824\uBCF4\uB0B4\uAE30",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "event-82a2f419b87c",
+      "name": "Observed Event",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "Exclaim|Question|Dismisser|\uBD88\uD0C0\uB294 \uD608\uC561|Map|Deck|PotionHolder|\uC0C8\uB85C\uC6B4 \uC78E",
+      "tags": [
+        "event"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": [
+        {
+          "id": "deck",
+          "label": "Deck",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "dismisser",
+          "label": "Dismisser",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "exclaim",
+          "label": "Exclaim",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "map",
+          "label": "Map",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "potionholder",
+          "label": "PotionHolder",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "question",
+          "label": "Question",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "event-8be3ce008286",
       "name": "Observed Event",
       "source": "live-event:event-screen-opened",
@@ -1465,6 +1840,33 @@
       "options": []
     },
     {
+      "id": "event-bdb959ae1841",
+      "name": "Observed Event",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uBB35\uBB35\uD788 \uB098\uC544\uAC04\uB2E4|\uD734\uC2DD\uD55C\uB2E4",
+      "tags": [
+        "event"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": [
+        {
+          "id": "\uBB35\uBB35\uD788-\uB098\uC544\uAC04\uB2E4",
+          "label": "\uBB35\uBB35\uD788 \uB098\uC544\uAC04\uB2E4",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD734\uC2DD\uD55C\uB2E4",
+          "label": "\uD734\uC2DD\uD55C\uB2E4",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "event-bdd840a24101",
       "name": "Observed Event",
       "source": "live-event:event-screen-opened",
@@ -1477,6 +1879,174 @@
         "screen": "event"
       },
       "options": []
+    },
+    {
+      "id": "event-c066c45a51a3",
+      "name": "Observed Event",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC601\uC591\uB9CC\uC810 \uAD74|\uC0C8\uB85C\uC6B4 \uC78E|\uC740 \uB3C4\uAC00\uB2C8",
+      "tags": [
+        "event"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": [
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC601\uC591\uB9CC\uC810-\uAD74",
+          "label": "\uC601\uC591\uB9CC\uC810 \uAD74",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC740-\uB3C4\uAC00\uB2C8",
+          "label": "\uC740 \uB3C4\uAC00\uB2C8",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "event-c0e0bd4a5f7e",
+      "name": "Observed Event",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "Exclaim|Question|Dismisser|\uBD88\uD0C0\uB294 \uD608\uC561|Map|Deck|PotionHolder",
+      "tags": [
+        "event"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": [
+        {
+          "id": "deck",
+          "label": "Deck",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "dismisser",
+          "label": "Dismisser",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "exclaim",
+          "label": "Exclaim",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "map",
+          "label": "Map",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "potionholder",
+          "label": "PotionHolder",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "question",
+          "label": "Question",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "event-ded7594b20ca",
+      "name": "Observed Event",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "Exclaim|Question|Dismisser|\uBD88\uD0C0\uB294 \uD608\uC561|\uC0C8\uB85C\uC6B4 \uC78E|\uD0C0\uACA9",
+      "tags": [
+        "event"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": [
+        {
+          "id": "dismisser",
+          "label": "Dismisser",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "exclaim",
+          "label": "Exclaim",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "question",
+          "label": "Question",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD0C0\uACA9",
+          "label": "\uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "event-f2935ce3d9f0",
+      "name": "Observed Event",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uACE8\uB4DC\uB97C \uAC70\uB798\uD55C\uB2E4|\uB098\uBB34\uB97C \uB04C\uC5B4\uC548\uB294\uB2E4",
+      "tags": [
+        "event"
+      ],
+      "attributes": {
+        "screen": "event"
+      },
+      "options": [
+        {
+          "id": "\uACE8\uB4DC\uB97C-\uAC70\uB798\uD55C\uB2E4",
+          "label": "\uACE8\uB4DC\uB97C \uAC70\uB798\uD55C\uB2E4",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB098\uBB34\uB97C-\uB04C\uC5B4\uC548\uB294\uB2E4",
+          "label": "\uB098\uBB34\uB97C \uB04C\uC5B4\uC548\uB294\uB2E4",
+          "description": null,
+          "attributes": {}
+        }
+      ]
     },
     {
       "id": "event-f9e6455241fd",
@@ -1506,7 +2076,158 @@
       ]
     }
   ],
-  "shops": [],
+  "shops": [
+    {
+      "id": "shop-0ba1d9f30d29",
+      "name": "Observed Shop",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uCE74\uB4DC \uC81C\uAC70 \uC11C\uBE44\uC2A4|\uC720\uC11C \uAE4A\uC740 \uCC28 \uC138\uD2B8|\uC22B\uB3CC|\uC6A9\uACFC|\uBCD1\uC0AC\uC758 \uC2A4\uD29C|\uB3C4\uBC15\uAFBC\uC758 \uC601\uC561|\uBBFC\uCCA9 \uD3EC\uC158|MerchantPotion|MerchantPotion2|MerchantPotion3",
+      "tags": [
+        "shop"
+      ],
+      "attributes": {
+        "screen": "shop"
+      },
+      "options": [
+        {
+          "id": "merchantpotion",
+          "label": "MerchantPotion",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "merchantpotion2",
+          "label": "MerchantPotion2",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "merchantpotion3",
+          "label": "MerchantPotion3",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB3C4\uBC15\uAFBC\uC758-\uC601\uC561",
+          "label": "\uB3C4\uBC15\uAFBC\uC758 \uC601\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBBFC\uCCA9-\uD3EC\uC158",
+          "label": "\uBBFC\uCCA9 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBCD1\uC0AC\uC758-\uC2A4\uD29C",
+          "label": "\uBCD1\uC0AC\uC758 \uC2A4\uD29C",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC22B\uB3CC",
+          "label": "\uC22B\uB3CC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC6A9\uACFC",
+          "label": "\uC6A9\uACFC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC720\uC11C-\uAE4A\uC740-\uCC28-\uC138\uD2B8",
+          "label": "\uC720\uC11C \uAE4A\uC740 \uCC28 \uC138\uD2B8",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCE74\uB4DC-\uC81C\uAC70-\uC11C\uBE44\uC2A4",
+          "label": "\uCE74\uB4DC \uC81C\uAC70 \uC11C\uBE44\uC2A4",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "shop-b103cdee268d",
+      "name": "Observed Shop",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uCE74\uB4DC \uC81C\uAC70 \uC11C\uBE44\uC2A4|\uC720\uC11C \uAE4A\uC740 \uCC28 \uC138\uD2B8|\uC22B\uB3CC|\uC6A9\uACFC|\uBCD1\uC0AC\uC758 \uC2A4\uD29C|\uB3C4\uBC15\uAFBC\uC758 \uC601\uC561|\uBBFC\uCCA9 \uD3EC\uC158|MerchantCardHolder5|MerchantPotion|MerchantPotion2",
+      "tags": [
+        "shop"
+      ],
+      "attributes": {
+        "screen": "shop"
+      },
+      "options": [
+        {
+          "id": "merchantcardholder5",
+          "label": "MerchantCardHolder5",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "merchantpotion",
+          "label": "MerchantPotion",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "merchantpotion2",
+          "label": "MerchantPotion2",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB3C4\uBC15\uAFBC\uC758-\uC601\uC561",
+          "label": "\uB3C4\uBC15\uAFBC\uC758 \uC601\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBBFC\uCCA9-\uD3EC\uC158",
+          "label": "\uBBFC\uCCA9 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBCD1\uC0AC\uC758-\uC2A4\uD29C",
+          "label": "\uBCD1\uC0AC\uC758 \uC2A4\uD29C",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC22B\uB3CC",
+          "label": "\uC22B\uB3CC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC6A9\uACFC",
+          "label": "\uC6A9\uACFC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC720\uC11C-\uAE4A\uC740-\uCC28-\uC138\uD2B8",
+          "label": "\uC720\uC11C \uAE4A\uC740 \uCC28 \uC138\uD2B8",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCE74\uB4DC-\uC81C\uAC70-\uC11C\uBE44\uC2A4",
+          "label": "\uCE74\uB4DC \uC81C\uAC70 \uC11C\uBE44\uC2A4",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    }
+  ],
   "rewards": [
     {
       "id": "reward-03e5b74b6b09",
@@ -1578,6 +2299,57 @@
         {
           "id": "sendbutton",
           "label": "SendButton",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-041fb087adc7",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC57D\uD654 \uD3EC\uC158|\uC9D3\uBC1F\uAE30|\uAC70\uC0C1|\uD30C\uC5F4|NCardRewardSelectionScreen|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uAC70\uC0C1",
+          "label": "\uAC70\uC0C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC57D\uD654-\uD3EC\uC158",
+          "label": "\uC57D\uD654 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9D3\uBC1F\uAE30",
+          "label": "\uC9D3\uBC1F\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD30C\uC5F4",
+          "label": "\uD30C\uC5F4",
           "description": null,
           "attributes": {}
         }
@@ -1908,6 +2680,102 @@
       ]
     },
     {
+      "id": "reward-1dbf41541f5c",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC9C4\uD589|\uBD88\uD0C0\uB294 \uD608\uC561|\uC0C8\uB85C\uC6B4 \uC78E|\uD551|5\uD134 \uC885\uB8CC|\uD0C0\uACA9\u002B",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "5\uD134-\uC885\uB8CC",
+          "label": "5\uD134 \uC885\uB8CC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9C4\uD589",
+          "label": "\uC9C4\uD589",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD0C0\uACA9",
+          "label": "\uD0C0\uACA9\u002B",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD551",
+          "label": "\uD551",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-1f9f85c7bb71",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC57D\uD654 \uD3EC\uC158|\uC790\uC218\uC815 \uAC00\uC9C0|\uC9D3\uBC1F\uAE30|\uAC70\uC0C1|\uD30C\uC5F4",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uAC70\uC0C1",
+          "label": "\uAC70\uC0C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC57D\uD654-\uD3EC\uC158",
+          "label": "\uC57D\uD654 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC790\uC218\uC815-\uAC00\uC9C0",
+          "label": "\uC790\uC218\uC815 \uAC00\uC9C0",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9D3\uBC1F\uAE30",
+          "label": "\uC9D3\uBC1F\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD30C\uC5F4",
+          "label": "\uD30C\uC5F4",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-27e2ed8ed374",
       "name": "Observed Reward",
       "source": "live-event:choice-list-presented",
@@ -1953,6 +2821,212 @@
         {
           "id": "\uCC9C\uB465",
           "label": "\uCC9C\uB465\u002B",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-2bf1222f880a",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "NCardRewardSelectionScreen|\uBAB8\uD1B5 \uBC15\uCE58\uAE30|\uC545\uC758|\uC644\uBCBD\uD55C \uD0C0\uACA9|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBAB8\uD1B5-\uBC15\uCE58\uAE30",
+          "label": "\uBAB8\uD1B5 \uBC15\uCE58\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC545\uC758",
+          "label": "\uC545\uC758",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-2e133c35cf01",
+      "name": "Observed Reward",
+      "source": "live-event:reward-screen-opened",
+      "observed": true,
+      "rawText": "{\u0022method\u0022:\u0022SetRewards\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022,\u0022choiceCount\u0022:5}",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "reward-319a1d9aa0af",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC9C4\uD589|\uBD88\uD0C0\uB294 \uD608\uC561|\uC0C8\uB85C\uC6B4 \uC78E|\uBD89\uC740 \uD574\uACE8|\uD551|7\uD134 \uC885\uB8CC",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "7\uD134-\uC885\uB8CC",
+          "label": "7\uD134 \uC885\uB8CC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD89\uC740-\uD574\uACE8",
+          "label": "\uBD89\uC740 \uD574\uACE8",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9C4\uD589",
+          "label": "\uC9C4\uD589",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD551",
+          "label": "\uD551",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-31a5aa1c30b7",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC9C4\uD589|\uBD88\uD0C0\uB294 \uD608\uC561|\uC0C8\uB85C\uC6B4 \uC78E|\uBD89\uC740 \uD574\uACE8|\uAC15\uD0C0|\uD551|3\uD134 \uC885\uB8CC",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "3\uD134-\uC885\uB8CC",
+          "label": "3\uD134 \uC885\uB8CC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uAC15\uD0C0",
+          "label": "\uAC15\uD0C0",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD89\uC740-\uD574\uACE8",
+          "label": "\uBD89\uC740 \uD574\uACE8",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9C4\uD589",
+          "label": "\uC9C4\uD589",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD551",
+          "label": "\uD551",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-35a08a591685",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC11D\uC7AC \uB2EC\uB825|\uC800\uAE00\uB9C1|\uC804\uD22C\uC7A5\uBE44|\uAD11\uB780",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uAD11\uB780",
+          "label": "\uAD11\uB780",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC11D\uC7AC-\uB2EC\uB825",
+          "label": "\uC11D\uC7AC \uB2EC\uB825",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC800\uAE00\uB9C1",
+          "label": "\uC800\uAE00\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
           "description": null,
           "attributes": {}
         }
@@ -2055,6 +3129,90 @@
       ]
     },
     {
+      "id": "reward-3cdd2de43c08",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC0AC\uD608|\uCC9C\uB465|\uC9C4\uC815\uD55C \uB048\uAE30|NCardRewardSelectionScreen|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0AC\uD608",
+          "label": "\uC0AC\uD608",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9C4\uC815\uD55C-\uB048\uAE30",
+          "label": "\uC9C4\uC815\uD55C \uB048\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCC9C\uB465",
+          "label": "\uCC9C\uB465",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-3e59d630e2ff",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uCCA0\uC758 \uD30C\uB3D9|\uC804\uD22C\uC7A5\uBE44|\uC644\uBCBD\uD55C \uD0C0\uACA9|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCCA0\uC758-\uD30C\uB3D9",
+          "label": "\uCCA0\uC758 \uD30C\uB3D9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-425988603a25",
       "name": "Observed Reward",
       "source": "live-event:reward-screen-opened",
@@ -2083,6 +3241,27 @@
       "options": []
     },
     {
+      "id": "reward-44cf523563a6",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC57D\uD654 \uD3EC\uC158",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uC57D\uD654-\uD3EC\uC158",
+          "label": "\uC57D\uD654 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-45158a17cc50",
       "name": "Observed Reward",
       "source": "live-event:choice-list-presented",
@@ -2104,6 +3283,51 @@
         {
           "id": "\uB118\uAE30\uAE30",
           "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-457552f49c93",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC800\uAE00\uB9C1|\uC804\uD22C\uC7A5\uBE44|\uAD11\uB780|NCardRewardSelectionScreen|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uAD11\uB780",
+          "label": "\uAD11\uB780",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC800\uAE00\uB9C1",
+          "label": "\uC800\uAE00\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
           "description": null,
           "attributes": {}
         }
@@ -2178,6 +3402,39 @@
         {
           "id": "rewardsscreen",
           "label": "RewardsScreen",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-4ef0cb1e2b32",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC0AC\uD608|\uCC9C\uB465|\uC9C4\uC815\uD55C \uB048\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uC0AC\uD608",
+          "label": "\uC0AC\uD608",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9C4\uC815\uD55C-\uB048\uAE30",
+          "label": "\uC9C4\uC815\uD55C \uB048\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCC9C\uB465",
+          "label": "\uCC9C\uB465",
           "description": null,
           "attributes": {}
         }
@@ -2274,6 +3531,123 @@
         {
           "id": "\uD30C\uAD34",
           "label": "\uD30C\uAD34",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-59b533cd3696",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC57D\uD654 \uD3EC\uC158|\uC9D3\uBC1F\uAE30|\uAC70\uC0C1|\uD30C\uC5F4",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uAC70\uC0C1",
+          "label": "\uAC70\uC0C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC57D\uD654-\uD3EC\uC158",
+          "label": "\uC57D\uD654 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9D3\uBC1F\uAE30",
+          "label": "\uC9D3\uBC1F\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD30C\uC5F4",
+          "label": "\uD30C\uC5F4",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-59db33bcd715",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uBAB8\uD1B5 \uBC15\uCE58\uAE30|\uC545\uC758|\uC644\uBCBD\uD55C \uD0C0\uACA9",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uBAB8\uD1B5-\uBC15\uCE58\uAE30",
+          "label": "\uBAB8\uD1B5 \uBC15\uCE58\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC545\uC758",
+          "label": "\uC545\uC758",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-5e209c1c8478",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC57D\uD654 \uD3EC\uC158|\uBD89\uC740 \uD574\uACE8|\uBAB8\uD1B5 \uBC15\uCE58\uAE30|\uC545\uC758|\uC644\uBCBD\uD55C \uD0C0\uACA9",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uBAB8\uD1B5-\uBC15\uCE58\uAE30",
+          "label": "\uBAB8\uD1B5 \uBC15\uCE58\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD89\uC740-\uD574\uACE8",
+          "label": "\uBD89\uC740 \uD574\uACE8",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC545\uC758",
+          "label": "\uC545\uC758",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC57D\uD654-\uD3EC\uC158",
+          "label": "\uC57D\uD654 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
           "description": null,
           "attributes": {}
         }
@@ -2418,6 +3792,45 @@
         {
           "id": "\uD551",
           "label": "\uD551",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-6269821d58cd",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC800\uAE00\uB9C1|\uC804\uD22C\uC7A5\uBE44|\uAD11\uB780|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uAD11\uB780",
+          "label": "\uAD11\uB780",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC800\uAE00\uB9C1",
+          "label": "\uC800\uAE00\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
           "description": null,
           "attributes": {}
         }
@@ -2617,11 +4030,154 @@
       ]
     },
     {
+      "id": "reward-6b5a745e6410",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uADF8\uB798\uD50C\uB9C1|\uC78A\uD78C \uC758\uC2DD|\uCCA0\uC758 \uD30C\uB3D9|NCardRewardSelectionScreen|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uADF8\uB798\uD50C\uB9C1",
+          "label": "\uADF8\uB798\uD50C\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC78A\uD78C-\uC758\uC2DD",
+          "label": "\uC78A\uD78C \uC758\uC2DD",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCCA0\uC758-\uD30C\uB3D9",
+          "label": "\uCCA0\uC758 \uD30C\uB3D9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-70242c3f1906",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "{gold} \uACE8\uB4DC|\uC0AC\uD608|\uCC9C\uB465|\uC9C4\uC815\uD55C \uB048\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "gold--\uACE8\uB4DC",
+          "label": "{gold} \uACE8\uB4DC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0AC\uD608",
+          "label": "\uC0AC\uD608",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9C4\uC815\uD55C-\uB048\uAE30",
+          "label": "\uC9C4\uC815\uD55C \uB048\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCC9C\uB465",
+          "label": "\uCC9C\uB465",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-744827f45492",
       "name": "Observed Reward",
       "source": "live-event:reward-screen-opened",
       "observed": true,
       "rawText": "{\u0022method\u0022:\u0022ShowScreen\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022,\u0022choiceCount\u0022:1}",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": []
+    },
+    {
+      "id": "reward-745889fe6f04",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "NCardRewardSelectionScreen|\uC9D3\uBC1F\uAE30|\uAC70\uC0C1|\uD30C\uC5F4|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uAC70\uC0C1",
+          "label": "\uAC70\uC0C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9D3\uBC1F\uAE30",
+          "label": "\uC9D3\uBC1F\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD30C\uC5F4",
+          "label": "\uD30C\uC5F4",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-7534e0e762ef",
+      "name": "Observed Reward",
+      "source": "live-event:reward-screen-opened",
+      "observed": true,
+      "rawText": "{\u0022method\u0022:\u0022_Ready\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022,\u0022choiceCount\u0022:11}",
       "tags": [
         "reward"
       ],
@@ -2696,6 +4252,90 @@
         {
           "id": "\uD654\uC5FC-\uD3EC\uC158",
           "label": "\uD654\uC5FC \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-8282082a79bf",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "{gold} \uACE8\uB4DC|\uBBFC\uCCA9 \uD3EC\uC158|\uCCA0\uC758 \uD30C\uB3D9|\uC804\uD22C\uC7A5\uBE44|\uC644\uBCBD\uD55C \uD0C0\uACA9",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "gold--\uACE8\uB4DC",
+          "label": "{gold} \uACE8\uB4DC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBBFC\uCCA9-\uD3EC\uC158",
+          "label": "\uBBFC\uCCA9 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCCA0\uC758-\uD30C\uB3D9",
+          "label": "\uCCA0\uC758 \uD30C\uB3D9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-86929a5b9cd4",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uBD89\uC740 \uD574\uACE8|\uBAB8\uD1B5 \uBC15\uCE58\uAE30|\uC545\uC758|\uC644\uBCBD\uD55C \uD0C0\uACA9",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uBAB8\uD1B5-\uBC15\uCE58\uAE30",
+          "label": "\uBAB8\uD1B5 \uBC15\uCE58\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD89\uC740-\uD574\uACE8",
+          "label": "\uBD89\uC740 \uD574\uACE8",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC545\uC758",
+          "label": "\uC545\uC758",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
           "description": null,
           "attributes": {}
         }
@@ -2831,6 +4471,57 @@
       ]
     },
     {
+      "id": "reward-971167cf4d74",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "{gold} \uACE8\uB4DC|\uC57D\uD654 \uD3EC\uC158|\uBD89\uC740 \uD574\uACE8|\uBAB8\uD1B5 \uBC15\uCE58\uAE30|\uC545\uC758|\uC644\uBCBD\uD55C \uD0C0\uACA9",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "gold--\uACE8\uB4DC",
+          "label": "{gold} \uACE8\uB4DC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBAB8\uD1B5-\uBC15\uCE58\uAE30",
+          "label": "\uBAB8\uD1B5 \uBC15\uCE58\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD89\uC740-\uD574\uACE8",
+          "label": "\uBD89\uC740 \uD574\uACE8",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC545\uC758",
+          "label": "\uC545\uC758",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC57D\uD654-\uD3EC\uC158",
+          "label": "\uC57D\uD654 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-9af996138ef2",
       "name": "Observed Reward",
       "source": "live-event:choice-list-presented",
@@ -2912,6 +4603,39 @@
         "screen": "rewards"
       },
       "options": []
+    },
+    {
+      "id": "reward-9fb2a2460eb1",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uADF8\uB798\uD50C\uB9C1|\uC78A\uD78C \uC758\uC2DD|\uCCA0\uC758 \uD30C\uB3D9",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uADF8\uB798\uD50C\uB9C1",
+          "label": "\uADF8\uB798\uD50C\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC78A\uD78C-\uC758\uC2DD",
+          "label": "\uC78A\uD78C \uC758\uC2DD",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCCA0\uC758-\uD30C\uB3D9",
+          "label": "\uCCA0\uC758 \uD30C\uB3D9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
     },
     {
       "id": "reward-a010ad87a99b",
@@ -3058,6 +4782,192 @@
         "screen": "rewards"
       },
       "options": []
+    },
+    {
+      "id": "reward-b5d4d7a9c0a5",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uBAB8\uD1B5 \uBC15\uCE58\uAE30|\uC545\uC758|\uC644\uBCBD\uD55C \uD0C0\uACA9|NCardRewardSelectionScreen|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBAB8\uD1B5-\uBC15\uCE58\uAE30",
+          "label": "\uBAB8\uD1B5 \uBC15\uCE58\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC545\uC758",
+          "label": "\uC545\uC758",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-b71fa31d7ce7",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC9C4\uD589|\uBD88\uD0C0\uB294 \uD608\uC561|\uC0C8\uB85C\uC6B4 \uC78E|\uC601\uC6D0\uD55C \uC5BC\uC74C|\uC11D\uC7AC \uB2EC\uB825|\uBD89\uC740 \uD574\uACE8|\uD551|7\uD134 \uC885\uB8CC",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "7\uD134-\uC885\uB8CC",
+          "label": "7\uD134 \uC885\uB8CC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD89\uC740-\uD574\uACE8",
+          "label": "\uBD89\uC740 \uD574\uACE8",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC11D\uC7AC-\uB2EC\uB825",
+          "label": "\uC11D\uC7AC \uB2EC\uB825",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC601\uC6D0\uD55C-\uC5BC\uC74C",
+          "label": "\uC601\uC6D0\uD55C \uC5BC\uC74C",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9C4\uD589",
+          "label": "\uC9C4\uD589",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD551",
+          "label": "\uD551",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-b931031f8f53",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uADF8\uB798\uD50C\uB9C1|\uC78A\uD78C \uC758\uC2DD|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uADF8\uB798\uD50C\uB9C1",
+          "label": "\uADF8\uB798\uD50C\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC78A\uD78C-\uC758\uC2DD",
+          "label": "\uC78A\uD78C \uC758\uC2DD",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-bc2a4277a9fc",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "NCardRewardSelectionScreen|\uCCA0\uC758 \uD30C\uB3D9|\uC804\uD22C\uC7A5\uBE44|\uC644\uBCBD\uD55C \uD0C0\uACA9|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCCA0\uC758-\uD30C\uB3D9",
+          "label": "\uCCA0\uC758 \uD30C\uB3D9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
     },
     {
       "id": "reward-c10ee1ed7c08",
@@ -3220,6 +5130,102 @@
       ]
     },
     {
+      "id": "reward-c84792160397",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "{gold} \uACE8\uB4DC|\uC57D\uD654 \uD3EC\uC158|\uC790\uC218\uC815 \uAC00\uC9C0|\uC9D3\uBC1F\uAE30|\uAC70\uC0C1|\uD30C\uC5F4",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "gold--\uACE8\uB4DC",
+          "label": "{gold} \uACE8\uB4DC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uAC70\uC0C1",
+          "label": "\uAC70\uC0C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC57D\uD654-\uD3EC\uC158",
+          "label": "\uC57D\uD654 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC790\uC218\uC815-\uAC00\uC9C0",
+          "label": "\uC790\uC218\uC815 \uAC00\uC9C0",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9D3\uBC1F\uAE30",
+          "label": "\uC9D3\uBC1F\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD30C\uC5F4",
+          "label": "\uD30C\uC5F4",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-cc61cc4bac7a",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "NCardRewardSelectionScreen|\uC800\uAE00\uB9C1|\uC804\uD22C\uC7A5\uBE44|\uAD11\uB780|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uAD11\uB780",
+          "label": "\uAD11\uB780",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC800\uAE00\uB9C1",
+          "label": "\uC800\uAE00\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-cfcb71956165",
       "name": "Observed Reward",
       "source": "live-event:reward-screen-opened",
@@ -3232,6 +5238,39 @@
         "screen": "rewards"
       },
       "options": []
+    },
+    {
+      "id": "reward-d2b63ba97202",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC0AC\uD608|\uCC9C\uB465|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0AC\uD608",
+          "label": "\uC0AC\uD608",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCC9C\uB465",
+          "label": "\uCC9C\uB465",
+          "description": null,
+          "attributes": {}
+        }
+      ]
     },
     {
       "id": "reward-d61460b8e1e7",
@@ -3299,6 +5338,153 @@
       "options": []
     },
     {
+      "id": "reward-daa5cabf5ee8",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "{gold} \uACE8\uB4DC|\uBA85\uD655\uC131 \uCD94\uCD9C\uBB3C|\uC11D\uC7AC \uB2EC\uB825|\uC800\uAE00\uB9C1|\uC804\uD22C\uC7A5\uBE44|\uAD11\uB780",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "gold--\uACE8\uB4DC",
+          "label": "{gold} \uACE8\uB4DC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uAD11\uB780",
+          "label": "\uAD11\uB780",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBA85\uD655\uC131-\uCD94\uCD9C\uBB3C",
+          "label": "\uBA85\uD655\uC131 \uCD94\uCD9C\uBB3C",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC11D\uC7AC-\uB2EC\uB825",
+          "label": "\uC11D\uC7AC \uB2EC\uB825",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC800\uAE00\uB9C1",
+          "label": "\uC800\uAE00\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-dcd9ca7f20a1",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "NCardRewardSelectionScreen|\uADF8\uB798\uD50C\uB9C1|\uC78A\uD78C \uC758\uC2DD|\uCCA0\uC758 \uD30C\uB3D9|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uADF8\uB798\uD50C\uB9C1",
+          "label": "\uADF8\uB798\uD50C\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC78A\uD78C-\uC758\uC2DD",
+          "label": "\uC78A\uD78C \uC758\uC2DD",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCCA0\uC758-\uD30C\uB3D9",
+          "label": "\uCCA0\uC758 \uD30C\uB3D9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-ddd06ea43257",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC9C4\uD589|\uBD88\uD0C0\uB294 \uD608\uC561|\uC0C8\uB85C\uC6B4 \uC78E|\uD551|5\uD134 \uC885\uB8CC|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "5\uD134-\uC885\uB8CC",
+          "label": "5\uD134 \uC885\uB8CC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uBD88\uD0C0\uB294-\uD608\uC561",
+          "label": "\uBD88\uD0C0\uB294 \uD608\uC561",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0C8\uB85C\uC6B4-\uC78E",
+          "label": "\uC0C8\uB85C\uC6B4 \uC78E",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9C4\uD589",
+          "label": "\uC9C4\uD589",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD551",
+          "label": "\uD551",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-e0ed2dbbd8d0",
       "name": "Observed Reward",
       "source": "live-event:choice-list-presented",
@@ -3350,11 +5536,50 @@
       ]
     },
     {
+      "id": "reward-e2998c9a136c",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "{gold} \uACE8\uB4DC|\uADF8\uB798\uD50C\uB9C1|\uC78A\uD78C \uC758\uC2DD|\uCCA0\uC758 \uD30C\uB3D9",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "gold--\uACE8\uB4DC",
+          "label": "{gold} \uACE8\uB4DC",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uADF8\uB798\uD50C\uB9C1",
+          "label": "\uADF8\uB798\uD50C\uB9C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC78A\uD78C-\uC758\uC2DD",
+          "label": "\uC78A\uD78C \uC758\uC2DD",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCCA0\uC758-\uD30C\uB3D9",
+          "label": "\uCCA0\uC758 \uD30C\uB3D9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-ea78714e4001",
       "name": "Observed Reward",
       "source": "live-snapshot",
       "observed": true,
-      "rawText": "BackButton | SendButton | RelicInventory | CardPreviewContainer | GridCardPreviewContainer | EventCardPreviewContainer | MessyCardPreviewContainer | HappyCultist | Heart | SlimeSad",
+      "rawText": "\uB118\uAE30\uAE30",
       "tags": [
         "reward"
       ],
@@ -3364,6 +5589,8 @@
         "currentSceneType": "MegaCrit.Sts2.Core.Nodes.NGame",
         "sceneRootType": "Godot.Window",
         "screen": "rewards",
+        "rootTypeSummary": "System.Boolean MegaCrit.Sts2.Core.Runs.RunState System.RuntimeType MegaCrit.Sts2.Core.Runs.RunManager MegaCrit.Sts2.Core.Combat.CombatManager MegaCrit.Sts2.Core.Saves.SaveManager MegaCrit.Sts2.Core.Combat.CombatState MegaCrit.Sts2.Core.Models.Encounters.DenseVegetationEventEncounter",
+        "choiceExtractorPath": "generic",
         "declaringType": "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
         "instanceType": "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen"
       },
@@ -3457,6 +5684,15 @@
             "kind": "choice",
             "value": null
           }
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": "\uB118\uAE30\uAE30",
+          "attributes": {
+            "kind": "choice",
+            "value": null
+          }
         }
       ]
     },
@@ -3475,6 +5711,51 @@
       "options": []
     },
     {
+      "id": "reward-eb499ed5cb3b",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uC57D\uD654 \uD3EC\uC158|\uC9D3\uBC1F\uAE30|\uAC70\uC0C1|\uD30C\uC5F4|NCardRewardSelectionScreen",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uAC70\uC0C1",
+          "label": "\uAC70\uC0C1",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC57D\uD654-\uD3EC\uC158",
+          "label": "\uC57D\uD654 \uD3EC\uC158",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9D3\uBC1F\uAE30",
+          "label": "\uC9D3\uBC1F\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uD30C\uC5F4",
+          "label": "\uD30C\uC5F4",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
       "id": "reward-ed277fbc1cda",
       "name": "Observed Reward",
       "source": "live-event:reward-screen-opened",
@@ -3487,6 +5768,96 @@
         "screen": "rewards"
       },
       "options": []
+    },
+    {
+      "id": "reward-f0b71a5a94ec",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "NCardRewardSelectionScreen|\uC0AC\uD608|\uCC9C\uB465|\uC9C4\uC815\uD55C \uB048\uAE30|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC0AC\uD608",
+          "label": "\uC0AC\uD608",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC9C4\uC815\uD55C-\uB048\uAE30",
+          "label": "\uC9C4\uC815\uD55C \uB048\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCC9C\uB465",
+          "label": "\uCC9C\uB465",
+          "description": null,
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "id": "reward-f0d74531a229",
+      "name": "Observed Reward",
+      "source": "live-event:choice-list-presented",
+      "observed": true,
+      "rawText": "\uCCA0\uC758 \uD30C\uB3D9|\uC804\uD22C\uC7A5\uBE44|\uC644\uBCBD\uD55C \uD0C0\uACA9|NCardRewardSelectionScreen|\uB118\uAE30\uAE30",
+      "tags": [
+        "reward"
+      ],
+      "attributes": {
+        "screen": "rewards"
+      },
+      "options": [
+        {
+          "id": "ncardrewardselectionscreen",
+          "label": "NCardRewardSelectionScreen",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uB118\uAE30\uAE30",
+          "label": "\uB118\uAE30\uAE30",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC644\uBCBD\uD55C-\uD0C0\uACA9",
+          "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uC804\uD22C\uC7A5\uBE44",
+          "label": "\uC804\uD22C\uC7A5\uBE44",
+          "description": null,
+          "attributes": {}
+        },
+        {
+          "id": "\uCCA0\uC758-\uD30C\uB3D9",
+          "label": "\uCCA0\uC758 \uD30C\uB3D9",
+          "description": null,
+          "attributes": {}
+        }
+      ]
     }
   ],
   "keywords": [
