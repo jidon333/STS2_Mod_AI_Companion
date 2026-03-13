@@ -1,4 +1,4 @@
-# mod-with-ui
+﻿# mod-with-ui
 
 This folder contains optional reference snippets for a future mod settings UI.
 

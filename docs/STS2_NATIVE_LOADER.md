@@ -1,4 +1,4 @@
-# STS2 Native Mod Loader
+﻿# STS2 Native Mod Loader
 
 The native loader looks for content in the game's `mods` directory.
 

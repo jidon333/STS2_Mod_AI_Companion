@@ -1,4 +1,4 @@
-# 아키텍처
+﻿# 아키텍처
 
 Phase 1의 구조는 이제 `shared foundation + advisor mode + harness mode` 관점으로 읽습니다.
 

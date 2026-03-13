@@ -1,4 +1,4 @@
-# 백업과 롤백
+﻿# 백업과 롤백
 
 게임 `mods` 폴더나 modded profile을 건드리는 live 배포/검증 전에는 반드시 snapshot과 restore 경로를 준비합니다.
 

@@ -1,4 +1,4 @@
-# STS2 Mod AI Companion
+﻿# STS2 Mod AI Companion
 
 Slay the Spire 2의 현재 게임 상태를 게임 밖으로 안전하게 추출하고, 그 상태와 정적 지식 카탈로그를 바탕으로 AI 조언을 제공하는 외부 어시스턴트 프로젝트입니다.
 

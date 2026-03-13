@@ -1,4 +1,4 @@
-# Local Setup Notes
+﻿# Local Setup Notes
 
 This repository is already materialized from the shared scaffold. Use this file as a local bootstrap checklist for the AI Companion mod.
 

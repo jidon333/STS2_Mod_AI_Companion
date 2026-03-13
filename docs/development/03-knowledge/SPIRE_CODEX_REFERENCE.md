@@ -1,4 +1,4 @@
-# Spire Codex 참고 메모
+﻿# Spire Codex 참고 메모
 
 이 문서는 `https://github.com/ptrlrd/spire-codex`와 `https://spire-codex.com/`에서 무엇을 참고했고, 현재 `STS2_Mod_AI_Companion`에 무엇을 반영했는지 정리합니다.
 

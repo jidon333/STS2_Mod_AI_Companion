@@ -1,4 +1,4 @@
-# Dual-Mode 아키텍처
+﻿# Dual-Mode 아키텍처
 
 이 저장소는 이제 단일 advisor 앱이 아니라, 공통 foundation 위에 `advisor mode`와 `harness mode`가 공존하는 구조로 해석합니다.
 

@@ -1,4 +1,4 @@
-# basic-native-mod
+﻿# basic-native-mod
 
 These files are the Godot export-pack template assets used by `build-native-pck`.
 

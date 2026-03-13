@@ -1,4 +1,4 @@
-# LIVE EXPORT 세만틱스
+﻿# LIVE EXPORT 세만틱스
 
 이 문서는 현재 exporter가 내보내는 파일의 의미를 정리합니다.
 

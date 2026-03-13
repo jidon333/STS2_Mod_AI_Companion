@@ -1,4 +1,4 @@
-# Replay Fixtures
+﻿# Replay Fixtures
 
 이 폴더는 harness mode에서 사용하는 재생 입력 묶음을 둡니다.
 

@@ -1,4 +1,4 @@
-# 인게임 UI injection 예제
+﻿# 인게임 UI injection 예제
 
 이 scaffold의 기본 template mod는 인게임 UI를 포함하지 않습니다.
 

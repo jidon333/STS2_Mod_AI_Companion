@@ -1,4 +1,4 @@
-# STS2_Mod_AI_Companion 작업 인계 프롬프트
+﻿# STS2_Mod_AI_Companion 작업 인계 프롬프트
 
 아래 지시를 그대로 읽고, 현재 저장소의 작업을 이어서 진행하라.
 

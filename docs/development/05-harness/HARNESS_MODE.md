@@ -1,4 +1,4 @@
-# Harness Mode
+﻿# Harness Mode
 
 Harness mode는 개발/QA 단계에서 사용하는 test-only 운영 모드입니다. production advisor와 foundation을 공유하지만, 입력 실행이 허용된다는 점이 다릅니다.
 
