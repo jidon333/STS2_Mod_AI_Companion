@@ -53,7 +53,8 @@
 
 ### Harness Mode
 - test-only action ingress
-- scenario runner
+- legacy scenario runner
+- smoke scenario loop
 - policy engine
 - recovery manager
 - pass/fail evaluator
@@ -121,9 +122,11 @@
 - `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\src\Sts2AiCompanion.Foundation\State\CompanionStateMapper.cs`
 - `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\src\Sts2AiCompanion.Advisor\AdvisorCoordinator.cs`
 - `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\src\Sts2AiCompanion.Harness\Scenarios\ScenarioRunner.cs`
+  - legacy scenario runner
 - `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\src\Sts2AiCompanion.Harness\Policies\DeterministicPolicyEngine.cs`
 - `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\src\Sts2AiCompanion.Harness\Recovery\RecoveryManager.cs`
 - `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\src\Sts2ModAiCompanion.HarnessBridge\HarnessBridgeHost.cs`
+  - harness bridge host
 - `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\src\Sts2ModKit.Tool\HarnessCommands.cs`
 
 ### Legacy / Migration Shim
@@ -174,6 +177,13 @@
 - 다음 하네스 observer 작업은 먼저 `artifacts/knowledge/decompiled`에서 흐름과 메서드 후보를 찾고, 그 다음 runtime hook/event로 검증한다.
 - 특히 `NMainMenu::_Ready`, `NMainMenu.SingleplayerButtonPressed`, `NSingleplayerSubmenu.OpenCharacterSelect`, `NCharacterSelectScreen.OnEmbarkPressed`를 먼저 보라.
 - transient polled scene이 남아 있는 동안 `dispatch_node`를 다시 열지 마라.
+
+### E. 용어를 혼동하지 마라
+- `Smoke Harness`: `src/Sts2GuiSmokeHarness` 개발용 GUI 스모크 도구 전체
+- `Smoke Scenario Loop`: Smoke Harness 내부 단계 진행 상태 머신
+- `Legacy Scenario Runner`: `src/Sts2AiCompanion.Harness/Scenarios/ScenarioRunner.cs`
+- `Harness Bridge`: `src/Sts2ModAiCompanion.HarnessBridge` 및 `HarnessBridgeHost`/`HarnessBridgeEntryPoint`
+- GUI 스모크 하네스 상태 머신을 `Scenario Runner`라고 부르지 마라.
 
 ## 7. 현재 가장 큰 미해결 문제
 

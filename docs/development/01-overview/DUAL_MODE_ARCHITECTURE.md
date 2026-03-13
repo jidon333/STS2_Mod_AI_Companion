@@ -48,10 +48,17 @@
 - `tests/replay-fixtures/`
 
 책임:
-- scenario runner
+- legacy scenario runner
+- smoke scenario loop
 - deterministic policy
 - action executor abstraction
 - recovery / acceptance / replay
+
+용어 규칙:
+- `Smoke Harness`: `src/Sts2GuiSmokeHarness` 개발용 GUI 스모크 도구
+- `Smoke Scenario Loop`: Smoke Harness 내부 상태 머신
+- `Legacy Scenario Runner`: `src/Sts2AiCompanion.Harness/Scenarios/ScenarioRunner.cs`
+- `Harness Bridge`: `src/Sts2ModAiCompanion.HarnessBridge`
 
 ## 3. 현재 리팩터링 상태
 

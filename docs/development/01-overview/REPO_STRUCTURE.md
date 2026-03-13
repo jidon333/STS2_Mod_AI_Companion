@@ -131,7 +131,7 @@ advisor mode orchestration 계층입니다.
 test harness 계층입니다.
 
 - 역할
-  - scenario runner
+  - legacy scenario runner
   - action executor abstraction
   - deterministic policy
   - recovery / evaluation / replay
@@ -141,8 +141,22 @@ test harness 계층입니다.
 test-only in-mod action ingress 자리입니다.
 
 - 역할
-  - production read-only mod와 분리된 테스트용 action bridge
+  - production read-only mod와 분리된 테스트용 harness bridge
   - harness mode에서만 쓰는 입력 경로
+
+### `src/Sts2GuiSmokeHarness`
+
+개발용 GUI 스모크 하네스입니다.
+
+- 역할
+  - smoke scenario loop
+  - 게임 창 캡처
+  - 마우스 입력 기반 black-box acceptance 자동화
+  - observer 산출물 교차검증
+
+용어 규칙:
+- `Smoke Scenario Loop`는 이 프로젝트 내부 상태 머신을 뜻합니다.
+- `Legacy Scenario Runner`는 `src/Sts2AiCompanion.Harness/Scenarios/ScenarioRunner.cs`를 뜻합니다.
 
 ### `src/Sts2AiCompanion.Wpf`
 
