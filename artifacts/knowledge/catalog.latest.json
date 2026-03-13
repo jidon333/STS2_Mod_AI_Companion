@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-12T09:03:52.3838785+00:00",
+  "generatedAt": "2026-03-13T06:38:17.9913754+00:00",
   "metadata": {
     "releaseVersion": "v0.98.3",
     "releaseCommit": "cb602cef",
@@ -19,9 +19,9 @@
       "atlas:era_atlas": "27",
       "atlas:controller_atlas": "112",
       "source": "extract-static-knowledge",
-      "eventsLoaded": "36783",
+      "eventsLoaded": "37123",
       "snapshotLoaded": "True",
-      "observedSources": "12"
+      "observedSources": "18"
     }
   },
   "cards": [
@@ -25618,7 +25618,7 @@
     {
       "id": "relic-burning-blood",
       "name": "RELIC.BURNING_BLOOD",
-      "source": "live-relics",
+      "source": "live-event:relic-gained",
       "observed": true,
       "rawText": "RELIC.BURNING_BLOOD",
       "tags": [
@@ -37666,7 +37666,7 @@
     {
       "id": "potion-dexterity-potion",
       "name": "POTION.DEXTERITY_POTION",
-      "source": "live-potions",
+      "source": "live-event:potion-changed",
       "observed": true,
       "rawText": "POTION.DEXTERITY_POTION",
       "tags": [
@@ -37714,7 +37714,7 @@
     {
       "id": "potion-weak-potion",
       "name": "POTION.WEAK_POTION",
-      "source": "live-potions",
+      "source": "live-event:potion-changed",
       "observed": true,
       "rawText": "POTION.WEAK_POTION",
       "tags": [

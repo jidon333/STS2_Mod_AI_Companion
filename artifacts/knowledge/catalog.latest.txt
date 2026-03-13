@@ -1,5 +1,5 @@
 metadata
-generated_at: 2026-03-12T09:03:52.3838785+00:00
+generated_at: 2026-03-13T06:38:17.9913754+00:00
 release_version: v0.98.3
 release_commit: cb602cef
 release_date: 2026-03-09T19:21:00.0000000-07:00
@@ -16,8 +16,8 @@ atlas:relic_atlas: 336
 atlas:relic_outline_atlas: 336
 atlas:stats_screen_atlas: 16
 atlas:ui_atlas: 102
-eventsLoaded: 36783
-observedSources: 12
+eventsLoaded: 37123
+observedSources: 18
 snapshotLoaded: True
 source: extract-static-knowledge
 
@@ -44,7 +44,7 @@ count: 307
 - Potion Belt [megacrit-sts2-core-models-relics-potionbelt] source=strict-domain-parse tags=strict-relic, strict-model
 - RELIC.AMETHYST_AUBERGINE [relic-amethyst-aubergine] source=live-relics tags=relic, relic-gained
 - RELIC.BELLOWS [relic-bellows] source=live-relics tags=relic, relic-gained
-- RELIC.BURNING_BLOOD [relic-burning-blood] source=live-relics tags=choice, relic, relic-gained, relic-lost
+- RELIC.BURNING_BLOOD [relic-burning-blood] source=live-event:relic-gained tags=choice, relic, relic-gained, relic-lost
 - RELIC.CURSED_PEARL [relic-cursed-pearl] source=live-relics tags=choice, relic, relic-gained
 - RELIC.HAPPY_FLOWER [relic-happy-flower] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
 - RELIC.LEAD_PAPERWEIGHT [relic-lead-paperweight] source=live-event:relic-gained tags=relic, relic-gained, relic-lost
@@ -57,11 +57,11 @@ potions
 count: 70
 - POTION.ATTACK_POTION [potion-attack-potion] source=live-event:potion-changed tags=potion
 - POTION.CLARITY [potion-clarity] source=live-potions tags=potion
-- POTION.DEXTERITY_POTION [potion-dexterity-potion] source=live-potions tags=potion
+- POTION.DEXTERITY_POTION [potion-dexterity-potion] source=live-event:potion-changed tags=potion
 - POTION.FAIRY_IN_A_BOTTLE [potion-fairy-in-a-bottle] source=live-event:potion-changed tags=potion
 - POTION.FIRE_POTION [potion-fire-potion] source=live-potions tags=potion
 - POTION.SKILL_POTION [potion-skill-potion] source=live-event:potion-changed tags=potion
-- POTION.WEAK_POTION [potion-weak-potion] source=live-potions tags=potion
+- POTION.WEAK_POTION [potion-weak-potion] source=live-event:potion-changed tags=potion
 - 강장제 [megacrit-sts2-core-models-potions-fortifier] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=[gold]방어도[/gold]를 3배로 만듭니다.
 - 거대화 포션 [megacrit-sts2-core-models-potions-gigantificationpotion] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=다음에 사용하는 공격 카드의 피해량이 3배로 증가합니다.
 - 공격 포션 [megacrit-sts2-core-models-potions-attackpotion] source=localization-scan tags=l10n, localized-potion, strict-model, strict-potion description=무작위 공격 카드 [blue]3[/blue]장 중 [blue]1[/blue]장을 선택해 [gold]손[/gold]으로 가져옵니다. 이번 턴 동안...
