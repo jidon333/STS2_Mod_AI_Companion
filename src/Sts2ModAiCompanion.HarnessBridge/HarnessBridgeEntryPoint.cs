@@ -19,11 +19,15 @@ public static class HarnessBridgeEntryPoint
                 return true;
             }
 
-            TryEnableTestMode();
             _host = new HarnessBridgeHost(layout, pollIntervalMs);
             _host.Start();
             return true;
         }
+    }
+
+    internal static void ActivateHarnessSession()
+    {
+        TryEnableTestMode();
     }
 
     private static void TryEnableTestMode()

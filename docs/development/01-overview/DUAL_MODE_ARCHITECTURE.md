@@ -72,3 +72,12 @@
 - harness는 production을 대체하지 않고 production 개발 속도를 올리기 위한 test mode입니다.
 - mode별 계약은 분리하지만, `state`, `knowledge`, `session`, `artifact` vocabulary는 공유합니다.
 - production UI는 foundation 위에 얹힌 surface이며, foundation이 아닙니다.
+
+## Update (2026-03-13): observer/actuator split 구체화
+
+- HarnessBridge는 이제 `observer + actuator` 경계로 해석합니다.
+- bridge load 가능 상태와 actuator active 상태를 분리합니다.
+- `harness.enabled`는 bridge를 로드할 수 있다는 뜻이지, 곧바로 action 소비를 허용한다는 뜻이 아닙니다.
+- observer 역할은 dormant 상태에서도 유지될 수 있습니다. 즉 harness inventory export는 가능하지만 queue 소비와 test mode 활성화는 arm 이후에만 허용됩니다.
+- external commander는 게임 밖에서 screenshot + live export + harness inventory를 보고 판단하고, DLL은 `nodeId` 기반 UI-bound event dispatch만 수행합니다.
+- production advisor / WPF에는 이 harness control concern을 넣지 않습니다.

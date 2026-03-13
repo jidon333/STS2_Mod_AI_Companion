@@ -10,7 +10,9 @@ public sealed record HarnessQueueLayout(
     string OutboxRoot,
     string ResultsPath,
     string StatusPath,
-    string TracePath);
+    string TracePath,
+    string ArmSessionPath,
+    string InventoryPath);
 
 public static class HarnessPathResolver
 {
@@ -28,7 +30,9 @@ public static class HarnessPathResolver
             outboxRoot,
             Path.Combine(outboxRoot, options.ResultsFileName),
             Path.Combine(harnessRoot, options.StatusFileName),
-            Path.Combine(outboxRoot, "trace.ndjson"));
+            Path.Combine(outboxRoot, "trace.ndjson"),
+            Path.Combine(harnessRoot, "arm.json"),
+            Path.Combine(outboxRoot, "inventory.latest.json"));
     }
 
     public static void EnsureDirectories(HarnessQueueLayout layout)

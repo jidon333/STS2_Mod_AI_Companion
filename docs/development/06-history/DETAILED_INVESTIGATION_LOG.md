@@ -99,3 +99,59 @@
 - reward/event/shop/rest/combat에서 semantic hook가 실제로 어느 타입/메서드에 잘 걸리는가
 - PCK inventory 결과를 실제 카드/유물/이벤트 canonical id로 어떻게 정규화할 것인가
 - replay harness를 어떤 fixture 세트로 구성할 것인가
+
+## 8. harness contamination이 결과 전체를 오염시키는 문제
+
+### 증상
+
+- 사용자가 새 명령을 내리지 않았는데도 main menu에서 character select / run start 쪽으로 자동 진행되는 것처럼 보이는 런이 있었습니다.
+- stale harness inbox에 `__start__`, `__ironclad__`, `__confirm__` 같은 이전 액션이 남아 있었습니다.
+- bridge load 시점에 test mode / FTUE bypass가 곧바로 활성화되는 경로가 존재했습니다.
+
+### 판단
+
+- 이 상태에서는 black screen, crash, scene contamination, harness PoC 결과를 정상 기준으로 해석하면 안 됩니다.
+- 우선순위는 `first reward`가 아니라 `Manual Clean Boot`입니다.
+- stale deploy/ABI mismatch가 해결되어도 harness contamination이 남아 있으면 런 전체를 신뢰할 수 없습니다.
+
+### 조치
+
+- bridge 기본 상태를 `dormant`로 재정의했습니다.
+- `arm.json`이 없으면 queue를 소비하지 않도록 경계를 재설계했습니다.
+- session token이 일치하는 action만 소비하도록 방어선을 추가했습니다.
+- bridge load 시 test mode auto-enable은 허용하지 않고, arm 이후에만 가능하도록 바꾸는 방향으로 고정했습니다.
+
+## 9. external command transport를 왜 파일 기반으로 먼저 고정했는가
+
+### 고민
+
+- observer는 파일 기반 live export이고, command만 IPC로 올리는 혼합형이 직관적으로 좋아 보일 수 있었습니다.
+
+### 판단
+
+- 현재 iteration의 핵심은 지연시간보다 contamination 차단과 triage 가능성입니다.
+- 이미 `live export`, `harness inbox/outbox`, `status.json`, `trace.ndjson`가 파일 기반이므로, 같은 경계에 `arm.json`과 `inventory.latest.json`을 추가하는 편이 더 안전합니다.
+- transport를 섞으면 session sync, boot race, stale command 판정 지점이 늘어납니다.
+
+### 결론
+
+- 이번 단계는 파일 기반 external command contract로 고정합니다.
+- latency가 실제 병목으로 확인되기 전까지는 IPC로 올리지 않습니다.
+
+## 10. 멀티 에이전트 Codex orchestration 자체의 실패
+
+### 증상
+
+- 서브 에이전트가 repository 파일을 읽거나 쓰려는 시점에 backend가 `refusing to run unsandboxed` 류 오류를 내며 막혔습니다.
+- `fork_context=true`로 다시 붙여도 critical path worker로 신뢰할 수 있는 수준까지는 복구되지 않았습니다.
+
+### 판단
+
+- 이 세션에서는 멀티 에이전트를 주 작업 경로로 쓰면 안 됩니다.
+- 특히 구현/빌드/검증을 worker에 의존하는 전략은 지금 상태에서 실무적으로 불안정합니다.
+
+### 조치
+
+- 이번 iteration 동안은 메인 세션 단일 실행 주체 전략으로 전환했습니다.
+- 서브 에이전트는 critical path에서 제외하고, 문서/설계 참고용 보조 수단으로만 취급하기로 했습니다.
+- 이 판단 자체도 시행착오로 기록해 다음 세션이 같은 시간 손실을 반복하지 않도록 합니다.

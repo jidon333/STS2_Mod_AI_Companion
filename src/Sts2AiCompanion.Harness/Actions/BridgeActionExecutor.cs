@@ -7,7 +7,9 @@ namespace Sts2AiCompanion.Harness.Actions;
 public sealed class BridgeActionExecutor : IHarnessActionExecutor
 {
     private const int TimeoutGraceMs = 3_000;
+    private const string SessionTokenMetadataKey = "sessionToken";
     private readonly HarnessQueueLayout _layout;
+    private readonly string? _sessionToken;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -15,18 +17,20 @@ public sealed class BridgeActionExecutor : IHarnessActionExecutor
         WriteIndented = false,
     };
 
-    public BridgeActionExecutor(HarnessQueueLayout layout)
+    public BridgeActionExecutor(HarnessQueueLayout layout, string? sessionToken = null)
     {
         _layout = layout;
+        _sessionToken = string.IsNullOrWhiteSpace(sessionToken) ? null : sessionToken.Trim();
         HarnessPathResolver.EnsureDirectories(layout);
     }
 
     public async Task<HarnessActionResult> ExecuteAsync(HarnessAction action, CompanionState state, CancellationToken cancellationToken)
     {
         var startedAt = DateTimeOffset.UtcNow;
+        var queuedAction = StampSessionToken(action);
         var payload = new
         {
-            action,
+            action = queuedAction,
             state,
         };
 
@@ -34,11 +38,11 @@ public sealed class BridgeActionExecutor : IHarnessActionExecutor
             JsonSerializer.Serialize(payload, _jsonOptions) + Environment.NewLine,
             cancellationToken).ConfigureAwait(false);
 
-        var deadline = startedAt.AddMilliseconds(Math.Max(action.TimeoutMs, 1_000) + TimeoutGraceMs);
+        var deadline = startedAt.AddMilliseconds(Math.Max(queuedAction.TimeoutMs, 1_000) + TimeoutGraceMs);
         while (DateTimeOffset.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var existing = await TryReadResultAsync(action.ActionId, cancellationToken).ConfigureAwait(false);
+            var existing = await TryReadResultAsync(queuedAction.ActionId, cancellationToken).ConfigureAwait(false);
             if (existing is not null)
             {
                 return existing;
@@ -46,7 +50,7 @@ public sealed class BridgeActionExecutor : IHarnessActionExecutor
 
             var bridgeStatus = await TryReadStatusAsync(cancellationToken).ConfigureAwait(false);
             if (bridgeStatus is not null
-                && string.Equals(bridgeStatus.LastActionId, action.ActionId, StringComparison.Ordinal)
+                && string.Equals(bridgeStatus.LastActionId, queuedAction.ActionId, StringComparison.Ordinal)
                 && string.Equals(bridgeStatus.LastResultStatus, "pending", StringComparison.OrdinalIgnoreCase))
             {
                 await Task.Delay(250, cancellationToken).ConfigureAwait(false);
@@ -57,7 +61,7 @@ public sealed class BridgeActionExecutor : IHarnessActionExecutor
         }
 
         return new HarnessActionResult(
-            action.ActionId,
+            queuedAction.ActionId,
             "timeout",
             startedAt,
             DateTimeOffset.UtcNow,
@@ -65,6 +69,21 @@ public sealed class BridgeActionExecutor : IHarnessActionExecutor
             true,
             null,
             Array.Empty<string>());
+    }
+
+    private HarnessAction StampSessionToken(HarnessAction action)
+    {
+        if (string.IsNullOrWhiteSpace(_sessionToken))
+        {
+            return action;
+        }
+
+        var metadata = new Dictionary<string, string?>(action.Metadata, StringComparer.OrdinalIgnoreCase)
+        {
+            [SessionTokenMetadataKey] = _sessionToken,
+        };
+
+        return action with { Metadata = metadata };
     }
 
     private async Task AppendActionAsync(string payload, CancellationToken cancellationToken)

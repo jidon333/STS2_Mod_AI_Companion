@@ -26,6 +26,7 @@ internal static class HarnessCommands
         CancellationToken cancellationToken)
     {
         var stage = "initialize";
+        HarnessQueueLayout? queueLayout = null;
         try
         {
             stage = "enable-harness-config";
@@ -35,16 +36,20 @@ internal static class HarnessCommands
             };
             var startupTargetScene = await TryReadStartupTargetSceneAsync(scenarioPath, cancellationToken).ConfigureAwait(false);
             var liveLayout = LiveExportPathResolver.Resolve(harnessConfiguration.GamePaths, harnessConfiguration.LiveExport);
-            var queueLayout = HarnessPathResolver.Resolve(harnessConfiguration.GamePaths, harnessConfiguration.Harness);
+            queueLayout = HarnessPathResolver.Resolve(harnessConfiguration.GamePaths, harnessConfiguration.Harness);
 
             stage = "stop-running-game";
             StopGameIfRunning();
             stage = "restore-latest-snapshot";
             TryRestoreLatestSnapshotState(harnessConfiguration, workspaceRoot);
+            stage = "sync-modded-profile";
+            SyncHarnessProfileState(harnessConfiguration, workspaceRoot);
             stage = "clear-active-run-save";
             ClearHarnessRunProgress(harnessConfiguration);
             stage = "reset-live-export";
             ResetLiveArtifacts(liveLayout);
+            stage = "reset-runtime-log";
+            ResetRuntimeLog(harnessConfiguration);
             stage = "reset-harness-queue";
             ResetHarnessQueue(queueLayout);
             stage = "deploy-harness";
@@ -53,10 +58,15 @@ internal static class HarnessCommands
             EnsureGameRunning(harnessConfiguration);
             stage = "wait-for-harness-bridge";
             await WaitForHarnessBridgeReadyAsync(queueLayout, harnessConfiguration, cancellationToken).ConfigureAwait(false);
+            stage = "arm-harness-bridge";
+            var armSession = CreateHarnessArmSession(harnessConfiguration, "run-harness-scenario");
+            await WriteHarnessArmSessionAsync(queueLayout, armSession, cancellationToken).ConfigureAwait(false);
+            stage = "wait-for-harness-arm";
+            await WaitForHarnessBridgeReadyAsync(queueLayout, harnessConfiguration, cancellationToken, requiredMode: "armed").ConfigureAwait(false);
 
             stage = "construct-services";
             var stateSource = new LiveCompanionStateSource(harnessConfiguration);
-            var actionExecutor = new BridgeActionExecutor(queueLayout);
+            var actionExecutor = new BridgeActionExecutor(queueLayout, armSession.SessionToken);
             var recoveryManager = new RecoveryManager(harnessConfiguration, actionExecutor);
             var evaluator = new AcceptanceEvaluator();
             var policyEngine = new DeterministicPolicyEngine(harnessConfiguration);
@@ -113,6 +123,13 @@ internal static class HarnessCommands
         {
             throw new InvalidOperationException($"Harness scenario failed during '{stage}' for '{scenarioPath}': {exception.Message}", exception);
         }
+        finally
+        {
+            if (queueLayout is not null)
+            {
+                TryDisarmHarness(queueLayout);
+            }
+        }
     }
 
     public static HarnessRunInspectionResult InspectRun(string workspaceRoot, string runId)
@@ -132,6 +149,87 @@ internal static class HarnessCommands
             File.Exists(actionsPath) ? File.ReadLines(actionsPath).Count() : 0,
             File.Exists(resultsPath) ? File.ReadLines(resultsPath).Count() : 0,
             evaluation);
+    }
+
+    public static async Task<HarnessArmSession> ArmSessionAsync(
+        ScaffoldConfiguration configuration,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var layout = HarnessPathResolver.Resolve(configuration.GamePaths, configuration.Harness);
+        HarnessPathResolver.EnsureDirectories(layout);
+        var session = CreateHarnessArmSession(configuration, reason);
+        await WriteHarnessArmSessionAsync(layout, session, cancellationToken).ConfigureAwait(false);
+        return session;
+    }
+
+    public static HarnessControlInspectionResult DisarmSession(ScaffoldConfiguration configuration)
+    {
+        var layout = HarnessPathResolver.Resolve(configuration.GamePaths, configuration.Harness);
+        HarnessPathResolver.EnsureDirectories(layout);
+        TryDisarmHarness(layout);
+        return InspectControl(configuration);
+    }
+
+    public static HarnessControlInspectionResult InspectControl(ScaffoldConfiguration configuration)
+    {
+        var layout = HarnessPathResolver.Resolve(configuration.GamePaths, configuration.Harness);
+        HarnessPathResolver.EnsureDirectories(layout);
+        var armSession = TryReadActiveArmSession(layout);
+        var inventory = TryReadInventory(layout);
+        return new HarnessControlInspectionResult(
+            layout.HarnessRoot,
+            layout.StatusPath,
+            layout.ArmSessionPath,
+            layout.InventoryPath,
+            TryReadBridgeStatus(layout),
+            armSession,
+            armSession is not null && armSession.ExpiresAt <= DateTimeOffset.UtcNow,
+            inventory?.InventoryId,
+            inventory?.SceneType,
+            inventory?.Mode,
+            inventory?.BlockingModal,
+            inventory?.Nodes.Count ?? 0);
+    }
+
+    public static async Task<HarnessActionResult> DispatchNodeAsync(
+        ScaffoldConfiguration configuration,
+        string inventoryId,
+        string nodeId,
+        CancellationToken cancellationToken)
+    {
+        var layout = HarnessPathResolver.Resolve(configuration.GamePaths, configuration.Harness);
+        HarnessPathResolver.EnsureDirectories(layout);
+
+        var armSession = TryReadActiveArmSession(layout)
+                         ?? throw new InvalidOperationException($"Harness arm session is missing: {layout.ArmSessionPath}");
+        var inventory = TryReadInventory(layout)
+                        ?? throw new InvalidOperationException($"Harness node inventory is missing: {layout.InventoryPath}");
+        if (!string.Equals(inventory.InventoryId, inventoryId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Requested inventory '{inventoryId}' does not match current inventory '{inventory.InventoryId}'.");
+        }
+
+        var targetNode = inventory.Nodes.FirstOrDefault(node => string.Equals(node.NodeId, nodeId, StringComparison.Ordinal))
+                         ?? throw new InvalidOperationException($"Node '{nodeId}' was not found in inventory '{inventoryId}'.");
+        var metadata = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["inventoryId"] = inventoryId,
+        };
+        var action = HarnessAction.Create(
+            "dispatch_node",
+            $"dispatch-node:{nodeId}",
+            timeoutMs: Math.Max(configuration.Harness.StepTimeoutMs, 10_000),
+            safetyClass: "test-only",
+            metadata: metadata) with
+        {
+            TargetRef = nodeId,
+            TargetLabel = targetNode.Label,
+        };
+
+        var executor = new BridgeActionExecutor(layout, armSession.SessionToken);
+        return await executor.ExecuteAsync(action, CompanionState.CreateUnknown(inventory.RunId), cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task DeployHarnessAsync(
@@ -217,7 +315,8 @@ internal static class HarnessCommands
     private static async Task WaitForHarnessBridgeReadyAsync(
         HarnessQueueLayout layout,
         ScaffoldConfiguration configuration,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? requiredMode = null)
     {
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(Math.Max(configuration.Harness.StepTimeoutMs, 45_000));
         string? lastStatusContents = null;
@@ -232,7 +331,10 @@ internal static class HarnessCommands
                 {
                     await using var stream = new FileStream(layout.StatusPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                     var status = await JsonSerializer.DeserializeAsync<HarnessBridgeStatus>(stream, ProgramJson.SerializerOptions, cancellationToken).ConfigureAwait(false);
-                    if (status is not null && status.Enabled)
+                    if (status is not null
+                        && status.Enabled
+                        && (string.IsNullOrWhiteSpace(requiredMode)
+                            || string.Equals(status.Mode, requiredMode, StringComparison.OrdinalIgnoreCase)))
                     {
                         return;
                     }
@@ -256,6 +358,44 @@ internal static class HarnessCommands
 
         throw new InvalidOperationException(
             $"Harness bridge did not become ready within the expected time. status_path={layout.StatusPath} last_status={lastStatusContents ?? "<missing>"}");
+    }
+
+    private static HarnessArmSession CreateHarnessArmSession(ScaffoldConfiguration configuration, string reason)
+    {
+        var issuedAt = DateTimeOffset.UtcNow;
+        var ttl = TimeSpan.FromMilliseconds(Math.Max(configuration.Harness.StepTimeoutMs * 8, 600_000));
+        return new HarnessArmSession(
+            Guid.NewGuid().ToString("N"),
+            issuedAt,
+            issuedAt.Add(ttl),
+            reason);
+    }
+
+    private static async Task WriteHarnessArmSessionAsync(
+        HarnessQueueLayout layout,
+        HarnessArmSession session,
+        CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.ArmSessionPath)!);
+        await File.WriteAllTextAsync(
+            layout.ArmSessionPath,
+            JsonSerializer.Serialize(session, ProgramJson.SerializerOptions),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void TryDisarmHarness(HarnessQueueLayout layout)
+    {
+        try
+        {
+            if (File.Exists(layout.ArmSessionPath))
+            {
+                File.Delete(layout.ArmSessionPath);
+            }
+        }
+        catch
+        {
+            // Best-effort cleanup so later manual boots stay dormant.
+        }
     }
 
     private static void StopGameIfRunning()
@@ -298,6 +438,12 @@ internal static class HarnessCommands
         SnapshotExecutor.ExecuteRestoreToSnapshotState(snapshot);
     }
 
+    private static void SyncHarnessProfileState(ScaffoldConfiguration configuration, string workspaceRoot)
+    {
+        var outputRoot = Path.GetFullPath(configuration.GamePaths.ArtifactsRoot, workspaceRoot);
+        ModdedProfileSync.SyncVanillaToModded(configuration.GamePaths, outputRoot);
+    }
+
     private static void ClearHarnessRunProgress(ScaffoldConfiguration configuration)
     {
         foreach (var path in EnumerateHarnessRunProgressPaths(configuration))
@@ -319,7 +465,33 @@ internal static class HarnessCommands
     private static IEnumerable<string> EnumerateHarnessRunProgressPaths(ScaffoldConfiguration configuration)
     {
         var moddedProfileRoot = LiveExportPathResolver.BuildModdedProfileRoot(configuration.GamePaths);
+        var vanillaProfileRoot = Path.Combine(
+            configuration.GamePaths.UserDataRoot,
+            "steam",
+            configuration.GamePaths.SteamAccountId,
+            $"profile{configuration.GamePaths.ProfileIndex}");
         yield return Path.Combine(moddedProfileRoot, "saves", "current_run.save");
+        yield return Path.Combine(moddedProfileRoot, "saves", "current_run.save.backup");
+        yield return Path.Combine(moddedProfileRoot, "saves", "progress.save");
+        yield return Path.Combine(moddedProfileRoot, "saves", "progress.save.backup");
+        yield return Path.Combine(vanillaProfileRoot, "saves", "current_run.save");
+        yield return Path.Combine(vanillaProfileRoot, "saves", "current_run.save.backup");
+    }
+
+    private static void ResetRuntimeLog(ScaffoldConfiguration configuration)
+    {
+        var runtimeLogPath = Path.Combine(configuration.GamePaths.GameDirectory, "mods", "sts2-mod-ai-companion.runtime.log");
+        try
+        {
+            if (File.Exists(runtimeLogPath))
+            {
+                File.Delete(runtimeLogPath);
+            }
+        }
+        catch
+        {
+            // Best-effort runtime log reset so collector diagnostics stay scoped to the latest harness run.
+        }
     }
 
     private static string? TryResolveHarnessBaselineSnapshotRoot(ScaffoldConfiguration configuration, string workspaceRoot)
@@ -626,7 +798,7 @@ internal static class HarnessCommands
     private static void ResetHarnessQueue(HarnessQueueLayout layout)
     {
         HarnessPathResolver.EnsureDirectories(layout);
-        foreach (var path in new[] { layout.ActionsPath, layout.ResultsPath, layout.StatusPath, layout.TracePath })
+        foreach (var path in new[] { layout.ActionsPath, layout.ResultsPath, layout.StatusPath, layout.TracePath, layout.ArmSessionPath, layout.InventoryPath })
         {
             try
             {
@@ -690,7 +862,25 @@ internal static class HarnessCommands
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
-        File.Copy(sourcePath, destinationPath, overwrite: true);
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt += 1)
+        {
+            try
+            {
+                using var sourceStream = new FileStream(
+                    sourcePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+                using var destinationStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+                sourceStream.CopyTo(destinationStream);
+                return;
+            }
+            catch (IOException) when (attempt < maxAttempts)
+            {
+                Thread.Sleep(100 * attempt);
+            }
+        }
     }
 
     private static void CopyDirectoryContents(string sourceDirectory, string destinationDirectory)
@@ -707,6 +897,69 @@ internal static class HarnessCommands
             var destinationPath = Path.Combine(destinationDirectory, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
             File.Copy(file, destinationPath, overwrite: true);
+        }
+    }
+
+    private static HarnessArmSession? TryReadActiveArmSession(HarnessQueueLayout layout)
+    {
+        if (!File.Exists(layout.ArmSessionPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var session = JsonSerializer.Deserialize<HarnessArmSession>(
+                File.ReadAllText(layout.ArmSessionPath),
+                ProgramJson.SerializerOptions);
+            if (session is null || string.IsNullOrWhiteSpace(session.SessionToken))
+            {
+                return null;
+            }
+
+            return session.ExpiresAt <= DateTimeOffset.UtcNow ? null : session;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static HarnessBridgeStatus? TryReadBridgeStatus(HarnessQueueLayout layout)
+    {
+        if (!File.Exists(layout.StatusPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<HarnessBridgeStatus>(
+                File.ReadAllText(layout.StatusPath),
+                ProgramJson.SerializerOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static HarnessNodeInventory? TryReadInventory(HarnessQueueLayout layout)
+    {
+        if (!File.Exists(layout.InventoryPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<HarnessNodeInventory>(
+                File.ReadAllText(layout.InventoryPath),
+                ProgramJson.SerializerOptions);
+        }
+        catch
+        {
+            return null;
         }
     }
 }
@@ -729,3 +982,17 @@ internal sealed record HarnessRunInspectionResult(
     int ActionCount,
     int ResultCount,
     AcceptanceReport? Evaluation);
+
+internal sealed record HarnessControlInspectionResult(
+    string HarnessRoot,
+    string StatusPath,
+    string ArmSessionPath,
+    string InventoryPath,
+    HarnessBridgeStatus? Status,
+    HarnessArmSession? ArmSession,
+    bool ArmSessionExpired,
+    string? InventoryId,
+    string? SceneType,
+    string? InventoryMode,
+    string? BlockingModal,
+    int NodeCount);

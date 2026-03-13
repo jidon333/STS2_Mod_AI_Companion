@@ -179,3 +179,15 @@ collector mode 코드는 들어갔고, `WriteJsonAtomic` 호환성 수정, share
 ## 6. 한 줄 요약
 
 지금 저장소는 `shared foundation + advisor surface`와 harness 골격까지 세워졌고, 다음 병목은 `실제 gameplay high-value 화면에서 automatic advice와 session reuse를 안정적으로 끝까지 연결하는 것`과 `test-only harness를 최소 시나리오 1개까지 실제 실행 가능하게 만드는 것`입니다.
+
+## Update (2026-03-13): Manual Clean Boot gate와 external control 경계
+
+- 현재 가장 큰 리스크는 black screen 단정이 아니라 `harness contamination`입니다.
+- `harness.enabled = true` 자체는 더 이상 곧바로 action-enabled 상태를 뜻하지 않습니다.
+- 최신 경계 구현은 `dormant bridge + arm/session token + stale queue replay 차단`을 기준으로 재정렬되었습니다.
+- 브리지는 `arm.json`이 없으면 queue를 소비하지 않고, stale `actions.ndjson`가 남아 있어도 자동 진행을 유발하지 않는 것이 목표입니다.
+- test mode / FTUE 우회는 브리지 로드 시 자동 활성화되면 안 되고, arm 이후에만 허용됩니다.
+- external harness control의 목표 형태는 `observer + actuator` DLL이며, 외부 세션이 screenshot + live export + runtime log + harness inventory를 보고 `nodeId`를 선택하는 구조입니다.
+- action 단위는 semantic label이 아니라 `nodeId (+ inventoryId + sessionToken)`로 고정하는 방향으로 전환했습니다.
+- 현재 최신 코드 기준으로 `inventory.latest.json`, `dispatch_node`, `arm-harness-session`, `disarm-harness-session`, `inspect-harness-control`, `dispatch-harness-node` 경로를 추가했습니다.
+- 다만 이 최신 경계 작업에 대한 build/runtime 재검증은 아직 다시 수행하지 않았으므로, 다음 신뢰 게이트는 여전히 `Manual Clean Boot`입니다.

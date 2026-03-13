@@ -111,3 +111,13 @@
 - `Sts2AiCompanion.Foundation`, `Sts2AiCompanion.Advisor`, `Sts2AiCompanion.Harness`, `Sts2ModAiCompanion.HarnessBridge` 프로젝트 골격을 추가했습니다.
 - WPF는 legacy host를 직접 보는 대신 advisor façade를 통해 붙도록 구조를 정리하기 시작했습니다.
 - harness는 아직 스켈레톤 단계이며, 다음 단계에서 test-only action executor와 첫 unattended scenario를 닫는 것이 목표입니다.
+
+## 17. harness contamination 경계 재정의와 external control 파일 계약 추가
+
+- 최근 검은 화면/자동 진행 관측은 정상 런 기준이 아니라 stale harness queue와 auto-enabled test path가 섞인 contamination 상태일 가능성이 높다는 판단을 고정했습니다.
+- `Manual Clean Boot`를 first reward보다 앞선 최우선 게이트로 재설정했습니다.
+- bridge를 `dormant by default`로 보고, arm/session token 없이는 queue를 소비하지 않는 방향으로 제어 경계를 다시 잡았습니다.
+- `arm.json`과 `inventory.latest.json`을 포함한 harness control 파일 계약을 추가하고, external command 기본 단위를 semantic label에서 `nodeId`로 옮기기 시작했습니다.
+- CLI에 `arm-harness-session`, `disarm-harness-session`, `inspect-harness-control`, `dispatch-harness-node` 경로를 추가해 외부 지휘면을 tool 쪽으로 분리했습니다.
+- 이번 단계에서 중요한 판단은 “DLL은 손발과 관측만, 판단은 외부 세션”이며, UI-bound dispatch만 허용한다는 점입니다.
+- 아직 최신 경계 구현에 대한 Manual Clean Boot 재검증은 남아 있습니다.

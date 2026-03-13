@@ -382,7 +382,9 @@ static void TestBridgeActionExecutorRoundTrip()
             Path.Combine(root, "harness", "outbox"),
             Path.Combine(root, "harness", "outbox", "results.ndjson"),
             Path.Combine(root, "harness", "status.json"),
-            Path.Combine(root, "harness", "outbox", "trace.ndjson"));
+            Path.Combine(root, "harness", "outbox", "trace.ndjson"),
+            Path.Combine(root, "harness", "arm.json"),
+            Path.Combine(root, "harness", "outbox", "inventory.latest.json"));
         HarnessPathResolver.EnsureDirectories(layout);
 
         var executor = new BridgeActionExecutor(layout);

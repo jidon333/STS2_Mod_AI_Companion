@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Sts2AiCompanion.Foundation.Contracts;
 using Sts2ModAiCompanion.HarnessBridge.ActionIngress;
@@ -12,11 +14,10 @@ namespace Sts2ModAiCompanion.HarnessBridge;
 
 internal sealed class HarnessBridgeHost : IHarnessActionIngress
 {
+    private const string SessionTokenMetadataKey = "sessionToken";
     private static readonly string[] SingletonPropertyNames = { "Instance", "Current", "Singleton", "State" };
     private static readonly string[] NestedRootNames = { "Run", "RunState", "State", "Player", "Character", "Encounter", "Combat", "Manager" };
     private static readonly string[] SceneNodeKeywords = { "Screen", "Room", "Map", "Reward", "Event", "Shop", "Rest", "Button", "Character", "Menu", "Card" };
-    private static readonly string[] FtuesToDisable = { "accept_tutorials_ftue", "accept_tutorial_ftue" };
-
     private static readonly IReadOnlyDictionary<string, string[]> SentinelAliases =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
@@ -43,6 +44,9 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     private readonly int _pollIntervalMs;
     private Thread? _thread;
     private HarnessIngressStatus _status = new(true, "idle", null, DateTimeOffset.UtcNow);
+    private string? _activeSessionToken;
+    private bool _testModeActivatedForSession;
+    private string? _lastInventorySignature;
     private static IReadOnlyList<string> _defaultArtifactRefs = Array.Empty<string>();
 
     public HarnessBridgeHost(HarnessQueueLayout layout, int pollIntervalMs)
@@ -55,7 +59,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     public void Start()
     {
         HarnessPathResolver.EnsureDirectories(_layout);
-        WriteStatus("idle", null, null, "harness bridge started");
+        WriteStatus("dormant", null, null, "waiting for arm session");
         _thread = new Thread(RunLoop)
         {
             IsBackground = true,
@@ -76,6 +80,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         {
             try
             {
+                PublishNodeInventory();
                 ProcessPendingActions();
             }
             catch (Exception exception)
@@ -89,8 +94,15 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
     private void ProcessPendingActions()
     {
+        var armSession = TryGetActiveArmSession();
+        if (armSession is null)
+        {
+            return;
+        }
+
         if (!File.Exists(_layout.ActionsPath))
         {
+            EnsureArmedStatus(armSession);
             return;
         }
 
@@ -114,7 +126,41 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                 continue;
             }
 
-            if (envelope?.Action is null || !_processedActionIds.Add(envelope.Action.ActionId))
+            if (envelope?.Action is null)
+            {
+                continue;
+            }
+
+            var actionSessionToken = TryGetActionSessionToken(envelope.Action);
+            if (string.IsNullOrWhiteSpace(actionSessionToken)
+                || !string.Equals(actionSessionToken, armSession.SessionToken, StringComparison.Ordinal))
+            {
+                AppendTrace("action-ignored", envelope.Action.ActionId, new
+                {
+                    reason = "session-token-mismatch",
+                    expectedSessionToken = armSession.SessionToken,
+                    observedSessionToken = actionSessionToken,
+                    envelope.Action.Kind,
+                    envelope.Action.TargetLabel,
+                    requestedAt = envelope.Action.RequestedAt,
+                });
+                continue;
+            }
+
+            if (envelope.Action.RequestedAt < armSession.IssuedAt)
+            {
+                AppendTrace("action-ignored", envelope.Action.ActionId, new
+                {
+                    reason = "requested-before-arm",
+                    armIssuedAt = armSession.IssuedAt,
+                    requestedAt = envelope.Action.RequestedAt,
+                    envelope.Action.Kind,
+                    envelope.Action.TargetLabel,
+                });
+                continue;
+            }
+
+            if (!_processedActionIds.Add(envelope.Action.ActionId))
             {
                 continue;
             }
@@ -138,9 +184,444 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                 startedAt = result.StartedAt,
                 completedAt = result.CompletedAt,
             });
-            WriteStatus("idle", envelope.Action.ActionId, result.Status, result.FailureKind);
+            WriteStatus("armed", envelope.Action.ActionId, result.Status, result.FailureKind);
         }
     }
+
+    private HarnessArmSession? TryGetActiveArmSession()
+    {
+        var armSession = TryReadArmSession();
+        if (armSession is null)
+        {
+            if (!string.IsNullOrWhiteSpace(_activeSessionToken))
+            {
+                _activeSessionToken = null;
+                _processedActionIds.Clear();
+                _testModeActivatedForSession = false;
+                EnsureDormantStatus("waiting for arm session");
+            }
+
+            return null;
+        }
+
+        var tokenChanged = !string.Equals(_activeSessionToken, armSession.SessionToken, StringComparison.Ordinal);
+        if (tokenChanged)
+        {
+            _activeSessionToken = armSession.SessionToken;
+            _processedActionIds.Clear();
+            _testModeActivatedForSession = false;
+        }
+
+        if (!_testModeActivatedForSession)
+        {
+            HarnessBridgeEntryPoint.ActivateHarnessSession();
+            _testModeActivatedForSession = true;
+        }
+
+        EnsureArmedStatus(armSession);
+        return armSession;
+    }
+
+    private HarnessArmSession? TryReadArmSession()
+    {
+        if (!File.Exists(_layout.ArmSessionPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = new FileStream(_layout.ArmSessionPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            var session = JsonSerializer.Deserialize<HarnessArmSession>(stream, _jsonOptions);
+            if (session is null || string.IsNullOrWhiteSpace(session.SessionToken) || session.IssuedAt == default)
+            {
+                return null;
+            }
+
+            if (session.ExpiresAt <= DateTimeOffset.UtcNow)
+            {
+                return null;
+            }
+
+            return session with { SessionToken = session.SessionToken.Trim() };
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private void EnsureArmedStatus(HarnessArmSession armSession)
+    {
+        var message = string.IsNullOrWhiteSpace(armSession.Reason)
+            ? "armed"
+            : $"armed:{armSession.Reason}";
+        if (!string.Equals(_status.Mode, "armed", StringComparison.OrdinalIgnoreCase))
+        {
+            WriteStatus("armed", _status.LastActionId, null, message);
+        }
+    }
+
+    private void EnsureDormantStatus(string message)
+    {
+        if (!string.Equals(_status.Mode, "dormant", StringComparison.OrdinalIgnoreCase))
+        {
+            WriteStatus("dormant", _status.LastActionId, null, message);
+        }
+    }
+
+    private static string? TryGetActionSessionToken(HarnessAction action)
+    {
+        return action.Metadata.TryGetValue(SessionTokenMetadataKey, out var token) && !string.IsNullOrWhiteSpace(token)
+            ? token.Trim()
+            : null;
+    }
+
+    private static string? TryGetInventoryId(HarnessAction action)
+    {
+        return action.Metadata.TryGetValue("inventoryId", out var inventoryId) && !string.IsNullOrWhiteSpace(inventoryId)
+            ? inventoryId.Trim()
+            : null;
+    }
+
+    private void PublishNodeInventory()
+    {
+        var snapshot = BuildInventorySnapshot();
+        if (string.Equals(_lastInventorySignature, snapshot.Signature, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastInventorySignature = snapshot.Signature;
+        Directory.CreateDirectory(Path.GetDirectoryName(_layout.InventoryPath)!);
+        File.WriteAllText(_layout.InventoryPath, JsonSerializer.Serialize(snapshot.Inventory, _jsonOptions));
+    }
+
+    private InventorySnapshot BuildInventorySnapshot()
+    {
+        var sceneRoots = TryResolveSceneRoots();
+        var liveSnapshot = TryReadLiveExportSnapshot();
+        var scene = ResolveInventoryScene(sceneRoots, liveSnapshot);
+        var blockingModal = ResolveBlockingModal(sceneRoots);
+        var inputLocked = IsInputLocked(sceneRoots, out _);
+        var mode = TryReadArmSession() is null ? "dormant" : "armed";
+
+        var dispatchTargets = sceneRoots.Count == 0
+            ? Array.Empty<InventoryDispatchTarget>()
+            : sceneRoots
+                .SelectMany(root => EnumerateSceneNodes(root, 4096))
+                .Select(CreateNodeCandidate)
+                .Where(candidate => candidate.ActivationNode is not null)
+                .GroupBy(candidate => RuntimeHelpers.GetHashCode(candidate.ActivationNode ?? candidate.Node))
+                .Select(group => group.First())
+                .Select(candidate => CreateInventoryDispatchTarget(candidate, scene, blockingModal, inputLocked))
+                .Where(target => target is not null)
+                .Cast<InventoryDispatchTarget>()
+                .OrderBy(target => target.Kind, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(target => target.Label, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(target => target.UiPath, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+        var inventoryId = CreateInventoryId(mode, scene, blockingModal, dispatchTargets);
+        var inventoryNodes = dispatchTargets
+            .Select(target => new HarnessNodeInventoryItem(
+                CreateNodeId(inventoryId, target),
+                target.Kind,
+                target.Label,
+                target.Description,
+                target.TypeName,
+                target.UiPath,
+                target.Visible,
+                target.Enabled,
+                target.Actionable,
+                null,
+                target.SemanticHints))
+            .ToArray();
+        var inventory = new HarnessNodeInventory(
+            inventoryId,
+            DateTimeOffset.UtcNow,
+            liveSnapshot?.RunId,
+            scene,
+            TryReadLiveEpisodeId(liveSnapshot),
+            mode,
+            blockingModal,
+            inventoryNodes);
+        return new InventorySnapshot(
+            inventory,
+            dispatchTargets.Zip(inventoryNodes, (target, node) => new InventoryDispatchNode(node.NodeId, target)).ToArray(),
+            inventoryId);
+    }
+
+    private HarnessActionResult DispatchNode(HarnessAction action, CompanionState state, DateTimeOffset startedAt)
+    {
+        var inventoryId = TryGetInventoryId(action);
+        if (string.IsNullOrWhiteSpace(inventoryId))
+        {
+            return BuildResult(action, startedAt, "failed", true, failureKind: "dispatch-node-missing-inventory-id");
+        }
+
+        if (string.IsNullOrWhiteSpace(action.TargetRef))
+        {
+            return BuildResult(action, startedAt, "failed", true, failureKind: "dispatch-node-missing-target-ref");
+        }
+
+        var snapshot = BuildInventorySnapshot();
+        if (!string.Equals(snapshot.Inventory.InventoryId, inventoryId, StringComparison.Ordinal))
+        {
+            return BuildResult(
+                action,
+                startedAt,
+                "failed",
+                true,
+                observed: snapshot.Inventory.InventoryId,
+                failureKind: "dispatch-node-inventory-mismatch");
+        }
+
+        var target = snapshot.Nodes.FirstOrDefault(candidate => string.Equals(candidate.NodeId, action.TargetRef, StringComparison.Ordinal));
+        if (target is null)
+        {
+            return BuildResult(action, startedAt, "failed", true, failureKind: "dispatch-node-unavailable");
+        }
+
+        if (!target.Target.Actionable)
+        {
+            return BuildResult(action, startedAt, "failed", true, failureKind: "dispatch-node-not-actionable");
+        }
+
+        if (!TryActivateCandidate(target.Target.Candidate))
+        {
+            return BuildResult(
+                action,
+                startedAt,
+                "failed",
+                true,
+                observed: target.Target.Label,
+                failureKind: "dispatch-node-activation-failed");
+        }
+
+        return BuildResult(
+            action,
+            startedAt,
+            "ok",
+            false,
+            observed: $"{snapshot.Inventory.SceneType}:{target.Target.Kind}:{target.Target.Label}");
+    }
+
+    private static InventoryDispatchTarget? CreateInventoryDispatchTarget(
+        NodeCandidate candidate,
+        string scene,
+        string? blockingModal,
+        bool inputLocked)
+    {
+        var activationNode = candidate.ActivationNode ?? candidate.Node;
+        if (activationNode is null)
+        {
+            return null;
+        }
+
+        var visible = TryEvaluateNodeVisibility(activationNode);
+        if (!visible)
+        {
+            return null;
+        }
+
+        var kind = ClassifyInventoryNode(candidate, scene, blockingModal);
+        var label = candidate.Label ?? candidate.NodeName ?? candidate.TypeName;
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        if (LooksLikePlaceholder(label) && !string.Equals(kind, "overlay-dismiss", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var enabled = TryGetNodeEnabled(activationNode);
+        var actionable = enabled != false;
+        if (!string.IsNullOrWhiteSpace(blockingModal) || inputLocked)
+        {
+            actionable = string.Equals(kind, "overlay-dismiss", StringComparison.OrdinalIgnoreCase) && enabled != false;
+        }
+
+        var description = !string.IsNullOrWhiteSpace(candidate.NodeName)
+                          && !string.Equals(candidate.NodeName, label, StringComparison.OrdinalIgnoreCase)
+            ? candidate.NodeName
+            : null;
+        var uiPath = TryDescribeNodePath(activationNode);
+        var hints = new[] { scene, kind, candidate.NodeName, candidate.TypeName }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new InventoryDispatchTarget(candidate, kind, label, description, candidate.TypeName, uiPath, visible, enabled, actionable, hints);
+    }
+
+    private static string ResolveInventoryScene(IReadOnlyList<object> sceneRoots, LiveExportSnapshot? liveSnapshot)
+    {
+        var liveScene = NormalizeHarnessScene(liveSnapshot?.CurrentScreen);
+        if (!string.IsNullOrWhiteSpace(liveScene) && !string.Equals(liveScene, "unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return liveScene;
+        }
+
+        var observedScene = EnumerateObservedScenes(sceneRoots)
+            .Select(NormalizeHarnessScene)
+            .FirstOrDefault(scene => !string.IsNullOrWhiteSpace(scene));
+        return string.IsNullOrWhiteSpace(observedScene) ? "unknown" : observedScene;
+    }
+
+    private static string? ResolveBlockingModal(IReadOnlyList<object> sceneRoots)
+    {
+        if (FindFirstVisibleNodeByType(sceneRoots, "NMultiplayerTimeoutOverlay") is not null)
+        {
+            return "timeout-overlay";
+        }
+
+        if (FindFirstVisibleNodeByType(sceneRoots, "NSendFeedbackScreen") is not null)
+        {
+            return "feedback-overlay";
+        }
+
+        return CountBlockingOverlays(sceneRoots) > 0 ? "blocking-overlay" : null;
+    }
+
+    private static string ClassifyInventoryNode(NodeCandidate candidate, string scene, string? blockingModal)
+    {
+        if (!string.IsNullOrWhiteSpace(blockingModal) && ScoreOverlayDismissCandidate(candidate) > 0)
+        {
+            return "overlay-dismiss";
+        }
+
+        var typeName = candidate.TypeName;
+        if (typeName.Contains("MapPoint", StringComparison.OrdinalIgnoreCase))
+        {
+            return "map-node";
+        }
+
+        if (typeName.Contains("Card", StringComparison.OrdinalIgnoreCase))
+        {
+            return "card";
+        }
+
+        return scene switch
+        {
+            "character-select" => "character",
+            "map" => "map-node",
+            "rewards" => "reward-item",
+            "event" => "event-option",
+            "rest-site" => "rest-option",
+            "shop" => "shop-option",
+            _ => "button",
+        };
+    }
+
+    private static string CreateInventoryId(
+        string mode,
+        string scene,
+        string? blockingModal,
+        IReadOnlyList<InventoryDispatchTarget> targets)
+    {
+        var payload = string.Join(
+            "|",
+            targets.Select(target =>
+                string.Join(
+                    "::",
+                    target.Kind,
+                    target.Label,
+                    target.TypeName,
+                    target.UiPath,
+                    target.Visible,
+                    target.Enabled,
+                    target.Actionable)));
+        return "inv-" + ComputeStableId($"{mode}|{scene}|{blockingModal}|{payload}");
+    }
+
+    private static string CreateNodeId(string inventoryId, InventoryDispatchTarget target)
+    {
+        return "node-" + ComputeStableId(
+            string.Join(
+                "|",
+                inventoryId,
+                target.Kind,
+                target.Label,
+                target.TypeName,
+                target.UiPath));
+    }
+
+    private static string ComputeStableId(string payload)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToHexString(hash[..8]).ToLowerInvariant();
+    }
+
+    private static string? TryDescribeNodePath(object? node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        var rawPath = TryInvokeMethod(node, "GetPath");
+        var path = rawPath?.ToString()?.Trim();
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            return path;
+        }
+
+        var names = EnumerateSelfAndAncestors(node, 8)
+            .Select(ResolveNodeName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Reverse()
+            .ToArray();
+        return names.Length == 0 ? null : string.Join("/", names);
+    }
+
+    private static string? TryReadLiveEpisodeId(LiveExportSnapshot? snapshot)
+    {
+        if (snapshot?.Meta is null)
+        {
+            return null;
+        }
+
+        if (snapshot.Meta.TryGetValue("sceneEpisodeId", out var episodeId) && !string.IsNullOrWhiteSpace(episodeId))
+        {
+            return episodeId;
+        }
+
+        return snapshot.Meta.TryGetValue("screenEpisodeId", out episodeId) && !string.IsNullOrWhiteSpace(episodeId)
+            ? episodeId
+            : null;
+    }
+
+    private static LiveExportSnapshot? TryReadLiveExportSnapshot()
+    {
+        try
+        {
+            var layout = LiveExportPathResolver.Resolve(GamePathOptions.CreateLocalDefault(), LiveExportOptions.Defaults);
+            if (!File.Exists(layout.SnapshotPath))
+            {
+                return null;
+            }
+
+            return JsonSerializer.Deserialize<LiveExportSnapshot>(
+                File.ReadAllText(layout.SnapshotPath),
+                LiveExportJsonOptions);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static JsonSerializerOptions LiveExportJsonOptions { get; } = new()
+    {
+        PropertyNameCaseInsensitive = true,
+    };
 
     private void AppendResult(string payload)
     {
@@ -216,6 +697,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         return action.Kind.ToLowerInvariant() switch
         {
             "noop" => BuildResult(action, startedAt, "ok", false, "noop"),
+            "dispatch_node" => DispatchNode(action, envelope.State, startedAt),
             "click_button" => ClickButton(action, envelope.State, startedAt),
             "click_card" => ClickCard(action, envelope.State, startedAt),
             "confirm" => ClickNamedAction(action, envelope.State, startedAt, "__confirm__"),
@@ -229,6 +711,11 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
     private static HarnessActionResult? ExecuteOnMainThread(Func<HarnessActionResult> action, int timeoutMs)
     {
+        if (IsGameMainThread())
+        {
+            return action();
+        }
+
         HarnessActionResult? result = null;
         Exception? exception = null;
         using var completed = new ManualResetEventSlim(false);
@@ -317,7 +804,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     private HarnessActionResult ClickNamedAction(HarnessAction action, CompanionState state, DateTimeOffset startedAt, string sentinel)
     {
         var aliases = ResolveHarnessAliases(action.TargetLabel ?? sentinel, state);
-        return ClickButton(action with { TargetLabel = aliases.FirstOrDefault() }, state, startedAt, aliases);
+        return ClickButton(action with { TargetLabel = action.TargetLabel ?? sentinel }, state, startedAt, aliases);
     }
 
     private HarnessActionResult ClickButton(
@@ -326,60 +813,587 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         DateTimeOffset startedAt,
         IReadOnlyList<string>? aliases = null)
     {
+        var resolvedAliases = aliases ?? ResolveHarnessAliases(action.TargetLabel, state);
+        HarnessActionResult? lastFailure = null;
+
+        for (var attempt = 1; attempt <= 2; attempt += 1)
+        {
+            var sceneRoots = TryResolveSceneRoots();
+            var scoredCandidates = sceneRoots.Count == 0
+                ? Array.Empty<(NodeCandidate Candidate, int Score)>()
+                : sceneRoots
+                    .SelectMany(root => EnumerateSceneNodes(root, 4096))
+                    .Select(CreateNodeCandidate)
+                    .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Label) || !string.IsNullOrWhiteSpace(candidate.TypeName))
+                    .Select(candidate => (Candidate: candidate, Score: ScoreButtonCandidate(candidate, action.TargetLabel, resolvedAliases)))
+                    .OrderByDescending(entry => entry.Score)
+                    .ToArray();
+            var candidates = scoredCandidates.Select(entry => entry.Candidate).ToArray();
+            var primaryCandidate = scoredCandidates.FirstOrDefault(entry => entry.Score > 0).Candidate;
+            var snapshot = CaptureClickAttemptSnapshot(action, sceneRoots, primaryCandidate, state.Scene.SceneType);
+            var expectations = ResolveClickExpectations(action, snapshot);
+
+            AppendClickFingerprint(action, attempt, "preflight", snapshot, expectations);
+
+            var preflightFailure = EvaluateClickPreflight(action, sceneRoots, primaryCandidate, snapshot);
+            if (!string.IsNullOrWhiteSpace(preflightFailure))
+            {
+                var failureKind = preflightFailure == "target-button-unavailable"
+                    ? $"{preflightFailure}:{SummarizeCandidates(candidates)}"
+                    : preflightFailure;
+                lastFailure = BuildResult(
+                    action,
+                    startedAt,
+                    "failed",
+                    true,
+                    observed: snapshot.ButtonLabel,
+                    failureKind: $"preflight-unsatisfied:{failureKind}");
+                AppendClickFingerprint(action, attempt, "preflight-failed", snapshot, expectations, failureKind: lastFailure.FailureKind);
+                if (attempt >= 2)
+                {
+                    return lastFailure;
+                }
+
+                Thread.Sleep(300);
+                continue;
+            }
+
+            var dispatch = TryDispatchClickAction(action, state, startedAt, primaryCandidate, snapshot.ButtonLabel, candidates);
+            AppendClickFingerprint(
+                action,
+                attempt,
+                "dispatch",
+                snapshot,
+                expectations,
+                dispatchPath: dispatch.DispatchPath,
+                failureKind: dispatch.Success ? null : dispatch.FailureKind);
+            if (!dispatch.Success)
+            {
+                lastFailure = BuildResult(
+                    action,
+                    startedAt,
+                    "failed",
+                    true,
+                    observed: dispatch.Observed,
+                    failureKind: dispatch.FailureKind);
+                if (attempt >= 2)
+                {
+                    return lastFailure;
+                }
+
+                Thread.Sleep(300);
+                continue;
+            }
+
+            var postflight = WaitForClickPostflight(action, snapshot, dispatch.Candidate ?? primaryCandidate, expectations);
+            AppendClickFingerprint(
+                action,
+                attempt,
+                "postflight",
+                postflight.FinalSnapshot,
+                expectations,
+                dispatchPath: dispatch.DispatchPath,
+                actualScene: postflight.ActualScene,
+                sceneChanged: postflight.SceneTransitionObserved,
+                buttonStateChanged: postflight.ButtonStateChanged,
+                auxiliaryChanged: postflight.AuxiliaryChanged,
+                failureKind: postflight.Success ? null : postflight.FailureKind);
+
+            var observed = CombineObserved(dispatch.Observed, postflight.Observed);
+            if (postflight.Success)
+            {
+                return BuildResult(action, startedAt, "ok", false, observed: observed);
+            }
+
+            lastFailure = BuildResult(
+                action,
+                startedAt,
+                "failed",
+                true,
+                observed: observed,
+                failureKind: postflight.FailureKind);
+            if (attempt >= 2)
+            {
+                return lastFailure;
+            }
+
+            Thread.Sleep(400);
+        }
+
+        return lastFailure ?? BuildResult(action, startedAt, "failed", true, failureKind: "click-attempt-exhausted");
+    }
+
+    private ClickAttemptSnapshot CaptureClickAttemptSnapshot(
+        HarnessAction action,
+        IReadOnlyList<object> sceneRoots,
+        NodeCandidate? candidate,
+        string? fallbackScene)
+    {
+        var liveScene = TryReadLiveExportScene(out var resolvedLiveScene)
+            ? NormalizeHarnessScene(resolvedLiveScene)
+            : string.Empty;
+        var observedScene = EnumerateObservedScenes(sceneRoots)
+            .Select(NormalizeHarnessScene)
+            .FirstOrDefault(scene => !string.IsNullOrWhiteSpace(scene))
+            ?? string.Empty;
+        var scene = NormalizeHarnessScene(fallbackScene);
+        if (string.IsNullOrWhiteSpace(scene) || string.Equals(scene, "unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            scene = !string.IsNullOrWhiteSpace(liveScene) ? liveScene : observedScene;
+        }
+
+        if (string.IsNullOrWhiteSpace(scene))
+        {
+            scene = "unknown";
+        }
+
+        var buttonNode = candidate?.ActivationNode ?? candidate?.Node;
+        var buttonVisible = TryEvaluateNodeVisibility(buttonNode);
+        var buttonEnabled = TryGetNodeEnabled(buttonNode);
+        var overlayCount = CountBlockingOverlays(sceneRoots);
+        var inputLocked = IsInputLocked(sceneRoots, out var inputLockReason);
+        var buttonLabel = candidate?.Label ?? candidate?.NodeName ?? candidate?.TypeName ?? string.Empty;
+
+        return new ClickAttemptSnapshot(
+            scene,
+            liveScene,
+            overlayCount,
+            inputLocked,
+            inputLockReason,
+            action.TargetLabel ?? string.Empty,
+            buttonLabel,
+            buttonVisible,
+            buttonEnabled);
+    }
+
+    private static string? EvaluateClickPreflight(
+        HarnessAction action,
+        IReadOnlyList<object> sceneRoots,
+        NodeCandidate? primaryCandidate,
+        ClickAttemptSnapshot snapshot)
+    {
+        if (sceneRoots.Count == 0)
+        {
+            return "scene-root-unavailable";
+        }
+
+        var isCancel = MatchesSentinel(action.TargetLabel, "__cancel__");
+        if (!isCancel && snapshot.OverlayCount > 0)
+        {
+            return $"blocking-overlay:{snapshot.OverlayCount}";
+        }
+
+        if (!isCancel && snapshot.InputLocked)
+        {
+            return string.IsNullOrWhiteSpace(snapshot.InputLockReason)
+                ? "input-locked"
+                : $"input-locked:{snapshot.InputLockReason}";
+        }
+
+        if (primaryCandidate is null)
+        {
+            return "target-button-unavailable";
+        }
+
+        if (!snapshot.ButtonVisible)
+        {
+            return "target-button-hidden";
+        }
+
+        if (snapshot.ButtonEnabled == false)
+        {
+            return "target-button-disabled";
+        }
+
+        return null;
+    }
+
+    private ClickDispatchOutcome TryDispatchClickAction(
+        HarnessAction action,
+        CompanionState state,
+        DateTimeOffset startedAt,
+        NodeCandidate? primaryCandidate,
+        string? preflightObserved,
+        IReadOnlyList<NodeCandidate> candidates)
+    {
         HarnessActionResult? semanticFailure = null;
         var semanticResult = TryExecuteButtonSemanticAction(action, state, startedAt);
         if (semanticResult is not null)
         {
             if (string.Equals(semanticResult.Status, "ok", StringComparison.OrdinalIgnoreCase))
             {
-                return semanticResult;
+                return new ClickDispatchOutcome(
+                    true,
+                    "semantic-ui",
+                    semanticResult.ObservedStateDelta ?? preflightObserved,
+                    null,
+                    primaryCandidate);
+            }
+
+            if (MatchesSentinel(action.TargetLabel, "__cancel__"))
+            {
+                return new ClickDispatchOutcome(
+                    false,
+                    "semantic-ui",
+                    semanticResult.ObservedStateDelta ?? preflightObserved,
+                    semanticResult.FailureKind ?? "dispatch-failed",
+                    primaryCandidate);
             }
 
             semanticFailure = semanticResult;
         }
 
-        var sceneRoots = TryResolveSceneRoots();
-        if (sceneRoots.Count == 0)
+        if (primaryCandidate is null)
         {
-            return semanticFailure ?? BuildResult(action, startedAt, "failed", true, failureKind: "scene-root-unavailable");
+            return new ClickDispatchOutcome(
+                false,
+                "none",
+                semanticFailure?.ObservedStateDelta ?? preflightObserved,
+                semanticFailure?.FailureKind ?? $"dispatch-target-unavailable:{SummarizeCandidates(candidates)}",
+                null);
         }
 
-        var resolvedAliases = aliases ?? ResolveHarnessAliases(action.TargetLabel, state);
-        var candidates = sceneRoots
-            .SelectMany(root => EnumerateSceneNodes(root, 4096))
-            .Select(CreateNodeCandidate)
-            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.Label) || !string.IsNullOrWhiteSpace(candidate.TypeName))
-            .OrderByDescending(candidate => ScoreButtonCandidate(candidate, action.TargetLabel, resolvedAliases))
+        if (TryDispatchClickNode(primaryCandidate.ActivationNode ?? primaryCandidate.Node, out var dispatchPath))
+        {
+            var observed = primaryCandidate.Label ?? primaryCandidate.NodeName ?? primaryCandidate.TypeName;
+            observed = CombineObserved(semanticFailure?.ObservedStateDelta ?? preflightObserved, observed);
+            return new ClickDispatchOutcome(true, dispatchPath, observed, null, primaryCandidate);
+        }
+
+        return new ClickDispatchOutcome(
+            false,
+            "dispatch-failed",
+            semanticFailure?.ObservedStateDelta ?? preflightObserved,
+            semanticFailure?.FailureKind ?? "dispatch-failed",
+            primaryCandidate);
+    }
+
+    private ClickPostflightOutcome WaitForClickPostflight(
+        HarnessAction action,
+        ClickAttemptSnapshot before,
+        NodeCandidate? primaryCandidate,
+        IReadOnlyList<string> expectations)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddMilliseconds(Math.Max(action.TimeoutMs, 1_000));
+        var expectedScene = NormalizeHarnessScene(action.ExpectedStateDelta);
+        ClickAttemptSnapshot finalSnapshot = before;
+        string? lastObserved = null;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            Thread.Sleep(200);
+            var sceneRoots = TryResolveSceneRoots();
+            finalSnapshot = CaptureClickAttemptSnapshot(action, sceneRoots, primaryCandidate, before.Scene);
+
+            var sceneTransitionObserved = false;
+            string? sceneObserved = null;
+            if (!string.IsNullOrWhiteSpace(expectedScene))
+            {
+                sceneTransitionObserved = TryProbeExpectedSceneTransition(expectedScene, sceneRoots, out var observedScene);
+                sceneObserved = observedScene;
+            }
+            else if (!string.Equals(finalSnapshot.Scene, before.Scene, StringComparison.OrdinalIgnoreCase))
+            {
+                sceneTransitionObserved = true;
+                sceneObserved = $"scene-change:{before.Scene}->{finalSnapshot.Scene}";
+            }
+
+            var buttonStateChanged = DidButtonStateChange(before, finalSnapshot);
+            var buttonObserved = buttonStateChanged
+                ? $"button-state:{before.ButtonVisible}/{FormatEnabled(before.ButtonEnabled)}->{finalSnapshot.ButtonVisible}/{FormatEnabled(finalSnapshot.ButtonEnabled)}"
+                : null;
+            var auxiliaryChanged = TryObserveAuxiliaryClickTransition(action, before, finalSnapshot, sceneRoots, out var auxiliaryObserved);
+            lastObserved = CombineObserved(sceneObserved, CombineObserved(buttonObserved, auxiliaryObserved));
+
+            if (sceneTransitionObserved || buttonStateChanged || auxiliaryChanged)
+            {
+                return new ClickPostflightOutcome(
+                    true,
+                    null,
+                    lastObserved,
+                    finalSnapshot.Scene,
+                    finalSnapshot,
+                    sceneTransitionObserved,
+                    buttonStateChanged,
+                    auxiliaryChanged);
+            }
+        }
+
+        var actualScene = finalSnapshot.Scene;
+        var failureKind = !string.IsNullOrWhiteSpace(expectedScene) && !SceneMatchesOrProgressesPastHarness(actualScene, expectedScene)
+            ? $"transition-mismatch:{actualScene}"
+            : "postflight-timeout";
+        return new ClickPostflightOutcome(
+            false,
+            failureKind,
+            lastObserved,
+            actualScene,
+            finalSnapshot,
+            false,
+            false,
+            false);
+    }
+
+    private void AppendClickFingerprint(
+        HarnessAction action,
+        int attempt,
+        string phase,
+        ClickAttemptSnapshot snapshot,
+        IReadOnlyList<string> expectations,
+        string? dispatchPath = null,
+        string? actualScene = null,
+        bool? sceneChanged = null,
+        bool? buttonStateChanged = null,
+        bool? auxiliaryChanged = null,
+        string? failureKind = null)
+    {
+        AppendTrace("click-fingerprint", action.ActionId, new
+        {
+            attempt,
+            phase,
+            scene = snapshot.Scene,
+            liveScene = snapshot.LiveScene,
+            target = snapshot.TargetLabel,
+            button = snapshot.ButtonLabel,
+            buttonVisible = snapshot.ButtonVisible,
+            buttonEnabled = snapshot.ButtonEnabled,
+            overlayCount = snapshot.OverlayCount,
+            inputLocked = snapshot.InputLocked,
+            inputLockReason = snapshot.InputLockReason,
+            expected = expectations,
+            actualScene,
+            sceneChanged,
+            buttonStateChanged,
+            auxiliaryChanged,
+            dispatchPath,
+            failureKind,
+        });
+    }
+
+    private static IReadOnlyList<string> ResolveClickExpectations(HarnessAction action, ClickAttemptSnapshot snapshot)
+    {
+        var expectations = new List<string>();
+        var expectedScene = NormalizeHarnessScene(action.ExpectedStateDelta);
+        if (!string.IsNullOrWhiteSpace(expectedScene))
+        {
+            expectations.Add($"scene:{expectedScene}");
+        }
+
+        expectations.Add("button-state-change");
+
+        if (MatchesSentinel(action.TargetLabel, "__cancel__") || snapshot.OverlayCount > 0)
+        {
+            expectations.Add("overlay-count-change");
+        }
+        else if (MatchesSentinel(action.TargetLabel, "__confirm__") || string.Equals(expectedScene, "map", StringComparison.OrdinalIgnoreCase))
+        {
+            expectations.Add("run-start-signal");
+        }
+        else
+        {
+            expectations.Add("follow-up-scene-change");
+        }
+
+        return expectations
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
 
-        foreach (var candidate in candidates)
+    private static bool TryDispatchClickNode(object node, out string dispatchPath)
+    {
+        foreach (var attempt in new (string Path, Func<bool> Try)[]
+                 {
+                     ("ui-signal:pressed", () => TryInvokeMethodOnMainThread(node, "EmitSignal", 2_000, out _, "pressed")),
+                     ("ui-signal:pressed-node", () => TryInvokeMethodOnMainThread(node, "EmitSignal", 2_000, out _, "pressed", node)),
+                     ("ui-signal:released", () => TryInvokeMethodOnMainThread(node, "EmitSignal", 2_000, out _, "released")),
+                     ("ui-handler:OnPressed", () => TryInvokeMethodOnMainThread(node, "OnPressed", 2_000, out _)),
+                     ("ui-handler:_Pressed", () => TryInvokeMethodOnMainThread(node, "_Pressed", 2_000, out _)),
+                     ("ui-handler:Pressed", () => TryInvokeMethodOnMainThread(node, "Pressed", 2_000, out _)),
+                     ("ui-handler:OnRelease", () => TryInvokeMethodOnMainThread(node, "OnRelease", 2_000, out _)),
+                     ("ui-handler:OnReleased", () => TryInvokeMethodOnMainThread(node, "OnReleased", 2_000, out _)),
+                     ("ui-handler:OnClick", () => TryInvokeMethodOnMainThread(node, "OnClick", 2_000, out _)),
+                     ("ui-handler:OnClicked", () => TryInvokeMethodOnMainThread(node, "OnClicked", 2_000, out _)),
+                     ("input-path:ForceClick", () => TryInvokeMethodOnMainThread(node, "ForceClick", 2_000, out _)),
+                     ("input-path:Press", () => TryInvokeMethodOnMainThread(node, "Press", 2_000, out _)),
+                     ("input-path:Click", () => TryInvokeMethodOnMainThread(node, "Click", 2_000, out _)),
+                     ("input-path:Activate", () => TryInvokeMethodOnMainThread(node, "Activate", 2_000, out _)),
+                 })
         {
-            if (ScoreButtonCandidate(candidate, action.TargetLabel, resolvedAliases) <= 0)
+            try
             {
-                break;
-            }
-
-            if (TryActivateCandidate(candidate))
-            {
-                var observed = candidate.Label ?? candidate.TypeName;
-                if (!string.IsNullOrWhiteSpace(semanticFailure?.ObservedStateDelta))
+                if (attempt.Try())
                 {
-                    observed = CombineObserved(semanticFailure.ObservedStateDelta, observed);
+                    dispatchPath = attempt.Path;
+                    return true;
                 }
-
-                return BuildResult(action, startedAt, "ok", false, observed: observed);
+            }
+            catch
+            {
+                // Ignore handler-specific failures and continue down the allowed dispatch order.
             }
         }
 
-        if (semanticFailure is not null)
+        dispatchPath = "dispatch-failed";
+        return false;
+    }
+
+    private static bool TryEvaluateNodeVisibility(object? node)
+    {
+        if (node is null)
         {
-            return semanticFailure with
-            {
-                FailureKind = $"{semanticFailure.FailureKind}|matching-node-not-found:{SummarizeCandidates(candidates)}",
-            };
+            return false;
         }
 
-        return BuildResult(action, startedAt, "failed", true, failureKind: $"matching-node-not-found:{SummarizeCandidates(candidates)}");
+        try
+        {
+            return IsVisibleNode(node);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool? TryGetNodeEnabled(object? node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var disabled = TryConvertToBool(TryGetMemberValue(node, "Disabled"))
+                           ?? TryConvertToBool(TryGetMemberValue(node, "IsDisabled"))
+                           ?? TryConvertToBool(TryInvokeMethod(node, "IsDisabled"));
+            if (disabled is not null)
+            {
+                return !disabled.Value;
+            }
+
+            return TryConvertToBool(TryGetMemberValue(node, "Enabled"))
+                   ?? TryConvertToBool(TryGetMemberValue(node, "IsEnabled"))
+                   ?? TryConvertToBool(TryInvokeMethod(node, "IsEnabled"));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static int CountBlockingOverlays(IReadOnlyList<object> sceneRoots)
+    {
+        return EnumerateBlockingOverlayNodes(sceneRoots).Count();
+    }
+
+    private static IEnumerable<object> EnumerateBlockingOverlayNodes(IReadOnlyList<object> sceneRoots)
+    {
+        var seen = new HashSet<int>();
+
+        var feedbackScreen = ResolveFeedbackScreen(sceneRoots);
+        if (feedbackScreen is not null && IsBlockingFeedbackScreen(feedbackScreen) && seen.Add(RuntimeHelpers.GetHashCode(feedbackScreen)))
+        {
+            yield return feedbackScreen;
+        }
+
+        var timeoutOverlay = FindFirstNodeByType(sceneRoots, "NMultiplayerTimeoutOverlay");
+        if (timeoutOverlay is not null && IsVisibleNode(timeoutOverlay) && seen.Add(RuntimeHelpers.GetHashCode(timeoutOverlay)))
+        {
+            yield return timeoutOverlay;
+        }
+
+        foreach (var typeSuffix in new[] { "NAbandonRunConfirmPopup", "NVerticalPopup", "NModalPopup" })
+        {
+            var popup = FindFirstVisibleNodeByType(sceneRoots, typeSuffix);
+            if (popup is not null && seen.Add(RuntimeHelpers.GetHashCode(popup)))
+            {
+                yield return popup;
+            }
+        }
+    }
+
+    private static bool IsInputLocked(IReadOnlyList<object> sceneRoots, out string reason)
+    {
+        if (CountBlockingOverlays(sceneRoots) > 0)
+        {
+            reason = "blocking-overlay";
+            return true;
+        }
+
+        var transition = FindFirstVisibleNodeByType(sceneRoots, "NTransition");
+        if (transition is not null)
+        {
+            var active = TryConvertToBool(TryGetMemberValue(transition, "Active"))
+                         ?? TryConvertToBool(TryGetMemberValue(transition, "IsActive"))
+                         ?? true;
+            if (active)
+            {
+                reason = "transition-active";
+                return true;
+            }
+        }
+
+        var game = TryResolveGame(sceneRoots);
+        if (game is not null)
+        {
+            foreach (var memberName in new[] { "InputLocked", "IsInputLocked", "InteractionLocked", "IsTransitioning", "IsLoadingScene" })
+            {
+                if (TryConvertToBool(TryGetMemberValue(game, memberName)) == true)
+                {
+                    reason = memberName;
+                    return true;
+                }
+            }
+        }
+
+        reason = string.Empty;
+        return false;
+    }
+
+    private static bool DidButtonStateChange(ClickAttemptSnapshot before, ClickAttemptSnapshot after)
+    {
+        return before.ButtonVisible != after.ButtonVisible
+               || before.ButtonEnabled != after.ButtonEnabled;
+    }
+
+    private static bool TryObserveAuxiliaryClickTransition(
+        HarnessAction action,
+        ClickAttemptSnapshot before,
+        ClickAttemptSnapshot after,
+        IReadOnlyList<object> sceneRoots,
+        out string? observed)
+    {
+        observed = null;
+
+        if ((MatchesSentinel(action.TargetLabel, "__confirm__")
+             || string.Equals(NormalizeHarnessScene(action.ExpectedStateDelta), "map", StringComparison.OrdinalIgnoreCase))
+            && (TryProbeRunStartFromLiveExport(out var liveObserved) || TryProbeRunStart(sceneRoots, out liveObserved)))
+        {
+            observed = liveObserved;
+            return true;
+        }
+
+        if ((MatchesSentinel(action.TargetLabel, "__cancel__") || before.OverlayCount > 0) && after.OverlayCount < before.OverlayCount)
+        {
+            observed = $"overlay-count:{before.OverlayCount}->{after.OverlayCount}";
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(before.LiveScene)
+            && !string.IsNullOrWhiteSpace(after.LiveScene)
+            && !string.Equals(before.LiveScene, after.LiveScene, StringComparison.OrdinalIgnoreCase))
+        {
+            observed = $"live-scene:{before.LiveScene}->{after.LiveScene}";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string FormatEnabled(bool? enabled)
+    {
+        return enabled is null ? "?" : enabled.Value ? "enabled" : "disabled";
     }
 
     private HarnessActionResult ClickCard(HarnessAction action, CompanionState state, DateTimeOffset startedAt)
@@ -926,6 +1940,34 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                 failureKind: "confirm-semantic-failed");
         }
 
+        if (MatchesSentinel(action.TargetLabel, "__cancel__"))
+        {
+            if (!InvokeOnMainThread(() =>
+                {
+                    var roots = TryResolveSceneRoots();
+                    var dismissed = TryDismissBlockingOverlays(roots, out var observed);
+                    return (Dismissed: dismissed, Observed: observed);
+                },
+                3_000,
+                out (bool Dismissed, string Observed) dismissOutcome))
+            {
+                return BuildResult(action, startedAt, "failed", true, failureKind: "cancel-dispatch-timeout");
+            }
+
+            if (dismissOutcome.Dismissed)
+            {
+                return BuildResult(action, startedAt, "ok", false, observed: dismissOutcome.Observed);
+            }
+
+            return BuildResult(
+                action,
+                startedAt,
+                "failed",
+                true,
+                observed: string.IsNullOrWhiteSpace(dismissOutcome.Observed) ? null : dismissOutcome.Observed,
+                failureKind: "cancel-semantic-failed");
+        }
+
         return null;
     }
 
@@ -955,9 +1997,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             var mapScreen = ResolveMapScreen(sceneRoots);
             if (mapScreen is null)
             {
-                if (FindFirstVisibleNodeByType(sceneRoots, "NCombatRoom") is not null
-                    || FindFirstVisibleNodeByType(sceneRoots, "NCombatScreen") is not null
-                    || FindFirstVisibleNodeByType(sceneRoots, "NCombatHud") is not null)
+                if (HasCombatSceneEvidence(sceneRoots))
                 {
                     return BuildResult(action, startedAt, "ok", false, observed: "already-combat");
                 }
@@ -976,25 +2016,19 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                 TryInvokeMethod(runManager, "DebugOnlyGetState", out runState);
             }
 
-            TryInvokeMethod(mapRoom ?? typeof(object), "ReopenMap", out _);
-            TryInvokeMethod(mapScreen, "Open", out _);
-            TryInvokeMethod(mapScreen, "Open", out _, false);
+            var mapScreenIsOpen = TryConvertToBool(TryGetMemberValue(mapScreen, "IsOpen"));
+            var mapScreenVisible = IsVisibleNode(mapScreen);
+            var travelEnabled = TryConvertToBool(TryGetMemberValue(mapScreen, "IsTravelEnabled"));
+            var traveling = TryConvertToBool(TryGetMemberValue(mapScreen, "IsTraveling"));
+            var shouldPrepareMapScreen = mapScreenIsOpen != true && !mapScreenVisible;
 
-            if (runState is not null)
+            if (shouldPrepareMapScreen)
             {
-                TryInvokeMethod(mapScreen, "Initialize", out _, runState);
-                var runMap = TryGetMemberValue(runState, "Map");
-                var rng = TryGetMemberValue(runState, "Rng");
-                var seed = TryGetMemberValue(rng ?? typeof(object), "Seed");
-                if (runMap is not null && seed is not null)
-                {
-                    TryInvokeMethod(mapScreen, "SetMap", out _, runMap, seed, false);
-                }
+                mapScreenIsOpen = TryConvertToBool(TryGetMemberValue(mapScreen, "IsOpen"));
+                mapScreenVisible = IsVisibleNode(mapScreen);
+                travelEnabled = TryConvertToBool(TryGetMemberValue(mapScreen, "IsTravelEnabled"));
+                traveling = TryConvertToBool(TryGetMemberValue(mapScreen, "IsTraveling"));
             }
-
-            TryInvokeMethod(mapScreen, "SetTravelEnabled", out _, true);
-            TryInvokeMethod(mapScreen, "RecalculateTravelability", out _);
-            TryInvokeMethod(mapScreen, "InitMapVotes", out _);
 
             var visitedSignatureBefore = TryGetVisitedMapSignature();
             var pointsRoot = TryGetMemberValue(mapScreen, "_points")
@@ -1003,10 +2037,6 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             var pointsRootChildCount = ExpandEnumerable(TryInvokeMethod(pointsRoot ?? typeof(object), "GetChildren")).Count();
             var mapPointDictionary = TryGetMemberValue(mapScreen, "_mapPointDictionary") ?? TryGetMemberValue(mapScreen, "MapPointDictionary");
             var mapPointDictionaryCount = ExpandEnumerable(TryGetMemberValue(mapPointDictionary ?? typeof(object), "Values")).Count();
-            var mapScreenIsOpen = TryConvertToBool(TryGetMemberValue(mapScreen, "IsOpen"));
-            var mapScreenVisible = IsVisibleNode(mapScreen);
-            var travelEnabled = TryConvertToBool(TryGetMemberValue(mapScreen, "IsTravelEnabled"));
-            var traveling = TryConvertToBool(TryGetMemberValue(mapScreen, "IsTraveling"));
 
             var wantsCombat = MatchesSentinel(action.TargetLabel, "__first_combat__");
             var allMapCandidates = EnumerateAllMapPointCandidates(mapScreen).ToArray();
@@ -1101,10 +2131,8 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                 visibleTypes = SummarizeVisibleTypes(sceneRoots),
             });
             var mapCoordObject = TryGetMapCoordObject(mapPoint.Point) ?? TryGetMapCoordObject(mapPoint.Node);
-            var mapTaskFailure = string.Empty;
-            var activated = (mapPoint.Node is not null && TryInvokeMethod(mapScreen, "OnMapPointSelectedLocally", out _, mapPoint.Node))
+            var activated = (mapPoint.Node is not null && TryInvokeMethodOnMainThread(mapScreen, "OnMapPointSelectedLocally", 2_000, out _, mapPoint.Node))
                             || (mapPoint.Node is not null && TryInvokeMethod(mapPoint.Node, "OnRelease", out _))
-                            || (mapCoordObject is not null && TryInvokeTaskMethod(mapScreen, "TravelToMapCoord", TimeSpan.FromSeconds(15), out mapTaskFailure, mapCoordObject))
                             || (mapPoint.Node is not null && TryActivateNode(mapPoint.Node));
             var visitedSignatureAfter = TryGetVisitedMapSignature();
             if (subscribed && runManager is not null && roomEnteredHandler is not null)
@@ -1190,7 +2218,6 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                 target = action.TargetLabel,
                 observedTarget,
                 visibleTypes = SummarizeVisibleTypes(sceneRoots),
-                taskFailure = string.IsNullOrWhiteSpace(mapTaskFailure) ? null : mapTaskFailure,
             });
             return BuildResult(action, startedAt, "failed", true, failureKind: "map-point-activation-failed");
         }
@@ -1263,7 +2290,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     private static MapPointCandidate? TryResolveAutoSlayMapPointCandidate(object mapScreen, object? runState, string? targetLabel, IReadOnlyList<MapPointCandidate>? allCandidates = null)
     {
         var candidates = (allCandidates ?? EnumerateAllMapPointCandidates(mapScreen))
-            .Where(candidate => candidate.Point is not null)
+            .Where(candidate => candidate.Point is not null && !IsInvalidMapPointCandidate(candidate.Point, candidate.Node))
             .ToArray();
         if (candidates.Length == 0)
         {
@@ -1338,6 +2365,8 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             {
                 return combatCandidate.Candidate;
             }
+
+            return null;
         }
 
         return ranked[0].Candidate;
@@ -1361,6 +2390,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             })
             .Where(candidate => candidate is not null && TryGetMapCoord(candidate.Point) is not null)
             .Cast<MapPointCandidate>()
+            .Where(candidate => !IsInvalidMapPointCandidate(candidate.Point, candidate.Node))
             .ToArray();
         var visitedCoords = ExpandEnumerable(TryGetMemberValue(runState ?? typeof(object), "VisitedMapCoords"))
             .Select(TryGetMapCoord)
@@ -1479,7 +2509,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         IReadOnlyList<MapPointCandidate>? visibleCandidates = null)
     {
         var candidates = (visibleCandidates ?? EnumerateVisibleMapPointCandidates(mapScreen).ToArray())
-            .Where(candidate => candidate.Point is not null)
+            .Where(candidate => candidate.Point is not null && !IsInvalidMapPointCandidate(candidate.Point, candidate.Node))
             .ToArray();
         if (candidates.Length == 0)
         {
@@ -1551,6 +2581,8 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             {
                 return combatCandidate.Candidate;
             }
+
+            return null;
         }
 
         return ranked[0].Candidate;
@@ -1584,10 +2616,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
     private static bool IsCombatMapPoint(object point, object? node)
     {
-        var pointType = TryConvertToDisplayString(TryGetMemberValue(point, "PointType"))
-                        ?? TryConvertToDisplayString(TryGetMemberValue(node ?? typeof(object), "PointType"))
-                        ?? point.ToString()
-                        ?? string.Empty;
+        var pointType = ResolveMapPointType(point, node);
         return pointType.Contains("Monster", StringComparison.OrdinalIgnoreCase)
                || pointType.Contains("Combat", StringComparison.OrdinalIgnoreCase)
                || pointType.Contains("Enemy", StringComparison.OrdinalIgnoreCase);
@@ -1647,35 +2676,30 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     private static bool TryExecuteMainMenuStart(IReadOnlyList<object> sceneRoots, CompanionState state, out string observed, out string failureKind)
     {
         var observedParts = new List<string>();
-        var dismissedOverlay = false;
-        var mainMenu = TryResolveMainMenu(sceneRoots);
-        if (mainMenu is null || !IsVisibleNode(mainMenu))
+        if (!TryEnsureMainMenuAvailable(sceneRoots, out var mainMenu, out var mainMenuObserved, out var mainMenuFailureKind))
         {
-            if (TryDismissBlockingOverlays(sceneRoots, out var overlayObserved) && !string.IsNullOrWhiteSpace(overlayObserved))
-            {
-                observedParts.Add(overlayObserved);
-                dismissedOverlay = true;
-                mainMenu = TryResolveMainMenu(TryResolveSceneRoots());
-            }
-        }
-
-        if (mainMenu is null || !IsVisibleNode(mainMenu))
-        {
-            observed = observedParts.Count == 0 ? "main-menu-unavailable" : string.Join("|", observedParts);
-            failureKind = dismissedOverlay ? "main-menu-pending-after-overlay-dismiss" : "main-menu-unavailable";
+            observed = string.IsNullOrWhiteSpace(mainMenuObserved)
+                ? "main-menu-unavailable"
+                : mainMenuObserved;
+            failureKind = string.IsNullOrWhiteSpace(mainMenuFailureKind) ? "main-menu-unavailable" : mainMenuFailureKind;
             return false;
         }
 
-        if (TryOpenCharacterSelectFromMainMenu(mainMenu, state, out var directCharacterSelectObserved))
+        if (!string.IsNullOrWhiteSpace(mainMenuObserved))
         {
-            observed = CombineObserved(string.Join("|", observedParts), directCharacterSelectObserved);
-            failureKind = string.Empty;
-            return true;
+            observedParts.Add(mainMenuObserved);
         }
 
         if (TryOpenSingleplayerSubmenuFromMainMenu(mainMenu, state, out var startObserved))
         {
             observed = CombineObserved(string.Join("|", observedParts), startObserved);
+            failureKind = string.Empty;
+            return true;
+        }
+
+        if (TryOpenCharacterSelectFromMainMenu(mainMenu, state, out var directObserved))
+        {
+            observed = CombineObserved(string.Join("|", observedParts), directObserved);
             failureKind = string.Empty;
             return true;
         }
@@ -1697,7 +2721,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         var logoAnimation = TryGetMemberValue(game, "LogoAnimation") ?? FindFirstNodeByType(sceneRoots, "NLogoAnimation");
         if (logoAnimation is null && TryResolveMainMenu(sceneRoots) is not null)
         {
-            if (TryInvokeMethod(game, "ReloadMainMenu", out _))
+            if (TryInvokeMethodOnMainThread(game, "ReloadMainMenu", 2_000, out _))
             {
                 observed = "reload-main-menu";
                 Thread.Sleep(500);
@@ -1705,7 +2729,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             }
         }
 
-        if (TryInvokeTaskMethod(game, "LaunchMainMenu", TimeSpan.FromSeconds(8), out var launchObserved, true))
+        if (TryInvokeTaskMethodOnMainThread(game, "LaunchMainMenu", TimeSpan.FromSeconds(8), out var launchObserved, true))
         {
             observed = launchObserved;
             return true;
@@ -1810,12 +2834,12 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                     observedParts.Add(launchObserved);
                     launchAttempted = true;
                 }
-                else if (TryInvokeMethod(game, "LaunchMainMenu", out _, true))
+                else if (TryInvokeTaskMethodOnMainThread(game, "LaunchMainMenu", TimeSpan.FromSeconds(8), out var launchMainMenuObserved, true))
                 {
-                    observedParts.Add("launch-main-menu");
+                    observedParts.Add(string.IsNullOrWhiteSpace(launchMainMenuObserved) ? "launch-main-menu" : launchMainMenuObserved);
                     launchAttempted = true;
                 }
-                else if (TryInvokeMethod(game, "ReloadMainMenu", out _))
+                else if (TryInvokeMethodOnMainThread(game, "ReloadMainMenu", 2_000, out _))
                 {
                     observedParts.Add("reload-main-menu");
                     launchAttempted = true;
@@ -1905,7 +2929,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             }
         }
 
-        if (TryInvokeMethod(mainMenu, "OpenSingleplayerSubmenu", out _))
+        if (TryInvokeMethodOnMainThread(mainMenu, "OpenSingleplayerSubmenu", 2_000, out _))
         {
             observedParts.Add("open-singleplayer-submenu");
             if (TryWaitForSingleplayerSubmenu(mainMenu, out _, out var submenuObserved, TimeSpan.FromSeconds(6)))
@@ -1942,7 +2966,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                                      .FirstOrDefault(node => string.Equals(ResolveNodeName(node), "SingleplayerButton", StringComparison.OrdinalIgnoreCase));
 
         if (singleplayerButton is not null
-            && TryInvokeMethod(mainMenu, "SingleplayerButtonPressed", out _, singleplayerButton))
+            && TryInvokeMethodOnMainThread(mainMenu, "SingleplayerButtonPressed", 2_000, out _, singleplayerButton))
         {
             observedParts.Add("singleplayer-button-pressed");
             if (TryWaitForCharacterSelect(out var afterPressedObserved, TimeSpan.FromSeconds(6), trySubmenuActivation: true))
@@ -1955,17 +2979,6 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             {
                 observedParts.Add(afterPressedObserved);
             }
-        }
-
-        if (TryOpenCharacterSelectDirectly(mainMenu, out var directObserved))
-        {
-            observed = CombineObserved(string.Join("|", observedParts), directObserved);
-            return true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(directObserved))
-        {
-            observedParts.Add(directObserved);
         }
 
         var submenu = FindFirstNodeByType(EnumerateSceneNodes(mainMenu, 512).Cast<object>().ToArray(), "NSingleplayerSubmenu");
@@ -2035,7 +3048,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             }
         }
 
-        if (TryInvokeMethod(mainMenu, "OpenSingleplayerSubmenu", out _))
+        if (TryInvokeMethodOnMainThread(mainMenu, "OpenSingleplayerSubmenu", 2_000, out _))
         {
             observedParts.Add("open-singleplayer-submenu");
             if (TryWaitForCharacterSelect(out var afterSubmenuObserved, TimeSpan.FromSeconds(6), trySubmenuActivation: true))
@@ -2072,8 +3085,6 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             var characterSelect = FindFirstNodeByType(refreshedRoots, "NCharacterSelectScreen");
             if (characterSelect is not null && IsVisibleNode(characterSelect))
             {
-                TryInvokeMethod(characterSelect, "InitializeSingleplayer", out _);
-                TryInvokeMethod(characterSelect, "OnSubmenuOpened", out _);
                 observed = CombineObserved(string.Join("|", observedParts), "character-select");
                 return true;
             }
@@ -2119,7 +3130,8 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     {
         foreach (var methodName in new[] { "Dismiss", "Close", "Hide", "OnDismissPressed", "OnBackPressed" })
         {
-            if (TryInvokeMethod(timeoutOverlay, methodName, out _, null) || TryInvokeMethod(timeoutOverlay, methodName, out _))
+            if (TryInvokeMethodOnMainThread(timeoutOverlay, methodName, 2_000, out _, null)
+                || TryInvokeMethodOnMainThread(timeoutOverlay, methodName, 2_000, out _))
             {
                 observed = $"timeout-overlay:{methodName}";
                 Thread.Sleep(200);
@@ -2177,7 +3189,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         var standardButton = TryGetMemberValue(submenu, "_standardButton")
                              ?? TryGetMemberValue(submenu, "StandardButton")
                              ?? subtreeCandidates.FirstOrDefault();
-        if (standardButton is not null && TryInvokeMethod(submenu, "OpenCharacterSelect", out _, standardButton))
+        if (standardButton is not null && TryInvokeMethodOnMainThread(submenu, "OpenCharacterSelect", 2_000, out _, standardButton))
         {
             observed = ResolveNodeLabel(standardButton) ?? ResolveNodeName(standardButton) ?? "standard-run";
             return true;
@@ -2191,14 +3203,14 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
         foreach (var candidate in subtreeCandidates)
         {
-            if (TryInvokeMethod(submenu, "OpenCharacterSelect", out _, candidate) || TryActivateNode(candidate))
+            if (TryInvokeMethodOnMainThread(submenu, "OpenCharacterSelect", 2_000, out _, candidate) || TryActivateNode(candidate))
             {
                 observed = ResolveNodeLabel(candidate) ?? ResolveNodeName(candidate) ?? "standard-run";
                 return true;
             }
         }
 
-        if (TryInvokeMethod(submenu, "OpenCharacterSelect", out _, null))
+        if (TryInvokeMethodOnMainThread(submenu, "OpenCharacterSelect", 2_000, out _, null))
         {
             observed = "standard-run";
             return true;
@@ -2219,7 +3231,8 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
         foreach (var methodName in new[] { "Close", "Hide", "OnClose", "OnBackPressed" })
         {
-            if (TryInvokeMethod(feedbackScreen, methodName, out _, null) || TryInvokeMethod(feedbackScreen, methodName, out _))
+            if (TryInvokeMethodOnMainThread(feedbackScreen, methodName, 2_000, out _, null)
+                || TryInvokeMethodOnMainThread(feedbackScreen, methodName, 2_000, out _))
             {
                 observed = $"feedback-screen:{methodName}";
                 Thread.Sleep(200);
@@ -2236,25 +3249,6 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             observed = "feedback-screen:BackButton";
             Thread.Sleep(200);
             return true;
-        }
-
-        var candidates = EnumerateSceneNodes(feedbackScreen, 256)
-            .Select(CreateNodeCandidate)
-            .OrderByDescending(ScoreOverlayDismissCandidate)
-            .ToArray();
-        foreach (var candidate in candidates)
-        {
-            if (ScoreOverlayDismissCandidate(candidate) <= 0)
-            {
-                break;
-            }
-
-            if (TryActivateCandidate(candidate))
-            {
-                observed = $"feedback-screen:{candidate.Label ?? candidate.NodeName ?? candidate.TypeName}";
-                Thread.Sleep(200);
-                return true;
-            }
         }
 
         observed = string.Empty;
@@ -2300,8 +3294,8 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     {
         var standardButton = TryGetMemberValue(submenu, "_standardButton")
                              ?? TryGetMemberValue(submenu, "StandardButton");
-        if ((standardButton is not null && TryInvokeMethod(submenu, "OpenCharacterSelect", out _, standardButton))
-            || TryInvokeMethod(submenu, "OpenCharacterSelect", out _, null)
+        if ((standardButton is not null && TryInvokeMethodOnMainThread(submenu, "OpenCharacterSelect", 2_000, out _, standardButton))
+            || TryInvokeMethodOnMainThread(submenu, "OpenCharacterSelect", 2_000, out _, null)
             || TryClickStandardRunButton(submenu, out _))
         {
             observed = "open-character-select";
@@ -2323,7 +3317,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         observed = string.Empty;
         object? submenu = null;
 
-        if (TryInvokeMethod(mainMenu, "OpenSingleplayerSubmenu", out var openedSubmenu) && openedSubmenu is not null)
+        if (TryInvokeMethodOnMainThread(mainMenu, "OpenSingleplayerSubmenu", 2_000, out var openedSubmenu) && openedSubmenu is not null)
         {
             submenu = openedSubmenu;
         }
@@ -2409,7 +3403,6 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
             if (resolvedSubmenu is not null && IsVisibleNode(resolvedSubmenu))
             {
-                TryInvokeMethod(resolvedSubmenu, "OnSubmenuOpened", out _);
                 submenu = resolvedSubmenu;
                 observed = "singleplayer-submenu";
                 return true;
@@ -2449,13 +3442,6 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                 return (false, unavailableObserved, "character-select-unavailable");
             }
 
-            if (TryGetMemberValue(characterSelect, "_lobby") is null && TryGetMemberValue(characterSelect, "Lobby") is null)
-            {
-                TryInvokeMethod(characterSelect, "InitializeSingleplayer", out _);
-            }
-
-            TryInvokeMethod(characterSelect, "OnSubmenuOpened", out _);
-
             var characterButtonRoot = TryGetNodeAtPath(characterSelect, "CharSelectButtons/ButtonContainer") ?? characterSelect;
             var characterButtons = EnumerateSceneNodes(characterButtonRoot, 512)
                 .Where(node => TypeNameEndsWith(node, "NCharacterSelectButton"))
@@ -2489,20 +3475,11 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             }
 
             var identity = selected.CharacterId ?? selected.Label ?? selected.NodeName ?? "ironclad";
-            var selectedViaScreen = selected.Character is not null
-                                    && TryInvokeMethod(characterSelect, "SelectCharacter", out _, selected.Node, selected.Character);
-            var selectedViaButton = selectedViaScreen
-                                    || TryInvokeMethod(selected.Node, "Select", out _)
+            var selectedViaButton = TryDispatchClickNode(selected.Node, out _)
                                     || TryActivateNode(selected.Node);
             if (!selectedViaButton)
             {
                 return (false, CombineObserved(overlayObserved, $"character-select-activate-failed:{identity}"), "character-select-activate-failed");
-            }
-
-            var lobby = TryGetMemberValue(characterSelect, "_lobby") ?? TryGetMemberValue(characterSelect, "Lobby");
-            if (lobby is not null && selected.Character is not null)
-            {
-                TryInvokeMethod(lobby, "SetCharacter", out _, selected.Character);
             }
 
             return (true, CombineObserved(overlayObserved, CombineObserved(identity, "character-selected")), string.Empty);
@@ -2543,13 +3520,11 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
     private static bool TryExecuteCharacterConfirm(IReadOnlyList<object> sceneRoots, object? confirmButton, out string observed)
     {
-        TryForceFtuesDisabled();
         var roots = sceneRoots;
         var observedParts = new List<string>();
         if (TryDismissBlockingOverlays(roots, out var overlayObserved) && !string.IsNullOrWhiteSpace(overlayObserved))
         {
             observedParts.Add(overlayObserved);
-            Thread.Sleep(250);
             roots = TryResolveSceneRoots();
         }
 
@@ -2562,119 +3537,37 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
         if ((TryGetMemberValue(characterSelect, "_lobby") ?? TryGetMemberValue(characterSelect, "Lobby")) is null)
         {
-            TryInvokeMethod(characterSelect, "InitializeSingleplayer", out _);
-            TryInvokeMethod(characterSelect, "OnSubmenuOpened", out _);
+            observedParts.Add("character-select-lobby-unavailable");
+            observed = string.Join("|", observedParts.Where(part => !string.IsNullOrWhiteSpace(part)).Distinct(StringComparer.OrdinalIgnoreCase));
+            return false;
         }
 
-        var embarkButton = TryGetMemberValue(characterSelect, "_embarkButton") ?? TryGetMemberValue(characterSelect, "EmbarkButton");
-        if (embarkButton is not null && TryInvokeMethod(characterSelect, "OnEmbarkPressed", out _, embarkButton))
-        {
-            observedParts.Add("embark-pressed-with-button");
-            if (TryWaitForRunStart(TimeSpan.FromSeconds(3), out var runObserved))
-            {
-                observed = CombineObserved(string.Join("|", observedParts), runObserved);
-                return true;
-            }
-        }
-
-        if (TryInvokeMethod(characterSelect, "OnEmbarkPressed", out _, null))
-        {
-            observedParts.Add("embark-pressed");
-            if (TryWaitForRunStart(TimeSpan.FromSeconds(3), out var runObserved))
-            {
-                observed = CombineObserved(string.Join("|", observedParts), runObserved);
-                return true;
-            }
-        }
-
-        var lobby = TryGetMemberValue(characterSelect, "_lobby") ?? TryGetMemberValue(characterSelect, "Lobby");
-        if (lobby is not null && TryInvokeMethod(lobby, "SetReady", out _, true))
-        {
-            observedParts.Add("lobby-ready");
-            if (TryInvokeMethod(lobby, "BeginRunIfAllPlayersReady", out _))
-            {
-                observedParts.Add("begin-run-if-ready");
-            }
-
-            if (TryWaitForRunStart(TimeSpan.FromSeconds(4), out var runObserved))
-            {
-                observed = CombineObserved(string.Join("|", observedParts), runObserved);
-                return true;
-            }
-        }
-
+        var embarkButton = confirmButton
+                           ?? TryGetMemberValue(characterSelect, "_embarkButton")
+                           ?? TryGetMemberValue(characterSelect, "EmbarkButton");
+        string? dispatchedObserved = null;
         if (confirmButton is not null && TryActivateNode(confirmButton))
         {
-            observedParts.Add("confirm-button");
-            if (TryWaitForRunStart(TimeSpan.FromSeconds(3), out var runObserved))
-            {
-                observed = CombineObserved(string.Join("|", observedParts), runObserved);
-                return true;
-            }
+            dispatchedObserved = ResolveNodeLabel(confirmButton) ?? ResolveNodeName(confirmButton) ?? "confirm-button";
+        }
+        else if (embarkButton is not null && TryActivateNode(embarkButton))
+        {
+            dispatchedObserved = ResolveNodeLabel(embarkButton) ?? ResolveNodeName(embarkButton) ?? "embark-button";
+        }
+        else if (embarkButton is not null && TryInvokeMethodOnMainThread(characterSelect, "OnEmbarkPressed", 2_000, out _, embarkButton))
+        {
+            dispatchedObserved = "embark-pressed-with-button";
+        }
+        else if (TryInvokeMethodOnMainThread(characterSelect, "OnEmbarkPressed", 2_000, out _, null))
+        {
+            dispatchedObserved = "embark-pressed";
         }
 
-        if (embarkButton is not null && TryActivateNode(embarkButton))
+        if (!string.IsNullOrWhiteSpace(dispatchedObserved))
         {
-            observedParts.Add("embark-button");
-            if (TryWaitForRunStart(TimeSpan.FromSeconds(3), out var runObserved))
-            {
-                observed = CombineObserved(string.Join("|", observedParts), runObserved);
-                return true;
-            }
-        }
-
-        if (lobby is not null && TryForceSingleplayerRunStart(characterSelect, lobby, out var forceObserved))
-        {
-            observedParts.Add(forceObserved);
-            if (TryWaitForRunStart(TimeSpan.FromSeconds(8), out var runObserved))
-            {
-                observed = CombineObserved(string.Join("|", observedParts), runObserved);
-                return true;
-            }
-        }
-
-        observed = string.Join("|", observedParts.Where(part => !string.IsNullOrWhiteSpace(part)).Distinct(StringComparer.OrdinalIgnoreCase));
-        return false;
-    }
-
-    private static bool TryForceSingleplayerRunStart(object characterSelect, object lobby, out string observed)
-    {
-        observed = string.Empty;
-        var observedParts = new List<string>();
-
-        if (TryInvokeMethod(lobby, "BeginRunIfAllPlayersReady", out _))
-        {
-            observedParts.Add("begin-run-if-ready");
-            if (TryWaitForRunStart(TimeSpan.FromSeconds(4), out var beginObserved))
-            {
-                observed = CombineObserved(string.Join("|", observedParts), beginObserved);
-                return true;
-            }
-        }
-
-        if (TryResolveLobbySeed(lobby, out var seed)
-            && TryGetLobbyModifiers(lobby, out var modifiers)
-            && TryInvokeMethod(lobby, "BeginRun", out _, seed, modifiers))
-        {
-            observedParts.Add("begin-run-direct");
-            if (TryWaitForRunStart(TimeSpan.FromSeconds(6), out var beginObserved))
-            {
-                observed = CombineObserved(string.Join("|", observedParts), beginObserved);
-                return true;
-            }
-        }
-
-        if (TryResolveLobbySeed(lobby, out seed)
-            && TryBuildActsForSeed(lobby, seed, out var acts)
-            && TryGetLobbyModifiers(lobby, out modifiers)
-            && TryInvokeMethod(characterSelect, "BeginRun", out _, seed, acts, modifiers))
-        {
-            observedParts.Add("character-select-begin-run");
-            if (TryWaitForRunStart(TimeSpan.FromSeconds(6), out var beginObserved))
-            {
-                observed = CombineObserved(string.Join("|", observedParts), beginObserved);
-                return true;
-            }
+            observedParts.Add(dispatchedObserved!);
+            observed = string.Join("|", observedParts.Where(part => !string.IsNullOrWhiteSpace(part)).Distinct(StringComparer.OrdinalIgnoreCase));
+            return true;
         }
 
         observed = string.Join("|", observedParts.Where(part => !string.IsNullOrWhiteSpace(part)).Distinct(StringComparer.OrdinalIgnoreCase));
@@ -2801,29 +3694,6 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         return true;
     }
 
-    private static void TryForceFtuesDisabled()
-    {
-        try
-        {
-            var saveManagerType = TryFindLoadedType("MegaCrit.Sts2.Core.Saves.SaveManager");
-            var saveManager = saveManagerType?.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            if (saveManager is null || saveManagerType is null)
-            {
-                return;
-            }
-
-            saveManagerType.GetMethod("SetFtuesEnabled", BindingFlags.Public | BindingFlags.Instance)?.Invoke(saveManager, new object[] { false });
-            foreach (var ftueKey in FtuesToDisable)
-            {
-                saveManagerType.GetMethod("MarkFtueAsComplete", BindingFlags.Public | BindingFlags.Instance)?.Invoke(saveManager, new object[] { ftueKey });
-            }
-        }
-        catch
-        {
-            // Best-effort only for harness mode.
-        }
-    }
-
     private static bool TryWaitForRunStart(TimeSpan timeout, out string observed)
     {
         var deadline = DateTimeOffset.UtcNow.Add(timeout);
@@ -2882,9 +3752,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                 return true;
             }
 
-            if (FindFirstVisibleNodeByType(refreshedRoots, "NCombatRoom") is not null
-                || FindFirstVisibleNodeByType(refreshedRoots, "NCombatScreen") is not null
-                || FindFirstVisibleNodeByType(refreshedRoots, "NCombatHud") is not null)
+            if (HasCombatSceneEvidence(refreshedRoots))
             {
                 observed = CombineObserved(string.Join("|", observedParts), "run-started:combat-visible");
                 return true;
@@ -2928,9 +3796,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
             return true;
         }
 
-        if (FindFirstVisibleNodeByType(refreshedRoots, "NCombatRoom") is not null
-            || FindFirstVisibleNodeByType(refreshedRoots, "NCombatScreen") is not null
-            || FindFirstVisibleNodeByType(refreshedRoots, "NCombatHud") is not null)
+        if (HasCombatSceneEvidence(refreshedRoots))
         {
             observed = "run-started:combat-visible";
             return true;
@@ -2976,20 +3842,6 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
                 return true;
             }
 
-            if (!string.IsNullOrWhiteSpace(snapshot.RunStatus)
-                && !string.Equals(snapshot.RunStatus, "idle", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(snapshot.RunStatus, "unknown", StringComparison.OrdinalIgnoreCase))
-            {
-                observed = $"run-started:map-inferred:status:{snapshot.RunStatus}";
-                return true;
-            }
-
-            if (snapshot.Act is not null || snapshot.Floor is not null || snapshot.Deck.Count > 0 || snapshot.Relics.Count > 0)
-            {
-                observed = "run-started:map-inferred:progress";
-                return true;
-            }
-
             return false;
         }
         catch
@@ -3032,9 +3884,7 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
     private static IEnumerable<string> EnumerateObservedScenes(IReadOnlyList<object> sceneRoots)
     {
-        if (FindFirstVisibleNodeByType(sceneRoots, "NCombatRoom") is not null
-            || FindFirstVisibleNodeByType(sceneRoots, "NCombatScreen") is not null
-            || FindFirstVisibleNodeByType(sceneRoots, "NCombatHud") is not null)
+        if (HasCombatSceneEvidence(sceneRoots))
         {
             yield return "combat";
         }
@@ -3129,8 +3979,28 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         };
     }
 
+    private static bool HasCombatSceneEvidence(IReadOnlyList<object> sceneRoots)
+    {
+        if (FindFirstVisibleNodeByType(sceneRoots, "NCombatRoom") is not null
+            || FindFirstVisibleNodeByType(sceneRoots, "NCombatScreen") is not null
+            || FindFirstVisibleNodeByType(sceneRoots, "NCombatHud") is not null
+            || FindFirstVisibleNodeByType(sceneRoots, "NPlayerHand") is not null)
+        {
+            return true;
+        }
+
+        return FindFirstVisibleNodeByType(sceneRoots, "NTargetManager") is not null
+               && FindFirstVisibleNodeByType(sceneRoots, "NSelectionReticle") is not null;
+    }
+
     private static bool InvokeOnMainThread<T>(Func<T> action, int timeoutMs, out T result)
     {
+        if (IsGameMainThread())
+        {
+            result = action();
+            return true;
+        }
+
         T localResult = default!;
         Exception? exception = null;
         using var completed = new ManualResetEventSlim(false);
@@ -3168,6 +4038,77 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
 
         result = localResult;
         return true;
+    }
+
+    private static bool TryInvokeMethodOnMainThread(object source, string methodName, int timeoutMs, out object? result, params object?[]? args)
+    {
+        result = null;
+        if (IsGameMainThread())
+        {
+            return TryInvokeMethod(source, methodName, out result, args);
+        }
+
+        if (!InvokeOnMainThread(
+                () =>
+                {
+                    var success = TryInvokeMethod(source, methodName, out var localResult, args);
+                    return (Success: success, Result: localResult);
+                },
+                timeoutMs,
+                out (bool Success, object? Result) invocation))
+        {
+            return false;
+        }
+
+        result = invocation.Result;
+        return invocation.Success;
+    }
+
+    private static bool TryInvokeTaskMethodOnMainThread(object source, string methodName, TimeSpan timeout, out string observed, params object?[]? args)
+    {
+        observed = string.Empty;
+        if (!TryInvokeMethodOnMainThread(source, methodName, 2_000, out var result, args))
+        {
+            return false;
+        }
+
+        if (result is Task task)
+        {
+            try
+            {
+                if (!task.Wait(timeout))
+                {
+                    observed = "task-timeout";
+                    return false;
+                }
+            }
+            catch (Exception exception)
+            {
+                observed = exception.GetBaseException().Message;
+                return false;
+            }
+
+            observed = methodName;
+            return true;
+        }
+
+        observed = result?.ToString() ?? methodName;
+        return true;
+    }
+
+    private static bool IsGameMainThread()
+    {
+        try
+        {
+            var gameType = TryFindLoadedType("MegaCrit.Sts2.Core.Nodes.NGame");
+            return gameType is not null
+                   && TryInvokeMethod(gameType, "IsMainThread", out var result)
+                   && TryConvertToBool(result) == true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool TryWaitForVisibleSceneNode(string typeSuffix, TimeSpan timeout, out object? node, out string observed)
@@ -3462,6 +4403,18 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     }
 
     private static bool TryActivateNode(object node)
+    {
+        if (IsGameMainThread())
+        {
+            return TryActivateNodeCore(node);
+        }
+
+        return InvokeOnMainThread(() => TryActivateNodeCore(node), 2_000, out var activated)
+            ? activated
+            : TryActivateNodeCore(node);
+    }
+
+    private static bool TryActivateNodeCore(object node)
     {
         foreach (var attempt in new Func<bool>[]
                  {
@@ -4266,7 +5219,12 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     private static int ScoreSemanticMapPointCandidate(object point, string state, bool? isEnabled, bool wantsCombat, object? node)
     {
         var score = ScoreMapPointCandidate(point, state, isEnabled);
-        var pointType = TryConvertToDisplayString(TryGetMemberValue(point, "PointType")) ?? point.ToString() ?? string.Empty;
+        var pointType = ResolveMapPointType(point, node);
+
+        if (IsInvalidMapPointType(pointType))
+        {
+            return int.MinValue / 4;
+        }
 
         if (wantsCombat)
         {
@@ -4302,7 +5260,12 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     private static int ScoreMapPointCandidate(object point, string state, bool? isEnabled)
     {
         var score = 0;
-        var pointType = TryConvertToDisplayString(TryGetMemberValue(point, "PointType")) ?? point.ToString() ?? string.Empty;
+        var pointType = ResolveMapPointType(point, null);
+        if (IsInvalidMapPointType(pointType))
+        {
+            score -= 1_000;
+        }
+
         if (pointType.Contains("Monster", StringComparison.OrdinalIgnoreCase))
         {
             score += 200;
@@ -4335,10 +5298,42 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
         var coord = TryGetMemberValue(point ?? node!, "coord") ?? TryGetMemberValue(point ?? node!, "Coord");
         var row = TryConvertToInt(TryGetMemberValue(coord ?? point ?? node!, "row") ?? TryGetMemberValue(coord ?? point ?? node!, "Row"));
         var col = TryConvertToInt(TryGetMemberValue(coord ?? point ?? node!, "col") ?? TryGetMemberValue(coord ?? point ?? node!, "Col"));
-        var pointType = TryConvertToDisplayString(TryGetMemberValue(point ?? node!, "PointType")) ?? "Unknown";
+        var pointType = ResolveMapPointType(point, node);
         return row is not null && col is not null
             ? $"map-point:{pointType}@({row},{col})"
             : $"map-point:{pointType}";
+    }
+
+    private static bool IsInvalidMapPointCandidate(object? point, object? node)
+    {
+        return IsInvalidMapPointType(ResolveMapPointType(point, node));
+    }
+
+    private static bool IsInvalidMapPointType(string? pointType)
+    {
+        if (string.IsNullOrWhiteSpace(pointType))
+        {
+            return true;
+        }
+
+        return pointType.Contains("Unassigned", StringComparison.OrdinalIgnoreCase)
+               || pointType.Contains("Unknown", StringComparison.OrdinalIgnoreCase)
+               || pointType.Contains("None", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveMapPointType(object? point, object? node)
+    {
+        return TryConvertToDisplayString(TryGetMemberValue(point ?? typeof(object), "PointType"))
+               ?? TryConvertToDisplayString(TryGetMemberValue(node ?? typeof(object), "PointType"))
+               ?? TryConvertToDisplayString(TryGetMemberValue(point ?? typeof(object), "RoomType"))
+               ?? TryConvertToDisplayString(TryGetMemberValue(node ?? typeof(object), "RoomType"))
+               ?? TryConvertToDisplayString(TryGetMemberValue(TryGetMemberValue(point ?? typeof(object), "Model") ?? typeof(object), "PointType"))
+               ?? TryConvertToDisplayString(TryGetMemberValue(TryGetMemberValue(node ?? typeof(object), "Model") ?? typeof(object), "PointType"))
+               ?? TryConvertToDisplayString(TryGetMemberValue(TryGetMemberValue(point ?? typeof(object), "Model") ?? typeof(object), "RoomType"))
+               ?? TryConvertToDisplayString(TryGetMemberValue(TryGetMemberValue(node ?? typeof(object), "Model") ?? typeof(object), "RoomType"))
+               ?? TryConvertToDisplayString(point)
+               ?? TryConvertToDisplayString(node)
+               ?? "Unknown";
     }
 
     private static string SummarizeMapCandidates(IEnumerable<MapPointCandidate> candidates)
@@ -4739,6 +5734,47 @@ internal sealed class HarnessBridgeHost : IHarnessActionIngress
     private sealed record HarnessActionEnvelope(HarnessAction Action, CompanionState State);
     private sealed record MapPointCandidate(object? Node, object Point, string State, bool? Enabled);
     private sealed record NodeCandidate(object Node, object? ActivationNode, string? Label, string? NodeName, string TypeName);
+    private sealed record InventoryDispatchTarget(
+        NodeCandidate Candidate,
+        string Kind,
+        string Label,
+        string? Description,
+        string TypeName,
+        string? UiPath,
+        bool Visible,
+        bool? Enabled,
+        bool Actionable,
+        IReadOnlyList<string> SemanticHints);
+    private sealed record InventoryDispatchNode(string NodeId, InventoryDispatchTarget Target);
+    private sealed record InventorySnapshot(
+        HarnessNodeInventory Inventory,
+        IReadOnlyList<InventoryDispatchNode> Nodes,
+        string Signature);
+    private sealed record ClickAttemptSnapshot(
+        string Scene,
+        string LiveScene,
+        int OverlayCount,
+        bool InputLocked,
+        string InputLockReason,
+        string TargetLabel,
+        string ButtonLabel,
+        bool ButtonVisible,
+        bool? ButtonEnabled);
+    private sealed record ClickDispatchOutcome(
+        bool Success,
+        string DispatchPath,
+        string? Observed,
+        string? FailureKind,
+        NodeCandidate? Candidate);
+    private sealed record ClickPostflightOutcome(
+        bool Success,
+        string? FailureKind,
+        string? Observed,
+        string ActualScene,
+        ClickAttemptSnapshot FinalSnapshot,
+        bool SceneTransitionObserved,
+        bool ButtonStateChanged,
+        bool AuxiliaryChanged);
 
     private static IEnumerable<object> TryGetChildMapCoordObjects(object? runState, (int Row, int Col)? currentCoord, IReadOnlyList<(int Row, int Col)> visitedCoords)
     {

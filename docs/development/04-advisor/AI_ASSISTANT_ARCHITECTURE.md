@@ -265,3 +265,10 @@ advisor mode와 harness mode는 같은 foundation을 공유합니다.
 4. gameplay session reuse 실증
 5. AppHang 원인 축소
 6. harness bridge와 scenario runner를 실제 action loop로 닫기
+
+## Update (2026-03-13): advisor surface와 external harness commander 분리 강화
+
+- advisor mode / WPF는 계속 read-only surface입니다.
+- harness control은 advisor surface에서 수행하지 않고, bridge + tool + file contract에서만 수행합니다.
+- screenshot, live export, runtime log, harness inventory를 함께 보고 명령을 결정하는 외부 commander는 advisor와 별도 경계로 유지합니다.
+- 이 분리는 production purity를 보존하기 위한 것이며, WPF에 harness concern을 섞지 않는다는 원칙을 다시 고정합니다.

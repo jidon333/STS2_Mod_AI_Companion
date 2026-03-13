@@ -129,6 +129,51 @@ try
                 return result.Evaluation?.Status == "passed" ? 0 : 1;
             }
 
+        case "arm-harness-session":
+            {
+                var reason = options.TryGetValue("--reason", out var requestedReason)
+                    ? requestedReason
+                    : "manual-arm";
+                var result = await HarnessCommands.ArmSessionAsync(configuration, reason, CancellationToken.None).ConfigureAwait(false);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "disarm-harness-session":
+            {
+                var result = HarnessCommands.DisarmSession(configuration);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "inspect-harness-control":
+            {
+                var result = HarnessCommands.InspectControl(configuration);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "dispatch-harness-node":
+            {
+                if (!options.TryGetValue("--inventory-id", out var inventoryId))
+                {
+                    throw new InvalidOperationException("--inventory-id is required.");
+                }
+
+                if (!options.TryGetValue("--node-id", out var nodeId))
+                {
+                    throw new InvalidOperationException("--node-id is required.");
+                }
+
+                var result = await HarnessCommands.DispatchNodeAsync(
+                    configuration,
+                    inventoryId,
+                    nodeId,
+                    CancellationToken.None).ConfigureAwait(false);
+                PrintJson(result);
+                return string.Equals(result.Status, "ok", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+            }
+
         case "collector-postprocess":
             {
                 var godotLineCount = options.TryGetValue("--lines", out var lineRaw)
@@ -516,6 +561,10 @@ static void WriteUsage()
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- build-replay-fixture --source-run <run-id> [--config path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- run-harness-scenario --scenario <path> [--config path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-harness-run --run-id <run-id>");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- arm-harness-session [--config path] [--reason text]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- disarm-harness-session [--config path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-harness-control [--config path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- dispatch-harness-node --inventory-id <id> --node-id <id> [--config path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- collector-postprocess [--config path] [--knowledge-root path] [--lines 200] [--tail 40]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-godot-log [--config path] [--lines 200]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- extract-static-knowledge [--config path] [--knowledge-root path] [--godot-exe path]");
