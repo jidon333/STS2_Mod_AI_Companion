@@ -688,7 +688,17 @@ public sealed class LiveExportStateTracker
 
     private static bool IsStickyHighValueScreen(string screen)
     {
-        return screen is "rewards" or "event" or "rest-site" or "shop" or "card-choice" or "upgrade" or "transform";
+        return screen is "main-menu"
+            or "singleplayer-submenu"
+            or "character-select"
+            or "map"
+            or "rewards"
+            or "event"
+            or "rest-site"
+            or "shop"
+            or "card-choice"
+            or "upgrade"
+            or "transform";
     }
 
     private static bool IsChoiceLikeScreen(string screen)
@@ -698,7 +708,14 @@ public sealed class LiveExportStateTracker
 
     private static bool IsFallbackScreen(string screen)
     {
-        return screen is "" or "unknown" or "combat" or "map";
+        return screen is ""
+            or "unknown"
+            or "startup"
+            or "bootstrap"
+            or "feedback-overlay"
+            or "blocking-overlay"
+            or "combat"
+            or "map";
     }
 
     private static bool IsAuthoritativePlayerName(string incomingName, string screen)

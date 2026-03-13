@@ -365,57 +365,98 @@ static void TestNativePackageContents()
 
 static void TestLiveExportTrackerMenuToCombatExistingRunAuthority()
 {
-    var tracker = CreateTracker();
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
 
-    tracker.Apply(CreateObservation("main-menu", "main-menu", 0, 0, 72, 99, choices: new[] { "Singleplayer", "Settings" }));
-    AssertEqual("main-menu", tracker.Snapshot.CurrentScreen, "main menu hook should establish main-menu");
+    var mainMenu = CreateObservation("main-menu", "main-menu", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()) with
+    {
+        Choices = new[]
+        {
+            new LiveExportChoiceSummary("choice", "Singleplayer", "singleplayer", null),
+            new LiveExportChoiceSummary("choice", "Settings", "settings", null),
+        },
+    };
+    Assert(tracker.Apply(mainMenu).Snapshot.CurrentScreen == "main-menu", "Expected main-menu hook to establish main-menu.");
 
-    tracker.Apply(CreateObservation("runtime-poll", "startup", 0, 0, 72, 99));
-    AssertEqual("main-menu", tracker.Snapshot.CurrentScreen, "runtime poll should not displace main-menu");
+    var startupPoll = CreateObservation("runtime-poll", "startup", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    Assert(tracker.Apply(startupPoll).Snapshot.CurrentScreen == "main-menu", "Expected runtime poll not to displace main-menu.");
 
-    tracker.Apply(CreateObservation("singleplayer-submenu", "singleplayer-submenu", 0, 0, 72, 99, choices: new[] { "Standard", "Custom" }));
-    AssertEqual("singleplayer-submenu", tracker.Snapshot.CurrentScreen, "submenu hook should advance to singleplayer submenu");
+    var submenu = CreateObservation("singleplayer-submenu", "singleplayer-submenu", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()) with
+    {
+        Choices = new[]
+        {
+            new LiveExportChoiceSummary("choice", "Standard", "standard", null),
+            new LiveExportChoiceSummary("choice", "Custom", "custom", null),
+        },
+    };
+    Assert(tracker.Apply(submenu).Snapshot.CurrentScreen == "singleplayer-submenu", "Expected submenu hook to establish singleplayer-submenu.");
 
-    tracker.Apply(CreateObservation("open-character-select", "singleplayer-submenu", 0, 0, 72, 99));
-    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "open-character-select should infer character-select");
+    var openCharacterSelect = CreateObservation("open-character-select", "singleplayer-submenu", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    Assert(tracker.Apply(openCharacterSelect).Snapshot.CurrentScreen == "singleplayer-submenu", "Expected open-character-select to keep singleplayer-submenu until character-select is opened.");
 
-    tracker.Apply(CreateObservation("character-select", "character-select", 0, 0, 72, 99, choices: new[] { "Ironclad", "Embark" }));
-    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "character select hook should keep character-select");
+    var characterSelect = CreateObservation("character-select", "character-select", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()) with
+    {
+        Choices = new[]
+        {
+            new LiveExportChoiceSummary("choice", "Ironclad", "ironclad", null),
+            new LiveExportChoiceSummary("choice", "Embark", "embark", null),
+        },
+    };
+    Assert(tracker.Apply(characterSelect).Snapshot.CurrentScreen == "character-select", "Expected character-select hook to keep character-select.");
 
-    tracker.Apply(CreateObservation("runtime-poll", "feedback-overlay", 0, 0, 72, 99));
-    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "transient overlay poll should not displace character-select");
+    var feedbackPoll = CreateObservation("runtime-poll", "feedback-overlay", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    Assert(tracker.Apply(feedbackPoll).Snapshot.CurrentScreen == "character-select", "Expected transient overlay poll not to displace character-select.");
 
-    tracker.Apply(CreateObservation("character-selected", "character-select", 0, 0, 72, 99, choices: new[] { "Embark" }));
-    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "character selection should remain on character-select");
+    var characterSelected = CreateObservation("character-selected", "character-select", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()) with
+    {
+        Choices = new[]
+        {
+            new LiveExportChoiceSummary("choice", "Embark", "embark", null),
+        },
+    };
+    Assert(tracker.Apply(characterSelected).Snapshot.CurrentScreen == "character-select", "Expected character-selected to remain on character-select.");
 
-    tracker.Apply(CreateObservation("map", "map", 1, 0, 72, 99, choices: new[] { "Path A", "Path B" }));
-    AssertEqual("map", tracker.Snapshot.CurrentScreen, "map hook should establish map");
+    var map = CreateObservation("map", "map", 1, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    Assert(tracker.Apply(map).Snapshot.CurrentScreen == "map", "Expected map hook to establish map.");
 
-    tracker.Apply(CreateObservation("map-point-selected", "map", 1, 0, 72, 99));
-    AssertEqual("map", tracker.Snapshot.CurrentScreen, "map-point-selected should remain on map");
+    var mapPointSelected = CreateObservation("map-point-selected", "map", 1, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    Assert(tracker.Apply(mapPointSelected).Snapshot.CurrentScreen == "map", "Expected map-point-selected to remain on map.");
 
-    tracker.Apply(CreateObservation("combat-started", "combat", 1, 1, 72, 99));
-    AssertEqual("combat", tracker.Snapshot.CurrentScreen, "combat-started should establish combat");
+    var combatStarted = CreateObservation("combat-started", "combat", 1, 1, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    Assert(tracker.Apply(combatStarted).Snapshot.CurrentScreen == "combat", "Expected combat-started to establish combat.");
 }
 
 static void TestLiveExportTrackerMenuToCombatDirectBranchAuthority()
 {
-    var tracker = CreateTracker();
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
 
-    tracker.Apply(CreateObservation("main-menu", "main-menu", 0, 0, 72, 99, choices: new[] { "Singleplayer", "Settings" }));
-    AssertEqual("main-menu", tracker.Snapshot.CurrentScreen, "main menu hook should establish main-menu");
+    var mainMenu = CreateObservation("main-menu", "main-menu", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()) with
+    {
+        Choices = new[]
+        {
+            new LiveExportChoiceSummary("choice", "Singleplayer", "singleplayer", null),
+            new LiveExportChoiceSummary("choice", "Settings", "settings", null),
+        },
+    };
+    Assert(tracker.Apply(mainMenu).Snapshot.CurrentScreen == "main-menu", "Expected main-menu hook to establish main-menu.");
 
-    tracker.Apply(CreateObservation("singleplayer-button-pressed", "main-menu", 0, 0, 72, 99));
-    AssertEqual("main-menu", tracker.Snapshot.CurrentScreen, "button press should remain on main-menu until character-select appears");
+    var singleplayerPressed = CreateObservation("singleplayer-button-pressed", "main-menu", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    Assert(tracker.Apply(singleplayerPressed).Snapshot.CurrentScreen == "main-menu", "Expected singleplayer-button-pressed to remain on main-menu until character-select appears.");
 
-    tracker.Apply(CreateObservation("character-select", "character-select", 0, 0, 72, 99, choices: new[] { "Ironclad", "Embark" }));
-    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "direct branch should allow character-select without submenu");
+    var characterSelect = CreateObservation("character-select", "character-select", 0, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()) with
+    {
+        Choices = new[]
+        {
+            new LiveExportChoiceSummary("choice", "Ironclad", "ironclad", null),
+            new LiveExportChoiceSummary("choice", "Embark", "embark", null),
+        },
+    };
+    Assert(tracker.Apply(characterSelect).Snapshot.CurrentScreen == "character-select", "Expected direct branch to allow character-select without submenu.");
 
-    tracker.Apply(CreateObservation("map", "map", 1, 0, 72, 99, choices: new[] { "Path A" }));
-    AssertEqual("map", tracker.Snapshot.CurrentScreen, "map hook should establish map");
+    var map = CreateObservation("map", "map", 1, 0, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    Assert(tracker.Apply(map).Snapshot.CurrentScreen == "map", "Expected map hook to establish map.");
 
-    tracker.Apply(CreateObservation("combat-started", "combat", 1, 1, 72, 99));
-    AssertEqual("combat", tracker.Snapshot.CurrentScreen, "combat-started should establish combat");
+    var combatStarted = CreateObservation("combat-started", "combat", 1, 1, 72, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+    Assert(tracker.Apply(combatStarted).Snapshot.CurrentScreen == "combat", "Expected combat-started to establish combat.");
 }
 
 static void TestHarnessPathResolver()
