@@ -48,8 +48,8 @@ flowchart TD
   end
 
   subgraph GAME["게임 프로세스"]
-    MOD["Observer DLL\nSts2ModAiCompanion.Mod"]
-    BRIDGE["Harness Bridge DLL\nSts2ModAiCompanion.HarnessBridge"]
+    MOD["Observer DLL"]
+    BRIDGE["Harness Bridge DLL"]
     UI["STS2 UI / Scene / Input"]
   end
 
@@ -100,8 +100,8 @@ flowchart TD
 ```mermaid
 flowchart LR
   subgraph PHYSICAL["물리 단위"]
-    P1["Observer DLL\nSts2ModAiCompanion.Mod"]
-    P2["Harness Bridge DLL\nSts2ModAiCompanion.HarnessBridge"]
+    P1["Observer DLL"]
+    P2["Harness Bridge DLL"]
     P3["Commander process"]
     P4["Smoke Harness process"]
   end
@@ -130,6 +130,23 @@ flowchart LR
 - `Observer`는 현재 `Observer DLL`과 거의 1:1 대응한다.
 - `Harness Bridge`, `Guard`, `Actuator`는 현재 모두 `Harness Bridge DLL` 안에 들어 있다.
 - `Smoke Scenario Loop`는 별도 제품 레이어가 아니라 `Smoke Harness process` 내부 상태 머신이다.
+
+## 3.1 실제 DLL 이름과 포함 역할
+
+현재 물리 DLL은 아래 두 개를 기준으로 이해한다.
+
+| 물리 DLL | 실제 출력 이름 | 현재 포함 역할 |
+| --- | --- | --- |
+| Observer DLL | `Sts2ModAiCompanion.Mod.dll` | `Observer` 중심 런타임 exporter |
+| Harness Bridge DLL | `Sts2ModAiCompanion.HarnessBridge.dll` | `Harness Bridge`, `Guard`, `Actuator role` |
+
+추가 설명:
+
+- 두 프로젝트 모두 `.csproj`에 `AssemblyName` override가 없으므로 출력 DLL 이름은 프로젝트명과 같다.
+- 즉 현재 인게임 핵심 DLL을 말할 때는 아래처럼 부르면 된다.
+  - `Observer DLL = Sts2ModAiCompanion.Mod.dll`
+  - `Harness Bridge DLL = Sts2ModAiCompanion.HarnessBridge.dll`
+- `Actuator`는 현재 별도 DLL이 아니므로 `Actuator DLL`이라고 부르지 않는다.
 
 ## 4. 용어 고정
 
