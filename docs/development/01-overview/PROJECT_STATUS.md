@@ -46,6 +46,8 @@
   - `state.latest.txt`
   - `session.json`
 - reward / event / rest / shop hook observed
+- `main-menu -> character-select -> map -> combat` observer authority chain
+- `CombatManager.IsInProgress` 기반 `encounter.inCombat=true` 런타임 검증
 - collector mode 산출물 구조 추가
   - `raw-observations.ndjson`
   - `screen-transitions.ndjson`
@@ -205,3 +207,11 @@ collector mode 코드는 들어갔고, `WriteJsonAtomic` 호환성 수정, share
 - 특히 `NMainMenu::_Ready`, `NMainMenu.SingleplayerButtonPressed`, `NSingleplayerSubmenu.OpenCharacterSelect`, `NCharacterSelectScreen.OnEmbarkPressed`가 첫 분석 대상이다.
 - `scene transition`과 `screen ready` 판단은 decompiled-backed transition-oriented hook를 우선 검토하고, polling은 continuous state/reconciliation 계층으로 유지한다.
 - transient polled scene이 남아 있는 동안 `dispatch_node`를 다시 여는 것은 금지한다.
+
+## Update (2026-03-13): authoritative combat observer truth validated
+
+- `combat` 상태의 primary source를 `CombatManager.IsInProgress`로 고정했다.
+- 최신 런타임 검증에서 `state.latest.json`은 전투 중 `currentScreen=combat`, `encounter.inCombat=true`를 유지했다.
+- `meta.combatPrimarySource=CombatManager.IsInProgress`, `meta.combatPrimaryValue=true`가 실제 파일에 기록되는 것도 확인했다.
+- 따라서 `main-menu -> ... -> combat` observer chain에서 남아 있던 핵심 truth gap은 닫혔다.
+- 현재 남은 observer 작업은 `combat` 진실값이 아니라 `act/floor/turn/energy/currentChoices` 같은 세부 fidelity 개선이다.

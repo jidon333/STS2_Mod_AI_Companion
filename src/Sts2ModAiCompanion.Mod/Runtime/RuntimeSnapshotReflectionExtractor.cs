@@ -237,7 +237,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             roots,
             config.LiveExport.MaxChoiceEntries);
         var choices = choiceResult.Choices;
-        var encounter = ExtractEncounter(roots);
+        var encounter = ExtractEncounter(roots, meta);
         var rootTypeSummary = string.Join(
             " ",
             roots
@@ -537,8 +537,28 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static IReadOnlyList<LiveExportCardSummary> ExtractDeck(IEnumerable<object> roots, int maxEntries)
     {
         var cards = new List<LiveExportCardSummary>();
-        foreach (var item in FindEnumerableItems(roots, "MasterDeck", "Deck", "Cards", "DrawPile"))
+        var deckRoots = roots
+            .Concat(FindRoots(roots, "PlayerCombatState", "CombatState", "Deck", "Hand", "DrawPile", "DiscardPile", "ExhaustPile", "PlayPile"))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+
+        foreach (var item in FindEnumerableItems(
+                     deckRoots,
+                     "MasterDeck",
+                     "Deck",
+                     "Cards",
+                     "AllCards",
+                     "Hand",
+                     "DrawPile",
+                     "DiscardPile",
+                     "ExhaustPile",
+                     "PlayPile"))
         {
+            if (!LooksLikeCardLikeItem(item))
+            {
+                continue;
+            }
+
             var name = TryReadString(item, "Name", "CardName", "DisplayName", "Id", "CardId");
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -706,6 +726,16 @@ internal static class RuntimeSnapshotReflectionExtractor
                     strictExtractor: true));
         }
 
+        if (LooksLikeCombatContext(triggerKind, screenHint, choiceRoots))
+        {
+            strictAttempts.Add(
+                EvaluateChoiceSet(
+                    "combat",
+                    CollectCombatChoiceItems(choiceRoots),
+                    maxEntries,
+                    strictExtractor: true));
+        }
+
         var strictSuccess = strictAttempts.FirstOrDefault(result => result.Choices.Count > 0);
         if (strictSuccess is not null)
         {
@@ -732,13 +762,85 @@ internal static class RuntimeSnapshotReflectionExtractor
         };
     }
 
-    private static LiveExportEncounterSummary? ExtractEncounter(IEnumerable<object> roots)
+    private static LiveExportEncounterSummary? ExtractEncounter(
+        IEnumerable<object> roots,
+        IDictionary<string, string?>? meta = null)
     {
         var encounterRoots = FindRoots(roots, "Encounter", "Room", "Combat", "Battle", "Monster");
+        var combatManagerRoots = roots
+            .Where(root =>
+            {
+                var typeName = root.GetType().FullName ?? root.GetType().Name;
+                return typeName.Contains("CombatManager", StringComparison.OrdinalIgnoreCase);
+            })
+            .Concat(FindRoots(roots, "CombatManager"))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
         var name = TryReadString(encounterRoots, "Name", "EncounterName", "RoomName", "DisplayName");
         var kind = TryReadString(encounterRoots, "Type", "EncounterType", "RoomType");
         var turn = TryReadInt(encounterRoots, "Turn", "TurnNumber", "CurrentTurn");
-        var inCombat = TryReadBool(encounterRoots, "IsInProgress", "InCombat", "IsInCombat");
+        var isInProgress = TryReadBool(combatManagerRoots, "IsInProgress");
+        var isEnding = TryReadBool(combatManagerRoots, "IsEnding", "IsOverOrEnding");
+        var isPlayPhase = TryReadBool(combatManagerRoots, "IsPlayPhase");
+        var isEnemyTurnStarted = TryReadBool(combatManagerRoots, "IsEnemyTurnStarted");
+        var fallbackInCombat = TryReadBool(encounterRoots, "IsInProgress", "InCombat", "IsInCombat");
+
+        bool? inCombat;
+        string? combatPrimarySource;
+        if (isInProgress is not null)
+        {
+            inCombat = isInProgress;
+            combatPrimarySource = "CombatManager.IsInProgress";
+        }
+        else
+        {
+            inCombat = fallbackInCombat;
+            combatPrimarySource = fallbackInCombat is null ? null : "Encounter.InCombat";
+        }
+
+        if (meta is not null)
+        {
+            meta["combatPrimarySource"] = combatPrimarySource;
+            meta["combatPrimaryValue"] = inCombat?.ToString().ToLowerInvariant();
+
+            var crossChecks = new List<string>();
+            if (isPlayPhase is not null)
+            {
+                crossChecks.Add($"CombatManager.IsPlayPhase={isPlayPhase.Value.ToString().ToLowerInvariant()}");
+            }
+
+            if (isEnemyTurnStarted is not null)
+            {
+                crossChecks.Add($"CombatManager.IsEnemyTurnStarted={isEnemyTurnStarted.Value.ToString().ToLowerInvariant()}");
+            }
+
+            if (isEnding is not null)
+            {
+                crossChecks.Add($"CombatManager.IsEnding={isEnding.Value.ToString().ToLowerInvariant()}");
+            }
+
+            if (roots.Any(root =>
+                {
+                    var typeName = root.GetType().FullName ?? root.GetType().Name;
+                    return typeName.Contains("NCombatRoom", StringComparison.OrdinalIgnoreCase);
+                }))
+            {
+                crossChecks.Add("node:NCombatRoom");
+            }
+
+            if (roots.Any(root =>
+                {
+                    var typeName = root.GetType().FullName ?? root.GetType().Name;
+                    return typeName.Contains("NCombatUi", StringComparison.OrdinalIgnoreCase);
+                }))
+            {
+                crossChecks.Add("node:NCombatUi");
+            }
+
+            meta["combatCrossCheck"] = crossChecks.Count == 0
+                ? null
+                : string.Join(";", crossChecks);
+        }
 
         if (name is null && kind is null && turn is null && inCombat is null)
         {
@@ -911,6 +1013,21 @@ internal static class RuntimeSnapshotReflectionExtractor
             "ShopEntries");
     }
 
+    private static IEnumerable<object> CollectCombatChoiceItems(IEnumerable<object> choiceRoots)
+    {
+        return CollectChoiceItems(
+            choiceRoots,
+            "Combat",
+            "Hand",
+            "Cards",
+            "CardNodes",
+            "DrawPile",
+            "DiscardPile",
+            "ExhaustPile",
+            "EndTurnButton",
+            "PingButton");
+    }
+
     private static IEnumerable<object> CollectChoiceItems(
         IEnumerable<object> choiceRoots,
         string typeHint,
@@ -988,6 +1105,18 @@ internal static class RuntimeSnapshotReflectionExtractor
                    var typeName = root.GetType().FullName ?? root.GetType().Name;
                    return typeName.Contains("Shop", StringComparison.OrdinalIgnoreCase)
                           || typeName.Contains("Merchant", StringComparison.OrdinalIgnoreCase);
+               });
+    }
+
+    private static bool LooksLikeCombatContext(string triggerKind, string? screenHint, IEnumerable<object> roots)
+    {
+        return triggerKind.Contains("combat", StringComparison.OrdinalIgnoreCase)
+               || MatchesScreenHint(screenHint, "combat")
+               || roots.Any(root =>
+               {
+                   var typeName = root.GetType().FullName ?? root.GetType().Name;
+                   return typeName.Contains("Combat", StringComparison.OrdinalIgnoreCase)
+                          || typeName.Contains("PlayerCombatState", StringComparison.OrdinalIgnoreCase);
                });
     }
 
@@ -2026,6 +2155,12 @@ internal static class RuntimeSnapshotReflectionExtractor
                || typeName.Contains("MerchantCard", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("MerchantRelic", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("MerchantPotion", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("NCard", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("EndTurnButton", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("PingButton", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("DrawPileButton", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("DiscardPileButton", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("ExhaustPileButton", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Option", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("Entry", StringComparison.OrdinalIgnoreCase)
@@ -2108,11 +2243,18 @@ internal static class RuntimeSnapshotReflectionExtractor
     {
         var typeName = root.GetType().FullName ?? root.GetType().Name;
         if (LooksLikePreviewLayoutOrContainerType(typeName)
+            || typeName.StartsWith("Godot.", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("addons.", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains(".Nodes.", StringComparison.OrdinalIgnoreCase)
             || typeName.Contains("Screen", StringComparison.OrdinalIgnoreCase)
             || typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
             || typeName.Contains("Merchant", StringComparison.OrdinalIgnoreCase)
             || typeName.Contains("Event", StringComparison.OrdinalIgnoreCase)
-            || typeName.Contains("Rest", StringComparison.OrdinalIgnoreCase))
+            || typeName.Contains("Rest", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Overlay", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Timeout", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Feedback", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Cursor", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -2135,8 +2277,32 @@ internal static class RuntimeSnapshotReflectionExtractor
                || value.Contains("Container", StringComparison.OrdinalIgnoreCase)
                || value.Contains("Holder", StringComparison.OrdinalIgnoreCase)
                || value.Contains("Rewards", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Overlay", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Timeout", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Feedback", StringComparison.OrdinalIgnoreCase)
+               || value.Contains("Multiplayer", StringComparison.OrdinalIgnoreCase)
                || value.Contains("Merchant", StringComparison.OrdinalIgnoreCase)
                || value.Contains("Event", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeCardLikeItem(object item)
+    {
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        if (LooksLikePreviewLayoutOrContainerType(typeName)
+            || typeName.Contains(".Nodes.", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Button", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Pile", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Queue", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Container", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return typeName.Contains("Card", StringComparison.OrdinalIgnoreCase)
+               || TryGetMemberValue(item, "CardId") is not null
+               || TryGetMemberValue(item, "EnergyCost") is not null
+               || TryGetMemberValue(item, "ManaCost") is not null
+               || TryGetMemberValue(item, "Cost") is not null;
     }
 
     private static string? TryConvertToDisplayString(object? value, int depth = 0)

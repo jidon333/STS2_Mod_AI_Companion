@@ -34,11 +34,16 @@ Run("localization scan merges into canonical card entries", TestLocalizationKnow
 Run("smoke diagnostics surface startup patch failures", TestSmokeDiagnostics, failures);
 Run("runtime reflection invoker supports optional parameters", TestRuntimeReflectionOptionalParameters, failures);
 Run("runtime reflection string extraction resolves nested label text", TestRuntimeReflectionStringExtraction, failures);
+Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
+Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
+Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
+Run("runtime reflection encounter does not override CombatManager IsInProgress false", TestRuntimeReflectionEncounterDoesNotOverrideCombatManagerFalse, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
 Run("companion scene normalizer prefers main-menu over hidden character-select markers", TestCompanionSceneNormalizerMainMenuPriority, failures);
 Run("companion scene normalizer detects blocking overlay from placeholder choices", TestCompanionSceneNormalizerBlockingOverlay, failures);
 Run("companion state mapper prefers main-menu over hidden character-select markers", TestCompanionStateMapperMainMenuPriority, failures);
 Run("live export tracker preserves high-value state across partial observations", TestLiveExportTrackerPartialMerge, failures);
+Run("live export tracker accepts authoritative combat encounter on high-value screen", TestLiveExportTrackerAcceptsAuthoritativeCombatEncounter, failures);
 Run("collector mode records screen episodes and choice diagnostics", TestLiveExportTrackerCollectorMode, failures);
 Run("live export tracker keeps authoritative existing-run menu-to-combat transitions", TestLiveExportTrackerMenuToCombatExistingRunAuthority, failures);
 Run("live export tracker accepts direct character-select branch without submenu", TestLiveExportTrackerMenuToCombatDirectBranchAuthority, failures);
@@ -1144,6 +1149,110 @@ static void TestRuntimeReflectionStringExtraction()
     Assert(description == "카드를 선택하세요.", "Expected LocString.GetFormattedText() to be used for descriptions.");
 }
 
+static void TestRuntimeReflectionRejectsOverlayLikePlayerRoots()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("IsAuthoritativePlayerRoot", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private IsAuthoritativePlayerRoot helper.");
+
+    var playerRoot = method!.Invoke(null, new object?[] { new FakePlayerEntity() });
+    var overlayRoot = method.Invoke(null, new object?[] { new FakeOverlayPlayerContainer() });
+
+    Assert(playerRoot is bool accepted && accepted, "Expected plain player entity root to be accepted.");
+    Assert(overlayRoot is bool rejected && !rejected, "Expected overlay-like player container to be rejected.");
+}
+
+static void TestRuntimeReflectionExtractDeckFromCombatState()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("ExtractDeck", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private ExtractDeck helper.");
+
+    var roots = new object[]
+    {
+        new FakeCombatPlayerRoot
+        {
+            PlayerCombatState = new FakePlayerCombatState
+            {
+                Hand = new object[]
+                {
+                    new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+                    new FakeCombatCard { Name = "Defend", CardId = "DEFEND", Cost = 1, Type = "skill" },
+                },
+                DrawPile = new object[]
+                {
+                    new FakeCombatCard { Name = "Bash", CardId = "BASH", Cost = 2, Type = "attack" },
+                },
+            },
+        },
+    };
+
+    var cards = method!.Invoke(null, new object?[] { roots, 16 }) as IReadOnlyList<LiveExportCardSummary>;
+    Assert(cards is not null, "Expected ExtractDeck to return a card list.");
+    Assert(cards!.Count == 3, $"Expected three combat cards, got {cards.Count}.");
+    Assert(cards.Any(card => card.Name == "Strike"), "Expected Strike to be present.");
+    Assert(cards.Any(card => card.Name == "Bash"), "Expected Bash to be present.");
+}
+
+static void TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod(
+        "ExtractEncounter",
+        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
+        null,
+        new[] { typeof(IEnumerable<object>), typeof(IDictionary<string, string?>) },
+        null);
+    Assert(method is not null, "Expected private ExtractEncounter helper.");
+
+    var meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+    var roots = new object[]
+    {
+        new FakeCombatManagerState { IsInProgress = true, IsPlayPhase = true },
+        new FakeEncounterState { Name = "Cultist", Type = "Monster", InCombat = false, IsInCombat = false, Turn = 2 },
+        new FakeCombatUiNode(),
+    };
+
+    var summary = method!.Invoke(null, new object?[] { roots, meta }) as LiveExportEncounterSummary;
+    Assert(summary is not null, "Expected ExtractEncounter to return a summary.");
+    Assert(summary!.InCombat == true, "Expected CombatManager.IsInProgress=true to establish inCombat=true.");
+    Assert(meta.TryGetValue("combatPrimarySource", out var primarySource) && primarySource == "CombatManager.IsInProgress", "Expected meta to record the primary combat source.");
+    Assert(meta.TryGetValue("combatPrimaryValue", out var primaryValue) && primaryValue == "true", "Expected meta to record the primary combat value.");
+}
+
+static void TestRuntimeReflectionEncounterDoesNotOverrideCombatManagerFalse()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod(
+        "ExtractEncounter",
+        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
+        null,
+        new[] { typeof(IEnumerable<object>), typeof(IDictionary<string, string?>) },
+        null);
+    Assert(method is not null, "Expected private ExtractEncounter helper.");
+
+    var meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+    var roots = new object[]
+    {
+        new FakeCombatManagerState { IsInProgress = false, IsEnding = true },
+        new FakeEncounterState { Name = "Cultist", Type = "Monster", InCombat = true, IsInCombat = true, Turn = 2 },
+        new FakeCombatUiNode(),
+    };
+
+    var summary = method!.Invoke(null, new object?[] { roots, meta }) as LiveExportEncounterSummary;
+    Assert(summary is not null, "Expected ExtractEncounter to return a summary.");
+    Assert(summary!.InCombat == false, "Expected CombatManager.IsInProgress=false to win over conflicting fallback signals.");
+    Assert(meta.TryGetValue("combatPrimaryValue", out var primaryValue) && primaryValue == "false", "Expected meta to record the false primary combat value.");
+}
+
 static void TestRuntimeReflectionScreenResolution()
 {
     var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
@@ -1215,6 +1324,32 @@ static void TestLiveExportTrackerPartialMerge()
     Assert(second.Relics.SequenceEqual(first.Relics, StringComparer.Ordinal), "Expected partial runtime poll not to clear relics.");
     Assert(second.Potions.SequenceEqual(first.Potions, StringComparer.Ordinal), "Expected partial runtime poll not to clear potions.");
     Assert(second.CurrentChoices.Select(choice => choice.Label).SequenceEqual(first.CurrentChoices.Select(choice => choice.Label), StringComparer.Ordinal), "Expected unresolved choice poll not to clear visible choices.");
+}
+
+static void TestLiveExportTrackerAcceptsAuthoritativeCombatEncounter()
+{
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
+
+    var mapObservation = CreateObservation("map", "map", 1, 1, 80, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()) with
+    {
+        Encounter = new LiveExportEncounterSummary("Shrinker Beetle", "Monster", false, null),
+    };
+    var first = tracker.Apply(mapObservation).Snapshot;
+    Assert(first.Encounter?.InCombat == false, "Expected initial map encounter to be non-combat.");
+
+    var combatObservation = CreateObservation("runtime-poll", "combat", 1, 1, 80, 99, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()) with
+    {
+        Encounter = new LiveExportEncounterSummary("Shrinker Beetle", "Monster", true, 1),
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["combatPrimarySource"] = "CombatManager.IsInProgress",
+            ["combatPrimaryValue"] = "true",
+        },
+    };
+
+    var second = tracker.Apply(combatObservation).Snapshot;
+    Assert(second.CurrentScreen == "combat", "Expected authoritative combat observation to set combat screen.");
+    Assert(second.Encounter?.InCombat == true, "Expected authoritative combat encounter to replace previous false inCombat value.");
 }
 
 static void TestCompanionStateMapperMainMenuPriority()
@@ -1735,6 +1870,67 @@ file sealed class FakeLocString
 file sealed class FakeScreenState
 {
     public string? RoomType { get; init; }
+}
+
+file sealed class FakePlayerEntity
+{
+    public string Name { get; init; } = "Ironclad";
+}
+
+file sealed class FakeOverlayPlayerContainer
+{
+    public string Name { get; init; } = "MultiplayerTimeoutOverlay";
+}
+
+file sealed class FakeCombatPlayerRoot
+{
+    public object? PlayerCombatState { get; init; }
+}
+
+file sealed class FakePlayerCombatState
+{
+    public object[] Hand { get; init; } = Array.Empty<object>();
+
+    public object[] DrawPile { get; init; } = Array.Empty<object>();
+}
+
+file sealed class FakeCombatCard
+{
+    public string? Name { get; init; }
+
+    public string? CardId { get; init; }
+
+    public int Cost { get; init; }
+
+    public string? Type { get; init; }
+}
+
+file sealed class FakeCombatManagerState
+{
+    public bool IsInProgress { get; init; }
+
+    public bool IsEnding { get; init; }
+
+    public bool IsPlayPhase { get; init; }
+
+    public bool IsEnemyTurnStarted { get; init; }
+}
+
+file sealed class FakeEncounterState
+{
+    public string? Name { get; init; }
+
+    public string? Type { get; init; }
+
+    public bool InCombat { get; init; }
+
+    public bool IsInCombat { get; init; }
+
+    public int? Turn { get; init; }
+}
+
+file sealed class FakeCombatUiNode
+{
 }
 
 sealed class FakeProbe : IFileStateProbe

@@ -146,3 +146,11 @@
 - Replaced `map-node-entered` as the canonical map transition with `map`, while keeping the legacy alias for consumer compatibility.
 - Updated live export consumers and self-test coverage so menu-to-combat authority is preserved even when `runtime-poll` observations interleave with hook-backed events.
 - Left actuation closed. Runtime smoke acceptance for existing-run and zero-run menu branches still remains as the next gate.
+
+## 22. 2026-03-13 - Authoritative combat observer truth fixed
+- `CombatManager.IsInProgress`를 combat 상태의 primary source로 채택하고, `RuntimeSnapshotReflectionExtractor`가 이를 `encounter.inCombat`의 기준값으로 사용하도록 정리했다.
+- `state.latest.json.meta`에 `combatPrimarySource`, `combatPrimaryValue`, `combatCrossCheck`를 남겨 observer가 왜 combat로 판정했는지 바로 설명할 수 있게 했다.
+- `LiveExportStateTracker`의 `MergeEncounter`가 이전 `false` 값을 잘못 보존하던 경로를 수정해, authoritative `inCombat=true`가 실제 snapshot 출력까지 반영되게 했다.
+- self-test에 `CombatManager.IsInProgress` 우선순위와 authoritative combat encounter merge를 검증하는 케이스를 추가했고 `dotnet build`, `Sts2ModKit.SelfTest` 모두 통과했다.
+- Steam 런타임 재검증에서 `currentScreen=combat`, `encounter.inCombat=true`, `meta.combatPrimarySource=CombatManager.IsInProgress`를 확인했다.
+- 이로써 `main-menu -> ... -> combat` observer chain의 핵심 truth는 닫혔고, 다음 병목은 `act/floor/turn/energy` 같은 combat detail fidelity다.

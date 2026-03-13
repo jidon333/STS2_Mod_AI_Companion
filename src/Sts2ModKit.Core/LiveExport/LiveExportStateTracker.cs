@@ -493,14 +493,30 @@ public sealed class LiveExportStateTracker
         }
 
         var stickyScreen = _activeScreenEpisode ?? previous.CurrentScreen;
+        var withinEpisodeWindow = _activeScreenEpisodeStartedAt is not null
+                                  && observation.ObservedAt - _activeScreenEpisodeStartedAt <= TimeSpan.FromSeconds(45);
+        if (observation.Encounter?.InCombat == true
+            && (string.Equals(previous.CurrentScreen, "combat", StringComparison.Ordinal)
+                || previous.Encounter?.InCombat == true)
+            && !string.Equals(incoming, "combat", StringComparison.Ordinal))
+        {
+            return "combat";
+        }
+
+        if (string.Equals(stickyScreen, "combat", StringComparison.Ordinal)
+            && (observation.Encounter?.InCombat == true
+                || previous.Encounter?.InCombat == true
+                || withinEpisodeWindow))
+        {
+            return stickyScreen;
+        }
+
         if (!IsStickyHighValueScreen(stickyScreen)
             || !IsFallbackScreen(incoming))
         {
             return incoming;
         }
 
-        var withinEpisodeWindow = _activeScreenEpisodeStartedAt is not null
-                                  && observation.ObservedAt - _activeScreenEpisodeStartedAt <= TimeSpan.FromSeconds(45);
         if (HasPartialStateWarning(observation)
             || HasChoiceResolutionWarning(observation)
             || (previous.CurrentChoices.Count > 0 && (observation.Choices?.Count ?? 0) == 0)
@@ -656,6 +672,12 @@ public sealed class LiveExportStateTracker
             && previous is not null
             && previous.InCombat != true)
         {
+            if (observation.Meta.TryGetValue("combatPrimarySource", out var combatPrimarySource)
+                && string.Equals(combatPrimarySource, "CombatManager.IsInProgress", StringComparison.Ordinal))
+            {
+                return incoming;
+            }
+
             regressionWarnings.Add($"state-regression: preserved-encounter-over-combat-conflict:{screen}");
             return previous with
             {
@@ -692,6 +714,7 @@ public sealed class LiveExportStateTracker
             or "singleplayer-submenu"
             or "character-select"
             or "map"
+            or "combat"
             or "rewards"
             or "event"
             or "rest-site"
@@ -712,10 +735,9 @@ public sealed class LiveExportStateTracker
             or "unknown"
             or "startup"
             or "bootstrap"
-            or "feedback-overlay"
-            or "blocking-overlay"
             or "combat"
-            or "map";
+            or "feedback-overlay"
+            or "blocking-overlay";
     }
 
     private static bool IsAuthoritativePlayerName(string incomingName, string screen)

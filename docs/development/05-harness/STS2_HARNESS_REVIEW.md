@@ -19,6 +19,7 @@
 - `2026-03-13` 재검증에서 Steam URI clean boot 후 `inventory.latest.json`가 dormant mode로 생성됐고, live state와 같은 `main-menu` choice set을 반영하는 것을 확인했다. stale action은 여전히 `action-ignored`로만 남았다.
 - shared scene normalizer를 foundation/bridge 공용으로 올리고, main menu inventory를 `profile-slot`, `continue-run`, `menu-action` 같은 semantic kind로 승격했다. self-test와 clean boot에서 이 매핑이 실제로 반영되는 것을 확인했다.
 - Implemented a decompiled-source-first observer authority chain for `main menu -> character select -> map -> combat`. Runtime acceptance is still pending.
+- Runtime acceptance for the menu-to-combat observer chain now includes authoritative combat truth. `CombatManager.IsInProgress` is the adopted primary source for `encounter.inCombat`.
 
 ## 3. 위험한 점
 - `2026-03-13` 기준 새 최소 bridge로 `Manual Clean Boot`를 다시 통과시켰다. stale action은 `action-ignored`로만 남았고 live state는 `main-menu`에 머물렀다.
@@ -35,6 +36,7 @@
 ## 4. 체크리스트
 - [~] 조작 표면: 이번 사이클에서는 actuator를 의도적으로 닫았다. legacy semantic action을 runtime bridge에서 비활성화하는 방향은 맞지만, 최종 조작 표면은 아직 재개방 전이다.
 - [~] observer: live export 기반 scene/state 관측은 유지된다. harness inventory observer도 publish-only로 다시 열었고 clean boot에서 실제 생성까지 확인했다. semantic typing은 개선됐지만, 아직 live export-derived inventory이며 transient stabilization은 미완이다.
+- [~] observer: live export 기반 scene/state 관측은 유지된다. harness inventory observer도 publish-only로 다시 열었고 clean boot에서 실제 생성까지 확인했다. semantic typing은 개선됐고, `combat` truth는 이제 `CombatManager.IsInProgress`를 primary source로 사용한다. 남은 미완은 transient stabilization과 combat detail fidelity다.
 - [~] actuator: `dispatch_node`와 semantic action 경로를 이번 사이클에서 비활성화했다. 안전성은 올라갔지만 actuator readiness 자체는 아직 미완이다.
 - [~] preflight/postflight: 이번 사이클에서는 action 자체를 실행하지 않으므로 dispatch용 preflight/postflight는 다음 사이클 과제다.
 - [x] session/guard: `arm.json` 기반 dormant/armed 전환과 arm 없을 때 action 미소비 경계를 clean-boot 전용 bridge로 다시 고정했다.
@@ -55,8 +57,9 @@
 ### P1
 - `decompiled source-first observer refinement`를 다음 작업의 맨 앞에 둬야 한다. main menu -> singleplayer submenu -> character select 흐름에서 authoritative transition candidate를 먼저 찾고, 그 다음 stabilization 규칙과 runtime hook를 정교화한다.
 - [부분완료] `inventory.latest.json` observer를 actuation 없이 publish-only로 복구했고, Steam URI clean boot에서 dormant 상태 파일 생성과 semantic node typing까지 확인했다.
-- [partial] The menu-to-combat observer authority vocabulary and consumer path are in code. The next gate is `main menu -> combat` manual smoke acceptance.
+- [x] The menu-to-combat observer authority vocabulary and consumer path are in code, and manual runtime smoke now validates `combat` truth with `CombatManager.IsInProgress`.
 - 다음은 transient scene stabilization을 acceptance 수준으로 끌어올리고, overlay/startup publish를 더 강하게 차단하는 일이다.
+- 다음 observer 병목은 `combat` 진실값이 아니라 `act/floor/turn/energy/currentChoices` 같은 detail fidelity다.
 - `dispatch_node`는 inventory match뿐 아니라 preflight/postflight를 강제하는 구조로 재도입해야 한다.
 - scenario/policy 계층은 bridge 직접 실행 경로와 분리된 adapter 뒤로 옮겨야 한다.
 - `BridgeActionExecutor`와 result schema를 clean-boot 이후 contract에 맞춰 다시 정리해야 한다.
