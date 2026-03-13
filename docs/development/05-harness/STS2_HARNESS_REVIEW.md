@@ -17,7 +17,7 @@
 - actuator를 다시 열지 않은 채 `arm/disarm/inspect`만 남겨 manual clean-boot triage 표면을 단순화했다. 근거: `src/Sts2ModKit.Tool/HarnessCommands.cs`
 
 ## 3. 위험한 점
-- 가장 큰 미해결 리스크는 아직 `Manual Clean Boot`를 새 최소 bridge 기준으로 다시 통과시켰다는 증거가 없다는 점이다. 이번 리팩토링은 방향 수습이지, 아직 acceptance는 아니다.
+- `2026-03-13` 기준 새 최소 bridge로 `Manual Clean Boot`를 다시 통과시켰다. stale action은 `action-ignored`로만 남았고 live state는 `main-menu`에 머물렀다.
 - `dispatch_node`와 `inventory.latest.json` 경로를 잠시 꺼 두었기 때문에 외부 AI policy 연동 준비도는 이번 순간에 오히려 낮아졌다. 이는 의도적 후퇴지만 문서와 기대치를 분리해서 관리해야 한다.
 - `BridgeActionExecutor`와 scripted scenario stack은 코드상 남아 있지만 clean-boot cycle에서는 사실상 죽은 경로다. 다음 사이클에서 policy adapter 뒤로 숨기거나 더 강하게 분리해야 한다.
 - `actions.ndjson`에 대한 dedupe는 현재 프로세스 메모리의 `_seenActionIds`에 의존한다. clean-boot 복구에는 충분하지만, bridge 재시작 후 ordering/idempotency 보장은 아직 약하다.
@@ -30,9 +30,9 @@
 - [~] actuator: `dispatch_node`와 semantic action 경로를 이번 사이클에서 비활성화했다. 안전성은 올라갔지만 actuator readiness 자체는 아직 미완이다.
 - [~] preflight/postflight: 이번 사이클에서는 action 자체를 실행하지 않으므로 dispatch용 preflight/postflight는 다음 사이클 과제다.
 - [x] session/guard: `arm.json` 기반 dormant/armed 전환과 arm 없을 때 action 미소비 경계를 clean-boot 전용 bridge로 다시 고정했다.
-- [~] file contract: `status.json` atomic write는 이번 사이클에서 반영했다. 하지만 action/result ordering, idempotency, inventory/result contract는 아직 보강이 더 필요하다.
+- [~] file contract: `status.json` atomic write는 반영됐고 clean boot에서 정상 기록을 확인했다. 하지만 action/result ordering, idempotency, inventory/result contract는 아직 보강이 더 필요하다.
 - [~] replay: run artifact와 replay 관련 코드는 남아 있지만 clean-boot 기준 복구에는 아직 직접 기여하지 않는다.
-- [~] smoke/progression suitability: scripted smoke/progression 경로는 의도적으로 비활성화했다. 이번 사이클 목표에는 맞지만 end-to-end smoke readiness는 아니다.
+- [~] smoke/progression suitability: `Manual Clean Boot`는 통과했다. scripted smoke/progression 경로는 여전히 의도적으로 비활성화된 상태다.
 - [~] manual control readiness: `arm/disarm/inspect`는 유지된다. `dispatch`와 scenario 실행은 의도적으로 막아 두었다.
 - [~] future AI policy readiness: `inventoryId + nodeId + sessionToken` 방향성은 유지하지만, 현재 구현은 clean-boot 우선 복구 단계다.
 
@@ -66,3 +66,4 @@
 - 현재 구조는 이제 “기능 많은 불안정 하네스”에서 “기준선 복구를 위한 최소 clean-boot bridge”로 의도적으로 축소됐다.
 - 이 축소는 후퇴가 아니라 acceptance 기준선 복구를 위한 정리 단계다.
 - 다음 게이트는 오직 `Manual Clean Boot`다. 이것을 통과하기 전까지 `dispatch_node`, scripted scenario, unattended harness 결과는 다시 신뢰하지 않는다.
+

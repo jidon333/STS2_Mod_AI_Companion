@@ -121,3 +121,10 @@
 - CLI에 `arm-harness-session`, `disarm-harness-session`, `inspect-harness-control`, `dispatch-harness-node` 경로를 추가해 외부 지휘면을 tool 쪽으로 분리했습니다.
 - 이번 단계에서 중요한 판단은 “DLL은 손발과 관측만, 판단은 외부 세션”이며, UI-bound dispatch만 허용한다는 점입니다.
 - 아직 최신 경계 구현에 대한 Manual Clean Boot 재검증은 남아 있습니다.
+
+## 18. 2026-03-13 - Manual Clean Boot gate passed
+- 최소 clean-boot bridge(dormant/status/trace/action-ignore)를 수동 컴파일 후 배포했다.
+- 초기 재부팅에서는 Sts2ModKit.Core.dll ABI mismatch로 HarnessArmSession 타입 로드 실패를 확인했다.
+- Core/Foundation/HarnessBridge DLL을 함께 맞춘 뒤 다시 Steam URI 부팅했고, stale __start__, __ironclad__, __confirm__ 액션이 모두 ction-ignored로만 남는 것을 확인했다.
+- status.json은 mode=dormant, message=bridge-dormant-no-arm으로 기록됐고 live state는 main-menu에 머물렀다.
+

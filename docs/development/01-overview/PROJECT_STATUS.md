@@ -191,3 +191,9 @@ collector mode 코드는 들어갔고, `WriteJsonAtomic` 호환성 수정, share
 - action 단위는 semantic label이 아니라 `nodeId (+ inventoryId + sessionToken)`로 고정하는 방향으로 전환했습니다.
 - 현재 최신 코드 기준으로 `inventory.latest.json`, `dispatch_node`, `arm-harness-session`, `disarm-harness-session`, `inspect-harness-control`, `dispatch-harness-node` 경로를 추가했습니다.
 - 다만 이 최신 경계 작업에 대한 build/runtime 재검증은 아직 다시 수행하지 않았으므로, 다음 신뢰 게이트는 여전히 `Manual Clean Boot`입니다.
+
+## Manual Clean Boot validated (2026-03-13)
+- Steam URI boot에서 rm.json 없이 stale ctions.ndjson를 남겨도 bridge가 dormant 상태를 유지하고 ction-ignored만 기록하는 것을 확인했다.
+- live state는 main-menu에 머물렀고 esults.ndjson는 생성되지 않았다.
+- 현재 기준선은 복구됐다. 다음 단계는 publish-only inventory observer 복구다.
+
