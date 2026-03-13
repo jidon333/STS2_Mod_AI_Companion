@@ -35,6 +35,14 @@
   - test mode does not auto-enable
   - the game does not auto-progress from main menu
 
+## Harness Observer Strategy
+- For harness observer or scene-authority work, start from `artifacts/knowledge/decompiled` before tuning polling heuristics.
+- Treat the runtime observer as an `event + polling mixed observer`.
+- Use transition-oriented hooks for scene transition, screen-ready, and lifecycle-boundary judgments when decompiled flow supports them.
+- Keep polling for continuous state, reconciliation, drift detection, and watchdog duties.
+- Do not treat a transient polled scene from `state.latest.json` as `scene-ready` by itself.
+- Do not blanket-ban `_Ready`, `_EnterTree`, `Open`, `Setup`, `ShowScreen`, or `Refresh`; evaluate them as narrow scene-specific candidates first.
+- Do not reopen `dispatch_node` while scene authority still depends on transient published snapshots.
 ## Preferred Pre-Deploy Checklist
 1. Stop the game and confirm related processes are gone.
 2. Rebuild the intended artifacts.

@@ -24,6 +24,7 @@
 - `inventory.latest.json`는 publish-only로 복구됐지만, source-of-truth가 live export snapshot이라서 아직 실제 UI node tree와 1:1 계약은 아니다. external AI policy 연동 준비도는 이전보다 좋아졌지만, actuation acceptance 기준으로 보기엔 아직 부족하다.
 - 초기 poll에서 `bootstrap -> combat -> main-menu`처럼 transient sceneType가 잠깐 기록된다. 현재 publish-only observer는 steady-state triage에는 충분하지만, 이후 `dispatch_node` 재개 전에는 scene stabilization 규칙이 더 필요하다.
 - 이번 사이클에서 transient suppress를 넣었지만, `bootstrap`, `feedback-overlay`, `startup`이 2회 연속 관측되면 결국 publish된다. 즉 suppress는 들어갔지만 acceptance 수준의 stabilization으로 보기는 아직 이르다.
+- 현재 핵심 부족점은 polling 자체가 아니라 scene transition authority가 아직 live export snapshot 해석에 크게 의존한다는 점이다. 다음 사이클은 `decompiled source-first`로 좁은 candidate 메서드를 먼저 찾고, `transition-oriented hook`로 검증하는 순서여야 한다.
 - `BridgeActionExecutor`와 scripted scenario stack은 코드상 남아 있지만 clean-boot cycle에서는 사실상 죽은 경로다. 다음 사이클에서 policy adapter 뒤로 숨기거나 더 강하게 분리해야 한다.
 - `actions.ndjson`에 대한 dedupe는 현재 프로세스 메모리의 `_seenActionIds`에 의존한다. clean-boot 복구에는 충분하지만, bridge 재시작 후 ordering/idempotency 보장은 아직 약하다.
 - `results.ndjson`를 이번 사이클에서 적극적으로 생산하지 않으므로, arm 이후 actuation acceptance를 논하기엔 아직 이르다.
@@ -50,6 +51,7 @@
 - clean-boot acceptance가 닫히면 그 시점의 trace/status/runtime log를 기준 artifact로 보존해야 한다.
 
 ### P1
+- `decompiled source-first observer refinement`를 다음 작업의 맨 앞에 둬야 한다. main menu -> singleplayer submenu -> character select 흐름에서 authoritative transition candidate를 먼저 찾고, 그 다음 stabilization 규칙과 runtime hook를 정교화한다.
 - [부분완료] `inventory.latest.json` observer를 actuation 없이 publish-only로 복구했고, Steam URI clean boot에서 dormant 상태 파일 생성과 semantic node typing까지 확인했다.
 - 다음은 transient scene stabilization을 acceptance 수준으로 끌어올리고, overlay/startup publish를 더 강하게 차단하는 일이다.
 - `dispatch_node`는 inventory match뿐 아니라 preflight/postflight를 강제하는 구조로 재도입해야 한다.

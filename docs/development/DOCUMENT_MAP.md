@@ -54,6 +54,8 @@
   - dual-mode 재정렬 계획과 구조적 이유를 설명합니다.
 - `docs/development/05-harness/HARNESS_MODE.md`
   - harness mode 전용 개념과 운영 목표를 설명합니다.
+- `docs/development/05-harness/DECOMPILED_SOURCE_FIRST_OBSERVER_STRATEGY.md`
+  - 하네스 observer를 `decompiled source-first`, `event + polling mixed observer` 기준으로 읽는 문서입니다.
 - `docs/development/01-overview/MODDING_FROM_ZERO.md`
   - 초보자 기준으로 STS2 모딩과 현재 저장소 핵심 개념을 설명합니다.
 - `docs/development/02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
@@ -118,8 +120,9 @@
 
 1. `docs/development/01-overview/DUAL_MODE_ARCHITECTURE.md`
 2. `docs/development/05-harness/HARNESS_MODE.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/development/01-overview/REPO_STRUCTURE.md`
+3. `docs/development/05-harness/DECOMPILED_SOURCE_FIRST_OBSERVER_STRATEGY.md`
+4. `docs/ARCHITECTURE.md`
+5. `docs/development/01-overview/REPO_STRUCTURE.md`
 
 ## 4. 현재 판단
 

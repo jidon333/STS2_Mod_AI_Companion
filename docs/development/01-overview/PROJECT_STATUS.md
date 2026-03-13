@@ -197,3 +197,11 @@ collector mode 코드는 들어갔고, `WriteJsonAtomic` 호환성 수정, share
 - live state는 main-menu에 머물렀고 esults.ndjson는 생성되지 않았다.
 - 현재 기준선은 복구됐다. 다음 단계는 publish-only inventory observer 복구다.
 
+
+## Update (2026-03-13): harness observer 방향 전환
+
+- polling 자체를 줄이는 것이 목표가 아니다. 현재 observer는 `event + polling mixed observer`로 본다.
+- 다음 하네스 observer 개선의 우선순위는 polling heuristic 추가가 아니라 `artifacts/knowledge/decompiled`에서 authoritative transition candidate를 먼저 찾는 일이다.
+- 특히 `NMainMenu::_Ready`, `NMainMenu.SingleplayerButtonPressed`, `NSingleplayerSubmenu.OpenCharacterSelect`, `NCharacterSelectScreen.OnEmbarkPressed`가 첫 분석 대상이다.
+- `scene transition`과 `screen ready` 판단은 decompiled-backed transition-oriented hook를 우선 검토하고, polling은 continuous state/reconciliation 계층으로 유지한다.
+- transient polled scene이 남아 있는 동안 `dispatch_node`를 다시 여는 것은 금지한다.

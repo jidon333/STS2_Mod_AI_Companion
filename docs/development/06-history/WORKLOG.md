@@ -135,3 +135,9 @@
 - 다만 transient suppress 규칙은 아직 충분히 강하지 않다. `bootstrap`, `feedback-overlay`, `startup` 같은 초기 scene이 두 번 연속 관측되면 여전히 publish될 수 있었다.
 - 따라서 이번 작업은 observer fidelity 개선까지는 성공했지만, `dispatch_node` 재개 전 acceptance 수준의 stabilization은 아직 미완이다.
 
+
+## 20. 2026-03-13 - Decompiled source-first observer strategy documented
+- observer 개선 논의를 정리하면서 polling 자체를 문제로 보는 것은 정확하지 않다는 점을 명시했다.
+- 현재 observer는 `event + polling mixed observer`로 보고, polling은 continuous state / reconciliation / watchdog 역할을 계속 맡는다고 문서화했다.
+- 대신 scene transition, screen ready, lifecycle boundary 같은 권위 있는 경계 판단은 먼저 decompiled source에서 후보 메서드를 찾고, 그 다음 runtime hook/event로 검증해야 한다는 원칙을 고정했다.
+- 이 판단을 `AI_HANDOFF_PROMPT_KO`, `AGENTS.md`, `HARNESS_MODE`, `PENDING_HOOKS_AND_RISKS`, `PROJECT_STATUS`, `DOCUMENT_MAP`, `STS2_HARNESS_REVIEW`에 동시에 반영해 다음 AI가 같은 기준으로 출발하도록 정리했다.

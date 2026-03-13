@@ -82,6 +82,10 @@
 9. `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\docs\development\01-overview\REPO_STRUCTURE.md`
    - 프로젝트/폴더 구조
 
+하네스 observer / scene authority 작업 전에는 아래 문서를 추가 기준 문서로 반드시 읽는다.
+
+- `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\docs\development\05-harness\DECOMPILED_SOURCE_FIRST_OBSERVER_STRATEGY.md`
+  - `decompiled source-first`, `event + polling mixed observer`, `transition-oriented hook` 원칙
 필요 시 추가로 읽을 문서:
 
 - `C:\Users\jidon\source\repos\STS2_Mod_AI_Companion\docs\REALTIME_EXTRACTION.md`
@@ -163,6 +167,13 @@
 ### C. harness는 아직 “자동화 가능한 구조”까지만 왔지, 자동 테스트가 닫힌 것은 아니다
 - scaffolding은 있음
 - 실제 unattended scenario 완주는 아직 실패
+
+### D. 하네스 observer 접근 방식은 이제 `decompiled source-first + event/polling mixed observer`다
+- polling은 버릴 대상이 아니라 continuous state, reconciliation, watchdog 용도로 계속 중요하다.
+- 다만 `scene transition`, `screen ready`, `lifecycle boundary` 판단은 polling 순간값만으로 확정하지 않는다.
+- 다음 하네스 observer 작업은 먼저 `artifacts/knowledge/decompiled`에서 흐름과 메서드 후보를 찾고, 그 다음 runtime hook/event로 검증한다.
+- 특히 `NMainMenu::_Ready`, `NMainMenu.SingleplayerButtonPressed`, `NSingleplayerSubmenu.OpenCharacterSelect`, `NCharacterSelectScreen.OnEmbarkPressed`를 먼저 보라.
+- transient polled scene이 남아 있는 동안 `dispatch_node`를 다시 열지 마라.
 
 ## 7. 현재 가장 큰 미해결 문제
 
