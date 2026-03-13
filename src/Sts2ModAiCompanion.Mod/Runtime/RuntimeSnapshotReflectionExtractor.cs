@@ -472,8 +472,8 @@ internal static class RuntimeSnapshotReflectionExtractor
                 TryReadString(currentScene ?? sceneRoot, "Name", "SceneFilePath", "SceneFile"),
                 currentScene?.GetType().FullName,
                 sceneRoot?.GetType().FullName,
-                string.Join(" ", visibleNodeTypes.Take(24)),
-                string.Join(" ", interestingNodeTypes.Take(24))),
+                string.Join(" ", visibleNodeTypes.Take(96)),
+                string.Join(" ", interestingNodeTypes.Take(96))),
             traversedNodeCount,
             visibleNodeTypes
                 .Distinct(StringComparer.Ordinal)
@@ -1245,6 +1245,17 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static string InferScreen(params string?[] candidates)
     {
         var joined = string.Join(" ", candidates.Where(candidate => !string.IsNullOrWhiteSpace(candidate)));
+        if (joined.Contains("CharacterSelect", StringComparison.OrdinalIgnoreCase)
+            || joined.Contains("NewRun", StringComparison.OrdinalIgnoreCase))
+        {
+            return "character-select";
+        }
+
+        if (joined.Contains("SingleplayerSubmenu", StringComparison.OrdinalIgnoreCase))
+        {
+            return "singleplayer-submenu";
+        }
+
         if (joined.Contains("MainMenu", StringComparison.OrdinalIgnoreCase))
         {
             return "main-menu";
@@ -1259,12 +1270,6 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (joined.Contains("Modding", StringComparison.OrdinalIgnoreCase))
         {
             return "modding";
-        }
-
-        if (joined.Contains("CharacterSelect", StringComparison.OrdinalIgnoreCase)
-            || joined.Contains("NewRun", StringComparison.OrdinalIgnoreCase))
-        {
-            return "character-select";
         }
 
         if (joined.Contains("Event", StringComparison.OrdinalIgnoreCase))

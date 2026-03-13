@@ -201,7 +201,13 @@ public sealed class ScenarioRunner
                         "choose_reward" => Math.Max(action.TimeoutMs, 8_000),
                         _ => Math.Max(Math.Min(action.TimeoutMs, 5_000), 1_000),
                     };
-                    currentState = await WaitForSceneAsync(step.ExpectedResult, seenScenes, cancellationToken, expectedWaitBudgetMs).ConfigureAwait(false);
+                    currentState = await WaitForSceneAsync(
+                            step.ExpectedResult,
+                            seenScenes,
+                            cancellationToken,
+                            expectedWaitBudgetMs,
+                            acceptProgression: true)
+                        .ConfigureAwait(false);
                     if (string.IsNullOrWhiteSpace(step.ExpectedResult) || SceneMatchesOrProgressesPast(currentState.Scene.SceneType, step.ExpectedResult))
                     {
                         stepStatus = "passed";
@@ -269,7 +275,12 @@ public sealed class ScenarioRunner
         };
     }
 
-    private async Task<CompanionState> WaitForSceneAsync(string? expectedScene, ICollection<string> seenScenes, CancellationToken cancellationToken, int? timeoutMsOverride = null)
+    private async Task<CompanionState> WaitForSceneAsync(
+        string? expectedScene,
+        ICollection<string> seenScenes,
+        CancellationToken cancellationToken,
+        int? timeoutMsOverride = null,
+        bool acceptProgression = false)
     {
         if (string.IsNullOrWhiteSpace(expectedScene))
         {
@@ -279,6 +290,8 @@ public sealed class ScenarioRunner
         var timeout = TimeSpan.FromMilliseconds(Math.Max(timeoutMsOverride ?? _configuration.Harness.StepTimeoutMs, 1_000));
         var deadline = DateTimeOffset.UtcNow.Add(timeout);
         CompanionState? lastState = null;
+        DateTimeOffset? matchedSince = null;
+        var stabilityWindow = TimeSpan.FromMilliseconds(GetSceneStabilityWindowMs(expectedScene));
         while (DateTimeOffset.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -290,7 +303,19 @@ public sealed class ScenarioRunner
 
             if (SceneMatches(lastState.Scene.SceneType, expectedScene))
             {
+                matchedSince ??= DateTimeOffset.UtcNow;
+                if (DateTimeOffset.UtcNow - matchedSince.Value >= stabilityWindow)
+                {
+                    return lastState;
+                }
+            }
+            else if (acceptProgression && SceneMatchesOrProgressesPast(lastState.Scene.SceneType, expectedScene))
+            {
                 return lastState;
+            }
+            else
+            {
+                matchedSince = null;
             }
 
             await Task.Delay(Math.Max(_configuration.Harness.PollIntervalMs, 250), cancellationToken).ConfigureAwait(false);
@@ -331,12 +356,17 @@ public sealed class ScenarioRunner
 
     private static bool IsCombatReady(CompanionState state)
     {
-        if (!SceneMatchesOrProgressesPast(state.Scene.SceneType, "combat"))
+        if (!string.Equals(NormalizeScene(state.Scene.SceneType), "combat", StringComparison.Ordinal))
         {
             return false;
         }
 
-        if (state.Combat.Turn is > 0 || state.Player.Energy is not null)
+        if (HasOverlayChoiceNoise(state))
+        {
+            return false;
+        }
+
+        if (state.Combat.Turn is > 0)
         {
             return true;
         }
@@ -354,6 +384,33 @@ public sealed class ScenarioRunner
         return state.Choices.List.Any(choice => IsLikelyCombatChoice(choice.Label));
     }
 
+    private static bool HasOverlayChoiceNoise(CompanionState state)
+    {
+        if (string.Equals(state.Scene.SceneType, "blocking-overlay", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(state.Scene.SceneType, "feedback-overlay", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return state.Choices.List.Count > 0
+               && state.Choices.List.All(choice => IsOverlayChoice(choice.Label));
+    }
+
+    private static bool IsOverlayChoice(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        var normalized = label.Trim();
+        return normalized.Equals("Dismisser", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("Exclaim", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("Question", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("BackButton", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("Send!", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsLikelyCombatChoice(string? label)
     {
         if (string.IsNullOrWhiteSpace(label))
@@ -362,11 +419,7 @@ public sealed class ScenarioRunner
         }
 
         var normalized = label.Trim();
-        if (normalized.Equals("Dismisser", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("Exclaim", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("Question", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("BackButton", StringComparison.OrdinalIgnoreCase)
-            || normalized.Equals("Send!", StringComparison.OrdinalIgnoreCase))
+        if (IsOverlayChoice(normalized))
         {
             return false;
         }
@@ -426,6 +479,20 @@ public sealed class ScenarioRunner
             "choose_map_node" => true,
             "choose_reward" => true,
             _ => false,
+        };
+    }
+
+    private static int GetSceneStabilityWindowMs(string? scene)
+    {
+        return NormalizeScene(scene) switch
+        {
+            "main-menu" => 1_500,
+            "singleplayer-submenu" => 1_000,
+            "character-select" => 1_000,
+            "map" => 1_500,
+            "combat" => 1_000,
+            "rewards" => 1_000,
+            _ => 750,
         };
     }
 

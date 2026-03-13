@@ -58,6 +58,11 @@ public sealed class RecoveryManager
                 string.Equals(normalizedScene, "blocking-overlay", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(normalizedScene, "feedback-overlay", StringComparison.OrdinalIgnoreCase);
             var isCombatScene = string.Equals(normalizedScene, "combat", StringComparison.OrdinalIgnoreCase);
+            var handUnavailable =
+                reason.Contains("player-hand-unavailable", StringComparison.OrdinalIgnoreCase)
+                || reason.Contains("hand-holder-unavailable", StringComparison.OrdinalIgnoreCase);
+            var hasOverlayOnlyChoices = state.Choices.List.Count > 0
+                                        && state.Choices.List.All(choice => IsOverlayChoice(choice.Label));
             var hasExplicitDismissChoice = state.Choices.List.Any(choice =>
             {
                 var label = (choice.Label ?? string.Empty).Trim();
@@ -65,14 +70,16 @@ public sealed class RecoveryManager
                        || string.Equals(label, "Continue", StringComparison.OrdinalIgnoreCase)
                        || string.Equals(label, "Cancel", StringComparison.OrdinalIgnoreCase)
                        || string.Equals(label, "Close", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(label, "확인", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(label, "취소", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(label, "닫기", StringComparison.OrdinalIgnoreCase);
+                       || string.Equals(label, "Back", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(label, "OK", StringComparison.OrdinalIgnoreCase);
             });
-            var shouldCancel = isOverlayScene || (hasExplicitDismissChoice && !isCombatScene);
+
+            var shouldCancel = isOverlayScene
+                               || hasOverlayOnlyChoices
+                               || (hasExplicitDismissChoice && !isCombatScene);
             var action = shouldCancel
                 ? HarnessAction.Create("cancel", "recovery:bridge-stalled", targetLabel: "__cancel__", timeoutMs: 10_000, retryBudget: 1)
-                : HarnessAction.Create("noop", "recovery:bridge-stalled", timeoutMs: 10_000);
+                : HarnessAction.Create("noop", handUnavailable ? "recovery:combat-wait" : "recovery:bridge-stalled", timeoutMs: 10_000);
             var result = await _actionExecutor.ExecuteAsync(
                     action,
                     state,
@@ -86,6 +93,21 @@ public sealed class RecoveryManager
         }
 
         return new RecoveryAttempt(false, null, null, "unsupported-recovery");
+    }
+
+    private static bool IsOverlayChoice(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        var normalized = label.Trim();
+        return normalized.Equals("Dismisser", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("Exclaim", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("Question", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("BackButton", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("Send!", StringComparison.OrdinalIgnoreCase);
     }
 }
 

@@ -69,13 +69,35 @@ public sealed class DeterministicPolicyEngine
                 || choice.Label.Contains("타격", StringComparison.OrdinalIgnoreCase)
                 || choice.Label.Contains("수비", StringComparison.OrdinalIgnoreCase))
             .ToArray();
-        var canPlayCard =
-            playableChoices.Length > 0
-            || state.Player.Energy.GetValueOrDefault() > 0
-            || (state.Combat.InCombat && state.Choices.List.Count <= 4);
+        var hasHandEvidence = !string.IsNullOrWhiteSpace(state.Combat.HandSummary);
+        var hasEndTurnChoice = state.Choices.List.Any(choice =>
+        {
+            if (string.IsNullOrWhiteSpace(choice.Label))
+            {
+                return false;
+            }
 
-        var chosenKind = canPlayCard ? "click_card" : "end_turn";
-        var targetLabel = canPlayCard ? "__first_playable__" : "__end_turn__";
+            return choice.Label.Contains("end turn", StringComparison.OrdinalIgnoreCase)
+                   || choice.Label.Contains("turn end", StringComparison.OrdinalIgnoreCase)
+                   || choice.Label.Contains("턴 종료", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(choice.Kind, "end_turn", StringComparison.OrdinalIgnoreCase);
+        });
+        var energy = state.Player.Energy.GetValueOrDefault();
+
+        var chosenKind = playableChoices.Length > 0 || hasHandEvidence
+            ? "click_card"
+            : hasEndTurnChoice || (state.Combat.Turn is > 0 && energy <= 0)
+                ? "end_turn"
+                : "noop";
+        var targetLabel = chosenKind switch
+        {
+            "click_card" => "__first_playable__",
+            "end_turn" => "__end_turn__",
+            _ => "__wait__",
+        };
+        var timeoutMs = string.Equals(chosenKind, "noop", StringComparison.Ordinal)
+            ? Math.Min(_combatTimeoutMs, 5_000)
+            : _combatTimeoutMs;
         var metadata = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
         {
             ["targetScene"] = step.TargetScene,
@@ -91,7 +113,7 @@ public sealed class DeterministicPolicyEngine
             step.Name,
             targetLabel,
             null,
-            _combatTimeoutMs,
+            timeoutMs,
             1,
             "test-only",
             $"scenario-step:{step.Name}|scene:{state.Scene.SceneType}|combat-basic",

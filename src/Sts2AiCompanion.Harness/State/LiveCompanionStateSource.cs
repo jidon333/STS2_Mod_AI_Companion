@@ -159,13 +159,23 @@ public sealed class LiveCompanionStateSource
             return state;
         }
 
-        if (DateTimeOffset.UtcNow - latestHarnessResult.CompletedAt > TimeSpan.FromSeconds(20))
+        if (DateTimeOffset.UtcNow - latestHarnessResult.CompletedAt > TimeSpan.FromSeconds(5))
+        {
+            return state;
+        }
+
+        if (state.CapturedAt - latestHarnessResult.CompletedAt > TimeSpan.FromSeconds(2))
         {
             return state;
         }
 
         var overlayScene = TryInferSceneFromObservedDelta(latestHarnessResult.ObservedStateDelta);
         if (string.IsNullOrWhiteSpace(overlayScene))
+        {
+            return state;
+        }
+
+        if (!ShouldPromoteHarnessScene(state, overlayScene))
         {
             return state;
         }
@@ -204,6 +214,21 @@ public sealed class LiveCompanionStateSource
         };
     }
 
+    private static bool ShouldPromoteHarnessScene(CompanionState state, string overlayScene)
+    {
+        if (!string.Equals(overlayScene, "combat", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(state.Scene.SceneType, "combat", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return HasCombatEvidence(state);
+    }
+
     private static string? TryInferSceneFromObservedDelta(string observedStateDelta)
     {
         if (string.IsNullOrWhiteSpace(observedStateDelta))
@@ -234,10 +259,13 @@ public sealed class LiveCompanionStateSource
         {
             "push-character-select" => "character-select",
             "character-select" => "character-select",
+            "character-selected" => "character-select",
+            "open-character-select" => "character-select",
             "singleplayer-submenu" => "singleplayer-submenu",
             "main-menu" => "main-menu",
             "map" => "map",
             "combat" => "combat",
+            "already-combat" => "combat",
             "rewards" => "rewards",
             "reward" => "rewards",
             "event" => "event",
@@ -275,8 +303,63 @@ public sealed class LiveCompanionStateSource
             return !string.IsNullOrWhiteSpace(scene);
         }
 
+        if (lowered.StartsWith("run-started:", StringComparison.Ordinal))
+        {
+            var candidate = lowered["run-started:".Length..];
+            if (candidate.Contains("map", StringComparison.Ordinal))
+            {
+                scene = "map";
+                return true;
+            }
+
+            if (candidate.Contains("reward", StringComparison.Ordinal))
+            {
+                scene = "rewards";
+                return true;
+            }
+
+            if (candidate.Contains("combat", StringComparison.Ordinal))
+            {
+                scene = "combat";
+                return true;
+            }
+        }
+
         scene = null;
         return false;
+    }
+
+    private static bool HasCombatEvidence(CompanionState state)
+    {
+        if (state.Combat.Turn is > 0 || !string.IsNullOrWhiteSpace(state.Combat.HandSummary))
+        {
+            return true;
+        }
+
+        return state.Choices.List.Any(choice => IsLikelyCombatChoice(choice.Label));
+    }
+
+    private static bool IsLikelyCombatChoice(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        var normalized = label.Trim();
+        if (normalized.Equals("Dismisser", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("Exclaim", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("Question", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("BackButton", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("Send!", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return normalized.Contains("strike", StringComparison.OrdinalIgnoreCase)
+               || normalized.Contains("defend", StringComparison.OrdinalIgnoreCase)
+               || normalized.Contains("bash", StringComparison.OrdinalIgnoreCase)
+               || normalized.Contains("card", StringComparison.OrdinalIgnoreCase);
     }
 
     private static int SceneRank(string? sceneType)

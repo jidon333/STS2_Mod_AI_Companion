@@ -23,7 +23,13 @@ internal static class RuntimeHookCatalog
 
     private static readonly RuntimeHookCandidate[] Candidates =
     {
-        new("run-lifecycle", "run-started", "MegaCrit.Sts2.Core.Runs.RunManager", new[] { "StartRun", "BeginRun", "CreateRun" }),
+        new("run-lifecycle", "run-start-requested", "MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectScreen", new[] { "OnEmbarkPressed" }, "character-select"),
+        new("run-lifecycle", "run-ready-state-changed", "MegaCrit.Sts2.Core.Multiplayer.Game.Lobby.StartRunLobby", new[] { "SetReady" }, "character-select"),
+        new("run-lifecycle", "run-start-requested", "MegaCrit.Sts2.Core.Multiplayer.Game.Lobby.StartRunLobby", new[] { "BeginRunIfAllPlayersReady", "BeginRun" }, "character-select"),
+        new("run-lifecycle", "run-started", "MegaCrit.Sts2.Core.Nodes.NGame", new[] { "StartRun", "StartNewSingleplayerRun" }),
+        new("run-lifecycle", "run-started", "MegaCrit.Sts2.Core.Runs.RunManager", new[] { "Launch" }),
+        new("run-lifecycle", "act-entered", "MegaCrit.Sts2.Core.Runs.RunManager", new[] { "EnterAct" }),
+        new("run-lifecycle", "room-entered", "MegaCrit.Sts2.Core.Runs.RunManager", new[] { "EnterRoom", "EnterRoomInternal", "LoadIntoLatestMapCoord" }),
         new("run-lifecycle", "run-loaded", "MegaCrit.Sts2.Core.Runs.RunManager", new[] { "LoadRun", "ContinueRun", "ResumeRun" }),
         new("run-lifecycle", "run-ended", "MegaCrit.Sts2.Core.Runs.RunManager", new[] { "EndRun", "WinRun", "LoseRun", "GameOver" }),
         new("save", "save-persisted", "MegaCrit.Sts2.Core.Saves.SaveManager", new[] { "Save", "Write", "Persist", "Flush" }),

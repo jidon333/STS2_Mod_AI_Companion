@@ -3,17 +3,10 @@
   "description": "Start a standard Ironclad run, clear the first combat, take the first reward, and return to the map.",
   "steps": [
     {
-      "name": "main-menu",
+      "name": "open-character-select",
       "targetScene": "main-menu",
       "actionKind": "click_button",
       "targetLabel": "__start__",
-      "expectedResult": "singleplayer-submenu"
-    },
-    {
-      "name": "open-standard-run",
-      "targetScene": "singleplayer-submenu",
-      "actionKind": "click_button",
-      "targetLabel": "__standard_run__",
       "expectedResult": "character-select"
     },
     {

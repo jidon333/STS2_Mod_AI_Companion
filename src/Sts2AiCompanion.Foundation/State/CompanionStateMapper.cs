@@ -10,32 +10,33 @@ public static class CompanionStateMapper
         LiveExportSession? session,
         IReadOnlyList<LiveExportEventEnvelope> recentEvents)
     {
+        var sanitizedChoices = SanitizeChoices(snapshot.CurrentChoices);
         var normalizedScene = NormalizeScene(snapshot);
         var sceneType = normalizedScene.SceneType;
         var confidence = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
         {
             ["scene"] = normalizedScene.Confidence,
-            ["choices"] = snapshot.CurrentChoices.Count == 0 ? 0.2 : 0.8,
+            ["choices"] = sanitizedChoices.Count == 0 ? 0.2 : 0.8,
             ["deck"] = snapshot.Deck.Count == 0 ? 0.2 : 0.8,
             ["player"] = snapshot.Player.CurrentHp is null ? 0.3 : 0.9,
         };
 
         var unknowns = new List<string>();
         if (snapshot.Deck.Count == 0) unknowns.Add("deck-empty");
-        if (snapshot.CurrentChoices.Count == 0) unknowns.Add("choices-empty");
+        if (sanitizedChoices.Count == 0) unknowns.Add("choices-empty");
         if (string.Equals(sceneType, "unknown", StringComparison.OrdinalIgnoreCase)) unknowns.Add("scene-unknown");
 
         var rewardEntries = IsRewardScene(sceneType)
-            ? snapshot.CurrentChoices.Select(ToChoiceItem).ToArray()
+            ? sanitizedChoices.Select(ToChoiceItem).ToArray()
             : Array.Empty<CompanionChoiceItem>();
         var eventEntries = IsEventScene(sceneType)
-            ? snapshot.CurrentChoices.Select(ToChoiceItem).ToArray()
+            ? sanitizedChoices.Select(ToChoiceItem).ToArray()
             : Array.Empty<CompanionChoiceItem>();
         var shopEntries = IsShopScene(sceneType)
-            ? snapshot.CurrentChoices.Select(ToChoiceItem).ToArray()
+            ? sanitizedChoices.Select(ToChoiceItem).ToArray()
             : Array.Empty<CompanionChoiceItem>();
         var restEntries = IsRestScene(sceneType)
-            ? snapshot.CurrentChoices.Select(ToChoiceItem).ToArray()
+            ? sanitizedChoices.Select(ToChoiceItem).ToArray()
             : Array.Empty<CompanionChoiceItem>();
 
         return new CompanionState(
@@ -71,7 +72,7 @@ public static class CompanionStateMapper
                 TryGetMeta(snapshot.Meta, "hand-summary"),
                 TryGetMeta(snapshot.Meta, "enemy-intent-summary")),
             new CompanionChoiceState(
-                snapshot.CurrentChoices.Select(ToChoiceItem).ToArray(),
+                sanitizedChoices.Select(ToChoiceItem).ToArray(),
                 TryGetMeta(snapshot.Meta, "choice-source") ?? "live-export",
                 TryGetMeta(snapshot.Meta, "choice-extractor"),
                 confidence["choices"]),
@@ -136,12 +137,32 @@ public static class CompanionStateMapper
         var currentSceneType = TryGetMeta(snapshot.Meta, "currentSceneType");
         var rootTypeSummary = TryGetMeta(snapshot.Meta, "rootTypeSummary");
         var modalType = TryGetMeta(snapshot.Meta, "modal-type");
-        var choiceLabels = snapshot.CurrentChoices
+        var choiceLabels = SanitizeChoices(snapshot.CurrentChoices)
             .Select(choice => choice.Label)
             .Where(label => !string.IsNullOrWhiteSpace(label))
             .ToArray();
+        var overlayChoiceNoise = snapshot.CurrentChoices.Count > 0 && choiceLabels.Length == 0;
         var currentSceneTypeLooksLikeCharacterSelect = ContainsSceneMarker(currentSceneType, null, "NCharacterSelectScreen");
         var currentSceneTypeLooksLikeSingleplayerSubmenu = ContainsSceneMarker(currentSceneType, null, "NSingleplayerSubmenu");
+        var feedbackOverlayVisible = ContainsSceneMarker(currentSceneType, rootTypeSummary, "NSendFeedbackScreen");
+        var timeoutOverlayVisible = ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMultiplayerTimeoutOverlay");
+        var combatMarkersVisible = ContainsSceneMarker(currentSceneType, rootTypeSummary, "NCombatRoom")
+                                   || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NCombatScreen")
+                                   || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NCombatHud")
+                                   || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NPlayerHand")
+                                   || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NTargetManager")
+                                   || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NSelectionReticle")
+                                   || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NTargetingArrow");
+
+        if (feedbackOverlayVisible && overlayChoiceNoise)
+        {
+            return new NormalizedScene("feedback-overlay", "feedback-overlay", 0.92, "meta:feedback-overlay");
+        }
+
+        if (timeoutOverlayVisible && overlayChoiceNoise)
+        {
+            return new NormalizedScene("blocking-overlay", "blocking-overlay", 0.92, "meta:timeout-overlay");
+        }
 
         var looksLikeMainMenu = LooksLikeMainMenuNormalized(choiceLabels)
                                 || string.Equals(rawScene, "main-menu", StringComparison.OrdinalIgnoreCase)
@@ -204,6 +225,12 @@ public static class CompanionStateMapper
             return new NormalizedScene("singleplayer-submenu", "singleplayer-submenu", 0.95, "meta:singleplayer-submenu");
         }
 
+        if (string.Equals(rawScene, "combat", StringComparison.OrdinalIgnoreCase)
+            || (snapshot.Encounter?.InCombat == true && combatMarkersVisible))
+        {
+            return new NormalizedScene("combat", "combat", 0.96, "raw/meta:combat");
+        }
+
         if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMapScreen"))
         {
             return new NormalizedScene("map", "map", 0.94, "meta:map");
@@ -258,6 +285,28 @@ public static class CompanionStateMapper
             rawScene,
             string.Equals(rawScene, "unknown", StringComparison.OrdinalIgnoreCase) ? 0.0 : 0.8,
             TryGetMeta(snapshot.Meta, "scene-source") ?? "live-export");
+    }
+
+    private static IReadOnlyList<LiveExportChoiceSummary> SanitizeChoices(IReadOnlyList<LiveExportChoiceSummary> choices)
+    {
+        return choices
+            .Where(choice => !IsOverlayChoice(choice.Label))
+            .ToArray();
+    }
+
+    private static bool IsOverlayChoice(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        var normalized = label.Trim();
+        return normalized.Equals("Dismisser", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("Exclaim", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("Question", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("BackButton", StringComparison.OrdinalIgnoreCase)
+               || normalized.Equals("Send!", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ContainsSceneMarker(string? currentSceneType, string? rootTypeSummary, string marker)

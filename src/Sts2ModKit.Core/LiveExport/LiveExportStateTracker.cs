@@ -609,6 +609,11 @@ public sealed class LiveExportStateTracker
             return previous;
         }
 
+        incoming = incoming
+            .Where(choice => !IsOverlayChoice(choice))
+            .Take(_options.MaxChoiceEntries)
+            .ToArray();
+
         if (incoming.Count == 0
             && previous.Count > 0
             && (IsChoiceLikeScreen(previousScreen) || IsChoiceLikeScreen(nextScreen))
@@ -711,9 +716,26 @@ public sealed class LiveExportStateTracker
         return !incomingName.Contains("Screen", StringComparison.OrdinalIgnoreCase)
                && !incomingName.Contains("Room", StringComparison.OrdinalIgnoreCase)
                && !incomingName.Contains("Layout", StringComparison.OrdinalIgnoreCase)
+               && !incomingName.Contains("Overlay", StringComparison.OrdinalIgnoreCase)
+               && !incomingName.Contains("Feedback", StringComparison.OrdinalIgnoreCase)
                && !incomingName.Contains("Rewards", StringComparison.OrdinalIgnoreCase)
                && !incomingName.Contains("Merchant", StringComparison.OrdinalIgnoreCase)
                && !incomingName.Contains("Holder", StringComparison.OrdinalIgnoreCase)
                && !incomingName.Contains("Container", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsOverlayChoice(LiveExportChoiceSummary choice)
+    {
+        var label = choice.Label?.Trim();
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        return string.Equals(label, "Dismisser", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "Exclaim", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "Question", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "BackButton", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "Send!", StringComparison.OrdinalIgnoreCase);
     }
 }
