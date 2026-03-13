@@ -1,0 +1,11 @@
+{
+  "sessionId": "589ec949c49f4562b42ffd1797137c4b",
+  "runId": "pending-589ec949",
+  "status": "active",
+  "startedAt": "2026-03-12T07:54:40.7306463+00:00",
+  "updatedAt": "2026-03-12T07:54:40.7306463+00:00",
+  "lastSeq": 2179,
+  "liveRoot": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live",
+  "lastEventKind": "reward-screen-opened",
+  "lastScreen": "rewards"
+}

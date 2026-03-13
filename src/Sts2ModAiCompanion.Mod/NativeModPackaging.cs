@@ -360,6 +360,7 @@ public static partial class AiCompanionModEntryPoint
             Enabled = configuration.LiveExport.Enabled,
             GamePaths = configuration.GamePaths,
             LiveExport = configuration.LiveExport,
+            Harness = configuration.Harness,
         };
 
         return JsonSerializer.Serialize(runtimeConfig, JsonOptions);

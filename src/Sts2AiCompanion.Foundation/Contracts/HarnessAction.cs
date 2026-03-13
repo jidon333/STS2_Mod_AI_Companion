@@ -14,7 +14,15 @@ public sealed record HarnessAction(
     string? ExpectedStateDelta,
     IReadOnlyDictionary<string, string?> Metadata)
 {
-    public static HarnessAction Create(string kind, string reason, string? targetLabel = null)
+    public static HarnessAction Create(
+        string kind,
+        string reason,
+        string? targetLabel = null,
+        int timeoutMs = 8_000,
+        int retryBudget = 0,
+        string safetyClass = "normal",
+        string? expectedStateDelta = null,
+        IReadOnlyDictionary<string, string?>? metadata = null)
     {
         return new HarnessAction(
             Guid.NewGuid().ToString("N"),
@@ -23,16 +31,17 @@ public sealed record HarnessAction(
             null,
             targetLabel,
             null,
-            5000,
-            0,
-            "normal",
+            Math.Max(timeoutMs, 1_000),
+            Math.Max(retryBudget, 0),
+            safetyClass,
             reason,
-            null,
-            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase));
+            expectedStateDelta,
+            metadata ?? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase));
     }
 }
 
 public sealed record HarnessActionResult(
+    string ActionId,
     string Status,
     DateTimeOffset StartedAt,
     DateTimeOffset CompletedAt,
@@ -40,3 +49,11 @@ public sealed record HarnessActionResult(
     bool Recoverable,
     string? ObservedStateDelta,
     IReadOnlyList<string> ArtifactRefs);
+
+public sealed record HarnessBridgeStatus(
+    bool Enabled,
+    string Mode,
+    string? LastActionId,
+    string? LastResultStatus,
+    DateTimeOffset UpdatedAt,
+    string? Message);

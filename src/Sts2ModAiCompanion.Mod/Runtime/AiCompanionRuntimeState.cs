@@ -15,6 +15,8 @@ internal static class AiCompanionRuntimeState
 
     public const string RuntimeLogFileName = "sts2-mod-ai-companion.runtime.log";
 
+    public static string GetModDirectory() => ModDirectory;
+
     public static AiCompanionRuntimeConfig GetConfig(bool forceRefresh = false)
     {
         var cached = _cachedConfig;

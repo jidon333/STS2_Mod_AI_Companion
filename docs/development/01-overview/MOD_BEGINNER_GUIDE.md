@@ -4,7 +4,7 @@
 
 - `README.md`
 - `docs/development/README.md`
-- `docs/development/PROJECT_STATUS.md`
+- `docs/development/01-overview/PROJECT_STATUS.md`
 
 이 세 파일을 먼저 보면 현재 저장소가 무엇을 하고 있는지 큰 그림을 잡을 수 있습니다.
 

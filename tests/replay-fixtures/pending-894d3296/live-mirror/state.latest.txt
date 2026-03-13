@@ -1,0 +1,54 @@
+run status
+run_id: pending-894d3296
+status: combat
+version: 696
+captured_at: 2026-03-12T04:02:36.6033225+00:00
+act: unknown
+floor: unknown
+
+current screen / encounter
+screen: combat
+encounter: root
+encounter_kind: Monster
+combat_active: True
+turn: unknown
+
+player summary
+name: root
+hp: 75/80
+gold: 131
+energy: unknown
+Block: 0
+
+deck summary
+deck: none
+
+relics / potions
+- relic: RELIC.BURNING_BLOOD
+- relic: RELIC.SILVER_CRUCIBLE
+- potion: POTION.ATTACK_POTION
+
+current choices
+- [choice] RewardsScreen :: RewardsScreen
+
+recent changes
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+trigger: runtime-poll
+
+extraction warnings
+state extraction is partial; core run data was not resolved from live objects.
+no visible choices resolved for this observation.

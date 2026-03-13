@@ -1,0 +1,81 @@
+{
+  "runId": "pending-589ec949",
+  "runStatus": "active",
+  "version": 1605,
+  "capturedAt": "2026-03-12T07:54:40.7306463+00:00",
+  "currentScreen": "rewards",
+  "act": null,
+  "floor": null,
+  "player": {
+    "name": "RewardsScreen",
+    "currentHp": 54,
+    "maxHp": 80,
+    "gold": 281,
+    "energy": null,
+    "resources": {
+      "Block": "0"
+    }
+  },
+  "deck": [],
+  "relics": [
+    "RELIC.BURNING_BLOOD",
+    "RELIC.NEW_LEAF",
+    "RELIC.PERMAFROST",
+    "RELIC.STONE_CALENDAR",
+    "RELIC.BELLOWS",
+    "RELIC.RED_SKULL",
+    "RELIC.AMETHYST_AUBERGINE"
+  ],
+  "potions": [
+    "POTION.CLARITY",
+    "POTION.WEAK_POTION",
+    "POTION.DEXTERITY_POTION"
+  ],
+  "currentChoices": [
+    {
+      "kind": "choice",
+      "label": "\uB118\uAE30\uAE30",
+      "value": null,
+      "description": "\uB118\uAE30\uAE30"
+    }
+  ],
+  "recentChanges": [
+    "trigger: runtime-poll",
+    "choices -\u003E 10",
+    "trigger: runtime-poll",
+    "choices -\u003E 10",
+    "trigger: runtime-poll",
+    "choices -\u003E 10",
+    "trigger: runtime-poll",
+    "choices -\u003E 10",
+    "trigger: runtime-poll",
+    "choices -\u003E 10",
+    "trigger: runtime-poll",
+    "choices -\u003E 10",
+    "trigger: reward-screen-opened",
+    "screen -\u003E rewards",
+    "choices -\u003E 1",
+    "trigger: reward-screen-opened"
+  ],
+  "warnings": [
+    "state extraction is partial; core run data was not resolved from live objects.",
+    "no visible choices resolved for this observation."
+  ],
+  "encounter": {
+    "name": "RewardsScreen",
+    "kind": "Monster",
+    "inCombat": true,
+    "turn": null
+  },
+  "meta": {
+    "semanticKind": "reward-screen-opened",
+    "source": "scene-poll",
+    "currentSceneType": "MegaCrit.Sts2.Core.Nodes.NGame",
+    "sceneRootType": "Godot.Window",
+    "screen": "rewards",
+    "rootTypeSummary": "System.Boolean MegaCrit.Sts2.Core.Runs.RunState System.RuntimeType MegaCrit.Sts2.Core.Runs.RunManager MegaCrit.Sts2.Core.Combat.CombatManager MegaCrit.Sts2.Core.Saves.SaveManager MegaCrit.Sts2.Core.Combat.CombatState MegaCrit.Sts2.Core.Models.Encounters.DenseVegetationEventEncounter",
+    "choiceExtractorPath": "generic",
+    "declaringType": "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+    "instanceType": "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen"
+  }
+}

@@ -12,6 +12,8 @@ public sealed record ScaffoldConfiguration
 
     public AssistantOptions Assistant { get; init; } = AssistantOptions.Defaults;
 
+    public HarnessOptions Harness { get; init; } = HarnessOptions.Defaults;
+
     public static ScaffoldConfiguration CreateLocalDefault()
     {
         return new ScaffoldConfiguration();
@@ -30,6 +32,7 @@ public sealed record ScaffoldConfiguration
             AiCompanionMod = AiCompanionMod.With(partial.AiCompanionMod),
             LiveExport = LiveExport.With(partial.LiveExport),
             Assistant = Assistant.With(partial.Assistant),
+            Harness = Harness.With(partial.Harness),
         };
     }
 }
@@ -43,6 +46,8 @@ public sealed record PartialScaffoldConfiguration
     public PartialLiveExportOptions? LiveExport { get; init; }
 
     public PartialAssistantOptions? Assistant { get; init; }
+
+    public PartialHarnessOptions? Harness { get; init; }
 }
 
 public sealed record GamePathOptions
@@ -372,6 +377,66 @@ public sealed record PartialAssistantOptions
     public int? RecentEventsCount { get; init; }
 
     public string? CompanionArtifactsRelativeRoot { get; init; }
+}
+
+public sealed record HarnessOptions
+{
+    public bool Enabled { get; init; } = false;
+
+    public string RelativeHarnessRoot { get; init; } = "ai_companion/harness";
+
+    public string ActionsFileName { get; init; } = "actions.ndjson";
+
+    public string ResultsFileName { get; init; } = "results.ndjson";
+
+    public string StatusFileName { get; init; } = "status.json";
+
+    public int PollIntervalMs { get; init; } = 250;
+
+    public int StepTimeoutMs { get; init; } = 45000;
+
+    public bool AutoLaunchGame { get; init; } = true;
+
+    public static HarnessOptions Defaults { get; } = new();
+
+    public HarnessOptions With(PartialHarnessOptions? partial)
+    {
+        if (partial is null)
+        {
+            return this;
+        }
+
+        return this with
+        {
+            Enabled = partial.Enabled ?? Enabled,
+            RelativeHarnessRoot = partial.RelativeHarnessRoot ?? RelativeHarnessRoot,
+            ActionsFileName = partial.ActionsFileName ?? ActionsFileName,
+            ResultsFileName = partial.ResultsFileName ?? ResultsFileName,
+            StatusFileName = partial.StatusFileName ?? StatusFileName,
+            PollIntervalMs = partial.PollIntervalMs ?? PollIntervalMs,
+            StepTimeoutMs = partial.StepTimeoutMs ?? StepTimeoutMs,
+            AutoLaunchGame = partial.AutoLaunchGame ?? AutoLaunchGame,
+        };
+    }
+}
+
+public sealed record PartialHarnessOptions
+{
+    public bool? Enabled { get; init; }
+
+    public string? RelativeHarnessRoot { get; init; }
+
+    public string? ActionsFileName { get; init; }
+
+    public string? ResultsFileName { get; init; }
+
+    public string? StatusFileName { get; init; }
+
+    public int? PollIntervalMs { get; init; }
+
+    public int? StepTimeoutMs { get; init; }
+
+    public bool? AutoLaunchGame { get; init; }
 }
 
 public sealed record ConfigurationLoadResult

@@ -52,5 +52,15 @@
     "maxKnowledgeBytes": 12288,
     "recentEventsCount": 20,
     "companionArtifactsRelativeRoot": "companion"
+  },
+  "harness": {
+    "enabled": false,
+    "relativeHarnessRoot": "ai_companion/harness",
+    "actionsFileName": "actions.ndjson",
+    "resultsFileName": "results.ndjson",
+    "statusFileName": "status.json",
+    "pollIntervalMs": 250,
+    "stepTimeoutMs": 45000,
+    "autoLaunchGame": true
   }
 }

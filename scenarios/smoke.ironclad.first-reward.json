@@ -1,40 +1,54 @@
 {
   "id": "smoke.ironclad.first-reward",
-  "description": "아이언클래드로 새 런을 시작하고 첫 전투 보상까지 자동으로 진행하는 최소 하네스 시나리오",
+  "description": "Start a standard Ironclad run, clear the first combat, take the first reward, and return to the map.",
   "steps": [
     {
       "name": "main-menu",
       "targetScene": "main-menu",
       "actionKind": "click_button",
-      "targetLabel": "새 런 시작",
+      "targetLabel": "__start__",
+      "expectedResult": "singleplayer-submenu"
+    },
+    {
+      "name": "open-standard-run",
+      "targetScene": "singleplayer-submenu",
+      "actionKind": "click_button",
+      "targetLabel": "__standard_run__",
       "expectedResult": "character-select"
     },
     {
       "name": "choose-ironclad",
       "targetScene": "character-select",
       "actionKind": "click_button",
-      "targetLabel": "아이언클래드",
+      "targetLabel": "__ironclad__",
+      "expectedResult": "character-select"
+    },
+    {
+      "name": "confirm-run-start",
+      "targetScene": "character-select",
+      "actionKind": "click_button",
+      "targetLabel": "__confirm__",
       "expectedResult": "map"
     },
     {
       "name": "first-map-node",
       "targetScene": "map",
       "actionKind": "choose_map_node",
-      "targetLabel": "첫 전투 노드",
+      "targetLabel": "__first_combat__",
       "expectedResult": "combat"
     },
     {
       "name": "combat-loop",
       "targetScene": "combat",
-      "actionKind": "end_turn",
-      "targetLabel": null,
+      "actionKind": "combat-basic",
+      "targetLabel": "__first_playable__",
       "expectedResult": "reward"
     },
     {
       "name": "pick-first-reward",
       "targetScene": "reward",
       "actionKind": "choose_reward",
-      "targetLabel": "첫 번째 카드",
+      "targetLabel": "__first_reward__",
       "expectedResult": "map"
     }
   ]

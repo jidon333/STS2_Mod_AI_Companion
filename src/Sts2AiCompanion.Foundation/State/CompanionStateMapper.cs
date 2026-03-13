@@ -10,10 +10,11 @@ public static class CompanionStateMapper
         LiveExportSession? session,
         IReadOnlyList<LiveExportEventEnvelope> recentEvents)
     {
-        var sceneType = string.IsNullOrWhiteSpace(snapshot.CurrentScreen) ? "unknown" : snapshot.CurrentScreen;
+        var normalizedScene = NormalizeScene(snapshot);
+        var sceneType = normalizedScene.SceneType;
         var confidence = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
         {
-            ["scene"] = string.Equals(sceneType, "unknown", StringComparison.OrdinalIgnoreCase) ? 0.0 : 0.8,
+            ["scene"] = normalizedScene.Confidence,
             ["choices"] = snapshot.CurrentChoices.Count == 0 ? 0.2 : 0.8,
             ["deck"] = snapshot.Deck.Count == 0 ? 0.2 : 0.8,
             ["player"] = snapshot.Player.CurrentHp is null ? 0.3 : 0.9,
@@ -49,9 +50,9 @@ public static class CompanionStateMapper
                 TryGetMeta(snapshot.Meta, "seed")),
             new CompanionSceneState(
                 sceneType,
-                sceneType,
+                normalizedScene.SemanticSceneType,
                 confidence["scene"],
-                TryGetMeta(snapshot.Meta, "scene-source") ?? "live-export",
+                normalizedScene.Source,
                 TryGetMeta(snapshot.Meta, "screen-episode")),
             new CompanionPlayerState(
                 snapshot.Player.CurrentHp,
@@ -128,4 +129,225 @@ public static class CompanionStateMapper
     private static bool IsEventScene(string sceneType) => string.Equals(sceneType, "event", StringComparison.OrdinalIgnoreCase);
     private static bool IsShopScene(string sceneType) => string.Equals(sceneType, "shop", StringComparison.OrdinalIgnoreCase);
     private static bool IsRestScene(string sceneType) => string.Equals(sceneType, "rest", StringComparison.OrdinalIgnoreCase) || string.Equals(sceneType, "rest-site", StringComparison.OrdinalIgnoreCase);
+
+    private static NormalizedScene NormalizeScene(LiveExportSnapshot snapshot)
+    {
+        var rawScene = string.IsNullOrWhiteSpace(snapshot.CurrentScreen) ? "unknown" : snapshot.CurrentScreen.Trim();
+        var currentSceneType = TryGetMeta(snapshot.Meta, "currentSceneType");
+        var rootTypeSummary = TryGetMeta(snapshot.Meta, "rootTypeSummary");
+        var modalType = TryGetMeta(snapshot.Meta, "modal-type");
+        var choiceLabels = snapshot.CurrentChoices
+            .Select(choice => choice.Label)
+            .Where(label => !string.IsNullOrWhiteSpace(label))
+            .ToArray();
+        var currentSceneTypeLooksLikeCharacterSelect = ContainsSceneMarker(currentSceneType, null, "NCharacterSelectScreen");
+        var currentSceneTypeLooksLikeSingleplayerSubmenu = ContainsSceneMarker(currentSceneType, null, "NSingleplayerSubmenu");
+
+        var looksLikeMainMenu = LooksLikeMainMenuNormalized(choiceLabels)
+                                || string.Equals(rawScene, "main-menu", StringComparison.OrdinalIgnoreCase)
+                                || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMainMenu");
+        var looksLikeCharacterSelect = LooksLikeCharacterSelectNormalized(choiceLabels)
+                                       || currentSceneTypeLooksLikeCharacterSelect;
+        var looksLikeSingleplayerSubmenu = LooksLikeSingleplayerSubmenuNormalized(choiceLabels)
+                                           || currentSceneTypeLooksLikeSingleplayerSubmenu;
+        var looksLikeSemanticGameplayScreen = looksLikeMainMenu
+                                              || looksLikeCharacterSelect
+                                              || looksLikeSingleplayerSubmenu
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMapScreen")
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NCardRewardSelectionScreen")
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NRewardsScreen")
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NEventLayout")
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NEventRoom")
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMerchantInventory")
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMerchantRoom")
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMerchant")
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NRestSiteRoom")
+                                              || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NRestSite");
+
+        if (!looksLikeSemanticGameplayScreen
+            && ContainsSceneMarker(currentSceneType, rootTypeSummary, "NSendFeedbackScreen"))
+        {
+            return new NormalizedScene("feedback-overlay", "feedback-overlay", 0.85, "meta:feedback-overlay");
+        }
+
+        if (!looksLikeSemanticGameplayScreen
+            && ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMultiplayerTimeoutOverlay"))
+        {
+            return new NormalizedScene("blocking-overlay", "blocking-overlay", 0.85, "meta:timeout-overlay");
+        }
+
+        if (string.Equals(rawScene, "main-menu", StringComparison.OrdinalIgnoreCase))
+        {
+            if (LooksLikeCharacterSelectNormalized(choiceLabels))
+            {
+                return new NormalizedScene("character-select", "character-select", 0.96, "choices:character-select");
+            }
+
+            if (LooksLikeSingleplayerSubmenuNormalized(choiceLabels))
+            {
+                return new NormalizedScene("singleplayer-submenu", "singleplayer-submenu", 0.94, "choices:singleplayer-submenu");
+            }
+
+            if (LooksLikeMainMenuNormalized(choiceLabels) || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMainMenu"))
+            {
+                return new NormalizedScene("main-menu", "main-menu", 0.98, "raw:main-menu");
+            }
+        }
+
+        if (currentSceneTypeLooksLikeCharacterSelect)
+        {
+            return new NormalizedScene("character-select", "character-select", 0.97, "meta:character-select");
+        }
+
+        if (currentSceneTypeLooksLikeSingleplayerSubmenu)
+        {
+            return new NormalizedScene("singleplayer-submenu", "singleplayer-submenu", 0.95, "meta:singleplayer-submenu");
+        }
+
+        if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMapScreen"))
+        {
+            return new NormalizedScene("map", "map", 0.94, "meta:map");
+        }
+
+        if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NCardRewardSelectionScreen")
+            || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NRewardsScreen"))
+        {
+            return new NormalizedScene("rewards", "rewards", 0.96, "meta:rewards");
+        }
+
+        if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NEventLayout")
+            || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NEventRoom"))
+        {
+            return new NormalizedScene("event", "event", 0.95, "meta:event");
+        }
+
+        if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMerchantInventory")
+            || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMerchantRoom")
+            || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMerchant"))
+        {
+            return new NormalizedScene("shop", "shop", 0.94, "meta:shop");
+        }
+
+        if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NRestSiteRoom")
+            || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NRestSite"))
+        {
+            return new NormalizedScene("rest-site", "rest-site", 0.94, "meta:rest-site");
+        }
+
+        if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMainMenu")
+            && (LooksLikeMainMenuNormalized(choiceLabels) || string.Equals(rawScene, "main-menu", StringComparison.OrdinalIgnoreCase)))
+        {
+            return new NormalizedScene("main-menu", "main-menu", 0.95, "meta:main-menu");
+        }
+
+        if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NLogoAnimation"))
+        {
+            return new NormalizedScene("startup", "startup", 0.9, "meta:logo-animation");
+        }
+
+        if (string.Equals(rawScene, "main-menu", StringComparison.OrdinalIgnoreCase)
+            && !ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMainMenu")
+            && (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NGame")
+                || !string.IsNullOrWhiteSpace(modalType)))
+        {
+            return new NormalizedScene("startup", "startup", 0.6, "meta:startup-fallback");
+        }
+
+        return new NormalizedScene(
+            rawScene,
+            rawScene,
+            string.Equals(rawScene, "unknown", StringComparison.OrdinalIgnoreCase) ? 0.0 : 0.8,
+            TryGetMeta(snapshot.Meta, "scene-source") ?? "live-export");
+    }
+
+    private static bool ContainsSceneMarker(string? currentSceneType, string? rootTypeSummary, string marker)
+    {
+        return (!string.IsNullOrWhiteSpace(currentSceneType) && currentSceneType.Contains(marker, StringComparison.OrdinalIgnoreCase))
+               || (!string.IsNullOrWhiteSpace(rootTypeSummary) && rootTypeSummary.Contains(marker, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool LooksLikeMainMenuNormalized(IReadOnlyList<string> labels)
+    {
+        var candidates = new[]
+        {
+            "\uC2F1\uAE00\uD50C\uB808\uC774", "singleplayer",
+            "\uBA40\uD2F0\uD50C\uB808\uC774", "multiplayer",
+            "\uC5F0\uB300\uD45C", "leaderboard",
+            "\uC124\uC815", "settings",
+            "\uBC31\uACFC\uC0AC\uC804", "compendium",
+            "\uC885\uB8CC", "quit",
+        };
+
+        return labels.Any(label => candidates.Any(candidate => label.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool LooksLikeCharacterSelectNormalized(IReadOnlyList<string> labels)
+    {
+        var candidates = new[]
+        {
+            "\uC544\uC774\uC5B8\uD074\uB798\uB4DC", "ironclad",
+            "\uC0AC\uC77C\uB7F0\uD2B8", "silent",
+            "\uB514\uD399\uD2B8", "defect",
+            "\uB9AC\uC820\uD2B8", "regent",
+            "\uB124\uD06C\uB85C\uBC14\uC778\uB354", "necrobinder",
+            "\uCD9C\uBC1C", "embark",
+        };
+
+        return labels.Any(label => candidates.Any(candidate => label.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool LooksLikeSingleplayerSubmenuNormalized(IReadOnlyList<string> labels)
+    {
+        var candidates = new[]
+        {
+            "\uC77C\uBC18", "standard",
+            "\uC8FC\uAC04", "weekly",
+            "\uC2DC\uB4DC", "seed",
+            "\uC77C\uC77C", "daily",
+        };
+
+        return labels.Any(label => candidates.Any(candidate => label.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool LooksLikeMainMenu(IReadOnlyList<string> labels)
+    {
+        var candidates = new[]
+        {
+            "싱글플레이", "singleplayer",
+            "멀티플레이", "multiplayer",
+            "연대표", "leaderboard",
+            "설정", "settings",
+            "백과사전", "compendium",
+            "종료", "quit",
+        };
+        return labels.Any(label => candidates.Any(candidate => label.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool LooksLikeCharacterSelect(IReadOnlyList<string> labels)
+    {
+        var characterCandidates = new[]
+        {
+            "아이언클래드", "ironclad",
+            "사일런트", "silent",
+            "디펙트", "defect",
+            "레전트", "regent",
+            "네크로", "necrobinder",
+            "출발", "embark",
+        };
+        return labels.Any(label => characterCandidates.Any(candidate => label.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool LooksLikeSingleplayerSubmenu(IReadOnlyList<string> labels)
+    {
+        var submenuCandidates = new[]
+        {
+            "표준", "standard",
+            "주간", "weekly",
+            "시드", "seed",
+            "일일", "daily",
+        };
+        return labels.Any(label => submenuCandidates.Any(candidate => label.Contains(candidate, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private sealed record NormalizedScene(string SceneType, string SemanticSceneType, double Confidence, string Source);
 }

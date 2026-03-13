@@ -1,0 +1,74 @@
+{
+  "runId": "pending-894d3296",
+  "runStatus": "combat",
+  "version": 696,
+  "capturedAt": "2026-03-12T04:02:36.6033225+00:00",
+  "currentScreen": "combat",
+  "act": null,
+  "floor": null,
+  "player": {
+    "name": "root",
+    "currentHp": 75,
+    "maxHp": 80,
+    "gold": 131,
+    "energy": null,
+    "resources": {
+      "Block": "0"
+    }
+  },
+  "deck": [],
+  "relics": [
+    "RELIC.BURNING_BLOOD",
+    "RELIC.SILVER_CRUCIBLE"
+  ],
+  "potions": [
+    "POTION.ATTACK_POTION"
+  ],
+  "currentChoices": [
+    {
+      "kind": "choice",
+      "label": "RewardsScreen",
+      "value": null,
+      "description": "RewardsScreen"
+    }
+  ],
+  "recentChanges": [
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll",
+    "trigger: runtime-poll"
+  ],
+  "warnings": [
+    "state extraction is partial; core run data was not resolved from live objects.",
+    "no visible choices resolved for this observation."
+  ],
+  "encounter": {
+    "name": "root",
+    "kind": "Monster",
+    "inCombat": true,
+    "turn": null
+  },
+  "meta": {
+    "semanticKind": "runtime-poll",
+    "source": "scene-poll",
+    "currentSceneType": "MegaCrit.Sts2.Core.Nodes.NGame",
+    "sceneRootType": "Godot.Window",
+    "screen": "combat",
+    "rootTypeSummary": "System.RuntimeType MegaCrit.Sts2.Core.Runs.RunManager MegaCrit.Sts2.Core.Combat.CombatManager MegaCrit.Sts2.Core.Saves.SaveManager MegaCrit.Sts2.Core.Runs.RunState MegaCrit.Sts2.Core.Combat.CombatState MegaCrit.Sts2.Core.Models.Encounters.CorpseSlugsWeak Godot.SceneTree Godot.Window MegaCrit.Sts2.Core.Nodes.NGame MegaCrit.Sts2.Core.Nodes.Vfx.Utilities.NScreenShake MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NFeedbackScreenOpener MegaCrit.Sts2.Core.Nodes.NSceneContainer Godot.Control MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackScreen MegaCrit.Sts2.Core.Nodes.NTransition MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerTimeoutOverlay Godot.Node2D Godot.AudioStreamPlayer MegaCrit.Sts2.Core.Nodes.NRun MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge Godot.TextureRect Godot.ColorRect Godot.Panel MegaCrit.Sts2.Core.Nodes.CommonUi.NBackButton MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackCartoon MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackFlower MegaCrit.Sts2.addons.mega_text.MegaLabel MegaCrit.Sts2.addons.mega_text.MegaRichTextLabel MegaCrit.Sts2.Core.Nodes.Audio.NRunMusicController MegaCrit.Sts2.Core.Nodes.CommonUi.NGlobalUi MegaCrit.Sts2.Core.Nodes.GodotExtensions.NMegaTextEdit Godot.HBoxContainer MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackButton MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NFeedbackCategoryDropdown MegaCrit.Sts2.Core.Nodes.Rooms.NCombatRoom MegaCrit.Sts2.Core.Nodes.Screens.Overlays.NOverlayStack MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen MegaCrit.Sts2.Core.Nodes.Screens.Capstones.NCapstoneContainer MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerPlayerStateContainer MegaCrit.Sts2.Core.Nodes.Relics.NRelicInventory MegaCrit.Sts2.Core.Entities.Players.Player MegaCrit.Sts2.Core.Nodes.CommonUi.NTopBar MegaCrit.Sts2.Core.Nodes.CommonUi.NCardPreviewContainer MegaCrit.Sts2.Core.Nodes.CommonUi.NGridCardPreviewContainer MegaCrit.Sts2.Core.Nodes.CommonUi.NMessyCardPreviewContainer Godot.VBoxContainer MegaCrit.Sts2.Core.Nodes.Combat.NTargetManager MegaCrit.Sts2.Core.Nodes.Combat.NSelectionReticle MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackEmojiButton MegaCrit.Sts2.Core.Nodes.Combat.NCombatSceneContainer MegaCrit.Sts2.Core.Nodes.Combat.NCombatUi MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen Godot.NinePatchRect MegaCrit.Sts2.Core.Nodes.Screens.NCapstoneSubmenuStack MegaCrit.Sts2.Core.Nodes.Relics.NRelicInventoryHolder MegaCrit.Sts2.Core.Models.Relics.BurningBlood MegaCrit.Sts2.Core.Models.Relics.SilverCrucible MegaCrit.Sts2.Core.Nodes.Combat.NTargetingArrow",
+    "choiceExtractorPath": "reward",
+    "declaringType": "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+    "instanceType": "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen"
+  }
+}

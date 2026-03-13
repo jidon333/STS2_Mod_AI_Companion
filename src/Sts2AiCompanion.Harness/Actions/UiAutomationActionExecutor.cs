@@ -7,7 +7,8 @@ public sealed class UiAutomationActionExecutor : IHarnessActionExecutor
     public Task<HarnessActionResult> ExecuteAsync(HarnessAction action, CompanionState state, CancellationToken cancellationToken)
     {
         return Task.FromResult(new HarnessActionResult(
-            "not-implemented",
+            action.ActionId,
+            "not-supported-yet",
             DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow,
             "ui-automation-not-implemented",

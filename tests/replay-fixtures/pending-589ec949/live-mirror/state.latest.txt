@@ -1,0 +1,61 @@
+run status
+run_id: pending-589ec949
+status: active
+version: 1605
+captured_at: 2026-03-12T07:54:40.7306463+00:00
+act: unknown
+floor: unknown
+
+current screen / encounter
+screen: rewards
+encounter: RewardsScreen
+encounter_kind: Monster
+combat_active: True
+turn: unknown
+
+player summary
+name: RewardsScreen
+hp: 54/80
+gold: 281
+energy: unknown
+Block: 0
+
+deck summary
+deck: none
+
+relics / potions
+- relic: RELIC.BURNING_BLOOD
+- relic: RELIC.NEW_LEAF
+- relic: RELIC.PERMAFROST
+- relic: RELIC.STONE_CALENDAR
+- relic: RELIC.BELLOWS
+- relic: RELIC.RED_SKULL
+- relic: RELIC.AMETHYST_AUBERGINE
+- potion: POTION.CLARITY
+- potion: POTION.WEAK_POTION
+- potion: POTION.DEXTERITY_POTION
+
+current choices
+- [choice] 넘기기 :: 넘기기
+
+recent changes
+trigger: runtime-poll
+choices -> 10
+trigger: runtime-poll
+choices -> 10
+trigger: runtime-poll
+choices -> 10
+trigger: runtime-poll
+choices -> 10
+trigger: runtime-poll
+choices -> 10
+trigger: runtime-poll
+choices -> 10
+trigger: reward-screen-opened
+screen -> rewards
+choices -> 1
+trigger: reward-screen-opened
+
+extraction warnings
+state extraction is partial; core run data was not resolved from live objects.
+no visible choices resolved for this observation.

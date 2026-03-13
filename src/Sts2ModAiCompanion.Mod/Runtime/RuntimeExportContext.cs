@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
+using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 
 namespace Sts2ModAiCompanion.Mod.Runtime;
@@ -37,6 +38,7 @@ internal static class RuntimeExportContext
 
             _worker = new RuntimeExportWorker(config, layout);
             _worker.Enqueue(LiveExportObservation.Create("app-started", screen: "bootstrap"));
+            StartHarnessBridgeIfConfigured(config);
 
             if (!_processExitSubscribed)
             {
@@ -97,6 +99,45 @@ internal static class RuntimeExportContext
         catch
         {
             // Best effort only during shutdown.
+        }
+    }
+
+    private static void StartHarnessBridgeIfConfigured(AiCompanionRuntimeConfig config)
+    {
+        if (!config.Harness.Enabled)
+        {
+            AiCompanionRuntimeLog.WriteLine("harness bridge disabled by config.");
+            return;
+        }
+
+        try
+        {
+            var modDirectory = AiCompanionRuntimeState.GetModDirectory();
+            var bridgeAssemblyPath = Path.Combine(modDirectory, "Sts2ModAiCompanion.HarnessBridge.dll");
+            if (!File.Exists(bridgeAssemblyPath))
+            {
+                AiCompanionRuntimeLog.WriteLine($"harness bridge assembly not found: {bridgeAssemblyPath}");
+                return;
+            }
+
+            var layout = HarnessPathResolver.Resolve(config.GamePaths, config.Harness);
+            HarnessPathResolver.EnsureDirectories(layout);
+            var assembly = Assembly.LoadFrom(bridgeAssemblyPath);
+            var entryType = assembly.GetType("Sts2ModAiCompanion.HarnessBridge.HarnessBridgeEntryPoint", throwOnError: true);
+            var initialize = entryType?.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static);
+            if (initialize is null)
+            {
+                AiCompanionRuntimeLog.WriteLine("harness bridge entry point missing Initialize().");
+                return;
+            }
+
+            var started = initialize.Invoke(null, new object[] { layout, config.Harness.PollIntervalMs });
+            AiCompanionRuntimeLog.WriteLine(
+                $"harness bridge initialize result: {started ?? "null"} root={layout.HarnessRoot} poll_ms={config.Harness.PollIntervalMs}");
+        }
+        catch (Exception exception)
+        {
+            AiCompanionRuntimeLog.WriteLine($"harness bridge startup failure: {exception.Message}");
         }
     }
 }

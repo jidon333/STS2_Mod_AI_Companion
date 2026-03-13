@@ -1,0 +1,11 @@
+{
+  "sessionId": "894d32969d784daf8558fbb348a01fd9",
+  "runId": "pending-894d3296",
+  "status": "combat",
+  "startedAt": "2026-03-12T04:02:36.6033225+00:00",
+  "updatedAt": "2026-03-12T04:02:36.6033225+00:00",
+  "lastSeq": 838,
+  "liveRoot": "C:\\Users\\jidon\\AppData\\Roaming\\SlayTheSpire2\\steam\\76561198206882255\\modded\\profile1\\ai_companion\\live",
+  "lastEventKind": "runtime-poll",
+  "lastScreen": "combat"
+}

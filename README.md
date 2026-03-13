@@ -186,6 +186,15 @@ AI가 읽는 파일:
 
 ## 관련 문서
 
+처음 문서를 읽을 때는 아래 순서를 권장합니다.
+
+1. `docs/development/DOCUMENT_MAP.md`
+2. `docs/development/01-overview/PROJECT_STATUS.md`
+3. `docs/development/01-overview/DUAL_MODE_ARCHITECTURE.md`
+4. `docs/ARCHITECTURE.md`
+5. `docs/development/02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
+6. `docs/development/04-advisor/AI_ASSISTANT_ARCHITECTURE.md`
+
 - `docs/ARCHITECTURE.md`
 - `docs/BOUNDARIES.md`
 - `docs/ROADMAP.md`
@@ -193,11 +202,12 @@ AI가 읽는 파일:
 - `docs/SMOKE_TEST_CHECKLIST.md`
 - `docs/BACKUP_AND_ROLLBACK.md`
 - `docs/development/README.md`
-- `docs/development/PROJECT_STATUS.md`
-- `docs/development/KNOWLEDGE_EXTRACTION.md`
-- `docs/development/GAMEPLAY_RUNTIME_FLOW.md`
-- `docs/development/AI_ASSISTANT_ARCHITECTURE.md`
-- `docs/development/REPO_STRUCTURE.md`
-- `docs/development/SPIRE_CODEX_REFERENCE.md`
-- `docs/development/DUAL_MODE_ARCHITECTURE.md`
-- `docs/development/HARNESS_MODE.md`
+- `docs/development/DOCUMENT_MAP.md`
+- `docs/development/01-overview/PROJECT_STATUS.md`
+- `docs/development/01-overview/DUAL_MODE_ARCHITECTURE.md`
+- `docs/development/01-overview/REPO_STRUCTURE.md`
+- `docs/development/02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
+- `docs/development/03-knowledge/KNOWLEDGE_EXTRACTION.md`
+- `docs/development/03-knowledge/SPIRE_CODEX_REFERENCE.md`
+- `docs/development/04-advisor/AI_ASSISTANT_ARCHITECTURE.md`
+- `docs/development/05-harness/HARNESS_MODE.md`

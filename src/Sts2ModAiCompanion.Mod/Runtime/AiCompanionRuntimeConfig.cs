@@ -11,6 +11,8 @@ public sealed record AiCompanionRuntimeConfig
 
     public LiveExportOptions LiveExport { get; init; } = LiveExportOptions.Defaults;
 
+    public HarnessOptions Harness { get; init; } = HarnessOptions.Defaults;
+
     public static AiCompanionRuntimeConfig Defaults { get; } = new();
 }
 

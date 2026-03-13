@@ -267,8 +267,8 @@ replay 기반 회귀 검증용 fixture 폴더입니다.
 
 1. `README.md`
 2. `docs/ARCHITECTURE.md`
-3. `docs/development/GAMEPLAY_RUNTIME_FLOW.md`
-4. `docs/development/LOAD_CHAIN.md`
+3. `docs/development/02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
+4. `docs/development/02-runtime/LOAD_CHAIN.md`
 5. `src/Sts2ModAiCompanion.Mod/Runtime/RuntimeExportContext.cs`
 6. `src/Sts2ModAiCompanion.Mod/Runtime/RuntimeSnapshotReflectionExtractor.cs`
 7. `src/Sts2ModKit.Tool/Program.cs`

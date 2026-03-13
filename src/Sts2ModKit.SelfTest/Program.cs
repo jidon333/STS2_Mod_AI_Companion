@@ -1,7 +1,10 @@
 using System.Text;
+using Sts2AiCompanion.Foundation.State;
+using Sts2AiCompanion.Harness.Actions;
 using Sts2AiCompanion.Host;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Diagnostics;
+using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
 using Sts2ModKit.Core.Planning;
@@ -32,8 +35,11 @@ Run("smoke diagnostics surface startup patch failures", TestSmokeDiagnostics, fa
 Run("runtime reflection invoker supports optional parameters", TestRuntimeReflectionOptionalParameters, failures);
 Run("runtime reflection string extraction resolves nested label text", TestRuntimeReflectionStringExtraction, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
+Run("companion state mapper prefers main-menu over hidden character-select markers", TestCompanionStateMapperMainMenuPriority, failures);
 Run("live export tracker preserves high-value state across partial observations", TestLiveExportTrackerPartialMerge, failures);
 Run("collector mode records screen episodes and choice diagnostics", TestLiveExportTrackerCollectorMode, failures);
+Run("harness path resolver exposes trace queue path", TestHarnessPathResolver, failures);
+Run("bridge action executor round-trips action results through the queue", TestBridgeActionExecutorRoundTrip, failures);
 Run("companion path resolver keeps per-run artifacts under companion root", TestCompanionPathResolver, failures);
 Run("knowledge catalog service builds a bounded relevant slice", TestKnowledgeCatalogService, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
@@ -346,6 +352,69 @@ static void TestNativePackageContents()
         Assert(runtimeConfig.GamePaths.SteamAccountId == configuration.GamePaths.SteamAccountId, "Expected runtime config to carry the game paths used for live export.");
         Assert(runtimeConfig.LiveExport.RelativeLiveRoot == configuration.LiveExport.RelativeLiveRoot, "Expected runtime config to carry live export settings.");
         Assert(File.Exists(Path.Combine(result.PackageRoot, "packaged-template.dll")), "Expected packaged dll to follow the configured pck basename.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestHarnessPathResolver()
+{
+    var configuration = ScaffoldConfiguration.CreateLocalDefault();
+    var layout = HarnessPathResolver.Resolve(configuration.GamePaths, configuration.Harness);
+
+    Assert(layout.ActionsPath.EndsWith(Path.Combine("inbox", configuration.Harness.ActionsFileName), StringComparison.OrdinalIgnoreCase), "Expected harness actions queue path.");
+    Assert(layout.ResultsPath.EndsWith(Path.Combine("outbox", configuration.Harness.ResultsFileName), StringComparison.OrdinalIgnoreCase), "Expected harness results queue path.");
+    Assert(layout.TracePath.EndsWith(Path.Combine("outbox", "trace.ndjson"), StringComparison.OrdinalIgnoreCase), "Expected harness trace queue path.");
+}
+
+static void TestBridgeActionExecutorRoundTrip()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var layout = new HarnessQueueLayout(
+            Path.Combine(root, "profile"),
+            Path.Combine(root, "harness"),
+            Path.Combine(root, "harness", "inbox"),
+            Path.Combine(root, "harness", "inbox", "actions.ndjson"),
+            Path.Combine(root, "harness", "outbox"),
+            Path.Combine(root, "harness", "outbox", "results.ndjson"),
+            Path.Combine(root, "harness", "status.json"),
+            Path.Combine(root, "harness", "outbox", "trace.ndjson"));
+        HarnessPathResolver.EnsureDirectories(layout);
+
+        var executor = new BridgeActionExecutor(layout);
+        var action = Sts2AiCompanion.Foundation.Contracts.HarnessAction.Create("noop", "self-test") with
+        {
+            TimeoutMs = 3_000,
+        };
+        using var cancellationSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var resultTask = executor.ExecuteAsync(action, Sts2AiCompanion.Foundation.Contracts.CompanionState.CreateUnknown(), cancellationSource.Token);
+
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(2);
+        while (!File.Exists(layout.ActionsPath) && DateTimeOffset.UtcNow < deadline)
+        {
+            Thread.Sleep(50);
+        }
+
+        Assert(File.Exists(layout.ActionsPath), "Expected bridge executor to append an action to the inbox queue.");
+
+        var result = new Sts2AiCompanion.Foundation.Contracts.HarnessActionResult(
+            action.ActionId,
+            "ok",
+            DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow,
+            null,
+            false,
+            "noop",
+            new[] { layout.ResultsPath });
+        File.AppendAllText(layout.ResultsPath, System.Text.Json.JsonSerializer.Serialize(result) + Environment.NewLine);
+
+        var resolved = resultTask.GetAwaiter().GetResult();
+        Assert(string.Equals(resolved.Status, "ok", StringComparison.OrdinalIgnoreCase), "Expected bridge executor to resolve the queued result.");
+        Assert(string.Equals(resolved.ActionId, action.ActionId, StringComparison.Ordinal), "Expected bridge executor to match the action id.");
     }
     finally
     {
@@ -1044,6 +1113,39 @@ static void TestLiveExportTrackerPartialMerge()
     Assert(second.Relics.SequenceEqual(first.Relics, StringComparer.Ordinal), "Expected partial runtime poll not to clear relics.");
     Assert(second.Potions.SequenceEqual(first.Potions, StringComparer.Ordinal), "Expected partial runtime poll not to clear potions.");
     Assert(second.CurrentChoices.Select(choice => choice.Label).SequenceEqual(first.CurrentChoices.Select(choice => choice.Label), StringComparer.Ordinal), "Expected unresolved choice poll not to clear visible choices.");
+}
+
+static void TestCompanionStateMapperMainMenuPriority()
+{
+    var snapshot = new LiveExportSnapshot(
+        "pending-test",
+        "idle",
+        1,
+        DateTimeOffset.UtcNow,
+        "main-menu",
+        null,
+        null,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("choice", "싱글플레이", null, "싱글플레이"),
+            new LiveExportChoiceSummary("choice", "멀티플레이", null, "멀티플레이"),
+        },
+        new[] { "trigger: runtime-poll" },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("root", null, false, null),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.NGame",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectScreen MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NSingleplayerSubmenu",
+        });
+
+    var state = CompanionStateMapper.FromLiveExport(snapshot, session: null, Array.Empty<LiveExportEventEnvelope>());
+
+    Assert(state.Scene.SceneType == "main-menu", $"Expected main-menu scene, got {state.Scene.SceneType}.");
 }
 
 static void TestLiveExportTrackerCollectorMode()

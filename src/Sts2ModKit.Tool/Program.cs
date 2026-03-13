@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Sts2AiCompanion.Host;
+using FoundationPathResolver = Sts2AiCompanion.Foundation.Artifacts.CompanionPathResolver;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
@@ -70,6 +71,64 @@ try
                 return triggered ? 0 : 1;
             }
 
+        case "validate-advisor-replay":
+            {
+                if (!options.TryGetValue("--fixture", out var fixtureRoot))
+                {
+                    throw new InvalidOperationException("--fixture is required.");
+                }
+
+                var mockResponsePath = options.TryGetValue("--mock-response", out var mockResponse) ? mockResponse : null;
+                var result = await ReplayValidationCommands.ValidateAdvisorReplayAsync(
+                    configuration,
+                    workspaceRoot,
+                    fixtureRoot,
+                    mockResponsePath,
+                    CancellationToken.None).ConfigureAwait(false);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "build-replay-fixture":
+            {
+                if (!options.TryGetValue("--source-run", out var sourceRun))
+                {
+                    throw new InvalidOperationException("--source-run is required.");
+                }
+
+                var result = ReplayValidationCommands.BuildReplayFixture(configuration, workspaceRoot, sourceRun);
+                PrintJson(result);
+                return 0;
+            }
+
+        case "run-harness-scenario":
+            {
+                if (!options.TryGetValue("--scenario", out var scenarioPath))
+                {
+                    throw new InvalidOperationException("--scenario is required.");
+                }
+
+                var result = await HarnessCommands.RunScenarioAsync(
+                    configuration,
+                    workspaceRoot,
+                    Path.GetFullPath(scenarioPath, workspaceRoot),
+                    CancellationToken.None).ConfigureAwait(false);
+                PrintJson(result);
+                return string.Equals(result.Status, "passed", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+            }
+
+        case "inspect-harness-run":
+            {
+                if (!options.TryGetValue("--run-id", out var runId))
+                {
+                    throw new InvalidOperationException("--run-id is required.");
+                }
+
+                var result = HarnessCommands.InspectRun(workspaceRoot, runId);
+                PrintJson(result);
+                return result.Evaluation?.Status == "passed" ? 0 : 1;
+            }
+
         case "collector-postprocess":
             {
                 var godotLineCount = options.TryGetValue("--lines", out var lineRaw)
@@ -89,12 +148,12 @@ try
                 var liveResult = LiveSmokeCommands.Inspect(configuration, tailCount);
                 var knowledgeResult = StaticKnowledgeCommands.Extract(configuration, knowledgeRoot);
 
-                var companionPaths = CompanionPathResolver.Resolve(configuration, workspaceRoot, null);
+                var companionPaths = FoundationPathResolver.Resolve(configuration, workspaceRoot, null);
                 var currentRunState = TryReadJsonDocument(companionPaths.CurrentRunStatePath);
                 var runId = currentRunState is null
                     ? null
                     : TryReadString(currentRunState.RootElement, "runId");
-                var runPaths = CompanionPathResolver.Resolve(configuration, workspaceRoot, runId);
+                var runPaths = FoundationPathResolver.Resolve(configuration, workspaceRoot, runId);
                 var collectorSummary = runPaths.CollectorSummaryPath is null
                     ? null
                     : TryReadJsonDocument(runPaths.CollectorSummaryPath);
@@ -155,6 +214,10 @@ try
                     ? requestedLayout
                     : "flat";
                 var result = AiCompanionModEntryPoint.MaterializeNativePackage(configuration, outputRoot, runtimeAssemblyRoot, layoutKind);
+                if (options.ContainsKey("--include-harness-bridge"))
+                {
+                    MaterializeHarnessBridge(workspaceRoot, result.PackageRoot);
+                }
                 PrintJson(result);
                 return 0;
             }
@@ -180,6 +243,10 @@ try
                     ? requestedLayout
                     : "flat";
                 var result = AiCompanionModEntryPoint.DeployNativePackage(configuration, outputRoot, runtimeAssemblyRoot, layoutKind);
+                if (options.ContainsKey("--include-harness-bridge"))
+                {
+                    MaterializeHarnessBridge(workspaceRoot, result.DeployedRoot);
+                }
                 PrintJson(result);
                 return 0;
             }
@@ -419,7 +486,7 @@ static IReadOnlyList<string> BuildTrackedModsPaths(ScaffoldConfiguration configu
     var modsRoot = Path.Combine(configuration.GamePaths.GameDirectory, "mods");
     var aiDllName = Path.ChangeExtension(configuration.AiCompanionMod.PckName, ".dll");
 
-    return new[]
+    var tracked = new List<string>
     {
         Path.Combine(modsRoot, configuration.AiCompanionMod.RuntimeConfigFileName),
         Path.Combine(modsRoot, aiDllName),
@@ -427,6 +494,14 @@ static IReadOnlyList<string> BuildTrackedModsPaths(ScaffoldConfiguration configu
         Path.Combine(modsRoot, configuration.AiCompanionMod.RuntimeLogFileName),
         Path.Combine(modsRoot, "Sts2ModKit.Core.dll"),
     };
+
+    if (configuration.Harness.Enabled)
+    {
+        tracked.Add(Path.Combine(modsRoot, "Sts2ModAiCompanion.HarnessBridge.dll"));
+        tracked.Add(Path.Combine(modsRoot, "Sts2AiCompanion.Foundation.dll"));
+    }
+
+    return tracked;
 }
 
 static void WriteUsage()
@@ -437,14 +512,18 @@ static void WriteUsage()
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- prepare-live-smoke [--config path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-live-export [--config path] [--tail 20]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- analyze-live-once [--config path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- validate-advisor-replay --fixture <path> [--config path] [--mock-response path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- build-replay-fixture --source-run <run-id> [--config path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- run-harness-scenario --scenario <path> [--config path]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-harness-run --run-id <run-id>");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- collector-postprocess [--config path] [--knowledge-root path] [--lines 200] [--tail 40]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-godot-log [--config path] [--lines 200]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- extract-static-knowledge [--config path] [--knowledge-root path] [--godot-exe path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- inspect-static-knowledge [--knowledge-root path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- merge-observed-knowledge [--config path] [--knowledge-root path] [--godot-exe path]");
-    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- materialize-native-package [--config path] [--artifacts-root path] [--runtime-assembly-root path] [--layout flat|subdir]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- materialize-native-package [--config path] [--artifacts-root path] [--runtime-assembly-root path] [--layout flat|subdir] [--include-harness-bridge]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- build-native-pck [--config path] [--artifacts-root path] [--runtime-assembly-root path] [--layout flat|subdir] [--godot-exe path]");
-    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- deploy-native-package [--config path] [--artifacts-root path] [--runtime-assembly-root path] [--layout flat|subdir]");
+    Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- deploy-native-package [--config path] [--artifacts-root path] [--runtime-assembly-root path] [--layout flat|subdir] [--include-harness-bridge]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- dry-run-snapshot [--config path] [--snapshot-root path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- snapshot [--config path] [--snapshot-root path]");
     Console.WriteLine("  dotnet run --project src/Sts2ModKit.Tool -- dry-run-restore [--config path] [--snapshot-root path]");
@@ -456,11 +535,25 @@ static void WriteUsage()
 
 static void PrintJson<T>(T value)
 {
-    var serializerOptions = new JsonSerializerOptions
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-    };
+    Console.WriteLine(JsonSerializer.Serialize(value, ProgramJson.SerializerOptions));
+}
 
-    Console.WriteLine(JsonSerializer.Serialize(value, serializerOptions));
+static void MaterializeHarnessBridge(string workspaceRoot, string destinationRoot)
+{
+    Directory.CreateDirectory(destinationRoot);
+
+    foreach (var (sourceRoot, fileName) in new[]
+             {
+                 (Path.Combine(workspaceRoot, "src", "Sts2ModAiCompanion.HarnessBridge", "bin", "Debug", "net7.0"), "Sts2ModAiCompanion.HarnessBridge.dll"),
+                 (Path.Combine(workspaceRoot, "src", "Sts2AiCompanion.Foundation", "bin", "Debug", "net7.0"), "Sts2AiCompanion.Foundation.dll"),
+             })
+    {
+        var sourcePath = Path.Combine(sourceRoot, fileName);
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException("Harness deployment dependency was not found.", sourcePath);
+        }
+
+        File.Copy(sourcePath, Path.Combine(destinationRoot, fileName), overwrite: true);
+    }
 }
