@@ -257,6 +257,7 @@ public sealed class LiveCompanionStateSource
         var lowered = segment.Trim().ToLowerInvariant();
         scene = lowered switch
         {
+            "singleplayer-button-pressed" => "main-menu",
             "push-character-select" => "character-select",
             "character-select" => "character-select",
             "character-selected" => "character-select",
@@ -264,6 +265,8 @@ public sealed class LiveCompanionStateSource
             "singleplayer-submenu" => "singleplayer-submenu",
             "main-menu" => "main-menu",
             "map" => "map",
+            "map-node-entered" => "map",
+            "map-point-selected" => "map",
             "combat" => "combat",
             "already-combat" => "combat",
             "rewards" => "rewards",

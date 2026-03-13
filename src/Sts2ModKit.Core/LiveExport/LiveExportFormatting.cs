@@ -80,6 +80,7 @@ public static class LiveExportSummaryFormatter
         {
             "turn-started",
             "combat-started",
+            "map",
             "map-node-entered",
         };
 

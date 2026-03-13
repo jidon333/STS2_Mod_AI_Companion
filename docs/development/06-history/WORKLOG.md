@@ -141,3 +141,8 @@
 - 현재 observer는 `event + polling mixed observer`로 보고, polling은 continuous state / reconciliation / watchdog 역할을 계속 맡는다고 문서화했다.
 - 대신 scene transition, screen ready, lifecycle boundary 같은 권위 있는 경계 판단은 먼저 decompiled source에서 후보 메서드를 찾고, 그 다음 runtime hook/event로 검증해야 한다는 원칙을 고정했다.
 - 이 판단을 `AI_HANDOFF_PROMPT_KO`, `AGENTS.md`, `HARNESS_MODE`, `PENDING_HOOKS_AND_RISKS`, `PROJECT_STATUS`, `DOCUMENT_MAP`, `STS2_HARNESS_REVIEW`에 동시에 반영해 다음 AI가 같은 기준으로 출발하도록 정리했다.
+## 21. 2026-03-13 - Main menu to combat observer authority chain implemented
+- Added decompiled-backed runtime hook vocabulary for `main-menu`, `singleplayer-button-pressed`, `singleplayer-submenu`, `open-character-select`, `character-select`, `character-selected`, `map`, and `map-point-selected`.
+- Replaced `map-node-entered` as the canonical map transition with `map`, while keeping the legacy alias for consumer compatibility.
+- Updated live export consumers and self-test coverage so menu-to-combat authority is preserved even when `runtime-poll` observations interleave with hook-backed events.
+- Left actuation closed. Runtime smoke acceptance for existing-run and zero-run menu branches still remains as the next gate.

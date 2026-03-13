@@ -91,9 +91,16 @@ append-only 로그입니다. 각 줄은 하나의 이벤트 envelope입니다.
 - `event-screen-opened`
 - `shop-opened`
 - `rest-opened`
+- `main-menu`
+- `singleplayer-submenu`
+- `open-character-select`
+- `character-select`
+- `character-selected`
+- `map`
+- `map-point-selected`
 - `combat-started`
 - `turn-started`
-- `map-node-entered`
+- `map-node-entered` (legacy alias)
 
 일반 상태 변화는 debounce가 걸리고, 새 선택지가 등장한 경우는 빠르게 반응하는 쪽을 우선합니다.
 
@@ -103,13 +110,15 @@ append-only 로그입니다. 각 줄은 하나의 이벤트 envelope입니다.
 
 - semantic hook
 - scene polling fallback
+- decompiled-source-first hooks now cover `main-menu -> singleplayer-submenu -> character-select -> map -> combat`.
+- polling still handles continuity, partial merge, reconciliation, and drift recovery.
 
 의미:
 
 - semantic hook가 잡히면 더 좋은 이벤트가 나옵니다.
 - semantic hook가 아직 없더라도 polling으로 화면 분류와 snapshot 갱신을 유지합니다.
 
-현재 검증된 baseline은 main menu까지입니다.
+Current verified baseline has reached main menu; the next target is manual menu-to-combat smoke acceptance.
 
 ## 8. current choices 해석
 

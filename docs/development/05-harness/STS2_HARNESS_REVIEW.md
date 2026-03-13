@@ -18,6 +18,7 @@
 - `inventory.latest.json`를 direct UI dispatch 없이 live export snapshot 기반으로 다시 발행하게 만들어 external observer 경로를 조금씩 복구하기 시작했다. 근거: `src/Sts2ModAiCompanion.HarnessBridge/InventoryPublisher.cs`, `src/Sts2ModAiCompanion.Mod/Runtime/RuntimeExportContext.cs`
 - `2026-03-13` 재검증에서 Steam URI clean boot 후 `inventory.latest.json`가 dormant mode로 생성됐고, live state와 같은 `main-menu` choice set을 반영하는 것을 확인했다. stale action은 여전히 `action-ignored`로만 남았다.
 - shared scene normalizer를 foundation/bridge 공용으로 올리고, main menu inventory를 `profile-slot`, `continue-run`, `menu-action` 같은 semantic kind로 승격했다. self-test와 clean boot에서 이 매핑이 실제로 반영되는 것을 확인했다.
+- Implemented a decompiled-source-first observer authority chain for `main menu -> character select -> map -> combat`. Runtime acceptance is still pending.
 
 ## 3. 위험한 점
 - `2026-03-13` 기준 새 최소 bridge로 `Manual Clean Boot`를 다시 통과시켰다. stale action은 `action-ignored`로만 남았고 live state는 `main-menu`에 머물렀다.
@@ -25,6 +26,7 @@
 - 초기 poll에서 `bootstrap -> combat -> main-menu`처럼 transient sceneType가 잠깐 기록된다. 현재 publish-only observer는 steady-state triage에는 충분하지만, 이후 `dispatch_node` 재개 전에는 scene stabilization 규칙이 더 필요하다.
 - 이번 사이클에서 transient suppress를 넣었지만, `bootstrap`, `feedback-overlay`, `startup`이 2회 연속 관측되면 결국 publish된다. 즉 suppress는 들어갔지만 acceptance 수준의 stabilization으로 보기는 아직 이르다.
 - 현재 핵심 부족점은 polling 자체가 아니라 scene transition authority가 아직 live export snapshot 해석에 크게 의존한다는 점이다. 다음 사이클은 `decompiled source-first`로 좁은 candidate 메서드를 먼저 찾고, `transition-oriented hook`로 검증하는 순서여야 한다.
+- The menu-to-combat authority chain is now in code, but Steam runtime smoke coverage for the existing-run and zero-run branches is still missing.
 - `BridgeActionExecutor`와 scripted scenario stack은 코드상 남아 있지만 clean-boot cycle에서는 사실상 죽은 경로다. 다음 사이클에서 policy adapter 뒤로 숨기거나 더 강하게 분리해야 한다.
 - `actions.ndjson`에 대한 dedupe는 현재 프로세스 메모리의 `_seenActionIds`에 의존한다. clean-boot 복구에는 충분하지만, bridge 재시작 후 ordering/idempotency 보장은 아직 약하다.
 - `results.ndjson`를 이번 사이클에서 적극적으로 생산하지 않으므로, arm 이후 actuation acceptance를 논하기엔 아직 이르다.
@@ -53,6 +55,7 @@
 ### P1
 - `decompiled source-first observer refinement`를 다음 작업의 맨 앞에 둬야 한다. main menu -> singleplayer submenu -> character select 흐름에서 authoritative transition candidate를 먼저 찾고, 그 다음 stabilization 규칙과 runtime hook를 정교화한다.
 - [부분완료] `inventory.latest.json` observer를 actuation 없이 publish-only로 복구했고, Steam URI clean boot에서 dormant 상태 파일 생성과 semantic node typing까지 확인했다.
+- [partial] The menu-to-combat observer authority vocabulary and consumer path are in code. The next gate is `main menu -> combat` manual smoke acceptance.
 - 다음은 transient scene stabilization을 acceptance 수준으로 끌어올리고, overlay/startup publish를 더 강하게 차단하는 일이다.
 - `dispatch_node`는 inventory match뿐 아니라 preflight/postflight를 강제하는 구조로 재도입해야 한다.
 - scenario/policy 계층은 bridge 직접 실행 경로와 분리된 adapter 뒤로 옮겨야 한다.
@@ -74,4 +77,3 @@
 - 현재 구조는 이제 “기능 많은 불안정 하네스”에서 “기준선 복구를 위한 최소 clean-boot bridge”로 의도적으로 축소됐다.
 - 이 축소는 후퇴가 아니라 acceptance 기준선 복구를 위한 정리 단계다.
 - 다음 게이트는 오직 `Manual Clean Boot`다. 이것을 통과하기 전까지 `dispatch_node`, scripted scenario, unattended harness 결과는 다시 신뢰하지 않는다.
-

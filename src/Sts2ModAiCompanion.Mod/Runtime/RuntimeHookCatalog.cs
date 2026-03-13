@@ -23,6 +23,12 @@ internal static class RuntimeHookCatalog
 
     private static readonly RuntimeHookCandidate[] Candidates =
     {
+        new("screen", "main-menu", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu", new[] { "_Ready" }, "main-menu"),
+        new("screen", "singleplayer-button-pressed", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu", new[] { "SingleplayerButtonPressed" }, "main-menu"),
+        new("screen", "singleplayer-submenu", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NSingleplayerSubmenu", new[] { "OnSubmenuOpened" }, "singleplayer-submenu"),
+        new("screen", "open-character-select", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NSingleplayerSubmenu", new[] { "OpenCharacterSelect" }, "singleplayer-submenu"),
+        new("screen", "character-select", "MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectScreen", new[] { "OnSubmenuOpened" }, "character-select"),
+        new("screen", "character-selected", "MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectButton", new[] { "Select" }, "character-select"),
         new("run-lifecycle", "run-start-requested", "MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectScreen", new[] { "OnEmbarkPressed" }, "character-select"),
         new("run-lifecycle", "run-ready-state-changed", "MegaCrit.Sts2.Core.Multiplayer.Game.Lobby.StartRunLobby", new[] { "SetReady" }, "character-select"),
         new("run-lifecycle", "run-start-requested", "MegaCrit.Sts2.Core.Multiplayer.Game.Lobby.StartRunLobby", new[] { "BeginRunIfAllPlayersReady", "BeginRun" }, "character-select"),
@@ -34,11 +40,12 @@ internal static class RuntimeHookCatalog
         new("run-lifecycle", "run-ended", "MegaCrit.Sts2.Core.Runs.RunManager", new[] { "EndRun", "WinRun", "LoseRun", "GameOver" }),
         new("save", "save-persisted", "MegaCrit.Sts2.Core.Saves.SaveManager", new[] { "Save", "Write", "Persist", "Flush" }),
         new("save", "save-persisted", "MegaCrit.Sts2.Core.Saves.Managers.RunSaveManager", new[] { "Save", "Write", "Persist", "Flush" }),
-        new("combat", "combat-started", "MegaCrit.Sts2.Core.Combat.CombatManager", new[] { "StartCombat", "BeginCombat" }, "combat"),
+        new("combat", "combat-started", "MegaCrit.Sts2.Core.Combat.CombatManager", new[] { "StartCombatInternal" }, "combat"),
         new("combat", "combat-ended", "MegaCrit.Sts2.Core.Combat.CombatManager", new[] { "EndCombat", "FinishCombat", "CompleteCombat" }, "combat"),
         new("combat", "turn-started", "MegaCrit.Sts2.Core.Combat.CombatState", new[] { "StartTurn", "BeginTurn", "NextTurn" }, "combat"),
         new("combat", "turn-ended", "MegaCrit.Sts2.Core.Combat.CombatState", new[] { "EndTurn", "FinishTurn" }, "combat"),
-        new("screen", "map-node-entered", "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen", new[] { "Open", "Setup" }, "map"),
+        new("screen", "map", "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen", new[] { "Open" }, "map"),
+        new("screen", "map-point-selected", "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen", new[] { "OnMapPointSelectedLocally" }, "map"),
         new("screen", "reward-screen-opened", "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen", new[] { "ShowScreen", "_Ready" }, "rewards"),
         new("screen", "reward-screen-opened", "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen", new[] { "ShowScreen", "_Ready", "SetRewards" }, "rewards"),
         new("screen", "choice-list-presented", "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NChooseACardSelectionScreen", new[] { "Open", "Setup" }, "card-choice"),

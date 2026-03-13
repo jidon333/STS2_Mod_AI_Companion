@@ -40,6 +40,8 @@ Run("companion scene normalizer detects blocking overlay from placeholder choice
 Run("companion state mapper prefers main-menu over hidden character-select markers", TestCompanionStateMapperMainMenuPriority, failures);
 Run("live export tracker preserves high-value state across partial observations", TestLiveExportTrackerPartialMerge, failures);
 Run("collector mode records screen episodes and choice diagnostics", TestLiveExportTrackerCollectorMode, failures);
+Run("live export tracker keeps authoritative existing-run menu-to-combat transitions", TestLiveExportTrackerMenuToCombatExistingRunAuthority, failures);
+Run("live export tracker accepts direct character-select branch without submenu", TestLiveExportTrackerMenuToCombatDirectBranchAuthority, failures);
 Run("harness path resolver exposes trace queue path", TestHarnessPathResolver, failures);
 Run("bridge action executor round-trips action results through the queue", TestBridgeActionExecutorRoundTrip, failures);
 Run("companion path resolver keeps per-run artifacts under companion root", TestCompanionPathResolver, failures);
@@ -359,6 +361,61 @@ static void TestNativePackageContents()
     {
         SafeDeleteDirectory(root);
     }
+}
+
+static void TestLiveExportTrackerMenuToCombatExistingRunAuthority()
+{
+    var tracker = CreateTracker();
+
+    tracker.Apply(CreateObservation("main-menu", "main-menu", 0, 0, 72, 99, choices: new[] { "Singleplayer", "Settings" }));
+    AssertEqual("main-menu", tracker.Snapshot.CurrentScreen, "main menu hook should establish main-menu");
+
+    tracker.Apply(CreateObservation("runtime-poll", "startup", 0, 0, 72, 99));
+    AssertEqual("main-menu", tracker.Snapshot.CurrentScreen, "runtime poll should not displace main-menu");
+
+    tracker.Apply(CreateObservation("singleplayer-submenu", "singleplayer-submenu", 0, 0, 72, 99, choices: new[] { "Standard", "Custom" }));
+    AssertEqual("singleplayer-submenu", tracker.Snapshot.CurrentScreen, "submenu hook should advance to singleplayer submenu");
+
+    tracker.Apply(CreateObservation("open-character-select", "singleplayer-submenu", 0, 0, 72, 99));
+    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "open-character-select should infer character-select");
+
+    tracker.Apply(CreateObservation("character-select", "character-select", 0, 0, 72, 99, choices: new[] { "Ironclad", "Embark" }));
+    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "character select hook should keep character-select");
+
+    tracker.Apply(CreateObservation("runtime-poll", "feedback-overlay", 0, 0, 72, 99));
+    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "transient overlay poll should not displace character-select");
+
+    tracker.Apply(CreateObservation("character-selected", "character-select", 0, 0, 72, 99, choices: new[] { "Embark" }));
+    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "character selection should remain on character-select");
+
+    tracker.Apply(CreateObservation("map", "map", 1, 0, 72, 99, choices: new[] { "Path A", "Path B" }));
+    AssertEqual("map", tracker.Snapshot.CurrentScreen, "map hook should establish map");
+
+    tracker.Apply(CreateObservation("map-point-selected", "map", 1, 0, 72, 99));
+    AssertEqual("map", tracker.Snapshot.CurrentScreen, "map-point-selected should remain on map");
+
+    tracker.Apply(CreateObservation("combat-started", "combat", 1, 1, 72, 99));
+    AssertEqual("combat", tracker.Snapshot.CurrentScreen, "combat-started should establish combat");
+}
+
+static void TestLiveExportTrackerMenuToCombatDirectBranchAuthority()
+{
+    var tracker = CreateTracker();
+
+    tracker.Apply(CreateObservation("main-menu", "main-menu", 0, 0, 72, 99, choices: new[] { "Singleplayer", "Settings" }));
+    AssertEqual("main-menu", tracker.Snapshot.CurrentScreen, "main menu hook should establish main-menu");
+
+    tracker.Apply(CreateObservation("singleplayer-button-pressed", "main-menu", 0, 0, 72, 99));
+    AssertEqual("main-menu", tracker.Snapshot.CurrentScreen, "button press should remain on main-menu until character-select appears");
+
+    tracker.Apply(CreateObservation("character-select", "character-select", 0, 0, 72, 99, choices: new[] { "Ironclad", "Embark" }));
+    AssertEqual("character-select", tracker.Snapshot.CurrentScreen, "direct branch should allow character-select without submenu");
+
+    tracker.Apply(CreateObservation("map", "map", 1, 0, 72, 99, choices: new[] { "Path A" }));
+    AssertEqual("map", tracker.Snapshot.CurrentScreen, "map hook should establish map");
+
+    tracker.Apply(CreateObservation("combat-started", "combat", 1, 1, 72, 99));
+    AssertEqual("combat", tracker.Snapshot.CurrentScreen, "combat-started should establish combat");
 }
 
 static void TestHarnessPathResolver()
