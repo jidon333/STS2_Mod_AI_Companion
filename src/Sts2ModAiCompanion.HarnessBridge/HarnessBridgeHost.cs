@@ -9,8 +9,10 @@ internal sealed class HarnessBridgeHost
     private readonly int _pollIntervalMs;
     private readonly ArmSessionReader _armSessionReader = new();
     private readonly ActionQueueScanner _actionQueueScanner = new();
+    private readonly LiveSnapshotReader _liveSnapshotReader = new();
     private readonly StatusPublisher _statusPublisher;
     private readonly TraceWriter _traceWriter;
+    private readonly InventoryPublisher _inventoryPublisher;
     private readonly CancellationTokenSource _cancellation = new();
     private Task? _loopTask;
     private string? _lastMode;
@@ -18,12 +20,13 @@ internal sealed class HarnessBridgeHost
     private string? _lastResultStatus;
     private string? _lastMessage;
 
-    public HarnessBridgeHost(HarnessQueueLayout layout, int pollIntervalMs)
+    public HarnessBridgeHost(HarnessQueueLayout layout, string liveSnapshotPath, int pollIntervalMs)
     {
         _layout = layout;
         _pollIntervalMs = Math.Max(pollIntervalMs, 100);
         _statusPublisher = new StatusPublisher(layout.StatusPath);
         _traceWriter = new TraceWriter(layout.TracePath);
+        _inventoryPublisher = new InventoryPublisher(layout.InventoryPath, liveSnapshotPath);
     }
 
     public void Start()
@@ -44,6 +47,7 @@ internal sealed class HarnessBridgeHost
             actionsPath = _layout.ActionsPath,
             statusPath = _layout.StatusPath,
             tracePath = _layout.TracePath,
+            inventoryPath = _layout.InventoryPath,
         });
 
         while (!_cancellation.IsCancellationRequested)
@@ -85,6 +89,18 @@ internal sealed class HarnessBridgeHost
             out var sessionTokenPresent,
             out var modeMessage);
         var mode = armSession is null ? "dormant" : "armed";
+
+        if (_inventoryPublisher.TryPublish(_liveSnapshotReader, mode, out var inventory))
+        {
+            _traceWriter.Write("inventory-published", null, new
+            {
+                inventoryId = inventory.InventoryId,
+                sceneType = inventory.SceneType,
+                nodeCount = inventory.Nodes.Count,
+                mode = inventory.Mode,
+            });
+        }
+
         if (!string.Equals(_lastMode, mode, StringComparison.Ordinal))
         {
             _traceWriter.Write("mode-changed", null, new

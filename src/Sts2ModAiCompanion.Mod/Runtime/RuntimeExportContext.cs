@@ -122,6 +122,7 @@ internal static class RuntimeExportContext
 
             var layout = HarnessPathResolver.Resolve(config.GamePaths, config.Harness);
             HarnessPathResolver.EnsureDirectories(layout);
+            var liveLayout = LiveExportPathResolver.Resolve(config.GamePaths, config.LiveExport);
             var assembly = Assembly.LoadFrom(bridgeAssemblyPath);
             var entryType = assembly.GetType("Sts2ModAiCompanion.HarnessBridge.HarnessBridgeEntryPoint", throwOnError: true);
             var initialize = entryType?.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static);
@@ -131,9 +132,9 @@ internal static class RuntimeExportContext
                 return;
             }
 
-            var started = initialize.Invoke(null, new object[] { layout, config.Harness.PollIntervalMs });
+            var started = initialize.Invoke(null, new object[] { layout, liveLayout.SnapshotPath, config.Harness.PollIntervalMs });
             AiCompanionRuntimeLog.WriteLine(
-                $"harness bridge initialize result: {started ?? "null"} root={layout.HarnessRoot} poll_ms={config.Harness.PollIntervalMs}");
+                $"harness bridge initialize result: {started ?? "null"} root={layout.HarnessRoot} live_snapshot={liveLayout.SnapshotPath} poll_ms={config.Harness.PollIntervalMs}");
         }
         catch (Exception exception)
         {
