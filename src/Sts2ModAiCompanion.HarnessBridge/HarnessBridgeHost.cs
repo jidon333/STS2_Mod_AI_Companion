@@ -90,14 +90,27 @@ internal sealed class HarnessBridgeHost
             out var modeMessage);
         var mode = armSession is null ? "dormant" : "armed";
 
-        if (_inventoryPublisher.TryPublish(_liveSnapshotReader, mode, out var inventory))
+        var inventoryAttempt = _inventoryPublisher.TryPublish(_liveSnapshotReader, mode);
+        if (inventoryAttempt.Suppressed && inventoryAttempt.Inventory is not null)
+        {
+            _traceWriter.Write("inventory-suppressed", null, new
+            {
+                rawSceneType = inventoryAttempt.RawSceneType,
+                sceneType = inventoryAttempt.Inventory.SceneType,
+                reason = inventoryAttempt.SuppressionReason,
+                mode,
+            });
+        }
+
+        if (inventoryAttempt.Published && inventoryAttempt.Inventory is not null)
         {
             _traceWriter.Write("inventory-published", null, new
             {
-                inventoryId = inventory.InventoryId,
-                sceneType = inventory.SceneType,
-                nodeCount = inventory.Nodes.Count,
-                mode = inventory.Mode,
+                inventoryId = inventoryAttempt.Inventory.InventoryId,
+                rawSceneType = inventoryAttempt.RawSceneType,
+                sceneType = inventoryAttempt.Inventory.SceneType,
+                nodeCount = inventoryAttempt.Inventory.Nodes.Count,
+                mode = inventoryAttempt.Inventory.Mode,
             });
         }
 

@@ -35,6 +35,8 @@ Run("smoke diagnostics surface startup patch failures", TestSmokeDiagnostics, fa
 Run("runtime reflection invoker supports optional parameters", TestRuntimeReflectionOptionalParameters, failures);
 Run("runtime reflection string extraction resolves nested label text", TestRuntimeReflectionStringExtraction, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
+Run("companion scene normalizer prefers main-menu over hidden character-select markers", TestCompanionSceneNormalizerMainMenuPriority, failures);
+Run("companion scene normalizer detects blocking overlay from placeholder choices", TestCompanionSceneNormalizerBlockingOverlay, failures);
 Run("companion state mapper prefers main-menu over hidden character-select markers", TestCompanionStateMapperMainMenuPriority, failures);
 Run("live export tracker preserves high-value state across partial observations", TestLiveExportTrackerPartialMerge, failures);
 Run("collector mode records screen episodes and choice diagnostics", TestLiveExportTrackerCollectorMode, failures);
@@ -1148,6 +1150,71 @@ static void TestCompanionStateMapperMainMenuPriority()
     var state = CompanionStateMapper.FromLiveExport(snapshot, session: null, Array.Empty<LiveExportEventEnvelope>());
 
     Assert(state.Scene.SceneType == "main-menu", $"Expected main-menu scene, got {state.Scene.SceneType}.");
+}
+
+static void TestCompanionSceneNormalizerMainMenuPriority()
+{
+    var snapshot = new LiveExportSnapshot(
+        "pending-test",
+        "idle",
+        1,
+        DateTimeOffset.UtcNow,
+        "main-menu",
+        null,
+        null,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("choice", "Singleplayer", null, "Singleplayer"),
+            new LiveExportChoiceSummary("choice", "Multiplayer", null, "Multiplayer"),
+        },
+        new[] { "trigger: runtime-poll" },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("root", null, false, null),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.NGame",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect.NCharacterSelectScreen",
+        });
+
+    var scene = CompanionSceneNormalizer.Normalize(snapshot);
+
+    Assert(scene.SceneType == "main-menu", $"Expected main-menu scene, got {scene.SceneType}.");
+}
+
+static void TestCompanionSceneNormalizerBlockingOverlay()
+{
+    var snapshot = new LiveExportSnapshot(
+        "pending-test",
+        "idle",
+        1,
+        DateTimeOffset.UtcNow,
+        "main-menu",
+        null,
+        null,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("choice", "Dismisser", null, null),
+        },
+        new[] { "trigger: runtime-poll" },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("root", null, false, null),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.NGame",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerTimeoutOverlay",
+        });
+
+    var scene = CompanionSceneNormalizer.Normalize(snapshot);
+
+    Assert(scene.SceneType == "blocking-overlay", $"Expected blocking-overlay scene, got {scene.SceneType}.");
 }
 
 static void TestLiveExportTrackerCollectorMode()

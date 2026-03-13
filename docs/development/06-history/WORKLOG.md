@@ -128,3 +128,10 @@
 - Core/Foundation/HarnessBridge DLL을 함께 맞춘 뒤 다시 Steam URI 부팅했고, stale __start__, __ironclad__, __confirm__ 액션이 모두 ction-ignored로만 남는 것을 확인했다.
 - status.json은 mode=dormant, message=bridge-dormant-no-arm으로 기록됐고 live state는 main-menu에 머물렀다.
 
+## 19. 2026-03-13 - Observer typing improved, stabilization still partial
+- foundation과 harness bridge가 같은 scene normalizer를 쓰도록 공용 helper를 도입했다.
+- harness inventory는 main menu에서 `profile-slot`, `continue-run`, `menu-action` 같은 semantic node kind를 내보내기 시작했다.
+- self-test와 Steam URI clean boot에서 dormant 유지, stale action ignore 유지, semantic inventory publish를 다시 확인했다.
+- 다만 transient suppress 규칙은 아직 충분히 강하지 않다. `bootstrap`, `feedback-overlay`, `startup` 같은 초기 scene이 두 번 연속 관측되면 여전히 publish될 수 있었다.
+- 따라서 이번 작업은 observer fidelity 개선까지는 성공했지만, `dispatch_node` 재개 전 acceptance 수준의 stabilization은 아직 미완이다.
+

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Sts2AiCompanion.Foundation.State;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 
@@ -10,6 +11,8 @@ internal sealed class InventoryPublisher
     private readonly string _inventoryPath;
     private readonly string _liveSnapshotPath;
     private string? _lastFingerprint;
+    private string? _lastObservedSceneType;
+    private int _lastObservedSceneStreak;
 
     public InventoryPublisher(string inventoryPath, string liveSnapshotPath)
     {
@@ -17,31 +20,71 @@ internal sealed class InventoryPublisher
         _liveSnapshotPath = liveSnapshotPath;
     }
 
-    public bool TryPublish(LiveSnapshotReader snapshotReader, string mode, out HarnessNodeInventory inventory)
+    public InventoryPublishAttempt TryPublish(LiveSnapshotReader snapshotReader, string mode)
     {
-        inventory = default!;
         var snapshot = snapshotReader.TryRead(_liveSnapshotPath);
         if (snapshot is null)
         {
-            return false;
+            return InventoryPublishAttempt.None;
         }
 
-        inventory = BuildInventory(snapshot, mode);
+        var normalizedScene = CompanionSceneNormalizer.Normalize(snapshot);
+        var inventory = BuildInventory(snapshot, mode, normalizedScene);
+        if (ShouldSuppressPublish(normalizedScene.SceneType))
+        {
+            return new InventoryPublishAttempt(
+                Published: false,
+                Suppressed: true,
+                Inventory: inventory,
+                RawSceneType: string.IsNullOrWhiteSpace(snapshot.CurrentScreen) ? "unknown" : snapshot.CurrentScreen.Trim(),
+                SuppressionReason: "scene-not-yet-stable");
+        }
+
         var fingerprint = BuildFingerprint(inventory);
         if (string.Equals(_lastFingerprint, fingerprint, StringComparison.Ordinal))
         {
-            return false;
+            return new InventoryPublishAttempt(
+                Published: false,
+                Suppressed: false,
+                Inventory: inventory,
+                RawSceneType: string.IsNullOrWhiteSpace(snapshot.CurrentScreen) ? "unknown" : snapshot.CurrentScreen.Trim(),
+                SuppressionReason: null);
         }
 
         LiveExportAtomicFileWriter.WriteJsonAtomic(_inventoryPath, inventory);
         _lastFingerprint = fingerprint;
-        return true;
+        return new InventoryPublishAttempt(
+            Published: true,
+            Suppressed: false,
+            Inventory: inventory,
+            RawSceneType: string.IsNullOrWhiteSpace(snapshot.CurrentScreen) ? "unknown" : snapshot.CurrentScreen.Trim(),
+            SuppressionReason: null);
     }
 
-    private static HarnessNodeInventory BuildInventory(LiveExportSnapshot snapshot, string mode)
+    private bool ShouldSuppressPublish(string sceneType)
     {
-        var sceneType = NormalizeSceneType(snapshot);
-        var blockingModal = TryGetBlockingModal(snapshot.Meta);
+        if (string.Equals(_lastObservedSceneType, sceneType, StringComparison.OrdinalIgnoreCase))
+        {
+            _lastObservedSceneStreak += 1;
+        }
+        else
+        {
+            _lastObservedSceneType = sceneType;
+            _lastObservedSceneStreak = 1;
+        }
+
+        if (CompanionSceneNormalizer.IsStableSceneForImmediateInventoryPublish(sceneType))
+        {
+            return false;
+        }
+
+        return _lastObservedSceneStreak < 2;
+    }
+
+    private static HarnessNodeInventory BuildInventory(LiveExportSnapshot snapshot, string mode, CompanionNormalizedScene normalizedScene)
+    {
+        var sceneType = normalizedScene.SceneType;
+        var blockingModal = ResolveBlockingModal(snapshot, normalizedScene);
         var nodes = snapshot.CurrentChoices
             .Select((choice, index) => BuildNode(sceneType, choice, index))
             .ToArray();
@@ -61,7 +104,7 @@ internal sealed class InventoryPublisher
     {
         var label = choice.Label?.Trim() ?? string.Empty;
         var kind = ResolveKind(sceneType, choice);
-        var actionable = !string.IsNullOrWhiteSpace(label) && !IsOverlayChoice(label);
+        var actionable = !string.IsNullOrWhiteSpace(label) && !CompanionSceneNormalizer.IsOverlayChoice(label);
         var hints = BuildHints(sceneType, choice);
 
         return new HarnessNodeInventoryItem(
@@ -80,27 +123,29 @@ internal sealed class InventoryPublisher
 
     private static string ResolveKind(string sceneType, LiveExportChoiceSummary choice)
     {
-        if (!string.IsNullOrWhiteSpace(choice.Kind))
+        var label = choice.Label?.Trim() ?? string.Empty;
+        if (CompanionSceneNormalizer.IsOverlayChoice(label))
         {
-            return choice.Kind.Trim().ToLowerInvariant();
+            return "overlay-dismiss";
         }
 
         return sceneType switch
         {
-            "character-select" => "character",
+            "main-menu" => ResolveMainMenuKind(label),
             "singleplayer-submenu" => "mode-option",
+            "character-select" => IsEmbarkLabel(label) ? "embark" : "character",
             "map" => "map-node",
             "rewards" => "reward-item",
             "event" => "event-option",
             "shop" => "shop-option",
             "rest-site" => "rest-option",
-            _ => "choice",
+            _ => string.IsNullOrWhiteSpace(choice.Kind) ? "choice" : choice.Kind.Trim().ToLowerInvariant(),
         };
     }
 
     private static IReadOnlyList<string> BuildHints(string sceneType, LiveExportChoiceSummary choice)
     {
-        var hints = new List<string>(capacity: 4)
+        var hints = new List<string>(capacity: 5)
         {
             $"scene:{sceneType}",
             $"kind:{ResolveKind(sceneType, choice)}",
@@ -111,7 +156,12 @@ internal sealed class InventoryPublisher
             hints.Add($"value:{choice.Value.Trim()}");
         }
 
-        if (IsOverlayChoice(choice.Label))
+        if (!string.IsNullOrWhiteSpace(choice.Kind))
+        {
+            hints.Add($"raw-kind:{choice.Kind.Trim().ToLowerInvariant()}");
+        }
+
+        if (CompanionSceneNormalizer.IsOverlayChoice(choice.Label))
         {
             hints.Add("overlay");
         }
@@ -119,25 +169,44 @@ internal sealed class InventoryPublisher
         return hints;
     }
 
-    private static string NormalizeSceneType(LiveExportSnapshot snapshot)
+    private static string ResolveMainMenuKind(string label)
     {
-        if (bool.TryParse(TryGetMeta(snapshot.Meta, "modal-blocking"), out var blocking) && blocking)
+        if (ContainsAny(label, "\uD504\uB85C\uD544", "profile"))
         {
-            return "blocking-overlay";
+            return "profile-slot";
         }
 
-        var currentScreen = snapshot.CurrentScreen?.Trim();
-        return string.IsNullOrWhiteSpace(currentScreen) ? "unknown" : currentScreen;
+        if (ContainsAny(label, "\uACC4\uC18D", "continue"))
+        {
+            return "continue-run";
+        }
+
+        return "menu-action";
     }
 
-    private static string? TryGetBlockingModal(IReadOnlyDictionary<string, string?> meta)
+    private static bool IsEmbarkLabel(string label)
     {
-        if (!bool.TryParse(TryGetMeta(meta, "modal-blocking"), out var blocking) || !blocking)
+        return ContainsAny(label, "\uCD9C\uBC1C", "embark");
+    }
+
+    private static bool ContainsAny(string source, params string[] candidates)
+    {
+        return candidates.Any(candidate => source.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? ResolveBlockingModal(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
+    {
+        if (normalizedScene.SceneType is "feedback-overlay" or "blocking-overlay")
+        {
+            return TryGetMeta(snapshot.Meta, "modal-type") ?? normalizedScene.SceneType;
+        }
+
+        if (!bool.TryParse(TryGetMeta(snapshot.Meta, "modal-blocking"), out var blocking) || !blocking)
         {
             return null;
         }
 
-        return TryGetMeta(meta, "modal-type") ?? "blocking";
+        return TryGetMeta(snapshot.Meta, "modal-type") ?? "blocking";
     }
 
     private static string? TryGetMeta(IReadOnlyDictionary<string, string?> meta, string key)
@@ -145,27 +214,12 @@ internal sealed class InventoryPublisher
         return meta.TryGetValue(key, out var value) ? value : null;
     }
 
-    private static bool IsOverlayChoice(string? label)
-    {
-        if (string.IsNullOrWhiteSpace(label))
-        {
-            return false;
-        }
-
-        var normalized = label.Trim();
-        return normalized.Equals("Dismisser", StringComparison.OrdinalIgnoreCase)
-               || normalized.Equals("Exclaim", StringComparison.OrdinalIgnoreCase)
-               || normalized.Equals("Question", StringComparison.OrdinalIgnoreCase)
-               || normalized.Equals("BackButton", StringComparison.OrdinalIgnoreCase)
-               || normalized.Equals("Send!", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static string BuildInventoryId(LiveExportSnapshot snapshot, string sceneType, IReadOnlyList<HarnessNodeInventoryItem> nodes)
     {
         var builder = new StringBuilder();
         builder.Append(snapshot.RunId);
         builder.Append('|');
-        builder.Append(snapshot.CapturedAt.UtcTicks);
+        builder.Append(snapshot.CapturedAt.UtcDateTime.Ticks);
         builder.Append('|');
         builder.Append(sceneType);
         builder.Append('|');
@@ -209,4 +263,14 @@ internal sealed class InventoryPublisher
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
         return Convert.ToHexString(bytes);
     }
+}
+
+internal sealed record InventoryPublishAttempt(
+    bool Published,
+    bool Suppressed,
+    HarnessNodeInventory? Inventory,
+    string? RawSceneType,
+    string? SuppressionReason)
+{
+    public static InventoryPublishAttempt None { get; } = new(false, false, null, null, null);
 }
