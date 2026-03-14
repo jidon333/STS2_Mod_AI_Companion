@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Sts2ModKit.Core.LiveExport;
 
 namespace Sts2ModAiCompanion.Mod.Runtime;
@@ -686,6 +687,11 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         var strictAttempts = new List<ChoiceExtractionResult>();
 
+        if (LooksLikeMainMenuContext(triggerKind, screenHint, choiceRoots))
+        {
+            strictAttempts.Add(ExtractMainMenuChoices(choiceRoots, maxEntries));
+        }
+
         if (LooksLikeRewardContext(triggerKind, screenHint, choiceRoots))
         {
             strictAttempts.Add(
@@ -734,6 +740,11 @@ internal static class RuntimeSnapshotReflectionExtractor
                     CollectCombatChoiceItems(choiceRoots),
                     maxEntries,
                     strictExtractor: true));
+        }
+
+        if (LooksLikeMapContext(triggerKind, screenHint, choiceRoots))
+        {
+            strictAttempts.Add(ExtractMapChoices(choiceRoots, maxEntries));
         }
 
         var strictSuccess = strictAttempts.FirstOrDefault(result => result.Choices.Count > 0);
@@ -1538,6 +1549,12 @@ internal static class RuntimeSnapshotReflectionExtractor
         };
     }
 
+    private static double? TryReadDouble(object? root, params string[] memberNames)
+    {
+        var value = TryReadValue(root, memberNames);
+        return TryConvertToDouble(value);
+    }
+
     private static object? TryReadValue(object? root, params string[] memberNames)
     {
         if (root is null)
@@ -1601,6 +1618,35 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return null;
+    }
+
+    private static double? TryConvertToDouble(object? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return value switch
+        {
+            byte number => number,
+            sbyte number => number,
+            short number => number,
+            ushort number => number,
+            int number => number,
+            uint number => number,
+            long number => number,
+            ulong number => number,
+            float number => number,
+            double number => number,
+            decimal number => (double)number,
+            string stringValue when double.TryParse(
+                stringValue,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out var parsed) => parsed,
+            _ => null,
+        };
     }
 
     private static bool MemberNameMatches(string candidateName, string requestedName)
@@ -1840,7 +1886,344 @@ internal static class RuntimeSnapshotReflectionExtractor
             InferChoiceKind(item.GetType().FullName),
             label,
             TryResolveChoiceValue(item),
-            TryResolveChoiceDescription(item));
+            TryResolveChoiceDescription(item))
+        {
+            ScreenBounds = TryResolveScreenBounds(item),
+        };
+    }
+
+    private static bool LooksLikeMapContext(string triggerKind, string? screenHint, IEnumerable<object> choiceRoots)
+    {
+        if (string.Equals(screenHint, "map", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(triggerKind, "map", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(triggerKind, "map-point-selected", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return choiceRoots.Any(root =>
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            return typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("NMapPoint", StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    private static bool LooksLikeMainMenuContext(string triggerKind, string? screenHint, IEnumerable<object> choiceRoots)
+    {
+        if (string.Equals(screenHint, "main-menu", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(triggerKind, "main-menu", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return choiceRoots.Any(root =>
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            return typeName.Contains("NMainMenu", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("NMainMenuTextButton", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("NMainMenuContinueButton", StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    private static ChoiceExtractionResult ExtractMainMenuChoices(IEnumerable<object> roots, int maxEntries)
+    {
+        var buttons = new List<object>();
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (typeName.Contains("NMainMenuTextButton", StringComparison.OrdinalIgnoreCase)
+                || typeName.Contains("NMainMenuContinueButton", StringComparison.OrdinalIgnoreCase))
+            {
+                AddIfUseful(buttons, root);
+            }
+
+            if (!typeName.Contains("NMainMenu", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var memberName in new[]
+                     {
+                         "MainMenuButtons",
+                         "_continueButton",
+                         "_singleplayerButton",
+                         "_multiplayerButton",
+                         "_timelineButton",
+                         "_settingsButton",
+                         "_compendiumButton",
+                         "_quitButton",
+                         "_abandonRunButton",
+                     })
+            {
+                var candidate = TryGetMemberValue(root, memberName);
+                AddIfUseful(buttons, candidate);
+                foreach (var item in ExpandEnumerable(candidate))
+                {
+                    AddIfUseful(buttons, item);
+                }
+            }
+        }
+
+        var choices = buttons
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .Select(TryCreateMainMenuChoiceSummary)
+            .Where(choice => choice is not null)
+            .Cast<LiveExportChoiceSummary>()
+            .OrderBy(choice => choice.NodeId, StringComparer.Ordinal)
+            .Take(maxEntries)
+            .ToArray();
+
+        var candidates = choices
+            .Select(choice => new LiveExportChoiceCandidate(
+                "main-menu",
+                "NMainMenuTextButton",
+                choice.Label,
+                choice.Value,
+                choice.Description,
+                100,
+                Accepted: true,
+                RejectReason: null))
+            .ToArray();
+
+        return new ChoiceExtractionResult(
+            choices,
+            candidates,
+            new LiveExportChoiceDecision(
+                "main-menu",
+                UsedStrictExtractor: true,
+                CandidateCount: candidates.Length,
+                AcceptedCount: choices.Length,
+                choices.Length == 0 ? "none" : "accepted",
+                choices.Length == 0 ? "no visible main menu buttons with bounds resolved" : null,
+                Array.Empty<string>()));
+    }
+
+    private static LiveExportChoiceSummary? TryCreateMainMenuChoiceSummary(object item)
+    {
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        if (!typeName.Contains("NMainMenu", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (TryReadBool(item, "Visible", "IsVisible") == false)
+        {
+            return null;
+        }
+
+        if (TryReadBool(item, "IsEnabled", "Enabled", "Disabled") == false)
+        {
+            return null;
+        }
+
+        var screenBounds = TryResolveScreenBounds(item);
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return null;
+        }
+
+        var label = TryResolveChoiceLabel(item);
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        var normalizedLabel = label.Trim();
+        var kind = normalizedLabel.Contains("continue", StringComparison.OrdinalIgnoreCase)
+                   || normalizedLabel.Contains("계속", StringComparison.OrdinalIgnoreCase)
+            ? "continue-run"
+            : "menu-action";
+        var nodeId = normalizedLabel.ToLowerInvariant() switch
+        {
+            var text when text.Contains("continue", StringComparison.Ordinal) || text.Contains("계속", StringComparison.Ordinal) => "main-menu:continue",
+            var text when text.Contains("single", StringComparison.Ordinal) || text.Contains("싱글", StringComparison.Ordinal) => "main-menu:singleplayer",
+            var text when text.Contains("multi", StringComparison.Ordinal) || text.Contains("멀티", StringComparison.Ordinal) => "main-menu:multiplayer",
+            var text when text.Contains("setting", StringComparison.Ordinal) || text.Contains("설정", StringComparison.Ordinal) => "main-menu:settings",
+            var text when text.Contains("quit", StringComparison.Ordinal) || text.Contains("종료", StringComparison.Ordinal) => "main-menu:quit",
+            _ => $"main-menu:{SanitizeNodeKey(normalizedLabel)}",
+        };
+
+        return new LiveExportChoiceSummary(
+            kind,
+            normalizedLabel,
+            nodeId,
+            typeName)
+        {
+            NodeId = nodeId,
+            ScreenBounds = screenBounds,
+        };
+    }
+
+    private static ChoiceExtractionResult ExtractMapChoices(IEnumerable<object> roots, int maxEntries)
+    {
+        var mapPoints = new List<object>();
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (typeName.Contains("NMapPoint", StringComparison.OrdinalIgnoreCase))
+            {
+                AddIfUseful(mapPoints, root);
+            }
+
+            if (!typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var dictionary = TryGetMemberValue(root, "_mapPointDictionary");
+            var values = dictionary is null ? null : TryGetMemberValue(dictionary, "Values");
+            foreach (var point in ExpandEnumerable(values))
+            {
+                AddIfUseful(mapPoints, point);
+            }
+        }
+
+        var choices = mapPoints
+            .Select(TryCreateMapChoiceSummary)
+            .Where(choice => choice is not null)
+            .Cast<LiveExportChoiceSummary>()
+            .OrderBy(choice => choice.NodeId, StringComparer.Ordinal)
+            .Take(maxEntries)
+            .ToArray();
+
+        var candidates = choices
+            .Select(choice => new LiveExportChoiceCandidate(
+                "map",
+                "NMapPoint",
+                choice.Label,
+                choice.Value,
+                choice.Description,
+                100,
+                Accepted: true,
+                RejectReason: null))
+            .ToArray();
+
+        return new ChoiceExtractionResult(
+            choices,
+            candidates,
+            new LiveExportChoiceDecision(
+                "map",
+                UsedStrictExtractor: true,
+                CandidateCount: candidates.Length,
+                AcceptedCount: choices.Length,
+                choices.Length == 0 ? "none" : "accepted",
+                choices.Length == 0 ? "no reachable map points with bounds resolved" : null,
+                Array.Empty<string>()));
+    }
+
+    private static LiveExportChoiceSummary? TryCreateMapChoiceSummary(object item)
+    {
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        if (!typeName.Contains("NMapPoint", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (TryReadBool(item, "IsEnabled") != true)
+        {
+            return null;
+        }
+
+        var screenBounds = TryResolveScreenBounds(item);
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return null;
+        }
+
+        var point = TryGetMemberValue(item, "Point");
+        var coord = point is null ? null : TryGetMemberValue(point, "coord");
+        var row = TryReadInt(coord, "row", "Row");
+        var col = TryReadInt(coord, "col", "Col");
+        var pointType = TryReadString(point, "PointType", "Type", "RoomType");
+        var state = TryReadString(item, "State");
+
+        var label = pointType switch
+        {
+            { Length: > 0 } => row is not null && col is not null
+                ? $"{pointType} ({row},{col})"
+                : pointType,
+            _ => row is not null && col is not null
+                ? $"Map ({row},{col})"
+                : "Map",
+        };
+
+        var descriptionParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(pointType))
+        {
+            descriptionParts.Add($"type:{pointType}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(state))
+        {
+            descriptionParts.Add($"state:{state}");
+        }
+
+        if (row is not null && col is not null)
+        {
+            descriptionParts.Add($"coord:{row},{col}");
+        }
+
+        return new LiveExportChoiceSummary(
+            "map-node",
+            label,
+            row is not null && col is not null ? $"{row},{col}" : null,
+            descriptionParts.Count == 0 ? null : string.Join(";", descriptionParts))
+        {
+            NodeId = row is not null && col is not null
+                ? $"map:{row}:{col}"
+                : $"map:{RuntimeHelpers.GetHashCode(item)}",
+            ScreenBounds = screenBounds,
+        };
+    }
+
+    private static string SanitizeNodeKey(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "unknown";
+        }
+
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value)
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(char.ToLowerInvariant(character));
+            }
+            else if (builder.Length == 0 || builder[^1] != '-')
+            {
+                builder.Append('-');
+            }
+        }
+
+        return builder.ToString().Trim('-');
+    }
+
+    private static string? TryResolveScreenBounds(object item)
+    {
+        var globalRect = TryInvokeMethod(item, "GetGlobalRect");
+        var position = (globalRect is null ? null : TryGetMemberValue(globalRect, "Position"))
+            ?? TryGetMemberValue(item, "GlobalPosition")
+            ?? TryGetMemberValue(item, "Position");
+        var size = (globalRect is null ? null : TryGetMemberValue(globalRect, "Size"))
+            ?? TryGetMemberValue(item, "Size");
+
+        var x = TryReadDouble(position, "X", "x");
+        var y = TryReadDouble(position, "Y", "y");
+        var width = TryReadDouble(size, "X", "Width", "w");
+        var height = TryReadDouble(size, "Y", "Height", "h");
+        if (x is null || y is null || width is null || height is null)
+        {
+            return null;
+        }
+
+        if (width <= 0 || height <= 0)
+        {
+            return null;
+        }
+
+        return string.Create(CultureInfo.InvariantCulture, $"{x.Value:0.###},{y.Value:0.###},{width.Value:0.###},{height.Value:0.###}");
     }
 
     private static bool LooksLikeChoiceCandidate(object item)

@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 using System.Windows.Forms;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
@@ -65,6 +67,11 @@ static async Task<int> RunScenarioAsync(
         ? Path.GetFullPath(explicitRunRoot, workspaceRoot)
         : Path.Combine(workspaceRoot, "artifacts", "gui-smoke", runId);
 
+    if (Directory.Exists(runRoot))
+    {
+        Directory.Delete(runRoot, recursive: true);
+    }
+
     Directory.CreateDirectory(runRoot);
     var stepsRoot = Path.Combine(runRoot, "steps");
     Directory.CreateDirectory(stepsRoot);
@@ -88,17 +95,22 @@ static async Task<int> RunScenarioAsync(
             "run --project src\\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge",
             workspaceRoot,
             TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+        EnsureHarnessEnabledInRuntimeConfig(configuration);
     }
 
     if (!options.ContainsKey("--skip-launch"))
     {
         EnsureGameNotRunning();
+        var launchIssuedAt = DateTimeOffset.UtcNow;
         await GuiSmokeShared.RunProcessAsync(
             Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
             "/c start \"\" \"steam://rungameid/2868840\"",
             workspaceRoot,
             TimeSpan.FromSeconds(10),
             waitForExit: false).ConfigureAwait(false);
+
+        await WaitForLiveGameWindowAsync(launchIssuedAt, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
     }
 
     IGuiDecisionProvider provider = string.Equals(providerKind, "headless", StringComparison.OrdinalIgnoreCase)
@@ -115,21 +127,60 @@ static async Task<int> RunScenarioAsync(
     var attemptsByPhase = new Dictionary<GuiSmokePhase, int>();
     var history = new List<GuiSmokeHistoryEntry>();
     var waitDeadline = DateTimeOffset.UtcNow.AddMinutes(10);
+    var freshnessFloor = DateTimeOffset.UtcNow.AddSeconds(-5);
+    var consecutiveBlackFrames = 0;
+    string? lastActionFingerprint = null;
+    var sameActionStallCount = 0;
 
     while (DateTimeOffset.UtcNow < waitDeadline)
     {
         stepIndex += 1;
         var window = WindowLocator.TryFindSts2Window()
                      ?? WindowLocator.GetPrimaryMonitorFallback();
+        if (window.IsMinimized)
+        {
+            LogHarness($"step={stepIndex} window minimized; restoring title={window.Title}");
+            window = WindowLocator.EnsureRestored(window);
+            LogHarness($"step={stepIndex} window restored={DescribeWindow(window)}");
+        }
+        if (!window.IsFallback)
+        {
+            window = WindowLocator.EnsureInteractive(window);
+        }
         LogHarness($"step={stepIndex} phase={phase} window={DescribeWindow(window)}");
         var stepPrefix = Path.Combine(stepsRoot, stepIndex.ToString("0000"));
         var screenshotPath = stepPrefix + ".screen.png";
-        captureService.Capture(window, screenshotPath);
+        if (!captureService.TryCapture(window, screenshotPath))
+        {
+            consecutiveBlackFrames += 1;
+            LogHarness($"step={stepIndex} capture unusable; waiting for a valid process frame");
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "capture-unusable", null, null, null));
+            if (!window.IsFallback && consecutiveBlackFrames >= 3)
+            {
+                var focusWindow = WindowLocator.EnsureInteractive(window);
+                LogHarness($"step={stepIndex} black-frame streak={consecutiveBlackFrames}; sending center nudge");
+                inputDriver.Click(focusWindow, 0.5, 0.5);
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "black-frame-nudge", "center", DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "black-frame-nudge", null, null, "center"));
+                consecutiveBlackFrames = 0;
+            }
+            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            continue;
+        }
+        consecutiveBlackFrames = 0;
         LogHarness($"step={stepIndex} captured={screenshotPath}");
 
         var observer = observerReader.Read();
         logger.WriteObserverCopies(stepPrefix, observer);
-        LogHarness($"step={stepIndex} observer logical={observer.CurrentScreen ?? "null"} visible={observer.VisibleScreen ?? "null"} inCombat={observer.InCombat?.ToString() ?? "null"}");
+        LogHarness($"step={stepIndex} observer logical={observer.CurrentScreen ?? "null"} visible={observer.VisibleScreen ?? "null"} inCombat={observer.InCombat?.ToString() ?? "null"} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
+
+        if (!observer.IsFreshSince(freshnessFloor))
+        {
+            LogHarness($"step={stepIndex} stale observer snapshot ignored freshnessFloor={freshnessFloor:O}");
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "stale-observer", observer.CurrentScreen, observer.InCombat, null));
+            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            continue;
+        }
 
         if (evaluator.IsPhaseSatisfied(phase, observer))
         {
@@ -151,7 +202,7 @@ static async Task<int> RunScenarioAsync(
                 return 0;
             }
 
-            await Task.Delay(500).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             continue;
         }
 
@@ -166,7 +217,7 @@ static async Task<int> RunScenarioAsync(
                 return 0;
             }
 
-            await Task.Delay(500).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             continue;
         }
 
@@ -188,7 +239,7 @@ static async Task<int> RunScenarioAsync(
 
             LogHarness($"step={stepIndex} waiting phase={phase} attempt={waitAttempt} screen={observer.CurrentScreen ?? "null"}");
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "waiting", observer.CurrentScreen, observer.InCombat, null));
-            await Task.Delay(1000).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             continue;
         }
 
@@ -205,7 +256,6 @@ static async Task<int> RunScenarioAsync(
         var decisionPath = stepPrefix + ".decision.json";
         logger.WriteRequest(requestPath, request);
         LogHarness($"step={stepIndex} request={requestPath}");
-
         var decision = await provider.GetDecisionAsync(requestPath, decisionPath, TimeSpan.FromMinutes(3), CancellationToken.None).ConfigureAwait(false);
         logger.WriteDecision(decisionPath, decision);
         LogHarness($"step={stepIndex} decision status={decision.Status} action={decision.ActionKind ?? "null"} target={decision.TargetLabel ?? "null"} confidence={decision.Confidence?.ToString("0.00") ?? "null"}");
@@ -228,18 +278,54 @@ static async Task<int> RunScenarioAsync(
             LogHarness($"step={stepIndex} wait requested ms={Math.Max(250, decision.WaitMs ?? 1000)}");
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "wait", decision.TargetLabel, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "wait", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
-            await Task.Delay(Math.Max(250, decision.WaitMs ?? 1000)).ConfigureAwait(false);
+            await Task.Delay(Math.Max(2000, decision.WaitMs ?? 2000)).ConfigureAwait(false);
             continue;
         }
 
         ValidateDecision(phase, request, decision);
+        var actionFingerprint = string.Join("|",
+            phase.ToString(),
+            observer.CurrentScreen ?? "null",
+            observer.VisibleScreen ?? "null",
+            observer.InventoryId ?? "null",
+            decision.TargetLabel ?? "null");
+        if (string.Equals(lastActionFingerprint, actionFingerprint, StringComparison.Ordinal))
+        {
+            sameActionStallCount += 1;
+        }
+        else
+        {
+            lastActionFingerprint = actionFingerprint;
+            sameActionStallCount = 0;
+        }
+
+        if (sameActionStallCount >= 2)
+        {
+            var abortReason = $"same-action-stall phase={phase} target={decision.TargetLabel ?? "null"} screen={observer.CurrentScreen ?? "null"} inventory={observer.InventoryId ?? "null"}";
+            LogHarness($"step={stepIndex} abort {abortReason}");
+            logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                phase.ToString(),
+                abortReason,
+                observer.CurrentScreen,
+                observer.InCombat,
+                screenshotPath));
+            logger.CompleteRun("failed", abortReason);
+            return 1;
+        }
+
         var clickWindow = WindowLocator.Refresh(window);
+        if (clickWindow.IsMinimized)
+        {
+            LogHarness($"step={stepIndex} click blocked: window minimized before action; restoring title={clickWindow.Title}");
+            clickWindow = WindowLocator.EnsureRestored(clickWindow);
+            LogHarness($"step={stepIndex} click window restored={DescribeWindow(clickWindow)}");
+        }
         if (WindowLocator.HasMeaningfulDrift(window, clickWindow))
         {
             LogHarness($"step={stepIndex} recapture required captureBounds={DescribeBounds(window.Bounds)} clickBounds={DescribeBounds(clickWindow.Bounds)}");
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "recapture-required", decision.TargetLabel, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "recapture-required", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
-            await Task.Delay(300).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             continue;
         }
 
@@ -262,7 +348,7 @@ static async Task<int> RunScenarioAsync(
 
         attemptsByPhase.Clear();
         LogHarness($"step={stepIndex} next phase={phase}");
-        await Task.Delay(Math.Max(500, decision.WaitMs ?? 1250)).ConfigureAwait(false);
+        await Task.Delay(Math.Max(2000, decision.WaitMs ?? 2000)).ConfigureAwait(false);
     }
 
     logger.WriteFailureSummary(new GuiSmokeFailureSummary(
@@ -314,10 +400,56 @@ static int InspectRun(IReadOnlyDictionary<string, string> options, string worksp
     return 0;
 }
 
+static async Task WaitForLiveGameWindowAsync(DateTimeOffset launchedAt, TimeSpan timeout)
+{
+    var deadline = DateTimeOffset.UtcNow.Add(timeout);
+    while (DateTimeOffset.UtcNow < deadline)
+    {
+        var window = WindowLocator.TryFindSts2Window();
+        if (window is not null)
+        {
+            if (window.IsMinimized)
+            {
+                LogHarness($"window detected minimized; restoring title={window.Title}");
+                window = WindowLocator.EnsureRestored(window);
+            }
+            window = WindowLocator.EnsureInteractive(window);
+            LogHarness($"window detected after launch title={window.Title} bounds={DescribeBounds(window.Bounds)}");
+            return;
+        }
+
+        LogHarness($"waiting for STS2 window launchIssuedAt={launchedAt:O}");
+        await Task.Delay(1000).ConfigureAwait(false);
+    }
+
+    throw new TimeoutException("Timed out waiting for a live STS2 game window.");
+}
+
+static void EnsureHarnessEnabledInRuntimeConfig(ScaffoldConfiguration configuration)
+{
+    var runtimeConfigPath = Path.Combine(configuration.GamePaths.GameDirectory, "mods", "sts2-mod-ai-companion.config.json");
+    if (!File.Exists(runtimeConfigPath))
+    {
+        throw new FileNotFoundException("Runtime config was not deployed.", runtimeConfigPath);
+    }
+
+    var rootNode = JsonNode.Parse(File.ReadAllText(runtimeConfigPath))
+                   ?? throw new InvalidOperationException("Failed to parse runtime config.");
+    var rootObject = rootNode.AsObject();
+    if (rootObject["harness"] is not JsonObject harnessObject)
+    {
+        throw new InvalidOperationException("Runtime config does not contain a harness section.");
+    }
+
+    harnessObject["enabled"] = true;
+    File.WriteAllText(runtimeConfigPath, rootObject.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    LogHarness($"runtime config ensured harness.enabled=true path={runtimeConfigPath}");
+}
+
 static void RunSelfTest()
 {
     var point = MouseInputDriver.TransformNormalizedPoint(
-        new WindowCaptureTarget(IntPtr.Zero, "test", new Rectangle(100, 200, 1000, 800), false),
+        new WindowCaptureTarget(IntPtr.Zero, "test", new Rectangle(100, 200, 1000, 800), false, false),
         0.5,
         0.25);
     Assert(point.X == 600 && point.Y == 400, "Normalized transform should map into client bounds.");
@@ -330,7 +462,7 @@ static void RunSelfTest()
         "enter-run",
         "screen.png",
         new WindowBounds(100, 200, 1000, 800),
-        new ObserverSummary("main-menu", "main-menu", false, null, new[] { "Continue" }, new[] { "main-menu" }),
+        new ObserverSummary("main-menu", "main-menu", false, DateTimeOffset.UtcNow, null, new[] { "Continue" }, new[] { "main-menu" }, Array.Empty<ObserverActionNode>()),
         new[] { "click continue", "click singleplayer" },
         Array.Empty<GuiSmokeHistoryEntry>(),
         "menu entry");
@@ -348,14 +480,20 @@ static void RunSelfTest()
     Assert(
         evaluator.IsPhaseSatisfied(
             GuiSmokePhase.WaitCombat,
-            new ObserverState(new ObserverSummary("combat", "combat", true, null, Array.Empty<string>(), Array.Empty<string>()), null, null, null)),
+            new ObserverState(new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>()), null, null, null)),
         "Combat acceptance should require combat screen and inCombat=true.");
 
     Assert(
         WindowLocator.HasMeaningfulDrift(
-            new WindowCaptureTarget(IntPtr.Zero, "before", new Rectangle(100, 200, 1000, 800), false),
-            new WindowCaptureTarget(IntPtr.Zero, "after", new Rectangle(140, 200, 1000, 800), false)),
+            new WindowCaptureTarget(IntPtr.Zero, "before", new Rectangle(100, 200, 1000, 800), false, false),
+            new WindowCaptureTarget(IntPtr.Zero, "after", new Rectangle(140, 200, 1000, 800), false, false)),
         "Bounds drift should be detected when the window moved.");
+
+    Assert(
+        TryParseScreenBounds("100,200,40,20", out var parsedBounds)
+        && Math.Abs(parsedBounds.X - 100f) < 0.01f
+        && Math.Abs(parsedBounds.Width - 40f) < 0.01f,
+        "Screen bounds should parse from observer inventory strings.");
 }
 
 static GuiSmokeStepRequest CreateStepRequest(
@@ -431,6 +569,37 @@ static bool IsPassiveWaitPhase(GuiSmokePhase phase)
         or GuiSmokePhase.WaitCharacterSelect
         or GuiSmokePhase.WaitMap
         or GuiSmokePhase.WaitCombat;
+}
+
+static bool TryParseScreenBounds(string? raw, out RectangleF bounds)
+{
+    bounds = default;
+    if (string.IsNullOrWhiteSpace(raw))
+    {
+        return false;
+    }
+
+    var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+    if (parts.Length != 4)
+    {
+        return false;
+    }
+
+    if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+        || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+        || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+        || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+    {
+        return false;
+    }
+
+    if (width <= 0 || height <= 0)
+    {
+        return false;
+    }
+
+    bounds = new RectangleF(x, y, width, height);
+    return true;
 }
 
 static bool TryAdvanceAlternateBranch(
@@ -524,6 +693,25 @@ static bool TryAdvanceAlternateBranch(
         }
     }
 
+    if (phase == GuiSmokePhase.ChooseFirstNode || phase == GuiSmokePhase.WaitCombat)
+    {
+        if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleRewards;
+            return true;
+        }
+
+        if (string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase) && phase == GuiSmokePhase.WaitCombat)
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-map", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -546,7 +734,7 @@ static void LogHarness(string message)
 
 static string DescribeWindow(WindowCaptureTarget target)
 {
-    return $"{target.Title} fallback={target.IsFallback} bounds={DescribeBounds(target.Bounds)}";
+    return $"{target.Title} fallback={target.IsFallback} minimized={target.IsMinimized} bounds={DescribeBounds(target.Bounds)}";
 }
 
 static string DescribeBounds(Rectangle bounds)
@@ -796,9 +984,18 @@ sealed record ObserverSummary(
     string? CurrentScreen,
     string? VisibleScreen,
     bool? InCombat,
+    DateTimeOffset? CapturedAt,
     string? InventoryId,
     IReadOnlyList<string> CurrentChoices,
-    IReadOnlyList<string> LastEventsTail);
+    IReadOnlyList<string> LastEventsTail,
+    IReadOnlyList<ObserverActionNode> ActionNodes);
+
+sealed record ObserverActionNode(
+    string NodeId,
+    string Kind,
+    string Label,
+    string? ScreenBounds,
+    bool Actionable);
 
 sealed record ObserverState(
     ObserverSummary Summary,
@@ -809,6 +1006,14 @@ sealed record ObserverState(
     public string? CurrentScreen => Summary.CurrentScreen;
     public string? VisibleScreen => Summary.VisibleScreen;
     public bool? InCombat => Summary.InCombat;
+    public string? InventoryId => Summary.InventoryId;
+    public IReadOnlyList<ObserverActionNode> ActionNodes => Summary.ActionNodes;
+    public DateTimeOffset? CapturedAt => Summary.CapturedAt;
+
+    public bool IsFreshSince(DateTimeOffset threshold)
+    {
+        return CapturedAt is not null && CapturedAt >= threshold;
+    }
 }
 
 interface IGuiDecisionProvider
@@ -921,28 +1126,28 @@ sealed class ArtifactRecorder
     {
         if (observer.StateDocument is not null)
         {
-            LiveExportAtomicFileWriter.WriteAllTextAtomic(stepPrefix + ".observer.state.json", observer.StateDocument.RootElement.GetRawText());
+            File.WriteAllText(stepPrefix + ".observer.state.json", observer.StateDocument.RootElement.GetRawText());
         }
 
         if (observer.InventoryDocument is not null)
         {
-            LiveExportAtomicFileWriter.WriteAllTextAtomic(stepPrefix + ".observer.inventory.json", observer.InventoryDocument.RootElement.GetRawText());
+            File.WriteAllText(stepPrefix + ".observer.inventory.json", observer.InventoryDocument.RootElement.GetRawText());
         }
 
         if (observer.EventLines is { Length: > 0 })
         {
-            LiveExportAtomicFileWriter.WriteAllTextAtomic(stepPrefix + ".observer.events.tail.json", JsonSerializer.Serialize(observer.EventLines, GuiSmokeShared.JsonOptions));
+            File.WriteAllText(stepPrefix + ".observer.events.tail.json", JsonSerializer.Serialize(observer.EventLines, GuiSmokeShared.JsonOptions));
         }
     }
 
     public void WriteRequest(string path, GuiSmokeStepRequest request)
     {
-        LiveExportAtomicFileWriter.WriteJsonAtomic(path, request, GuiSmokeShared.JsonOptions);
+        File.WriteAllText(path, JsonSerializer.Serialize(request, GuiSmokeShared.JsonOptions));
     }
 
     public void WriteDecision(string path, GuiSmokeStepDecision decision)
     {
-        LiveExportAtomicFileWriter.WriteJsonAtomic(path, decision, GuiSmokeShared.JsonOptions);
+        File.WriteAllText(path, JsonSerializer.Serialize(decision, GuiSmokeShared.JsonOptions));
     }
 }
 
@@ -966,13 +1171,14 @@ sealed class ObserverSnapshotReader
         var currentScreen = TryReadString(stateDocument?.RootElement, "currentScreen");
         var visibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "visibleScreen") ?? currentScreen;
         var inCombat = TryReadBool(stateDocument?.RootElement, "encounter", "inCombat");
+        var capturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt");
         var inventoryId = inventoryDocument is null
             ? null
             : TryReadString(inventoryDocument.RootElement, "inventoryId");
         var currentChoices = ReadChoiceLabels(stateDocument);
 
         return new ObserverState(
-            new ObserverSummary(currentScreen, visibleScreen, inCombat, inventoryId, currentChoices, eventLines ?? Array.Empty<string>()),
+            new ObserverSummary(currentScreen, visibleScreen, inCombat, capturedAt, inventoryId, currentChoices, eventLines ?? Array.Empty<string>(), ReadActionNodes(inventoryDocument)),
             stateDocument,
             inventoryDocument,
             eventLines);
@@ -985,8 +1191,27 @@ sealed class ObserverSnapshotReader
             return null;
         }
 
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        return JsonDocument.Parse(stream);
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return JsonDocument.Parse(stream);
+        }
+        catch (FileNotFoundException)
+        {
+            return null;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static string[]? TryReadTail(string path, int lines)
@@ -1028,6 +1253,42 @@ sealed class ObserverSnapshotReader
         return labels;
     }
 
+    private static IReadOnlyList<ObserverActionNode> ReadActionNodes(JsonDocument? document)
+    {
+        if (document is null
+            || !document.RootElement.TryGetProperty("nodes", out var nodesElement)
+            || nodesElement.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<ObserverActionNode>();
+        }
+
+        var nodes = new List<ObserverActionNode>();
+        foreach (var node in nodesElement.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var nodeId = TryReadString(node, "nodeId");
+            var kind = TryReadString(node, "kind");
+            var label = TryReadString(node, "label");
+            var screenBounds = TryReadString(node, "screenBounds");
+            var actionable = node.TryGetProperty("actionable", out var actionableElement)
+                             && actionableElement.ValueKind == JsonValueKind.True;
+            if (string.IsNullOrWhiteSpace(nodeId)
+                || string.IsNullOrWhiteSpace(kind)
+                || string.IsNullOrWhiteSpace(label))
+            {
+                continue;
+            }
+
+            nodes.Add(new ObserverActionNode(nodeId, kind, label, screenBounds, actionable));
+        }
+
+        return nodes;
+    }
+
     private static string? TryReadString(JsonElement? element, string propertyName)
     {
         return element.HasValue
@@ -1067,6 +1328,17 @@ sealed class ObserverSnapshotReader
                 ? false
                 : null;
     }
+
+    private static DateTimeOffset? TryReadDateTimeOffset(JsonElement? element, string propertyName)
+    {
+        return element.HasValue
+               && element.Value.ValueKind == JsonValueKind.Object
+               && element.Value.TryGetProperty(propertyName, out var property)
+               && property.ValueKind == JsonValueKind.String
+               && DateTimeOffset.TryParse(property.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+            ? parsed
+            : null;
+    }
 }
 
 sealed class ObserverAcceptanceEvaluator
@@ -1087,11 +1359,42 @@ sealed class ObserverAcceptanceEvaluator
 
 sealed class ScreenCaptureService
 {
-    public void Capture(WindowCaptureTarget target, string outputPath)
+    public bool TryCapture(WindowCaptureTarget target, string outputPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-        using var bitmap = TryCaptureWindowClient(target) ?? CaptureFromScreen(target);
+        using var bitmap = TryCaptureProcessWindow(target);
+        if (bitmap is null)
+        {
+            return false;
+        }
+
         bitmap.Save(outputPath, ImageFormat.Png);
+        return true;
+    }
+
+    private static Bitmap? TryCaptureProcessWindow(WindowCaptureTarget target)
+    {
+        if (target.IsFallback || target.Handle == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        Bitmap? lastCapture = null;
+        for (var attempt = 0; attempt < 5; attempt += 1)
+        {
+            target = WindowLocator.EnsureInteractive(target);
+            lastCapture?.Dispose();
+            lastCapture = TryCaptureWindowClient(target);
+            if (lastCapture is not null && !IsMostlyBlack(lastCapture))
+            {
+                return lastCapture;
+            }
+
+            Thread.Sleep(TimeSpan.FromSeconds(2));
+        }
+
+        lastCapture?.Dispose();
+        return null;
     }
 
     private static Bitmap? TryCaptureWindowClient(WindowCaptureTarget target)
@@ -1106,12 +1409,31 @@ sealed class ScreenCaptureService
             : null;
     }
 
-    private static Bitmap CaptureFromScreen(WindowCaptureTarget target)
+    private static bool IsMostlyBlack(Bitmap bitmap)
     {
-        var bitmap = new Bitmap(target.Bounds.Width, target.Bounds.Height);
-        using var graphics = Graphics.FromImage(bitmap);
-        graphics.CopyFromScreen(target.Bounds.X, target.Bounds.Y, 0, 0, target.Bounds.Size, CopyPixelOperation.SourceCopy);
-        return bitmap;
+        var sampleColumns = 12;
+        var sampleRows = 8;
+        var brightSamples = 0;
+        var totalSamples = 0;
+
+        for (var row = 0; row < sampleRows; row += 1)
+        {
+            var y = (int)Math.Round((bitmap.Height - 1) * (row / (double)Math.Max(1, sampleRows - 1)));
+            for (var column = 0; column < sampleColumns; column += 1)
+            {
+                var x = (int)Math.Round((bitmap.Width - 1) * (column / (double)Math.Max(1, sampleColumns - 1)));
+                var pixel = bitmap.GetPixel(x, y);
+                var brightness = (pixel.R + pixel.G + pixel.B) / 3.0;
+                if (brightness >= 12)
+                {
+                    brightSamples += 1;
+                }
+
+                totalSamples += 1;
+            }
+        }
+
+        return brightSamples <= Math.Max(1, totalSamples / 20);
     }
 }
 
@@ -1152,7 +1474,8 @@ sealed record WindowCaptureTarget(
     IntPtr Handle,
     string Title,
     Rectangle Bounds,
-    bool IsFallback);
+    bool IsFallback,
+    bool IsMinimized);
 
 static class WindowLocator
 {
@@ -1179,7 +1502,12 @@ static class WindowLocator
                     continue;
                 }
 
-                return new WindowCaptureTarget(process.MainWindowHandle, process.MainWindowTitle, bounds, false);
+                return new WindowCaptureTarget(
+                    process.MainWindowHandle,
+                    process.MainWindowTitle,
+                    bounds,
+                    false,
+                    NativeMethods.IsIconic(process.MainWindowHandle));
             }
             catch
             {
@@ -1191,8 +1519,8 @@ static class WindowLocator
 
     public static WindowCaptureTarget GetPrimaryMonitorFallback()
     {
-        var bounds = Screen.PrimaryScreen?.Bounds ?? throw new InvalidOperationException("Primary screen is not available.");
-        return new WindowCaptureTarget(IntPtr.Zero, "primary-screen-fallback", bounds, true);
+        var bounds = SystemInformation.VirtualScreen;
+        return new WindowCaptureTarget(IntPtr.Zero, "virtual-screen-fallback", bounds, true, false);
     }
 
     public static WindowCaptureTarget Refresh(WindowCaptureTarget target)
@@ -1204,10 +1532,41 @@ static class WindowLocator
 
         if (NativeMethods.TryGetClientBounds(target.Handle, out var bounds))
         {
-            return target with { Bounds = bounds };
+            return target with
+            {
+                Bounds = bounds,
+                IsMinimized = NativeMethods.IsIconic(target.Handle),
+            };
         }
 
         return target;
+    }
+
+    public static WindowCaptureTarget EnsureRestored(WindowCaptureTarget target)
+    {
+        if (target.IsFallback || target.Handle == IntPtr.Zero || !target.IsMinimized)
+        {
+            return target;
+        }
+
+        NativeMethods.ShowWindow(target.Handle, NativeMethods.SW_RESTORE);
+        Thread.Sleep(300);
+        return Refresh(target);
+    }
+
+    public static WindowCaptureTarget EnsureInteractive(WindowCaptureTarget target)
+    {
+        if (target.IsFallback || target.Handle == IntPtr.Zero)
+        {
+            return target;
+        }
+
+        target = EnsureRestored(target);
+        NativeMethods.ShowWindow(target.Handle, NativeMethods.SW_RESTORE);
+        NativeMethods.BringWindowToTop(target.Handle);
+        NativeMethods.SetForegroundWindow(target.Handle);
+        Thread.Sleep(500);
+        return Refresh(target);
     }
 
     public static bool HasMeaningfulDrift(WindowCaptureTarget before, WindowCaptureTarget after, int tolerancePixels = 8)
@@ -1225,6 +1584,7 @@ static class NativeMethods
     public const uint MOUSEEVENTF_LEFTUP = 0x0004;
     private const uint INPUT_MOUSE = 0;
     private const uint PW_RENDERFULLCONTENT = 0x00000002;
+    public const int SW_RESTORE = 9;
 
     [DllImport("user32.dll")]
     private static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
@@ -1236,7 +1596,16 @@ static class NativeMethods
     public static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
     public static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);

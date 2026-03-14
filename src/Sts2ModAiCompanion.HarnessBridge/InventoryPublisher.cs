@@ -83,7 +83,7 @@ internal sealed class InventoryPublisher
 
     private static HarnessNodeInventory BuildInventory(LiveExportSnapshot snapshot, string mode, CompanionNormalizedScene normalizedScene)
     {
-        var sceneType = normalizedScene.SceneType;
+        var sceneType = ResolveInventorySceneType(snapshot, normalizedScene);
         var blockingModal = ResolveBlockingModal(snapshot, normalizedScene);
         var nodes = snapshot.CurrentChoices
             .Select((choice, index) => BuildNode(sceneType, choice, index))
@@ -100,6 +100,20 @@ internal sealed class InventoryPublisher
             Nodes: nodes);
     }
 
+    private static string ResolveInventorySceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
+    {
+        var logicalScreen = NormalizeSceneToken(snapshot.CurrentScreen)
+            ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "logicalScreen"))
+            ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "flowScreen"));
+
+        if (logicalScreen is not null)
+        {
+            return logicalScreen;
+        }
+
+        return normalizedScene.SceneType;
+    }
+
     private static HarnessNodeInventoryItem BuildNode(string sceneType, LiveExportChoiceSummary choice, int index)
     {
         var label = choice.Label?.Trim() ?? string.Empty;
@@ -108,7 +122,7 @@ internal sealed class InventoryPublisher
         var hints = BuildHints(sceneType, choice);
 
         return new HarnessNodeInventoryItem(
-            NodeId: $"{kind}:{index}",
+            NodeId: string.IsNullOrWhiteSpace(choice.NodeId) ? $"{kind}:{index}" : choice.NodeId,
             Kind: kind,
             Label: label,
             Description: choice.Description,
@@ -117,7 +131,7 @@ internal sealed class InventoryPublisher
             Visible: true,
             Enabled: null,
             Actionable: actionable,
-            ScreenBounds: null,
+            ScreenBounds: choice.ScreenBounds,
             SemanticHints: hints);
     }
 
@@ -135,7 +149,7 @@ internal sealed class InventoryPublisher
             "singleplayer-submenu" => "mode-option",
             "character-select" => IsEmbarkLabel(label) ? "embark" : "character",
             "map" => "map-node",
-            "rewards" => "reward-item",
+            "rewards" => IsProceedLabel(label) ? "proceed" : "reward-item",
             "event" => "event-option",
             "shop" => "shop-option",
             "rest-site" => "rest-option",
@@ -189,6 +203,11 @@ internal sealed class InventoryPublisher
         return ContainsAny(label, "\uCD9C\uBC1C", "embark");
     }
 
+    private static bool IsProceedLabel(string label)
+    {
+        return ContainsAny(label, "\uC9C4\uD589", "\uB118\uAE30\uAE30", "proceed", "continue", "skip");
+    }
+
     private static bool ContainsAny(string source, params string[] candidates)
     {
         return candidates.Any(candidate => source.Contains(candidate, StringComparison.OrdinalIgnoreCase));
@@ -214,6 +233,33 @@ internal sealed class InventoryPublisher
         return meta.TryGetValue(key, out var value) ? value : null;
     }
 
+    private static string? NormalizeSceneToken(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed switch
+        {
+            "main-menu" or
+            "singleplayer-submenu" or
+            "character-select" or
+            "map" or
+            "rewards" or
+            "event" or
+            "shop" or
+            "rest-site" or
+            "combat" or
+            "feedback-overlay" or
+            "blocking-overlay" or
+            "startup" or
+            "unknown" => trimmed,
+            _ => null,
+        };
+    }
+
     private static string BuildInventoryId(LiveExportSnapshot snapshot, string sceneType, IReadOnlyList<HarnessNodeInventoryItem> nodes)
     {
         var builder = new StringBuilder();
@@ -231,6 +277,8 @@ internal sealed class InventoryPublisher
             builder.Append(node.Label);
             builder.Append(':');
             builder.Append(node.Actionable ? '1' : '0');
+            builder.Append(':');
+            builder.Append(node.ScreenBounds);
             builder.Append('|');
         }
 
@@ -257,6 +305,8 @@ internal sealed class InventoryPublisher
             builder.Append(node.Kind);
             builder.Append(':');
             builder.Append(node.Actionable ? '1' : '0');
+            builder.Append(':');
+            builder.Append(node.ScreenBounds);
             builder.Append('|');
         }
 
