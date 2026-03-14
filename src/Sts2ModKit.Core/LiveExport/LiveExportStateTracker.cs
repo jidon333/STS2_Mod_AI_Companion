@@ -179,7 +179,8 @@ public sealed class LiveExportStateTracker
         var choices = MergeChoices(previous.CurrentChoices, observation.Choices, observation, previous.CurrentScreen, screen, previous.CapturedAt);
         var warnings = MergeWarnings(previous.Warnings, MergeWarnings(observation.Warnings, regressionWarnings));
         var encounter = MergeEncounter(previous.Encounter, observation.Encounter, observation, screen, regressionWarnings);
-        if (IsStickyHighValueScreen(screen) && encounter?.InCombat == true)
+        if (!string.Equals(screen, "combat", StringComparison.OrdinalIgnoreCase)
+            && encounter?.InCombat == true)
         {
             warnings = MergeWarnings(warnings, new[] { $"state-regression: combat-conflict-with-screen:{screen}" });
         }
@@ -475,10 +476,17 @@ public sealed class LiveExportStateTracker
     {
         var updated = new Dictionary<string, string?>(mergedMeta, StringComparer.OrdinalIgnoreCase)
         {
+            ["screen"] = logicalScreen,
             ["logicalScreen"] = logicalScreen,
             ["flowScreen"] = logicalScreen,
             ["visibleScreen"] = ResolveVisibleScreen(previousMeta, mergedMeta, observation, logicalScreen),
         };
+
+        if (mergedMeta.TryGetValue("screen", out var rawObservedScreen)
+            && !string.IsNullOrWhiteSpace(rawObservedScreen))
+        {
+            updated["rawObservedScreen"] = rawObservedScreen;
+        }
 
         return updated;
     }

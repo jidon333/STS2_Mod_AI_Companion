@@ -49,7 +49,12 @@ public sealed record LiveExportChoiceSummary(
     string Kind,
     string Label,
     string? Value,
-    string? Description);
+    string? Description)
+{
+    public string? NodeId { get; init; }
+
+    public string? ScreenBounds { get; init; }
+}
 
 public sealed record LiveExportChoiceCandidate(
     string ExtractorPath,
