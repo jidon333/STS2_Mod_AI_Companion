@@ -25,7 +25,7 @@ public sealed record CompanionState(
             Guid.NewGuid().ToString("N"),
             DateTimeOffset.UtcNow,
             new CompanionRunIdentity(runId, null, "unknown", null, null, null),
-            new CompanionSceneState("unknown", "unknown", 0.0, "none", null),
+            new CompanionSceneState("unknown", "unknown", "unknown", "unknown", 0.0, "none", null),
             new CompanionPlayerState(null, null, null, null, null, new Dictionary<string, string?>(), "unknown", Array.Empty<string>(), Array.Empty<string>()),
             new CompanionCombatState(false, null, null, null, null),
             new CompanionChoiceState(Array.Empty<CompanionChoiceItem>(), "none", null, 0.0),
@@ -53,6 +53,8 @@ public sealed record CompanionRunIdentity(
 public sealed record CompanionSceneState(
     string SceneType,
     string SemanticSceneType,
+    string VisibleSceneType,
+    string FlowSceneType,
     double Confidence,
     string Source,
     string? EpisodeId);

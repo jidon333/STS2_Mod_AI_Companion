@@ -42,6 +42,7 @@ Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeR
 Run("companion scene normalizer prefers main-menu over hidden character-select markers", TestCompanionSceneNormalizerMainMenuPriority, failures);
 Run("companion scene normalizer detects blocking overlay from placeholder choices", TestCompanionSceneNormalizerBlockingOverlay, failures);
 Run("companion state mapper prefers main-menu over hidden character-select markers", TestCompanionStateMapperMainMenuPriority, failures);
+Run("companion state mapper preserves visible and flow scene split", TestCompanionStateMapperVisibleAndFlowSceneSplit, failures);
 Run("live export tracker preserves high-value state across partial observations", TestLiveExportTrackerPartialMerge, failures);
 Run("live export tracker accepts authoritative combat encounter on high-value screen", TestLiveExportTrackerAcceptsAuthoritativeCombatEncounter, failures);
 Run("collector mode records screen episodes and choice diagnostics", TestLiveExportTrackerCollectorMode, failures);
@@ -1448,6 +1449,42 @@ static void TestCompanionSceneNormalizerBlockingOverlay()
     var scene = CompanionSceneNormalizer.Normalize(snapshot);
 
     Assert(scene.SceneType == "blocking-overlay", $"Expected blocking-overlay scene, got {scene.SceneType}.");
+}
+
+static void TestCompanionStateMapperVisibleAndFlowSceneSplit()
+{
+    var snapshot = new LiveExportSnapshot(
+        "pending-test",
+        "active",
+        1,
+        DateTimeOffset.UtcNow,
+        "rewards",
+        null,
+        null,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("choice", "넘기기", null, "넘기기"),
+        },
+        new[] { "trigger: runtime-poll" },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("root", null, false, null),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["visibleScreen"] = "map",
+            ["flowScreen"] = "rewards",
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.NGame",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+        });
+
+    var state = CompanionStateMapper.FromLiveExport(snapshot, session: null, Array.Empty<LiveExportEventEnvelope>());
+
+    Assert(state.Scene.SceneType == "rewards", $"Expected logical rewards scene, got {state.Scene.SceneType}.");
+    Assert(state.Scene.VisibleSceneType == "map", $"Expected visible map scene, got {state.Scene.VisibleSceneType}.");
+    Assert(state.Scene.FlowSceneType == "rewards", $"Expected flow rewards scene, got {state.Scene.FlowSceneType}.");
 }
 
 static void TestLiveExportTrackerCollectorMode()
