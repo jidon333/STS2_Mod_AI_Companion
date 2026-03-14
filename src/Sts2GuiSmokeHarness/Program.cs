@@ -331,12 +331,23 @@ static async Task<int> RunScenarioAsync(
             continue;
         }
 
-        var clickPoint = MouseInputDriver.TransformNormalizedPoint(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
-        LogHarness($"step={stepIndex} click target={decision.TargetLabel ?? "null"} normalized=({decision.NormalizedX:0.000},{decision.NormalizedY:0.000}) absolute=({clickPoint.X},{clickPoint.Y}) bounds={DescribeBounds(clickWindow.Bounds)}");
-        inputDriver.Click(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
-        history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "click", decision.TargetLabel, DateTimeOffset.UtcNow));
-        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "click", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
-        LogHarness($"step={stepIndex} click sent target={decision.TargetLabel ?? "null"}");
+        if (string.Equals(decision.ActionKind, "press-key", StringComparison.OrdinalIgnoreCase))
+        {
+            LogHarness($"step={stepIndex} key target={decision.TargetLabel ?? decision.KeyText ?? "null"} key={decision.KeyText ?? "null"}");
+            inputDriver.PressKey(clickWindow, decision.KeyText!);
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "press-key", decision.TargetLabel ?? decision.KeyText, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "press-key", observer.CurrentScreen, observer.InCombat, decision.TargetLabel ?? decision.KeyText));
+            LogHarness($"step={stepIndex} key sent key={decision.KeyText ?? "null"}");
+        }
+        else
+        {
+            var clickPoint = MouseInputDriver.TransformNormalizedPoint(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
+            LogHarness($"step={stepIndex} click target={decision.TargetLabel ?? "null"} normalized=({decision.NormalizedX:0.000},{decision.NormalizedY:0.000}) absolute=({clickPoint.X},{clickPoint.Y}) bounds={DescribeBounds(clickWindow.Bounds)}");
+            inputDriver.Click(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "click", decision.TargetLabel, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "click", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
+            LogHarness($"step={stepIndex} click sent target={decision.TargetLabel ?? "null"}");
+        }
 
         phase = phase switch
         {
@@ -473,7 +484,7 @@ static void RunSelfTest()
     var roundTrip = JsonSerializer.Deserialize<GuiSmokeStepRequest>(json, GuiSmokeShared.JsonOptions);
     Assert(roundTrip?.Phase == GuiSmokePhase.EnterRun.ToString(), "Request should round-trip.");
 
-    var decision = new GuiSmokeStepDecision("act", "click", 0.3, 0.7, "continue", "main menu continue", 0.9, "character-select", 1000, true, null);
+    var decision = new GuiSmokeStepDecision("act", "click", null, 0.3, 0.7, "continue", "main menu continue", 0.9, "character-select", 1000, true, null);
     ValidateDecision(
         GuiSmokePhase.EnterRun,
         request,
@@ -803,24 +814,33 @@ static void ValidateDecision(GuiSmokePhase phase, GuiSmokeStepRequest request, G
         throw new InvalidOperationException("Only act decisions are valid here.");
     }
 
-    if (!string.Equals(decision.ActionKind, "click", StringComparison.OrdinalIgnoreCase))
+    if (string.Equals(decision.ActionKind, "click", StringComparison.OrdinalIgnoreCase))
     {
-        throw new InvalidOperationException("Only click actionKind is supported.");
-    }
+        if (decision.NormalizedX is null || decision.NormalizedY is null)
+        {
+            throw new InvalidOperationException("Click decision requires normalized coordinates.");
+        }
 
-    if (decision.NormalizedX is null || decision.NormalizedY is null)
-    {
-        throw new InvalidOperationException("Click decision requires normalized coordinates.");
+        if (decision.NormalizedX < 0 || decision.NormalizedX > 1 || decision.NormalizedY < 0 || decision.NormalizedY > 1)
+        {
+            throw new InvalidOperationException("Normalized coordinates must be within [0,1].");
+        }
     }
-
-    if (decision.NormalizedX < 0 || decision.NormalizedX > 1 || decision.NormalizedY < 0 || decision.NormalizedY > 1)
+    else if (string.Equals(decision.ActionKind, "press-key", StringComparison.OrdinalIgnoreCase))
     {
-        throw new InvalidOperationException("Normalized coordinates must be within [0,1].");
+        if (string.IsNullOrWhiteSpace(decision.KeyText))
+        {
+            throw new InvalidOperationException("press-key decision requires keyText.");
+        }
+    }
+    else
+    {
+        throw new InvalidOperationException("Only click and press-key actionKind are supported.");
     }
 
     if (request.AllowedActions.Length == 1 && string.Equals(request.AllowedActions[0], "wait", StringComparison.OrdinalIgnoreCase))
     {
-        throw new InvalidOperationException($"Phase {phase} does not allow clicks.");
+        throw new InvalidOperationException($"Phase {phase} does not allow actions.");
     }
 }
 
@@ -1013,6 +1033,7 @@ sealed record GuiSmokeStepRequest(
 sealed record GuiSmokeStepDecision(
     string Status,
     string? ActionKind,
+    string? KeyText,
     double? NormalizedX,
     double? NormalizedY,
     string? TargetLabel,
@@ -1524,6 +1545,43 @@ sealed class MouseInputDriver
         var pixelY = target.Bounds.Y + (int)Math.Round((target.Bounds.Height - 1) * clampedY);
         return new Point(pixelX, pixelY);
     }
+
+    public void PressKey(WindowCaptureTarget target, string keyText)
+    {
+        if (target.Handle != IntPtr.Zero)
+        {
+            NativeMethods.SetForegroundWindow(target.Handle);
+        }
+
+        var virtualKey = ResolveVirtualKey(keyText);
+        var inputs = new[]
+        {
+            NativeMethods.CreateKeyboardInput(virtualKey, 0),
+            NativeMethods.CreateKeyboardInput(virtualKey, NativeMethods.KEYEVENTF_KEYUP),
+        };
+        var sent = NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
+        if (sent != inputs.Length)
+        {
+            throw new InvalidOperationException($"Failed to send keyboard input for key '{keyText}'.");
+        }
+    }
+
+    private static ushort ResolveVirtualKey(string keyText)
+    {
+        var trimmed = keyText.Trim();
+        if (trimmed.Length != 1)
+        {
+            throw new InvalidOperationException($"Unsupported keyText '{keyText}'.");
+        }
+
+        var virtualKey = NativeMethods.VkKeyScan(trimmed[0]);
+        if (virtualKey == -1)
+        {
+            throw new InvalidOperationException($"Unable to resolve keyText '{keyText}' to a virtual key.");
+        }
+
+        return (ushort)(virtualKey & 0xFF);
+    }
 }
 
 sealed record WindowCaptureTarget(
@@ -1638,7 +1696,9 @@ static class NativeMethods
 {
     public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     public const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    public const uint KEYEVENTF_KEYUP = 0x0002;
     private const uint INPUT_MOUSE = 0;
+    private const uint INPUT_KEYBOARD = 1;
     private const uint PW_RENDERFULLCONTENT = 0x00000002;
     public const int SW_RESTORE = 9;
 
@@ -1656,6 +1716,9 @@ static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    public static extern short VkKeyScan(char ch);
 
     [DllImport("user32.dll")]
     public static extern bool IsIconic(IntPtr hWnd);
@@ -1758,6 +1821,25 @@ static class NativeMethods
         };
     }
 
+    public static INPUT CreateKeyboardInput(ushort virtualKey, uint flags)
+    {
+        return new INPUT
+        {
+            type = INPUT_KEYBOARD,
+            U = new InputUnion
+            {
+                ki = new KEYBDINPUT
+                {
+                    wVk = virtualKey,
+                    wScan = 0,
+                    dwFlags = flags,
+                    time = 0,
+                    dwExtraInfo = IntPtr.Zero,
+                }
+            }
+        };
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     public struct INPUT
     {
@@ -1770,6 +1852,9 @@ static class NativeMethods
     {
         [FieldOffset(0)]
         public MOUSEINPUT mi;
+
+        [FieldOffset(0)]
+        public KEYBDINPUT ki;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -1778,6 +1863,16 @@ static class NativeMethods
         public int dx;
         public int dy;
         public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
         public uint dwFlags;
         public uint time;
         public IntPtr dwExtraInfo;
