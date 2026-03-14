@@ -183,6 +183,7 @@ public sealed class LiveExportStateTracker
         {
             warnings = MergeWarnings(warnings, new[] { $"state-regression: combat-conflict-with-screen:{screen}" });
         }
+        var meta = ApplyScreenMeta(MergeMeta(previous.Meta, observation.Meta), previous.Meta, observation, screen);
 
         var recentChanges = previous.RecentChanges
             .Concat(DescribeDiff(previous, screen, player, deck, relics, potions, choices, observation.TriggerKind))
@@ -206,7 +207,7 @@ public sealed class LiveExportStateTracker
             RecentChanges = recentChanges,
             Warnings = warnings,
             Encounter = encounter,
-            Meta = MergeMeta(previous.Meta, observation.Meta),
+            Meta = meta,
         };
     }
 
@@ -466,6 +467,87 @@ public sealed class LiveExportStateTracker
         return merged;
     }
 
+    private static IReadOnlyDictionary<string, string?> ApplyScreenMeta(
+        IReadOnlyDictionary<string, string?> mergedMeta,
+        IReadOnlyDictionary<string, string?> previousMeta,
+        LiveExportObservation observation,
+        string logicalScreen)
+    {
+        var updated = new Dictionary<string, string?>(mergedMeta, StringComparer.OrdinalIgnoreCase)
+        {
+            ["logicalScreen"] = logicalScreen,
+            ["flowScreen"] = logicalScreen,
+            ["visibleScreen"] = ResolveVisibleScreen(previousMeta, mergedMeta, observation, logicalScreen),
+        };
+
+        return updated;
+    }
+
+    private static string ResolveVisibleScreen(
+        IReadOnlyDictionary<string, string?> previousMeta,
+        IReadOnlyDictionary<string, string?> mergedMeta,
+        LiveExportObservation observation,
+        string logicalScreen)
+    {
+        if (string.IsNullOrWhiteSpace(logicalScreen))
+        {
+            return "unknown";
+        }
+
+        if (string.Equals(logicalScreen, "rewards", StringComparison.OrdinalIgnoreCase))
+        {
+            if (LooksLikeVisibleMap(mergedMeta))
+            {
+                return "map";
+            }
+
+            if (previousMeta.TryGetValue("visibleScreen", out var previousVisible)
+                && string.Equals(previousVisible, "map", StringComparison.OrdinalIgnoreCase)
+                && HasMapMarker(mergedMeta))
+            {
+                return "map";
+            }
+
+            if (LooksLikeVisibleRewards(mergedMeta))
+            {
+                return "rewards";
+            }
+        }
+
+        return logicalScreen;
+    }
+
+    private static bool LooksLikeVisibleMap(IReadOnlyDictionary<string, string?> meta)
+    {
+        return ContainsTypeMarker(meta, "instanceType", "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen")
+               || ContainsTypeMarker(meta, "declaringType", "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen");
+    }
+
+    private static bool LooksLikeVisibleRewards(IReadOnlyDictionary<string, string?> meta)
+    {
+        return ContainsTypeMarker(meta, "instanceType", "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen")
+               || ContainsTypeMarker(meta, "declaringType", "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen")
+               || ContainsTypeMarker(meta, "instanceType", "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen")
+               || ContainsTypeMarker(meta, "declaringType", "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen");
+    }
+
+    private static bool HasMapMarker(IReadOnlyDictionary<string, string?> meta)
+    {
+        return meta.TryGetValue("rootTypeSummary", out var rootTypeSummary)
+               && !string.IsNullOrWhiteSpace(rootTypeSummary)
+               && rootTypeSummary.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsTypeMarker(
+        IReadOnlyDictionary<string, string?> meta,
+        string key,
+        string marker)
+    {
+        return meta.TryGetValue(key, out var value)
+               && !string.IsNullOrWhiteSpace(value)
+               && value.Contains(marker, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string? InferRunStatus(string triggerKind)
     {
         return triggerKind switch
@@ -499,6 +581,16 @@ public sealed class LiveExportStateTracker
             && (string.Equals(previous.CurrentScreen, "combat", StringComparison.Ordinal)
                 || previous.Encounter?.InCombat == true)
             && !string.Equals(incoming, "combat", StringComparison.Ordinal))
+        {
+            return "combat";
+        }
+
+        if (string.Equals(incoming, "combat", StringComparison.Ordinal)
+            && observation.Encounter?.InCombat == true
+            && observation.Meta.TryGetValue("combatPrimarySource", out var combatPrimarySource)
+            && string.Equals(combatPrimarySource, "CombatManager.IsInProgress", StringComparison.Ordinal)
+            && observation.Meta.TryGetValue("combatPrimaryValue", out var combatPrimaryValue)
+            && string.Equals(combatPrimaryValue, "true", StringComparison.OrdinalIgnoreCase))
         {
             return "combat";
         }

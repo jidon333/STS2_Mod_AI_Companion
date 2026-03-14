@@ -20,11 +20,11 @@
 - Do not trust black screen, crash, harness, or scene-flow results until deployment identity is confirmed.
 
 ## Encoding Guardrails
-- Markdown in this repository must be saved as UTF-8 with BOM.
-- Reason: Windows PowerShell 5.1 misreads BOM-less UTF-8 Markdown as ANSI when `Get-Content` is used without an explicit `-Encoding`, which produced repeated Korean text corruption during doc updates.
+- Documents in this repository must be saved as UTF-8.
+- Reason: document encoding must be explicit and uniform across tools. Do not leave document encoding implicit or tool-default.
 - If a Markdown file renders as mojibake in the terminal, verify the file bytes before editing. Do not assume the file contents are already corrupted.
 - When reading or writing Korean docs from the shell, prefer explicit UTF-8 operations such as `Get-Content -Encoding UTF8` and UTF-8 writes.
-- `.editorconfig` is the repository-level source of truth for Markdown encoding. Do not save `.md` files in ANSI, UTF-16, or BOM-less UTF-8.
+- `.editorconfig` is the repository-level source of truth for document encoding. Do not save documents in ANSI or UTF-16.
 - Korean C# source files are also vulnerable when PowerShell or shell redirection rewrites text. Avoid `git show > file`, `Set-Content`, or ad-hoc re-save flows on non-ASCII source unless the encoding is explicitly controlled.
 - Preferred source-code edit paths are `apply_patch`, editor-based save with the existing file encoding preserved, or scripted writes that explicitly emit UTF-8.
 - If a source file suddenly shows many `CS1010` string-literal errors after a text rewrite, suspect encoding corruption first and restore from a known-good revision before debugging syntax.

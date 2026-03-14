@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net7.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sts2AiCompanion.Foundation\Sts2AiCompanion.Foundation.csproj" />
+    <ProjectReference Include="..\Sts2ModKit.Core\Sts2ModKit.Core.csproj" />
+  </ItemGroup>
+
+</Project>
