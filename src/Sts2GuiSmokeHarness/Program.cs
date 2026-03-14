@@ -50,6 +50,11 @@ static async Task<int> RunScenarioAsync(
     string workspaceRoot,
     IReadOnlyDictionary<string, string> options)
 {
+    const int PassiveWaitMs = 1000;
+    const int DecisionWaitMinimumMs = 750;
+    const int ActionSettleMinimumMs = 900;
+    const int TransitionSettleMs = 2000;
+
     var scenarioId = options.TryGetValue("--scenario", out var scenarioRaw)
         ? scenarioRaw
         : "boot-to-combat";
@@ -116,7 +121,9 @@ static async Task<int> RunScenarioAsync(
 
     IGuiDecisionProvider provider = string.Equals(providerKind, "headless", StringComparison.OrdinalIgnoreCase)
         ? new HeadlessCodexDecisionProvider(options)
-        : new SessionDecisionProvider();
+        : string.Equals(providerKind, "auto", StringComparison.OrdinalIgnoreCase)
+            ? new AutoDecisionProvider()
+            : new SessionDecisionProvider();
 
     var observerReader = new ObserverSnapshotReader(liveLayout, harnessLayout);
     var captureService = new ScreenCaptureService();
@@ -165,7 +172,7 @@ static async Task<int> RunScenarioAsync(
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "black-frame-nudge", null, null, "center"));
                 consecutiveBlackFrames = 0;
             }
-            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
             continue;
         }
         consecutiveBlackFrames = 0;
@@ -179,7 +186,7 @@ static async Task<int> RunScenarioAsync(
         {
             LogHarness($"step={stepIndex} stale observer snapshot ignored freshnessFloor={freshnessFloor:O}");
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "stale-observer", observer.CurrentScreen, observer.InCombat, null));
-            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await Task.Delay(PassiveWaitMs).ConfigureAwait(false);
             continue;
         }
 
@@ -203,7 +210,7 @@ static async Task<int> RunScenarioAsync(
                 return 0;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
             continue;
         }
 
@@ -218,13 +225,26 @@ static async Task<int> RunScenarioAsync(
                 return 0;
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
             continue;
         }
 
         if (IsPassiveWaitPhase(phase))
         {
             var waitAttempt = IncrementAttempt(attemptsByPhase, phase);
+            if (phase == GuiSmokePhase.WaitCharacterSelect
+                && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
+                && waitAttempt >= 2
+                && waitAttempt % 2 == 0)
+            {
+                LogHarness($"step={stepIndex} still on main-menu after continue; retrying enter-run attempt={waitAttempt}");
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "retry-enter-run", observer.CurrentScreen, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "retry-enter-run", observer.CurrentScreen, observer.InCombat, null));
+                phase = GuiSmokePhase.EnterRun;
+                await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
+                continue;
+            }
+
             if (waitAttempt >= 30)
             {
                 LogHarness($"step={stepIndex} timeout waiting for phase={phase} screen={observer.CurrentScreen ?? "null"}");
@@ -240,7 +260,7 @@ static async Task<int> RunScenarioAsync(
 
             LogHarness($"step={stepIndex} waiting phase={phase} attempt={waitAttempt} screen={observer.CurrentScreen ?? "null"}");
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "waiting", observer.CurrentScreen, observer.InCombat, null));
-            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await Task.Delay(PassiveWaitMs).ConfigureAwait(false);
             continue;
         }
 
@@ -279,7 +299,7 @@ static async Task<int> RunScenarioAsync(
             LogHarness($"step={stepIndex} wait requested ms={Math.Max(250, decision.WaitMs ?? 1000)}");
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "wait", decision.TargetLabel, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "wait", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
-            await Task.Delay(Math.Max(2000, decision.WaitMs ?? 2000)).ConfigureAwait(false);
+            await Task.Delay(Math.Max(DecisionWaitMinimumMs, decision.WaitMs ?? DecisionWaitMinimumMs)).ConfigureAwait(false);
             continue;
         }
 
@@ -289,7 +309,6 @@ static async Task<int> RunScenarioAsync(
             observer.CurrentScreen ?? "null",
             observer.VisibleScreen ?? "null",
             observer.InventoryId ?? "null",
-            ComputeFileFingerprint(screenshotPath),
             decision.TargetLabel ?? "null");
         if (string.Equals(lastActionFingerprint, actionFingerprint, StringComparison.Ordinal))
         {
@@ -327,7 +346,7 @@ static async Task<int> RunScenarioAsync(
             LogHarness($"step={stepIndex} recapture required captureBounds={DescribeBounds(window.Bounds)} clickBounds={DescribeBounds(clickWindow.Bounds)}");
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "recapture-required", decision.TargetLabel, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "recapture-required", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
-            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
             continue;
         }
 
@@ -338,6 +357,17 @@ static async Task<int> RunScenarioAsync(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "press-key", decision.TargetLabel ?? decision.KeyText, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "press-key", observer.CurrentScreen, observer.InCombat, decision.TargetLabel ?? decision.KeyText));
             LogHarness($"step={stepIndex} key sent key={decision.KeyText ?? "null"}");
+        }
+        else if (string.Equals(decision.ActionKind, "right-click", StringComparison.OrdinalIgnoreCase))
+        {
+            var rightClickX = decision.NormalizedX ?? 0.5;
+            var rightClickY = decision.NormalizedY ?? 0.5;
+            var clickPoint = MouseInputDriver.TransformNormalizedPoint(clickWindow, rightClickX, rightClickY);
+            LogHarness($"step={stepIndex} right-click target={decision.TargetLabel ?? "null"} normalized=({rightClickX:0.000},{rightClickY:0.000}) absolute=({clickPoint.X},{clickPoint.Y}) bounds={DescribeBounds(clickWindow.Bounds)}");
+            inputDriver.RightClick(clickWindow, rightClickX, rightClickY);
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "right-click", decision.TargetLabel, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "right-click", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
+            LogHarness($"step={stepIndex} right-click sent target={decision.TargetLabel ?? "null"}");
         }
         else
         {
@@ -362,7 +392,7 @@ static async Task<int> RunScenarioAsync(
 
         attemptsByPhase.Clear();
         LogHarness($"step={stepIndex} next phase={phase}");
-        await Task.Delay(Math.Max(2000, decision.WaitMs ?? 2000)).ConfigureAwait(false);
+        await Task.Delay(Math.Max(ActionSettleMinimumMs, decision.WaitMs ?? ActionSettleMinimumMs)).ConfigureAwait(false);
     }
 
     logger.WriteFailureSummary(new GuiSmokeFailureSummary(
@@ -476,7 +506,7 @@ static void RunSelfTest()
         "enter-run",
         "screen.png",
         new WindowBounds(100, 200, 1000, 800),
-        new ObserverSummary("main-menu", "main-menu", false, DateTimeOffset.UtcNow, null, new[] { "Continue" }, new[] { "main-menu" }, Array.Empty<ObserverActionNode>()),
+        new ObserverSummary("main-menu", "main-menu", false, DateTimeOffset.UtcNow, null, null, null, null, null, new[] { "Continue" }, new[] { "main-menu" }, Array.Empty<ObserverActionNode>()),
         new[] { "click continue", "click singleplayer" },
         Array.Empty<GuiSmokeHistoryEntry>(),
         "menu entry");
@@ -490,11 +520,43 @@ static void RunSelfTest()
         request,
         decision);
 
+    var specialKeyDecision = new GuiSmokeStepDecision("act", "press-key", "Escape", null, null, "cancel selection", "cancel with escape", 0.8, "combat", 500, false, null);
+    ValidateDecision(
+        GuiSmokePhase.HandleCombat,
+        request with { AllowedActions = new[] { "click card", "click enemy", "click end turn", "wait" } },
+        specialKeyDecision);
+
+    var autoRewardRequest = request with
+    {
+        Phase = GuiSmokePhase.HandleRewards.ToString(),
+        Observer = new ObserverSummary(
+            "rewards",
+            "rewards",
+            false,
+            DateTimeOffset.UtcNow,
+            "inv",
+            null,
+            null,
+            30,
+            80,
+            new[] { "skip" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("reward:0", "reward-item", "Reward Card", "100,200,120,120", true),
+                new ObserverActionNode("reward:1", "button", "Proceed", "900,700,240,90", true),
+            }),
+        AllowedActions = new[] { "click proceed", "click reward", "wait" },
+    };
+    var autoDecision = AutoDecisionProvider.Decide(autoRewardRequest);
+    Assert(autoDecision.ActionKind == "click", "Auto provider should choose a click for reward handling.");
+    Assert(autoDecision.TargetLabel == "claim reward item", "Auto provider should prefer the reward item before proceed.");
+
     var evaluator = new ObserverAcceptanceEvaluator();
     Assert(
         evaluator.IsPhaseSatisfied(
             GuiSmokePhase.WaitCombat,
-            new ObserverState(new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>()), null, null, null)),
+            new ObserverState(new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>()), null, null, null)),
         "Combat acceptance should require combat screen and inCombat=true.");
 
     Assert(
@@ -645,6 +707,17 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase == GuiSmokePhase.WaitCharacterSelect)
     {
+        if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
         if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
@@ -672,6 +745,17 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase == GuiSmokePhase.WaitMainMenu)
     {
+        if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
         if (string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-character-select", null, DateTimeOffset.UtcNow));
@@ -707,6 +791,17 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase == GuiSmokePhase.WaitMap)
     {
+        if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
         if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
@@ -726,6 +821,22 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase == GuiSmokePhase.ChooseFirstNode || phase == GuiSmokePhase.WaitCombat)
     {
+        if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase))
+        {
+            if (phase == GuiSmokePhase.ChooseFirstNode)
+            {
+                return false;
+            }
+
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
         if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
@@ -826,6 +937,19 @@ static void ValidateDecision(GuiSmokePhase phase, GuiSmokeStepRequest request, G
             throw new InvalidOperationException("Normalized coordinates must be within [0,1].");
         }
     }
+    else if (string.Equals(decision.ActionKind, "right-click", StringComparison.OrdinalIgnoreCase))
+    {
+        if ((decision.NormalizedX is null) != (decision.NormalizedY is null))
+        {
+            throw new InvalidOperationException("right-click decision must provide both normalized coordinates or neither.");
+        }
+
+        if (decision.NormalizedX is not null
+            && (decision.NormalizedX < 0 || decision.NormalizedX > 1 || decision.NormalizedY < 0 || decision.NormalizedY > 1))
+        {
+            throw new InvalidOperationException("Normalized coordinates must be within [0,1].");
+        }
+    }
     else if (string.Equals(decision.ActionKind, "press-key", StringComparison.OrdinalIgnoreCase))
     {
         if (string.IsNullOrWhiteSpace(decision.KeyText))
@@ -835,7 +959,7 @@ static void ValidateDecision(GuiSmokePhase phase, GuiSmokeStepRequest request, G
     }
     else
     {
-        throw new InvalidOperationException("Only click and press-key actionKind are supported.");
+        throw new InvalidOperationException("Only click, right-click, and press-key actionKind are supported.");
     }
 
     if (request.AllowedActions.Length == 1 && string.Equals(request.AllowedActions[0], "wait", StringComparison.OrdinalIgnoreCase))
@@ -1062,6 +1186,10 @@ sealed record ObserverSummary(
     bool? InCombat,
     DateTimeOffset? CapturedAt,
     string? InventoryId,
+    string? EncounterKind,
+    string? ChoiceExtractorPath,
+    int? PlayerCurrentHp,
+    int? PlayerMaxHp,
     IReadOnlyList<string> CurrentChoices,
     IReadOnlyList<string> LastEventsTail,
     IReadOnlyList<ObserverActionNode> ActionNodes);
@@ -1090,6 +1218,9 @@ sealed record ObserverState(
     {
         return CapturedAt is not null && CapturedAt >= threshold;
     }
+
+    public string? EncounterKind => Summary.EncounterKind;
+    public string? ChoiceExtractorPath => Summary.ChoiceExtractorPath;
 }
 
 interface IGuiDecisionProvider
@@ -1119,6 +1250,648 @@ sealed class SessionDecisionProvider : IGuiDecisionProvider
         }
 
         throw new TimeoutException($"Timed out waiting for decision file: {decisionPath}");
+    }
+}
+
+sealed class AutoDecisionProvider : IGuiDecisionProvider
+{
+    public async Task<GuiSmokeStepDecision> GetDecisionAsync(string requestPath, string decisionPath, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        using var stream = new FileStream(requestPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var request = await JsonSerializer.DeserializeAsync<GuiSmokeStepRequest>(stream, GuiSmokeShared.JsonOptions, cancellationToken).ConfigureAwait(false)
+                     ?? throw new InvalidOperationException("Failed to parse step request.");
+        return Decide(request);
+    }
+
+    public static GuiSmokeStepDecision Decide(GuiSmokeStepRequest request)
+    {
+        var phase = Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true);
+        return phase switch
+        {
+            GuiSmokePhase.EnterRun => DecideEnterRun(request),
+            GuiSmokePhase.ChooseCharacter => DecideChooseCharacter(request),
+            GuiSmokePhase.Embark => DecideEmbark(request),
+            GuiSmokePhase.HandleRewards => DecideHandleRewards(request),
+            GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request),
+            GuiSmokePhase.HandleCombat => DecideHandleCombat(request),
+            _ => CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen),
+        };
+    }
+
+    private static GuiSmokeStepDecision DecideEnterRun(GuiSmokeStepRequest request)
+    {
+        return TryFindActionNodeDecision(request, "Continue", "continue")
+               ?? TryFindActionNodeDecision(request, "\uACC4\uC18D", "continue")
+               ?? TryFindActionNodeDecision(request, "Singleplayer", "singleplayer")
+               ?? TryFindActionNodeDecision(request, "\uC2F1\uAE00", "singleplayer")
+               ?? CreateWaitDecision("main menu actions not yet visible", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision DecideChooseCharacter(GuiSmokeStepRequest request)
+    {
+        return TryFindActionNodeDecision(request, "Ironclad", "ironclad")
+               ?? CreateWaitDecision("waiting for ironclad node", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision DecideEmbark(GuiSmokeStepRequest request)
+    {
+        return TryFindActionNodeDecision(request, "Embark", "embark")
+               ?? CreateWaitDecision("waiting for embark action", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision DecideHandleRewards(GuiSmokeStepRequest request)
+    {
+        if (string.Equals(request.Observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase))
+        {
+            var mapDecision = TryFindVisibleMapAdvanceDecision(request)
+                              ?? TryFindFirstReachableMapNodeDecision(request);
+            if (mapDecision is not null)
+            {
+                return mapDecision;
+            }
+        }
+
+        var claimedRewardRecently = request.History.Any(entry =>
+            string.Equals(entry.Phase, GuiSmokePhase.HandleRewards.ToString(), StringComparison.OrdinalIgnoreCase)
+            && string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(entry.TargetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase));
+
+        var rewardNode = request.Observer.ActionNodes
+            .FirstOrDefault(node => node.Actionable
+                                    && node.ScreenBounds is not null
+                                    && !IsProceedNode(node)
+                                    && !IsBackNode(node)
+                                    && !IsMapNode(node));
+        if (rewardNode is not null && !claimedRewardRecently)
+        {
+            return CreateClickDecisionFromNode(request, rewardNode, "claim reward item");
+        }
+
+        var proceedNode = request.Observer.ActionNodes.FirstOrDefault(node => node.Actionable && IsProceedNode(node));
+        if (proceedNode is not null)
+        {
+            return CreateClickDecisionFromNode(request, proceedNode, "proceed after resolving rewards");
+        }
+
+        return CreateWaitDecision("waiting for reward actions", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request)
+    {
+        var visibleMapNodeDecision = TryFindFirstReachableMapNodeDecision(request);
+        if (visibleMapNodeDecision is not null)
+        {
+            return visibleMapNodeDecision;
+        }
+
+        if (LooksLikeShopState(request.Observer))
+        {
+            return DecideHandleShop(request);
+        }
+
+        return TryCreateRestSiteDecision(request)
+               ?? TryCreateHiddenOverlayCleanupDecision(request)
+               ?? TryCreateOverlayAdvanceDecision(request)
+               ?? TryCreateVisibleProceedDecision(request)
+                ?? CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision DecideHandleShop(GuiSmokeStepRequest request)
+    {
+        return TryCreateHiddenOverlayCleanupDecision(request)
+               ?? TryCreateVisibleProceedDecision(request)
+               ?? CreateWaitDecision("waiting for shop exit or stable shop UI", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision DecideHandleCombat(GuiSmokeStepRequest request)
+    {
+        var analysis = AutoCombatAnalyzer.Analyze(request.ScreenshotPath);
+        if (analysis.HasTargetArrow)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                0.744,
+                0.542,
+                "auto-target enemy",
+                "A targeting arrow is visible. Resolve the selected attack on the enemy body.",
+                0.93,
+                "combat",
+                1200,
+                true,
+                null);
+        }
+
+        if (analysis.HasSelectedCard)
+        {
+            if (analysis.SelectedCardKind == AutoCombatCardKind.DefendLike)
+            {
+                return new GuiSmokeStepDecision(
+                    "act",
+                    "click",
+                    null,
+                    0.500,
+                    0.770,
+                    "confirm selected defend",
+                    "A selected blue defense card is visible. Click the selected card again to resolve it.",
+                    0.82,
+                    "combat",
+                    1200,
+                    true,
+                    null);
+            }
+
+            return new GuiSmokeStepDecision(
+                "act",
+                "right-click",
+                null,
+                null,
+                null,
+                "cancel unresolved selected card",
+                "A selected card is visible without a targeting arrow. Cancel the selection and continue.",
+                0.75,
+                "combat",
+                800,
+                true,
+                null);
+        }
+
+        var triedHotkeys = request.History
+            .Where(entry => string.Equals(entry.Action, "press-key", StringComparison.OrdinalIgnoreCase))
+            .Select(entry => ExtractFirstDigit(entry.TargetLabel))
+            .Where(static digit => digit is not null)
+            .Select(static digit => digit!.Value)
+            .Distinct()
+            .ToHashSet();
+
+        var nextHotkey = Enumerable.Range(1, 5).FirstOrDefault(slot => !triedHotkeys.Contains(slot));
+        if (nextHotkey != 0)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "press-key",
+                nextHotkey.ToString(CultureInfo.InvariantCulture),
+                null,
+                null,
+                $"auto-select slot {nextHotkey}",
+                "No selected card is visible. Select the next unseen hand slot by hotkey.",
+                0.70,
+                "combat",
+                1000,
+                true,
+                null);
+        }
+
+        return new GuiSmokeStepDecision(
+            "act",
+            "press-key",
+            "E",
+            null,
+            null,
+            "auto-end turn",
+            "No productive combat action remains. End the turn.",
+            0.88,
+            "combat",
+            1500,
+            true,
+            null);
+    }
+
+    private static int? ExtractFirstDigit(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        foreach (var character in value)
+        {
+            if (char.IsDigit(character))
+            {
+                return character - '0';
+            }
+        }
+
+        return null;
+    }
+
+    private static GuiSmokeStepDecision? TryFindActionNodeDecision(GuiSmokeStepRequest request, string contains, string targetLabel)
+    {
+        var node = request.Observer.ActionNodes.FirstOrDefault(candidate =>
+            candidate.Actionable &&
+            candidate.Label.Contains(contains, StringComparison.OrdinalIgnoreCase));
+        return node is null ? null : CreateClickDecisionFromNode(request, node, targetLabel);
+    }
+
+    private static GuiSmokeStepDecision? TryFindFirstReachableMapNodeDecision(GuiSmokeStepRequest request)
+    {
+        var analysis = AutoMapAnalyzer.Analyze(request.ScreenshotPath);
+        if (analysis.HasReachableNode)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                analysis.ReachableNodeNormalizedX,
+                analysis.ReachableNodeNormalizedY,
+                "visible reachable node",
+                "The screenshot shows the current map arrow and a connected reachable node. Click the reachable node directly.",
+                0.90,
+                "map",
+                1500,
+                true,
+                null);
+        }
+
+        if (!analysis.HasCurrentArrow || LooksLikeShopState(request.Observer))
+        {
+            return null;
+        }
+
+        var node = request.Observer.ActionNodes
+            .Where(node => node.Actionable && IsMapNode(node) && HasUsableLogicalBounds(node.ScreenBounds))
+            .OrderBy(node => TryParseNodeBounds(node.ScreenBounds, out var bounds) ? bounds.X : float.MaxValue)
+            .ThenBy(node => TryParseNodeBounds(node.ScreenBounds, out var bounds) ? bounds.Y : float.MaxValue)
+            .FirstOrDefault();
+        return node is null ? null : CreateClickDecisionFromNode(request, node, "first reachable node");
+    }
+
+    private static GuiSmokeStepDecision? TryFindVisibleMapAdvanceDecision(GuiSmokeStepRequest request)
+    {
+        var attempt = request.History.Count(entry =>
+            string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(entry.TargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase));
+
+        var analysis = AutoMapAnalyzer.Analyze(request.ScreenshotPath);
+        if (!analysis.HasCurrentArrow)
+        {
+            return null;
+        }
+
+        var offset = attempt switch
+        {
+            0 => new PointF(0f, -0.105f),
+            1 => new PointF(-0.060f, -0.110f),
+            2 => new PointF(0.060f, -0.110f),
+            _ => new PointF(0f, -0.135f),
+        };
+
+        var normalizedX = Math.Clamp(analysis.ArrowNormalizedX + offset.X, 0.08f, 0.92f);
+        var normalizedY = Math.Clamp(analysis.ArrowNormalizedY + offset.Y, 0.10f, 0.86f);
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            normalizedX,
+            normalizedY,
+            "visible map advance",
+            $"Visible map is present while logical flow remains '{request.Observer.CurrentScreen}'. Advance from the red current-node arrow using screenshot-derived positioning (attempt {attempt + 1}).",
+            0.78,
+            "map",
+            1500,
+            true,
+            null);
+    }
+
+    private static GuiSmokeStepDecision? TryCreateRestSiteDecision(GuiSmokeStepRequest request)
+    {
+        var choices = request.Observer.CurrentChoices;
+        var hasRest = choices.Any(static label => label.Contains("\uD734\uC2DD", StringComparison.OrdinalIgnoreCase) || label.Contains("Rest", StringComparison.OrdinalIgnoreCase));
+        var hasSmith = choices.Any(static label => label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase) || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+        if (!hasRest && !hasSmith)
+        {
+            return null;
+        }
+
+        var maxHp = request.Observer.PlayerMaxHp ?? 0;
+        var currentHp = request.Observer.PlayerCurrentHp ?? 0;
+        var shouldRest = hasRest && (maxHp <= 0 || currentHp <= Math.Ceiling(maxHp * 0.70));
+        var targetLabel = shouldRest ? "rest site: rest" : "rest site: smith";
+        var normalizedX = shouldRest ? 0.405 : 0.575;
+        var normalizedY = 0.305;
+        var reason = shouldRest
+            ? $"Rest site detected from choices. HP {currentHp}/{maxHp} favors healing."
+            : "Rest site detected from choices. HP is healthy enough to prefer smithing.";
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            normalizedX,
+            normalizedY,
+            targetLabel,
+            reason,
+            0.86,
+            "map",
+            1500,
+            true,
+            null);
+    }
+
+    private static GuiSmokeStepDecision? TryCreateVisibleProceedDecision(GuiSmokeStepRequest request)
+    {
+        var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(request.ScreenshotPath);
+        if (!overlayAnalysis.HasRightProceedArrow || overlayAnalysis.HasBottomLeftBackArrow || overlayAnalysis.HasCentralOverlayPanel)
+        {
+            return null;
+        }
+
+        var proceedNode = request.Observer.ActionNodes.FirstOrDefault(node => node.Actionable && IsProceedNode(node));
+        if (proceedNode is not null && TryParseNodeBounds(proceedNode.ScreenBounds, out _))
+        {
+            return CreateClickDecisionFromNode(request, proceedNode, "visible proceed");
+        }
+
+        if (overlayAnalysis.RightProceedNormalizedX is not null && overlayAnalysis.RightProceedNormalizedY is not null)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                overlayAnalysis.RightProceedNormalizedX,
+                overlayAnalysis.RightProceedNormalizedY,
+                "visible proceed",
+                "The screenshot shows a right-side proceed arrow cluster without an active overlay back arrow. Advance the room flow before attempting any map click.",
+                0.95,
+                "map",
+                1400,
+                true,
+                null);
+        }
+
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            0.885,
+            0.835,
+            "visible proceed",
+            "The screenshot shows the large right-side proceed arrow without an active overlay back arrow. Advance the room flow before attempting any map click.",
+            0.95,
+            "map",
+            1400,
+            true,
+            null);
+    }
+
+    private static GuiSmokeStepDecision? TryCreateHiddenOverlayCleanupDecision(GuiSmokeStepRequest request)
+    {
+        var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(request.ScreenshotPath);
+        if (overlayAnalysis.HasCentralOverlayPanel)
+        {
+            return null;
+        }
+
+        var choices = request.Observer.CurrentChoices;
+        var hasOverlayChoices = choices.Any(static label =>
+            label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase));
+        if (!hasOverlayChoices)
+        {
+            return null;
+        }
+
+        var cleanupAttempts = request.History.Count(entry =>
+            string.Equals(entry.TargetLabel, "hidden overlay close", StringComparison.OrdinalIgnoreCase));
+        if (cleanupAttempts >= 2)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                0.180,
+                0.520,
+                "hidden overlay close",
+                "Overlay controls remain in observer output even though no panel is visible. Retry backdrop dismissal before proceeding.",
+                0.72,
+                "map",
+                1200,
+                true,
+                null);
+        }
+
+        return new GuiSmokeStepDecision(
+            "act",
+            "press-key",
+            "Escape",
+            null,
+            null,
+            "hidden overlay close",
+            "Overlay controls remain active behind the visible room. Send cancel/back before trying to proceed.",
+            0.84,
+            "map",
+            1000,
+            true,
+            null);
+    }
+
+    private static GuiSmokeStepDecision? TryCreateOverlayAdvanceDecision(GuiSmokeStepRequest request)
+    {
+        var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(request.ScreenshotPath);
+        if (!overlayAnalysis.HasCentralOverlayPanel)
+        {
+            return null;
+        }
+
+        var choices = request.Observer.CurrentChoices;
+        var hasBackstop = choices.Any(static label => label.Contains("Backstop", StringComparison.OrdinalIgnoreCase));
+        var hasLeftArrow = choices.Any(static label => label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase));
+        var hasRightArrow = choices.Any(static label => label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase));
+        if (!hasBackstop && !hasLeftArrow && !hasRightArrow)
+        {
+            return null;
+        }
+
+        var recentOverlayBackCount = request.History.Count(entry =>
+            string.Equals(entry.Phase, GuiSmokePhase.ChooseFirstNode.ToString(), StringComparison.OrdinalIgnoreCase)
+            && string.Equals(entry.TargetLabel, "overlay back", StringComparison.OrdinalIgnoreCase));
+
+        if (recentOverlayBackCount >= 3)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "press-key",
+                "Escape",
+                null,
+                null,
+                "overlay close",
+                "Overlay remains open after repeated back clicks. Try cancel/back as a fallback.",
+                0.72,
+                "map",
+                1200,
+                true,
+                null);
+        }
+
+        if (overlayAnalysis.HasBottomLeftBackArrow)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                0.045,
+                0.905,
+                "overlay back",
+                "An inspect/compendium overlay is present above the map or rest site. Close it via the visible bottom-left back arrow before trying to progress.",
+                0.93,
+                "map",
+                1200,
+                true,
+                null);
+        }
+
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            0.180,
+            0.520,
+            "overlay backdrop close",
+            "A centered inspect overlay is visible without a dedicated back arrow. Click the dark backdrop to dismiss it before trying to progress.",
+            0.88,
+            "map",
+            1200,
+            true,
+            null);
+    }
+
+    private static bool IsProceedNode(ObserverActionNode node)
+    {
+        return node.Label.Contains("\uC9C4\uD589", StringComparison.OrdinalIgnoreCase)
+               || node.Label.Contains("\uB118\uAE30\uAE30", StringComparison.OrdinalIgnoreCase)
+               || node.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
+               || node.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsBackNode(ObserverActionNode node)
+    {
+        return node.Label.Contains("\uB4A4\uB85C", StringComparison.OrdinalIgnoreCase)
+               || node.Label.Contains("Back", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMapNode(ObserverActionNode node)
+    {
+        return node.Kind.Contains("map", StringComparison.OrdinalIgnoreCase)
+               || node.NodeId.Contains("map", StringComparison.OrdinalIgnoreCase)
+               || node.Label.Contains("Map", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeShopState(ObserverSummary observer)
+    {
+        return string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static GuiSmokeStepDecision CreateClickDecisionFromNode(GuiSmokeStepRequest request, ObserverActionNode node, string targetLabel)
+    {
+        if (!TryParseNodeBounds(node.ScreenBounds, out var bounds))
+        {
+            throw new InvalidOperationException($"Action node '{node.Label}' does not include screen bounds.");
+        }
+
+        var centerX = bounds.X + bounds.Width / 2f;
+        var centerY = bounds.Y + bounds.Height / 2f;
+        double normalizedX;
+        double normalizedY;
+
+        if (HasUsableLogicalBounds(node.ScreenBounds))
+        {
+            normalizedX = centerX / 1920f;
+            normalizedY = centerY / 1080f;
+        }
+        else if (bounds.Right > request.WindowBounds.X
+                 && bounds.Bottom > request.WindowBounds.Y
+                 && bounds.X < request.WindowBounds.X + request.WindowBounds.Width
+                 && bounds.Y < request.WindowBounds.Y + request.WindowBounds.Height)
+        {
+            normalizedX = (centerX - request.WindowBounds.X) / request.WindowBounds.Width;
+            normalizedY = (centerY - request.WindowBounds.Y) / request.WindowBounds.Height;
+        }
+        else
+        {
+            normalizedX = centerX / Math.Max(1d, request.WindowBounds.Width);
+            normalizedY = centerY / Math.Max(1d, request.WindowBounds.Height);
+        }
+
+        normalizedX = Math.Clamp(normalizedX, 0d, 1d);
+        normalizedY = Math.Clamp(normalizedY, 0d, 1d);
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            normalizedX,
+            normalizedY,
+            targetLabel,
+            $"Auto provider selected node '{node.Label}'.",
+            0.92,
+            null,
+            1200,
+            true,
+            null);
+    }
+
+    private static bool HasUsableLogicalBounds(string? raw)
+    {
+        if (!TryParseNodeBounds(raw, out var bounds))
+        {
+            return false;
+        }
+
+        return bounds.X >= 0f
+               && bounds.Y >= 0f
+               && bounds.Right <= 1920f
+               && bounds.Bottom <= 1080f;
+    }
+
+    private static GuiSmokeStepDecision CreateWaitDecision(string reason, string? expectedScreen)
+    {
+        return new GuiSmokeStepDecision(
+            "wait",
+            null,
+            null,
+            null,
+            null,
+            null,
+            reason,
+            0.60,
+            expectedScreen,
+            2000,
+            true,
+            null);
+    }
+
+    private static bool TryParseNodeBounds(string? raw, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4)
+        {
+            return false;
+        }
+
+        if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+        {
+            return false;
+        }
+
+        if (width <= 0 || height <= 0)
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return true;
     }
 }
 
@@ -1155,6 +1928,440 @@ sealed class HeadlessCodexDecisionProvider : IGuiDecisionProvider
         using var stream = new FileStream(decisionPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         var parsed = await JsonSerializer.DeserializeAsync<GuiSmokeStepDecision>(stream, GuiSmokeShared.JsonOptions, cancellationToken).ConfigureAwait(false);
         return parsed ?? throw new InvalidOperationException("Failed to parse decision file.");
+    }
+}
+
+sealed class AutoMapAnalysis
+{
+    public static readonly AutoMapAnalysis None = new(false, 0.5f, 0.5f, false, 0.5f, 0.5f);
+
+    public AutoMapAnalysis(
+        bool hasCurrentArrow,
+        float arrowNormalizedX,
+        float arrowNormalizedY,
+        bool hasReachableNode,
+        float reachableNodeNormalizedX,
+        float reachableNodeNormalizedY)
+    {
+        HasCurrentArrow = hasCurrentArrow;
+        ArrowNormalizedX = arrowNormalizedX;
+        ArrowNormalizedY = arrowNormalizedY;
+        HasReachableNode = hasReachableNode;
+        ReachableNodeNormalizedX = reachableNodeNormalizedX;
+        ReachableNodeNormalizedY = reachableNodeNormalizedY;
+    }
+
+    public bool HasCurrentArrow { get; }
+
+    public float ArrowNormalizedX { get; }
+
+    public float ArrowNormalizedY { get; }
+
+    public bool HasReachableNode { get; }
+
+    public float ReachableNodeNormalizedX { get; }
+
+    public float ReachableNodeNormalizedY { get; }
+}
+
+static class AutoMapAnalyzer
+{
+    public static AutoMapAnalysis Analyze(string screenshotPath)
+    {
+        using var bitmap = new Bitmap(screenshotPath);
+        var samples = new List<Point>();
+
+        var yStart = (int)(bitmap.Height * 0.30);
+        var yEnd = (int)(bitmap.Height * 0.92);
+        var xStart = (int)(bitmap.Width * 0.12);
+        var xEnd = (int)(bitmap.Width * 0.88);
+
+        for (var y = yStart; y < yEnd; y += 2)
+        {
+            for (var x = xStart; x < xEnd; x += 2)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.R >= 170 && pixel.G <= 110 && pixel.B <= 110 && pixel.R - pixel.G >= 70)
+                {
+                    samples.Add(new Point(x, y));
+                }
+            }
+        }
+
+        if (samples.Count < 12)
+        {
+            return AutoMapAnalysis.None;
+        }
+
+        var bestCluster = FindBestArrowCluster(samples);
+        if (bestCluster.Count < 8)
+        {
+            return AutoMapAnalysis.None;
+        }
+
+        var centroidX = bestCluster.Average(static point => point.X);
+        var centroidY = bestCluster.Average(static point => point.Y);
+        var reachableNode = TryFindReachableNode(bitmap, centroidX, centroidY);
+        return new AutoMapAnalysis(
+            true,
+            (float)(centroidX / bitmap.Width),
+            (float)(centroidY / bitmap.Height),
+            reachableNode is not null,
+            reachableNode is null ? 0.5f : (float)(reachableNode.Value.X / bitmap.Width),
+            reachableNode is null ? 0.5f : (float)(reachableNode.Value.Y / bitmap.Height));
+    }
+
+    private static List<Point> FindBestArrowCluster(List<Point> samples)
+    {
+        var remaining = new HashSet<int>(Enumerable.Range(0, samples.Count));
+        var bestCluster = new List<Point>();
+
+        while (remaining.Count > 0)
+        {
+            var seedIndex = remaining.First();
+            remaining.Remove(seedIndex);
+            var queue = new Queue<int>();
+            queue.Enqueue(seedIndex);
+            var cluster = new List<Point>();
+
+            while (queue.Count > 0)
+            {
+                var currentIndex = queue.Dequeue();
+                var current = samples[currentIndex];
+                cluster.Add(current);
+
+                var neighbors = remaining
+                    .Where(index =>
+                    {
+                        var other = samples[index];
+                        return Math.Abs(other.X - current.X) <= 18 && Math.Abs(other.Y - current.Y) <= 18;
+                    })
+                    .ToArray();
+
+                foreach (var neighbor in neighbors)
+                {
+                    remaining.Remove(neighbor);
+                    queue.Enqueue(neighbor);
+                }
+            }
+
+            if (cluster.Count > bestCluster.Count)
+            {
+                bestCluster = cluster;
+            }
+        }
+
+        return bestCluster;
+    }
+
+    private static PointF? TryFindReachableNode(Bitmap bitmap, double currentArrowX, double currentArrowY)
+    {
+        var xMin = Math.Max(0, (int)(currentArrowX - bitmap.Width * 0.14));
+        var xMax = Math.Min(bitmap.Width - 1, (int)(currentArrowX + bitmap.Width * 0.14));
+        var yMin = Math.Max(0, (int)(currentArrowY - bitmap.Height * 0.24));
+        var yMax = Math.Min(bitmap.Height - 1, (int)(currentArrowY + bitmap.Height * 0.26));
+        var samples = new List<Point>();
+
+        for (var y = yMin; y <= yMax; y += 2)
+        {
+            for (var x = xMin; x <= xMax; x += 2)
+            {
+                var distance = Math.Sqrt(Math.Pow(x - currentArrowX, 2) + Math.Pow(y - currentArrowY, 2));
+                if (distance <= 40)
+                {
+                    continue;
+                }
+
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.R <= 80 && pixel.G <= 80 && pixel.B <= 80)
+                {
+                    samples.Add(new Point(x, y));
+                }
+            }
+        }
+
+        if (samples.Count < 24)
+        {
+            return null;
+        }
+
+        var clusters = FindClusters(samples, 18, 18);
+        var candidates = clusters
+            .Where(cluster => cluster.Count >= 10)
+            .Select(cluster =>
+            {
+                var centroidX = cluster.Average(static point => point.X);
+                var centroidY = cluster.Average(static point => point.Y);
+                var dx = Math.Abs(centroidX - currentArrowX);
+                var dy = Math.Abs(centroidY - currentArrowY);
+                var score = dx * 1.5 + dy;
+                return new { cluster, centroidX, centroidY, dx, dy, score };
+            })
+            .Where(entry => entry.dx <= bitmap.Width * 0.10 && entry.dy >= 28 && entry.dy <= bitmap.Height * 0.20)
+            .ToArray();
+
+        var candidate = candidates
+            .Where(entry => entry.centroidY > currentArrowY + 32)
+            .OrderBy(entry => entry.score)
+            .FirstOrDefault()
+            ?? candidates
+                .OrderBy(entry => entry.score)
+                .FirstOrDefault();
+
+        return candidate is null ? null : new PointF((float)candidate.centroidX, (float)candidate.centroidY);
+    }
+
+    private static List<List<Point>> FindClusters(List<Point> samples, int maxDx, int maxDy)
+    {
+        var remaining = new HashSet<int>(Enumerable.Range(0, samples.Count));
+        var clusters = new List<List<Point>>();
+
+        while (remaining.Count > 0)
+        {
+            var seedIndex = remaining.First();
+            remaining.Remove(seedIndex);
+            var queue = new Queue<int>();
+            queue.Enqueue(seedIndex);
+            var cluster = new List<Point>();
+
+            while (queue.Count > 0)
+            {
+                var currentIndex = queue.Dequeue();
+                var current = samples[currentIndex];
+                cluster.Add(current);
+
+                var neighbors = remaining
+                    .Where(index =>
+                    {
+                        var other = samples[index];
+                        return Math.Abs(other.X - current.X) <= maxDx && Math.Abs(other.Y - current.Y) <= maxDy;
+                    })
+                    .ToArray();
+
+                foreach (var neighbor in neighbors)
+                {
+                    remaining.Remove(neighbor);
+                    queue.Enqueue(neighbor);
+                }
+            }
+
+            clusters.Add(cluster);
+        }
+
+        return clusters;
+    }
+}
+
+sealed record AutoOverlayUiAnalysis(
+    bool HasCentralOverlayPanel,
+    bool HasBottomLeftBackArrow,
+    bool HasRightProceedArrow,
+    double? RightProceedNormalizedX,
+    double? RightProceedNormalizedY);
+
+static class AutoOverlayUiAnalyzer
+{
+    public static AutoOverlayUiAnalysis Analyze(string screenshotPath)
+    {
+        using var bitmap = new Bitmap(screenshotPath);
+        var center = AverageColor(bitmap, 0.32, 0.16, 0.68, 0.88);
+        var left = AverageColor(bitmap, 0.05, 0.20, 0.25, 0.82);
+        var right = AverageColor(bitmap, 0.75, 0.20, 0.95, 0.82);
+        var hasCentralOverlayPanel = center.Brightness >= 35
+                                     && center.B >= center.R - 10
+                                     && center.B >= center.G - 10
+                                     && center.Brightness - Math.Max(left.Brightness, right.Brightness) >= 20;
+        var hasBottomLeftBackArrow = CountArrowLikePixels(bitmap, 0.00, 0.72, 0.18, 0.98) >= 18;
+        var proceedCentroid = TryFindArrowLikeCentroid(bitmap, 0.78, 0.68, 1.00, 0.98);
+        var hasRightProceedArrow = proceedCentroid is not null || CountArrowLikePixels(bitmap, 0.78, 0.68, 1.00, 0.98) >= 2;
+        return new AutoOverlayUiAnalysis(
+            hasCentralOverlayPanel,
+            hasBottomLeftBackArrow,
+            hasRightProceedArrow,
+            proceedCentroid is null ? null : proceedCentroid.Value.X / Math.Max(1f, bitmap.Width),
+            proceedCentroid is null ? null : proceedCentroid.Value.Y / Math.Max(1f, bitmap.Height));
+    }
+
+    private static int CountArrowLikePixels(Bitmap bitmap, double left, double top, double right, double bottom)
+    {
+        var count = 0;
+        AutoCombatAnalyzer.ForEachSample(bitmap, left, top, right, bottom, 28, 20, color =>
+        {
+            if (color.R >= 140 && color.R - color.G >= 35 && color.G >= 35 && color.G <= 185 && color.B <= 120)
+            {
+                count += 1;
+            }
+        });
+
+        return count;
+    }
+
+    private static PointF? TryFindArrowLikeCentroid(Bitmap bitmap, double left, double top, double right, double bottom)
+    {
+        var sumX = 0d;
+        var sumY = 0d;
+        var count = 0;
+        AutoCombatAnalyzer.ForEachSample(bitmap, left, top, right, bottom, 40, 28, (color, x, y) =>
+        {
+            if (color.R >= 140 && color.R - color.G >= 35 && color.G >= 35 && color.G <= 185 && color.B <= 120)
+            {
+                sumX += x;
+                sumY += y;
+                count += 1;
+            }
+        });
+
+        if (count < 4)
+        {
+            return null;
+        }
+
+        return new PointF((float)(sumX / count), (float)(sumY / count));
+    }
+
+    private static (double R, double G, double B, double Brightness) AverageColor(Bitmap bitmap, double left, double top, double right, double bottom)
+    {
+        var totalR = 0d;
+        var totalG = 0d;
+        var totalB = 0d;
+        var total = 0;
+        AutoCombatAnalyzer.ForEachSample(bitmap, left, top, right, bottom, 18, 18, color =>
+        {
+            totalR += color.R;
+            totalG += color.G;
+            totalB += color.B;
+            total += 1;
+        });
+
+        if (total == 0)
+        {
+            return (0, 0, 0, 0);
+        }
+
+        var averageR = totalR / total;
+        var averageG = totalG / total;
+        var averageB = totalB / total;
+        return (averageR, averageG, averageB, (averageR + averageG + averageB) / 3.0);
+    }
+}
+
+enum AutoCombatCardKind
+{
+    Unknown,
+    AttackLike,
+    DefendLike,
+}
+
+sealed record AutoCombatAnalysis(
+    bool HasSelectedCard,
+    bool HasTargetArrow,
+    AutoCombatCardKind SelectedCardKind);
+
+static class AutoCombatAnalyzer
+{
+    public static AutoCombatAnalysis Analyze(string screenshotPath)
+    {
+        using var bitmap = new Bitmap(screenshotPath);
+        var hasSelectedCard = HasSelectedCard(bitmap);
+        var hasTargetArrow = hasSelectedCard && HasTargetArrow(bitmap);
+        var selectedCardKind = hasSelectedCard ? ClassifySelectedCard(bitmap) : AutoCombatCardKind.Unknown;
+        return new AutoCombatAnalysis(hasSelectedCard, hasTargetArrow, selectedCardKind);
+    }
+
+    private static bool HasSelectedCard(Bitmap bitmap)
+    {
+        var sample = AverageColor(bitmap, 0.43, 0.63, 0.57, 0.90);
+        return sample.Brightness > 55;
+    }
+
+    private static bool HasTargetArrow(Bitmap bitmap)
+    {
+        var grayLikePixels = CountMatchingPixels(bitmap, 0.40, 0.22, 0.60, 0.60, color =>
+        {
+            var max = Math.Max(color.R, Math.Max(color.G, color.B));
+            var min = Math.Min(color.R, Math.Min(color.G, color.B));
+            var delta = max - min;
+            var brightness = (color.R + color.G + color.B) / 3.0;
+            return delta < 20 && brightness is > 90 and < 235;
+        });
+        return grayLikePixels >= 25;
+    }
+
+    private static AutoCombatCardKind ClassifySelectedCard(Bitmap bitmap)
+    {
+        var sample = AverageColor(bitmap, 0.44, 0.66, 0.56, 0.88);
+        if (sample.B > sample.R + 12)
+        {
+            return AutoCombatCardKind.DefendLike;
+        }
+
+        if (sample.R > sample.B + 12)
+        {
+            return AutoCombatCardKind.AttackLike;
+        }
+
+        return AutoCombatCardKind.Unknown;
+    }
+
+    private static int CountMatchingPixels(Bitmap bitmap, double left, double top, double right, double bottom, Func<Color, bool> predicate)
+    {
+        var count = 0;
+        ForEachSample(bitmap, left, top, right, bottom, 18, 18, color =>
+        {
+            if (predicate(color))
+            {
+                count += 1;
+            }
+        });
+        return count;
+    }
+
+    private static (double R, double G, double B, double Brightness) AverageColor(Bitmap bitmap, double left, double top, double right, double bottom)
+    {
+        var totalR = 0d;
+        var totalG = 0d;
+        var totalB = 0d;
+        var total = 0;
+        ForEachSample(bitmap, left, top, right, bottom, 16, 16, color =>
+        {
+            totalR += color.R;
+            totalG += color.G;
+            totalB += color.B;
+            total += 1;
+        });
+
+        if (total == 0)
+        {
+            return (0, 0, 0, 0);
+        }
+
+        var averageR = totalR / total;
+        var averageG = totalG / total;
+        var averageB = totalB / total;
+        return (averageR, averageG, averageB, (averageR + averageG + averageB) / 3.0);
+    }
+
+    internal static void ForEachSample(Bitmap bitmap, double left, double top, double right, double bottom, int columns, int rows, Action<Color> visitor)
+    {
+        ForEachSample(bitmap, left, top, right, bottom, columns, rows, (color, _, _) => visitor(color));
+    }
+
+    internal static void ForEachSample(Bitmap bitmap, double left, double top, double right, double bottom, int columns, int rows, Action<Color, int, int> visitor)
+    {
+        for (var row = 0; row < rows; row += 1)
+        {
+            var y = (int)Math.Round((bitmap.Height - 1) * Lerp(top, bottom, row / (double)Math.Max(1, rows - 1)));
+            for (var column = 0; column < columns; column += 1)
+            {
+                var x = (int)Math.Round((bitmap.Width - 1) * Lerp(left, right, column / (double)Math.Max(1, columns - 1)));
+                visitor(bitmap.GetPixel(x, y), x, y);
+            }
+        }
+    }
+
+    private static double Lerp(double from, double to, double t)
+    {
+        return from + ((to - from) * t);
     }
 }
 
@@ -1251,10 +2458,14 @@ sealed class ObserverSnapshotReader
         var inventoryId = inventoryDocument is null
             ? null
             : TryReadString(inventoryDocument.RootElement, "inventoryId");
+        var encounterKind = TryReadNestedString(stateDocument?.RootElement, "encounter", "kind");
+        var choiceExtractorPath = TryReadNestedString(stateDocument?.RootElement, "meta", "choiceExtractorPath");
+        var playerCurrentHp = TryReadInt32(stateDocument?.RootElement, "player", "currentHp");
+        var playerMaxHp = TryReadInt32(stateDocument?.RootElement, "player", "maxHp");
         var currentChoices = ReadChoiceLabels(stateDocument);
 
         return new ObserverState(
-            new ObserverSummary(currentScreen, visibleScreen, inCombat, capturedAt, inventoryId, currentChoices, eventLines ?? Array.Empty<string>(), ReadActionNodes(inventoryDocument)),
+            new ObserverSummary(currentScreen, visibleScreen, inCombat, capturedAt, inventoryId, encounterKind, choiceExtractorPath, playerCurrentHp, playerMaxHp, currentChoices, eventLines ?? Array.Empty<string>(), ReadActionNodes(inventoryDocument)),
             stateDocument,
             inventoryDocument,
             eventLines);
@@ -1405,6 +2616,25 @@ sealed class ObserverSnapshotReader
                 : null;
     }
 
+    private static int? TryReadInt32(JsonElement? element, string objectPropertyName, string intPropertyName)
+    {
+        if (!element.HasValue
+            || element.Value.ValueKind != JsonValueKind.Object
+            || !element.Value.TryGetProperty(objectPropertyName, out var objectProperty)
+            || objectProperty.ValueKind != JsonValueKind.Object
+            || !objectProperty.TryGetProperty(intPropertyName, out var intProperty))
+        {
+            return null;
+        }
+
+        return intProperty.ValueKind switch
+        {
+            JsonValueKind.Number when intProperty.TryGetInt32(out var numericValue) => numericValue,
+            JsonValueKind.String when int.TryParse(intProperty.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var stringValue) => stringValue,
+            _ => null,
+        };
+    }
+
     private static DateTimeOffset? TryReadDateTimeOffset(JsonElement? element, string propertyName)
     {
         return element.HasValue
@@ -1521,6 +2751,7 @@ sealed class MouseInputDriver
         if (target.Handle != IntPtr.Zero)
         {
             NativeMethods.SetForegroundWindow(target.Handle);
+            Thread.Sleep(200);
         }
 
         var point = TransformNormalizedPoint(target, normalizedX, normalizedY);
@@ -1534,6 +2765,28 @@ sealed class MouseInputDriver
         if (sent != inputs.Length)
         {
             throw new InvalidOperationException("Failed to send mouse input.");
+        }
+    }
+
+    public void RightClick(WindowCaptureTarget target, double normalizedX, double normalizedY)
+    {
+        if (target.Handle != IntPtr.Zero)
+        {
+            NativeMethods.SetForegroundWindow(target.Handle);
+            Thread.Sleep(200);
+        }
+
+        var point = TransformNormalizedPoint(target, normalizedX, normalizedY);
+        NativeMethods.SetCursorPos(point.X, point.Y);
+        var inputs = new[]
+        {
+            NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_RIGHTDOWN),
+            NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_RIGHTUP),
+        };
+        var sent = NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
+        if (sent != inputs.Length)
+        {
+            throw new InvalidOperationException("Failed to send right-click mouse input.");
         }
     }
 
@@ -1551,6 +2804,7 @@ sealed class MouseInputDriver
         if (target.Handle != IntPtr.Zero)
         {
             NativeMethods.SetForegroundWindow(target.Handle);
+            Thread.Sleep(200);
         }
 
         var virtualKey = ResolveVirtualKey(keyText);
@@ -1569,6 +2823,22 @@ sealed class MouseInputDriver
     private static ushort ResolveVirtualKey(string keyText)
     {
         var trimmed = keyText.Trim();
+        if (string.Equals(trimmed, "Escape", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "Esc", StringComparison.OrdinalIgnoreCase))
+        {
+            return NativeMethods.VK_ESCAPE;
+        }
+
+        if (string.Equals(trimmed, "Enter", StringComparison.OrdinalIgnoreCase))
+        {
+            return NativeMethods.VK_RETURN;
+        }
+
+        if (string.Equals(trimmed, "Space", StringComparison.OrdinalIgnoreCase))
+        {
+            return NativeMethods.VK_SPACE;
+        }
+
         if (trimmed.Length != 1)
         {
             throw new InvalidOperationException($"Unsupported keyText '{keyText}'.");
@@ -1696,7 +2966,12 @@ static class NativeMethods
 {
     public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     public const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    public const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
+    public const uint MOUSEEVENTF_RIGHTUP = 0x0010;
     public const uint KEYEVENTF_KEYUP = 0x0002;
+    public const ushort VK_ESCAPE = 0x1B;
+    public const ushort VK_RETURN = 0x0D;
+    public const ushort VK_SPACE = 0x20;
     private const uint INPUT_MOUSE = 0;
     private const uint INPUT_KEYBOARD = 1;
     private const uint PW_RENDERFULLCONTENT = 0x00000002;
