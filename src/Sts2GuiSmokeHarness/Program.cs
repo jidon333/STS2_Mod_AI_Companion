@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
@@ -288,6 +289,7 @@ static async Task<int> RunScenarioAsync(
             observer.CurrentScreen ?? "null",
             observer.VisibleScreen ?? "null",
             observer.InventoryId ?? "null",
+            ComputeFileFingerprint(screenshotPath),
             decision.TargetLabel ?? "null");
         if (string.Equals(lastActionFingerprint, actionFingerprint, StringComparison.Ordinal))
         {
@@ -739,6 +741,21 @@ static int IncrementAttempt(Dictionary<GuiSmokePhase, int> attemptsByPhase, GuiS
     current += 1;
     attemptsByPhase[phase] = current;
     return current;
+}
+
+static string ComputeFileFingerprint(string path)
+{
+    try
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(stream);
+        return Convert.ToHexString(hash.AsSpan(0, 8));
+    }
+    catch
+    {
+        return "no-image";
+    }
 }
 
 static void LogHarness(string message)
