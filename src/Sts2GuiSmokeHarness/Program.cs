@@ -386,6 +386,7 @@ static async Task<int> RunScenarioAsync(
             GuiSmokePhase.Embark => GuiSmokePhase.WaitMap,
             GuiSmokePhase.HandleRewards => GetPostRewardPhase(decision),
             GuiSmokePhase.ChooseFirstNode => GuiSmokePhase.WaitCombat,
+            GuiSmokePhase.HandleEvent => GuiSmokePhase.HandleEvent,
             GuiSmokePhase.HandleCombat => GuiSmokePhase.HandleCombat,
             _ => phase,
         };
@@ -607,6 +608,7 @@ static string[] GetAllowedActions(GuiSmokePhase phase, ObserverState observer)
             => new[] { "click proceed", "click reward", "click first reachable node", "wait" },
         GuiSmokePhase.HandleRewards => new[] { "click proceed", "click reward", "wait" },
         GuiSmokePhase.ChooseFirstNode => new[] { "click first reachable node", "wait" },
+        GuiSmokePhase.HandleEvent => new[] { "click first event option", "wait" },
         GuiSmokePhase.HandleCombat => new[] { "click card", "click enemy", "click end turn", "wait" },
         _ => new[] { "wait" },
     };
@@ -624,6 +626,7 @@ static string BuildGoal(GuiSmokePhase phase)
         GuiSmokePhase.WaitMap => "Wait until observer logical currentScreen=map. visibleScreen may reach map earlier while reward flow is still active.",
         GuiSmokePhase.HandleRewards => "Resolve the visible reward screen so the run can return to map.",
         GuiSmokePhase.ChooseFirstNode => "Click the first reachable map node.",
+        GuiSmokePhase.HandleEvent => "Resolve the event screen. If nothing else is obvious, pick the first visible option.",
         GuiSmokePhase.WaitCombat => "Wait until observer currentScreen=combat and encounter.inCombat=true.",
         GuiSmokePhase.HandleCombat => "Play the combat from the screenshot: choose cards, targets, or end turn until combat resolves.",
         _ => "Complete the scenario.",
@@ -640,6 +643,7 @@ static string BuildFailureModeHint(GuiSmokePhase phase, ObserverState observer)
             => "AI first: use the screenshot as the primary source. If the map is clearly visible, you may click the first reachable node instead of forcing another reward proceed click.",
         GuiSmokePhase.HandleRewards => "Prefer the proceed arrow when the reward can be skipped; otherwise pick a valid reward card.",
         GuiSmokePhase.ChooseFirstNode => "Do not click non-reachable map nodes.",
+        GuiSmokePhase.HandleEvent => "If the event text is ambiguous, choose the first visible option.",
         GuiSmokePhase.WaitCombat => "Observer must end with combat screen and inCombat=true.",
         GuiSmokePhase.HandleCombat => "AI first: read the full combat board from the screenshot. Cards, targets, energy, and end-turn are visual decisions. The harness only executes the click you choose.",
         _ => "Fail closed when screenshot and observer disagree.",
@@ -741,6 +745,14 @@ static bool TryAdvanceAlternateBranch(
             nextPhase = GuiSmokePhase.HandleCombat;
             return true;
         }
+
+        if (string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleEvent;
+            return true;
+        }
     }
 
     if (phase == GuiSmokePhase.WaitMainMenu)
@@ -787,6 +799,14 @@ static bool TryAdvanceAlternateBranch(
             nextPhase = GuiSmokePhase.HandleCombat;
             return true;
         }
+
+        if (string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleEvent;
+            return true;
+        }
     }
 
     if (phase == GuiSmokePhase.WaitMap)
@@ -815,6 +835,14 @@ static bool TryAdvanceAlternateBranch(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
             nextPhase = GuiSmokePhase.HandleCombat;
+            return true;
+        }
+
+        if (string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleEvent;
             return true;
         }
     }
@@ -850,6 +878,41 @@ static bool TryAdvanceAlternateBranch(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-map", observer.CurrentScreen, observer.InCombat, null));
             nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleEvent;
+            return true;
+        }
+    }
+
+    if (phase == GuiSmokePhase.HandleEvent)
+    {
+        if (string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "event-resolved-map", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "event-resolved-map", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase) && observer.InCombat == true)
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "event-resolved-combat", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "event-resolved-combat", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleCombat;
+            return true;
+        }
+
+        if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "event-resolved-rewards", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "event-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleRewards;
             return true;
         }
     }
@@ -1106,6 +1169,7 @@ enum GuiSmokePhase
     HandleRewards,
     ChooseFirstNode,
     WaitCombat,
+    HandleEvent,
     HandleCombat,
     Completed,
 }
@@ -1273,6 +1337,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokePhase.Embark => DecideEmbark(request),
             GuiSmokePhase.HandleRewards => DecideHandleRewards(request),
             GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request),
+            GuiSmokePhase.HandleEvent => DecideHandleEvent(request),
             GuiSmokePhase.HandleCombat => DecideHandleCombat(request),
             _ => CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen),
         };
@@ -1361,6 +1426,37 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         return TryCreateHiddenOverlayCleanupDecision(request)
                ?? TryCreateVisibleProceedDecision(request)
                ?? CreateWaitDecision("waiting for shop exit or stable shop UI", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request)
+    {
+        var firstOption = TryFindActionNodeDecision(request, "", "first event option");
+        if (firstOption is not null)
+        {
+            var eventNode = request.Observer.ActionNodes
+                .Where(node => node.Actionable && !IsProceedNode(node) && !IsBackNode(node))
+                .OrderBy(node => TryParseNodeBounds(node.ScreenBounds, out var bounds) ? bounds.Y : float.MaxValue)
+                .ThenBy(node => TryParseNodeBounds(node.ScreenBounds, out var bounds) ? bounds.X : float.MaxValue)
+                .FirstOrDefault();
+            if (eventNode is not null && eventNode.ScreenBounds is not null)
+            {
+                return CreateClickDecisionFromNode(request, eventNode, "first event option");
+            }
+        }
+
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            0.700,
+            0.430,
+            "first event option",
+            "Event room is visible. Choose the first visible option by default.",
+            0.80,
+            "event",
+            1400,
+            true,
+            null);
     }
 
     private static GuiSmokeStepDecision DecideHandleCombat(GuiSmokeStepRequest request)
