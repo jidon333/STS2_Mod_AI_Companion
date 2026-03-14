@@ -193,13 +193,13 @@ static async Task<int> RunScenarioAsync(
                 GuiSmokePhase.WaitMainMenu => GuiSmokePhase.EnterRun,
                 GuiSmokePhase.WaitCharacterSelect => GuiSmokePhase.ChooseCharacter,
                 GuiSmokePhase.WaitMap => GuiSmokePhase.ChooseFirstNode,
-                GuiSmokePhase.WaitCombat => GuiSmokePhase.Completed,
+                GuiSmokePhase.WaitCombat => GuiSmokePhase.HandleCombat,
                 _ => phase,
             };
 
             if (phase == GuiSmokePhase.Completed)
             {
-                logger.CompleteRun("passed", "combat accepted by observer");
+                logger.CompleteRun("passed", "combat flow accepted by observer");
                 return 0;
             }
 
@@ -214,7 +214,7 @@ static async Task<int> RunScenarioAsync(
 
             if (phase == GuiSmokePhase.Completed)
             {
-                logger.CompleteRun("passed", "combat accepted by observer");
+                logger.CompleteRun("passed", "combat flow accepted by observer");
                 return 0;
             }
 
@@ -345,6 +345,7 @@ static async Task<int> RunScenarioAsync(
             GuiSmokePhase.Embark => GuiSmokePhase.WaitMap,
             GuiSmokePhase.HandleRewards => GetPostRewardPhase(decision),
             GuiSmokePhase.ChooseFirstNode => GuiSmokePhase.WaitCombat,
+            GuiSmokePhase.HandleCombat => GuiSmokePhase.HandleCombat,
             _ => phase,
         };
 
@@ -533,6 +534,7 @@ static string[] GetAllowedActions(GuiSmokePhase phase, ObserverState observer)
             => new[] { "click proceed", "click reward", "click first reachable node", "wait" },
         GuiSmokePhase.HandleRewards => new[] { "click proceed", "click reward", "wait" },
         GuiSmokePhase.ChooseFirstNode => new[] { "click first reachable node", "wait" },
+        GuiSmokePhase.HandleCombat => new[] { "click card", "click enemy", "click end turn", "wait" },
         _ => new[] { "wait" },
     };
 }
@@ -550,6 +552,7 @@ static string BuildGoal(GuiSmokePhase phase)
         GuiSmokePhase.HandleRewards => "Resolve the visible reward screen so the run can return to map.",
         GuiSmokePhase.ChooseFirstNode => "Click the first reachable map node.",
         GuiSmokePhase.WaitCombat => "Wait until observer currentScreen=combat and encounter.inCombat=true.",
+        GuiSmokePhase.HandleCombat => "Play the combat from the screenshot: choose cards, targets, or end turn until combat resolves.",
         _ => "Complete the scenario.",
     };
 }
@@ -565,6 +568,7 @@ static string BuildFailureModeHint(GuiSmokePhase phase, ObserverState observer)
         GuiSmokePhase.HandleRewards => "Prefer the proceed arrow when the reward can be skipped; otherwise pick a valid reward card.",
         GuiSmokePhase.ChooseFirstNode => "Do not click non-reachable map nodes.",
         GuiSmokePhase.WaitCombat => "Observer must end with combat screen and inCombat=true.",
+        GuiSmokePhase.HandleCombat => "AI first: read the full combat board from the screenshot. Cards, targets, energy, and end-turn are visual decisions. The harness only executes the click you choose.",
         _ => "Fail closed when screenshot and observer disagree.",
     };
 }
@@ -650,7 +654,7 @@ static bool TryAdvanceAlternateBranch(
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.Completed;
+            nextPhase = GuiSmokePhase.HandleCombat;
             return true;
         }
     }
@@ -685,7 +689,7 @@ static bool TryAdvanceAlternateBranch(
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.Completed;
+            nextPhase = GuiSmokePhase.HandleCombat;
             return true;
         }
     }
@@ -704,7 +708,7 @@ static bool TryAdvanceAlternateBranch(
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.Completed;
+            nextPhase = GuiSmokePhase.HandleCombat;
             return true;
         }
     }
@@ -724,6 +728,25 @@ static bool TryAdvanceAlternateBranch(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-map", observer.CurrentScreen, observer.InCombat, null));
             nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+    }
+
+    if (phase == GuiSmokePhase.HandleCombat)
+    {
+        if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-resolved-rewards", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.Completed;
+            return true;
+        }
+
+        if (string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase) && observer.InCombat != true)
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-resolved-map", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-resolved-map", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.Completed;
             return true;
         }
     }
@@ -939,6 +962,7 @@ enum GuiSmokePhase
     HandleRewards,
     ChooseFirstNode,
     WaitCombat,
+    HandleCombat,
     Completed,
 }
 
@@ -1383,6 +1407,7 @@ sealed class ObserverAcceptanceEvaluator
             GuiSmokePhase.WaitMap => string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase),
             GuiSmokePhase.WaitCombat => string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
                 && observer.InCombat == true,
+            GuiSmokePhase.HandleCombat => false,
             _ => false,
         };
     }
