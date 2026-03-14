@@ -139,6 +139,7 @@ static async Task<int> RunScenarioAsync(
     var consecutiveBlackFrames = 0;
     string? lastActionFingerprint = null;
     var sameActionStallCount = 0;
+    var decisionStaleBudget = TimeSpan.FromSeconds(2);
 
     while (DateTimeOffset.UtcNow < waitDeadline)
     {
@@ -300,6 +301,26 @@ static async Task<int> RunScenarioAsync(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "wait", decision.TargetLabel, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "wait", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
             await Task.Delay(Math.Max(DecisionWaitMinimumMs, decision.WaitMs ?? DecisionWaitMinimumMs)).ConfigureAwait(false);
+            continue;
+        }
+
+        var decisionAge = DateTimeOffset.UtcNow - request.IssuedAt;
+        if (decisionAge > decisionStaleBudget)
+        {
+            LogHarness($"step={stepIndex} recapture required stale-decision ageMs={(int)decisionAge.TotalMilliseconds}");
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "stale-decision", decision.TargetLabel, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "stale-decision", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
+            await Task.Delay(DecisionWaitMinimumMs).ConfigureAwait(false);
+            continue;
+        }
+
+        var latestObserver = observerReader.Read();
+        if (ShouldRecaptureForObserverDrift(request.Observer, latestObserver))
+        {
+            LogHarness($"step={stepIndex} recapture required observer-drift requestScreen={request.Observer.CurrentScreen ?? "null"} latestScreen={latestObserver.CurrentScreen ?? "null"} requestVisible={request.Observer.VisibleScreen ?? "null"} latestVisible={latestObserver.VisibleScreen ?? "null"}");
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "observer-drift", decision.TargetLabel, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "observer-drift", latestObserver.CurrentScreen, latestObserver.InCombat, decision.TargetLabel));
+            await Task.Delay(DecisionWaitMinimumMs).ConfigureAwait(false);
             continue;
         }
 
@@ -505,9 +526,10 @@ static void RunSelfTest()
         3,
         GuiSmokePhase.EnterRun.ToString(),
         "enter-run",
+        DateTimeOffset.UtcNow,
         "screen.png",
         new WindowBounds(100, 200, 1000, 800),
-        new ObserverSummary("main-menu", "main-menu", false, DateTimeOffset.UtcNow, null, null, null, null, null, new[] { "Continue" }, new[] { "main-menu" }, Array.Empty<ObserverActionNode>()),
+        new ObserverSummary("main-menu", "main-menu", false, DateTimeOffset.UtcNow, null, null, null, null, null, new[] { "Continue" }, new[] { "main-menu" }, Array.Empty<ObserverActionNode>(), Array.Empty<ObserverChoice>()),
         new[] { "click continue", "click singleplayer" },
         Array.Empty<GuiSmokeHistoryEntry>(),
         "menu entry");
@@ -546,7 +568,8 @@ static void RunSelfTest()
             {
                 new ObserverActionNode("reward:0", "reward-item", "Reward Card", "100,200,120,120", true),
                 new ObserverActionNode("reward:1", "button", "Proceed", "900,700,240,90", true),
-            }),
+            },
+            Array.Empty<ObserverChoice>()),
         AllowedActions = new[] { "click proceed", "click reward", "wait" },
     };
     var autoDecision = AutoDecisionProvider.Decide(autoRewardRequest);
@@ -557,7 +580,7 @@ static void RunSelfTest()
     Assert(
         evaluator.IsPhaseSatisfied(
             GuiSmokePhase.WaitCombat,
-            new ObserverState(new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>()), null, null, null)),
+            new ObserverState(new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>(), Array.Empty<ObserverChoice>()), null, null, null)),
         "Combat acceptance should require combat screen and inCombat=true.");
 
     Assert(
@@ -589,6 +612,7 @@ static GuiSmokeStepRequest CreateStepRequest(
         stepIndex,
         phase.ToString(),
         BuildGoal(phase),
+        DateTimeOffset.UtcNow,
         screenshotPath,
         new WindowBounds(window.Bounds.X, window.Bounds.Y, window.Bounds.Width, window.Bounds.Height),
         observer.Summary,
@@ -1110,6 +1134,41 @@ static void Assert(bool condition, string message)
     }
 }
 
+static bool ShouldRecaptureForObserverDrift(ObserverSummary requestObserver, ObserverState latestObserver)
+{
+    if (latestObserver.CapturedAt is null || requestObserver.CapturedAt is null)
+    {
+        return false;
+    }
+
+    if (latestObserver.CapturedAt <= requestObserver.CapturedAt)
+    {
+        return false;
+    }
+
+    if (!string.Equals(requestObserver.CurrentScreen, latestObserver.CurrentScreen, StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
+    if (!string.Equals(requestObserver.VisibleScreen, latestObserver.VisibleScreen, StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
+    if (requestObserver.InCombat != latestObserver.InCombat)
+    {
+        return true;
+    }
+
+    if (!string.Equals(requestObserver.InventoryId, latestObserver.InventoryId, StringComparison.Ordinal))
+    {
+        return true;
+    }
+
+    return false;
+}
+
 static class GuiSmokeShared
 {
     public static JsonSerializerOptions JsonOptions { get; } = new()
@@ -1211,6 +1270,7 @@ sealed record GuiSmokeStepRequest(
     int StepIndex,
     string Phase,
     string Goal,
+    DateTimeOffset IssuedAt,
     string ScreenshotPath,
     WindowBounds WindowBounds,
     ObserverSummary Observer,
@@ -1256,7 +1316,8 @@ sealed record ObserverSummary(
     int? PlayerMaxHp,
     IReadOnlyList<string> CurrentChoices,
     IReadOnlyList<string> LastEventsTail,
-    IReadOnlyList<ObserverActionNode> ActionNodes);
+    IReadOnlyList<ObserverActionNode> ActionNodes,
+    IReadOnlyList<ObserverChoice> Choices);
 
 sealed record ObserverActionNode(
     string NodeId,
@@ -1264,6 +1325,11 @@ sealed record ObserverActionNode(
     string Label,
     string? ScreenBounds,
     bool Actionable);
+
+sealed record ObserverChoice(
+    string Kind,
+    string Label,
+    string? ScreenBounds);
 
 sealed record ObserverState(
     ObserverSummary Summary,
@@ -1430,18 +1496,86 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request)
     {
-        var firstOption = TryFindActionNodeDecision(request, "", "first event option");
-        if (firstOption is not null)
+        var mapAnalysis = AutoMapAnalyzer.Analyze(request.ScreenshotPath);
+        if (mapAnalysis.HasCurrentArrow && mapAnalysis.HasReachableNode)
         {
-            var eventNode = request.Observer.ActionNodes
-                .Where(node => node.Actionable && !IsProceedNode(node) && !IsBackNode(node))
-                .OrderBy(node => TryParseNodeBounds(node.ScreenBounds, out var bounds) ? bounds.Y : float.MaxValue)
-                .ThenBy(node => TryParseNodeBounds(node.ScreenBounds, out var bounds) ? bounds.X : float.MaxValue)
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                Math.Clamp(mapAnalysis.ReachableNodeNormalizedX, 0.08f, 0.92f),
+                Math.Clamp(mapAnalysis.ReachableNodeNormalizedY, 0.10f, 0.86f),
+                "first reachable node",
+                "Visible scene is already the map even though observer still reports event. Follow the directly connected reachable node from the current arrow.",
+                0.95,
+                "map",
+                1400,
+                true,
+                null);
+        }
+
+        var hasCardGrid = request.Observer.Choices.Any(choice =>
+            string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.Label, "CardGrid", StringComparison.OrdinalIgnoreCase));
+        if (hasCardGrid)
+        {
+            var confirmChoice = request.Observer.Choices
+                .Where(choice =>
+                    !string.IsNullOrWhiteSpace(choice.ScreenBounds)
+                    && (string.Equals(choice.Label, "Confirm", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(choice.Label, "확인", StringComparison.OrdinalIgnoreCase)))
+                .Where(choice => TryParseNodeBounds(choice.ScreenBounds, out var confirmBounds) && HasUsableLogicalBounds(choice.ScreenBounds))
+                .OrderByDescending(choice => TryParseNodeBounds(choice.ScreenBounds, out var confirmBounds) ? confirmBounds.X : float.MinValue)
                 .FirstOrDefault();
-            if (eventNode is not null && eventNode.ScreenBounds is not null)
+            if (confirmChoice is not null && TryParseNodeBounds(confirmChoice.ScreenBounds, out var confirmBounds))
             {
-                return CreateClickDecisionFromNode(request, eventNode, "first event option");
+                var centerX = confirmBounds.X + confirmBounds.Width / 2f;
+                var centerY = confirmBounds.Y + confirmBounds.Height / 2f;
+                return new GuiSmokeStepDecision(
+                    "act",
+                    "click",
+                    null,
+                    Math.Clamp(centerX / 1920f, 0d, 1d),
+                    Math.Clamp(centerY / 1080f, 0d, 1d),
+                    "event confirm",
+                    "Card selection substate is active. Confirm the already selected card.",
+                    0.98,
+                    "event",
+                    1400,
+                    true,
+                    null);
             }
+        }
+
+        var firstChoice = request.Observer.Choices
+            .Where(choice =>
+                !string.IsNullOrWhiteSpace(choice.ScreenBounds)
+                && !string.Equals(choice.Label, "Confirm", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(choice.Label, "확인", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(choice.Label, "Cancel", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(choice.Label, "취소", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(choice.Label, "Close", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(choice.Label, "닫기", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(choice => TryParseNodeBounds(choice.ScreenBounds, out var bounds) ? bounds.Y : float.MaxValue)
+            .ThenBy(choice => TryParseNodeBounds(choice.ScreenBounds, out var bounds) ? bounds.X : float.MaxValue)
+            .FirstOrDefault();
+        if (firstChoice is not null && TryParseNodeBounds(firstChoice.ScreenBounds, out var bounds))
+        {
+            var centerX = bounds.X + bounds.Width / 2f;
+            var centerY = bounds.Y + bounds.Height / 2f;
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                Math.Clamp(centerX / 1920f, 0d, 1d),
+                Math.Clamp(centerY / 1080f, 0d, 1d),
+                "first event option",
+                $"Event room is visible. Choose the first option '{firstChoice.Label}'.",
+                0.92,
+                "event",
+                1400,
+                true,
+                null);
         }
 
         return new GuiSmokeStepDecision(
@@ -1936,10 +2070,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return false;
         }
 
-        return bounds.X >= 0f
-               && bounds.Y >= 0f
-               && bounds.Right <= 1920f
-               && bounds.Bottom <= 1080f;
+        var centerX = bounds.X + bounds.Width / 2f;
+        var centerY = bounds.Y + bounds.Height / 2f;
+        return centerX >= 0f
+               && centerY >= 0f
+               && centerX <= 1920f
+               && centerY <= 1080f;
     }
 
     private static GuiSmokeStepDecision CreateWaitDecision(string reason, string? expectedScreen)
@@ -2561,7 +2697,7 @@ sealed class ObserverSnapshotReader
         var currentChoices = ReadChoiceLabels(stateDocument);
 
         return new ObserverState(
-            new ObserverSummary(currentScreen, visibleScreen, inCombat, capturedAt, inventoryId, encounterKind, choiceExtractorPath, playerCurrentHp, playerMaxHp, currentChoices, eventLines ?? Array.Empty<string>(), ReadActionNodes(inventoryDocument)),
+            new ObserverSummary(currentScreen, visibleScreen, inCombat, capturedAt, inventoryId, encounterKind, choiceExtractorPath, playerCurrentHp, playerMaxHp, currentChoices, eventLines ?? Array.Empty<string>(), ReadActionNodes(inventoryDocument), ReadChoices(stateDocument)),
             stateDocument,
             inventoryDocument,
             eventLines);
@@ -2670,6 +2806,37 @@ sealed class ObserverSnapshotReader
         }
 
         return nodes;
+    }
+
+    private static IReadOnlyList<ObserverChoice> ReadChoices(JsonDocument? document)
+    {
+        if (document is null
+            || !document.RootElement.TryGetProperty("currentChoices", out var choicesElement)
+            || choicesElement.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<ObserverChoice>();
+        }
+
+        var choices = new List<ObserverChoice>();
+        foreach (var choice in choicesElement.EnumerateArray())
+        {
+            if (choice.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var kind = TryReadString(choice, "kind") ?? "choice";
+            var label = TryReadString(choice, "label");
+            var screenBounds = TryReadString(choice, "screenBounds");
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                continue;
+            }
+
+            choices.Add(new ObserverChoice(kind, label, screenBounds));
+        }
+
+        return choices;
     }
 
     private static string? TryReadString(JsonElement? element, string propertyName)
