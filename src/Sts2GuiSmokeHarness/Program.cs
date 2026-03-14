@@ -341,7 +341,7 @@ static async Task<int> RunScenarioAsync(
             GuiSmokePhase.EnterRun => GuiSmokePhase.WaitCharacterSelect,
             GuiSmokePhase.ChooseCharacter => GuiSmokePhase.Embark,
             GuiSmokePhase.Embark => GuiSmokePhase.WaitMap,
-            GuiSmokePhase.HandleRewards => GuiSmokePhase.WaitMap,
+            GuiSmokePhase.HandleRewards => GetPostRewardPhase(decision),
             GuiSmokePhase.ChooseFirstNode => GuiSmokePhase.WaitCombat,
             _ => phase,
         };
@@ -515,18 +515,20 @@ static GuiSmokeStepRequest CreateStepRequest(
         screenshotPath,
         new WindowBounds(window.Bounds.X, window.Bounds.Y, window.Bounds.Width, window.Bounds.Height),
         observer.Summary,
-        GetAllowedActions(phase),
+        GetAllowedActions(phase, observer),
         history.TakeLast(5).ToArray(),
-        BuildFailureModeHint(phase));
+        BuildFailureModeHint(phase, observer));
 }
 
-static string[] GetAllowedActions(GuiSmokePhase phase)
+static string[] GetAllowedActions(GuiSmokePhase phase, ObserverState observer)
 {
     return phase switch
     {
         GuiSmokePhase.EnterRun => new[] { "click continue", "click singleplayer", "wait" },
         GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "wait" },
         GuiSmokePhase.Embark => new[] { "click embark", "wait" },
+        GuiSmokePhase.HandleRewards when string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+            => new[] { "click proceed", "click reward", "click first reachable node", "wait" },
         GuiSmokePhase.HandleRewards => new[] { "click proceed", "click reward", "wait" },
         GuiSmokePhase.ChooseFirstNode => new[] { "click first reachable node", "wait" },
         _ => new[] { "wait" },
@@ -550,17 +552,29 @@ static string BuildGoal(GuiSmokePhase phase)
     };
 }
 
-static string BuildFailureModeHint(GuiSmokePhase phase)
+static string BuildFailureModeHint(GuiSmokePhase phase, ObserverState observer)
 {
     return phase switch
     {
         GuiSmokePhase.EnterRun => "Continue may be absent. Use Singleplayer only if Continue is not visible.",
         GuiSmokePhase.ChooseCharacter => "Do not click Embark before Ironclad is selected.",
+        GuiSmokePhase.HandleRewards when string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+            => "AI first: use the screenshot as the primary source. If the map is clearly visible, you may click the first reachable node instead of forcing another reward proceed click.",
         GuiSmokePhase.HandleRewards => "Prefer the proceed arrow when the reward can be skipped; otherwise pick a valid reward card.",
         GuiSmokePhase.ChooseFirstNode => "Do not click non-reachable map nodes.",
         GuiSmokePhase.WaitCombat => "Observer must end with combat screen and inCombat=true.",
         _ => "Fail closed when screenshot and observer disagree.",
     };
+}
+
+static GuiSmokePhase GetPostRewardPhase(GuiSmokeStepDecision decision)
+{
+    if (string.Equals(decision.TargetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase))
+    {
+        return GuiSmokePhase.WaitCombat;
+    }
+
+    return GuiSmokePhase.WaitMap;
 }
 
 static bool IsPassiveWaitPhase(GuiSmokePhase phase)
