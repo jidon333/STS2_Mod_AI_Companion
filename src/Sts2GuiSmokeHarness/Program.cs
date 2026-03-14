@@ -83,6 +83,7 @@ static async Task<int> RunScenarioAsync(
     Directory.CreateDirectory(stepsRoot);
 
     var logger = new ArtifactRecorder(runRoot);
+    SetHarnessLogSink(logger.AppendHumanLog);
     logger.WriteRunManifest(new GuiSmokeRunManifest(
         runId,
         scenarioId,
@@ -181,7 +182,7 @@ static async Task<int> RunScenarioAsync(
 
         var observer = observerReader.Read();
         logger.WriteObserverCopies(stepPrefix, observer);
-        LogHarness($"step={stepIndex} observer logical={observer.CurrentScreen ?? "null"} visible={observer.VisibleScreen ?? "null"} inCombat={observer.InCombat?.ToString() ?? "null"} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
+        LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
 
         if (!observer.IsFreshSince(freshnessFloor))
         {
@@ -280,7 +281,7 @@ static async Task<int> RunScenarioAsync(
         LogHarness($"step={stepIndex} request={requestPath}");
         var decision = await provider.GetDecisionAsync(requestPath, decisionPath, TimeSpan.FromMinutes(3), CancellationToken.None).ConfigureAwait(false);
         logger.WriteDecision(decisionPath, decision);
-        LogHarness($"step={stepIndex} decision status={decision.Status} action={decision.ActionKind ?? "null"} target={decision.TargetLabel ?? "null"} confidence={decision.Confidence?.ToString("0.00") ?? "null"}");
+        LogHarness($"step={stepIndex} decision status={decision.Status} action={decision.ActionKind ?? "null"} target={decision.TargetLabel ?? "null"} confidence={decision.Confidence?.ToString("0.00") ?? "null"} reason={decision.Reason ?? "null"}");
 
         if (string.Equals(decision.Status, "abort", StringComparison.OrdinalIgnoreCase))
         {
@@ -992,7 +993,24 @@ static string ComputeFileFingerprint(string path)
 
 static void LogHarness(string message)
 {
-    Console.WriteLine($"[gui-smoke {DateTimeOffset.Now:HH:mm:ss}] {message}");
+    var line = $"[gui-smoke {DateTimeOffset.Now:HH:mm:ss}] {message}";
+    Console.WriteLine(line);
+    GuiSmokeShared.HarnessLogSink?.Invoke(line);
+}
+
+static string DescribeObserverHuman(ObserverState observer)
+{
+    var logical = observer.CurrentScreen ?? "null";
+    var visible = observer.VisibleScreen ?? "null";
+    var inCombat = observer.InCombat?.ToString() ?? "null";
+    var hp = observer.Summary.PlayerCurrentHp is not null && observer.Summary.PlayerMaxHp is not null
+        ? $"{observer.Summary.PlayerCurrentHp}/{observer.Summary.PlayerMaxHp}"
+        : "null";
+    var encounter = observer.EncounterKind ?? "null";
+    var extractor = observer.ChoiceExtractorPath ?? "null";
+    var choices = observer.Summary.CurrentChoices.Take(4).ToArray();
+    var choiceText = choices.Length == 0 ? "-" : string.Join(", ", choices);
+    return $"logical={logical} visible={visible} inCombat={inCombat} hp={hp} encounter={encounter} extractor={extractor} choices=[{choiceText}]";
 }
 
 static string DescribeWindow(WindowCaptureTarget target)
@@ -1134,6 +1152,11 @@ static void Assert(bool condition, string message)
     }
 }
 
+static void SetHarnessLogSink(Action<string>? sink)
+{
+    GuiSmokeShared.HarnessLogSink = sink;
+}
+
 static bool ShouldRecaptureForObserverDrift(ObserverSummary requestObserver, ObserverState latestObserver)
 {
     if (latestObserver.CapturedAt is null || requestObserver.CapturedAt is null)
@@ -1171,6 +1194,8 @@ static bool ShouldRecaptureForObserverDrift(ObserverSummary requestObserver, Obs
 
 static class GuiSmokeShared
 {
+    public static Action<string>? HarnessLogSink { get; set; }
+
     public static JsonSerializerOptions JsonOptions { get; } = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -2602,12 +2627,14 @@ sealed class ArtifactRecorder
     private readonly string _runRoot;
     private readonly string _tracePath;
     private readonly string _manifestPath;
+    private readonly string _humanLogPath;
 
     public ArtifactRecorder(string runRoot)
     {
         _runRoot = runRoot;
         _tracePath = Path.Combine(runRoot, "trace.ndjson");
         _manifestPath = Path.Combine(runRoot, "run.json");
+        _humanLogPath = Path.Combine(runRoot, "run.log");
     }
 
     public void WriteRunManifest(GuiSmokeRunManifest manifest)
@@ -2663,6 +2690,13 @@ sealed class ArtifactRecorder
     public void WriteDecision(string path, GuiSmokeStepDecision decision)
     {
         File.WriteAllText(path, JsonSerializer.Serialize(decision, GuiSmokeShared.JsonOptions));
+    }
+
+    public void AppendHumanLog(string line)
+    {
+        LiveExportAtomicFileWriter.AppendAllTextShared(
+            _humanLogPath,
+            line + Environment.NewLine);
     }
 }
 

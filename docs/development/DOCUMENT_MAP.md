@@ -2,6 +2,20 @@
 
 이 문서는 `STS2_Mod_AI_Companion`의 문서를 **무슨 목적으로 읽어야 하는지**와 **어떤 순서로 읽어야 하는지**를 한 번에 보여주는 메타 문서입니다.
 
+## 0. 지금 당장 유지할 canonical 문서
+
+현재 우선순위는 `Smoke Harness`와 `Observer`를 빠르게 안정화하는 것입니다. 그래서 아래 문서만 active canonical로 봅니다.
+
+1. `01-overview/AI_HANDOFF_PROMPT_KO.md`
+2. `01-overview/PROJECT_STATUS.md`
+3. `05-harness/HARNESS_LAYER_ARCHITECTURE.md`
+4. `05-harness/HARNESS_MODE.md`
+5. `05-harness/DECOMPILED_SOURCE_FIRST_OBSERVER_STRATEGY.md`
+6. `05-harness/STS2_HARNESS_REVIEW.md`
+7. `06-history/WORKLOG.md`
+
+나머지 문서는 reference 또는 history로 보고, 구현 중 의사결정 authority로 쓰지 않습니다.
+
 ## 1. 가장 먼저 읽을 순서
 
 처음 프로젝트를 파악할 때는 아래 순서를 권장합니다.
