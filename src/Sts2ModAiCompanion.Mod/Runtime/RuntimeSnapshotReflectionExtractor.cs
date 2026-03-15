@@ -9,7 +9,7 @@ namespace Sts2ModAiCompanion.Mod.Runtime;
 internal static class RuntimeSnapshotReflectionExtractor
 {
     private static readonly string[] SingletonPropertyNames = { "Instance", "Current", "Singleton", "State" };
-    private static readonly string[] NestedRootNames = { "Run", "RunState", "State", "Player", "Character", "Encounter", "Combat", "Manager" };
+    private static readonly string[] NestedRootNames = { "Run", "RunState", "State", "Player", "PlayerCombatState", "Character", "Encounter", "Combat", "CombatState", "Manager" };
     private static readonly string[] SceneNodeKeywords =
     {
         "Screen",
@@ -239,6 +239,9 @@ internal static class RuntimeSnapshotReflectionExtractor
             config.LiveExport.MaxChoiceEntries);
         var choices = choiceResult.Choices;
         var encounter = ExtractEncounter(roots, meta);
+        var combatHand = encounter?.InCombat == true
+            ? ExtractCombatHand(roots, config.LiveExport.MaxChoiceEntries)
+            : Array.Empty<LiveExportCardSummary>();
         var rootTypeSummary = string.Join(
             " ",
             roots
@@ -258,6 +261,12 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (!string.IsNullOrWhiteSpace(choiceResult.Decision.ExtractorPath))
         {
             meta["choiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
+        }
+
+        if (combatHand.Count > 0)
+        {
+            meta["combatHandSummary"] = FormatCombatHandSummary(combatHand);
+            meta["combatHandCount"] = combatHand.Count.ToString(CultureInfo.InvariantCulture);
         }
 
         if (act is not null)
@@ -511,6 +520,18 @@ internal static class RuntimeSnapshotReflectionExtractor
                 .ToArray();
         }
 
+        var playerCombatRoots = roots
+            .SelectMany(root => new[]
+            {
+                TryGetMemberValue(root, "PlayerCombatState"),
+                TryGetMemberValue(root, "CombatState"),
+            })
+            .Concat(FindRoots(roots, "PlayerCombatState"))
+            .Where(root => root is not null)
+            .Cast<object>()
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+
         var name = TryReadString(playerRoots, "Name", "CharacterName", "DisplayName");
         if (LooksLikeNonAuthoritativePlayerName(name))
         {
@@ -520,12 +541,14 @@ internal static class RuntimeSnapshotReflectionExtractor
         var currentHp = TryReadInt(playerRoots, "CurrentHp", "CurrentHealth", "Hp", "Health");
         var maxHp = TryReadInt(playerRoots, "MaxHp", "MaxHealth", "HealthMax");
         var gold = TryReadInt(playerRoots, "Gold", "CurrentGold");
-        var energy = TryReadInt(playerRoots, "Energy", "CurrentEnergy");
+        var energy = TryReadInt(playerRoots, "Energy", "CurrentEnergy")
+                     ?? TryReadInt(playerCombatRoots, "Energy", "CurrentEnergy", "_energy");
         var resources = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var key in new[] { "Block", "Strength", "Dexterity", "Focus", "Mana", "Miracle", "OrbSlots" })
         {
-            var value = TryReadString(playerRoots, key);
+            var value = TryReadString(playerRoots, key)
+                        ?? TryReadString(playerCombatRoots, key);
             if (!string.IsNullOrWhiteSpace(value))
             {
                 resources[key] = value;
@@ -578,6 +601,111 @@ internal static class RuntimeSnapshotReflectionExtractor
             .DistinctBy(card => $"{card.Name}|{card.Id}|{card.Cost}|{card.Type}|{card.Upgraded}")
             .Take(maxEntries)
             .ToArray();
+    }
+
+    private static IReadOnlyList<LiveExportCardSummary> ExtractCombatHand(IEnumerable<object> roots, int maxEntries)
+    {
+        var cards = new List<LiveExportCardSummary>();
+        var seen = new HashSet<int>();
+        var uiHandRoots = roots
+            .SelectMany(root => new[]
+            {
+                TryGetMemberValue(root, "Ui"),
+                TryGetMemberValue(root, "Hand"),
+            })
+            .Concat(FindRoots(roots, "Ui", "Hand"))
+            .Where(root => root is not null)
+            .Cast<object>()
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+
+        foreach (var holder in FindEnumerableItems(uiHandRoots, "ActiveHolders", "Holders", "CardHolderContainer"))
+        {
+            if (!seen.Add(RuntimeHelpers.GetHashCode(holder)))
+            {
+                continue;
+            }
+
+            var cardModel = TryGetMemberValue(TryGetMemberValue(holder, "CardNode"), "Model")
+                            ?? TryGetMemberValue(holder, "CardModel")
+                            ?? TryGetMemberValue(holder, "Model")
+                            ?? TryGetMemberValue(holder, "Card");
+            if (!LooksLikeCardLikeItem(cardModel))
+            {
+                continue;
+            }
+
+            var summary = TryCreateCardSummary(cardModel);
+            if (summary is null)
+            {
+                continue;
+            }
+
+            cards.Add(summary);
+            if (cards.Count >= maxEntries)
+            {
+                return cards;
+            }
+        }
+
+        var handRoots = roots
+            .Concat(FindRoots(roots, "PlayerCombatState", "CombatState", "Hand", "HandCards"))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+
+        foreach (var item in FindEnumerableItems(handRoots, "Hand", "HandCards", "Cards"))
+        {
+            if (!LooksLikeCardLikeItem(item) || !seen.Add(RuntimeHelpers.GetHashCode(item)))
+            {
+                continue;
+            }
+
+            var summary = TryCreateCardSummary(item);
+            if (summary is null)
+            {
+                continue;
+            }
+
+            cards.Add(summary);
+
+            if (cards.Count >= maxEntries)
+            {
+                break;
+            }
+        }
+
+        return cards;
+    }
+
+    private static LiveExportCardSummary? TryCreateCardSummary(object? item)
+    {
+        if (!LooksLikeCardLikeItem(item))
+        {
+            return null;
+        }
+
+        var name = TryReadString(item, "Name", "CardName", "DisplayName", "Id", "CardId");
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        return new LiveExportCardSummary(
+            name,
+            TryReadString(item, "Id", "CardId", "Name"),
+            TryReadInt(item, "Cost", "CurrentCost", "DisplayedCost", "EnergyCost", "ManaCost"),
+            TryReadString(item, "Type", "CardType"),
+            TryReadBool(item, "Upgraded", "IsUpgraded"));
+    }
+
+    private static string FormatCombatHandSummary(IReadOnlyList<LiveExportCardSummary> cards)
+    {
+        return string.Join(
+            ";",
+            cards.Select((card, index) =>
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{index + 1}:{(card.Id ?? card.Name)}|{card.Type ?? "unknown"}|{(card.Cost?.ToString(CultureInfo.InvariantCulture) ?? "?")}")));
     }
 
     private static IReadOnlyList<string> ExtractStringList(IEnumerable<object> roots, int maxEntries, params string[] collectionNames)
@@ -2538,6 +2666,7 @@ internal static class RuntimeSnapshotReflectionExtractor
                || typeName.Contains("MerchantCard", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("MerchantRelic", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("MerchantPotion", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("ProceedButton", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("NCard", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("EndTurnButton", StringComparison.OrdinalIgnoreCase)
                || typeName.Contains("PingButton", StringComparison.OrdinalIgnoreCase)
