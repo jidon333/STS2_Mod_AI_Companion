@@ -113,7 +113,16 @@ sealed record GuiSmokeManualCleanBootEvidence(
     bool ActionsPending,
     string? HarnessStatusMode,
     string? HarnessInventoryMode,
-    string? ObservedScreen);
+    string? ObservedScreen,
+    bool FirstStepEligible = false,
+    bool MainMenuObserved = false,
+    bool ArmSessionClear = false,
+    bool ActionsQueueClear = false,
+    bool HarnessDormant = false,
+    string? LastActionId = null,
+    string? LastResultStatus = null,
+    IReadOnlyList<string>? BlockingReasons = null,
+    IReadOnlyList<string>? EvaluationNotes = null);
 
 sealed record GuiSmokePrevalidation(
     string SessionId,
@@ -226,6 +235,15 @@ static partial class LongRunArtifacts
         string? Phase,
         string? ObserverScreen,
         string? SceneSignature);
+
+    private sealed record InspectOverlayLoopAnalysis(
+        string DiagnosisKind,
+        bool LoopDetected,
+        int OverlayCloseCount,
+        string? Phase,
+        string? ObserverScreen,
+        string? SceneSignature,
+        string? LastMisdirectedTarget);
 
     private sealed record HealthEvaluation(
         string HealthState,
@@ -551,21 +569,58 @@ static partial class LongRunArtifacts
             return true;
         }
 
-        if (history.Count != 0
-            || !string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
+        var firstStepEligible = history.Count == 0;
+        var mainMenuObserved = string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
+                               || string.Equals(observer.VisibleScreen, "main-menu", StringComparison.OrdinalIgnoreCase);
         var armSessionPresent = HasActiveArmSession(harnessLayout.ArmSessionPath);
         var actionsPending = HasPendingHarnessActions(harnessLayout.ActionsPath);
         var status = TryReadJson<HarnessBridgeStatus>(harnessLayout.StatusPath);
         var inventory = TryReadJson<HarnessNodeInventory>(harnessLayout.InventoryPath);
         var inventoryDormant = inventory is null || string.Equals(inventory.Mode, "dormant", StringComparison.OrdinalIgnoreCase);
-        if (armSessionPresent || actionsPending || !inventoryDormant)
+        var actionsQueueClear = !actionsPending
+                                || (!armSessionPresent && firstStepEligible && mainMenuObserved && inventoryDormant);
+        var blockingReasons = new List<string>();
+        var evaluationNotes = new List<string>();
+        if (!firstStepEligible)
         {
-            return false;
+            blockingReasons.Add("not-first-step");
         }
+
+        if (!mainMenuObserved)
+        {
+            blockingReasons.Add($"observer-not-main-menu:{observer.CurrentScreen ?? observer.VisibleScreen ?? "unknown"}");
+        }
+
+        if (armSessionPresent)
+        {
+            blockingReasons.Add("arm-session-present");
+        }
+
+        if (!actionsQueueClear)
+        {
+            blockingReasons.Add("actions-pending-active");
+        }
+        else if (actionsPending)
+        {
+            evaluationNotes.Add("stale-actions-observed-but-inert");
+        }
+
+        if (!inventoryDormant)
+        {
+            blockingReasons.Add("harness-inventory-not-dormant");
+        }
+
+        if (!string.IsNullOrWhiteSpace(status?.Mode)
+            && !string.Equals(status.Mode, "dormant", StringComparison.OrdinalIgnoreCase))
+        {
+            evaluationNotes.Add($"status-mode:{status.Mode}");
+        }
+
+        var verified = firstStepEligible
+                       && mainMenuObserved
+                       && !armSessionPresent
+                       && actionsQueueClear
+                       && inventoryDormant;
         var evidence = new GuiSmokeManualCleanBootEvidence(
             DateTimeOffset.UtcNow,
             screenshotPath,
@@ -584,13 +639,28 @@ static partial class LongRunArtifacts
             actionsPending,
             status?.Mode,
             inventory?.Mode,
-            observer.CurrentScreen);
-        UpdatePrevalidation(
-            sessionRoot,
-            manualCleanBootVerified: true,
-            manualCleanBootEvidence: evidence,
-            note: "runner captured manual clean boot evidence before the first action.");
-        return true;
+            observer.CurrentScreen,
+            firstStepEligible,
+            mainMenuObserved,
+            !armSessionPresent,
+            actionsQueueClear,
+            inventoryDormant,
+            status?.LastActionId,
+            status?.LastResultStatus,
+            blockingReasons,
+            evaluationNotes);
+        if (prevalidation.ManualCleanBootEvidence is null || firstStepEligible || verified)
+        {
+            UpdatePrevalidation(
+                sessionRoot,
+                manualCleanBootVerified: verified,
+                manualCleanBootEvidence: evidence,
+                note: verified
+                    ? "runner captured manual clean boot evidence before the first action."
+                    : $"runner recorded manual clean boot blockers:{string.Join(",", blockingReasons)}");
+        }
+
+        return verified;
     }
 
     public static void RecordAttemptStarted(
@@ -798,6 +868,10 @@ static partial class LongRunArtifacts
         if (!prevalidation.ManualCleanBootVerified)
         {
             blockers.Add("missing-gate:manualCleanBootVerified");
+            if (prevalidation.ManualCleanBootEvidence?.BlockingReasons is { Count: > 0 })
+            {
+                blockers.AddRange(prevalidation.ManualCleanBootEvidence.BlockingReasons.Select(static reason => $"manual-clean-boot:{reason}"));
+            }
         }
 
         blockers.AddRange(milestoneEvaluation.Blockers);
@@ -821,6 +895,18 @@ static partial class LongRunArtifacts
         if (prevalidation.ManualCleanBootEvidence is not null)
         {
             evidence.Add($"manual-clean-boot-screen:{prevalidation.ManualCleanBootEvidence.ScreenshotPath}");
+            evidence.Add($"manual-clean-boot-first-step:{prevalidation.ManualCleanBootEvidence.FirstStepEligible}");
+            evidence.Add($"manual-clean-boot-main-menu:{prevalidation.ManualCleanBootEvidence.MainMenuObserved}");
+            evidence.Add($"manual-clean-boot-arm-clear:{prevalidation.ManualCleanBootEvidence.ArmSessionClear}");
+            evidence.Add($"manual-clean-boot-actions-clear:{prevalidation.ManualCleanBootEvidence.ActionsQueueClear}");
+            evidence.Add($"manual-clean-boot-harness-dormant:{prevalidation.ManualCleanBootEvidence.HarnessDormant}");
+            if (prevalidation.ManualCleanBootEvidence.BlockingReasons is { Count: > 0 })
+            {
+                foreach (var reason in prevalidation.ManualCleanBootEvidence.BlockingReasons)
+                {
+                    evidence.Add($"manual-clean-boot-blocker:{reason}");
+                }
+            }
         }
 
         var supervisorState = new GuiSmokeSupervisorState(
@@ -1016,9 +1102,10 @@ static partial class LongRunArtifacts
         var progress = ReadNdjson<GuiSmokeStepProgress>(Path.Combine(runRoot, "progress.ndjson"));
         var sameActionStallCount = progress.Count(entry => entry.ObserverSignals.Contains("same-action-stall", StringComparer.OrdinalIgnoreCase));
         var decisionWaitPlateau = AnalyzeDecisionWaitPlateau(progress);
-        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau);
-        var phase = failureSummary?.Phase ?? decisionWaitPlateau.Phase ?? progress.LastOrDefault()?.Phase;
-        var observerScreen = failureSummary?.ObserverScreen ?? decisionWaitPlateau.ObserverScreen ?? progress.LastOrDefault()?.ObserverScreen;
+        var inspectOverlayLoop = AnalyzeInspectOverlayLoop(progress);
+        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop);
+        var phase = failureSummary?.Phase ?? inspectOverlayLoop.Phase ?? decisionWaitPlateau.Phase ?? progress.LastOrDefault()?.Phase;
+        var observerScreen = failureSummary?.ObserverScreen ?? inspectOverlayLoop.ObserverScreen ?? decisionWaitPlateau.ObserverScreen ?? progress.LastOrDefault()?.ObserverScreen;
         var screenshotPath = failureSummary?.ScreenshotPath ?? FindLatestScreenshotPath(runRoot);
         var backlogRoute = ShouldRouteToDecompilerBacklog(diagnosisKind, phase, observerScreen)
             ? "decompiled-source-first-observer"
@@ -1030,6 +1117,7 @@ static partial class LongRunArtifacts
             $"failureClass:{attemptEntry.FailureClass ?? "null"}",
             $"sameActionStalls:{sameActionStallCount}",
             $"repeatedDecisionWaits:{decisionWaitPlateau.RepeatedWaitCount}",
+            $"overlayLoopCount:{inspectOverlayLoop.OverlayCloseCount}",
             $"trustStateAtStart:{attemptEntry.TrustStateAtStart}",
         };
         if (!string.IsNullOrWhiteSpace(phase))
@@ -1040,6 +1128,16 @@ static partial class LongRunArtifacts
         if (!string.IsNullOrWhiteSpace(decisionWaitPlateau.SceneSignature))
         {
             evidence.Add($"waitSignature:{decisionWaitPlateau.SceneSignature}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(inspectOverlayLoop.SceneSignature))
+        {
+            evidence.Add($"overlayLoopSignature:{inspectOverlayLoop.SceneSignature}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(inspectOverlayLoop.LastMisdirectedTarget))
+        {
+            evidence.Add($"overlayLoopMisdirectedTarget:{inspectOverlayLoop.LastMisdirectedTarget}");
         }
 
         if (!string.IsNullOrWhiteSpace(backlogRoute))
@@ -1053,14 +1151,14 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
             observerScreen,
             screenshotPath,
             sameActionStallCount,
-            selfMetaReview?.PlateauDetected == true || decisionWaitPlateau.PlateauDetected,
+            selfMetaReview?.PlateauDetected == true || decisionWaitPlateau.PlateauDetected || inspectOverlayLoop.LoopDetected,
             backlogRoute,
             evidence);
         UpsertNdjson(GetStallDiagnosisPath(sessionRoot), diagnosis, static existing => existing.AttemptId, diagnosis.AttemptId);
@@ -1263,7 +1361,8 @@ static partial class LongRunArtifacts
         GuiSmokeAttemptIndexEntry attemptEntry,
         GuiSmokeFailureSummary? failureSummary,
         int sameActionStallCount,
-        DecisionWaitPlateauAnalysis decisionWaitPlateau)
+        DecisionWaitPlateauAnalysis decisionWaitPlateau,
+        InspectOverlayLoopAnalysis inspectOverlayLoop)
     {
         if (string.Equals(attemptEntry.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase))
         {
@@ -1282,6 +1381,13 @@ static partial class LongRunArtifacts
             || (decisionWaitPlateau.PlateauDetected && string.Equals(decisionWaitPlateau.DiagnosisKind, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)))
         {
             return "decision-wait-plateau";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
+            || inspectOverlayLoop.LoopDetected)
+        {
+            return "inspect-overlay-loop";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
@@ -1363,6 +1469,87 @@ static partial class LongRunArtifacts
             normalizedSignature);
     }
 
+    private static InspectOverlayLoopAnalysis AnalyzeInspectOverlayLoop(IReadOnlyList<GuiSmokeStepProgress> progress)
+    {
+        if (progress.Count == 0)
+        {
+            return new InspectOverlayLoopAnalysis("no-stall", false, 0, null, null, null, null);
+        }
+
+        var lastOverlayAction = progress.LastOrDefault(entry => IsOverlayCleanupDecisionTarget(entry.DecisionTargetLabel));
+        if (lastOverlayAction is null)
+        {
+            return new InspectOverlayLoopAnalysis("no-stall", false, 0, null, null, null, null);
+        }
+
+        var normalizedSignature = NormalizeSceneSignatureForPlateau(lastOverlayAction.SceneSignature);
+        if (!SignatureIndicatesRoomScreen(normalizedSignature, lastOverlayAction.ObserverScreen))
+        {
+            return new InspectOverlayLoopAnalysis("no-stall", false, 0, lastOverlayAction.Phase, lastOverlayAction.ObserverScreen, normalizedSignature, null);
+        }
+
+        var overlayCloseCount = 0;
+        string? lastMisdirectedTarget = null;
+        for (var index = progress.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = progress[index];
+            if (!string.Equals(entry.ObserverScreen, lastOverlayAction.ObserverScreen, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(NormalizeSceneSignatureForPlateau(entry.SceneSignature), normalizedSignature, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            if (IsOverlayCleanupDecisionTarget(entry.DecisionTargetLabel))
+            {
+                overlayCloseCount += 1;
+                continue;
+            }
+
+            if (entry.ObserverSignals.Contains("alternate-branch:HandleEvent", StringComparer.OrdinalIgnoreCase)
+                || entry.ObserverSignals.Contains("alternate-branch:HandleRewards", StringComparer.OrdinalIgnoreCase)
+                || entry.ObserverSignals.Contains("inspect-overlay", StringComparer.OrdinalIgnoreCase)
+                || entry.ObserverSignals.Contains("reward-choice", StringComparer.OrdinalIgnoreCase)
+                || entry.DecisionTargetLabel is null)
+            {
+                continue;
+            }
+
+            if (string.Equals(entry.DecisionTargetLabel, "first event option", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.DecisionTargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.DecisionTargetLabel, "reward choice", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.DecisionTargetLabel, "reward card choice", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.DecisionTargetLabel, "colorless card choice", StringComparison.OrdinalIgnoreCase))
+            {
+                lastMisdirectedTarget = entry.DecisionTargetLabel;
+            }
+
+            break;
+        }
+
+        if (overlayCloseCount < 3)
+        {
+            return new InspectOverlayLoopAnalysis("no-stall", false, overlayCloseCount, lastOverlayAction.Phase, lastOverlayAction.ObserverScreen, normalizedSignature, lastMisdirectedTarget);
+        }
+
+        return new InspectOverlayLoopAnalysis(
+            "inspect-overlay-loop",
+            true,
+            overlayCloseCount,
+            lastOverlayAction.Phase,
+            lastOverlayAction.ObserverScreen,
+            normalizedSignature,
+            lastMisdirectedTarget);
+    }
+
+    private static bool IsOverlayCleanupDecisionTarget(string? decisionTargetLabel)
+    {
+        return string.Equals(decisionTargetLabel, "hidden overlay close", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "overlay back", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "overlay close", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "overlay backdrop close", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "inspect overlay escape", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string NormalizeSceneSignatureForPlateau(string? sceneSignature)
     {
         if (string.IsNullOrWhiteSpace(sceneSignature))
@@ -1372,7 +1559,9 @@ static partial class LongRunArtifacts
 
         var parts = sceneSignature
             .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(static part => !part.StartsWith("shot:", StringComparison.OrdinalIgnoreCase))
+            .Where(static part =>
+                !part.StartsWith("shot:", StringComparison.OrdinalIgnoreCase)
+                && !part.StartsWith("phase:", StringComparison.OrdinalIgnoreCase))
             .ToArray();
         return parts.Length == 0 ? sceneSignature : string.Join("|", parts);
     }
