@@ -2958,6 +2958,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var analysis = AutoCombatAnalyzer.Analyze(request.ScreenshotPath);
         var handAnalysis = AutoCombatHandAnalyzer.Analyze(request.ScreenshotPath);
         var pendingSelection = TryGetPendingCombatSelection(request.History);
+        var repeatedNonEnemyLoop = HasRecentRepeatedNonEnemyLoop(request.History);
         if (analysis.HasTargetArrow)
         {
             return new GuiSmokeStepDecision(
@@ -3044,6 +3045,23 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 0.78,
                 "combat",
                 300,
+                true,
+                null);
+        }
+
+        if (repeatedNonEnemyLoop)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "press-key",
+                "E",
+                null,
+                null,
+                "end turn after repeated non-enemy loop",
+                "Recent combat history shows a repeated non-enemy select/confirm loop. End the turn instead of repeating the same sequence.",
+                0.86,
+                "combat",
+                400,
                 true,
                 null);
         }
@@ -3183,6 +3201,39 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     private static bool HasRecentCombatCardSelection(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
         return TryGetPendingCombatSelection(history) is not null;
+    }
+
+    private static bool HasRecentRepeatedNonEnemyLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        var labels = history
+            .Where(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
+            .Select(static entry => entry.TargetLabel)
+            .Where(static label =>
+                !string.IsNullOrWhiteSpace(label)
+                && (IsNonEnemySelectionLabel(label)
+                    || string.Equals(label, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)))
+            .TakeLast(4)
+            .ToArray();
+        if (labels.Length < 4)
+        {
+            return false;
+        }
+
+        return IsNonEnemySelectionLabel(labels[0])
+               && string.Equals(labels[1], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)
+               && IsNonEnemySelectionLabel(labels[2])
+               && string.Equals(labels[3], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsNonEnemySelectionLabel(string? targetLabel)
+    {
+        if (string.IsNullOrWhiteSpace(targetLabel))
+        {
+            return false;
+        }
+
+        return targetLabel.StartsWith("combat select non-enemy slot ", StringComparison.OrdinalIgnoreCase)
+               || targetLabel.StartsWith("combat select defend slot ", StringComparison.OrdinalIgnoreCase);
     }
 
     private static PendingCombatSelection? TryGetPendingCombatSelection(IReadOnlyList<GuiSmokeHistoryEntry> history)
