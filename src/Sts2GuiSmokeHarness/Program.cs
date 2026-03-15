@@ -383,6 +383,36 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             return CompleteAttempt(0, "completed", "returned-main-menu");
         }
 
+        if (isLongRun
+            && history.Count > 0
+            && phase is not GuiSmokePhase.WaitMainMenu and not GuiSmokePhase.EnterRun and not GuiSmokePhase.WaitCharacterSelect
+            && observer.Summary.PlayerCurrentHp is <= 0)
+        {
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "terminal-detected", observer.CurrentScreen, observer.InCombat, "player-defeated"));
+            logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                phase.ToString(),
+                "player-defeated",
+                observer.CurrentScreen,
+                observer.InCombat,
+                screenshotPath));
+            AppendProgressIfLongRun(
+                isLongRun,
+                logger,
+                EvaluateStepProgress(
+                    stepIndex,
+                    phase,
+                    iterationSceneSignature,
+                    observer,
+                    null,
+                    null,
+                    iterationFirstSeenScene,
+                    iterationReasoningMode,
+                    false,
+                    sameActionStallCount,
+                    "terminal-player-defeated"));
+            return CompleteAttempt(0, "completed", "player-defeated");
+        }
+
         if (!observer.IsFreshSince(freshnessFloor))
         {
             LogHarness($"step={stepIndex} stale observer snapshot ignored freshnessFloor={freshnessFloor:O}");
