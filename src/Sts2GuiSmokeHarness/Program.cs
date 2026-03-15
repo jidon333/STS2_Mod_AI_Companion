@@ -1620,8 +1620,8 @@ static string[] GetAllowedActions(GuiSmokePhase phase, ObserverState observer)
     return phase switch
     {
         GuiSmokePhase.EnterRun => new[] { "click continue", "click singleplayer", "click normal mode", "wait" },
-        GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "wait" },
-        GuiSmokePhase.Embark => new[] { "click embark", "wait" },
+        GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "click character confirm", "wait" },
+        GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
         GuiSmokePhase.HandleRewards when string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
             => new[] { "click proceed", "click reward", "click first reachable node", "wait" },
         GuiSmokePhase.HandleRewards => new[] { "click proceed", "click reward", "wait" },
@@ -2916,12 +2916,48 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideChooseCharacter(GuiSmokeStepRequest request)
     {
+        if (string.Equals(request.Observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(request.Observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                0.955,
+                0.723,
+                "character confirm",
+                "Ironclad is already highlighted on the character-select screen. Click the right confirm checkmark to continue.",
+                0.94,
+                "character-select",
+                1000,
+                true,
+                null);
+        }
+
         return TryFindActionNodeDecision(request, "Ironclad", "ironclad")
                ?? CreateWaitDecision("waiting for ironclad node", request.Observer.CurrentScreen);
     }
 
     private static GuiSmokeStepDecision DecideEmbark(GuiSmokeStepRequest request)
     {
+        if (string.Equals(request.Observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(request.Observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                0.955,
+                0.723,
+                "character confirm",
+                "The run start confirm checkmark is visible on the character-select screen. Click it to embark.",
+                0.94,
+                "character-select",
+                1000,
+                true,
+                null);
+        }
+
         return TryFindActionNodeDecision(request, "Embark", "embark")
                ?? CreateWaitDecision("waiting for embark action", request.Observer.CurrentScreen);
     }
