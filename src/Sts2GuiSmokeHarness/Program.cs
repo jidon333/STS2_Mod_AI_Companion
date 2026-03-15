@@ -278,6 +278,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     var consecutiveBlackFrames = 0;
     string? lastActionFingerprint = null;
     var sameActionStallCount = 0;
+    var consecutiveFallbackCapturesWithoutProcess = 0;
     var useDecisionAgeGuard = !string.Equals(providerKind, "auto", StringComparison.OrdinalIgnoreCase);
     var decisionStaleBudget = useDecisionAgeGuard
         ? TimeSpan.FromSeconds(2)
@@ -306,6 +307,24 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             consecutiveBlackFrames += 1;
             LogHarness($"step={stepIndex} capture unusable; waiting for a valid process frame");
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "capture-unusable", null, null, null));
+            if (window.IsFallback && !HasLiveGameProcess())
+            {
+                consecutiveFallbackCapturesWithoutProcess += 1;
+                if (consecutiveFallbackCapturesWithoutProcess >= 3)
+                {
+                    logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                        phase.ToString(),
+                        "process-lost",
+                        null,
+                        null,
+                        screenshotPath));
+                    return CompleteAttempt(1, "failed", "process-lost");
+                }
+            }
+            else
+            {
+                consecutiveFallbackCapturesWithoutProcess = 0;
+            }
             if (!window.IsFallback && consecutiveBlackFrames >= 3)
             {
                 var focusWindow = WindowLocator.EnsureInteractive(window);
@@ -319,6 +338,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             continue;
         }
         consecutiveBlackFrames = 0;
+        consecutiveFallbackCapturesWithoutProcess = 0;
         LogHarness($"step={stepIndex} captured={screenshotPath}");
 
         var observer = observerReader.Read();
@@ -862,11 +882,7 @@ static bool IsSceneDeadEndAttempt(GuiSmokeAttemptResult result)
 
 static async Task StopGameProcessesAsync(TimeSpan timeout)
 {
-    var relevantNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "SlayTheSpire2",
-        "crashpad_handler",
-    };
+    var relevantNames = GetRelevantGameProcessNames();
 
     var deadline = DateTimeOffset.UtcNow.Add(timeout);
     while (DateTimeOffset.UtcNow < deadline)
@@ -898,6 +914,34 @@ static async Task StopGameProcessesAsync(TimeSpan timeout)
 
         await Task.Delay(500).ConfigureAwait(false);
     }
+}
+
+static bool HasLiveGameProcess()
+{
+    foreach (var process in Process.GetProcesses())
+    {
+        try
+        {
+            if (!process.HasExited && GetRelevantGameProcessNames().Contains(process.ProcessName))
+            {
+                return true;
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    return false;
+}
+
+static HashSet<string> GetRelevantGameProcessNames()
+{
+    return new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "SlayTheSpire2",
+        "crashpad_handler",
+    };
 }
 
 static int InspectRun(IReadOnlyDictionary<string, string> options, string workspaceRoot)
