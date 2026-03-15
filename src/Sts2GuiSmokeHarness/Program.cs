@@ -1619,7 +1619,7 @@ static string[] GetAllowedActions(GuiSmokePhase phase, ObserverState observer)
 {
     return phase switch
     {
-        GuiSmokePhase.EnterRun => new[] { "click continue", "click singleplayer", "wait" },
+        GuiSmokePhase.EnterRun => new[] { "click continue", "click singleplayer", "click normal mode", "wait" },
         GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "wait" },
         GuiSmokePhase.Embark => new[] { "click embark", "wait" },
         GuiSmokePhase.HandleRewards when string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
@@ -1663,6 +1663,12 @@ static bool LooksLikeRestSiteState(ObserverSummary observer)
         || label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
         || label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
         || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+}
+
+static bool LooksLikeSingleplayerSubmenuState(ObserverSummary observer)
+{
+    return string.Equals(observer.CurrentScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(observer.VisibleScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase);
 }
 
 static string BuildGoal(GuiSmokePhase phase)
@@ -1834,6 +1840,14 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase == GuiSmokePhase.WaitCharacterSelect)
     {
+        if (LooksLikeSingleplayerSubmenuState(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-singleplayer-submenu", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-singleplayer-submenu", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.EnterRun;
+            return true;
+        }
+
         if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
@@ -2875,6 +2889,24 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideEnterRun(GuiSmokeStepRequest request)
     {
+        if (string.Equals(request.Observer.CurrentScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(request.Observer.VisibleScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase))
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                0.275,
+                0.445,
+                "normal mode",
+                "The singleplayer submenu is visible. Click the left 'normal' panel to start a standard run.",
+                0.94,
+                "singleplayer-submenu",
+                1200,
+                true,
+                null);
+        }
+
         return TryFindActionNodeDecision(request, "Continue", "continue")
                ?? TryFindActionNodeDecision(request, "\uACC4\uC18D", "continue")
                ?? TryFindActionNodeDecision(request, "Singleplayer", "singleplayer")
