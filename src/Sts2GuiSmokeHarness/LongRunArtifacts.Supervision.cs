@@ -254,6 +254,17 @@ static partial class LongRunArtifacts
         string? SceneSignature,
         string? LastLoopTarget);
 
+    private sealed record RewardMapLoopAnalysis(
+        string DiagnosisKind,
+        bool LoopDetected,
+        int RepeatedLoopCount,
+        string? Phase,
+        string? ObserverScreen,
+        string? SceneSignature,
+        string? LastLoopTarget,
+        bool ExplicitRewardChoicesPresent,
+        bool MapArrowContaminationPresent);
+
     private sealed record CombatNoOpLoopAnalysis(
         string DiagnosisKind,
         bool LoopDetected,
@@ -297,7 +308,7 @@ static partial class LongRunArtifacts
         var now = DateTimeOffset.UtcNow;
         if (!File.Exists(GetGoalContractPath(sessionRoot)))
         {
-            LiveExportAtomicFileWriter.WriteJsonAtomic(
+            WriteJsonAtomicWithRetry(
                 GetGoalContractPath(sessionRoot),
                 new GuiSmokeGoalContract(
                     sessionId,
@@ -320,7 +331,7 @@ static partial class LongRunArtifacts
 
         if (!File.Exists(GetPrevalidationPath(sessionRoot)))
         {
-            LiveExportAtomicFileWriter.WriteJsonAtomic(
+            WriteJsonAtomicWithRetry(
                 GetPrevalidationPath(sessionRoot),
                 new GuiSmokePrevalidation(
                     sessionId,
@@ -359,7 +370,7 @@ static partial class LongRunArtifacts
             CompletedBy = completedBy,
         };
 
-        LiveExportAtomicFileWriter.WriteJsonAtomic(GetGoalContractPath(sessionRoot), updated, GuiSmokeShared.JsonOptions);
+        WriteJsonAtomicWithRetry(GetGoalContractPath(sessionRoot), updated, GuiSmokeShared.JsonOptions);
         if (!string.IsNullOrWhiteSpace(note))
         {
             UpdatePrevalidation(sessionRoot, note: note);
@@ -403,7 +414,7 @@ static partial class LongRunArtifacts
             Notes = notes,
         };
 
-        LiveExportAtomicFileWriter.WriteJsonAtomic(GetPrevalidationPath(sessionRoot), updated, GuiSmokeShared.JsonOptions);
+        WriteJsonAtomicWithRetry(GetPrevalidationPath(sessionRoot), updated, GuiSmokeShared.JsonOptions);
         RefreshSupervisorState(sessionRoot);
         return updated;
     }
@@ -893,13 +904,20 @@ static partial class LongRunArtifacts
         }
 
         blockers.AddRange(milestoneEvaluation.Blockers);
-        var updatedGoal = goal with
+        var goalStateChanged = !string.Equals(goal.TrustState, trustState, StringComparison.OrdinalIgnoreCase)
+                               || !string.Equals(goal.MilestoneState, milestoneEvaluation.MilestoneState, StringComparison.OrdinalIgnoreCase);
+        var updatedGoal = goalStateChanged
+            ? goal with
+            {
+                UpdatedAt = now,
+                TrustState = trustState,
+                MilestoneState = milestoneEvaluation.MilestoneState,
+            }
+            : goal;
+        if (goalStateChanged)
         {
-            UpdatedAt = now,
-            TrustState = trustState,
-            MilestoneState = milestoneEvaluation.MilestoneState,
-        };
-        LiveExportAtomicFileWriter.WriteJsonAtomic(GetGoalContractPath(sessionRoot), updatedGoal, GuiSmokeShared.JsonOptions);
+            WriteJsonAtomicWithRetry(GetGoalContractPath(sessionRoot), updatedGoal, GuiSmokeShared.JsonOptions);
+        }
 
         var evidence = new List<string>();
         evidence.AddRange(milestoneEvaluation.Evidence);
@@ -953,7 +971,7 @@ static partial class LongRunArtifacts
             healthEvaluation.Classifications,
             evidence,
             blockers);
-        LiveExportAtomicFileWriter.WriteJsonAtomic(GetSupervisorStatePath(sessionRoot), supervisorState, GuiSmokeShared.JsonOptions);
+        WriteJsonAtomicWithRetry(GetSupervisorStatePath(sessionRoot), supervisorState, GuiSmokeShared.JsonOptions);
         return supervisorState;
     }
 
@@ -1121,16 +1139,19 @@ static partial class LongRunArtifacts
         var sameActionStallCount = progress.Count(entry => entry.ObserverSignals.Contains("same-action-stall", StringComparer.OrdinalIgnoreCase));
         var decisionWaitPlateau = AnalyzeDecisionWaitPlateau(progress);
         var inspectOverlayLoop = AnalyzeInspectOverlayLoop(progress);
+        var rewardMapLoop = AnalyzeRewardMapLoop(progress);
         var mapTransitionStall = AnalyzeMapTransitionStall(progress);
         var combatNoOpLoop = AnalyzeCombatNoOpLoop(progress);
-        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop, mapTransitionStall, combatNoOpLoop);
+        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop, rewardMapLoop, mapTransitionStall, combatNoOpLoop);
         var phase = failureSummary?.Phase
+                    ?? rewardMapLoop.Phase
                     ?? mapTransitionStall.Phase
                     ?? combatNoOpLoop.Phase
                     ?? inspectOverlayLoop.Phase
                     ?? decisionWaitPlateau.Phase
                     ?? progress.LastOrDefault()?.Phase;
         var observerScreen = failureSummary?.ObserverScreen
+                             ?? rewardMapLoop.ObserverScreen
                              ?? mapTransitionStall.ObserverScreen
                              ?? combatNoOpLoop.ObserverScreen
                              ?? inspectOverlayLoop.ObserverScreen
@@ -1148,6 +1169,7 @@ static partial class LongRunArtifacts
             $"sameActionStalls:{sameActionStallCount}",
             $"repeatedDecisionWaits:{decisionWaitPlateau.RepeatedWaitCount}",
             $"overlayLoopCount:{inspectOverlayLoop.OverlayCloseCount}",
+            $"rewardMapLoopCount:{rewardMapLoop.RepeatedLoopCount}",
             $"mapTransitionLoopCount:{mapTransitionStall.RepeatedLoopCount}",
             $"combatNoOpLoopCount:{combatNoOpLoop.RepeatedLoopCount}",
             $"trustStateAtStart:{attemptEntry.TrustStateAtStart}",
@@ -1172,6 +1194,21 @@ static partial class LongRunArtifacts
             evidence.Add($"overlayLoopMisdirectedTarget:{inspectOverlayLoop.LastMisdirectedTarget}");
         }
 
+        if (!string.IsNullOrWhiteSpace(rewardMapLoop.LastLoopTarget))
+        {
+            evidence.Add($"rewardMapLoopTarget:{rewardMapLoop.LastLoopTarget}");
+        }
+
+        if (rewardMapLoop.ExplicitRewardChoicesPresent)
+        {
+            evidence.Add("rewardExplicitChoicesPresent:true");
+        }
+
+        if (rewardMapLoop.MapArrowContaminationPresent)
+        {
+            evidence.Add("rewardMapArrowContamination:true");
+        }
+
         if (!string.IsNullOrWhiteSpace(mapTransitionStall.LastLoopTarget))
         {
             evidence.Add($"mapTransitionLoopTarget:{mapTransitionStall.LastLoopTarget}");
@@ -1193,7 +1230,7 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "map-transition-stall" or "combat-noop-loop",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-transition-stall" or "combat-noop-loop",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
@@ -1203,6 +1240,7 @@ static partial class LongRunArtifacts
             selfMetaReview?.PlateauDetected == true
             || decisionWaitPlateau.PlateauDetected
             || inspectOverlayLoop.LoopDetected
+            || rewardMapLoop.LoopDetected
             || mapTransitionStall.StallDetected
             || combatNoOpLoop.LoopDetected,
             backlogRoute,
@@ -1235,7 +1273,7 @@ static partial class LongRunArtifacts
             null,
             GoalCompletionCriteria,
             GoalOperationalRules);
-        LiveExportAtomicFileWriter.WriteJsonAtomic(GetGoalContractPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
+        WriteJsonAtomicWithRetry(GetGoalContractPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
         return fallback;
     }
 
@@ -1260,7 +1298,7 @@ static partial class LongRunArtifacts
             DeployEvidence: null,
             ManualCleanBootEvidence: null,
             Notes: Array.Empty<string>());
-        LiveExportAtomicFileWriter.WriteJsonAtomic(GetPrevalidationPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
+        WriteJsonAtomicWithRetry(GetPrevalidationPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
         return fallback;
     }
 
@@ -1409,12 +1447,20 @@ static partial class LongRunArtifacts
         int sameActionStallCount,
         DecisionWaitPlateauAnalysis decisionWaitPlateau,
         InspectOverlayLoopAnalysis inspectOverlayLoop,
+        RewardMapLoopAnalysis rewardMapLoop,
         MapTransitionStallAnalysis mapTransitionStall,
         CombatNoOpLoopAnalysis combatNoOpLoop)
     {
         if (string.Equals(attemptEntry.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase))
         {
             return "scene-authority-invalid";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
+            || rewardMapLoop.LoopDetected)
+        {
+            return "reward-map-loop";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
@@ -1603,6 +1649,84 @@ static partial class LongRunArtifacts
             lastMisdirectedTarget);
     }
 
+    private static RewardMapLoopAnalysis AnalyzeRewardMapLoop(IReadOnlyList<GuiSmokeStepProgress> progress)
+    {
+        if (progress.Count == 0)
+        {
+            return new RewardMapLoopAnalysis("no-stall", false, 0, null, null, null, null, false, false);
+        }
+
+        var lastLoopEntry = progress.LastOrDefault(IsRewardMapLoopProgressEntry);
+        if (lastLoopEntry is null)
+        {
+            return new RewardMapLoopAnalysis("no-stall", false, 0, null, null, null, null, false, false);
+        }
+
+        var normalizedSignature = NormalizeSceneSignatureForPlateau(lastLoopEntry.SceneSignature);
+        var repeatedLoopCount = 0;
+        string? lastLoopTarget = null;
+        var explicitRewardChoicesPresent = false;
+        var mapArrowContaminationPresent = normalizedSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase)
+                                           || normalizedSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase);
+        for (var index = progress.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = progress[index];
+            if (!IsRewardMapLoopProgressEntry(entry)
+                || !string.Equals(entry.ObserverScreen, lastLoopEntry.ObserverScreen, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(NormalizeSceneSignatureForPlateau(entry.SceneSignature), normalizedSignature, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            explicitRewardChoicesPresent |= HasExplicitRewardProgressionEvidence(entry);
+            mapArrowContaminationPresent |= entry.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase)
+                                            || entry.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase);
+
+            if (IsRewardMapLoopTarget(entry.DecisionTargetLabel))
+            {
+                repeatedLoopCount += 1;
+                lastLoopTarget ??= entry.DecisionTargetLabel;
+                continue;
+            }
+
+            if (entry.DecisionTargetLabel is null
+                || entry.ObserverSignals.Contains("alternate-branch:HandleRewards", StringComparer.OrdinalIgnoreCase)
+                || entry.ObserverSignals.Contains("alternate-branch:WaitMap", StringComparer.OrdinalIgnoreCase)
+                || entry.ObserverSignals.Contains("reward-screen-authority", StringComparer.OrdinalIgnoreCase)
+                || entry.ObserverSignals.Contains("reward-explicit-progression", StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        if (repeatedLoopCount < 2 || !explicitRewardChoicesPresent)
+        {
+            return new RewardMapLoopAnalysis(
+                "no-stall",
+                false,
+                repeatedLoopCount,
+                lastLoopEntry.Phase,
+                lastLoopEntry.ObserverScreen,
+                normalizedSignature,
+                lastLoopTarget,
+                explicitRewardChoicesPresent,
+                mapArrowContaminationPresent);
+        }
+
+        return new RewardMapLoopAnalysis(
+            "reward-map-loop",
+            true,
+            repeatedLoopCount,
+            lastLoopEntry.Phase,
+            lastLoopEntry.ObserverScreen,
+            normalizedSignature,
+            lastLoopTarget,
+            explicitRewardChoicesPresent,
+            mapArrowContaminationPresent);
+    }
+
     private static MapTransitionStallAnalysis AnalyzeMapTransitionStall(IReadOnlyList<GuiSmokeStepProgress> progress)
     {
         if (progress.Count == 0)
@@ -1735,6 +1859,31 @@ static partial class LongRunArtifacts
             blockedTargetLabel);
     }
 
+    private static bool IsRewardMapLoopProgressEntry(GuiSmokeStepProgress entry)
+    {
+        return (string.Equals(entry.Phase, GuiSmokePhase.HandleRewards.ToString(), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Phase, GuiSmokePhase.WaitMap.ToString(), StringComparison.OrdinalIgnoreCase))
+               && (SignatureIndicatesRewardScreen(entry.SceneSignature, entry.ObserverScreen)
+                   || HasExplicitRewardProgressionEvidence(entry));
+    }
+
+    private static bool HasExplicitRewardProgressionEvidence(GuiSmokeStepProgress entry)
+    {
+        return entry.ObserverSignals.Contains("reward-explicit-progression", StringComparer.OrdinalIgnoreCase)
+               || entry.ObserverSignals.Contains("reward-choice", StringComparer.OrdinalIgnoreCase)
+               || entry.ObserverSignals.Contains("choice-extractor:reward", StringComparer.OrdinalIgnoreCase)
+               || entry.ObserverSignals.Contains("choice-extractor:rewards", StringComparer.OrdinalIgnoreCase)
+               || SignatureIndicatesRewardScreen(entry.SceneSignature, entry.ObserverScreen);
+    }
+
+    private static bool SignatureIndicatesRewardScreen(string? sceneSignature, string? observerScreen)
+    {
+        return string.Equals(observerScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+               || (!string.IsNullOrWhiteSpace(sceneSignature)
+                   && (sceneSignature.Contains("screen:rewards", StringComparison.OrdinalIgnoreCase)
+                       || sceneSignature.Contains("visible:rewards", StringComparison.OrdinalIgnoreCase)));
+    }
+
     private static bool IsMapTransitionProgressEntry(GuiSmokeStepProgress entry)
     {
         return (string.Equals(entry.Phase, GuiSmokePhase.HandleEvent.ToString(), StringComparison.OrdinalIgnoreCase)
@@ -1750,6 +1899,13 @@ static partial class LongRunArtifacts
         return string.Equals(decisionTargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRewardMapLoopTarget(string? decisionTargetLabel)
+    {
+        return string.Equals(decisionTargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsOverlayCleanupDecisionTarget(string? decisionTargetLabel)
@@ -2148,9 +2304,36 @@ static partial class LongRunArtifacts
         var lines = existingEntries
             .Select(item => JsonSerializer.Serialize(item, GuiSmokeShared.NdjsonOptions))
             .ToArray();
-        LiveExportAtomicFileWriter.WriteJsonAtomic(path + ".tmp.json", lines, GuiSmokeShared.JsonOptions);
+        WriteJsonAtomicWithRetry(path + ".tmp.json", lines, GuiSmokeShared.JsonOptions);
         File.WriteAllLines(path, lines);
         File.Delete(path + ".tmp.json");
+    }
+
+    private static void WriteJsonAtomicWithRetry<T>(
+        string path,
+        T value,
+        JsonSerializerOptions options,
+        int maxAttempts = 6,
+        int retryDelayMs = 25)
+    {
+        for (var attempt = 1; attempt <= Math.Max(1, maxAttempts); attempt += 1)
+        {
+            try
+            {
+                LiveExportAtomicFileWriter.WriteJsonAtomic(path, value, options);
+                return;
+            }
+            catch (IOException) when (attempt < maxAttempts)
+            {
+                Thread.Sleep(retryDelayMs * attempt);
+            }
+            catch (UnauthorizedAccessException) when (attempt < maxAttempts)
+            {
+                Thread.Sleep(retryDelayMs * attempt);
+            }
+        }
+
+        LiveExportAtomicFileWriter.WriteJsonAtomic(path, value, options);
     }
 
     private static string GetGoalContractPath(string sessionRoot) => Path.Combine(sessionRoot, "goal-contract.json");
