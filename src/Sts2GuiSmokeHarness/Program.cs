@@ -3108,6 +3108,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             .Where(card => IsAttackCombatHandCard(card) && IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy))
             .OrderBy(card => card.SlotIndex)
             .FirstOrDefault();
+        var observerHandHasOnlyNonEnemyCards = request.Observer.CombatHand.Count > 0
+            && request.Observer.CombatHand.All(card => IsNonEnemyCombatHandCard(card) || !IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy));
         var attackSlot = knowledgeAttackSlot is not null
             ? new AutoCombatHandSlotAnalysis(
                 knowledgeAttackSlot.SlotIndex,
@@ -3126,11 +3128,13 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 double.MaxValue,
                 0,
                 0)
-                : handAnalysis.Slots
-                .Where(static slot => slot.IsVisible && slot.Kind == AutoCombatCardKind.AttackLike)
-                .OrderByDescending(static slot => slot.RedBlueDelta)
-                .ThenByDescending(static slot => slot.Brightness)
-                .FirstOrDefault();
+                : observerHandHasOnlyNonEnemyCards
+                    ? null
+                    : handAnalysis.Slots
+                    .Where(static slot => slot.IsVisible && slot.Kind == AutoCombatCardKind.AttackLike)
+                    .OrderByDescending(static slot => slot.RedBlueDelta)
+                    .ThenByDescending(static slot => slot.Brightness)
+                    .FirstOrDefault();
         if (attackSlot is not null)
         {
             return new GuiSmokeStepDecision(
