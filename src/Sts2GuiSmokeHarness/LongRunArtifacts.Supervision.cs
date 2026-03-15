@@ -245,6 +245,24 @@ static partial class LongRunArtifacts
         string? SceneSignature,
         string? LastMisdirectedTarget);
 
+    private sealed record MapTransitionStallAnalysis(
+        string DiagnosisKind,
+        bool StallDetected,
+        int RepeatedLoopCount,
+        string? Phase,
+        string? ObserverScreen,
+        string? SceneSignature,
+        string? LastLoopTarget);
+
+    private sealed record CombatNoOpLoopAnalysis(
+        string DiagnosisKind,
+        bool LoopDetected,
+        int RepeatedLoopCount,
+        string? Phase,
+        string? ObserverScreen,
+        string? SceneSignature,
+        string? BlockedTargetLabel);
+
     private sealed record HealthEvaluation(
         string HealthState,
         bool RelevantProcessObserved,
@@ -1103,9 +1121,21 @@ static partial class LongRunArtifacts
         var sameActionStallCount = progress.Count(entry => entry.ObserverSignals.Contains("same-action-stall", StringComparer.OrdinalIgnoreCase));
         var decisionWaitPlateau = AnalyzeDecisionWaitPlateau(progress);
         var inspectOverlayLoop = AnalyzeInspectOverlayLoop(progress);
-        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop);
-        var phase = failureSummary?.Phase ?? inspectOverlayLoop.Phase ?? decisionWaitPlateau.Phase ?? progress.LastOrDefault()?.Phase;
-        var observerScreen = failureSummary?.ObserverScreen ?? inspectOverlayLoop.ObserverScreen ?? decisionWaitPlateau.ObserverScreen ?? progress.LastOrDefault()?.ObserverScreen;
+        var mapTransitionStall = AnalyzeMapTransitionStall(progress);
+        var combatNoOpLoop = AnalyzeCombatNoOpLoop(progress);
+        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop, mapTransitionStall, combatNoOpLoop);
+        var phase = failureSummary?.Phase
+                    ?? mapTransitionStall.Phase
+                    ?? combatNoOpLoop.Phase
+                    ?? inspectOverlayLoop.Phase
+                    ?? decisionWaitPlateau.Phase
+                    ?? progress.LastOrDefault()?.Phase;
+        var observerScreen = failureSummary?.ObserverScreen
+                             ?? mapTransitionStall.ObserverScreen
+                             ?? combatNoOpLoop.ObserverScreen
+                             ?? inspectOverlayLoop.ObserverScreen
+                             ?? decisionWaitPlateau.ObserverScreen
+                             ?? progress.LastOrDefault()?.ObserverScreen;
         var screenshotPath = failureSummary?.ScreenshotPath ?? FindLatestScreenshotPath(runRoot);
         var backlogRoute = ShouldRouteToDecompilerBacklog(diagnosisKind, phase, observerScreen)
             ? "decompiled-source-first-observer"
@@ -1118,6 +1148,8 @@ static partial class LongRunArtifacts
             $"sameActionStalls:{sameActionStallCount}",
             $"repeatedDecisionWaits:{decisionWaitPlateau.RepeatedWaitCount}",
             $"overlayLoopCount:{inspectOverlayLoop.OverlayCloseCount}",
+            $"mapTransitionLoopCount:{mapTransitionStall.RepeatedLoopCount}",
+            $"combatNoOpLoopCount:{combatNoOpLoop.RepeatedLoopCount}",
             $"trustStateAtStart:{attemptEntry.TrustStateAtStart}",
         };
         if (!string.IsNullOrWhiteSpace(phase))
@@ -1140,6 +1172,16 @@ static partial class LongRunArtifacts
             evidence.Add($"overlayLoopMisdirectedTarget:{inspectOverlayLoop.LastMisdirectedTarget}");
         }
 
+        if (!string.IsNullOrWhiteSpace(mapTransitionStall.LastLoopTarget))
+        {
+            evidence.Add($"mapTransitionLoopTarget:{mapTransitionStall.LastLoopTarget}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(combatNoOpLoop.BlockedTargetLabel))
+        {
+            evidence.Add($"combatNoOpTarget:{combatNoOpLoop.BlockedTargetLabel}");
+        }
+
         if (!string.IsNullOrWhiteSpace(backlogRoute))
         {
             evidence.Add($"backlogRoute:{backlogRoute}");
@@ -1151,14 +1193,18 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "map-transition-stall" or "combat-noop-loop",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
             observerScreen,
             screenshotPath,
             sameActionStallCount,
-            selfMetaReview?.PlateauDetected == true || decisionWaitPlateau.PlateauDetected || inspectOverlayLoop.LoopDetected,
+            selfMetaReview?.PlateauDetected == true
+            || decisionWaitPlateau.PlateauDetected
+            || inspectOverlayLoop.LoopDetected
+            || mapTransitionStall.StallDetected
+            || combatNoOpLoop.LoopDetected,
             backlogRoute,
             evidence);
         UpsertNdjson(GetStallDiagnosisPath(sessionRoot), diagnosis, static existing => existing.AttemptId, diagnosis.AttemptId);
@@ -1362,11 +1408,20 @@ static partial class LongRunArtifacts
         GuiSmokeFailureSummary? failureSummary,
         int sameActionStallCount,
         DecisionWaitPlateauAnalysis decisionWaitPlateau,
-        InspectOverlayLoopAnalysis inspectOverlayLoop)
+        InspectOverlayLoopAnalysis inspectOverlayLoop,
+        MapTransitionStallAnalysis mapTransitionStall,
+        CombatNoOpLoopAnalysis combatNoOpLoop)
     {
         if (string.Equals(attemptEntry.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase))
         {
             return "scene-authority-invalid";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
+            || mapTransitionStall.StallDetected)
+        {
+            return "map-transition-stall";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
@@ -1388,6 +1443,13 @@ static partial class LongRunArtifacts
             || inspectOverlayLoop.LoopDetected)
         {
             return "inspect-overlay-loop";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
+            || combatNoOpLoop.LoopDetected)
+        {
+            return "combat-noop-loop";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
@@ -1539,6 +1601,155 @@ static partial class LongRunArtifacts
             lastOverlayAction.ObserverScreen,
             normalizedSignature,
             lastMisdirectedTarget);
+    }
+
+    private static MapTransitionStallAnalysis AnalyzeMapTransitionStall(IReadOnlyList<GuiSmokeStepProgress> progress)
+    {
+        if (progress.Count == 0)
+        {
+            return new MapTransitionStallAnalysis("no-stall", false, 0, null, null, null, null);
+        }
+
+        var lastLoopEntry = progress.LastOrDefault(IsMapTransitionProgressEntry);
+        if (lastLoopEntry is null)
+        {
+            return new MapTransitionStallAnalysis("no-stall", false, 0, null, null, null, null);
+        }
+
+        var normalizedSignature = NormalizeSceneSignatureForPlateau(lastLoopEntry.SceneSignature);
+        var repeatedLoopCount = 0;
+        string? lastLoopTarget = null;
+        for (var index = progress.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = progress[index];
+            if (!IsMapTransitionProgressEntry(entry)
+                || !string.Equals(entry.ObserverScreen, lastLoopEntry.ObserverScreen, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(NormalizeSceneSignatureForPlateau(entry.SceneSignature), normalizedSignature, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            if (IsMapTransitionLoopTarget(entry.DecisionTargetLabel))
+            {
+                repeatedLoopCount += 1;
+                lastLoopTarget ??= entry.DecisionTargetLabel;
+                continue;
+            }
+
+            if (entry.DecisionTargetLabel is null
+                || entry.ObserverSignals.Contains("alternate-branch:HandleEvent", StringComparer.OrdinalIgnoreCase)
+                || entry.ObserverSignals.Contains("alternate-branch:ChooseFirstNode", StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        if (repeatedLoopCount < 2)
+        {
+            return new MapTransitionStallAnalysis("no-stall", false, repeatedLoopCount, lastLoopEntry.Phase, lastLoopEntry.ObserverScreen, normalizedSignature, lastLoopTarget);
+        }
+
+        return new MapTransitionStallAnalysis(
+            "map-transition-stall",
+            true,
+            repeatedLoopCount,
+            lastLoopEntry.Phase,
+            lastLoopEntry.ObserverScreen,
+            normalizedSignature,
+            lastLoopTarget);
+    }
+
+    private static CombatNoOpLoopAnalysis AnalyzeCombatNoOpLoop(IReadOnlyList<GuiSmokeStepProgress> progress)
+    {
+        if (progress.Count == 0)
+        {
+            return new CombatNoOpLoopAnalysis("no-stall", false, 0, null, null, null, null);
+        }
+
+        var lastCombatEntry = progress.LastOrDefault(entry =>
+            string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(entry.DecisionTargetLabel));
+        if (lastCombatEntry is null)
+        {
+            return new CombatNoOpLoopAnalysis("no-stall", false, 0, null, null, null, null);
+        }
+
+        var normalizedSignature = NormalizeSceneSignatureForPlateau(lastCombatEntry.SceneSignature);
+        var blockedTargetLabel = progress
+            .Where(entry =>
+                string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                && entry.DecisionTargetLabel is not null
+                && entry.DecisionTargetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
+            .Select(static entry => entry.DecisionTargetLabel)
+            .LastOrDefault();
+        var repeatedSelectionCount = 0;
+        var enemyTargetCount = 0;
+        for (var index = progress.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = progress[index];
+            if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(entry.ObserverScreen, lastCombatEntry.ObserverScreen, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(NormalizeSceneSignatureForPlateau(entry.SceneSignature), normalizedSignature, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            if (!string.IsNullOrWhiteSpace(blockedTargetLabel)
+                && string.Equals(entry.DecisionTargetLabel, blockedTargetLabel, StringComparison.OrdinalIgnoreCase))
+            {
+                repeatedSelectionCount += 1;
+                continue;
+            }
+
+            if (string.Equals(entry.DecisionTargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase))
+            {
+                enemyTargetCount += 1;
+                continue;
+            }
+
+            if (entry.DecisionTargetLabel is null)
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        var loopDetected = repeatedSelectionCount >= 2
+                           && enemyTargetCount >= 2
+                           && !string.IsNullOrWhiteSpace(blockedTargetLabel);
+        if (!loopDetected)
+        {
+            return new CombatNoOpLoopAnalysis("no-stall", false, repeatedSelectionCount, lastCombatEntry.Phase, lastCombatEntry.ObserverScreen, normalizedSignature, blockedTargetLabel);
+        }
+
+        return new CombatNoOpLoopAnalysis(
+            "combat-noop-loop",
+            true,
+            repeatedSelectionCount,
+            lastCombatEntry.Phase,
+            lastCombatEntry.ObserverScreen,
+            normalizedSignature,
+            blockedTargetLabel);
+    }
+
+    private static bool IsMapTransitionProgressEntry(GuiSmokeStepProgress entry)
+    {
+        return (string.Equals(entry.Phase, GuiSmokePhase.HandleEvent.ToString(), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Phase, GuiSmokePhase.WaitMap.ToString(), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Phase, GuiSmokePhase.ChooseFirstNode.ToString(), StringComparison.OrdinalIgnoreCase))
+               && (entry.ObserverSignals.Contains("map-transition-evidence", StringComparer.OrdinalIgnoreCase)
+                   || entry.SceneSignature.Contains("substate:map-transition", StringComparison.OrdinalIgnoreCase)
+                   || entry.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsMapTransitionLoopTarget(string? decisionTargetLabel)
+    {
+        return string.Equals(decisionTargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsOverlayCleanupDecisionTarget(string? decisionTargetLabel)
