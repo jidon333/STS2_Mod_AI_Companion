@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 using System.Windows.Forms;
+using Sts2AiCompanion.Foundation.Contracts;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
@@ -28,6 +29,9 @@ try
 
         case "inspect-run":
             return InspectRun(options, workspaceRoot);
+
+        case "inspect-session":
+            return InspectSession(options, workspaceRoot);
 
         case "self-test":
             RunSelfTest();
@@ -80,30 +84,69 @@ static async Task<int> RunScenarioAsync(
     var maxConsecutiveLaunchFailures = TryGetPositiveIntOption(options, "--max-consecutive-launch-failures") ?? 3;
     var maxSceneDeadEnds = TryGetPositiveIntOption(options, "--max-scene-dead-ends") ?? 5;
 
-    if (!options.ContainsKey("--skip-deploy"))
-    {
-        EnsureGameNotRunning();
-        await GuiSmokeShared.RunProcessAsync(
-            "dotnet",
-            "run --project src\\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge",
-            workspaceRoot,
-            TimeSpan.FromMinutes(5)).ConfigureAwait(false);
-        EnsureHarnessEnabledInRuntimeConfig(configuration);
-    }
-
     if (isLongRun)
     {
         Directory.CreateDirectory(sessionRoot);
         Directory.CreateDirectory(Path.Combine(sessionRoot, "attempts"));
+        LongRunArtifacts.InitializeSessionArtifacts(sessionRoot, sessionId, scenarioId, providerKind);
+    }
+
+    if (!options.ContainsKey("--skip-deploy"))
+    {
+        try
+        {
+            EnsureGameNotRunning();
+            if (isLongRun)
+            {
+                LongRunArtifacts.RecordGameStoppedBeforeDeployEvidence(sessionRoot);
+            }
+
+            await GuiSmokeShared.RunProcessAsync(
+                "dotnet",
+                "run --project src\\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge",
+                workspaceRoot,
+                TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+            EnsureHarnessEnabledInRuntimeConfig(configuration);
+            if (isLongRun)
+            {
+                LongRunArtifacts.RecordDeployVerificationEvidence(
+                    sessionRoot,
+                    configuration,
+                    workspaceRoot,
+                    includeHarnessBridge: true);
+            }
+        }
+        catch
+        {
+            if (isLongRun)
+            {
+                LongRunArtifacts.UpdateRunnerSessionState(
+                    sessionRoot,
+                    GuiSmokeContractStates.SessionAborted,
+                    "runner aborted during deploy.");
+            }
+
+            throw;
+        }
     }
     else if (Directory.Exists(sessionRoot))
     {
         Directory.Delete(sessionRoot, recursive: true);
     }
 
+    if (isLongRun && options.ContainsKey("--skip-deploy"))
+    {
+        LongRunArtifacts.UpdatePrevalidation(
+            sessionRoot,
+            note: "skip-deploy was enabled; trust gate remains invalid until required deploy proof is recorded.");
+    }
+
     if (isLongRun && options.ContainsKey("--skip-launch"))
     {
         maxAttempts = Math.Min(maxAttempts, 1);
+        LongRunArtifacts.UpdatePrevalidation(
+            sessionRoot,
+            note: "skip-launch was enabled; manual clean boot proof was not recorded by the runner.");
     }
 
     GuiSmokeAttemptResult? lastAttempt = null;
@@ -112,6 +155,29 @@ static async Task<int> RunScenarioAsync(
     for (var attemptOrdinal = 1; attemptOrdinal <= maxAttempts && DateTimeOffset.UtcNow < sessionDeadline; attemptOrdinal += 1)
     {
         var attemptId = attemptOrdinal.ToString("0000", CultureInfo.InvariantCulture);
+        var trustStateAtStart = GuiSmokeContractStates.TrustInvalid;
+        if (isLongRun)
+        {
+            if (lastAttempt is not null)
+            {
+                if (ShouldMarkSessionStalled(lastAttempt))
+                {
+                    LongRunArtifacts.UpdateRunnerSessionState(
+                        sessionRoot,
+                        GuiSmokeContractStates.SessionStalled,
+                        $"runner observed terminal attempt {lastAttempt.AttemptId} before deciding restart.");
+                }
+
+                LongRunArtifacts.RecordRunnerBeginRestart(sessionRoot, lastAttempt, attemptId, attemptOrdinal);
+            }
+
+            LongRunArtifacts.UpdateRunnerSessionState(
+                sessionRoot,
+                GuiSmokeContractStates.SessionCollecting,
+                $"runner starting attempt {attemptId}.");
+            trustStateAtStart = LongRunArtifacts.RefreshSupervisorState(sessionRoot).TrustState;
+        }
+
         lastAttempt = await RunAttemptAsync(
             configuration,
             workspaceRoot,
@@ -125,7 +191,8 @@ static async Task<int> RunScenarioAsync(
             isLongRun,
             attemptId,
             attemptOrdinal,
-            sessionDeadline).ConfigureAwait(false);
+            sessionDeadline,
+            trustStateAtStart).ConfigureAwait(false);
 
         if (!isLongRun)
         {
@@ -142,14 +209,36 @@ static async Task<int> RunScenarioAsync(
         if (consecutiveLaunchFailures >= maxConsecutiveLaunchFailures)
         {
             LogHarness($"session abort consecutive launch failures={consecutiveLaunchFailures}");
+            LongRunArtifacts.UpdateRunnerSessionState(
+                sessionRoot,
+                GuiSmokeContractStates.SessionAborted,
+                $"runner aborted after {consecutiveLaunchFailures} consecutive launch failures.");
             return 1;
         }
 
         if (consecutiveSceneDeadEnds >= maxSceneDeadEnds)
         {
             LogHarness($"session abort consecutive scene dead-ends={consecutiveSceneDeadEnds}");
+            LongRunArtifacts.UpdateRunnerSessionState(
+                sessionRoot,
+                GuiSmokeContractStates.SessionAborted,
+                $"runner aborted after {consecutiveSceneDeadEnds} consecutive scene dead-ends.");
             return 1;
         }
+    }
+
+    if (isLongRun)
+    {
+        var supervisorState = LongRunArtifacts.RefreshSupervisorState(sessionRoot);
+        var finalSessionState = string.Equals(supervisorState.MilestoneState, GuiSmokeContractStates.MilestoneDone, StringComparison.OrdinalIgnoreCase)
+            ? GuiSmokeContractStates.SessionCompleted
+            : GuiSmokeContractStates.SessionAborted;
+        LongRunArtifacts.UpdateRunnerSessionState(
+            sessionRoot,
+            finalSessionState,
+            finalSessionState == GuiSmokeContractStates.SessionCompleted
+                ? "runner ended after milestone proof was completed."
+                : "runner ended before milestone proof completed.");
     }
 
     return lastAttempt?.ExitCode ?? 1;
@@ -168,7 +257,8 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     bool isLongRun,
     string attemptId,
     int attemptOrdinal,
-    DateTimeOffset sessionDeadline)
+    DateTimeOffset sessionDeadline,
+    string trustStateAtStart)
 {
     const int PassiveWaitMs = 1000;
     const int ActionSettleMinimumMs = 900;
@@ -204,15 +294,44 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         configuration.GamePaths.GameDirectory));
     var stepIndex = 0;
 
-    GuiSmokeAttemptResult CompleteAttempt(int exitCode, string status, string message, bool launchFailed = false)
+    GuiSmokeAttemptResult CompleteAttempt(
+        int exitCode,
+        string status,
+        string message,
+        bool launchFailed = false,
+        string? terminalCause = null,
+        string? failureClass = null)
     {
         logger.CompleteRun(status, message);
         logger.WriteValidationSummary(runId);
         if (isLongRun)
         {
-            var selfMetaReview = LongRunArtifacts.WriteAttemptMetaReview(sessionRoot, attemptId, attemptOrdinal, runId, status, message);
+            LongRunArtifacts.RecordAttemptTerminal(
+                sessionRoot,
+                attemptId,
+                attemptOrdinal,
+                runId,
+                terminalCause,
+                launchFailed,
+                failureClass,
+                trustStateAtStart);
+            var selfMetaReview = LongRunArtifacts.WriteAttemptMetaReview(sessionRoot, attemptId, attemptOrdinal, runId, status, message, failureClass);
             logger.WriteSelfMetaReview(selfMetaReview);
-            LongRunArtifacts.WriteSessionArtifacts(sessionRoot, logger, runId, scenarioId, providerKind, attemptId, attemptOrdinal, stepIndex, status, message);
+            LongRunArtifacts.WriteSessionArtifacts(
+                sessionRoot,
+                logger,
+                runId,
+                scenarioId,
+                providerKind,
+                attemptId,
+                attemptOrdinal,
+                stepIndex,
+                status,
+                message,
+                terminalCause,
+                launchFailed,
+                failureClass,
+                trustStateAtStart);
         }
 
         return new GuiSmokeAttemptResult(
@@ -224,12 +343,15 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             status,
             message,
             stepIndex,
-            launchFailed);
+            launchFailed,
+            terminalCause,
+            failureClass,
+            trustStateAtStart);
     }
 
-    if (!options.ContainsKey("--skip-launch"))
+    try
     {
-        try
+        if (!options.ContainsKey("--skip-launch"))
         {
             await StopGameProcessesAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
             EnsureGameNotRunning();
@@ -240,23 +362,35 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                 workspaceRoot,
                 TimeSpan.FromSeconds(10),
                 waitForExit: false).ConfigureAwait(false);
+            if (isLongRun)
+            {
+                LongRunArtifacts.RecordRunnerLaunchIssued(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart);
+            }
 
             await WaitForLiveGameWindowAsync(launchIssuedAt, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
             await MaintainLaunchFocusAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         }
-        catch (Exception exception)
-        {
-            logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                GuiSmokePhase.WaitMainMenu.ToString(),
-                $"launch-failed: {exception.Message}",
-                null,
-                null,
-                null));
-            return CompleteAttempt(1, "failed", $"launch-failed: {exception.Message}", launchFailed: true);
-        }
+    }
+    catch (Exception exception)
+    {
+        logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+            GuiSmokePhase.WaitMainMenu.ToString(),
+            $"launch-failed: {exception.Message}",
+            null,
+            null,
+            null));
+        return CompleteAttempt(
+            1,
+            "failed",
+            $"launch-failed: {exception.Message}",
+            launchFailed: true,
+            terminalCause: "launch-failed",
+            failureClass: "launch-runtime-noise");
     }
 
+    try
+    {
     IGuiDecisionProvider provider = string.Equals(providerKind, "headless", StringComparison.OrdinalIgnoreCase)
         ? new HeadlessCodexDecisionProvider(options)
         : string.Equals(providerKind, "auto", StringComparison.OrdinalIgnoreCase)
@@ -278,11 +412,20 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     var consecutiveBlackFrames = 0;
     string? lastActionFingerprint = null;
     var sameActionStallCount = 0;
+    var attemptStartedRecorded = false;
+    string? lastDecisionWaitFingerprint = null;
+    var consecutiveDecisionWaitCount = 0;
     var consecutiveFallbackCapturesWithoutProcess = 0;
     var useDecisionAgeGuard = !string.Equals(providerKind, "auto", StringComparison.OrdinalIgnoreCase);
     var decisionStaleBudget = useDecisionAgeGuard
         ? TimeSpan.FromSeconds(2)
         : TimeSpan.FromSeconds(30);
+
+    void ResetDecisionWaitTracking()
+    {
+        lastDecisionWaitFingerprint = null;
+        consecutiveDecisionWaitCount = 0;
+    }
 
     while (DateTimeOffset.UtcNow < waitDeadline)
     {
@@ -304,6 +447,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         var screenshotPath = stepPrefix + ".screen.png";
         if (!captureService.TryCapture(window, screenshotPath))
         {
+            ResetDecisionWaitTracking();
             consecutiveBlackFrames += 1;
             LogHarness($"step={stepIndex} capture unusable; waiting for a valid process frame");
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "capture-unusable", null, null, null));
@@ -318,7 +462,12 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                         null,
                         null,
                         screenshotPath));
-                    return CompleteAttempt(1, "failed", "process-lost");
+                    return CompleteAttempt(
+                        1,
+                        "failed",
+                        "process-lost",
+                        terminalCause: "process-lost",
+                        failureClass: "launch-runtime-noise");
                 }
             }
             else
@@ -339,10 +488,26 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         }
         consecutiveBlackFrames = 0;
         consecutiveFallbackCapturesWithoutProcess = 0;
+        if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
+        {
+            LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
+            attemptStartedRecorded = true;
+        }
         LogHarness($"step={stepIndex} captured={screenshotPath}");
 
         var observer = observerReader.Read();
         logger.WriteObserverCopies(stepPrefix, observer);
+        if (isLongRun)
+        {
+            LongRunArtifacts.TryMarkManualCleanBootVerified(
+                sessionRoot,
+                harnessLayout,
+                observer,
+                history,
+                screenshotPath,
+                stepPrefix + ".observer.state.json");
+        }
+
         LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
         var iterationSceneSignature = ComputeSceneSignature(screenshotPath, observer, phase);
         var iterationFirstSeenScene = isLongRun && !HasSceneSignatureHistory(sessionRoot, iterationSceneSignature);
@@ -380,7 +545,11 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                     false,
                     sameActionStallCount,
                     "terminal-returned-main-menu"));
-            return CompleteAttempt(0, "completed", "returned-main-menu");
+            return CompleteAttempt(
+                0,
+                "completed",
+                "returned-main-menu",
+                terminalCause: "returned-main-menu");
         }
 
         if (isLongRun
@@ -410,11 +579,16 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                     false,
                     sameActionStallCount,
                     "terminal-player-defeated"));
-            return CompleteAttempt(0, "completed", "player-defeated");
+            return CompleteAttempt(
+                0,
+                "completed",
+                "player-defeated",
+                terminalCause: "player-defeated");
         }
 
         if (!observer.IsFreshSince(freshnessFloor))
         {
+            ResetDecisionWaitTracking();
             LogHarness($"step={stepIndex} stale observer snapshot ignored freshnessFloor={freshnessFloor:O}");
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "stale-observer", observer.CurrentScreen, observer.InCombat, null));
             AppendProgressIfLongRun(
@@ -438,6 +612,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
         if (evaluator.IsPhaseSatisfied(phase, observer))
         {
+            ResetDecisionWaitTracking();
             LogHarness($"step={stepIndex} observer accepted phase={phase}");
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "observer-accepted", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "observer-accepted", observer.CurrentScreen, observer.InCombat, null));
@@ -468,7 +643,11 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
             if (phase == GuiSmokePhase.Completed)
             {
-                return CompleteAttempt(0, "passed", "combat flow accepted by observer");
+                return CompleteAttempt(
+                    0,
+                    "passed",
+                    "combat flow accepted by observer",
+                    terminalCause: "combat-flow-accepted");
             }
 
             await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
@@ -477,6 +656,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
         if (TryAdvanceAlternateBranch(phase, observer, history, logger, stepIndex, isLongRun, out var alternatePhase))
         {
+            ResetDecisionWaitTracking();
             LogHarness($"step={stepIndex} alternate branch {phase} -> {alternatePhase} from screen={observer.CurrentScreen ?? "null"}");
             AppendProgressIfLongRun(
                 isLongRun,
@@ -497,7 +677,11 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
             if (phase == GuiSmokePhase.Completed)
             {
-                return CompleteAttempt(0, "passed", "combat flow accepted by observer");
+                return CompleteAttempt(
+                    0,
+                    "passed",
+                    "combat flow accepted by observer",
+                    terminalCause: "combat-flow-accepted");
             }
 
             await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
@@ -506,6 +690,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
         if (IsPassiveWaitPhase(phase))
         {
+            ResetDecisionWaitTracking();
             var waitAttempt = IncrementAttempt(attemptsByPhase, phase);
             if (phase == GuiSmokePhase.WaitCharacterSelect
                 && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
@@ -529,7 +714,12 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                     observer.CurrentScreen,
                     observer.InCombat,
                     screenshotPath));
-                return CompleteAttempt(1, "failed", $"timeout at {phase}");
+                return CompleteAttempt(
+                    1,
+                    "failed",
+                    $"timeout at {phase}",
+                    terminalCause: "phase-timeout",
+                    failureClass: ClassifyFailureForAttempt(phase, observer, "phase-timeout", launchFailed: false));
             }
 
             LogHarness($"step={stepIndex} waiting phase={phase} attempt={waitAttempt} screen={observer.CurrentScreen ?? "null"}");
@@ -580,6 +770,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
         if (string.Equals(decision.Status, "abort", StringComparison.OrdinalIgnoreCase))
         {
+            ResetDecisionWaitTracking();
             LogHarness($"step={stepIndex} aborted reason={decision.AbortReason ?? "null"}");
             AppendProgressIfLongRun(
                 isLongRun,
@@ -602,11 +793,60 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                 observer.CurrentScreen,
                 observer.InCombat,
                 screenshotPath));
-            return CompleteAttempt(1, "failed", decision.AbortReason ?? "decision aborted");
+            return CompleteAttempt(
+                1,
+                "failed",
+                decision.AbortReason ?? "decision aborted",
+                terminalCause: "decision-abort",
+                failureClass: ClassifyFailureForAttempt(phase, observer, "decision-abort", launchFailed: false));
         }
 
         if (string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase))
         {
+            var waitFingerprint = BuildDecisionWaitFingerprint(phase, request.SceneSignature, observer);
+            if (string.Equals(lastDecisionWaitFingerprint, waitFingerprint, StringComparison.Ordinal))
+            {
+                consecutiveDecisionWaitCount += 1;
+            }
+            else
+            {
+                lastDecisionWaitFingerprint = waitFingerprint;
+                consecutiveDecisionWaitCount = 1;
+            }
+
+            if (TryClassifyDecisionWaitPlateau(phase, observer, consecutiveDecisionWaitCount, out var plateauTerminalCause, out var plateauMessage))
+            {
+                LogHarness($"step={stepIndex} abort {plateauMessage}");
+                AppendProgressIfLongRun(
+                    isLongRun,
+                    logger,
+                    EvaluateStepProgress(
+                        stepIndex,
+                        phase,
+                        request.SceneSignature,
+                        observer,
+                        null,
+                        decision,
+                        request.FirstSeenScene,
+                        request.ReasoningMode,
+                        false,
+                        sameActionStallCount,
+                        "decision-wait",
+                        "wait-plateau"));
+                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                    phase.ToString(),
+                    plateauMessage,
+                    observer.CurrentScreen,
+                    observer.InCombat,
+                    screenshotPath));
+                return CompleteAttempt(
+                    1,
+                    "failed",
+                    plateauMessage,
+                    terminalCause: plateauTerminalCause,
+                    failureClass: ClassifyFailureForAttempt(phase, observer, plateauTerminalCause, launchFailed: false));
+            }
+
             var waitMinimumMs = GetDecisionWaitMinimumMs(phase);
             LogHarness($"step={stepIndex} wait requested ms={Math.Max(250, decision.WaitMs ?? waitMinimumMs)}");
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "wait", decision.TargetLabel, DateTimeOffset.UtcNow));
@@ -629,6 +869,8 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             await Task.Delay(Math.Max(waitMinimumMs, decision.WaitMs ?? waitMinimumMs)).ConfigureAwait(false);
             continue;
         }
+
+        ResetDecisionWaitTracking();
 
         var decisionAge = DateTimeOffset.UtcNow - request.IssuedAt;
         if (useDecisionAgeGuard && decisionAge > decisionStaleBudget)
@@ -722,7 +964,12 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                 observer.CurrentScreen,
                 observer.InCombat,
                 screenshotPath));
-            return CompleteAttempt(1, "failed", abortReason);
+            return CompleteAttempt(
+                1,
+                "failed",
+                abortReason,
+                terminalCause: "same-action-stall",
+                failureClass: ClassifyFailureForAttempt(phase, observer, "same-action-stall", launchFailed: false));
         }
 
         var clickWindow = WindowLocator.Refresh(window);
@@ -844,6 +1091,12 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             _ => phase,
         };
 
+        if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(postActionObserver, out var postEmbarkPhase))
+        {
+            LogHarness($"step={stepIndex} post-action phase reconciliation Embark -> {postEmbarkPhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
+            phase = postEmbarkPhase;
+        }
+
         attemptsByPhase.Clear();
         LogHarness($"step={stepIndex} next phase={phase}");
         var remainingSettleDelayMs = Math.Max(0, settleDelayMs - progressProbeDelayMs);
@@ -860,7 +1113,28 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         finalObserver.CurrentScreen,
         finalObserver.InCombat,
         null));
-    return CompleteAttempt(1, "failed", "global timeout");
+    return CompleteAttempt(
+        1,
+        "failed",
+        "global timeout",
+        terminalCause: "global-timeout",
+        failureClass: ClassifyFailureForAttempt(phase, finalObserver, "global-timeout", launchFailed: false));
+    }
+    catch (Exception exception)
+    {
+        logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+            "runner",
+            $"unexpected-exception: {exception.Message}",
+            null,
+            null,
+            null));
+        return CompleteAttempt(
+            1,
+            "failed",
+            $"unexpected-exception: {exception.Message}",
+            terminalCause: "unexpected-exception",
+            failureClass: "generic-recovery-failure");
+    }
 }
 
 static int? TryGetPositiveIntOption(IReadOnlyDictionary<string, string> options, string key)
@@ -905,6 +1179,57 @@ static bool IsNonEnemyCombatSelectionLabel(string? targetLabel)
            || targetLabel.StartsWith("combat select defend slot ", StringComparison.OrdinalIgnoreCase);
 }
 
+static bool ShouldMarkSessionStalled(GuiSmokeAttemptResult result)
+{
+    return string.Equals(result.Status, "failed", StringComparison.OrdinalIgnoreCase)
+           && !result.LaunchFailed
+           && !string.Equals(result.FailureClass, "launch-runtime-noise", StringComparison.OrdinalIgnoreCase);
+}
+
+static string ClassifyFailureForAttempt(
+    GuiSmokePhase phase,
+    ObserverState? observer,
+    string terminalCause,
+    bool launchFailed)
+{
+    if (launchFailed
+        || string.Equals(terminalCause, "launch-failed", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(terminalCause, "process-lost", StringComparison.OrdinalIgnoreCase))
+    {
+        return "launch-runtime-noise";
+    }
+
+    if (IsSceneAuthorityInvalidFailure(phase, observer))
+    {
+        return "scene-authority-invalid";
+    }
+
+    return terminalCause switch
+    {
+        "phase-mismatch-stall" => "phase-mismatch-stall",
+        "decision-wait-plateau" => "decision-wait-plateau",
+        "same-action-stall" => "screenshot-heuristic-drift",
+        "decision-abort" => "semantic-scene-ambiguity",
+        "phase-timeout" => "observer-blindspot",
+        "global-timeout" => "observer-blindspot",
+        _ => "generic-recovery-failure",
+    };
+}
+
+static bool IsSceneAuthorityInvalidFailure(GuiSmokePhase phase, ObserverState? observer)
+{
+    var currentScreen = observer?.CurrentScreen;
+    var visibleScreen = observer?.VisibleScreen;
+    var sceneAuthority = observer?.SceneAuthority;
+    return string.Equals(currentScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(visibleScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(currentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(visibleScreen, "character-select", StringComparison.OrdinalIgnoreCase)
+           || (string.Equals(currentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
+               && (phase is GuiSmokePhase.EnterRun or GuiSmokePhase.WaitCharacterSelect or GuiSmokePhase.ChooseCharacter)
+               && !string.Equals(sceneAuthority, "observer", StringComparison.OrdinalIgnoreCase));
+}
+
 static bool IsSceneDeadEndAttempt(GuiSmokeAttemptResult result)
 {
     if (result.LaunchFailed)
@@ -912,10 +1237,17 @@ static bool IsSceneDeadEndAttempt(GuiSmokeAttemptResult result)
         return false;
     }
 
-    return result.Message.Contains("same-action-stall", StringComparison.OrdinalIgnoreCase)
-           || result.Message.Contains("dead-end", StringComparison.OrdinalIgnoreCase)
-           || result.Message.Contains("decision aborted", StringComparison.OrdinalIgnoreCase)
-           || result.Message.Contains("timeout at Handle", StringComparison.OrdinalIgnoreCase);
+    return string.Equals(result.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.TerminalCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.FailureClass, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.FailureClass, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.FailureClass, "observer-blindspot", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.FailureClass, "semantic-scene-ambiguity", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.FailureClass, "screenshot-heuristic-drift", StringComparison.OrdinalIgnoreCase);
 }
 
 static async Task StopGameProcessesAsync(TimeSpan timeout)
@@ -1017,6 +1349,33 @@ static int InspectRun(IReadOnlyDictionary<string, string> options, string worksp
         Steps = Directory.Exists(Path.Combine(resolvedRoot, "steps"))
             ? Directory.GetFiles(Path.Combine(resolvedRoot, "steps"), "*.screen.png").Length
             : 0,
+    }, GuiSmokeShared.JsonOptions));
+    return 0;
+}
+
+static int InspectSession(IReadOnlyDictionary<string, string> options, string workspaceRoot)
+{
+    if (!options.TryGetValue("--session-root", out var sessionRoot))
+    {
+        throw new InvalidOperationException("--session-root is required.");
+    }
+
+    var resolvedRoot = Path.GetFullPath(sessionRoot, workspaceRoot);
+    if (!Directory.Exists(resolvedRoot))
+    {
+        throw new DirectoryNotFoundException(resolvedRoot);
+    }
+
+    LongRunArtifacts.RefreshStallSentinel(resolvedRoot);
+    var supervisorState = LongRunArtifacts.RefreshSupervisorState(resolvedRoot);
+    var goalContract = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(Path.Combine(resolvedRoot, "goal-contract.json")), GuiSmokeShared.JsonOptions);
+    var prevalidation = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(Path.Combine(resolvedRoot, "prevalidation.json")), GuiSmokeShared.JsonOptions);
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        SessionRoot = resolvedRoot,
+        GoalContract = goalContract,
+        Prevalidation = prevalidation,
+        SupervisorState = supervisorState,
     }, GuiSmokeShared.JsonOptions));
     return 0;
 }
@@ -1275,6 +1634,545 @@ static void RunSelfTest()
         && Math.Abs(parsedBounds.X - 100f) < 0.01f
         && Math.Abs(parsedBounds.Width - 40f) < 0.01f,
         "Screen bounds should parse from observer inventory strings.");
+
+    var embarkEventObserver = new ObserverState(
+        new ObserverSummary(
+            "event",
+            "event",
+            false,
+            DateTimeOffset.UtcNow,
+            "inv-event",
+            true,
+            "mixed",
+            "stable",
+            "episode-embark",
+            "None",
+            "event",
+            80,
+            80,
+            null,
+            new[] { "Option A" },
+            Array.Empty<string>(),
+            new[] { new ObserverActionNode("event-option:0", "event-option", "Option A", "460,750,1000,100", true) },
+            new[] { new ObserverChoice("choice", "Option A", "460,750,1000,100") },
+            Array.Empty<ObservedCombatHandCard>()),
+        null,
+        null,
+        null);
+    Assert(GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(embarkEventObserver, out var postEmbarkPhase) && postEmbarkPhase == GuiSmokePhase.HandleEvent, "Embark should reconcile to HandleEvent when observer already reports an event room.");
+    Assert(GetAllowedActions(GuiSmokePhase.Embark, embarkEventObserver).Contains("click first event option", StringComparer.OrdinalIgnoreCase), "Embark allowlist should admit event actions when observer is already in an event room.");
+    var embarkDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+        "run",
+        "boot-to-long-run",
+        7,
+        GuiSmokePhase.Embark.ToString(),
+        "Click Embark to begin the run.",
+        DateTimeOffset.UtcNow,
+        "screen.png",
+        new WindowBounds(0, 0, 1280, 720),
+        "phase:embark|screen:event|visible:event|encounter:none|ready:true|stability:stable|room:treasure",
+        "0001",
+        1,
+        3,
+        true,
+        "tactical",
+        null,
+        embarkEventObserver.Summary,
+        Array.Empty<KnownRecipeHint>(),
+        Array.Empty<EventKnowledgeCandidate>(),
+        Array.Empty<CombatCardKnowledgeHint>(),
+        GetAllowedActions(GuiSmokePhase.Embark, embarkEventObserver),
+        Array.Empty<GuiSmokeHistoryEntry>(),
+        "phase reconciliation required",
+        null));
+    Assert(string.Equals(embarkDecision.TargetLabel, "first event option", StringComparison.OrdinalIgnoreCase), "Embark decisioning should switch to the event option instead of waiting for an embark button.");
+    Assert(TryClassifyDecisionWaitPlateau(GuiSmokePhase.Embark, embarkEventObserver, 2, out var embarkPlateauCause, out _) && string.Equals(embarkPlateauCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase), "Embark/event repeated waits should escalate to phase-mismatch-stall.");
+    Assert(TryClassifyDecisionWaitPlateau(GuiSmokePhase.HandleEvent, embarkEventObserver, 5, out var waitPlateauCause, out _) && string.Equals(waitPlateauCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase), "Repeated waits in a stable room scene should escalate to decision-wait-plateau.");
+
+    var manualCleanBootRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-clean-boot-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(manualCleanBootRoot);
+        var harnessRoot = Path.Combine(manualCleanBootRoot, "harness");
+        var inboxRoot = Path.Combine(harnessRoot, "inbox");
+        var outboxRoot = Path.Combine(harnessRoot, "outbox");
+        Directory.CreateDirectory(inboxRoot);
+        Directory.CreateDirectory(outboxRoot);
+        var harnessLayout = new HarnessQueueLayout(
+            manualCleanBootRoot,
+            harnessRoot,
+            inboxRoot,
+            Path.Combine(inboxRoot, "actions.ndjson"),
+            outboxRoot,
+            Path.Combine(outboxRoot, "results.ndjson"),
+            Path.Combine(harnessRoot, "status.json"),
+            Path.Combine(outboxRoot, "trace.ndjson"),
+            Path.Combine(harnessRoot, "arm.json"),
+            Path.Combine(outboxRoot, "inventory.latest.json"));
+        File.WriteAllText(
+            harnessLayout.StatusPath,
+            JsonSerializer.Serialize(
+                new HarnessBridgeStatus(true, "active", null, null, DateTimeOffset.UtcNow, "warming up", null, null),
+                GuiSmokeShared.JsonOptions));
+        File.WriteAllText(
+            harnessLayout.InventoryPath,
+            JsonSerializer.Serialize(
+                new HarnessNodeInventory(
+                    "inventory-clean-boot",
+                    DateTimeOffset.UtcNow,
+                    "pending",
+                    "main-menu",
+                    null,
+                    "dormant",
+                    null,
+                    true,
+                    "mixed",
+                    "stable",
+                    Array.Empty<HarnessNodeInventoryItem>()),
+                GuiSmokeShared.JsonOptions));
+
+        LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootRoot, "clean-boot-session", "boot-to-long-run", "headless");
+        var screenshotPath = Path.Combine(manualCleanBootRoot, "main-menu.png");
+        var observerPath = Path.Combine(manualCleanBootRoot, "main-menu.observer.json");
+        File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
+        File.WriteAllText(observerPath, "{}");
+        Assert(
+            LongRunArtifacts.TryMarkManualCleanBootVerified(
+                manualCleanBootRoot,
+                harnessLayout,
+                new ObserverState(
+                    new ObserverSummary(
+                        "main-menu",
+                        "main-menu",
+                        false,
+                        DateTimeOffset.UtcNow,
+                        "inv-main-menu",
+                        true,
+                        "mixed",
+                        "stable",
+                        "episode-main-menu",
+                        null,
+                        "main-menu",
+                        null,
+                        null,
+                        null,
+                        new[] { "Singleplayer" },
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                screenshotPath,
+                observerPath),
+            "Manual clean boot should verify on a clean main-menu first step even when status mode is transiently non-dormant.");
+    }
+    finally
+    {
+        if (Directory.Exists(manualCleanBootRoot))
+        {
+            Directory.Delete(manualCleanBootRoot, recursive: true);
+        }
+    }
+
+    var deployVerificationRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-deploy-verify-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(deployVerificationRoot);
+        var workspace = Path.Combine(deployVerificationRoot, "workspace");
+        var artifactsRoot = Path.Combine(workspace, "artifacts", "native-package-layout", "flat");
+        var sourceModsRoot = Path.Combine(artifactsRoot, "mods");
+        var gameRoot = Path.Combine(deployVerificationRoot, "game");
+        var deployedModsRoot = Path.Combine(gameRoot, "mods");
+        Directory.CreateDirectory(sourceModsRoot);
+        Directory.CreateDirectory(deployedModsRoot);
+
+        var sourceConfigPath = Path.Combine(sourceModsRoot, "sts2-mod-ai-companion.config.json");
+        var deployedConfigPath = Path.Combine(deployedModsRoot, "sts2-mod-ai-companion.config.json");
+        File.WriteAllText(sourceConfigPath, """{"enabled":true,"harness":{"enabled":false},"liveExport":{"collectorModeEnabled":true}}""");
+        File.WriteAllText(deployedConfigPath, """{"enabled":true,"harness":{"enabled":true},"liveExport":{"collectorModeEnabled":true}}""");
+        File.WriteAllText(
+            Path.Combine(artifactsRoot, "native-deploy-report.json"),
+            JsonSerializer.Serialize(
+                new
+                {
+                    sourcePackageRoot = sourceModsRoot,
+                    deployedRoot = deployedModsRoot,
+                    files = new[]
+                    {
+                        new
+                        {
+                            sourcePath = sourceConfigPath,
+                            destinationPath = deployedConfigPath,
+                        },
+                    },
+                },
+                GuiSmokeShared.JsonOptions));
+
+        var deployConfiguration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = new GamePathOptions
+            {
+                GameDirectory = gameRoot,
+                UserDataRoot = Path.Combine(deployVerificationRoot, "userdata"),
+                SteamAccountId = "self-test",
+                ProfileIndex = 1,
+                ArtifactsRoot = "artifacts",
+            },
+        };
+        var deploySessionRoot = Path.Combine(deployVerificationRoot, "session");
+        Directory.CreateDirectory(Path.Combine(deploySessionRoot, "attempts"));
+        LongRunArtifacts.InitializeSessionArtifacts(deploySessionRoot, "deploy-session", "boot-to-long-run", "headless");
+        LongRunArtifacts.RecordDeployVerificationEvidence(deploySessionRoot, deployConfiguration, workspace, includeHarnessBridge: false);
+        var deployPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(File.ReadAllText(Path.Combine(deploySessionRoot, "prevalidation.json")), GuiSmokeShared.JsonOptions)
+                                 ?? throw new InvalidOperationException("Failed to read deploy prevalidation self-test.");
+        Assert(deployPrevalidation.DeployIdentityVerified, "Deploy verification should stay valid after the runner's intentional harness-enabled rewrite.");
+        Assert(deployPrevalidation.DeployEvidence?.HashMismatches.Count == 0, "Intentional runtime-config rewrite should not register as a deploy hash mismatch.");
+    }
+    finally
+    {
+        if (Directory.Exists(deployVerificationRoot))
+        {
+            Directory.Delete(deployVerificationRoot, recursive: true);
+        }
+    }
+
+    var eventOrderingRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-event-order-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(eventOrderingRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(eventOrderingRoot, "event-order-session", "boot-to-long-run", "headless");
+        LongRunArtifacts.RecordRunnerLaunchIssued(eventOrderingRoot, "0001", 1, "event-order-session-attempt-0001", GuiSmokeContractStates.TrustInvalid);
+        var firstScreenPath = Path.Combine(eventOrderingRoot, "attempts", "0001", "steps", "0001.screen.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(firstScreenPath)!);
+        File.WriteAllBytes(firstScreenPath, Array.Empty<byte>());
+        LongRunArtifacts.RecordAttemptStarted(eventOrderingRoot, "0001", 1, "event-order-session-attempt-0001", GuiSmokeContractStates.TrustInvalid, firstScreenPath);
+        var restartEvents = File.ReadLines(Path.Combine(eventOrderingRoot, "restart-events.ndjson"))
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => JsonSerializer.Deserialize<GuiSmokeRestartEvent>(line, GuiSmokeShared.JsonOptions))
+            .Where(static entry => entry is not null)
+            .Cast<GuiSmokeRestartEvent>()
+            .ToArray();
+        Assert(restartEvents.Length == 2, "Expected launch-issued and next-attempt-started restart events.");
+        Assert(string.Equals(restartEvents[0].EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase), "runner-launch-issued should be recorded before next-attempt-started.");
+        Assert(string.Equals(restartEvents[1].EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase), "next-attempt-started should be recorded at first-screen proof time.");
+    }
+    finally
+    {
+        if (Directory.Exists(eventOrderingRoot))
+        {
+            Directory.Delete(eventOrderingRoot, recursive: true);
+        }
+    }
+
+    var stallSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-stall-sentinel-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(stallSentinelRoot);
+        var runRoot = Path.Combine(stallSentinelRoot, "attempts", "0001");
+        Directory.CreateDirectory(runRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(stallSentinelRoot, "stall-session", "boot-to-long-run", "headless");
+        var progressPath = Path.Combine(runRoot, "progress.ndjson");
+        var progressEntries = new[]
+        {
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-3), 7, GuiSmokePhase.Embark.ToString(), "phase:embark|screen:event|visible:event|encounter:none|ready:true|stability:stable|room:treasure|shot:A", "event", null, null, true, false, true, false, false, new[] { "scene-ready-true", "decision-wait" }, Array.Empty<string>()),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-2), 8, GuiSmokePhase.Embark.ToString(), "phase:embark|screen:event|visible:event|encounter:none|ready:true|stability:stable|room:treasure|shot:B", "event", null, null, true, false, true, false, false, new[] { "scene-ready-true", "decision-wait" }, Array.Empty<string>()),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-1), 9, GuiSmokePhase.Embark.ToString(), "phase:embark|screen:event|visible:event|encounter:none|ready:true|stability:stable|room:treasure|shot:C", "event", null, null, true, false, true, false, false, new[] { "scene-ready-true", "decision-wait" }, Array.Empty<string>()),
+        };
+        File.WriteAllLines(progressPath, progressEntries.Select(entry => JsonSerializer.Serialize(entry, GuiSmokeShared.NdjsonOptions)));
+        LongRunArtifacts.RefreshStallSentinel(stallSentinelRoot);
+        var diagnosisEntries = File.ReadLines(Path.Combine(stallSentinelRoot, "stall-diagnosis.ndjson"))
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+            .Where(static entry => entry is not null)
+            .Cast<GuiSmokeStallDiagnosisEntry>()
+            .ToArray();
+        Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic in-progress attempt.");
+        Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase), "Stall sentinel should classify Embark/event repeated waits as phase-mismatch-stall.");
+        Assert(diagnosisEntries[0].StallDetected, "Stall sentinel should flag the repeated Embark/event wait plateau as a stall.");
+    }
+    finally
+    {
+        if (Directory.Exists(stallSentinelRoot))
+        {
+            Directory.Delete(stallSentinelRoot, recursive: true);
+        }
+    }
+
+    var longRunSessionRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-long-run-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(longRunSessionRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(longRunSessionRoot, "self-test-session", "boot-to-long-run", "headless");
+        LongRunArtifacts.UpdatePrevalidation(
+            longRunSessionRoot,
+            gameStoppedBeforeDeploy: true,
+            modsPayloadReconciled: true,
+            deployIdentityVerified: true,
+            manualCleanBootVerified: true);
+        LongRunArtifacts.UpdateRunnerSessionState(longRunSessionRoot, GuiSmokeContractStates.SessionCollecting);
+
+        var attemptOneRunRoot = Path.Combine(longRunSessionRoot, "attempts", "0001");
+        Directory.CreateDirectory(Path.Combine(attemptOneRunRoot, "steps"));
+        var attemptOneLogger = new ArtifactRecorder(attemptOneRunRoot);
+        var attemptOneManifest = new GuiSmokeRunManifest(
+            "self-test-session-attempt-0001",
+            "boot-to-long-run",
+            "headless",
+            DateTimeOffset.UtcNow.AddMinutes(-2),
+            "workspace",
+            "live",
+            "harness",
+            "game")
+        {
+            Status = "completed",
+            ResultMessage = "player-defeated",
+            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+        };
+        File.WriteAllText(Path.Combine(attemptOneRunRoot, "run.json"), JsonSerializer.Serialize(attemptOneManifest, GuiSmokeShared.JsonOptions));
+        var attemptOneValidation = new GuiSmokeValidationSummary(
+            "self-test-session-attempt-0001",
+            1,
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["observer-confirmed"] = 1,
+            },
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["map"] = 1,
+            });
+        File.WriteAllText(Path.Combine(attemptOneRunRoot, "validation-summary.json"), JsonSerializer.Serialize(attemptOneValidation, GuiSmokeShared.JsonOptions));
+        var attemptOneFirstScreen = Path.Combine(attemptOneRunRoot, "steps", "0001.screen.png");
+        File.WriteAllBytes(attemptOneFirstScreen, Array.Empty<byte>());
+        LongRunArtifacts.RecordAttemptTerminal(
+            longRunSessionRoot,
+            "0001",
+            1,
+            "self-test-session-attempt-0001",
+            "player-defeated",
+            launchFailed: false,
+            failureClass: null,
+            trustStateAtStart: GuiSmokeContractStates.TrustValid);
+        LongRunArtifacts.WriteSessionArtifacts(
+            longRunSessionRoot,
+            attemptOneLogger,
+            "self-test-session-attempt-0001",
+            "boot-to-long-run",
+            "headless",
+            "0001",
+            1,
+            1,
+            "completed",
+            "player-defeated",
+            "player-defeated",
+            launchFailed: false,
+            failureClass: null,
+            trustStateAtStart: GuiSmokeContractStates.TrustValid);
+
+        var attemptEntries = File.ReadLines(Path.Combine(longRunSessionRoot, "attempt-index.ndjson"))
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => JsonSerializer.Deserialize<GuiSmokeAttemptIndexEntry>(line, GuiSmokeShared.JsonOptions))
+            .Where(static entry => entry is not null)
+            .Cast<GuiSmokeAttemptIndexEntry>()
+            .ToArray();
+        Assert(attemptEntries.Length == 1, "Expected one attempt index entry for the synthetic long-run session.");
+        Assert(attemptEntries[0].TerminalCause == "player-defeated", "Attempt index should store explicit terminal cause.");
+        Assert(attemptEntries[0].TrustStateAtStart == GuiSmokeContractStates.TrustValid, "Attempt index should store trust state at attempt start.");
+
+        var previousAttempt = new GuiSmokeAttemptResult(
+            "0001",
+            1,
+            "self-test-session-attempt-0001",
+            attemptOneRunRoot,
+            0,
+            "completed",
+            "player-defeated",
+            1,
+            LaunchFailed: false,
+            TerminalCause: "player-defeated",
+            FailureClass: null,
+            TrustStateAtStart: GuiSmokeContractStates.TrustValid);
+        LongRunArtifacts.RecordRunnerBeginRestart(longRunSessionRoot, previousAttempt, "0002", 2);
+
+        var attemptTwoRunRoot = Path.Combine(longRunSessionRoot, "attempts", "0002");
+        Directory.CreateDirectory(Path.Combine(attemptTwoRunRoot, "steps"));
+        var attemptTwoFirstScreen = Path.Combine(attemptTwoRunRoot, "steps", "0001.screen.png");
+        File.WriteAllBytes(attemptTwoFirstScreen, Array.Empty<byte>());
+        LongRunArtifacts.RecordAttemptStarted(
+            longRunSessionRoot,
+            "0002",
+            2,
+            "self-test-session-attempt-0002",
+            GuiSmokeContractStates.TrustValid,
+            attemptTwoFirstScreen);
+
+        var supervisorState = LongRunArtifacts.RefreshSupervisorState(longRunSessionRoot);
+        Assert(supervisorState.TrustState == GuiSmokeContractStates.TrustValid, "Supervisor should mark trust valid when all prevalidation gates are present.");
+        Assert(supervisorState.MilestoneState == GuiSmokeContractStates.MilestoneDone, "Supervisor should require terminal, restart, and next attempt first-screen proof before reporting done.");
+        Assert(File.Exists(Path.Combine(longRunSessionRoot, "goal-contract.json")), "Expected goal-contract.json to be created.");
+        Assert(File.Exists(Path.Combine(longRunSessionRoot, "prevalidation.json")), "Expected prevalidation.json to be created.");
+        Assert(File.Exists(Path.Combine(longRunSessionRoot, "restart-events.ndjson")), "Expected restart-events.ndjson to be created.");
+        Assert(File.Exists(Path.Combine(longRunSessionRoot, "supervisor-state.json")), "Expected supervisor-state.json to be created.");
+        Assert(File.Exists(Path.Combine(longRunSessionRoot, "stall-diagnosis.ndjson")), "Expected stall-diagnosis.ndjson to be created.");
+    }
+    finally
+    {
+        if (Directory.Exists(longRunSessionRoot))
+        {
+            Directory.Delete(longRunSessionRoot, recursive: true);
+        }
+    }
+
+    var negativeMilestoneRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-negative-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(negativeMilestoneRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(negativeMilestoneRoot, "negative-session", "boot-to-long-run", "headless");
+        var invalidSupervisor = LongRunArtifacts.RefreshSupervisorState(negativeMilestoneRoot);
+        Assert(invalidSupervisor.TrustState == GuiSmokeContractStates.TrustInvalid, "Trust should remain invalid until all prevalidation gates have evidence.");
+        Assert(invalidSupervisor.MilestoneState == GuiSmokeContractStates.MilestoneInProgress, "Milestone should not advance while trust is invalid.");
+
+        LongRunArtifacts.UpdatePrevalidation(
+            negativeMilestoneRoot,
+            gameStoppedBeforeDeploy: true,
+            modsPayloadReconciled: true,
+            deployIdentityVerified: true,
+            manualCleanBootVerified: true);
+        LongRunArtifacts.UpdateRunnerSessionState(negativeMilestoneRoot, GuiSmokeContractStates.SessionCollecting);
+
+        var attemptRoot = Path.Combine(negativeMilestoneRoot, "attempts", "0001");
+        Directory.CreateDirectory(Path.Combine(attemptRoot, "steps"));
+        var logger = new ArtifactRecorder(attemptRoot);
+        var manifest = new GuiSmokeRunManifest(
+            "negative-session-attempt-0001",
+            "boot-to-long-run",
+            "headless",
+            DateTimeOffset.UtcNow.AddMinutes(-2),
+            "workspace",
+            "live",
+            "harness",
+            "game")
+        {
+            Status = "completed",
+            ResultMessage = "player-defeated",
+            CompletedAt = DateTimeOffset.UtcNow.AddMinutes(-1),
+        };
+        File.WriteAllText(Path.Combine(attemptRoot, "run.json"), JsonSerializer.Serialize(manifest, GuiSmokeShared.JsonOptions));
+        File.WriteAllText(
+            Path.Combine(attemptRoot, "validation-summary.json"),
+            JsonSerializer.Serialize(
+                new GuiSmokeValidationSummary(
+                    "negative-session-attempt-0001",
+                    1,
+                    new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
+                    new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)),
+                GuiSmokeShared.JsonOptions));
+        LongRunArtifacts.RecordAttemptTerminal(
+            negativeMilestoneRoot,
+            "0001",
+            1,
+            "negative-session-attempt-0001",
+            "player-defeated",
+            launchFailed: false,
+            failureClass: null,
+            trustStateAtStart: GuiSmokeContractStates.TrustValid);
+        LongRunArtifacts.WriteSessionArtifacts(
+            negativeMilestoneRoot,
+            logger,
+            "negative-session-attempt-0001",
+            "boot-to-long-run",
+            "headless",
+            "0001",
+            1,
+            0,
+            "completed",
+            "player-defeated",
+            "player-defeated",
+            launchFailed: false,
+            failureClass: null,
+            trustStateAtStart: GuiSmokeContractStates.TrustValid);
+
+        var terminalOnlySupervisor = LongRunArtifacts.RefreshSupervisorState(negativeMilestoneRoot);
+        Assert(terminalOnlySupervisor.MilestoneState == GuiSmokeContractStates.MilestoneTerminalSeen, "Milestone should stop at terminal_seen when restart proof is missing.");
+        Assert(terminalOnlySupervisor.Blockers.Contains("restart-missing-after:0001"), "Supervisor should report missing restart proof.");
+
+        var previousAttempt = new GuiSmokeAttemptResult(
+            "0001",
+            1,
+            "negative-session-attempt-0001",
+            attemptRoot,
+            0,
+            "completed",
+            "player-defeated",
+            0,
+            LaunchFailed: false,
+            TerminalCause: "player-defeated",
+            FailureClass: null,
+            TrustStateAtStart: GuiSmokeContractStates.TrustValid);
+        LongRunArtifacts.RecordRunnerBeginRestart(negativeMilestoneRoot, previousAttempt, "0002", 2);
+        LongRunArtifacts.RecordAttemptStarted(
+            negativeMilestoneRoot,
+            "0002",
+            2,
+            "negative-session-attempt-0002",
+            GuiSmokeContractStates.TrustValid,
+            Path.Combine(negativeMilestoneRoot, "attempts", "0002", "steps", "0001.screen.png"));
+
+        var missingFirstScreenSupervisor = LongRunArtifacts.RefreshSupervisorState(negativeMilestoneRoot);
+        Assert(missingFirstScreenSupervisor.MilestoneState == GuiSmokeContractStates.MilestoneRestartSeen, "Milestone should stop at restart_seen when attempt N+1 first screen is missing.");
+        Assert(missingFirstScreenSupervisor.Blockers.Contains("next-attempt-first-screen-missing:0002"), "Supervisor should report missing next-attempt first-screen proof.");
+
+        LongRunArtifacts.UpdateRunnerSessionState(negativeMilestoneRoot, GuiSmokeContractStates.SessionAborted);
+        var failedSupervisor = LongRunArtifacts.RefreshSupervisorState(negativeMilestoneRoot);
+        Assert(failedSupervisor.MilestoneState == GuiSmokeContractStates.MilestoneFailed, "Milestone should become failed when the session aborts before completion proof.");
+    }
+    finally
+    {
+        if (Directory.Exists(negativeMilestoneRoot))
+        {
+            Directory.Delete(negativeMilestoneRoot, recursive: true);
+        }
+    }
+
+    var healthRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-health-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(healthRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(healthRoot, "health-session", "boot-to-long-run", "headless");
+        LongRunArtifacts.UpdatePrevalidation(
+            healthRoot,
+            gameStoppedBeforeDeploy: true,
+            modsPayloadReconciled: true,
+            deployIdentityVerified: true,
+            manualCleanBootVerified: true);
+        LongRunArtifacts.UpdateRunnerSessionState(healthRoot, GuiSmokeContractStates.SessionCollecting);
+        LongRunArtifacts.RecordAttemptStarted(
+            healthRoot,
+            "0001",
+            1,
+            "health-session-attempt-0001",
+            GuiSmokeContractStates.TrustValid,
+            Path.Combine(healthRoot, "attempts", "0001", "steps", "0001.screen.png"));
+
+        var healthSupervisor = LongRunArtifacts.RefreshSupervisorStateForTesting(
+            healthRoot,
+            now: DateTimeOffset.UtcNow.AddMinutes(10),
+            relevantProcessObserved: true,
+            windowDetected: true,
+            runnerOwnerAlive: false);
+        Assert(healthSupervisor.HealthClassifications.Contains("runner-dead"), "Supervisor should classify missing runner owner heartbeat as runner-dead.");
+        Assert(healthSupervisor.HealthClassifications.Contains("no-artifact-heartbeat"), "Supervisor should classify stale runner artifacts as no-artifact-heartbeat.");
+        Assert(healthSupervisor.HealthClassifications.Contains("window-detected-no-step"), "Supervisor should classify a live window without step artifacts as window-detected-no-step.");
+    }
+    finally
+    {
+        if (Directory.Exists(healthRoot))
+        {
+            Directory.Delete(healthRoot, recursive: true);
+        }
+    }
 }
 
 static GuiSmokeStepRequest CreateStepRequest(
@@ -1617,6 +2515,11 @@ static string NormalizeKnowledgeKey(string? value)
 
 static string[] GetAllowedActions(GuiSmokePhase phase, ObserverState observer)
 {
+    if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out var observedPhase))
+    {
+        return GetAllowedActions(observedPhase, observer);
+    }
+
     return phase switch
     {
         GuiSmokePhase.EnterRun => new[] { "click continue", "click singleplayer", "click normal mode", "wait" },
@@ -1636,6 +2539,14 @@ static string[] GetAllowedActions(GuiSmokePhase phase, ObserverState observer)
         GuiSmokePhase.HandleCombat => new[] { "click card", "click enemy", "click end turn", "wait" },
         _ => new[] { "wait" },
     };
+}
+
+static bool LooksLikeShopState(ObserverSummary observer)
+{
+    return string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase);
 }
 
 static bool LooksLikeTreasureState(ObserverSummary observer)
@@ -1766,6 +2677,77 @@ static bool IsPassiveWaitPhase(GuiSmokePhase phase)
         or GuiSmokePhase.WaitCombat;
 }
 
+static string BuildDecisionWaitFingerprint(GuiSmokePhase phase, string sceneSignature, ObserverState observer)
+{
+    return string.Join("|",
+        phase.ToString(),
+        NormalizeSceneSignatureForPlateau(sceneSignature),
+        observer.CurrentScreen ?? "unknown",
+        observer.VisibleScreen ?? "unknown",
+        observer.ChoiceExtractorPath ?? "unknown",
+        GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType") ?? "unknown",
+        observer.InventoryId ?? "unknown",
+        BuildActionableStateSignature(observer.ActionNodes));
+}
+
+static string NormalizeSceneSignatureForPlateau(string sceneSignature)
+{
+    if (string.IsNullOrWhiteSpace(sceneSignature))
+    {
+        return "scene:none";
+    }
+
+    var parts = sceneSignature
+        .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Where(static part => !part.StartsWith("shot:", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    return parts.Length == 0 ? sceneSignature : string.Join("|", parts);
+}
+
+static string BuildActionableStateSignature(IReadOnlyList<ObserverActionNode> actionNodes)
+{
+    return string.Join(";",
+        actionNodes
+            .Where(static node => node.Actionable)
+            .OrderBy(static node => node.NodeId, StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .Select(node => $"{node.NodeId}:{node.Kind}:{node.Label}"));
+}
+
+static bool TryClassifyDecisionWaitPlateau(
+    GuiSmokePhase phase,
+    ObserverState observer,
+    int consecutiveDecisionWaitCount,
+    out string terminalCause,
+    out string message)
+{
+    var postEmbarkPhase = GuiSmokePhase.Embark;
+    var phaseMismatchObserved = phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out postEmbarkPhase);
+    var plateauLimit = phaseMismatchObserved ? 2 : GetDecisionWaitPlateauLimit(phase);
+    if (consecutiveDecisionWaitCount < plateauLimit)
+    {
+        terminalCause = string.Empty;
+        message = string.Empty;
+        return false;
+    }
+
+    if (phaseMismatchObserved)
+    {
+        terminalCause = "phase-mismatch-stall";
+        message = $"phase-mismatch-stall phase={phase} observer={observer.CurrentScreen ?? observer.VisibleScreen ?? "null"} reconciledPhase={postEmbarkPhase} waits={consecutiveDecisionWaitCount}";
+        return true;
+    }
+
+    terminalCause = "decision-wait-plateau";
+    message = $"decision-wait-plateau phase={phase} screen={observer.CurrentScreen ?? "null"} waits={consecutiveDecisionWaitCount} inventory={observer.InventoryId ?? "null"}";
+    return true;
+}
+
+static int GetDecisionWaitPlateauLimit(GuiSmokePhase phase)
+{
+    return phase == GuiSmokePhase.HandleCombat ? 4 : 5;
+}
+
 static int GetSameActionStallLimit(GuiSmokePhase phase, GuiSmokeStepDecision decision)
 {
     if (phase == GuiSmokePhase.HandleCombat)
@@ -1848,18 +2830,16 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase))
+        if (LooksLikeShopState(observer.Summary) || LooksLikeRestSiteState(observer.Summary))
         {
-            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
-            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
+            var branchKind = LooksLikeRestSiteState(observer.Summary) ? "branch-rest-site" : "branch-shop";
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
             nextPhase = GuiSmokePhase.ChooseFirstNode;
             return true;
         }
 
-        if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase))
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer.Summary))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
@@ -1867,7 +2847,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase))
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer.Summary))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-map", observer.CurrentScreen, observer.InCombat, null));
@@ -1875,7 +2855,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase) && observer.InCombat == true)
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
@@ -1883,13 +2863,31 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase))
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeEventState(observer.Summary, GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType")))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
             nextPhase = GuiSmokePhase.HandleEvent;
             return true;
         }
+    }
+
+    if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out var postEmbarkPhase))
+    {
+        var branchKind = postEmbarkPhase switch
+        {
+            GuiSmokePhase.HandleRewards => "branch-rewards",
+            GuiSmokePhase.HandleCombat => "branch-combat",
+            GuiSmokePhase.HandleEvent => "branch-event",
+            GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
+            GuiSmokePhase.ChooseFirstNode when LooksLikeShopState(observer.Summary) => "branch-shop",
+            GuiSmokePhase.ChooseFirstNode => "branch-map",
+            _ => "branch-room",
+        };
+        history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+        nextPhase = postEmbarkPhase;
+        return true;
     }
 
     if (phase == GuiSmokePhase.WaitMainMenu)
@@ -2429,6 +3427,7 @@ static void WriteUsage()
     Console.WriteLine("Usage:");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-run --run-root <path>");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- self-test");
 }
 
@@ -2589,7 +3588,10 @@ sealed record GuiSmokeAttemptResult(
     string Status,
     string Message,
     int StepCount,
-    bool LaunchFailed);
+    bool LaunchFailed,
+    string? TerminalCause,
+    string? FailureClass,
+    string TrustStateAtStart);
 
 sealed record GuiSmokeAttemptIndexEntry(
     string AttemptId,
@@ -2599,7 +3601,11 @@ sealed record GuiSmokeAttemptIndexEntry(
     string? ResultMessage,
     DateTimeOffset StartedAt,
     DateTimeOffset? CompletedAt,
-    int StepCount);
+    int StepCount,
+    string? TerminalCause,
+    bool LaunchFailed,
+    string? FailureClass,
+    string TrustStateAtStart);
 
 sealed record GuiSmokeFailureSummary(
     string Phase,
@@ -2823,6 +3829,135 @@ sealed record ObserverState(
     public string? ChoiceExtractorPath => Summary.ChoiceExtractorPath;
 }
 
+static class GuiSmokeObserverPhaseHeuristics
+{
+    public static bool TryGetPostEmbarkPhase(ObserverState observer, out GuiSmokePhase nextPhase)
+    {
+        return TryGetPostEmbarkPhase(observer.Summary, TryReadObserverMetaString(observer.StateDocument, "declaringType"), out nextPhase);
+    }
+
+    public static bool TryGetPostEmbarkPhase(ObserverSummary observer, out GuiSmokePhase nextPhase)
+    {
+        return TryGetPostEmbarkPhase(observer, null, out nextPhase);
+    }
+
+    public static bool TryGetPostEmbarkPhase(ObserverSummary observer, string? declaringType, out GuiSmokePhase nextPhase)
+    {
+        if (LooksLikeRewardsState(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleRewards;
+            return true;
+        }
+
+        if (LooksLikeEventState(observer, declaringType))
+        {
+            nextPhase = GuiSmokePhase.HandleEvent;
+            return true;
+        }
+
+        if (LooksLikeCombatState(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleCombat;
+            return true;
+        }
+
+        if (LooksLikeMapState(observer)
+            || LooksLikeShopState(observer)
+            || LooksLikeRestSiteState(observer))
+        {
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        nextPhase = default;
+        return false;
+    }
+
+    public static bool LooksLikeRewardsState(ObserverSummary observer)
+    {
+        return string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
+               || observer.ActionNodes.Any(static node =>
+                   node.Actionable
+                   && (node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase)
+                       || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static bool LooksLikeMapState(ObserverSummary observer)
+    {
+        return string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool LooksLikeCombatState(ObserverSummary observer)
+    {
+        return (string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase))
+               && observer.InCombat == true;
+    }
+
+    public static bool LooksLikeEventState(ObserverSummary observer, string? declaringType)
+    {
+        if (string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(declaringType)
+            && (declaringType.Contains("EventRoom", StringComparison.OrdinalIgnoreCase)
+                || declaringType.Contains(".Events.", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return observer.ActionNodes.Any(static node =>
+            node.Actionable
+            && (node.NodeId.StartsWith("event-option:", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(node.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+                || node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static string? TryReadObserverMetaString(JsonDocument? stateDocument, string propertyName)
+    {
+        if (stateDocument is null
+            || !stateDocument.RootElement.TryGetProperty("meta", out var metaElement)
+            || metaElement.ValueKind != JsonValueKind.Object
+            || !metaElement.TryGetProperty(propertyName, out var valueElement)
+            || valueElement.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        return valueElement.GetString();
+    }
+
+    private static bool LooksLikeShopState(ObserverSummary observer)
+    {
+        return string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeRestSiteState(ObserverSummary observer)
+    {
+        if (string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return observer.CurrentChoices.Any(static label =>
+            label.Contains("휴식", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("재련", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+    }
+}
+
 interface IGuiDecisionProvider
 {
     Task<GuiSmokeStepDecision> GetDecisionAsync(string requestPath, string decisionPath, TimeSpan timeout, CancellationToken cancellationToken);
@@ -2956,6 +4091,18 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 1000,
                 true,
                 null);
+        }
+
+        if (GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(request.Observer, out var postEmbarkPhase))
+        {
+            return postEmbarkPhase switch
+            {
+                GuiSmokePhase.HandleRewards => DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }),
+                GuiSmokePhase.HandleEvent => DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }),
+                GuiSmokePhase.HandleCombat => DecideHandleCombat(request with { Phase = GuiSmokePhase.HandleCombat.ToString() }),
+                GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }),
+                _ => CreateWaitDecision("waiting for post-embark room state", request.Observer.CurrentScreen),
+            };
         }
 
         return TryFindActionNodeDecision(request, "Embark", "embark")
@@ -5691,7 +6838,7 @@ sealed class ArtifactRecorder
     }
 }
 
-static class LongRunArtifacts
+static partial class LongRunArtifacts
 {
     public static GuiSmokeSelfMetaReview WriteAttemptMetaReview(
         string sessionRoot,
@@ -5699,7 +6846,8 @@ static class LongRunArtifacts
         int attemptOrdinal,
         string runId,
         string status,
-        string? resultMessage)
+        string? resultMessage,
+        string? explicitFailureClass = null)
     {
         var currentProgress = ReadNdjson<GuiSmokeStepProgress>(Path.Combine(sessionRoot, "attempts", attemptId, "progress.ndjson"));
         var previousReviews = ReadNdjson<GuiSmokeSelfMetaReview>(Path.Combine(sessionRoot, "meta-reviews.ndjson"));
@@ -5713,7 +6861,7 @@ static class LongRunArtifacts
         var novelSceneCount = currentProgress.Count(static entry => entry.FirstSeenScene);
         var sameActionStallCount = currentProgress.Count(entry => entry.ObserverSignals.Contains("same-action-stall", StringComparer.OrdinalIgnoreCase));
         var plateauDetected = DetectProgressPlateau(previousReviews, observerCoverageRatio, actuatorSuccessRatio, novelSceneCount, sameActionStallCount);
-        var dominantFailureClass = DetermineDominantFailureClass(currentProgress, status, resultMessage);
+        var dominantFailureClass = DetermineDominantFailureClass(currentProgress, status, resultMessage, explicitFailureClass);
         var evidence = BuildReviewEvidence(currentProgress, observerCoverageRatio, actuatorSuccessRatio, novelSceneCount, sameActionStallCount, status, resultMessage);
         var directionRisk = plateauDetected
             ? $"direction-risk:{dominantFailureClass}"
@@ -5750,7 +6898,11 @@ static class LongRunArtifacts
         int attemptOrdinal,
         int stepCount,
         string status,
-        string resultMessage)
+        string resultMessage,
+        string? terminalCause,
+        bool launchFailed,
+        string? failureClass,
+        string trustStateAtStart)
     {
         var validationPath = Path.Combine(logger.RunRoot, "validation-summary.json");
         GuiSmokeValidationSummary? validationSummary = null;
@@ -5771,7 +6923,11 @@ static class LongRunArtifacts
             resultMessage,
             runManifest?.StartedAt ?? DateTimeOffset.UtcNow,
             runManifest?.CompletedAt ?? DateTimeOffset.UtcNow,
-            stepCount);
+            stepCount,
+            terminalCause,
+            launchFailed,
+            failureClass,
+            trustStateAtStart);
 
         var attemptIndexPath = Path.Combine(sessionRoot, "attempt-index.ndjson");
         AppendUniqueNdjson(attemptIndexPath, attemptEntry, static existing => existing.RunId, attemptEntry.RunId);
@@ -5841,6 +6997,8 @@ static class LongRunArtifacts
             TotalSteps: totalSteps,
             ValidationEvents: validationEvents);
         LiveExportAtomicFileWriter.WriteJsonAtomic(Path.Combine(sessionRoot, "session-summary.json"), sessionSummary, GuiSmokeShared.JsonOptions);
+        RefreshStallSentinel(sessionRoot);
+        RefreshSupervisorState(sessionRoot);
     }
 
     public static void AppendSceneRecipe(string sessionRoot, GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
@@ -5983,8 +7141,14 @@ static class LongRunArtifacts
     private static string DetermineDominantFailureClass(
         IReadOnlyList<GuiSmokeStepProgress> progressEntries,
         string status,
-        string? resultMessage)
+        string? resultMessage,
+        string? explicitFailureClass = null)
     {
+        if (!string.IsNullOrWhiteSpace(explicitFailureClass))
+        {
+            return explicitFailureClass;
+        }
+
         if (resultMessage?.Contains("launch", StringComparison.OrdinalIgnoreCase) == true
             || progressEntries.Any(entry => entry.ObserverSignals.Contains("black-frame-nudge", StringComparer.OrdinalIgnoreCase)))
         {

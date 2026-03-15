@@ -1,0 +1,1765 @@
+using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using Sts2AiCompanion.Foundation.Contracts;
+using Sts2ModKit.Core.Configuration;
+using Sts2ModKit.Core.Harness;
+using Sts2ModKit.Core.LiveExport;
+
+static class GuiSmokeContractStates
+{
+    public const string TrustInvalid = "invalid";
+    public const string TrustValid = "valid";
+
+    public const string MilestoneInProgress = "in_progress";
+    public const string MilestoneTerminalSeen = "terminal_seen";
+    public const string MilestoneRestartSeen = "restart_seen";
+    public const string MilestoneDone = "done";
+    public const string MilestoneFailed = "failed";
+
+    public const string SessionStarting = "starting";
+    public const string SessionCollecting = "collecting";
+    public const string SessionStalled = "stalled";
+    public const string SessionAborted = "aborted";
+    public const string SessionCompleted = "completed";
+
+    public const string EventAttemptTerminal = "attempt-terminal";
+    public const string EventRunnerBeginRestart = "runner-begin-restart";
+    public const string EventRunnerLaunchIssued = "runner-launch-issued";
+    public const string EventNextAttemptStarted = "next-attempt-started";
+
+    public const string HealthHealthy = "healthy";
+    public const string HealthWarning = "warning";
+    public const string HealthCritical = "critical";
+
+    public static int GetMilestoneRank(string state)
+    {
+        return state switch
+        {
+            MilestoneTerminalSeen => 1,
+            MilestoneRestartSeen => 2,
+            MilestoneDone => 3,
+            MilestoneFailed => 4,
+            _ => 0,
+        };
+    }
+}
+
+sealed record GuiSmokeRunnerOwner(
+    string HostName,
+    int ProcessId,
+    string ProcessName,
+    DateTimeOffset ClaimedAt);
+
+sealed record GuiSmokeGoalContract(
+    string SessionId,
+    string ScenarioId,
+    string Provider,
+    string SessionRoot,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    string TrustState,
+    string MilestoneState,
+    string SessionState,
+    GuiSmokeRunnerOwner RunnerOwner,
+    DateTimeOffset LastRunnerHeartbeatAt,
+    DateTimeOffset? CompletedAt,
+    string? CompletedBy,
+    IReadOnlyList<string> CompletionCriteria,
+    IReadOnlyList<string> OperationalRules);
+
+sealed record GuiSmokeProcessStopEvidence(
+    DateTimeOffset VerifiedAt,
+    bool WindowDetected,
+    IReadOnlyList<string> RunningProcesses);
+
+sealed record GuiSmokeFileIdentityEvidence(
+    string Path,
+    long Size,
+    DateTimeOffset LastWriteUtc,
+    string Sha256);
+
+sealed record GuiSmokeDeployFileEvidence(
+    string RelativePath,
+    GuiSmokeFileIdentityEvidence Source,
+    GuiSmokeFileIdentityEvidence Deployed);
+
+sealed record GuiSmokeDeployEvidence(
+    DateTimeOffset VerifiedAt,
+    string ReportPath,
+    string ReportSha256,
+    string? SourcePackageRoot,
+    string? DeployedRoot,
+    IReadOnlyList<GuiSmokeDeployFileEvidence> VerifiedFiles,
+    IReadOnlyList<string> MissingFiles,
+    IReadOnlyList<string> HashMismatches,
+    IReadOnlyList<string> UnexpectedFamilyFiles,
+    IReadOnlyList<string> Notes);
+
+sealed record GuiSmokeManualCleanBootEvidence(
+    DateTimeOffset VerifiedAt,
+    string ScreenshotPath,
+    string ScreenshotSha256,
+    string? ObserverStatePath,
+    string? ObserverStateSha256,
+    string? HarnessStatusPath,
+    string? HarnessStatusSha256,
+    string? HarnessInventoryPath,
+    string? HarnessInventorySha256,
+    string ArmSessionPath,
+    bool ArmSessionPresent,
+    string ActionsPath,
+    bool ActionsPending,
+    string? HarnessStatusMode,
+    string? HarnessInventoryMode,
+    string? ObservedScreen);
+
+sealed record GuiSmokePrevalidation(
+    string SessionId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    bool GameStoppedBeforeDeploy,
+    bool ModsPayloadReconciled,
+    bool DeployIdentityVerified,
+    bool ManualCleanBootVerified,
+    GuiSmokeProcessStopEvidence? GameStopEvidence,
+    GuiSmokeDeployEvidence? DeployEvidence,
+    GuiSmokeManualCleanBootEvidence? ManualCleanBootEvidence,
+    IReadOnlyList<string> Notes);
+
+sealed record GuiSmokeRestartEvent(
+    DateTimeOffset RecordedAt,
+    string EventType,
+    string SessionId,
+    string AttemptId,
+    int AttemptOrdinal,
+    string? RunId,
+    string? PreviousAttemptId,
+    int? PreviousAttemptOrdinal,
+    string? TerminalCause,
+    bool? LaunchFailed,
+    string? FailureClass,
+    string? TrustStateAtStart,
+    string? StepScreenPath);
+
+sealed record GuiSmokeSupervisorState(
+    DateTimeOffset RecordedAt,
+    string SessionId,
+    string TrustState,
+    string MilestoneState,
+    string SessionState,
+    string HealthState,
+    bool TrustGateSatisfied,
+    bool RelevantProcessObserved,
+    bool WindowDetected,
+    bool RunnerOwnerAlive,
+    DateTimeOffset? LastArtifactHeartbeatAt,
+    string? LastArtifactHeartbeatPath,
+    DateTimeOffset? LastStepAt,
+    string? LastStepPath,
+    string? ExpectedCurrentAttemptId,
+    string? ExpectedCurrentAttemptFirstStepPath,
+    string? LastAttemptId,
+    string? LastTerminalAttemptId,
+    string? LastTerminalCause,
+    string? LatestRestartTargetAttemptId,
+    string? LatestNextAttemptId,
+    string? LatestNextAttemptFirstScreenPath,
+    IReadOnlyList<string> HealthClassifications,
+    IReadOnlyList<string> Evidence,
+    IReadOnlyList<string> Blockers);
+
+sealed record GuiSmokeStallDiagnosisEntry(
+    DateTimeOffset RecordedAt,
+    string SessionId,
+    string AttemptId,
+    int AttemptOrdinal,
+    string DiagnosisKind,
+    bool StallDetected,
+    string? FailureClass,
+    string? TerminalCause,
+    string? Phase,
+    string? ObserverScreen,
+    string? ScreenshotPath,
+    int SameActionStallCount,
+    bool PlateauDetected,
+    string? BacklogRoute,
+    IReadOnlyList<string> Evidence);
+
+static partial class LongRunArtifacts
+{
+    private static readonly string[] GoalCompletionCriteria =
+    {
+        "attempt N terminal event is durably recorded",
+        "runner-issued restart progress is durably recorded",
+        "attempt N+1 steps/0001.screen.png exists for the same session",
+    };
+
+    private static readonly string[] GoalOperationalRules =
+    {
+        "runner is the only execution owner",
+        "supervisor is read-mostly and decision-only",
+        "stall sentinel is read-only and diagnosis-only",
+        "supervisor and stall sentinel do not kill, relaunch, deploy, or create attempts",
+        "commentary is not evidence for health, completion, or recovery",
+        "gameplay results are untrusted until the trust gate is valid",
+    };
+
+    private static readonly TimeSpan NoArtifactHeartbeatThreshold = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan WindowNoStepThreshold = TimeSpan.FromSeconds(20);
+
+    private sealed record MilestoneEvaluation(
+        string MilestoneState,
+        string? LastTerminalAttemptId,
+        string? LastTerminalCause,
+        string? LatestRestartTargetAttemptId,
+        string? LatestNextAttemptId,
+        string? LatestNextAttemptFirstScreenPath,
+        IReadOnlyList<string> Evidence,
+        IReadOnlyList<string> Blockers);
+
+    private sealed record DecisionWaitPlateauAnalysis(
+        string DiagnosisKind,
+        bool PlateauDetected,
+        int RepeatedWaitCount,
+        string? Phase,
+        string? ObserverScreen,
+        string? SceneSignature);
+
+    private sealed record HealthEvaluation(
+        string HealthState,
+        bool RelevantProcessObserved,
+        bool WindowDetected,
+        bool RunnerOwnerAlive,
+        DateTimeOffset? LastArtifactHeartbeatAt,
+        string? LastArtifactHeartbeatPath,
+        DateTimeOffset? LastStepAt,
+        string? LastStepPath,
+        string? ExpectedCurrentAttemptId,
+        string? ExpectedCurrentAttemptFirstStepPath,
+        IReadOnlyList<string> Classifications,
+        IReadOnlyList<string> Evidence);
+
+    private sealed record ArtifactTimestamp(string Path, DateTimeOffset RecordedAt);
+
+    private sealed record SupervisorObservationOverride(
+        DateTimeOffset? Now = null,
+        bool? RelevantProcessObserved = null,
+        bool? WindowDetected = null,
+        bool? RunnerOwnerAlive = null);
+
+    public static void InitializeSessionArtifacts(
+        string sessionRoot,
+        string sessionId,
+        string scenarioId,
+        string providerKind)
+    {
+        Directory.CreateDirectory(sessionRoot);
+        Directory.CreateDirectory(Path.Combine(sessionRoot, "attempts"));
+
+        var now = DateTimeOffset.UtcNow;
+        if (!File.Exists(GetGoalContractPath(sessionRoot)))
+        {
+            LiveExportAtomicFileWriter.WriteJsonAtomic(
+                GetGoalContractPath(sessionRoot),
+                new GuiSmokeGoalContract(
+                    sessionId,
+                    scenarioId,
+                    providerKind,
+                    sessionRoot,
+                    now,
+                    now,
+                    GuiSmokeContractStates.TrustInvalid,
+                    GuiSmokeContractStates.MilestoneInProgress,
+                    GuiSmokeContractStates.SessionStarting,
+                    CreateRunnerOwner(now),
+                    now,
+                    null,
+                    null,
+                    GoalCompletionCriteria,
+                    GoalOperationalRules),
+                GuiSmokeShared.JsonOptions);
+        }
+
+        if (!File.Exists(GetPrevalidationPath(sessionRoot)))
+        {
+            LiveExportAtomicFileWriter.WriteJsonAtomic(
+                GetPrevalidationPath(sessionRoot),
+                new GuiSmokePrevalidation(
+                    sessionId,
+                    now,
+                    now,
+                    GameStoppedBeforeDeploy: false,
+                    ModsPayloadReconciled: false,
+                    DeployIdentityVerified: false,
+                    ManualCleanBootVerified: false,
+                    GameStopEvidence: null,
+                    DeployEvidence: null,
+                    ManualCleanBootEvidence: null,
+                    Notes: Array.Empty<string>()),
+                GuiSmokeShared.JsonOptions);
+        }
+
+        RefreshSupervisorState(sessionRoot);
+    }
+
+    public static GuiSmokeGoalContract UpdateRunnerSessionState(string sessionRoot, string sessionState, string? note = null)
+    {
+        var goal = LoadOrCreateGoalContract(sessionRoot);
+        var now = DateTimeOffset.UtcNow;
+        var completedAt = sessionState is GuiSmokeContractStates.SessionCompleted or GuiSmokeContractStates.SessionAborted
+            ? now
+            : goal.CompletedAt;
+        var completedBy = sessionState is GuiSmokeContractStates.SessionCompleted or GuiSmokeContractStates.SessionAborted
+            ? "runner"
+            : goal.CompletedBy;
+        var updated = goal with
+        {
+            UpdatedAt = now,
+            SessionState = sessionState,
+            LastRunnerHeartbeatAt = now,
+            CompletedAt = completedAt,
+            CompletedBy = completedBy,
+        };
+
+        LiveExportAtomicFileWriter.WriteJsonAtomic(GetGoalContractPath(sessionRoot), updated, GuiSmokeShared.JsonOptions);
+        if (!string.IsNullOrWhiteSpace(note))
+        {
+            UpdatePrevalidation(sessionRoot, note: note);
+        }
+        else
+        {
+            RefreshSupervisorState(sessionRoot);
+        }
+
+        return LoadOrCreateGoalContract(sessionRoot);
+    }
+
+    public static GuiSmokePrevalidation UpdatePrevalidation(
+        string sessionRoot,
+        bool? gameStoppedBeforeDeploy = null,
+        bool? modsPayloadReconciled = null,
+        bool? deployIdentityVerified = null,
+        bool? manualCleanBootVerified = null,
+        GuiSmokeProcessStopEvidence? gameStopEvidence = null,
+        GuiSmokeDeployEvidence? deployEvidence = null,
+        GuiSmokeManualCleanBootEvidence? manualCleanBootEvidence = null,
+        string? note = null)
+    {
+        var prevalidation = LoadOrCreatePrevalidation(sessionRoot);
+        var notes = prevalidation.Notes.ToList();
+        if (!string.IsNullOrWhiteSpace(note) && !notes.Contains(note, StringComparer.OrdinalIgnoreCase))
+        {
+            notes.Add(note);
+        }
+
+        var updated = prevalidation with
+        {
+            UpdatedAt = DateTimeOffset.UtcNow,
+            GameStoppedBeforeDeploy = gameStoppedBeforeDeploy ?? prevalidation.GameStoppedBeforeDeploy,
+            ModsPayloadReconciled = modsPayloadReconciled ?? prevalidation.ModsPayloadReconciled,
+            DeployIdentityVerified = deployIdentityVerified ?? prevalidation.DeployIdentityVerified,
+            ManualCleanBootVerified = manualCleanBootVerified ?? prevalidation.ManualCleanBootVerified,
+            GameStopEvidence = gameStopEvidence ?? prevalidation.GameStopEvidence,
+            DeployEvidence = deployEvidence ?? prevalidation.DeployEvidence,
+            ManualCleanBootEvidence = manualCleanBootEvidence ?? prevalidation.ManualCleanBootEvidence,
+            Notes = notes,
+        };
+
+        LiveExportAtomicFileWriter.WriteJsonAtomic(GetPrevalidationPath(sessionRoot), updated, GuiSmokeShared.JsonOptions);
+        RefreshSupervisorState(sessionRoot);
+        return updated;
+    }
+
+    public static void RecordGameStoppedBeforeDeployEvidence(string sessionRoot)
+    {
+        var runningProcesses = GetRunningRelevantProcesses();
+        var evidence = new GuiSmokeProcessStopEvidence(
+            DateTimeOffset.UtcNow,
+            ObserveGameWindow(),
+            runningProcesses);
+        UpdatePrevalidation(
+            sessionRoot,
+            gameStoppedBeforeDeploy: runningProcesses.Count == 0 && !evidence.WindowDetected,
+            gameStopEvidence: evidence,
+            note: "runner captured process-stop evidence before deploy.");
+    }
+
+    public static void RecordDeployVerificationEvidence(
+        string sessionRoot,
+        ScaffoldConfiguration configuration,
+        string workspaceRoot,
+        bool includeHarnessBridge)
+    {
+        var artifactsRoot = Path.GetFullPath(configuration.GamePaths.ArtifactsRoot, workspaceRoot);
+        var reportPath = Path.Combine(artifactsRoot, "native-package-layout", "flat", "native-deploy-report.json");
+        if (!File.Exists(reportPath))
+        {
+            UpdatePrevalidation(
+                sessionRoot,
+                modsPayloadReconciled: false,
+                deployIdentityVerified: false,
+                note: $"deploy report missing: {reportPath}");
+            return;
+        }
+
+        var reportDocument = TryReadJsonDocument(reportPath);
+        if (reportDocument is null)
+        {
+            UpdatePrevalidation(
+                sessionRoot,
+                modsPayloadReconciled: false,
+                deployIdentityVerified: false,
+                note: $"deploy report unreadable: {reportPath}");
+            return;
+        }
+
+        var root = reportDocument.RootElement;
+        var sourcePackageRoot = TryReadString(root, "sourcePackageRoot");
+        var deployedRoot = TryReadString(root, "deployedRoot");
+        var reportSha256 = ComputeFullFileSha256(reportPath);
+        var expectedFiles = new Dictionary<string, (string RelativePath, string SourcePath, string DestinationPath)>(StringComparer.OrdinalIgnoreCase);
+
+        if (root.TryGetProperty("files", out var filesElement) && filesElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var fileElement in filesElement.EnumerateArray())
+            {
+                var sourcePath = TryReadString(fileElement, "sourcePath");
+                var destinationPath = TryReadString(fileElement, "destinationPath");
+                if (string.IsNullOrWhiteSpace(sourcePath) || string.IsNullOrWhiteSpace(destinationPath))
+                {
+                    continue;
+                }
+
+                var relativePath = Path.GetFileName(destinationPath);
+                expectedFiles[relativePath] = (relativePath, sourcePath, destinationPath);
+            }
+        }
+
+        if (includeHarnessBridge && !string.IsNullOrWhiteSpace(deployedRoot))
+        {
+            foreach (var (sourceRoot, fileName) in new[]
+                     {
+                         (Path.Combine(workspaceRoot, "src", "Sts2ModAiCompanion.HarnessBridge", "bin", "Debug", "net7.0"), "Sts2ModAiCompanion.HarnessBridge.dll"),
+                         (Path.Combine(workspaceRoot, "src", "Sts2AiCompanion.Foundation", "bin", "Debug", "net7.0"), "Sts2AiCompanion.Foundation.dll"),
+                     })
+            {
+                var sourcePath = Path.Combine(sourceRoot, fileName);
+                var destinationPath = Path.Combine(deployedRoot, fileName);
+                expectedFiles[fileName] = (fileName, sourcePath, destinationPath);
+            }
+        }
+
+        var verifiedFiles = new List<GuiSmokeDeployFileEvidence>();
+        var missingFiles = new List<string>();
+        var hashMismatches = new List<string>();
+        var rewriteNotes = new List<string>();
+        foreach (var expected in expectedFiles.Values.OrderBy(static entry => entry.RelativePath, StringComparer.OrdinalIgnoreCase))
+        {
+            if (!File.Exists(expected.SourcePath))
+            {
+                missingFiles.Add($"missing-source:{expected.RelativePath}");
+                continue;
+            }
+
+            if (!File.Exists(expected.DestinationPath))
+            {
+                missingFiles.Add($"missing-deployed:{expected.RelativePath}");
+                continue;
+            }
+
+            var sourceEvidence = DescribeFile(expected.SourcePath);
+            var deployedEvidence = DescribeFile(expected.DestinationPath);
+            if (!string.Equals(sourceEvidence.Sha256, deployedEvidence.Sha256, StringComparison.OrdinalIgnoreCase))
+            {
+                if (TryMatchIntentionalRewrite(expected.RelativePath, expected.SourcePath, expected.DestinationPath, out var rewriteNote))
+                {
+                    if (!string.IsNullOrWhiteSpace(rewriteNote))
+                    {
+                        rewriteNotes.Add(rewriteNote);
+                    }
+                }
+                else
+                {
+                    hashMismatches.Add(expected.RelativePath);
+                    continue;
+                }
+            }
+
+            verifiedFiles.Add(new GuiSmokeDeployFileEvidence(expected.RelativePath, sourceEvidence, deployedEvidence));
+        }
+
+        var unexpectedFamilyFiles = new List<string>();
+        if (!string.IsNullOrWhiteSpace(deployedRoot) && Directory.Exists(deployedRoot))
+        {
+            foreach (var file in Directory.GetFiles(deployedRoot, "*", SearchOption.TopDirectoryOnly))
+            {
+                var fileName = Path.GetFileName(file);
+                if (!IsCompanionFamilyFile(fileName) || expectedFiles.ContainsKey(fileName))
+                {
+                    continue;
+                }
+
+                unexpectedFamilyFiles.Add(fileName);
+            }
+        }
+
+        var notes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(sourcePackageRoot))
+        {
+            notes.Add($"sourcePackageRoot:{sourcePackageRoot}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(deployedRoot))
+        {
+            notes.Add($"deployedRoot:{deployedRoot}");
+        }
+
+        notes.AddRange(rewriteNotes);
+
+        var deployEvidence = new GuiSmokeDeployEvidence(
+            DateTimeOffset.UtcNow,
+            reportPath,
+            reportSha256,
+            sourcePackageRoot,
+            deployedRoot,
+            verifiedFiles,
+            missingFiles,
+            hashMismatches,
+            unexpectedFamilyFiles,
+            notes);
+        UpdatePrevalidation(
+            sessionRoot,
+            modsPayloadReconciled: missingFiles.Count == 0 && unexpectedFamilyFiles.Count == 0,
+            deployIdentityVerified: missingFiles.Count == 0 && hashMismatches.Count == 0,
+            deployEvidence: deployEvidence,
+            note: "runner captured deploy identity evidence from the native deploy report and deployed payload.");
+    }
+
+    public static bool TryMarkManualCleanBootVerified(
+        string sessionRoot,
+        HarnessQueueLayout harnessLayout,
+        ObserverState observer,
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        string screenshotPath,
+        string? observerStatePath)
+    {
+        var prevalidation = LoadOrCreatePrevalidation(sessionRoot);
+        if (prevalidation.ManualCleanBootVerified)
+        {
+            return true;
+        }
+
+        if (history.Count != 0
+            || !string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var armSessionPresent = HasActiveArmSession(harnessLayout.ArmSessionPath);
+        var actionsPending = HasPendingHarnessActions(harnessLayout.ActionsPath);
+        var status = TryReadJson<HarnessBridgeStatus>(harnessLayout.StatusPath);
+        var inventory = TryReadJson<HarnessNodeInventory>(harnessLayout.InventoryPath);
+        var inventoryDormant = inventory is null || string.Equals(inventory.Mode, "dormant", StringComparison.OrdinalIgnoreCase);
+        if (armSessionPresent || actionsPending || !inventoryDormant)
+        {
+            return false;
+        }
+        var evidence = new GuiSmokeManualCleanBootEvidence(
+            DateTimeOffset.UtcNow,
+            screenshotPath,
+            File.Exists(screenshotPath) ? ComputeFullFileSha256(screenshotPath) : "missing",
+            observerStatePath,
+            !string.IsNullOrWhiteSpace(observerStatePath) && File.Exists(observerStatePath)
+                ? ComputeFullFileSha256(observerStatePath)
+                : null,
+            harnessLayout.StatusPath,
+            File.Exists(harnessLayout.StatusPath) ? ComputeFullFileSha256(harnessLayout.StatusPath) : null,
+            harnessLayout.InventoryPath,
+            File.Exists(harnessLayout.InventoryPath) ? ComputeFullFileSha256(harnessLayout.InventoryPath) : null,
+            harnessLayout.ArmSessionPath,
+            armSessionPresent,
+            harnessLayout.ActionsPath,
+            actionsPending,
+            status?.Mode,
+            inventory?.Mode,
+            observer.CurrentScreen);
+        UpdatePrevalidation(
+            sessionRoot,
+            manualCleanBootVerified: true,
+            manualCleanBootEvidence: evidence,
+            note: "runner captured manual clean boot evidence before the first action.");
+        return true;
+    }
+
+    public static void RecordAttemptStarted(
+        string sessionRoot,
+        string attemptId,
+        int attemptOrdinal,
+        string runId,
+        string trustStateAtStart,
+        string firstScreenPath)
+    {
+        AppendNdjson(
+            GetRestartEventsPath(sessionRoot),
+            new GuiSmokeRestartEvent(
+                DateTimeOffset.UtcNow,
+                GuiSmokeContractStates.EventNextAttemptStarted,
+                Path.GetFileName(sessionRoot),
+                attemptId,
+                attemptOrdinal,
+                runId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                trustStateAtStart,
+                firstScreenPath));
+        RefreshSupervisorState(sessionRoot);
+    }
+
+    public static void RecordRunnerLaunchIssued(
+        string sessionRoot,
+        string attemptId,
+        int attemptOrdinal,
+        string runId,
+        string trustStateAtStart)
+    {
+        AppendNdjson(
+            GetRestartEventsPath(sessionRoot),
+            new GuiSmokeRestartEvent(
+                DateTimeOffset.UtcNow,
+                GuiSmokeContractStates.EventRunnerLaunchIssued,
+                Path.GetFileName(sessionRoot),
+                attemptId,
+                attemptOrdinal,
+                runId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                trustStateAtStart,
+                null));
+        RefreshSupervisorState(sessionRoot);
+    }
+
+    public static void RecordRunnerBeginRestart(
+        string sessionRoot,
+        GuiSmokeAttemptResult previousAttempt,
+        string nextAttemptId,
+        int nextAttemptOrdinal)
+    {
+        AppendNdjson(
+            GetRestartEventsPath(sessionRoot),
+            new GuiSmokeRestartEvent(
+                DateTimeOffset.UtcNow,
+                GuiSmokeContractStates.EventRunnerBeginRestart,
+                Path.GetFileName(sessionRoot),
+                nextAttemptId,
+                nextAttemptOrdinal,
+                null,
+                previousAttempt.AttemptId,
+                previousAttempt.AttemptOrdinal,
+                previousAttempt.TerminalCause,
+                previousAttempt.LaunchFailed,
+                previousAttempt.FailureClass,
+                previousAttempt.TrustStateAtStart,
+                null));
+        RefreshSupervisorState(sessionRoot);
+    }
+
+    public static void RecordAttemptTerminal(
+        string sessionRoot,
+        string attemptId,
+        int attemptOrdinal,
+        string runId,
+        string? terminalCause,
+        bool launchFailed,
+        string? failureClass,
+        string trustStateAtStart)
+    {
+        AppendNdjson(
+            GetRestartEventsPath(sessionRoot),
+            new GuiSmokeRestartEvent(
+                DateTimeOffset.UtcNow,
+                GuiSmokeContractStates.EventAttemptTerminal,
+                Path.GetFileName(sessionRoot),
+                attemptId,
+                attemptOrdinal,
+                runId,
+                null,
+                null,
+                terminalCause,
+                launchFailed,
+                failureClass,
+                trustStateAtStart,
+                null));
+    }
+
+    public static GuiSmokeSupervisorState RefreshSupervisorState(string sessionRoot)
+    {
+        return RefreshSupervisorStateCore(sessionRoot, null);
+    }
+
+    public static GuiSmokeSupervisorState RefreshSupervisorStateForTesting(
+        string sessionRoot,
+        DateTimeOffset? now = null,
+        bool? relevantProcessObserved = null,
+        bool? windowDetected = null,
+        bool? runnerOwnerAlive = null)
+    {
+        return RefreshSupervisorStateCore(
+            sessionRoot,
+            new SupervisorObservationOverride(now, relevantProcessObserved, windowDetected, runnerOwnerAlive));
+    }
+
+    public static void RefreshStallSentinel(string sessionRoot)
+    {
+        var attemptEntries = ReadNdjson<GuiSmokeAttemptIndexEntry>(Path.Combine(sessionRoot, "attempt-index.ndjson"))
+            .OrderBy(static entry => entry.AttemptOrdinal)
+            .ToArray();
+        var restartEvents = ReadNdjson<GuiSmokeRestartEvent>(GetRestartEventsPath(sessionRoot))
+            .OrderBy(static entry => entry.RecordedAt)
+            .ThenBy(static entry => entry.AttemptOrdinal)
+            .ToArray();
+        var attemptDirectories = Directory.Exists(Path.Combine(sessionRoot, "attempts"))
+            ? Directory.GetDirectories(Path.Combine(sessionRoot, "attempts"))
+                .Select(Path.GetFileName)
+                .Where(static name => !string.IsNullOrWhiteSpace(name))
+                .Select(static name => name!)
+                .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : Array.Empty<string>();
+
+        foreach (var attemptId in attemptDirectories)
+        {
+            var indexedAttempt = attemptEntries.LastOrDefault(entry => string.Equals(entry.AttemptId, attemptId, StringComparison.OrdinalIgnoreCase));
+            var attemptOrdinal = indexedAttempt?.AttemptOrdinal
+                                 ?? restartEvents.LastOrDefault(entry => string.Equals(entry.AttemptId, attemptId, StringComparison.OrdinalIgnoreCase))?.AttemptOrdinal
+                                 ?? 0;
+            var diagnosisEntry = indexedAttempt ?? new GuiSmokeAttemptIndexEntry(
+                attemptId,
+                attemptOrdinal,
+                RunId: $"{Path.GetFileName(sessionRoot)}-attempt-{attemptId}",
+                Status: "in-progress",
+                ResultMessage: null,
+                StartedAt: DateTimeOffset.UtcNow,
+                CompletedAt: null,
+                StepCount: CountScreenshots(Path.Combine(sessionRoot, "attempts", attemptId, "steps")),
+                TerminalCause: null,
+                LaunchFailed: false,
+                FailureClass: null,
+                TrustStateAtStart: LoadOrCreateGoalContract(sessionRoot).TrustState);
+            WriteStallDiagnosis(sessionRoot, Path.Combine(sessionRoot, "attempts", attemptId), diagnosisEntry);
+        }
+    }
+
+    private static GuiSmokeSupervisorState RefreshSupervisorStateCore(string sessionRoot, SupervisorObservationOverride? observationOverride)
+    {
+        var now = observationOverride?.Now ?? DateTimeOffset.UtcNow;
+        var goal = LoadOrCreateGoalContract(sessionRoot);
+        var prevalidation = LoadOrCreatePrevalidation(sessionRoot);
+        var attemptEntries = ReadNdjson<GuiSmokeAttemptIndexEntry>(Path.Combine(sessionRoot, "attempt-index.ndjson"))
+            .OrderBy(static entry => entry.AttemptOrdinal)
+            .ToArray();
+        var restartEvents = ReadNdjson<GuiSmokeRestartEvent>(GetRestartEventsPath(sessionRoot))
+            .OrderBy(static entry => entry.RecordedAt)
+            .ThenBy(static entry => entry.AttemptOrdinal)
+            .ToArray();
+        var trustGateSatisfied = prevalidation.GameStoppedBeforeDeploy
+                                 && prevalidation.ModsPayloadReconciled
+                                 && prevalidation.DeployIdentityVerified
+                                 && prevalidation.ManualCleanBootVerified;
+        var trustState = trustGateSatisfied
+            ? GuiSmokeContractStates.TrustValid
+            : GuiSmokeContractStates.TrustInvalid;
+        var milestoneEvaluation = EvaluateMilestone(goal, trustState, attemptEntries, restartEvents, sessionRoot);
+        var healthEvaluation = EvaluateHealth(sessionRoot, goal, attemptEntries, restartEvents, now, observationOverride);
+
+        var blockers = new List<string>();
+        if (!prevalidation.GameStoppedBeforeDeploy)
+        {
+            blockers.Add("missing-gate:gameStoppedBeforeDeploy");
+        }
+
+        if (!prevalidation.ModsPayloadReconciled)
+        {
+            blockers.Add("missing-gate:modsPayloadReconciled");
+        }
+
+        if (!prevalidation.DeployIdentityVerified)
+        {
+            blockers.Add("missing-gate:deployIdentityVerified");
+        }
+
+        if (!prevalidation.ManualCleanBootVerified)
+        {
+            blockers.Add("missing-gate:manualCleanBootVerified");
+        }
+
+        blockers.AddRange(milestoneEvaluation.Blockers);
+        var updatedGoal = goal with
+        {
+            UpdatedAt = now,
+            TrustState = trustState,
+            MilestoneState = milestoneEvaluation.MilestoneState,
+        };
+        LiveExportAtomicFileWriter.WriteJsonAtomic(GetGoalContractPath(sessionRoot), updatedGoal, GuiSmokeShared.JsonOptions);
+
+        var evidence = new List<string>();
+        evidence.AddRange(milestoneEvaluation.Evidence);
+        evidence.AddRange(healthEvaluation.Evidence);
+        if (prevalidation.DeployEvidence is not null)
+        {
+            evidence.Add($"deploy-report:{prevalidation.DeployEvidence.ReportPath}");
+            evidence.Add($"deploy-report-sha256:{prevalidation.DeployEvidence.ReportSha256}");
+        }
+
+        if (prevalidation.ManualCleanBootEvidence is not null)
+        {
+            evidence.Add($"manual-clean-boot-screen:{prevalidation.ManualCleanBootEvidence.ScreenshotPath}");
+        }
+
+        var supervisorState = new GuiSmokeSupervisorState(
+            now,
+            updatedGoal.SessionId,
+            trustState,
+            milestoneEvaluation.MilestoneState,
+            updatedGoal.SessionState,
+            healthEvaluation.HealthState,
+            trustGateSatisfied,
+            healthEvaluation.RelevantProcessObserved,
+            healthEvaluation.WindowDetected,
+            healthEvaluation.RunnerOwnerAlive,
+            healthEvaluation.LastArtifactHeartbeatAt,
+            healthEvaluation.LastArtifactHeartbeatPath,
+            healthEvaluation.LastStepAt,
+            healthEvaluation.LastStepPath,
+            healthEvaluation.ExpectedCurrentAttemptId,
+            healthEvaluation.ExpectedCurrentAttemptFirstStepPath,
+            attemptEntries.LastOrDefault()?.AttemptId,
+            milestoneEvaluation.LastTerminalAttemptId,
+            milestoneEvaluation.LastTerminalCause,
+            milestoneEvaluation.LatestRestartTargetAttemptId,
+            milestoneEvaluation.LatestNextAttemptId,
+            milestoneEvaluation.LatestNextAttemptFirstScreenPath,
+            healthEvaluation.Classifications,
+            evidence,
+            blockers);
+        LiveExportAtomicFileWriter.WriteJsonAtomic(GetSupervisorStatePath(sessionRoot), supervisorState, GuiSmokeShared.JsonOptions);
+        return supervisorState;
+    }
+
+    private static HealthEvaluation EvaluateHealth(
+        string sessionRoot,
+        GuiSmokeGoalContract goal,
+        IReadOnlyList<GuiSmokeAttemptIndexEntry> attemptEntries,
+        IReadOnlyList<GuiSmokeRestartEvent> restartEvents,
+        DateTimeOffset now,
+        SupervisorObservationOverride? observationOverride)
+    {
+        var activeSession = goal.SessionState is GuiSmokeContractStates.SessionStarting or GuiSmokeContractStates.SessionCollecting or GuiSmokeContractStates.SessionStalled;
+        var relevantProcessObserved = observationOverride?.RelevantProcessObserved ?? ObserveRelevantProcessHealth();
+        var windowDetected = observationOverride?.WindowDetected ?? ObserveGameWindow();
+        var runnerOwnerAlive = observationOverride?.RunnerOwnerAlive ?? IsRunnerOwnerAlive(goal.RunnerOwner);
+        var currentAttemptId = DetermineCurrentAttemptId(attemptEntries, restartEvents);
+        var expectedCurrentAttemptFirstStepPath = string.IsNullOrWhiteSpace(currentAttemptId)
+            ? null
+            : Path.Combine(sessionRoot, "attempts", currentAttemptId, "steps", "0001.screen.png");
+        var runnerArtifacts = CollectRunnerHeartbeatArtifacts(sessionRoot, currentAttemptId);
+        var lastArtifact = runnerArtifacts
+            .OrderByDescending(static entry => entry.RecordedAt)
+            .FirstOrDefault();
+        var lastStep = CollectStepArtifacts(sessionRoot)
+            .OrderByDescending(static entry => entry.RecordedAt)
+            .FirstOrDefault();
+        var classifications = new List<string>();
+        var evidence = new List<string>
+        {
+            $"runner-owner-pid:{goal.RunnerOwner.ProcessId}",
+            $"runner-owner-alive:{runnerOwnerAlive}",
+            $"relevant-process-observed:{relevantProcessObserved}",
+            $"window-detected:{windowDetected}",
+        };
+
+        if (lastArtifact is not null)
+        {
+            evidence.Add($"artifact-heartbeat:{lastArtifact.Path}");
+            evidence.Add($"artifact-heartbeat-at:{lastArtifact.RecordedAt:O}");
+        }
+        else
+        {
+            evidence.Add("artifact-heartbeat:none");
+        }
+
+        if (lastStep is not null)
+        {
+            evidence.Add($"last-step:{lastStep.Path}");
+            evidence.Add($"last-step-at:{lastStep.RecordedAt:O}");
+        }
+        else
+        {
+            evidence.Add("last-step:none");
+        }
+
+        if (activeSession && !runnerOwnerAlive)
+        {
+            classifications.Add("runner-dead");
+        }
+
+        if (activeSession && (lastArtifact is null || now - lastArtifact.RecordedAt > NoArtifactHeartbeatThreshold))
+        {
+            classifications.Add("no-artifact-heartbeat");
+        }
+
+        var latestLaunchOrStartAt = restartEvents
+            .Where(eventEntry =>
+                string.Equals(eventEntry.AttemptId, currentAttemptId, StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase)))
+            .Select(static eventEntry => (DateTimeOffset?)eventEntry.RecordedAt)
+            .DefaultIfEmpty(null)
+            .Max();
+        if (activeSession
+            && windowDetected
+            && !string.IsNullOrWhiteSpace(expectedCurrentAttemptFirstStepPath)
+            && !File.Exists(expectedCurrentAttemptFirstStepPath)
+            && latestLaunchOrStartAt is not null
+            && now - latestLaunchOrStartAt.Value > WindowNoStepThreshold)
+        {
+            classifications.Add("window-detected-no-step");
+            evidence.Add($"expected-current-attempt-first-step:{expectedCurrentAttemptFirstStepPath}");
+        }
+
+        var healthState = classifications.Count == 0
+            ? GuiSmokeContractStates.HealthHealthy
+            : classifications.Contains("runner-dead", StringComparer.OrdinalIgnoreCase)
+                ? GuiSmokeContractStates.HealthCritical
+                : GuiSmokeContractStates.HealthWarning;
+        return new HealthEvaluation(
+            healthState,
+            relevantProcessObserved,
+            windowDetected,
+            runnerOwnerAlive,
+            lastArtifact?.RecordedAt,
+            lastArtifact?.Path,
+            lastStep?.RecordedAt,
+            lastStep?.Path,
+            currentAttemptId,
+            expectedCurrentAttemptFirstStepPath,
+            classifications,
+            evidence);
+    }
+
+    private static IReadOnlyList<ArtifactTimestamp> CollectRunnerHeartbeatArtifacts(string sessionRoot, string? currentAttemptId)
+    {
+        var paths = new List<string>
+        {
+            GetPrevalidationPath(sessionRoot),
+            GetRestartEventsPath(sessionRoot),
+            Path.Combine(sessionRoot, "attempt-index.ndjson"),
+            Path.Combine(sessionRoot, "session-summary.json"),
+        };
+
+        if (!string.IsNullOrWhiteSpace(currentAttemptId))
+        {
+            var attemptRoot = Path.Combine(sessionRoot, "attempts", currentAttemptId);
+            paths.Add(Path.Combine(attemptRoot, "run.json"));
+            paths.Add(Path.Combine(attemptRoot, "run.log"));
+            paths.Add(Path.Combine(attemptRoot, "trace.ndjson"));
+            paths.Add(Path.Combine(attemptRoot, "progress.ndjson"));
+        }
+
+        var timestamps = new List<ArtifactTimestamp>();
+        foreach (var path in paths.Where(File.Exists))
+        {
+            timestamps.Add(new ArtifactTimestamp(path, new FileInfo(path).LastWriteTimeUtc));
+        }
+
+        return timestamps;
+    }
+
+    private static IReadOnlyList<ArtifactTimestamp> CollectStepArtifacts(string sessionRoot)
+    {
+        var attemptsRoot = Path.Combine(sessionRoot, "attempts");
+        if (!Directory.Exists(attemptsRoot))
+        {
+            return Array.Empty<ArtifactTimestamp>();
+        }
+
+        return Directory.GetFiles(attemptsRoot, "*.screen.png", SearchOption.AllDirectories)
+            .Select(path => new ArtifactTimestamp(path, new FileInfo(path).LastWriteTimeUtc))
+            .ToArray();
+    }
+
+    private static string? DetermineCurrentAttemptId(
+        IReadOnlyList<GuiSmokeAttemptIndexEntry> attemptEntries,
+        IReadOnlyList<GuiSmokeRestartEvent> restartEvents)
+    {
+        var startedAttempt = restartEvents.LastOrDefault(eventEntry =>
+            string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(startedAttempt?.AttemptId))
+        {
+            return startedAttempt.AttemptId;
+        }
+
+        return attemptEntries.LastOrDefault()?.AttemptId;
+    }
+
+    private static void WriteStallDiagnosis(string sessionRoot, string runRoot, GuiSmokeAttemptIndexEntry attemptEntry)
+    {
+        var failureSummary = TryReadJson<GuiSmokeFailureSummary>(Path.Combine(runRoot, "failure-summary.json"));
+        var selfMetaReview = TryReadJson<GuiSmokeSelfMetaReview>(Path.Combine(runRoot, "self-meta-review.json"));
+        var progress = ReadNdjson<GuiSmokeStepProgress>(Path.Combine(runRoot, "progress.ndjson"));
+        var sameActionStallCount = progress.Count(entry => entry.ObserverSignals.Contains("same-action-stall", StringComparer.OrdinalIgnoreCase));
+        var decisionWaitPlateau = AnalyzeDecisionWaitPlateau(progress);
+        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau);
+        var phase = failureSummary?.Phase ?? decisionWaitPlateau.Phase ?? progress.LastOrDefault()?.Phase;
+        var observerScreen = failureSummary?.ObserverScreen ?? decisionWaitPlateau.ObserverScreen ?? progress.LastOrDefault()?.ObserverScreen;
+        var screenshotPath = failureSummary?.ScreenshotPath ?? FindLatestScreenshotPath(runRoot);
+        var backlogRoute = ShouldRouteToDecompilerBacklog(diagnosisKind, phase, observerScreen)
+            ? "decompiled-source-first-observer"
+            : null;
+        var evidence = new List<string>
+        {
+            $"status:{attemptEntry.Status}",
+            $"terminalCause:{attemptEntry.TerminalCause ?? "null"}",
+            $"failureClass:{attemptEntry.FailureClass ?? "null"}",
+            $"sameActionStalls:{sameActionStallCount}",
+            $"repeatedDecisionWaits:{decisionWaitPlateau.RepeatedWaitCount}",
+            $"trustStateAtStart:{attemptEntry.TrustStateAtStart}",
+        };
+        if (!string.IsNullOrWhiteSpace(phase))
+        {
+            evidence.Add($"phase:{phase}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(decisionWaitPlateau.SceneSignature))
+        {
+            evidence.Add($"waitSignature:{decisionWaitPlateau.SceneSignature}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(backlogRoute))
+        {
+            evidence.Add($"backlogRoute:{backlogRoute}");
+        }
+
+        var diagnosis = new GuiSmokeStallDiagnosisEntry(
+            DateTimeOffset.UtcNow,
+            Path.GetFileName(sessionRoot),
+            attemptEntry.AttemptId,
+            attemptEntry.AttemptOrdinal,
+            diagnosisKind,
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau",
+            attemptEntry.FailureClass,
+            attemptEntry.TerminalCause,
+            phase,
+            observerScreen,
+            screenshotPath,
+            sameActionStallCount,
+            selfMetaReview?.PlateauDetected == true || decisionWaitPlateau.PlateauDetected,
+            backlogRoute,
+            evidence);
+        UpsertNdjson(GetStallDiagnosisPath(sessionRoot), diagnosis, static existing => existing.AttemptId, diagnosis.AttemptId);
+    }
+
+    private static GuiSmokeGoalContract LoadOrCreateGoalContract(string sessionRoot)
+    {
+        var existing = TryReadJson<GuiSmokeGoalContract>(GetGoalContractPath(sessionRoot));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var fallback = new GuiSmokeGoalContract(
+            Path.GetFileName(sessionRoot),
+            "unknown",
+            "unknown",
+            sessionRoot,
+            now,
+            now,
+            GuiSmokeContractStates.TrustInvalid,
+            GuiSmokeContractStates.MilestoneInProgress,
+            GuiSmokeContractStates.SessionStarting,
+            CreateRunnerOwner(now),
+            now,
+            null,
+            null,
+            GoalCompletionCriteria,
+            GoalOperationalRules);
+        LiveExportAtomicFileWriter.WriteJsonAtomic(GetGoalContractPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
+        return fallback;
+    }
+
+    private static GuiSmokePrevalidation LoadOrCreatePrevalidation(string sessionRoot)
+    {
+        var existing = TryReadJson<GuiSmokePrevalidation>(GetPrevalidationPath(sessionRoot));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var fallback = new GuiSmokePrevalidation(
+            Path.GetFileName(sessionRoot),
+            now,
+            now,
+            GameStoppedBeforeDeploy: false,
+            ModsPayloadReconciled: false,
+            DeployIdentityVerified: false,
+            ManualCleanBootVerified: false,
+            GameStopEvidence: null,
+            DeployEvidence: null,
+            ManualCleanBootEvidence: null,
+            Notes: Array.Empty<string>());
+        LiveExportAtomicFileWriter.WriteJsonAtomic(GetPrevalidationPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
+        return fallback;
+    }
+
+    private static MilestoneEvaluation EvaluateMilestone(
+        GuiSmokeGoalContract goal,
+        string trustState,
+        IReadOnlyList<GuiSmokeAttemptIndexEntry> attemptEntries,
+        IReadOnlyList<GuiSmokeRestartEvent> restartEvents,
+        string sessionRoot)
+    {
+        var priorState = goal.MilestoneState;
+        if (string.Equals(priorState, GuiSmokeContractStates.MilestoneDone, StringComparison.OrdinalIgnoreCase))
+        {
+            return new MilestoneEvaluation(
+                GuiSmokeContractStates.MilestoneDone,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new[] { "milestone:done-persisted" },
+                Array.Empty<string>());
+        }
+
+        if (string.Equals(trustState, GuiSmokeContractStates.TrustInvalid, StringComparison.OrdinalIgnoreCase))
+        {
+            return new MilestoneEvaluation(
+                GuiSmokeContractStates.GetMilestoneRank(priorState) > 0 ? priorState : GuiSmokeContractStates.MilestoneInProgress,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Array.Empty<string>(),
+                new[] { "trust-gate-invalid" });
+        }
+
+        var bestState = GuiSmokeContractStates.MilestoneInProgress;
+        string? lastTerminalAttemptId = null;
+        string? lastTerminalCause = null;
+        string? latestRestartTargetAttemptId = null;
+        string? latestNextAttemptId = null;
+        string? latestNextAttemptFirstScreenPath = null;
+        var evidence = new List<string>();
+        var blockers = new List<string>();
+
+        foreach (var attemptEntry in attemptEntries)
+        {
+            if (!string.Equals(attemptEntry.TrustStateAtStart, GuiSmokeContractStates.TrustValid, StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(attemptEntry.TerminalCause))
+            {
+                continue;
+            }
+
+            var attemptTerminal = restartEvents.LastOrDefault(eventEntry =>
+                string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventAttemptTerminal, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(eventEntry.AttemptId, attemptEntry.AttemptId, StringComparison.OrdinalIgnoreCase));
+            if (attemptTerminal is null)
+            {
+                continue;
+            }
+
+            bestState = PromoteMilestoneState(bestState, GuiSmokeContractStates.MilestoneTerminalSeen);
+            lastTerminalAttemptId = attemptEntry.AttemptId;
+            lastTerminalCause = attemptEntry.TerminalCause;
+            evidence.Add($"attempt-terminal:{attemptEntry.AttemptId}:{attemptEntry.TerminalCause}");
+
+            var restartProgress = restartEvents.LastOrDefault(eventEntry =>
+                string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventRunnerBeginRestart, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(eventEntry.PreviousAttemptId, attemptEntry.AttemptId, StringComparison.OrdinalIgnoreCase));
+            if (restartProgress is null)
+            {
+                blockers.Add($"restart-missing-after:{attemptEntry.AttemptId}");
+                continue;
+            }
+
+            bestState = PromoteMilestoneState(bestState, GuiSmokeContractStates.MilestoneRestartSeen);
+            latestRestartTargetAttemptId = restartProgress.AttemptId;
+            evidence.Add($"runner-begin-restart:{restartProgress.AttemptId}");
+
+            var launchIssued = restartEvents.LastOrDefault(eventEntry =>
+                string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(eventEntry.AttemptId, restartProgress.AttemptId, StringComparison.OrdinalIgnoreCase));
+            if (launchIssued is not null)
+            {
+                evidence.Add($"runner-launch-issued:{launchIssued.AttemptId}");
+            }
+
+            var nextAttemptStarted = restartEvents.LastOrDefault(eventEntry =>
+                string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(eventEntry.AttemptId, restartProgress.AttemptId, StringComparison.OrdinalIgnoreCase));
+            if (nextAttemptStarted is null)
+            {
+                blockers.Add($"next-attempt-start-missing:{restartProgress.AttemptId}");
+                continue;
+            }
+
+            latestNextAttemptId = nextAttemptStarted.AttemptId;
+            latestNextAttemptFirstScreenPath = string.IsNullOrWhiteSpace(nextAttemptStarted.StepScreenPath)
+                ? Path.Combine(sessionRoot, "attempts", nextAttemptStarted.AttemptId, "steps", "0001.screen.png")
+                : nextAttemptStarted.StepScreenPath;
+            if (!File.Exists(latestNextAttemptFirstScreenPath))
+            {
+                blockers.Add($"next-attempt-first-screen-missing:{latestNextAttemptId}");
+                continue;
+            }
+
+            evidence.Add($"next-attempt-started:{latestNextAttemptId}");
+            evidence.Add($"next-attempt-first-screen:{latestNextAttemptFirstScreenPath}");
+            bestState = PromoteMilestoneState(bestState, GuiSmokeContractStates.MilestoneDone);
+        }
+
+        if (!string.Equals(bestState, GuiSmokeContractStates.MilestoneDone, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(goal.SessionState, GuiSmokeContractStates.SessionAborted, StringComparison.OrdinalIgnoreCase))
+        {
+            bestState = GuiSmokeContractStates.MilestoneFailed;
+            blockers.Add("session-aborted-before-milestone");
+        }
+
+        if (GuiSmokeContractStates.GetMilestoneRank(priorState) > GuiSmokeContractStates.GetMilestoneRank(bestState))
+        {
+            bestState = priorState;
+        }
+
+        return new MilestoneEvaluation(
+            bestState,
+            lastTerminalAttemptId,
+            lastTerminalCause,
+            latestRestartTargetAttemptId,
+            latestNextAttemptId,
+            latestNextAttemptFirstScreenPath,
+            evidence,
+            blockers);
+    }
+
+    private static string PromoteMilestoneState(string current, string candidate)
+    {
+        return GuiSmokeContractStates.GetMilestoneRank(candidate) > GuiSmokeContractStates.GetMilestoneRank(current)
+            ? candidate
+            : current;
+    }
+
+    private static string DetermineDiagnosisKind(
+        GuiSmokeAttemptIndexEntry attemptEntry,
+        GuiSmokeFailureSummary? failureSummary,
+        int sameActionStallCount,
+        DecisionWaitPlateauAnalysis decisionWaitPlateau)
+    {
+        if (string.Equals(attemptEntry.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase))
+        {
+            return "scene-authority-invalid";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
+            || (decisionWaitPlateau.PlateauDetected && string.Equals(decisionWaitPlateau.DiagnosisKind, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "phase-mismatch-stall";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+            || (decisionWaitPlateau.PlateauDetected && string.Equals(decisionWaitPlateau.DiagnosisKind, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "decision-wait-plateau";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
+            || sameActionStallCount > 0)
+        {
+            return "same-action-stall";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase))
+        {
+            return "phase-timeout";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase))
+        {
+            return "decision-abort";
+        }
+
+        if (string.Equals(attemptEntry.FailureClass, "launch-runtime-noise", StringComparison.OrdinalIgnoreCase))
+        {
+            return "launch-runtime-noise";
+        }
+
+        if (string.Equals(attemptEntry.Status, "failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return failureSummary?.Phase is not null ? $"failed:{failureSummary.Phase}" : "failed";
+        }
+
+        return "no-stall";
+    }
+
+    private static DecisionWaitPlateauAnalysis AnalyzeDecisionWaitPlateau(IReadOnlyList<GuiSmokeStepProgress> progress)
+    {
+        if (progress.Count == 0)
+        {
+            return new DecisionWaitPlateauAnalysis("no-stall", false, 0, null, null, null);
+        }
+
+        var lastWait = progress.LastOrDefault(entry => entry.ObserverSignals.Contains("decision-wait", StringComparer.OrdinalIgnoreCase));
+        if (lastWait is null)
+        {
+            return new DecisionWaitPlateauAnalysis("no-stall", false, 0, null, null, null);
+        }
+
+        var normalizedSignature = NormalizeSceneSignatureForPlateau(lastWait.SceneSignature);
+        var repeatedWaitCount = 0;
+        for (var index = progress.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = progress[index];
+            if (!entry.ObserverSignals.Contains("decision-wait", StringComparer.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            if (!string.Equals(entry.Phase, lastWait.Phase, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(entry.ObserverScreen, lastWait.ObserverScreen, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(NormalizeSceneSignatureForPlateau(entry.SceneSignature), normalizedSignature, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            repeatedWaitCount += 1;
+        }
+
+        var phaseMismatchObserved = string.Equals(lastWait.Phase, GuiSmokePhase.Embark.ToString(), StringComparison.OrdinalIgnoreCase)
+                                    && SignatureIndicatesRoomScreen(normalizedSignature, lastWait.ObserverScreen);
+        var plateauLimit = phaseMismatchObserved ? 2 : 5;
+        if (repeatedWaitCount < plateauLimit)
+        {
+            return new DecisionWaitPlateauAnalysis("no-stall", false, repeatedWaitCount, lastWait.Phase, lastWait.ObserverScreen, normalizedSignature);
+        }
+
+        return new DecisionWaitPlateauAnalysis(
+            phaseMismatchObserved ? "phase-mismatch-stall" : "decision-wait-plateau",
+            true,
+            repeatedWaitCount,
+            lastWait.Phase,
+            lastWait.ObserverScreen,
+            normalizedSignature);
+    }
+
+    private static string NormalizeSceneSignatureForPlateau(string? sceneSignature)
+    {
+        if (string.IsNullOrWhiteSpace(sceneSignature))
+        {
+            return "scene:none";
+        }
+
+        var parts = sceneSignature
+            .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static part => !part.StartsWith("shot:", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        return parts.Length == 0 ? sceneSignature : string.Join("|", parts);
+    }
+
+    private static bool SignatureIndicatesRoomScreen(string normalizedSignature, string? observerScreen)
+    {
+        if (string.Equals(observerScreen, "event", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observerScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observerScreen, "shop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observerScreen, "map", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observerScreen, "combat", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return normalizedSignature.Contains("|screen:event|", StringComparison.OrdinalIgnoreCase)
+               || normalizedSignature.Contains("|screen:rewards|", StringComparison.OrdinalIgnoreCase)
+               || normalizedSignature.Contains("|screen:shop|", StringComparison.OrdinalIgnoreCase)
+               || normalizedSignature.Contains("|screen:map|", StringComparison.OrdinalIgnoreCase)
+               || normalizedSignature.Contains("|screen:combat|", StringComparison.OrdinalIgnoreCase)
+               || normalizedSignature.Contains("|room:rest-site|", StringComparison.OrdinalIgnoreCase)
+               || normalizedSignature.Contains("|room:shop|", StringComparison.OrdinalIgnoreCase)
+               || normalizedSignature.Contains("|room:treasure|", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? FindLatestScreenshotPath(string runRoot)
+    {
+        var stepsRoot = Path.Combine(runRoot, "steps");
+        if (!Directory.Exists(stepsRoot))
+        {
+            return null;
+        }
+
+        return Directory.GetFiles(stepsRoot, "*.screen.png", SearchOption.TopDirectoryOnly)
+            .OrderByDescending(static path => path, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+    }
+
+    private static bool ShouldRouteToDecompilerBacklog(string diagnosisKind, string? phase, string? observerScreen)
+    {
+        return string.Equals(diagnosisKind, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase)
+               && (IsEarlyMenuPhase(phase)
+                   || string.Equals(observerScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(observerScreen, "character-select", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsEarlyMenuPhase(string? phase)
+    {
+        return string.Equals(phase, GuiSmokePhase.EnterRun.ToString(), StringComparison.OrdinalIgnoreCase)
+               || string.Equals(phase, GuiSmokePhase.WaitCharacterSelect.ToString(), StringComparison.OrdinalIgnoreCase)
+               || string.Equals(phase, GuiSmokePhase.ChooseCharacter.ToString(), StringComparison.OrdinalIgnoreCase)
+               || string.Equals(phase, GuiSmokePhase.Embark.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ObserveRelevantProcessHealth()
+    {
+        try
+        {
+            return Process.GetProcesses().Any(process =>
+                string.Equals(process.ProcessName, "SlayTheSpire2", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(process.ProcessName, "crashpad_handler", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool ObserveGameWindow()
+    {
+        try
+        {
+            return WindowLocator.TryFindSts2Window() is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsRunnerOwnerAlive(GuiSmokeRunnerOwner owner)
+    {
+        try
+        {
+            var process = Process.GetProcessById(owner.ProcessId);
+            if (process.HasExited)
+            {
+                return false;
+            }
+
+            return string.Equals(process.ProcessName, owner.ProcessName, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static GuiSmokeRunnerOwner CreateRunnerOwner(DateTimeOffset claimedAt)
+    {
+        return new GuiSmokeRunnerOwner(
+            Environment.MachineName,
+            Environment.ProcessId,
+            GetCurrentProcessName(),
+            claimedAt);
+    }
+
+    private static string GetCurrentProcessName()
+    {
+        try
+        {
+            return Process.GetCurrentProcess().ProcessName;
+        }
+        catch
+        {
+            return "Sts2GuiSmokeHarness";
+        }
+    }
+
+    private static IReadOnlyList<string> GetRunningRelevantProcesses()
+    {
+        try
+        {
+            return Process.GetProcesses()
+                .Where(process =>
+                    string.Equals(process.ProcessName, "SlayTheSpire2", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(process.ProcessName, "crashpad_handler", StringComparison.OrdinalIgnoreCase))
+                .Select(static process => process.ProcessName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(static name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static bool HasActiveArmSession(string armSessionPath)
+    {
+        if (!File.Exists(armSessionPath))
+        {
+            return false;
+        }
+
+        var armSession = TryReadJson<HarnessArmSession>(armSessionPath);
+        return armSession is null || armSession.ExpiresAt > DateTimeOffset.UtcNow;
+    }
+
+    private static bool HasPendingHarnessActions(string actionsPath)
+    {
+        if (!File.Exists(actionsPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            return File.ReadLines(actionsPath).Any(static line => !string.IsNullOrWhiteSpace(line));
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static bool IsHarnessDormant(HarnessQueueLayout harnessLayout)
+    {
+        var status = TryReadJson<HarnessBridgeStatus>(harnessLayout.StatusPath);
+        if (status is not null && !string.Equals(status.Mode, "dormant", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var inventory = TryReadJson<HarnessNodeInventory>(harnessLayout.InventoryPath);
+        return inventory is null || string.Equals(inventory.Mode, "dormant", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCompanionFamilyFile(string fileName)
+    {
+        return fileName.StartsWith("Sts2ModAiCompanion", StringComparison.OrdinalIgnoreCase)
+               || fileName.StartsWith("Sts2AiCompanion", StringComparison.OrdinalIgnoreCase)
+               || fileName.StartsWith("Sts2ModKit", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(fileName, "runtime-assembly-manifest.json", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(fileName, "sts2-mod-ai-companion.config.json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryMatchIntentionalRewrite(
+        string relativePath,
+        string sourcePath,
+        string deployedPath,
+        out string? rewriteNote)
+    {
+        rewriteNote = null;
+        if (!string.Equals(relativePath, "sts2-mod-ai-companion.config.json", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var normalizedSource = TryNormalizeRuntimeConfigForDeployVerification(sourcePath);
+        var normalizedDeployed = TryNormalizeRuntimeConfigForDeployVerification(deployedPath);
+        if (normalizedSource is null || normalizedDeployed is null)
+        {
+            return false;
+        }
+
+        var sourceHash = ComputeSha256Utf8(normalizedSource);
+        var deployedHash = ComputeSha256Utf8(normalizedDeployed);
+        if (!string.Equals(sourceHash, deployedHash, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        rewriteNote = $"rewrite-normalized-match:{relativePath}:{deployedHash}";
+        return true;
+    }
+
+    private static string? TryNormalizeRuntimeConfigForDeployVerification(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            var node = JsonNode.Parse(File.ReadAllText(path));
+            if (node is not JsonObject root)
+            {
+                return null;
+            }
+
+            if (root["harness"] is not JsonObject harness)
+            {
+                return null;
+            }
+
+            harness["enabled"] = true;
+            return root.ToJsonString();
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string ComputeSha256Utf8(string value)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(value);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
+    }
+
+    private static GuiSmokeFileIdentityEvidence DescribeFile(string path)
+    {
+        var info = new FileInfo(path);
+        return new GuiSmokeFileIdentityEvidence(
+            path,
+            info.Length,
+            info.LastWriteTimeUtc,
+            ComputeFullFileSha256(path));
+    }
+
+    private static int CountScreenshots(string stepsRoot)
+    {
+        return Directory.Exists(stepsRoot)
+            ? Directory.GetFiles(stepsRoot, "*.screen.png", SearchOption.TopDirectoryOnly).Length
+            : 0;
+    }
+
+    private static string ComputeFullFileSha256(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var sha = SHA256.Create();
+            return Convert.ToHexString(sha.ComputeHash(stream));
+        }
+        catch
+        {
+            return "unavailable";
+        }
+    }
+
+    private static JsonDocument? TryReadJsonDocument(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return JsonDocument.Parse(stream);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? TryReadString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var property)
+               && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+    }
+
+    private static T? TryReadJson<T>(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return default;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(File.ReadAllText(path), GuiSmokeShared.JsonOptions);
+        }
+        catch (IOException)
+        {
+            return default;
+        }
+        catch (JsonException)
+        {
+            return default;
+        }
+    }
+
+    private static void UpsertNdjson<T>(string path, T entry, Func<T, string> keySelector, string key)
+    {
+        var existingEntries = new List<T>();
+        if (File.Exists(path))
+        {
+            foreach (var line in File.ReadLines(path))
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                T? existing;
+                try
+                {
+                    existing = JsonSerializer.Deserialize<T>(line, GuiSmokeShared.JsonOptions);
+                }
+                catch (JsonException)
+                {
+                    continue;
+                }
+
+                if (existing is null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(keySelector(existing), key, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                existingEntries.Add(existing);
+            }
+        }
+
+        existingEntries.Add(entry);
+        var lines = existingEntries
+            .Select(item => JsonSerializer.Serialize(item, GuiSmokeShared.NdjsonOptions))
+            .ToArray();
+        LiveExportAtomicFileWriter.WriteJsonAtomic(path + ".tmp.json", lines, GuiSmokeShared.JsonOptions);
+        File.WriteAllLines(path, lines);
+        File.Delete(path + ".tmp.json");
+    }
+
+    private static string GetGoalContractPath(string sessionRoot) => Path.Combine(sessionRoot, "goal-contract.json");
+
+    private static string GetPrevalidationPath(string sessionRoot) => Path.Combine(sessionRoot, "prevalidation.json");
+
+    private static string GetRestartEventsPath(string sessionRoot) => Path.Combine(sessionRoot, "restart-events.ndjson");
+
+    private static string GetSupervisorStatePath(string sessionRoot) => Path.Combine(sessionRoot, "supervisor-state.json");
+
+    private static string GetStallDiagnosisPath(string sessionRoot) => Path.Combine(sessionRoot, "stall-diagnosis.ndjson");
+}
