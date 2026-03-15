@@ -730,8 +730,8 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         {
             if (IsNonEnemyCombatSelectionLabel(decision.TargetLabel))
             {
-                inputDriver.MoveCursor(clickWindow, 0.460, 0.480);
-                LogHarness($"step={stepIndex} cursor primed for non-enemy confirm normalized=(0.460,0.480)");
+                inputDriver.MoveCursor(clickWindow, GuiSmokeCombatConstants.NonEnemyPrimeNormalizedX, GuiSmokeCombatConstants.NonEnemyPrimeNormalizedY);
+                LogHarness($"step={stepIndex} cursor primed for non-enemy confirm normalized=({GuiSmokeCombatConstants.NonEnemyPrimeNormalizedX:0.000},{GuiSmokeCombatConstants.NonEnemyPrimeNormalizedY:0.000})");
             }
 
             LogHarness($"step={stepIndex} key target={decision.TargetLabel ?? decision.KeyText ?? "null"} key={decision.KeyText ?? "null"}");
@@ -750,6 +750,14 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "right-click", decision.TargetLabel, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "right-click", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
             LogHarness($"step={stepIndex} right-click sent target={decision.TargetLabel ?? "null"}");
+        }
+        else if (string.Equals(decision.ActionKind, "click-current", StringComparison.OrdinalIgnoreCase))
+        {
+            LogHarness($"step={stepIndex} click-current target={decision.TargetLabel ?? "null"}");
+            inputDriver.ClickCurrent(clickWindow);
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "click-current", decision.TargetLabel, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "click-current", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
+            LogHarness($"step={stepIndex} click-current sent target={decision.TargetLabel ?? "null"}");
         }
         else
         {
@@ -2271,6 +2279,13 @@ static void ValidateDecision(GuiSmokePhase phase, GuiSmokeStepRequest request, G
             throw new InvalidOperationException("Normalized coordinates must be within [0,1].");
         }
     }
+    else if (string.Equals(decision.ActionKind, "click-current", StringComparison.OrdinalIgnoreCase))
+    {
+        if (decision.NormalizedX is not null || decision.NormalizedY is not null)
+        {
+            throw new InvalidOperationException("click-current decision must not provide normalized coordinates.");
+        }
+    }
     else if (string.Equals(decision.ActionKind, "right-click", StringComparison.OrdinalIgnoreCase))
     {
         if ((decision.NormalizedX is null) != (decision.NormalizedY is null))
@@ -2293,7 +2308,7 @@ static void ValidateDecision(GuiSmokePhase phase, GuiSmokeStepRequest request, G
     }
     else
     {
-        throw new InvalidOperationException("Only click, right-click, and press-key actionKind are supported.");
+        throw new InvalidOperationException("Only click, click-current, right-click, and press-key actionKind are supported.");
     }
 
     if (request.AllowedActions.Length == 1 && string.Equals(request.AllowedActions[0], "wait", StringComparison.OrdinalIgnoreCase))
@@ -2769,6 +2784,14 @@ interface IGuiDecisionProvider
     Task<GuiSmokeStepDecision> GetDecisionAsync(string requestPath, string decisionPath, TimeSpan timeout, CancellationToken cancellationToken);
 }
 
+static class GuiSmokeCombatConstants
+{
+    public const double NonEnemyPrimeNormalizedX = 0.280;
+    public const double NonEnemyPrimeNormalizedY = 0.620;
+    public const double NonEnemyConfirmNormalizedX = 0.500;
+    public const double NonEnemyConfirmNormalizedY = 0.560;
+}
+
 sealed class SessionDecisionProvider : IGuiDecisionProvider
 {
     public async Task<GuiSmokeStepDecision> GetDecisionAsync(string requestPath, string decisionPath, TimeSpan timeout, CancellationToken cancellationToken)
@@ -3026,6 +3049,17 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var handAnalysis = AutoCombatHandAnalyzer.Analyze(request.ScreenshotPath);
         var pendingSelection = TryGetPendingCombatSelection(request.History);
         var repeatedNonEnemyLoop = HasRecentRepeatedNonEnemyLoop(request.History);
+        var repeatedAttackSelectionLoop = HasRecentRepeatedAttackSelectionLoop(request.History);
+        var observerHasAttackCard = request.Observer.CombatHand.Any(card =>
+            card.SlotIndex >= 1
+            && card.SlotIndex <= 5
+            && IsAttackCombatHandCard(card)
+            && IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy));
+        var observerHandHasOnlyNonEnemyOrInertCards = request.Observer.CombatHand.Count > 0
+            && request.Observer.CombatHand.All(card =>
+                IsNonEnemyCombatHandCard(card)
+                || IsInertCombatHandCard(card)
+                || !IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy));
         if (analysis.HasTargetArrow)
         {
             return new GuiSmokeStepDecision(
@@ -3066,10 +3100,10 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         {
             return new GuiSmokeStepDecision(
                 "act",
-                "click",
+                "click-current",
                 null,
-                0.460,
-                0.480,
+                null,
+                null,
                 "confirm selected non-enemy card",
                 "A self or non-enemy targeted card is selected. Click the safe center area to confirm it.",
                 0.82,
@@ -3103,13 +3137,32 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         {
             return new GuiSmokeStepDecision(
                 "act",
-                "click",
+                "click-current",
                 null,
-                0.460,
-                0.480,
+                null,
+                null,
                 "confirm selected non-enemy card",
                 "A non-enemy card overlay is still selected. Click the safe center area to confirm it.",
                 0.78,
+                "combat",
+                300,
+                true,
+                null);
+        }
+
+        if (pendingSelection?.Kind == AutoCombatCardKind.DefendLike
+            && request.Observer.CombatHand.Count > 0
+            && request.Observer.CombatHand.All(card => IsNonEnemyCombatHandCard(card) || !IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy)))
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click-current",
+                null,
+                null,
+                null,
+                "confirm selected non-enemy card",
+                "A non-enemy card was just selected via hotkey. Confirm it even if the screenshot analyzer missed the selected-card overlay.",
+                0.76,
                 "combat",
                 300,
                 true,
@@ -3142,6 +3195,32 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 null);
         }
 
+        if (repeatedAttackSelectionLoop && !observerHasAttackCard)
+        {
+            var endTurnNode = request.Observer.ActionNodes.FirstOrDefault(node =>
+                node.Actionable
+                && string.Equals(node.Label, "1턴 종료", StringComparison.OrdinalIgnoreCase)
+                && TryParseNodeBounds(node.ScreenBounds, out _));
+            if (endTurnNode is not null)
+            {
+                return CreateClickDecisionFromNode(request, endTurnNode, "end turn after repeated attack-select loop");
+            }
+
+            return new GuiSmokeStepDecision(
+                "act",
+                "press-key",
+                "E",
+                null,
+                null,
+                "end turn after repeated attack-select loop",
+                "Recent combat history shows repeated attack hotkeys without a matching observer attack card. End the turn instead of looping on screenshot drift.",
+                0.88,
+                "combat",
+                400,
+                true,
+                null);
+        }
+
         var knowledgeAttackSlot = request.CombatCardKnowledge
             .Where(card => card.SlotIndex >= 1 && card.SlotIndex <= 5)
             .Where(card => IsEnemyTargetCombatCard(card) && IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy))
@@ -3152,9 +3231,9 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             .Where(card => IsAttackCombatHandCard(card) && IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy))
             .OrderBy(card => card.SlotIndex)
             .FirstOrDefault();
-        var observerHandHasOnlyNonEnemyCards = request.Observer.CombatHand.Count > 0
-            && request.Observer.CombatHand.All(card => IsNonEnemyCombatHandCard(card) || !IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy));
-        var attackSlot = knowledgeAttackSlot is not null
+        var attackFallbackBlockedByObserver = request.Observer.CombatHand.Count > 0
+            && (observerHandHasOnlyNonEnemyOrInertCards || !observerHasAttackCard);
+        var attackSlot = !attackFallbackBlockedByObserver && knowledgeAttackSlot is not null
             ? new AutoCombatHandSlotAnalysis(
                 knowledgeAttackSlot.SlotIndex,
                 true,
@@ -3163,7 +3242,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 double.MaxValue,
                 0,
                 0)
-            : observerAttackSlot is not null
+            : !attackFallbackBlockedByObserver && observerAttackSlot is not null
                 ? new AutoCombatHandSlotAnalysis(
                 observerAttackSlot.SlotIndex,
                 true,
@@ -3172,7 +3251,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 double.MaxValue,
                 0,
                 0)
-                : observerHandHasOnlyNonEnemyCards
+                : attackFallbackBlockedByObserver
                     ? null
                     : handAnalysis.Slots
                     .Where(static slot => slot.IsVisible && slot.Kind == AutoCombatCardKind.AttackLike)
@@ -3334,6 +3413,40 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         }
 
         return false;
+    }
+
+    private static bool HasRecentRepeatedAttackSelectionLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        var labels = history
+            .Where(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
+            .Select(static entry => entry.TargetLabel)
+            .Where(static label => !string.IsNullOrWhiteSpace(label))
+            .TakeLast(6)
+            .ToArray();
+        if (labels.Length < 3)
+        {
+            return false;
+        }
+
+        var attackSelections = labels
+            .Where(static label => label is not null && label.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
+            .Select(static label => label!)
+            .TakeLast(4)
+            .ToArray();
+        if (attackSelections.Length < 3)
+        {
+            return false;
+        }
+
+        var distinctAttackSelections = attackSelections
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        if (distinctAttackSelections > 1)
+        {
+            return true;
+        }
+
+        return attackSelections.Length >= 3;
     }
 
     private static bool IsNonEnemySelectionLabel(string? targetLabel)
@@ -3560,6 +3673,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                || card.Name.Contains("DEFEND", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsInertCombatHandCard(ObservedCombatHandCard card)
+    {
+        return string.Equals(card.Type, "Status", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Type, "Curse", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsNonEnemyCombatCard(CombatCardKnowledgeHint card)
     {
         if (string.Equals(card.Target, "AnyEnemy", StringComparison.OrdinalIgnoreCase)
@@ -3578,6 +3697,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool IsPlayableAtCurrentEnergy(ObservedCombatHandCard card, int? energy)
     {
+        if (IsInertCombatHandCard(card) && card.Cost is null)
+        {
+            return false;
+        }
+
         if (energy is null || card.Cost is null)
         {
             return true;
@@ -6239,9 +6363,32 @@ sealed class ObserverSnapshotReader
             return null;
         }
 
-        return File.ReadLines(path)
-            .TakeLast(lines)
-            .ToArray();
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            var queue = new Queue<string>(Math.Max(1, lines));
+            while (!reader.EndOfStream)
+            {
+                var line = reader.ReadLine();
+                if (line is null)
+                {
+                    continue;
+                }
+
+                queue.Enqueue(line);
+                while (queue.Count > lines)
+                {
+                    queue.Dequeue();
+                }
+            }
+
+            return queue.ToArray();
+        }
+        catch (IOException)
+        {
+            return null;
+        }
     }
 
     private static IReadOnlyList<string> ReadChoiceLabels(JsonDocument? document)
@@ -6615,6 +6762,26 @@ sealed class MouseInputDriver
         if (sent != inputs.Length)
         {
             throw new InvalidOperationException("Failed to send mouse input.");
+        }
+    }
+
+    public void ClickCurrent(WindowCaptureTarget target)
+    {
+        if (target.Handle != IntPtr.Zero)
+        {
+            NativeMethods.SetForegroundWindow(target.Handle);
+            Thread.Sleep(200);
+        }
+
+        var inputs = new[]
+        {
+            NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_LEFTDOWN),
+            NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_LEFTUP),
+        };
+        var sent = NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
+        if (sent != inputs.Length)
+        {
+            throw new InvalidOperationException("Failed to send current-cursor mouse input.");
         }
     }
 
