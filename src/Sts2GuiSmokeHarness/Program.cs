@@ -3235,17 +3235,48 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 !string.IsNullOrWhiteSpace(label)
                 && (IsNonEnemySelectionLabel(label)
                     || string.Equals(label, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)))
-            .TakeLast(4)
+            .TakeLast(6)
             .ToArray();
         if (labels.Length < 4)
         {
             return false;
         }
 
-        return IsNonEnemySelectionLabel(labels[0])
-               && string.Equals(labels[1], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)
-               && IsNonEnemySelectionLabel(labels[2])
-               && string.Equals(labels[3], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase);
+        if (labels.Length >= 4
+            && IsNonEnemySelectionLabel(labels[0])
+            && string.Equals(labels[1], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)
+            && IsNonEnemySelectionLabel(labels[2])
+            && string.Equals(labels[3], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var recentSelectCount = labels.Count(IsNonEnemySelectionLabel);
+        if (recentSelectCount >= 3)
+        {
+            var distinctSelectionLabels = labels
+                .Where(IsNonEnemySelectionLabel)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            if (distinctSelectionLabels == 1)
+            {
+                return true;
+            }
+        }
+
+        if (labels.Length >= 5)
+        {
+            var trailingWindow = labels.TakeLast(5).ToArray();
+            var allowedMixedLoop = trailingWindow.All(label =>
+                IsNonEnemySelectionLabel(label)
+                || string.Equals(label, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase));
+            if (allowedMixedLoop && trailingWindow.Count(IsNonEnemySelectionLabel) >= 3)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsNonEnemySelectionLabel(string? targetLabel)
