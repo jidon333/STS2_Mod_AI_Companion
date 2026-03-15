@@ -2388,6 +2388,13 @@ static class GuiSmokeShared
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
+    public static JsonSerializerOptions NdjsonOptions { get; } = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
     public static async Task RunProcessAsync(
         string fileName,
         string arguments,
@@ -5047,7 +5054,7 @@ sealed class ArtifactRecorder
     {
         LiveExportAtomicFileWriter.AppendAllTextShared(
             _tracePath,
-            JsonSerializer.Serialize(entry, GuiSmokeShared.JsonOptions) + Environment.NewLine);
+            JsonSerializer.Serialize(entry, GuiSmokeShared.NdjsonOptions) + Environment.NewLine);
     }
 
     public void WriteObserverCopies(string stepPrefix, ObserverState observer)
@@ -5082,7 +5089,7 @@ sealed class ArtifactRecorder
     {
         LiveExportAtomicFileWriter.AppendAllTextShared(
             _progressPath,
-            JsonSerializer.Serialize(entry, GuiSmokeShared.JsonOptions) + Environment.NewLine);
+            JsonSerializer.Serialize(entry, GuiSmokeShared.NdjsonOptions) + Environment.NewLine);
     }
 
     public void WriteSelfMetaReview(GuiSmokeSelfMetaReview review)
@@ -5347,7 +5354,7 @@ static class LongRunArtifacts
     {
         LiveExportAtomicFileWriter.AppendAllTextShared(
             path,
-            JsonSerializer.Serialize(entry, GuiSmokeShared.JsonOptions) + Environment.NewLine);
+            JsonSerializer.Serialize(entry, GuiSmokeShared.NdjsonOptions) + Environment.NewLine);
     }
 
     private static void AppendUniqueNdjson<T>(string path, T entry, Func<T, string> keySelector, string key)
