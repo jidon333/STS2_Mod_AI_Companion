@@ -3074,6 +3074,15 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
         if (repeatedNonEnemyLoop)
         {
+            var endTurnNode = request.Observer.ActionNodes.FirstOrDefault(node =>
+                node.Actionable
+                && string.Equals(node.Label, "1턴 종료", StringComparison.OrdinalIgnoreCase)
+                && TryParseNodeBounds(node.ScreenBounds, out _));
+            if (endTurnNode is not null)
+            {
+                return CreateClickDecisionFromNode(request, endTurnNode, "end turn after repeated non-enemy loop");
+            }
+
             return new GuiSmokeStepDecision(
                 "act",
                 "press-key",
