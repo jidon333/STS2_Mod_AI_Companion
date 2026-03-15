@@ -3132,6 +3132,24 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 null);
         }
 
+        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+            && observerHasAttackCard)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                0.744,
+                0.542,
+                "auto-target enemy",
+                "An attack card was just selected via hotkey. Click the enemy even if the screenshot analyzer missed the target arrow.",
+                0.84,
+                "combat",
+                350,
+                true,
+                null);
+        }
+
         if (analysis.HasSelectedCard
             && analysis.SelectedCardKind == AutoCombatCardKind.DefendLike)
         {
