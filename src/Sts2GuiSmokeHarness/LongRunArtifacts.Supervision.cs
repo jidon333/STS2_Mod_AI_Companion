@@ -263,7 +263,11 @@ static partial class LongRunArtifacts
         string? SceneSignature,
         string? LastLoopTarget,
         bool ExplicitRewardChoicesPresent,
-        bool MapArrowContaminationPresent);
+        bool MapArrowContaminationPresent,
+        bool StaleRewardChoicePresent,
+        bool StaleRewardBoundsPresent,
+        bool RewardBackNavigationAvailable,
+        bool OffWindowBoundsReused);
 
     private sealed record CombatNoOpLoopAnalysis(
         string DiagnosisKind,
@@ -1204,9 +1208,30 @@ static partial class LongRunArtifacts
             evidence.Add("rewardExplicitChoicesPresent:true");
         }
 
+        if (rewardMapLoop.StaleRewardChoicePresent)
+        {
+            evidence.Add("staleRewardChoicePresent:true");
+        }
+
+        if (rewardMapLoop.StaleRewardBoundsPresent)
+        {
+            evidence.Add("staleRewardBoundsPresent:true");
+        }
+
+        if (rewardMapLoop.RewardBackNavigationAvailable)
+        {
+            evidence.Add("rewardBackNavigationAvailable:true");
+        }
+
         if (rewardMapLoop.MapArrowContaminationPresent)
         {
+            evidence.Add("mapContextVisible:true");
             evidence.Add("rewardMapArrowContamination:true");
+        }
+
+        if (rewardMapLoop.OffWindowBoundsReused)
+        {
+            evidence.Add("offWindowBoundsReused:true");
         }
 
         if (!string.IsNullOrWhiteSpace(mapTransitionStall.LastLoopTarget))
@@ -1653,21 +1678,26 @@ static partial class LongRunArtifacts
     {
         if (progress.Count == 0)
         {
-            return new RewardMapLoopAnalysis("no-stall", false, 0, null, null, null, null, false, false);
+            return new RewardMapLoopAnalysis("no-stall", false, 0, null, null, null, null, false, false, false, false, false, false);
         }
 
         var lastLoopEntry = progress.LastOrDefault(IsRewardMapLoopProgressEntry);
         if (lastLoopEntry is null)
         {
-            return new RewardMapLoopAnalysis("no-stall", false, 0, null, null, null, null, false, false);
+            return new RewardMapLoopAnalysis("no-stall", false, 0, null, null, null, null, false, false, false, false, false, false);
         }
 
         var normalizedSignature = NormalizeSceneSignatureForPlateau(lastLoopEntry.SceneSignature);
         var repeatedLoopCount = 0;
         string? lastLoopTarget = null;
         var explicitRewardChoicesPresent = false;
+        var staleRewardChoicePresent = normalizedSignature.Contains("stale:reward-choice", StringComparison.OrdinalIgnoreCase);
+        var staleRewardBoundsPresent = normalizedSignature.Contains("stale:reward-bounds", StringComparison.OrdinalIgnoreCase);
+        var rewardBackNavigationAvailable = normalizedSignature.Contains("layer:reward-back-nav", StringComparison.OrdinalIgnoreCase);
         var mapArrowContaminationPresent = normalizedSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase)
-                                           || normalizedSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase);
+                                           || normalizedSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)
+                                           || normalizedSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase);
+        var offWindowBoundsReused = staleRewardBoundsPresent;
         for (var index = progress.Count - 1; index >= 0; index -= 1)
         {
             var entry = progress[index];
@@ -1679,10 +1709,15 @@ static partial class LongRunArtifacts
             }
 
             explicitRewardChoicesPresent |= HasExplicitRewardProgressionEvidence(entry);
+            staleRewardChoicePresent |= entry.SceneSignature.Contains("stale:reward-choice", StringComparison.OrdinalIgnoreCase);
+            staleRewardBoundsPresent |= entry.SceneSignature.Contains("stale:reward-bounds", StringComparison.OrdinalIgnoreCase);
+            rewardBackNavigationAvailable |= entry.SceneSignature.Contains("layer:reward-back-nav", StringComparison.OrdinalIgnoreCase);
             mapArrowContaminationPresent |= entry.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase)
-                                            || entry.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase);
+                                            || entry.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)
+                                            || entry.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase);
+            offWindowBoundsReused |= entry.SceneSignature.Contains("stale:reward-bounds", StringComparison.OrdinalIgnoreCase);
 
-            if (IsRewardMapLoopTarget(entry.DecisionTargetLabel))
+            if (IsRewardMapLoopTarget(entry.DecisionTargetLabel) || IsStaleRewardLoopTarget(entry.DecisionTargetLabel))
             {
                 repeatedLoopCount += 1;
                 lastLoopTarget ??= entry.DecisionTargetLabel;
@@ -1701,7 +1736,10 @@ static partial class LongRunArtifacts
             break;
         }
 
-        if (repeatedLoopCount < 2 || !explicitRewardChoicesPresent)
+        var loopDetected = repeatedLoopCount >= 2
+                           && mapArrowContaminationPresent
+                           && (explicitRewardChoicesPresent || staleRewardChoicePresent || staleRewardBoundsPresent);
+        if (!loopDetected)
         {
             return new RewardMapLoopAnalysis(
                 "no-stall",
@@ -1712,7 +1750,11 @@ static partial class LongRunArtifacts
                 normalizedSignature,
                 lastLoopTarget,
                 explicitRewardChoicesPresent,
-                mapArrowContaminationPresent);
+                mapArrowContaminationPresent,
+                staleRewardChoicePresent,
+                staleRewardBoundsPresent,
+                rewardBackNavigationAvailable,
+                offWindowBoundsReused);
         }
 
         return new RewardMapLoopAnalysis(
@@ -1724,7 +1766,11 @@ static partial class LongRunArtifacts
             normalizedSignature,
             lastLoopTarget,
             explicitRewardChoicesPresent,
-            mapArrowContaminationPresent);
+            mapArrowContaminationPresent,
+            staleRewardChoicePresent,
+            staleRewardBoundsPresent,
+            rewardBackNavigationAvailable,
+            offWindowBoundsReused);
     }
 
     private static MapTransitionStallAnalysis AnalyzeMapTransitionStall(IReadOnlyList<GuiSmokeStepProgress> progress)
@@ -1906,6 +1952,13 @@ static partial class LongRunArtifacts
         return string.Equals(decisionTargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsStaleRewardLoopTarget(string? decisionTargetLabel)
+    {
+        return string.Equals(decisionTargetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "reward choice", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsOverlayCleanupDecisionTarget(string? decisionTargetLabel)
