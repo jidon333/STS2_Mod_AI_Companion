@@ -269,6 +269,17 @@ internal static class RuntimeSnapshotReflectionExtractor
             meta["combatHandCount"] = combatHand.Count.ToString(CultureInfo.InvariantCulture);
         }
 
+        var combatTargetChoices = choices
+            .Where(choice => string.Equals(choice.Kind, "enemy-target", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (combatTargetChoices.Length > 0)
+        {
+            meta["combatTargetCount"] = combatTargetChoices.Length.ToString(CultureInfo.InvariantCulture);
+            meta["combatTargetSummary"] = string.Join(
+                ";",
+                combatTargetChoices.Select(choice => $"{choice.NodeId ?? choice.Label}@{choice.ScreenBounds}"));
+        }
+
         if (act is not null)
         {
             payload["act"] = act;
@@ -862,6 +873,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         if (LooksLikeCombatContext(triggerKind, screenHint, choiceRoots))
         {
+            strictAttempts.Add(ExtractCombatChoices(choiceRoots, maxEntries));
             strictAttempts.Add(
                 EvaluateChoiceSet(
                     "combat",
@@ -1165,6 +1177,218 @@ internal static class RuntimeSnapshotReflectionExtractor
             "ExhaustPile",
             "EndTurnButton",
             "PingButton");
+    }
+
+    private static ChoiceExtractionResult ExtractCombatChoices(IEnumerable<object> roots, int maxEntries)
+    {
+        var choices = CollectCombatEnemyTargetChoices(roots)
+            .Take(maxEntries)
+            .ToArray();
+        var candidates = choices
+            .Select(choice => new LiveExportChoiceCandidate(
+                "combat-targets",
+                "NCreature",
+                choice.Label,
+                choice.Value,
+                choice.Description,
+                100,
+                Accepted: true,
+                RejectReason: null))
+            .ToArray();
+        return new ChoiceExtractionResult(
+            choices,
+            candidates,
+            new LiveExportChoiceDecision(
+                "combat-targets",
+                UsedStrictExtractor: true,
+                CandidateCount: candidates.Length,
+                AcceptedCount: choices.Length,
+                choices.Length == 0 ? "none" : "accepted",
+                choices.Length == 0 ? "no interactable enemy hitboxes resolved for combat targeting" : null,
+                Array.Empty<string>()));
+    }
+
+    private static IReadOnlyList<LiveExportChoiceSummary> CollectCombatEnemyTargetChoices(IEnumerable<object> roots)
+    {
+        var creatures = new List<object>();
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (typeName.Contains("NCreature", StringComparison.OrdinalIgnoreCase))
+            {
+                AddIfUseful(creatures, root);
+            }
+
+            if (typeName.Contains("NCombatRoom", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var creature in ExpandEnumerable(TryGetMemberValue(root, "CreatureNodes")))
+                {
+                    AddIfUseful(creatures, creature);
+                }
+            }
+
+            foreach (var creature in ExpandEnumerable(TryGetMemberValue(root, "CreatureNodes")))
+            {
+                AddIfUseful(creatures, creature);
+            }
+        }
+
+        return creatures
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .Select((creature, index) => TryCreateCombatEnemyTargetChoiceSummary(creature, index + 1))
+            .Where(static choice => choice is not null)
+            .Cast<LiveExportChoiceSummary>()
+            .OrderBy(static choice => TryGetBoundsSortX(choice.ScreenBounds))
+            .ThenBy(static choice => TryGetBoundsSortY(choice.ScreenBounds))
+            .ToArray();
+    }
+
+    private static LiveExportChoiceSummary? TryCreateCombatEnemyTargetChoiceSummary(object creature, int ordinal)
+    {
+        var typeName = creature.GetType().FullName ?? creature.GetType().Name;
+        if (!typeName.Contains("NCreature", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (TryReadBool(creature, "Visible", "IsVisible", "VisibleInTree") == false
+            || TryReadBool(creature, "IsInteractable") == false)
+        {
+            return null;
+        }
+
+        var entity = TryGetMemberValue(creature, "Entity");
+        if (TryReadBool(entity, "IsPlayer") == true
+            || TryReadBool(entity, "IsPet") == true
+            || TryReadBool(entity, "IsFriendly") == true)
+        {
+            return null;
+        }
+
+        var label = ResolveCombatEnemyTargetLabel(creature, entity, ordinal);
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        if (!TryResolveCombatEnemyTargetBounds(creature, out var screenBounds, out var targetSource)
+            || string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return null;
+        }
+
+        return new LiveExportChoiceSummary(
+            "enemy-target",
+            label,
+            TryReadString(entity, "Id", "Name", "DisplayName"),
+            $"target-source:{targetSource}")
+        {
+            NodeId = $"enemy-target:{ordinal}",
+            ScreenBounds = screenBounds,
+        };
+    }
+
+    private static string ResolveCombatEnemyTargetLabel(object creature, object? entity, int ordinal)
+    {
+        var rawName = TryReadString(entity, "DisplayName", "Name", "Id", "MonsterName")
+                      ?? TryReadString(creature, "DisplayName", "Name");
+        if (string.IsNullOrWhiteSpace(rawName))
+        {
+            return $"Enemy {ordinal}";
+        }
+
+        return rawName.Trim();
+    }
+
+    private static bool TryResolveCombatEnemyTargetBounds(object creature, out string? screenBounds, out string targetSource)
+    {
+        screenBounds = null;
+        targetSource = "none";
+
+        var hitbox = TryGetMemberValue(creature, "Hitbox") ?? creature;
+        var hitboxBounds = TryResolveScreenBounds(hitbox) ?? TryResolveScreenBounds(creature);
+        if (string.IsNullOrWhiteSpace(hitboxBounds))
+        {
+            return false;
+        }
+
+        if (!TryParseBounds(hitboxBounds, out var hitboxX, out var hitboxY, out var hitboxWidth, out var hitboxHeight))
+        {
+            return false;
+        }
+
+        var vfxSpawnPosition = TryGetMemberValue(creature, "VfxSpawnPosition");
+        var vfxX = TryReadDouble(vfxSpawnPosition, "X", "x");
+        var vfxY = TryReadDouble(vfxSpawnPosition, "Y", "y");
+        if (vfxX is not null && vfxY is not null)
+        {
+            var width = Clamp(hitboxWidth * 0.36d, 72d, Math.Max(72d, hitboxWidth * 0.78d));
+            var height = Clamp(hitboxHeight * 0.42d, 88d, Math.Max(88d, hitboxHeight * 0.82d));
+            var targetX = Clamp(vfxX.Value - width / 2d, hitboxX, hitboxX + hitboxWidth - width);
+            var targetY = Clamp(vfxY.Value - height * 0.55d, hitboxY, hitboxY + hitboxHeight - height);
+            screenBounds = FormatBounds(targetX, targetY, width, height);
+            targetSource = "vfx-spawn-hitbox";
+            return true;
+        }
+
+        var bodyX = hitboxX + hitboxWidth * 0.22d;
+        var bodyY = hitboxY + hitboxHeight * 0.18d;
+        var bodyWidth = hitboxWidth * 0.56d;
+        var bodyHeight = hitboxHeight * 0.62d;
+        screenBounds = FormatBounds(bodyX, bodyY, bodyWidth, bodyHeight);
+        targetSource = "hitbox-body";
+        return true;
+    }
+
+    private static bool TryParseBounds(string rawBounds, out double x, out double y, out double width, out double height)
+    {
+        x = default;
+        y = default;
+        width = default;
+        height = default;
+
+        var parts = rawBounds.Split(',', StringSplitOptions.TrimEntries);
+        return parts.Length == 4
+               && double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out x)
+               && double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out y)
+               && double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out width)
+               && double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out height)
+               && width > 0d
+               && height > 0d;
+    }
+
+    private static string FormatBounds(double x, double y, double width, double height)
+    {
+        return string.Create(CultureInfo.InvariantCulture, $"{x:0.###},{y:0.###},{width:0.###},{height:0.###}");
+    }
+
+    private static double TryGetBoundsSortX(string? rawBounds)
+    {
+        return !string.IsNullOrWhiteSpace(rawBounds) && TryParseBounds(rawBounds, out var x, out _, out _, out _)
+            ? x
+            : double.MaxValue;
+    }
+
+    private static double TryGetBoundsSortY(string? rawBounds)
+    {
+        return !string.IsNullOrWhiteSpace(rawBounds) && TryParseBounds(rawBounds, out _, out var y, out _, out _)
+            ? y
+            : double.MaxValue;
+    }
+
+    private static double Clamp(double value, double min, double max)
+    {
+        if (value < min)
+        {
+            return min;
+        }
+
+        if (value > max)
+        {
+            return max;
+        }
+
+        return value;
     }
 
     private static IEnumerable<object> CollectChoiceItems(

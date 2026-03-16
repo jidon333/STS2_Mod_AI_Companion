@@ -2427,6 +2427,106 @@ static void RunSelfTest()
             null));
         Assert(string.Equals(slotAlignmentDecision.TargetLabel, "combat select attack slot 2", StringComparison.OrdinalIgnoreCase), "Combat decisioning should align with observer/knowledge slot 2 instead of drifting to a screenshot-only slot.");
 
+        var combatTargetObserver = new ObserverState(
+            new ObserverSummary(
+                "combat",
+                "combat",
+                true,
+                DateTimeOffset.UtcNow,
+                "inv-combat-targets",
+                true,
+                "mixed",
+                "stable",
+                "episode-combat-targets",
+                "Combat",
+                "combat",
+                80,
+                80,
+                3,
+                new[] { "Jaw Worm", "Cultist" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("enemy-target:1", "enemy-target", "Jaw Worm", "720,180,180,260", true),
+                    new ObserverActionNode("enemy-target:2", "enemy-target", "Cultist", "930,210,180,250", true),
+                    new ObserverActionNode("end-turn", "button", "3턴 종료", "1080,620,140,60", true),
+                },
+                Array.Empty<ObserverChoice>(),
+                new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                }),
+            null,
+            null,
+            null);
+        var combatTargetDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            9,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Prefer actual combat target nodes over fixed normalized enemy anchors.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            combatTargetObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            },
+            new[] { "click enemy", "click end turn", "wait" },
+            new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-2)),
+            },
+            "Use current-frame enemy target bounds instead of fixed anchors.",
+            null));
+        Assert(combatTargetDecision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) == true, "Combat target selection should use exported enemy target nodes instead of fixed normalized labels when current-frame enemy bounds exist.");
+        Assert(combatTargetDecision.NormalizedX is > 0.35 and < 0.55, "Enemy target click should resolve from the exported hitbox/body rect, not the old fixed normalized anchor.");
+
+        var combatTargetRetryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            10,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "After one no-op target click, try another observed enemy target before giving up.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            combatTargetObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            },
+            new[] { "click enemy", "click end turn", "wait" },
+            new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-5)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "click", "combat enemy target Jaw Worm", DateTimeOffset.UtcNow.AddSeconds(-4)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 1", DateTimeOffset.UtcNow.AddSeconds(-3)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-2)),
+            },
+            "Try another enemy target before ending the turn.",
+            null));
+        Assert(combatTargetRetryDecision.TargetLabel?.Contains("Cultist", StringComparison.OrdinalIgnoreCase) == true, "After one no-op enemy click, combat recovery should try another observed enemy target when one is available.");
+
         var noEnemyTargetObserver = new ObserverState(
             new ObserverSummary(
                 "combat",
@@ -4217,6 +4317,11 @@ static bool CanResolveEnemyTargetFromStateAnalysis(
     AutoCombatAnalysis analysis,
     PendingCombatSelection? pendingSelection)
 {
+    if (GetCombatEnemyTargetNodes(observer.Summary).Count > 0)
+    {
+        return true;
+    }
+
     if (analysis.HasTargetArrow)
     {
         return true;
@@ -4243,6 +4348,70 @@ static bool CanResolveEnemyTargetFromStateAnalysis(
            && analysis.SelectedCardKind == AutoCombatCardKind.AttackLike
            && (GetPlayableCombatAttackSlots(observer, combatCardKnowledge).Any()
                || (observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0));
+}
+
+static IReadOnlyList<ObserverActionNode> GetCombatEnemyTargetNodes(ObserverSummary observer, WindowBounds? windowBounds = null)
+{
+    return observer.ActionNodes
+        .Where(static node => node.Actionable && IsCombatEnemyTargetNode(node))
+        .Where(node => windowBounds is null
+            ? TryParseNodeBounds(node.ScreenBounds, out _)
+            : HasTopLevelActiveNodeBounds(node.ScreenBounds, windowBounds))
+        .OrderBy(static node => GetTopLevelNodeSortX(node))
+        .ThenBy(static node => GetTopLevelNodeSortY(node))
+        .ToArray();
+}
+
+static bool IsCombatEnemyTargetNode(ObserverActionNode node)
+{
+    return string.Equals(node.Kind, "enemy-target", StringComparison.OrdinalIgnoreCase)
+           || node.NodeId.StartsWith("enemy-target:", StringComparison.OrdinalIgnoreCase)
+           || node.Label.Contains("enemy", StringComparison.OrdinalIgnoreCase)
+           || node.Label.Contains("적", StringComparison.OrdinalIgnoreCase);
+}
+
+static bool HasTopLevelActiveNodeBounds(string? screenBounds, WindowBounds? windowBounds)
+{
+    if (HasTopLevelUsableLogicalBounds(screenBounds))
+    {
+        return true;
+    }
+
+    return windowBounds is not null && IsTopLevelBoundsInsideWindow(screenBounds, windowBounds);
+}
+
+static float GetTopLevelNodeSortX(ObserverActionNode node)
+{
+    return TryParseNodeBounds(node.ScreenBounds, out var bounds)
+        ? bounds.X
+        : float.MaxValue;
+}
+
+static float GetTopLevelNodeSortY(ObserverActionNode node)
+{
+    return TryParseNodeBounds(node.ScreenBounds, out var bounds)
+        ? bounds.Y
+        : float.MaxValue;
+}
+
+static bool HasTopLevelUsableLogicalBounds(string? screenBounds)
+{
+    return TryParseNodeBounds(screenBounds, out var bounds)
+           && bounds.X >= 0f
+           && bounds.Y >= 0f
+           && bounds.Right <= 1920f
+           && bounds.Bottom <= 1080f;
+}
+
+static bool IsTopLevelBoundsInsideWindow(string? screenBounds, WindowBounds windowBounds)
+{
+    return TryParseNodeBounds(screenBounds, out var bounds)
+           && bounds.Width > 0f
+           && bounds.Height > 0f
+           && bounds.X >= windowBounds.X
+           && bounds.Y >= windowBounds.Y
+           && bounds.Right <= windowBounds.X + windowBounds.Width
+           && bounds.Bottom <= windowBounds.Y + windowBounds.Height;
 }
 
 static bool HasCombatSelectionToCancel(
@@ -5250,7 +5419,8 @@ static bool TryClassifyCombatNoOpLoop(
     var decisionRepeatsLoop = string.Equals(decision.TargetLabel, loopTarget, StringComparison.OrdinalIgnoreCase)
                               || ((string.Equals(decision.TargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase)
                                    || string.Equals(decision.TargetLabel, "auto-target enemy recenter", StringComparison.OrdinalIgnoreCase)
-                                   || string.Equals(decision.TargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase))
+                                   || string.Equals(decision.TargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase)
+                                   || (decision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) ?? false))
                                   && pendingSelection?.Kind == AutoCombatCardKind.AttackLike
                                   && pendingSelection.SlotIndex == blockedSlot);
     if (!decisionRepeatsLoop)
@@ -7796,6 +7966,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return true;
         }
 
+        if (TryCreateCombatEnemyTargetDecisionFromObservedNodes(request, pendingSelection, pendingSelectionNoOpCount, out decision))
+        {
+            return true;
+        }
+
         var targetCandidateIndex = Math.Clamp(pendingSelectionNoOpCount, 0, GuiSmokeCombatConstants.EnemyTargetCandidates.Length - 1);
         var targetCandidate = GuiSmokeCombatConstants.EnemyTargetCandidates[targetCandidateIndex];
         var reason = pendingSelectionNoOpCount == 0
@@ -7817,12 +7992,38 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         return true;
     }
 
+    private static bool TryCreateCombatEnemyTargetDecisionFromObservedNodes(
+        GuiSmokeStepRequest request,
+        PendingCombatSelection pendingSelection,
+        int pendingSelectionNoOpCount,
+        out GuiSmokeStepDecision decision)
+    {
+        var targetNodes = GetCombatEnemyTargetNodes(request.Observer, request.WindowBounds);
+        if (targetNodes.Count == 0)
+        {
+            decision = default!;
+            return false;
+        }
+
+        var targetNode = pendingSelectionNoOpCount == 0
+            ? targetNodes[0]
+            : targetNodes[Math.Clamp(pendingSelectionNoOpCount, 0, targetNodes.Count - 1)];
+        var targetLabel = BuildCombatEnemyTargetLabel(targetNode, pendingSelectionNoOpCount);
+        decision = CreateCombatEnemyTargetDecisionFromNode(request, targetNode, targetLabel, pendingSelectionNoOpCount);
+        return true;
+    }
+
     private static bool CanResolveEnemyTargetFromCurrentState(
         ObserverSummary observer,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
         AutoCombatAnalysis analysis,
         PendingCombatSelection? pendingSelection)
     {
+        if (GetCombatEnemyTargetNodes(observer).Count > 0)
+        {
+            return true;
+        }
+
         if (analysis.HasTargetArrow)
         {
             return true;
@@ -7868,7 +8069,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     {
         return targetLabel is not null
                && (targetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase)
-                   || targetLabel.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase));
+                   || targetLabel.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase)
+                   || targetLabel.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase));
     }
 
     public static string? ResolveCombatLaneLabel(string? targetLabel, IReadOnlyList<GuiSmokeHistoryEntry> history)
@@ -7879,7 +8081,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         }
 
         if (targetLabel is not null
-            && targetLabel.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase)
+            && (targetLabel.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase)
+                || targetLabel.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase))
             && TryGetPendingCombatSelection(history) is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: >= 1 and <= 5 } pendingSelection)
         {
             return $"combat lane slot {pendingSelection.SlotIndex}";
@@ -8047,7 +8250,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var recentEnemyTargetCount = recentCombatHistory.Count(entry =>
             string.Equals(entry.TargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase)
             || string.Equals(entry.TargetLabel, "auto-target enemy recenter", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(entry.TargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase));
+            || string.Equals(entry.TargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase)
+            || (entry.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) ?? false));
         var repeatedSameSlotCount = recentNoOpCounts.TryGetValue(mostRecentBlockedSlot.Value, out var blockedCount)
             ? blockedCount
             : 0;
@@ -8201,6 +8405,26 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             && (windowBounds is null
                 ? TryParseNodeBounds(node.ScreenBounds, out _)
                 : HasActiveNodeBounds(node.ScreenBounds, windowBounds)));
+    }
+
+    private static IReadOnlyList<ObserverActionNode> GetCombatEnemyTargetNodes(ObserverSummary observer, WindowBounds? windowBounds = null)
+    {
+        return observer.ActionNodes
+            .Where(static node => node.Actionable && IsCombatEnemyTargetNode(node))
+            .Where(node => windowBounds is null
+                ? TryParseNodeBounds(node.ScreenBounds, out _)
+                : HasActiveNodeBounds(node.ScreenBounds, windowBounds))
+            .OrderBy(static node => GetNodeSortX(node))
+            .ThenBy(static node => GetNodeSortY(node))
+            .ToArray();
+    }
+
+    private static bool IsCombatEnemyTargetNode(ObserverActionNode node)
+    {
+        return string.Equals(node.Kind, "enemy-target", StringComparison.OrdinalIgnoreCase)
+               || node.NodeId.StartsWith("enemy-target:", StringComparison.OrdinalIgnoreCase)
+               || node.Label.Contains("enemy", StringComparison.OrdinalIgnoreCase)
+               || node.Label.Contains("적", StringComparison.OrdinalIgnoreCase);
     }
 
     private static GuiSmokeStepDecision? TryCreateSemanticEventDecision(GuiSmokeStepRequest request)
@@ -9570,6 +9794,58 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 null);
     }
 
+    private static GuiSmokeStepDecision CreateCombatEnemyTargetDecisionFromNode(
+        GuiSmokeStepRequest request,
+        ObserverActionNode node,
+        string targetLabel,
+        int retryCount)
+    {
+        if (!TryParseNodeBounds(node.ScreenBounds, out var bounds))
+        {
+            throw new InvalidOperationException($"Enemy target node '{node.Label}' does not include screen bounds.");
+        }
+
+        var anchor = retryCount switch
+        {
+            <= 0 => (X: 0.50f, Y: 0.52f, Suffix: "body"),
+            1 => (X: 0.50f, Y: 0.40f, Suffix: "upper-body"),
+            2 => (X: 0.62f, Y: 0.48f, Suffix: "right-body"),
+            _ => (X: 0.38f, Y: 0.48f, Suffix: "left-body"),
+        };
+        if (!TryResolveNormalizedPointFromBounds(request.WindowBounds, node.ScreenBounds, bounds, anchor.X, anchor.Y, out var normalizedX, out var normalizedY, out var boundsSource))
+        {
+            throw new InvalidOperationException($"Enemy target node '{node.Label}' uses stale or off-window bounds '{node.ScreenBounds}'.");
+        }
+
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            normalizedX,
+            normalizedY,
+            targetLabel,
+            $"Auto provider selected enemy target '{node.Label}' using {boundsSource} bounds at {anchor.Suffix}.",
+            retryCount == 0 ? 0.94 : 0.90,
+            "combat",
+            800,
+            true,
+            null);
+    }
+
+    private static string BuildCombatEnemyTargetLabel(ObserverActionNode node, int retryCount)
+    {
+        var baseLabel = string.IsNullOrWhiteSpace(node.Label)
+            ? "combat enemy target"
+            : $"combat enemy target {node.Label.Trim()}";
+        return retryCount switch
+        {
+            <= 0 => baseLabel,
+            1 => $"{baseLabel} recenter",
+            2 => $"{baseLabel} alternate",
+            _ => $"{baseLabel} fallback",
+        };
+    }
+
     private static GuiSmokeStepDecision CreateClickDecisionFromChoice(
         GuiSmokeStepRequest request,
         ObserverChoice choice,
@@ -9626,16 +9902,29 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         out double normalizedY,
         out string boundsSource)
     {
+        return TryResolveNormalizedPointFromBounds(windowBounds, rawBounds, bounds, 0.5f, 0.5f, out normalizedX, out normalizedY, out boundsSource);
+    }
+
+    private static bool TryResolveNormalizedPointFromBounds(
+        WindowBounds windowBounds,
+        string? rawBounds,
+        RectangleF bounds,
+        float anchorX,
+        float anchorY,
+        out double normalizedX,
+        out double normalizedY,
+        out string boundsSource)
+    {
         normalizedX = default;
         normalizedY = default;
         boundsSource = "unknown";
 
-        var centerX = bounds.X + bounds.Width / 2f;
-        var centerY = bounds.Y + bounds.Height / 2f;
+        var pointX = bounds.X + bounds.Width * anchorX;
+        var pointY = bounds.Y + bounds.Height * anchorY;
         if (HasUsableLogicalBounds(rawBounds))
         {
-            normalizedX = Math.Clamp(centerX / 1920f, 0d, 1d);
-            normalizedY = Math.Clamp(centerY / 1080f, 0d, 1d);
+            normalizedX = Math.Clamp(pointX / 1920f, 0d, 1d);
+            normalizedY = Math.Clamp(pointY / 1080f, 0d, 1d);
             boundsSource = "logical";
             return true;
         }
@@ -9645,8 +9934,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return false;
         }
 
-        normalizedX = Math.Clamp((centerX - windowBounds.X) / Math.Max(1d, windowBounds.Width), 0d, 1d);
-        normalizedY = Math.Clamp((centerY - windowBounds.Y) / Math.Max(1d, windowBounds.Height), 0d, 1d);
+        normalizedX = Math.Clamp((pointX - windowBounds.X) / Math.Max(1d, windowBounds.Width), 0d, 1d);
+        normalizedY = Math.Clamp((pointY - windowBounds.Y) / Math.Max(1d, windowBounds.Height), 0d, 1d);
         boundsSource = "window";
         return true;
     }

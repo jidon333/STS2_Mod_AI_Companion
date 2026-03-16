@@ -1942,7 +1942,8 @@ static partial class LongRunArtifacts
                 repeatedSelectionCount += 1;
                 if (string.Equals(entry.DecisionTargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(entry.DecisionTargetLabel, "auto-target enemy recenter", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(entry.DecisionTargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(entry.DecisionTargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase)
+                    || (entry.DecisionTargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) ?? false))
                 {
                     enemyTargetCount += 1;
                 }
@@ -1959,7 +1960,8 @@ static partial class LongRunArtifacts
                 continue;
             }
 
-            if (string.Equals(entry.DecisionTargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(entry.DecisionTargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase)
+                || (entry.DecisionTargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) ?? false))
             {
                 enemyTargetCount += 1;
                 combatLoopActionCount += 1;
