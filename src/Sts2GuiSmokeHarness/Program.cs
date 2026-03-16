@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -1689,7 +1690,16 @@ static int ReplayStep(IReadOnlyDictionary<string, string> options, string worksp
         throw new FileNotFoundException("Replay request not found.", resolvedRequestPath);
     }
 
-    var request = LoadReplayRequest(resolvedRequestPath);
+    var trace = new GuiSmokeReplayTracer("replay-step", options.ContainsKey("--trace"));
+    var fullRequestRebuild = options.ContainsKey("--full-request-rebuild") || options.ContainsKey("--rebuild-request");
+    trace.Info($"request={resolvedRequestPath}");
+    var requestLoad = trace.Measure(
+        "load-request",
+        () => LoadReplayRequest(resolvedRequestPath, trace, fullRequestRebuild),
+        fullRequestRebuild ? "full-request-rebuild" : "lightweight-request",
+        alwaysLog: true);
+    var request = requestLoad.Request;
+    trace.Info($"request-ready mode={(requestLoad.FullRequestRebuild ? "full-request-rebuild" : "lightweight-request")} observerStateLoaded={requestLoad.ObserverStateLoaded} scene={request.SceneSignature}");
     GuiSmokeStepDecision? existingDecision = null;
     if (options.TryGetValue("--decision", out var decisionPath))
     {
@@ -1699,18 +1709,40 @@ static int ReplayStep(IReadOnlyDictionary<string, string> options, string worksp
             throw new FileNotFoundException("Replay decision not found.", resolvedDecisionPath);
         }
 
-        existingDecision = JsonSerializer.Deserialize<GuiSmokeStepDecision>(File.ReadAllText(resolvedDecisionPath), GuiSmokeShared.JsonOptions);
+        existingDecision = trace.Measure(
+            "load-actual-decision",
+            () => JsonSerializer.Deserialize<GuiSmokeStepDecision>(File.ReadAllText(resolvedDecisionPath), GuiSmokeShared.JsonOptions),
+            Path.GetFileName(resolvedDecisionPath),
+            alwaysLog: trace.Entries.Count == 0);
     }
 
-    var replayEvaluation = EvaluateAutoDecisionWithDiagnostics(resolvedRequestPath, request, existingDecision);
+    var replayEvaluation = trace.Measure(
+        "analyze",
+        () => EvaluateAutoDecisionWithDiagnostics(resolvedRequestPath, request, existingDecision),
+        Path.GetFileName(request.ScreenshotPath),
+        alwaysLog: true);
     var artifact = replayEvaluation.CandidateDump;
     if (options.TryGetValue("--out", out var outputPath))
     {
         var resolvedOutputPath = Path.GetFullPath(outputPath, workspaceRoot);
-        WriteCandidateDumpArtifact(resolvedOutputPath, artifact);
+        trace.Measure(
+            "write-candidate-dump",
+            () =>
+            {
+                WriteCandidateDumpArtifact(resolvedOutputPath, artifact);
+                return 0;
+            },
+            Path.GetFileName(resolvedOutputPath),
+            alwaysLog: true);
     }
 
-    Console.WriteLine(JsonSerializer.Serialize(artifact, GuiSmokeShared.JsonOptions));
+    trace.Info($"result target={artifact.FinalDecision.TargetLabel ?? artifact.FinalDecision.ActionKind ?? artifact.FinalDecision.Status} foreground={artifact.DebugSummary.ForegroundKind ?? "null"} background={artifact.DebugSummary.BackgroundKind ?? "null"} suppressed={BuildSuppressedCandidateSummary(artifact.DebugSummary)}");
+    var serializedArtifact = trace.Measure(
+        "serialize-result",
+        () => JsonSerializer.Serialize(artifact, GuiSmokeShared.JsonOptions),
+        "stdout",
+        alwaysLog: true);
+    Console.WriteLine(serializedArtifact);
     return 0;
 }
 
@@ -1727,11 +1759,26 @@ static int ReplayGoldenScenes(IReadOnlyDictionary<string, string> options, strin
     var fixtures = JsonSerializer.Deserialize<IReadOnlyList<GuiSmokeReplayGoldenSceneFixture>>(File.ReadAllText(suitePath), GuiSmokeShared.JsonOptions)
                    ?? throw new InvalidOperationException("Failed to parse golden scene suite.");
     var results = new List<object>(fixtures.Count);
-    foreach (var fixture in fixtures)
+    var traceEnabled = options.ContainsKey("--trace");
+    var fullRequestRebuild = options.ContainsKey("--full-request-rebuild") || options.ContainsKey("--rebuild-request");
+    for (var index = 0; index < fixtures.Count; index += 1)
     {
+        var fixture = fixtures[index];
+        var fixtureTrace = new GuiSmokeReplayTracer($"replay-test {index + 1}/{fixtures.Count}:{fixture.Name}", traceEnabled);
         var requestPath = Path.GetFullPath(fixture.RequestPath, workspaceRoot);
-        var request = LoadReplayRequest(requestPath);
-        var artifact = EvaluateAutoDecisionWithDiagnostics(requestPath, request).CandidateDump;
+        fixtureTrace.Info($"start request={requestPath}");
+        var requestLoad = fixtureTrace.Measure(
+            "load-request",
+            () => LoadReplayRequest(requestPath, fixtureTrace, fullRequestRebuild),
+            fullRequestRebuild ? "full-request-rebuild" : "lightweight-request",
+            alwaysLog: true);
+        var request = requestLoad.Request;
+        fixtureTrace.Info($"request-ready mode={(requestLoad.FullRequestRebuild ? "full-request-rebuild" : "lightweight-request")} observerStateLoaded={requestLoad.ObserverStateLoaded} scene={request.SceneSignature}");
+        var artifact = fixtureTrace.Measure(
+            "analyze",
+            () => EvaluateAutoDecisionWithDiagnostics(requestPath, request).CandidateDump,
+            Path.GetFileName(request.ScreenshotPath),
+            alwaysLog: true);
 
         if (!string.IsNullOrWhiteSpace(fixture.ExpectedTargetContains))
         {
@@ -1773,11 +1820,19 @@ static int ReplayGoldenScenes(IReadOnlyDictionary<string, string> options, strin
         {
             fixture.Name,
             fixture.RequestPath,
+            ReplayMode = requestLoad.FullRequestRebuild ? "full-request-rebuild" : "lightweight-request",
+            Checks = DescribeGoldenSceneChecks(fixture),
             SelectedTarget = artifact.FinalDecision.TargetLabel,
             artifact.DebugSummary.ForegroundKind,
             artifact.DebugSummary.BackgroundKind,
+            artifact.DebugSummary.WinnerSelectionReason,
+            Suppressed = artifact.DebugSummary.SuppressedCandidates
+                .Select(candidate => $"{candidate.Label}:{candidate.SuppressionReason}")
+                .ToArray(),
             CandidateCount = artifact.Candidates.Count,
+            ElapsedMs = fixtureTrace.Entries.Sum(static entry => entry.ElapsedMs),
         });
+        fixtureTrace.Info($"ok selected={artifact.FinalDecision.TargetLabel ?? artifact.FinalDecision.ActionKind ?? artifact.FinalDecision.Status} foreground={artifact.DebugSummary.ForegroundKind ?? "null"} background={artifact.DebugSummary.BackgroundKind ?? "null"} suppressed={BuildSuppressedCandidateSummary(artifact.DebugSummary)}");
     }
 
     Console.WriteLine(JsonSerializer.Serialize(new
@@ -1789,26 +1844,89 @@ static int ReplayGoldenScenes(IReadOnlyDictionary<string, string> options, strin
     return 0;
 }
 
-static GuiSmokeStepRequest LoadReplayRequest(string requestPath)
+static GuiSmokeReplayRequestLoadResult LoadReplayRequest(string requestPath, GuiSmokeReplayTracer? trace = null, bool fullRequestRebuild = false)
 {
-    using var requestStream = new FileStream(requestPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-    var request = JsonSerializer.Deserialize<GuiSmokeStepRequest>(requestStream, GuiSmokeShared.JsonOptions)
-                  ?? throw new InvalidOperationException($"Failed to parse replay request '{requestPath}'.");
+    var request = (trace ?? new GuiSmokeReplayTracer("replay-load", verbose: false)).Measure(
+        "request-json",
+        () =>
+        {
+            using var requestStream = new FileStream(requestPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return JsonSerializer.Deserialize<GuiSmokeStepRequest>(requestStream, GuiSmokeShared.JsonOptions)
+                   ?? throw new InvalidOperationException($"Failed to parse replay request '{requestPath}'.");
+        },
+        Path.GetFileName(requestPath),
+        alwaysLog: false);
     var stepPrefix = requestPath.EndsWith(".request.json", StringComparison.OrdinalIgnoreCase)
         ? requestPath[..^".request.json".Length]
         : Path.Combine(Path.GetDirectoryName(requestPath) ?? string.Empty, Path.GetFileNameWithoutExtension(requestPath));
-    using var stateDocument = TryLoadJsonDocument(stepPrefix + ".observer.state.json");
-    using var inventoryDocument = TryLoadJsonDocument(stepPrefix + ".observer.inventory.json");
-    var eventLines = TryLoadJson<string[]>(stepPrefix + ".observer.events.tail.json") ?? Array.Empty<string>();
-    var observer = new ObserverState(request.Observer, stateDocument, inventoryDocument, eventLines);
+    var tracer = trace ?? new GuiSmokeReplayTracer("replay-load", verbose: false);
+    var stateDocument = tracer.Measure(
+        "observer-state-load",
+        () => TryLoadJsonDocument(stepPrefix + ".observer.state.json"),
+        Path.GetFileName(stepPrefix + ".observer.state.json"),
+        alwaysLog: false);
+    tracer.Skipped("observer-inventory-load", "replay-uses-request-embedded-action-nodes");
+    tracer.Skipped("observer-events-load", "replay-uses-request-embedded-events-tail");
+    var observer = new ObserverState(
+        request.Observer with
+        {
+            LastEventsTail = request.Observer.LastEventsTail ?? Array.Empty<string>(),
+            ActionNodes = request.Observer.ActionNodes ?? Array.Empty<ObserverActionNode>(),
+            Choices = request.Observer.Choices ?? Array.Empty<ObserverChoice>(),
+            CombatHand = request.Observer.CombatHand ?? Array.Empty<ObservedCombatHandCard>(),
+        },
+        stateDocument,
+        null,
+        request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>());
     var phase = Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true);
-    return request with
+    var sceneSignature = tracer.Measure(
+        "scene-signature",
+        () => ComputeSceneSignature(request.ScreenshotPath, observer, phase),
+        Path.GetFileName(request.ScreenshotPath),
+        alwaysLog: false);
+    string[] allowedActions;
+    string failureModeHint;
+    string? semanticGoal;
+    if (fullRequestRebuild)
     {
-        SceneSignature = ComputeSceneSignature(request.ScreenshotPath, observer, phase),
-        AllowedActions = BuildAllowedActions(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History),
-        FailureModeHint = BuildFailureModeHintCore(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History),
-        SemanticGoal = BuildSemanticGoal(phase, observer, request.ReasoningMode),
-    };
+        allowedActions = tracer.Measure(
+            "allowed-actions",
+            () => BuildAllowedActions(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History),
+            request.Phase,
+            alwaysLog: false);
+        failureModeHint = tracer.Measure(
+            "failure-mode-hint",
+            () => BuildFailureModeHintCore(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History),
+            request.Phase,
+            alwaysLog: false);
+        semanticGoal = tracer.Measure(
+            "semantic-goal",
+            () => BuildSemanticGoal(phase, observer, request.ReasoningMode),
+            request.ReasoningMode,
+            alwaysLog: false);
+    }
+    else
+    {
+        allowedActions = request.AllowedActions;
+        failureModeHint = request.FailureModeHint;
+        semanticGoal = request.SemanticGoal;
+        tracer.Skipped("allowed-actions", "reuse-request-artifact");
+        tracer.Skipped("failure-mode-hint", "reuse-request-artifact");
+        tracer.Skipped("semantic-goal", "reuse-request-artifact");
+    }
+
+    return new GuiSmokeReplayRequestLoadResult(
+        request with
+        {
+            Observer = observer.Summary,
+            SceneSignature = sceneSignature,
+            AllowedActions = allowedActions,
+            FailureModeHint = failureModeHint,
+            SemanticGoal = semanticGoal,
+        },
+        fullRequestRebuild,
+        stateDocument is not null,
+        tracer.Entries.ToArray());
 }
 
 static JsonDocument? TryLoadJsonDocument(string path)
@@ -1820,17 +1938,6 @@ static JsonDocument? TryLoadJsonDocument(string path)
 
     using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
     return JsonDocument.Parse(stream);
-}
-
-static T? TryLoadJson<T>(string path)
-{
-    if (!File.Exists(path))
-    {
-        return default;
-    }
-
-    using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-    return JsonSerializer.Deserialize<T>(stream, GuiSmokeShared.JsonOptions);
 }
 
 static GuiSmokeReplayEvaluation EvaluateAutoDecisionWithDiagnostics(
@@ -1850,6 +1957,56 @@ static void WriteCandidateDumpArtifact(string path, GuiSmokeCandidateDumpArtifac
 {
     Directory.CreateDirectory(Path.GetDirectoryName(path) ?? Directory.GetCurrentDirectory());
     File.WriteAllText(path, JsonSerializer.Serialize(artifact, GuiSmokeShared.JsonOptions));
+}
+
+static string BuildSuppressedCandidateSummary(GuiSmokeDecisionDebugSummary debugSummary)
+{
+    if (debugSummary.SuppressedCandidates.Count == 0)
+    {
+        return "none";
+    }
+
+    return string.Join(
+        "; ",
+        debugSummary.SuppressedCandidates.Select(candidate => $"{candidate.Label}:{candidate.SuppressionReason}"));
+}
+
+static string DescribeGoldenSceneChecks(GuiSmokeReplayGoldenSceneFixture fixture)
+{
+    var checks = new List<string>();
+    if (!string.IsNullOrWhiteSpace(fixture.ExpectedTargetContains))
+    {
+        checks.Add($"target~{fixture.ExpectedTargetContains}");
+    }
+
+    if (!string.IsNullOrWhiteSpace(fixture.ExpectedForegroundKind))
+    {
+        checks.Add($"foreground={fixture.ExpectedForegroundKind}");
+    }
+
+    if (!string.IsNullOrWhiteSpace(fixture.ExpectedBackgroundKind))
+    {
+        checks.Add($"background={fixture.ExpectedBackgroundKind}");
+    }
+
+    if (fixture.RequiredCandidateLabels.Count > 0)
+    {
+        checks.Add($"requires:{string.Join(", ", fixture.RequiredCandidateLabels)}");
+    }
+
+    if (fixture.RequiredSuppressedLabels.Count > 0)
+    {
+        checks.Add($"suppresses:{string.Join(", ", fixture.RequiredSuppressedLabels)}");
+    }
+
+    if (fixture.ForbiddenTargetLabels.Count > 0)
+    {
+        checks.Add($"forbids:{string.Join(", ", fixture.ForbiddenTargetLabels)}");
+    }
+
+    return checks.Count == 0
+        ? "none"
+        : string.Join(" | ", checks);
 }
 
 static async Task WaitForLiveGameWindowAsync(DateTimeOffset launchedAt, TimeSpan timeout)
@@ -6488,17 +6645,20 @@ static int IncrementAttempt(Dictionary<GuiSmokePhase, int> attemptsByPhase, GuiS
 
 static string ComputeFileFingerprint(string path)
 {
-    try
+    return GuiSmokeScreenshotAnalysisCache.GetOrCreate("file-fingerprint", path, () =>
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        using var sha = SHA256.Create();
-        var hash = sha.ComputeHash(stream);
-        return Convert.ToHexString(hash.AsSpan(0, 8));
-    }
-    catch
-    {
-        return "no-image";
-    }
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var sha = SHA256.Create();
+            var hash = sha.ComputeHash(stream);
+            return Convert.ToHexString(hash.AsSpan(0, 8));
+        }
+        catch
+        {
+            return "no-image";
+        }
+    });
 }
 
 static void LogHarness(string message)
@@ -6960,8 +7120,8 @@ static void WriteUsage()
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-run --run-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
-    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>]");
-    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-test [--suite <path>]");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>] [--trace] [--full-request-rebuild]");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-test [--suite <path>] [--trace] [--full-request-rebuild]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- self-test");
 }
 
@@ -7360,6 +7520,77 @@ sealed record GuiSmokeReplayEvaluation(
     GuiSmokeStepDecision Decision,
     GuiSmokeCandidateDumpArtifact CandidateDump);
 
+sealed record GuiSmokeReplayTimingEntry(
+    string Stage,
+    long ElapsedMs,
+    string? Detail = null);
+
+sealed record GuiSmokeReplayRequestLoadResult(
+    GuiSmokeStepRequest Request,
+    bool FullRequestRebuild,
+    bool ObserverStateLoaded,
+    IReadOnlyList<GuiSmokeReplayTimingEntry> Timings);
+
+sealed class GuiSmokeReplayTracer
+{
+    private readonly string _scope;
+    private readonly bool _verbose;
+    private readonly List<GuiSmokeReplayTimingEntry> _entries = new();
+
+    public GuiSmokeReplayTracer(string scope, bool verbose)
+    {
+        _scope = scope;
+        _verbose = verbose;
+    }
+
+    public IReadOnlyList<GuiSmokeReplayTimingEntry> Entries => _entries;
+
+    public void Info(string message)
+    {
+        Console.Error.WriteLine($"[{_scope}] {message}");
+    }
+
+    public void Skipped(string stage, string detail)
+    {
+        _entries.Add(new GuiSmokeReplayTimingEntry(stage, 0, $"skipped:{detail}"));
+        if (_verbose)
+        {
+            Info($"{stage} skipped ({detail})");
+        }
+    }
+
+    public T Measure<T>(string stage, Func<T> action, string? detail = null, bool alwaysLog = false)
+    {
+        if (_verbose || alwaysLog)
+        {
+            Info($"start {stage}{FormatDetail(detail)}");
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            return action();
+        }
+        finally
+        {
+            stopwatch.Stop();
+            var entry = new GuiSmokeReplayTimingEntry(stage, stopwatch.ElapsedMilliseconds, detail);
+            _entries.Add(entry);
+            if (_verbose || alwaysLog)
+            {
+                Info($"done {stage} {stopwatch.ElapsedMilliseconds}ms{FormatDetail(detail)}");
+            }
+        }
+    }
+
+    private static string FormatDetail(string? detail)
+    {
+        return string.IsNullOrWhiteSpace(detail)
+            ? string.Empty
+            : $" ({detail})";
+    }
+}
+
 sealed record GuiSmokeHistoryEntry(
     string Phase,
     string Action,
@@ -7431,8 +7662,73 @@ static class GuiSmokeReplayArtifactLoader
             return null;
         }
 
-        using var stream = new FileStream(sidecarPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        return JsonDocument.Parse(stream);
+        return GuiSmokeScreenshotAnalysisCache.GetOrCreate("observer-state-sidecar", sidecarPath, () =>
+        {
+            using var stream = new FileStream(sidecarPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return JsonDocument.Parse(stream);
+        });
+    }
+}
+
+static class GuiSmokeScreenshotAnalysisCache
+{
+    private readonly record struct CacheKey(
+        string Kind,
+        string FullPath,
+        long Length,
+        long LastWriteUtcTicks);
+
+    private static readonly ConcurrentDictionary<CacheKey, object> Entries = new();
+
+    public static T GetOrCreate<T>(string kind, string screenshotPath, Func<T> factory)
+    {
+        if (!TryCreateKey(kind, screenshotPath, out var key))
+        {
+            return factory();
+        }
+
+        if (Entries.TryGetValue(key, out var existing) && existing is T typedExisting)
+        {
+            return typedExisting;
+        }
+
+        var created = factory();
+        Entries[key] = created!;
+        if (Entries.Count > 1024)
+        {
+            Entries.Clear();
+        }
+
+        return created;
+    }
+
+    private static bool TryCreateKey(string kind, string screenshotPath, out CacheKey key)
+    {
+        key = default;
+        if (string.IsNullOrWhiteSpace(screenshotPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            var fileInfo = new FileInfo(screenshotPath);
+            if (!fileInfo.Exists)
+            {
+                return false;
+            }
+
+            key = new CacheKey(
+                kind,
+                fileInfo.FullName,
+                fileInfo.Length,
+                fileInfo.LastWriteTimeUtc.Ticks);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
 
@@ -7636,7 +7932,7 @@ static class GuiSmokeMapOverlayHeuristics
 
     public static MapOverlayState BuildState(ObserverSummary observer, WindowBounds? windowBounds, string? screenshotPath)
     {
-        using var stateDocument = GuiSmokeReplayArtifactLoader.TryLoadObserverStateSidecar(screenshotPath);
+        var stateDocument = GuiSmokeReplayArtifactLoader.TryLoadObserverStateSidecar(screenshotPath);
         return BuildStateCore(observer, stateDocument, windowBounds, screenshotPath);
     }
 
@@ -11988,6 +12284,11 @@ static class AutoRestSiteCardGridAnalyzer
 
     public static AutoRestSiteCardGridAnalysis Analyze(string screenshotPath)
     {
+        return GuiSmokeScreenshotAnalysisCache.GetOrCreate("rest-site-card-grid", screenshotPath, () => AnalyzeCore(screenshotPath));
+    }
+
+    private static AutoRestSiteCardGridAnalysis AnalyzeCore(string screenshotPath)
+    {
         if (!File.Exists(screenshotPath))
         {
             return None;
@@ -12122,6 +12423,11 @@ static class AutoEventCardGridAnalyzer
 
     public static AutoEventCardGridAnalysis Analyze(string screenshotPath)
     {
+        return GuiSmokeScreenshotAnalysisCache.GetOrCreate("event-card-grid", screenshotPath, () => AnalyzeCore(screenshotPath));
+    }
+
+    private static AutoEventCardGridAnalysis AnalyzeCore(string screenshotPath)
+    {
         if (!File.Exists(screenshotPath))
         {
             return None;
@@ -12249,6 +12555,11 @@ static class AutoTreasureAnalyzer
     private static readonly AutoTreasureAnalysis None = new(false, false, 0.5d, 0.5d);
 
     public static AutoTreasureAnalysis Analyze(string screenshotPath)
+    {
+        return GuiSmokeScreenshotAnalysisCache.GetOrCreate("treasure", screenshotPath, () => AnalyzeCore(screenshotPath));
+    }
+
+    private static AutoTreasureAnalysis AnalyzeCore(string screenshotPath)
     {
         if (!File.Exists(screenshotPath))
         {
@@ -12398,6 +12709,11 @@ static class AutoTreasureAnalyzer
 static class AutoMapAnalyzer
 {
     public static AutoMapAnalysis Analyze(string screenshotPath)
+    {
+        return GuiSmokeScreenshotAnalysisCache.GetOrCreate("map", screenshotPath, () => AnalyzeCore(screenshotPath));
+    }
+
+    private static AutoMapAnalysis AnalyzeCore(string screenshotPath)
     {
         if (!File.Exists(screenshotPath))
         {
@@ -12681,6 +12997,11 @@ static class AutoOverlayUiAnalyzer
 {
     public static AutoOverlayUiAnalysis Analyze(string screenshotPath)
     {
+        return GuiSmokeScreenshotAnalysisCache.GetOrCreate("overlay-ui", screenshotPath, () => AnalyzeCore(screenshotPath));
+    }
+
+    private static AutoOverlayUiAnalysis AnalyzeCore(string screenshotPath)
+    {
         if (!File.Exists(screenshotPath))
         {
             return new AutoOverlayUiAnalysis(false, false, false, null, null);
@@ -12831,6 +13152,11 @@ sealed record CombatNoOpLoopAnalysis(
 static class AutoCombatAnalyzer
 {
     public static AutoCombatAnalysis Analyze(string screenshotPath)
+    {
+        return GuiSmokeScreenshotAnalysisCache.GetOrCreate("combat", screenshotPath, () => AnalyzeCore(screenshotPath));
+    }
+
+    private static AutoCombatAnalysis AnalyzeCore(string screenshotPath)
     {
         if (!File.Exists(screenshotPath))
         {
@@ -13807,6 +14133,11 @@ static class AutoCombatHandAnalyzer
     };
 
     public static AutoCombatHandAnalysis Analyze(string screenshotPath)
+    {
+        return GuiSmokeScreenshotAnalysisCache.GetOrCreate("combat-hand", screenshotPath, () => AnalyzeCore(screenshotPath));
+    }
+
+    private static AutoCombatHandAnalysis AnalyzeCore(string screenshotPath)
     {
         if (!File.Exists(screenshotPath))
         {
