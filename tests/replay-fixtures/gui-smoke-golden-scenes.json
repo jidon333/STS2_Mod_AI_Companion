@@ -70,18 +70,22 @@
   {
     "name": "rest-site-explicit-over-current-arrow",
     "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-10/attempts/0001/steps/0010.request.json",
-    "expectedForegroundKind": "map-overlay",
+    "expectedTargetContains": "rest site:",
+    "expectedForegroundKind": "rest-site",
     "expectedBackgroundKind": "map",
     "requiredCandidateLabels": [
-      "click exported reachable node",
-      "click map back",
-      "click first reachable node"
+      "click rest site choice"
     ],
     "requiredSuppressedLabels": [
+      "click exported reachable node",
+      "click first reachable node",
+      "click map back",
       "click visible map advance"
     ],
     "forbiddenTargetLabels": [
-      "visible map advance"
+      "visible map advance",
+      "exported reachable map node",
+      "map back"
     ]
   }
 ]

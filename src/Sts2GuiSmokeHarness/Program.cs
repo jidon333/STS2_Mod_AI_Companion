@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
@@ -79,7 +80,7 @@ static async Task<int> RunScenarioAsync(
     var harnessLayout = HarnessPathResolver.Resolve(configuration.GamePaths, configuration.Harness);
     var sessionId = $"{DateTimeOffset.Now:yyyyMMdd-HHmmss}-{scenarioId}";
     var sessionRoot = options.TryGetValue("--run-root", out var explicitRunRoot)
-        ? Path.GetFullPath(explicitRunRoot, workspaceRoot)
+        ? ResolveCliPath(explicitRunRoot, workspaceRoot)
         : Path.Combine(workspaceRoot, "artifacts", "gui-smoke", sessionId);
     var sessionDeadline = isLongRun
         ? TryGetPositiveIntOption(options, "--max-session-hours") is { } maxSessionHours
@@ -111,11 +112,7 @@ static async Task<int> RunScenarioAsync(
                 LongRunArtifacts.RecordGameStoppedBeforeDeployEvidence(sessionRoot);
             }
 
-            await GuiSmokeShared.RunProcessAsync(
-                "dotnet",
-                "run --project src\\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge",
-                workspaceRoot,
-                TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+            await RunDeployNativePackageAsync(workspaceRoot).ConfigureAwait(false);
             EnsureHarnessEnabledInRuntimeConfig(configuration);
             if (isLongRun)
             {
@@ -126,14 +123,17 @@ static async Task<int> RunScenarioAsync(
                     includeHarnessBridge: true);
             }
         }
-        catch
+        catch (Exception exception)
         {
             if (isLongRun)
             {
+                LongRunArtifacts.UpdatePrevalidation(
+                    sessionRoot,
+                    note: BuildDeployFailureNote(exception));
                 LongRunArtifacts.UpdateRunnerSessionState(
                     sessionRoot,
                     GuiSmokeContractStates.SessionAborted,
-                    "runner aborted during deploy.");
+                    $"runner aborted during deploy: {exception.GetType().Name}: {exception.Message}");
             }
 
             throw;
@@ -1618,7 +1618,7 @@ static int InspectRun(IReadOnlyDictionary<string, string> options, string worksp
         throw new InvalidOperationException("--run-root is required.");
     }
 
-    var resolvedRoot = Path.GetFullPath(runRoot, workspaceRoot);
+    var resolvedRoot = ResolveCliPath(runRoot, workspaceRoot);
     var manifestPath = Path.Combine(resolvedRoot, "run.json");
     if (!File.Exists(manifestPath))
     {
@@ -1657,7 +1657,7 @@ static int InspectSession(IReadOnlyDictionary<string, string> options, string wo
         throw new InvalidOperationException("--session-root is required.");
     }
 
-    var resolvedRoot = Path.GetFullPath(sessionRoot, workspaceRoot);
+    var resolvedRoot = ResolveCliPath(sessionRoot, workspaceRoot);
     if (!Directory.Exists(resolvedRoot))
     {
         throw new DirectoryNotFoundException(resolvedRoot);
@@ -1684,7 +1684,7 @@ static int ReplayStep(IReadOnlyDictionary<string, string> options, string worksp
         throw new InvalidOperationException("--request is required.");
     }
 
-    var resolvedRequestPath = Path.GetFullPath(requestPath, workspaceRoot);
+    var resolvedRequestPath = ResolveCliPath(requestPath, workspaceRoot);
     if (!File.Exists(resolvedRequestPath))
     {
         throw new FileNotFoundException("Replay request not found.", resolvedRequestPath);
@@ -1703,7 +1703,7 @@ static int ReplayStep(IReadOnlyDictionary<string, string> options, string worksp
     GuiSmokeStepDecision? existingDecision = null;
     if (options.TryGetValue("--decision", out var decisionPath))
     {
-        var resolvedDecisionPath = Path.GetFullPath(decisionPath, workspaceRoot);
+        var resolvedDecisionPath = ResolveCliPath(decisionPath, workspaceRoot);
         if (!File.Exists(resolvedDecisionPath))
         {
             throw new FileNotFoundException("Replay decision not found.", resolvedDecisionPath);
@@ -1722,14 +1722,19 @@ static int ReplayStep(IReadOnlyDictionary<string, string> options, string worksp
         Path.GetFileName(request.ScreenshotPath),
         alwaysLog: true);
     var artifact = replayEvaluation.CandidateDump;
+    var serializedArtifact = trace.Measure(
+        "serialize-result",
+        () => SerializeCandidateDumpArtifact(artifact),
+        "stdout",
+        alwaysLog: true);
     if (options.TryGetValue("--out", out var outputPath))
     {
-        var resolvedOutputPath = Path.GetFullPath(outputPath, workspaceRoot);
+        var resolvedOutputPath = ResolveCliPath(outputPath, workspaceRoot);
         trace.Measure(
             "write-candidate-dump",
             () =>
             {
-                WriteCandidateDumpArtifact(resolvedOutputPath, artifact);
+                WriteSerializedCandidateDumpArtifact(resolvedOutputPath, serializedArtifact);
                 return 0;
             },
             Path.GetFileName(resolvedOutputPath),
@@ -1737,11 +1742,6 @@ static int ReplayStep(IReadOnlyDictionary<string, string> options, string worksp
     }
 
     trace.Info($"result target={artifact.FinalDecision.TargetLabel ?? artifact.FinalDecision.ActionKind ?? artifact.FinalDecision.Status} foreground={artifact.DebugSummary.ForegroundKind ?? "null"} background={artifact.DebugSummary.BackgroundKind ?? "null"} suppressed={BuildSuppressedCandidateSummary(artifact.DebugSummary)}");
-    var serializedArtifact = trace.Measure(
-        "serialize-result",
-        () => JsonSerializer.Serialize(artifact, GuiSmokeShared.JsonOptions),
-        "stdout",
-        alwaysLog: true);
     Console.WriteLine(serializedArtifact);
     return 0;
 }
@@ -1749,7 +1749,7 @@ static int ReplayStep(IReadOnlyDictionary<string, string> options, string worksp
 static int ReplayGoldenScenes(IReadOnlyDictionary<string, string> options, string workspaceRoot)
 {
     var suitePath = options.TryGetValue("--suite", out var explicitSuitePath)
-        ? Path.GetFullPath(explicitSuitePath, workspaceRoot)
+        ? ResolveCliPath(explicitSuitePath, workspaceRoot)
         : Path.Combine(workspaceRoot, "tests", "replay-fixtures", "gui-smoke-golden-scenes.json");
     if (!File.Exists(suitePath))
     {
@@ -1765,7 +1765,7 @@ static int ReplayGoldenScenes(IReadOnlyDictionary<string, string> options, strin
     {
         var fixture = fixtures[index];
         var fixtureTrace = new GuiSmokeReplayTracer($"replay-test {index + 1}/{fixtures.Count}:{fixture.Name}", traceEnabled);
-        var requestPath = Path.GetFullPath(fixture.RequestPath, workspaceRoot);
+        var requestPath = ResolveCliPath(fixture.RequestPath, workspaceRoot);
         fixtureTrace.Info($"start request={requestPath}");
         var requestLoad = fixtureTrace.Measure(
             "load-request",
@@ -1953,10 +1953,23 @@ static GuiSmokeReplayEvaluation EvaluateAutoDecisionWithDiagnostics(
         analysis.ToArtifact());
 }
 
+static string SerializeCandidateDumpArtifact(GuiSmokeCandidateDumpArtifact artifact)
+{
+    return JsonSerializer.Serialize(artifact, GuiSmokeShared.JsonOptions);
+}
+
 static void WriteCandidateDumpArtifact(string path, GuiSmokeCandidateDumpArtifact artifact)
 {
+    WriteSerializedCandidateDumpArtifact(path, SerializeCandidateDumpArtifact(artifact));
+}
+
+static void WriteSerializedCandidateDumpArtifact(string path, string serializedArtifact)
+{
     Directory.CreateDirectory(Path.GetDirectoryName(path) ?? Directory.GetCurrentDirectory());
-    File.WriteAllText(path, JsonSerializer.Serialize(artifact, GuiSmokeShared.JsonOptions));
+    var bytes = Encoding.UTF8.GetBytes(serializedArtifact);
+    using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+    stream.Write(bytes, 0, bytes.Length);
+    stream.Flush(true);
 }
 
 static string BuildSuppressedCandidateSummary(GuiSmokeDecisionDebugSummary debugSummary)
@@ -2113,6 +2126,40 @@ static void RunSelfTest()
     Assert(roundTrip?.Phase == GuiSmokePhase.EnterRun.ToString(), "Request should round-trip.");
 
     var decision = new GuiSmokeStepDecision("act", "click", null, 0.3, 0.7, "continue", "main menu continue", 0.9, "character-select", 1000, true, null);
+    var replayOutputPath = ResolveCliPath($"/tmp/gui-smoke-replay-self-test-{Guid.NewGuid():N}.json", Directory.GetCurrentDirectory());
+    var replayDump = new GuiSmokeCandidateDumpArtifact(
+        request.Phase,
+        request.ScreenshotPath,
+        decision,
+        decision,
+        true,
+        new GuiSmokeDecisionDebugSummary(
+            "test-foreground",
+            "test-background",
+            new[] { "click continue" },
+            new[] { new GuiSmokeSuppressedCandidate("wait", "self-test") },
+            "self-test winner"),
+        new[]
+        {
+            new GuiSmokeDecisionCandidateDump(
+                "click continue",
+                "self-test",
+                0.99d,
+                true,
+                null,
+                "100,200,120,80",
+                new GuiSmokeCandidatePoint(0.30d, 0.70d),
+                "self-test-bounds",
+                decision.TargetLabel,
+                decision.ActionKind,
+                decision.Reason),
+        });
+    var replayDumpJson = SerializeCandidateDumpArtifact(replayDump);
+    WriteSerializedCandidateDumpArtifact(replayOutputPath, replayDumpJson);
+    Assert(File.Exists(replayOutputPath), "Replay candidate dump should be written to the resolved CLI path.");
+    Assert(new FileInfo(replayOutputPath).Length > 0, "Replay candidate dump file should not be empty.");
+    Assert(File.ReadAllText(replayOutputPath) == replayDumpJson, "Replay candidate dump file should contain the same JSON that replay-step writes to stdout.");
+    File.Delete(replayOutputPath);
     ValidateDecision(
         GuiSmokePhase.EnterRun,
         request,
@@ -4289,6 +4336,11 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
 
     if (!ShouldSuppressRoomSubstateHeuristics(phase, observer))
     {
+        if (HasExplicitRestSiteChoiceAuthority(observer, screenshotPath))
+        {
+            tags.Add("layer:rest-site-foreground");
+        }
+
         if (rewardMapLayer.RewardPanelVisible)
         {
             tags.Add("layer:reward-foreground");
@@ -4742,6 +4794,7 @@ static string[] BuildAllowedActions(
     var rewardBackNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
     var claimableRewardPresent = HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath);
     var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, null, screenshotPath);
+    var explicitRestSiteChoiceAuthority = HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
     if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out var observedPhase))
     {
         return BuildAllowedActions(observedPhase, observer, combatCardKnowledge, screenshotPath, history);
@@ -4767,12 +4820,12 @@ static string[] BuildAllowedActions(
                 ? new[] { "click first reachable node", "click visible map advance", "click reward back", "wait" }
                 : new[] { "click first reachable node", "click visible map advance", "wait" },
         GuiSmokePhase.HandleRewards => new[] { "click proceed", "click reward", "wait" },
+        GuiSmokePhase.ChooseFirstNode when explicitRestSiteChoiceAuthority
+            => BuildExplicitRestSiteAllowedActions(observer.Summary),
         GuiSmokePhase.ChooseFirstNode when mapOverlayState.ForegroundVisible
             => mapOverlayState.MapBackNavigationAvailable
                 ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
                 : new[] { "click exported reachable node", "click first reachable node", "wait" },
-        GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
-            => new[] { "click rest option", "click smith card", "click smith confirm", "wait" },
         GuiSmokePhase.ChooseFirstNode when LooksLikeTreasureState(observer.Summary)
             => new[] { "click treasure chest", "click treasure reward icon", "click proceed", "wait" },
         GuiSmokePhase.ChooseFirstNode => new[] { "click first reachable node", "click visible map advance", "wait" },
@@ -5742,7 +5795,100 @@ static bool LooksLikeRestSiteState(ObserverSummary observer)
         label.Contains("\uD734\uC2DD", StringComparison.OrdinalIgnoreCase)
         || label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
         || label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
-        || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+            || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+}
+
+static bool HasExplicitRestSiteChoiceAuthority(ObserverState observer, string? screenshotPath)
+{
+    return HasRestSiteAuthority(observer.Summary)
+           && HasExplicitRestSiteChoiceAffordance(observer.Summary)
+           && !AutoRestSiteCardGridAnalyzer.Analyze(screenshotPath ?? string.Empty).HasSelectableCard;
+}
+
+static bool HasRestSiteAuthority(ObserverSummary observer)
+{
+    return string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase);
+}
+
+static bool HasExplicitRestSiteChoiceAffordance(ObserverSummary observer)
+{
+    return observer.CurrentChoices.Any(IsExplicitRestSiteChoiceLabel)
+           || observer.Choices.Any(static choice => IsExplicitRestSiteChoiceLabel(choice.Label))
+           || observer.ActionNodes.Any(static node => node.Actionable && IsExplicitRestSiteChoiceLabel(node.Label));
+}
+
+static string[] BuildExplicitRestSiteAllowedActions(ObserverSummary observer)
+{
+    var actions = new List<string>(capacity: 6);
+    if (HasRestSiteRestChoice(observer))
+    {
+        actions.Add("click rest option");
+    }
+
+    if (HasRestSiteSmithChoice(observer))
+    {
+        actions.Add("click smith option");
+    }
+
+    if (HasRestSiteHatchChoice(observer))
+    {
+        actions.Add("click hatch option");
+    }
+
+    actions.Add("click smith card");
+    actions.Add("click smith confirm");
+    actions.Add("wait");
+    return actions.ToArray();
+}
+
+static bool IsExplicitRestSiteChoiceLabel(string? label)
+{
+    return HasRestSiteRestLabel(label)
+           || HasRestSiteSmithLabel(label)
+           || HasRestSiteHatchLabel(label);
+}
+
+static bool HasRestSiteRestChoice(ObserverSummary observer)
+{
+    return observer.CurrentChoices.Any(HasRestSiteRestLabel)
+           || observer.Choices.Any(choice => HasRestSiteRestLabel(choice.Label))
+           || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteRestLabel(node.Label));
+}
+
+static bool HasRestSiteSmithChoice(ObserverSummary observer)
+{
+    return observer.CurrentChoices.Any(HasRestSiteSmithLabel)
+           || observer.Choices.Any(choice => HasRestSiteSmithLabel(choice.Label))
+           || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteSmithLabel(node.Label));
+}
+
+static bool HasRestSiteHatchChoice(ObserverSummary observer)
+{
+    return observer.CurrentChoices.Any(HasRestSiteHatchLabel)
+           || observer.Choices.Any(choice => HasRestSiteHatchLabel(choice.Label))
+           || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteHatchLabel(node.Label));
+}
+
+static bool HasRestSiteRestLabel(string? label)
+{
+    return !string.IsNullOrWhiteSpace(label)
+           && (label.Contains("휴식", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("Rest", StringComparison.OrdinalIgnoreCase));
+}
+
+static bool HasRestSiteSmithLabel(string? label)
+{
+    return !string.IsNullOrWhiteSpace(label)
+           && (label.Contains("재련", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+}
+
+static bool HasRestSiteHatchLabel(string? label)
+{
+    return !string.IsNullOrWhiteSpace(label)
+           && (label.Contains("부화", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("Hatch", StringComparison.OrdinalIgnoreCase));
 }
 
 static bool LooksLikeSingleplayerSubmenuState(ObserverSummary observer)
@@ -5794,8 +5940,10 @@ static string BuildFailureModeHintCore(
         GuiSmokePhase.HandleRewards when string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
             => "AI first: use the screenshot as the primary source. If the map is clearly visible, you may click the first reachable node instead of forcing another reward proceed click.",
         GuiSmokePhase.HandleRewards => "Prefer the proceed arrow when the reward can be skipped; otherwise pick a valid reward card.",
+        GuiSmokePhase.ChooseFirstNode when HasExplicitRestSiteChoiceAuthority(observer, screenshotPath)
+            => "Rest-site explicit choices are foreground-authoritative here. Prefer 휴식/재련/부화 over any map overlay candidate or current-node arrow. If the smith card grid appears afterward, select a card and then confirm.",
         GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
-            => "Rest site is screenshot-first. If the two rest options are visible, choose rest or smith. If the smith card grid is visible, click one card first and then click the right-side confirm button.",
+            => "Rest site is screenshot-first. If the explicit rest options are visible, choose one of them before any map candidate. If the smith card grid is visible, click one card first and then click the right-side confirm button.",
         GuiSmokePhase.ChooseFirstNode when LooksLikeTreasureState(observer.Summary)
             => "Treasure rooms are not map-node routing. Closed chest: click the center chest. Open chest: click the floating reward icon, then proceed or return to map.",
         GuiSmokePhase.ChooseFirstNode => "Do not click non-reachable map nodes.",
@@ -7087,11 +7235,160 @@ static string? ResolveConfigPath(IReadOnlyDictionary<string, string> options, st
 {
     if (options.TryGetValue("--config", out var explicitPath))
     {
-        return Path.GetFullPath(explicitPath, workspaceRoot);
+        return ResolveCliPath(explicitPath, workspaceRoot);
     }
 
     var samplePath = Path.Combine(workspaceRoot, "config", "ai-companion.sample.json");
     return File.Exists(samplePath) ? samplePath : null;
+}
+
+static string ResolveCliPath(string explicitPath, string workspaceRoot)
+{
+    if (string.IsNullOrWhiteSpace(explicitPath))
+    {
+        throw new InvalidOperationException("A non-empty CLI path is required.");
+    }
+
+    if (TryConvertWslPathToWindowsPath(explicitPath, out var translatedPath))
+    {
+        return Path.GetFullPath(translatedPath);
+    }
+
+    return Path.IsPathRooted(explicitPath)
+        ? Path.GetFullPath(explicitPath)
+        : Path.GetFullPath(explicitPath, workspaceRoot);
+}
+
+static bool TryConvertWslPathToWindowsPath(string path, out string translatedPath)
+{
+    translatedPath = string.Empty;
+    if (string.IsNullOrWhiteSpace(path))
+    {
+        return false;
+    }
+
+    if (path.StartsWith(@"\\", StringComparison.OrdinalIgnoreCase)
+        || (path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':'))
+    {
+        return false;
+    }
+
+    var normalized = path.Replace('\\', '/');
+    if (normalized.StartsWith("/mnt/", StringComparison.OrdinalIgnoreCase)
+        && normalized.Length >= 7
+        && char.IsLetter(normalized[5])
+        && normalized[6] == '/')
+    {
+        var driveLetter = char.ToUpperInvariant(normalized[5]);
+        var remainder = normalized.Length == 7 ? string.Empty : normalized[7..].Replace('/', '\\');
+        translatedPath = string.IsNullOrEmpty(remainder)
+            ? $"{driveLetter}:\\"
+            : $"{driveLetter}:\\{remainder}";
+        return true;
+    }
+
+    if (!normalized.StartsWith("/", StringComparison.Ordinal))
+    {
+        return false;
+    }
+
+    var distroName = Environment.GetEnvironmentVariable("WSL_DISTRO_NAME");
+    if (!string.IsNullOrWhiteSpace(distroName))
+    {
+        translatedPath = $@"\\wsl.localhost\{distroName}\{normalized.TrimStart('/').Replace('/', '\\')}";
+        return true;
+    }
+
+    return TryResolveWslPathViaExe(normalized, out translatedPath);
+}
+
+static bool TryResolveWslPathViaExe(string wslPath, out string translatedPath)
+{
+    translatedPath = string.Empty;
+
+    try
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "wsl.exe",
+                Arguments = $"wslpath -w \"{wslPath}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            },
+        };
+
+        process.Start();
+        if (!process.WaitForExit(3000) || process.ExitCode != 0)
+        {
+            return false;
+        }
+
+        var stdout = process.StandardOutput.ReadToEnd();
+        if (string.IsNullOrWhiteSpace(stdout))
+        {
+            return false;
+        }
+
+        translatedPath = stdout.Trim();
+        return true;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+static async Task RunDeployNativePackageAsync(string workspaceRoot)
+{
+    var builtToolDll = TryFindBuiltDeployToolDll(workspaceRoot);
+    if (!string.IsNullOrWhiteSpace(builtToolDll))
+    {
+        await GuiSmokeShared.RunProcessAsync(
+            "dotnet",
+            $"\"{builtToolDll}\" deploy-native-package --include-harness-bridge",
+            workspaceRoot,
+            TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+        return;
+    }
+
+    await GuiSmokeShared.RunProcessAsync(
+        "dotnet",
+        "run --project src\\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge",
+        workspaceRoot,
+        TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+}
+
+static string? TryFindBuiltDeployToolDll(string workspaceRoot)
+{
+    var toolBinRoot = Path.Combine(workspaceRoot, "src", "Sts2ModKit.Tool", "bin");
+    if (!Directory.Exists(toolBinRoot))
+    {
+        return null;
+    }
+
+    return Directory.GetFiles(toolBinRoot, "Sts2ModKit.Tool.dll", SearchOption.AllDirectories)
+        .OrderByDescending(static path => File.GetLastWriteTimeUtc(path))
+        .FirstOrDefault();
+}
+
+static string BuildDeployFailureNote(Exception exception)
+{
+    var inner = exception.InnerException is null
+        ? string.Empty
+        : $" | inner={exception.InnerException.GetType().Name}: {SanitizeNoteText(exception.InnerException.Message)}";
+    return $"runner deploy failure: {exception.GetType().Name}: {SanitizeNoteText(exception.Message)}{inner}";
+}
+
+static string SanitizeNoteText(string? value)
+{
+    return (value ?? string.Empty)
+        .Replace('\r', ' ')
+        .Replace('\n', ' ')
+        .Trim();
 }
 
 static ScaffoldConfiguration ApplyPathOverrides(ScaffoldConfiguration configuration, IReadOnlyDictionary<string, string> options)
@@ -8651,6 +8948,29 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request)
     {
+        if (HasExplicitRestSiteChoiceAuthority(request))
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(BuildExplicitRestSiteCandidateLabels(request.Observer));
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site explicit choices outrank exported map routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site explicit choices outrank screenshot map routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site explicit choices suppress current-node-arrow fallback");
+            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site explicit choices are the progression lane");
+            return GuiSmokeDecisionDebug.TraceCandidate(
+                       "rest site explicit choice",
+                       "rest-site-choice",
+                       0.98,
+                       TryCreateRestSiteDecision(request),
+                       "rest-site explicit choices are not visible")
+                   ?? GuiSmokeDecisionDebug.TraceCandidate(
+                       "rest site upgrade",
+                       "rest-site-upgrade",
+                       0.92,
+                       TryCreateRestSiteUpgradeDecision(request),
+                       "rest-site upgrade grid is not currently actionable")
+                   ?? CreateWaitDecision("waiting for an explicit rest-site choice", request.Observer.CurrentScreen);
+        }
+
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (mapOverlayState.ForegroundVisible)
         {
@@ -9685,6 +10005,27 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
         var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
 
+        if (HasExplicitRestSiteChoiceAuthority(request))
+        {
+            builder.AddSuppressed("click exported reachable node", "rest-site-explicit-choices-outrank-exported-map-routing");
+            builder.AddSuppressed("click first reachable node", "rest-site-explicit-choices-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "rest-site-explicit-choices-suppress-current-node-arrow");
+            builder.AddSuppressed("click map back", "rest-site-explicit-choices-are-the-progression-lane");
+            builder.Consider(
+                ToCandidateLabel(TryCreateRestSiteDecision(request), "click rest site choice"),
+                "rest-site-choice",
+                1.00d,
+                () => TryCreateRestSiteDecision(request),
+                "no-rest-site-explicit-choice");
+            builder.Consider(
+                ToCandidateLabel(TryCreateRestSiteUpgradeDecision(request), "click smith card"),
+                "rest-site-upgrade",
+                0.92d,
+                () => TryCreateRestSiteUpgradeDecision(request),
+                "rest-site-upgrade-grid-not-visible");
+            return builder.Build(CreateWaitDecision("waiting for an explicit rest-site choice", request.Observer.CurrentScreen), actualDecision);
+        }
+
         if (mapOverlayState.ForegroundVisible)
         {
             if (mapOverlayState.StaleEventChoicePresent)
@@ -9831,6 +10172,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static (string? ForegroundKind, string? BackgroundKind) DescribeForegroundBackground(GuiSmokeStepRequest request)
     {
+        if (HasExplicitRestSiteChoiceAuthority(request))
+        {
+            return ("rest-site", "map");
+        }
+
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (mapOverlayState.ForegroundVisible && !HasStrongForegroundEventChoice(request))
         {
@@ -9866,6 +10212,99 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         return (request.Observer.CurrentScreen, request.Observer.VisibleScreen);
     }
 
+    private static bool HasExplicitRestSiteChoiceAuthority(GuiSmokeStepRequest request)
+    {
+        return HasRestSiteAuthority(request.Observer)
+               && HasExplicitRestSiteChoiceAffordance(request.Observer)
+               && !AutoRestSiteCardGridAnalyzer.Analyze(request.ScreenshotPath).HasSelectableCard;
+    }
+
+    private static bool HasRestSiteAuthority(ObserverSummary observer)
+    {
+        return string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string[] BuildExplicitRestSiteCandidateLabels(ObserverSummary observer)
+    {
+        var labels = new List<string>(capacity: 6);
+        if (HasRestSiteRestChoice(observer))
+        {
+            labels.Add("click rest option");
+        }
+
+        if (HasRestSiteSmithChoice(observer))
+        {
+            labels.Add("click smith option");
+        }
+
+        if (HasRestSiteHatchChoice(observer))
+        {
+            labels.Add("click hatch option");
+        }
+
+        labels.Add("click smith card");
+        labels.Add("click smith confirm");
+        labels.Add("wait");
+        return labels.ToArray();
+    }
+
+    private static bool HasExplicitRestSiteChoiceAffordance(ObserverSummary observer)
+    {
+        return observer.CurrentChoices.Any(IsExplicitRestSiteChoiceLabel)
+               || observer.Choices.Any(static choice => IsExplicitRestSiteChoiceLabel(choice.Label))
+               || observer.ActionNodes.Any(static node => node.Actionable && IsExplicitRestSiteChoiceLabel(node.Label));
+    }
+
+    private static bool HasRestSiteRestChoice(ObserverSummary observer)
+    {
+        return observer.CurrentChoices.Any(HasRestSiteRestLabel)
+               || observer.Choices.Any(choice => HasRestSiteRestLabel(choice.Label))
+               || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteRestLabel(node.Label));
+    }
+
+    private static bool HasRestSiteSmithChoice(ObserverSummary observer)
+    {
+        return observer.CurrentChoices.Any(HasRestSiteSmithLabel)
+               || observer.Choices.Any(choice => HasRestSiteSmithLabel(choice.Label))
+               || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteSmithLabel(node.Label));
+    }
+
+    private static bool HasRestSiteHatchChoice(ObserverSummary observer)
+    {
+        return observer.CurrentChoices.Any(HasRestSiteHatchLabel)
+               || observer.Choices.Any(choice => HasRestSiteHatchLabel(choice.Label))
+               || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteHatchLabel(node.Label));
+    }
+
+    private static bool IsExplicitRestSiteChoiceLabel(string? label)
+    {
+        return HasRestSiteRestLabel(label)
+               || HasRestSiteSmithLabel(label)
+               || HasRestSiteHatchLabel(label);
+    }
+
+    private static bool HasRestSiteRestLabel(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("휴식", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Rest", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasRestSiteSmithLabel(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("재련", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasRestSiteHatchLabel(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("부화", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Hatch", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static bool HasStrongForegroundEventChoice(GuiSmokeStepRequest request)
     {
         static bool IsGenericContinueLabel(string? label)
@@ -9895,12 +10334,36 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase));
     }
 
+    private static bool MatchesRestSiteTarget(string? label, string targetLabel)
+    {
+        return targetLabel switch
+        {
+            "rest site: rest" => HasRestSiteRestLabel(label),
+            "rest site: smith" => HasRestSiteSmithLabel(label),
+            "rest site: hatch" => HasRestSiteHatchLabel(label),
+            _ => false,
+        };
+    }
+
+    private static string BuildRestSiteChoiceReason(string targetLabel, int currentHp, int maxHp)
+    {
+        return targetLabel switch
+        {
+            "rest site: rest" => $"Rest site detected from explicit choices. HP {currentHp}/{maxHp} favors healing before routing again.",
+            "rest site: hatch" => "Rest site detected from explicit choices. Hatch is visible and no stronger rest/smith lane is available.",
+            _ => "Rest site detected from explicit choices. HP is healthy enough to prefer smithing over generic map routing.",
+        };
+    }
+
     private static string ToCandidateLabel(GuiSmokeStepDecision? decision, string fallback)
     {
         return decision?.TargetLabel switch
         {
             { } target when target.Contains("reward", StringComparison.OrdinalIgnoreCase) => "click reward choice",
             { } target when target.Contains("event", StringComparison.OrdinalIgnoreCase) => "click event choice",
+            { } target when target.Contains("rest site:", StringComparison.OrdinalIgnoreCase) => "click rest site choice",
+            { } target when target.Contains("smith card", StringComparison.OrdinalIgnoreCase) => "click smith card",
+            { } target when target.Contains("smith confirm", StringComparison.OrdinalIgnoreCase) => "click smith confirm",
             { } target when target.Contains("map back", StringComparison.OrdinalIgnoreCase) => "click map back",
             { } target when target.Contains("exported reachable map node", StringComparison.OrdinalIgnoreCase) => "click exported reachable node",
             { } target when target.Contains("visible map advance", StringComparison.OrdinalIgnoreCase) => "click visible map advance",
@@ -10435,6 +10898,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryFindFirstReachableMapNodeDecision(GuiSmokeStepRequest request)
     {
+        if (HasExplicitRestSiteChoiceAuthority(request))
+        {
+            return null;
+        }
+
         var analysis = AutoMapAnalyzer.Analyze(request.ScreenshotPath);
         if (analysis.HasReachableNode)
         {
@@ -10458,6 +10926,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateExportedReachableMapPointDecision(GuiSmokeStepRequest request)
     {
+        if (HasExplicitRestSiteChoiceAuthority(request))
+        {
+            return null;
+        }
+
         var choice = request.Observer.Choices
             .Where(choice =>
                 string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
@@ -10490,6 +10963,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateMapBackNavigationDecision(GuiSmokeStepRequest request)
     {
+        if (HasExplicitRestSiteChoiceAuthority(request))
+        {
+            return null;
+        }
+
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (!mapOverlayState.ForegroundVisible || !mapOverlayState.MapBackNavigationAvailable)
         {
@@ -11078,6 +11556,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryFindVisibleMapAdvanceDecision(GuiSmokeStepRequest request)
     {
+        if (HasExplicitRestSiteChoiceAuthority(request))
+        {
+            return null;
+        }
+
         if (BuildRewardMapLayerState(request.Observer, request.WindowBounds).RewardPanelVisible)
         {
             return null;
@@ -11126,10 +11609,15 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateRestSiteDecision(GuiSmokeStepRequest request)
     {
-        var choices = request.Observer.CurrentChoices;
-        var hasRest = choices.Any(static label => label.Contains("\uD734\uC2DD", StringComparison.OrdinalIgnoreCase) || label.Contains("Rest", StringComparison.OrdinalIgnoreCase));
-        var hasSmith = choices.Any(static label => label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase) || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
-        if (!hasRest && !hasSmith)
+        if (!HasExplicitRestSiteChoiceAffordance(request.Observer))
+        {
+            return null;
+        }
+
+        var hasRest = HasRestSiteRestChoice(request.Observer);
+        var hasSmith = HasRestSiteSmithChoice(request.Observer);
+        var hasHatch = HasRestSiteHatchChoice(request.Observer);
+        if (!hasRest && !hasSmith && !hasHatch)
         {
             return null;
         }
@@ -11137,12 +11625,44 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var maxHp = request.Observer.PlayerMaxHp ?? 0;
         var currentHp = request.Observer.PlayerCurrentHp ?? 0;
         var shouldRest = hasRest && (maxHp <= 0 || currentHp <= Math.Ceiling(maxHp * 0.70));
-        var targetLabel = shouldRest ? "rest site: rest" : "rest site: smith";
-        var normalizedX = shouldRest ? 0.405 : 0.575;
+        var targetLabel = shouldRest
+            ? "rest site: rest"
+            : hasSmith
+                ? "rest site: smith"
+                : hasHatch
+                    ? "rest site: hatch"
+                    : "rest site: rest";
+        var explicitChoice = request.Observer.Choices
+            .Where(choice => HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))
+            .FirstOrDefault(choice => MatchesRestSiteTarget(choice.Label, targetLabel));
+        if (explicitChoice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                explicitChoice,
+                targetLabel,
+                BuildRestSiteChoiceReason(targetLabel, currentHp, maxHp),
+                0.92,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                1400);
+        }
+
+        var explicitNode = request.Observer.ActionNodes
+            .Where(node => node.Actionable && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))
+            .FirstOrDefault(node => MatchesRestSiteTarget(node.Label, targetLabel));
+        if (explicitNode is not null)
+        {
+            return CreateClickDecisionFromNode(request, explicitNode, targetLabel);
+        }
+
+        var normalizedX = targetLabel switch
+        {
+            "rest site: rest" => 0.405,
+            "rest site: smith" => 0.575,
+            "rest site: hatch" => 0.745,
+            _ => 0.575,
+        };
         var normalizedY = 0.305;
-        var reason = shouldRest
-            ? $"Rest site detected from choices. HP {currentHp}/{maxHp} favors healing."
-            : "Rest site detected from choices. HP is healthy enough to prefer smithing.";
         return new GuiSmokeStepDecision(
             "act",
             "click",
@@ -11150,7 +11670,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             normalizedX,
             normalizedY,
             targetLabel,
-            reason,
+            BuildRestSiteChoiceReason(targetLabel, currentHp, maxHp),
             0.86,
             "map",
             1500,
@@ -11385,6 +11905,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool LooksLikeMapTransitionState(GuiSmokeStepRequest request)
     {
+        if (HasExplicitRestSiteChoiceAuthority(request))
+        {
+            return false;
+        }
+
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         return mapOverlayState.ForegroundVisible
                || string.Equals(request.Observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
