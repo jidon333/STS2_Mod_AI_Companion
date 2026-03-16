@@ -2466,6 +2466,47 @@ static void RunSelfTest()
         Assert(deployCommandSummary.StdoutTail.Contains("deploy-stdout", StringComparison.OrdinalIgnoreCase)
                && deployCommandSummary.StderrTail.Contains("deploy-stderr", StringComparison.OrdinalIgnoreCase),
             "Deploy command summary should preserve stdout/stderr tails.");
+
+        var failedProcessResult = GuiSmokeShared.RunProcessDetailedAsync(
+                $"gui-smoke-missing-process-{Guid.NewGuid():N}.exe",
+                string.Empty,
+                Directory.GetCurrentDirectory(),
+                TimeSpan.FromSeconds(5))
+            .GetAwaiter()
+            .GetResult();
+        Assert(string.Equals(failedProcessResult.FailureKind, "process-start-failure", StringComparison.OrdinalIgnoreCase),
+            "Detailed process execution should classify process start failures.");
+
+        var failedReason = BuildDeployCommandFailureReason(failedProcessResult);
+        Assert(!string.IsNullOrWhiteSpace(failedReason) && failedReason.Contains("process-start-failure", StringComparison.OrdinalIgnoreCase),
+            "Deploy command failure reasons should include the process failure kind.");
+
+        LongRunArtifacts.RecordDeployCommandResult(
+            startupTraceRoot,
+            new GuiSmokeDeployCommand(
+                "fast-path",
+                "dotnet",
+                "\"C:\\missing\\Sts2ModKit.Tool.dll\" deploy-native-package --include-harness-bridge",
+                TimeSpan.FromMinutes(2),
+                @"C:\missing\Sts2ModKit.Tool.dll",
+                "self-test failure"),
+            failedProcessResult,
+            failedReason);
+
+        startupSummary = JsonSerializer.Deserialize<GuiSmokeStartupSummary>(
+                             File.ReadAllText(Path.Combine(startupTraceRoot, "startup-summary.json")),
+                             GuiSmokeShared.JsonOptions)
+                         ?? throw new InvalidOperationException("Failed to read startup summary after deploy command failure self-test.");
+        Assert(!string.IsNullOrWhiteSpace(startupSummary.DeployCommandFailureReason)
+               && startupSummary.DeployCommandFailureReason.Contains("process-start-failure", StringComparison.OrdinalIgnoreCase),
+            "Startup summary should preserve deploy command process start failures.");
+        deployCommandSummary = JsonSerializer.Deserialize<GuiSmokeDeployCommandSummary>(
+                                   File.ReadAllText(Path.Combine(startupTraceRoot, "deploy-command-summary.json")),
+                                   GuiSmokeShared.JsonOptions)
+                               ?? throw new InvalidOperationException("Failed to read deploy command summary after failure self-test.");
+        Assert(!string.IsNullOrWhiteSpace(deployCommandSummary.FailureReason)
+               && deployCommandSummary.FailureReason.Contains("process-start-failure", StringComparison.OrdinalIgnoreCase),
+            "Deploy command summary should preserve process-start failure reasons.");
     }
     finally
     {
@@ -7701,6 +7742,19 @@ static GuiSmokeDeployCommand BuildDeployNativePackageCommand(string workspaceRoo
 
 static string? BuildDeployCommandFailureReason(GuiSmokeProcessExecutionResult result)
 {
+    if (!string.IsNullOrWhiteSpace(result.FailureKind))
+    {
+        var stderrSummary = SummarizeProcessOutput(result.Stderr);
+        var stdoutSummary = SummarizeProcessOutput(result.Stdout);
+        var exceptionType = string.IsNullOrWhiteSpace(result.ExceptionType)
+            ? "none"
+            : result.ExceptionType;
+        var exceptionMessage = string.IsNullOrWhiteSpace(result.ExceptionMessage)
+            ? "none"
+            : SanitizeNoteText(result.ExceptionMessage);
+        return $"{result.FailureKind}; exception={exceptionType}: {exceptionMessage}; stderr={stderrSummary}; stdout={stdoutSummary}";
+    }
+
     if (result.TimedOut)
     {
         return $"timeout after {result.Duration.TotalSeconds:F1}s";
@@ -7975,6 +8029,12 @@ static class GuiSmokeShared
                 $"Process timed out after {timeout}: {fileName} {arguments}{Environment.NewLine}stdout:{Environment.NewLine}{result.Stdout}{Environment.NewLine}stderr:{Environment.NewLine}{result.Stderr}");
         }
 
+        if (!string.IsNullOrWhiteSpace(result.FailureKind))
+        {
+            throw new InvalidOperationException(
+                $"Process failed before exit: {result.FailureKind} ({result.ExceptionType}: {result.ExceptionMessage}) {fileName} {arguments}{Environment.NewLine}stdout:{Environment.NewLine}{result.Stdout}{Environment.NewLine}stderr:{Environment.NewLine}{result.Stderr}");
+        }
+
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
@@ -8004,11 +8064,30 @@ static class GuiSmokeShared
         };
 
         var stopwatch = Stopwatch.StartNew();
-        process.Start();
+        try
+        {
+            process.Start();
+        }
+        catch (Exception exception)
+        {
+            stopwatch.Stop();
+            return new GuiSmokeProcessExecutionResult(
+                fileName,
+                arguments,
+                null,
+                false,
+                stopwatch.Elapsed,
+                string.Empty,
+                string.Empty,
+                "process-start-failure",
+                exception.GetType().Name,
+                exception.Message);
+        }
+
         if (!waitForExit)
         {
             stopwatch.Stop();
-            return new GuiSmokeProcessExecutionResult(fileName, arguments, null, false, stopwatch.Elapsed, string.Empty, string.Empty);
+            return new GuiSmokeProcessExecutionResult(fileName, arguments, null, false, stopwatch.Elapsed, string.Empty, string.Empty, null, null, null);
         }
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -8047,7 +8126,48 @@ static class GuiSmokeShared
                 true,
                 stopwatch.Elapsed,
                 await stdoutTask.ConfigureAwait(false),
-                await stderrTask.ConfigureAwait(false));
+                await stderrTask.ConfigureAwait(false),
+                null,
+                null,
+                null);
+        }
+        catch (Exception exception)
+        {
+            stopwatch.Stop();
+            return new GuiSmokeProcessExecutionResult(
+                fileName,
+                arguments,
+                process.HasExited ? process.ExitCode : null,
+                false,
+                stopwatch.Elapsed,
+                await TryReadProcessOutputAsync(stdoutTask).ConfigureAwait(false),
+                await TryReadProcessOutputAsync(stderrTask).ConfigureAwait(false),
+                "process-wait-failure",
+                exception.GetType().Name,
+                exception.Message);
+        }
+
+        string stdout;
+        string stderr;
+        try
+        {
+            stdout = await stdoutTask.ConfigureAwait(false);
+            stderr = await stderrTask.ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            stopwatch.Stop();
+            return new GuiSmokeProcessExecutionResult(
+                fileName,
+                arguments,
+                process.ExitCode,
+                false,
+                stopwatch.Elapsed,
+                await TryReadProcessOutputAsync(stdoutTask).ConfigureAwait(false),
+                await TryReadProcessOutputAsync(stderrTask).ConfigureAwait(false),
+                "output-drain-failure",
+                exception.GetType().Name,
+                exception.Message);
         }
 
         stopwatch.Stop();
@@ -8057,8 +8177,28 @@ static class GuiSmokeShared
             process.ExitCode,
             false,
             stopwatch.Elapsed,
-            await stdoutTask.ConfigureAwait(false),
-            await stderrTask.ConfigureAwait(false));
+            stdout,
+            stderr,
+            null,
+            null,
+            null);
+    }
+
+    private static async Task<string> TryReadProcessOutputAsync(Task<string>? task)
+    {
+        if (task is null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return await task.ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            return $"<output-read-failed:{exception.GetType().Name}:{exception.Message}>";
+        }
     }
 }
 
@@ -8159,7 +8299,10 @@ sealed record GuiSmokeProcessExecutionResult(
     bool TimedOut,
     TimeSpan Duration,
     string Stdout,
-    string Stderr);
+    string Stderr,
+    string? FailureKind,
+    string? ExceptionType,
+    string? ExceptionMessage);
 
 sealed record GuiSmokeValidationSummary(
     string RunId,

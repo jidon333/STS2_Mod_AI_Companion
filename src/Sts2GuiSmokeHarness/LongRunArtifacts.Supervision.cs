@@ -591,7 +591,15 @@ static partial class LongRunArtifacts
             TrimOutputTail(result.Stdout),
             TrimOutputTail(result.Stderr),
             failureReason);
-        WriteJsonAtomicWithRetry(GetDeployCommandSummaryPath(sessionRoot), summary, GuiSmokeShared.JsonOptions);
+        string? persistFailureReason = null;
+        try
+        {
+            WriteJsonWithFallback(GetDeployCommandSummaryPath(sessionRoot), summary, GuiSmokeShared.JsonOptions);
+        }
+        catch (Exception exception)
+        {
+            persistFailureReason = $"summary-persist-failure:deploy-command-summary:{exception.GetType().Name}:{exception.Message}";
+        }
 
         var startupSummary = LoadOrCreateStartupSummary(sessionRoot) with
         {
@@ -599,13 +607,47 @@ static partial class LongRunArtifacts
             DeployCommandExitCode = result.ExitCode,
             DeployCommandTimedOut = result.TimedOut,
             DeployCommandDurationMs = result.Duration.TotalMilliseconds,
-            DeployCommandFailureReason = failureReason,
+            DeployCommandFailureReason = CombineFailureReasons(failureReason, persistFailureReason),
         };
-        WriteJsonAtomicWithRetry(GetStartupSummaryPath(sessionRoot), startupSummary, GuiSmokeShared.JsonOptions);
+        try
+        {
+            WriteJsonWithFallback(GetStartupSummaryPath(sessionRoot), startupSummary, GuiSmokeShared.JsonOptions);
+        }
+        catch (Exception exception)
+        {
+            persistFailureReason = CombineFailureReasons(
+                persistFailureReason,
+                $"summary-persist-failure:startup-summary:{exception.GetType().Name}:{exception.Message}");
+        }
 
         if (!string.IsNullOrWhiteSpace(failureReason))
         {
             AppendPrevalidationNoteWithoutRefresh(sessionRoot, $"deploy-command-failure:{failureReason}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(persistFailureReason))
+        {
+            AppendPrevalidationNoteWithoutRefresh(sessionRoot, persistFailureReason);
+
+            try
+            {
+                var recoveredStartupSummary = LoadOrCreateStartupSummary(sessionRoot) with
+                {
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                    DeployCommandExitCode = result.ExitCode,
+                    DeployCommandTimedOut = result.TimedOut,
+                    DeployCommandDurationMs = result.Duration.TotalMilliseconds,
+                    DeployCommandFailureReason = CombineFailureReasons(failureReason, persistFailureReason),
+                    FailureStage = "deploy-command-finished",
+                    FailureReason = CombineFailureReasons(persistFailureReason, failureReason),
+                };
+                File.WriteAllText(
+                    GetStartupSummaryPath(sessionRoot),
+                    JsonSerializer.Serialize(recoveredStartupSummary, GuiSmokeShared.JsonOptions));
+            }
+            catch
+            {
+            }
         }
 
         TryRefreshSupervisorState(sessionRoot, "deploy-command-result");
@@ -1790,6 +1832,33 @@ static partial class LongRunArtifacts
         return normalized.Length <= maxLength
             ? normalized
             : normalized[^maxLength..];
+    }
+
+    private static string? CombineFailureReasons(string? primary, string? secondary)
+    {
+        if (string.IsNullOrWhiteSpace(primary))
+        {
+            return string.IsNullOrWhiteSpace(secondary) ? null : secondary;
+        }
+
+        if (string.IsNullOrWhiteSpace(secondary))
+        {
+            return primary;
+        }
+
+        return $"{primary} | {secondary}";
+    }
+
+    private static void WriteJsonWithFallback<T>(string path, T value, JsonSerializerOptions options)
+    {
+        try
+        {
+            WriteJsonAtomicWithRetry(path, value, options);
+        }
+        catch
+        {
+            File.WriteAllText(path, JsonSerializer.Serialize(value, options));
+        }
     }
 
     private static void TryRefreshSupervisorState(string sessionRoot, string context)
