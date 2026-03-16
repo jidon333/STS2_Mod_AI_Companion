@@ -158,6 +158,10 @@ sealed record GuiSmokeStartupSummary(
     string? SelectedDeployReason,
     bool DeployCommandStarted,
     bool DeployCommandFinished,
+    int? DeployCommandExitCode,
+    bool DeployCommandTimedOut,
+    double? DeployCommandDurationMs,
+    string? DeployCommandFailureReason,
     bool DeployVerificationStarted,
     bool DeployVerificationFinished,
     bool LaunchIssued,
@@ -167,6 +171,21 @@ sealed record GuiSmokeStartupSummary(
     bool FirstAttemptCreated,
     bool FirstScreenshotCaptured,
     string? FailureStage,
+    string? FailureReason);
+
+sealed record GuiSmokeDeployCommandSummary(
+    DateTimeOffset RecordedAt,
+    string SessionId,
+    string Mode,
+    string FileName,
+    string Arguments,
+    string? ToolPath,
+    string SelectionReason,
+    int? ExitCode,
+    bool TimedOut,
+    double DurationMs,
+    string StdoutTail,
+    string StderrTail,
     string? FailureReason);
 
 sealed record GuiSmokeRestartEvent(
@@ -426,6 +445,10 @@ static partial class LongRunArtifacts
                     SelectedDeployReason: null,
                     DeployCommandStarted: false,
                     DeployCommandFinished: false,
+                    DeployCommandExitCode: null,
+                    DeployCommandTimedOut: false,
+                    DeployCommandDurationMs: null,
+                    DeployCommandFailureReason: null,
                     DeployVerificationStarted: false,
                     DeployVerificationFinished: false,
                     LaunchIssued: false,
@@ -546,6 +569,46 @@ static partial class LongRunArtifacts
         RecordStartupStage(sessionRoot, stage, "failed", reason, metadata);
         AppendPrevalidationNoteWithoutRefresh(sessionRoot, $"startup-failure:{stage}:{reason}");
         TryRefreshSupervisorState(sessionRoot, $"startup-failure:{stage}");
+    }
+
+    public static void RecordDeployCommandResult(
+        string sessionRoot,
+        GuiSmokeDeployCommand command,
+        GuiSmokeProcessExecutionResult result,
+        string? failureReason)
+    {
+        var summary = new GuiSmokeDeployCommandSummary(
+            DateTimeOffset.UtcNow,
+            Path.GetFileName(sessionRoot),
+            command.Mode,
+            command.FileName,
+            command.Arguments,
+            command.ToolPath,
+            command.Reason,
+            result.ExitCode,
+            result.TimedOut,
+            result.Duration.TotalMilliseconds,
+            TrimOutputTail(result.Stdout),
+            TrimOutputTail(result.Stderr),
+            failureReason);
+        WriteJsonAtomicWithRetry(GetDeployCommandSummaryPath(sessionRoot), summary, GuiSmokeShared.JsonOptions);
+
+        var startupSummary = LoadOrCreateStartupSummary(sessionRoot) with
+        {
+            UpdatedAt = DateTimeOffset.UtcNow,
+            DeployCommandExitCode = result.ExitCode,
+            DeployCommandTimedOut = result.TimedOut,
+            DeployCommandDurationMs = result.Duration.TotalMilliseconds,
+            DeployCommandFailureReason = failureReason,
+        };
+        WriteJsonAtomicWithRetry(GetStartupSummaryPath(sessionRoot), startupSummary, GuiSmokeShared.JsonOptions);
+
+        if (!string.IsNullOrWhiteSpace(failureReason))
+        {
+            AppendPrevalidationNoteWithoutRefresh(sessionRoot, $"deploy-command-failure:{failureReason}");
+        }
+
+        TryRefreshSupervisorState(sessionRoot, "deploy-command-result");
     }
 
     public static void RecordGameStoppedBeforeDeployEvidence(string sessionRoot)
@@ -1095,6 +1158,28 @@ static partial class LongRunArtifacts
             evidence.Add($"startup-deploy-tool:{startupSummary.SelectedDeployToolPath}");
         }
 
+        if (startupSummary.DeployCommandExitCode is not null)
+        {
+            evidence.Add($"deploy-command-exit-code:{startupSummary.DeployCommandExitCode}");
+        }
+
+        if (startupSummary.DeployCommandDurationMs is not null)
+        {
+            evidence.Add($"deploy-command-duration-ms:{startupSummary.DeployCommandDurationMs.Value:F0}");
+        }
+
+        if (startupSummary.DeployCommandTimedOut)
+        {
+            evidence.Add("deploy-command-timeout:true");
+            blockers.Add("deploy-command-timeout");
+        }
+
+        if (!string.IsNullOrWhiteSpace(startupSummary.DeployCommandFailureReason))
+        {
+            evidence.Add($"deploy-command-failure:{startupSummary.DeployCommandFailureReason}");
+            blockers.Add("deploy-command-failed");
+        }
+
         if (!string.IsNullOrWhiteSpace(startupSummary.FailureStage))
         {
             evidence.Add($"startup-failure-stage:{startupSummary.FailureStage}");
@@ -1578,6 +1663,10 @@ static partial class LongRunArtifacts
             SelectedDeployReason: null,
             DeployCommandStarted: false,
             DeployCommandFinished: false,
+            DeployCommandExitCode: null,
+            DeployCommandTimedOut: false,
+            DeployCommandDurationMs: null,
+            DeployCommandFailureReason: null,
             DeployVerificationStarted: false,
             DeployVerificationFinished: false,
             LaunchIssued: false,
@@ -1688,6 +1777,19 @@ static partial class LongRunArtifacts
             Notes = prevalidation.Notes.Concat(new[] { note }).ToArray(),
         };
         WriteJsonAtomicWithRetry(GetPrevalidationPath(sessionRoot), updated, GuiSmokeShared.JsonOptions);
+    }
+
+    private static string TrimOutputTail(string? text, int maxLength = 4000)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var normalized = text.Replace("\r", string.Empty).Trim();
+        return normalized.Length <= maxLength
+            ? normalized
+            : normalized[^maxLength..];
     }
 
     private static void TryRefreshSupervisorState(string sessionRoot, string context)
@@ -3054,4 +3156,6 @@ static partial class LongRunArtifacts
     private static string GetStartupTracePath(string sessionRoot) => Path.Combine(sessionRoot, "startup-trace.ndjson");
 
     private static string GetStartupSummaryPath(string sessionRoot) => Path.Combine(sessionRoot, "startup-summary.json");
+
+    private static string GetDeployCommandSummaryPath(string sessionRoot) => Path.Combine(sessionRoot, "deploy-command-summary.json");
 }

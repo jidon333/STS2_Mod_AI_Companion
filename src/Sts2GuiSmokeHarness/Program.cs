@@ -170,9 +170,41 @@ static async Task<int> RunScenarioAsync(
 
             startupStage = "deploy-command-started";
             RecordStartupStage(startupStage, "started");
-            await RunDeployNativePackageAsync(workspaceRoot, deployCommand).ConfigureAwait(false);
+            var deployResult = await RunDeployNativePackageAsync(workspaceRoot, deployCommand).ConfigureAwait(false);
+            var deployFailureReason = BuildDeployCommandFailureReason(deployResult);
+            if (isLongRun)
+            {
+                LongRunArtifacts.RecordDeployCommandResult(sessionRoot, deployCommand, deployResult, deployFailureReason);
+            }
+
             startupStage = "deploy-command-finished";
-            RecordStartupStage(startupStage, "finished");
+            if (!string.IsNullOrWhiteSpace(deployFailureReason))
+            {
+                RecordStartupFailure(
+                    startupStage,
+                    deployFailureReason,
+                    new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["deployMode"] = deployCommand.Mode,
+                        ["toolPath"] = deployCommand.ToolPath,
+                        ["exitCode"] = deployResult.ExitCode?.ToString(CultureInfo.InvariantCulture),
+                        ["timedOut"] = deployResult.TimedOut.ToString(),
+                    });
+                throw new InvalidOperationException($"Deploy command failed: {deployFailureReason}");
+            }
+
+            RecordStartupStage(
+                startupStage,
+                "finished",
+                $"exitCode={deployResult.ExitCode ?? 0};durationMs={deployResult.Duration.TotalMilliseconds:F0}",
+                new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["deployMode"] = deployCommand.Mode,
+                    ["toolPath"] = deployCommand.ToolPath,
+                    ["exitCode"] = deployResult.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "0",
+                    ["timedOut"] = "False",
+                    ["durationMs"] = deployResult.Duration.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
+                });
 
             EnsureHarnessEnabledInRuntimeConfig(configuration);
             if (isLongRun)
@@ -2396,6 +2428,44 @@ static void RunSelfTest()
         Assert(startupPrevalidation.Notes.Contains("startup-failure:deploy-verification-finished:deploy report missing", StringComparer.OrdinalIgnoreCase),
             "Startup failure notes should be durably recorded in prevalidation.");
         Assert(File.ReadAllLines(Path.Combine(startupTraceRoot, "startup-trace.ndjson")).Length >= 5, "Startup trace should record each staged transition.");
+
+        var processResult = GuiSmokeShared.RunProcessDetailedAsync(
+                Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+                "/c echo deploy-stdout && echo deploy-stderr 1>&2",
+                Directory.GetCurrentDirectory(),
+                TimeSpan.FromSeconds(10))
+            .GetAwaiter()
+            .GetResult();
+        Assert(processResult.ExitCode == 0 && !processResult.TimedOut, "Detailed process execution should report a successful exit code.");
+        Assert(processResult.Stdout.Contains("deploy-stdout", StringComparison.OrdinalIgnoreCase), "Detailed process execution should capture stdout.");
+        Assert(processResult.Stderr.Contains("deploy-stderr", StringComparison.OrdinalIgnoreCase), "Detailed process execution should capture stderr.");
+
+        LongRunArtifacts.RecordDeployCommandResult(
+            startupTraceRoot,
+            new GuiSmokeDeployCommand(
+                "fast-path",
+                "dotnet",
+                "\"C:\\fake\\Sts2ModKit.Tool.dll\" deploy-native-package --include-harness-bridge",
+                TimeSpan.FromMinutes(2),
+                @"C:\fake\Sts2ModKit.Tool.dll",
+                "self-test"),
+            processResult,
+            failureReason: null);
+        startupSummary = JsonSerializer.Deserialize<GuiSmokeStartupSummary>(
+                             File.ReadAllText(Path.Combine(startupTraceRoot, "startup-summary.json")),
+                             GuiSmokeShared.JsonOptions)
+                         ?? throw new InvalidOperationException("Failed to read startup summary after deploy command result self-test.");
+        Assert(startupSummary.DeployCommandExitCode == 0
+               && startupSummary.DeployCommandTimedOut == false
+               && startupSummary.DeployCommandDurationMs is > 0,
+            "Startup summary should capture deploy command exit code, timeout, and duration.");
+        var deployCommandSummary = JsonSerializer.Deserialize<GuiSmokeDeployCommandSummary>(
+                                       File.ReadAllText(Path.Combine(startupTraceRoot, "deploy-command-summary.json")),
+                                       GuiSmokeShared.JsonOptions)
+                                   ?? throw new InvalidOperationException("Failed to read deploy command summary self-test artifact.");
+        Assert(deployCommandSummary.StdoutTail.Contains("deploy-stdout", StringComparison.OrdinalIgnoreCase)
+               && deployCommandSummary.StderrTail.Contains("deploy-stderr", StringComparison.OrdinalIgnoreCase),
+            "Deploy command summary should preserve stdout/stderr tails.");
     }
     finally
     {
@@ -7587,7 +7657,7 @@ static bool TryResolveWslPathViaExe(string wslPath, out string translatedPath)
     }
 }
 
-static async Task RunDeployNativePackageAsync(string workspaceRoot, GuiSmokeDeployCommand? deployCommand = null)
+static async Task<GuiSmokeProcessExecutionResult> RunDeployNativePackageAsync(string workspaceRoot, GuiSmokeDeployCommand? deployCommand = null)
 {
     var resolvedDeployCommand = deployCommand ?? BuildDeployNativePackageCommand(workspaceRoot);
     if (string.Equals(resolvedDeployCommand.Mode, "fast-path", StringComparison.OrdinalIgnoreCase))
@@ -7599,7 +7669,7 @@ static async Task RunDeployNativePackageAsync(string workspaceRoot, GuiSmokeDepl
         LogHarness($"deploy fast-path unavailable; falling back to dotnet run --project src\\Sts2ModKit.Tool reason={resolvedDeployCommand.Reason}");
     }
 
-    await GuiSmokeShared.RunProcessAsync(
+    return await GuiSmokeShared.RunProcessDetailedAsync(
         resolvedDeployCommand.FileName,
         resolvedDeployCommand.Arguments,
         workspaceRoot,
@@ -7627,6 +7697,39 @@ static GuiSmokeDeployCommand BuildDeployNativePackageCommand(string workspaceRoo
         TimeSpan.FromMinutes(5),
         null,
         "built deploy tool unavailable");
+}
+
+static string? BuildDeployCommandFailureReason(GuiSmokeProcessExecutionResult result)
+{
+    if (result.TimedOut)
+    {
+        return $"timeout after {result.Duration.TotalSeconds:F1}s";
+    }
+
+    if (result.ExitCode is not null and not 0)
+    {
+        var stderrSummary = SummarizeProcessOutput(result.Stderr);
+        var stdoutSummary = SummarizeProcessOutput(result.Stdout);
+        return $"exit-code:{result.ExitCode}; stderr={stderrSummary}; stdout={stdoutSummary}";
+    }
+
+    return null;
+}
+
+static string SummarizeProcessOutput(string? text, int maxLength = 240)
+{
+    if (string.IsNullOrWhiteSpace(text))
+    {
+        return "none";
+    }
+
+    var normalized = text.Replace("\r", " ").Replace("\n", " ").Trim();
+    if (normalized.Length <= maxLength)
+    {
+        return normalized;
+    }
+
+    return normalized[..maxLength] + "...";
 }
 
 static GuiSmokeDeployToolSelection? TryFindBuiltDeployToolDll(string workspaceRoot)
@@ -7860,6 +7963,32 @@ static class GuiSmokeShared
         TimeSpan timeout,
         bool waitForExit = true)
     {
+        var result = await RunProcessDetailedAsync(fileName, arguments, workingDirectory, timeout, waitForExit).ConfigureAwait(false);
+        if (!waitForExit)
+        {
+            return;
+        }
+
+        if (result.TimedOut)
+        {
+            throw new TimeoutException(
+                $"Process timed out after {timeout}: {fileName} {arguments}{Environment.NewLine}stdout:{Environment.NewLine}{result.Stdout}{Environment.NewLine}stderr:{Environment.NewLine}{result.Stderr}");
+        }
+
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Process failed with exit code {result.ExitCode}: {fileName} {arguments}{Environment.NewLine}stdout:{Environment.NewLine}{result.Stdout}{Environment.NewLine}stderr:{Environment.NewLine}{result.Stderr}");
+        }
+    }
+
+    public static async Task<GuiSmokeProcessExecutionResult> RunProcessDetailedAsync(
+        string fileName,
+        string arguments,
+        string workingDirectory,
+        TimeSpan timeout,
+        bool waitForExit = true)
+    {
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -7874,21 +8003,62 @@ static class GuiSmokeShared
             },
         };
 
+        var stopwatch = Stopwatch.StartNew();
         process.Start();
         if (!waitForExit)
         {
-            return;
+            stopwatch.Stop();
+            return new GuiSmokeProcessExecutionResult(fileName, arguments, null, false, stopwatch.Elapsed, string.Empty, string.Empty);
         }
 
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
         using var timeoutCts = new CancellationTokenSource(timeout);
-        await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-        if (process.ExitCode != 0)
+        try
         {
-            var stdout = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
-            var stderr = await process.StandardError.ReadToEndAsync().ConfigureAwait(false);
-            throw new InvalidOperationException(
-                $"Process failed: {fileName} {arguments}{Environment.NewLine}stdout:{Environment.NewLine}{stdout}{Environment.NewLine}stderr:{Environment.NewLine}{stderr}");
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
         }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                await process.WaitForExitAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+
+            stopwatch.Stop();
+            return new GuiSmokeProcessExecutionResult(
+                fileName,
+                arguments,
+                process.HasExited ? process.ExitCode : null,
+                true,
+                stopwatch.Elapsed,
+                await stdoutTask.ConfigureAwait(false),
+                await stderrTask.ConfigureAwait(false));
+        }
+
+        stopwatch.Stop();
+        return new GuiSmokeProcessExecutionResult(
+            fileName,
+            arguments,
+            process.ExitCode,
+            false,
+            stopwatch.Elapsed,
+            await stdoutTask.ConfigureAwait(false),
+            await stderrTask.ConfigureAwait(false));
     }
 }
 
@@ -7981,6 +8151,15 @@ sealed record GuiSmokeDeployCommand(
     TimeSpan Timeout,
     string? ToolPath,
     string Reason);
+
+sealed record GuiSmokeProcessExecutionResult(
+    string FileName,
+    string Arguments,
+    int? ExitCode,
+    bool TimedOut,
+    TimeSpan Duration,
+    string Stdout,
+    string Stderr);
 
 sealed record GuiSmokeValidationSummary(
     string RunId,
