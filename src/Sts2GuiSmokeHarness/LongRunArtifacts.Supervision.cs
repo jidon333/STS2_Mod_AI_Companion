@@ -534,7 +534,7 @@ static partial class LongRunArtifacts
             detail,
             safeMetadata);
         WriteJsonAtomicWithRetry(GetStartupSummaryPath(sessionRoot), summary, GuiSmokeShared.JsonOptions);
-        RefreshSupervisorState(sessionRoot);
+        TryRefreshSupervisorState(sessionRoot, $"startup-stage:{stage}:{status}");
     }
 
     public static void RecordStartupFailure(
@@ -544,7 +544,8 @@ static partial class LongRunArtifacts
         IReadOnlyDictionary<string, string?>? metadata = null)
     {
         RecordStartupStage(sessionRoot, stage, "failed", reason, metadata);
-        UpdatePrevalidation(sessionRoot, note: $"startup-failure:{stage}:{reason}");
+        AppendPrevalidationNoteWithoutRefresh(sessionRoot, $"startup-failure:{stage}:{reason}");
+        TryRefreshSupervisorState(sessionRoot, $"startup-failure:{stage}");
     }
 
     public static void RecordGameStoppedBeforeDeployEvidence(string sessionRoot)
@@ -1666,6 +1667,48 @@ static partial class LongRunArtifacts
             },
             _ => updated,
         };
+    }
+
+    private static void AppendPrevalidationNoteWithoutRefresh(string sessionRoot, string note)
+    {
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            return;
+        }
+
+        var prevalidation = LoadOrCreatePrevalidation(sessionRoot);
+        if (prevalidation.Notes.Contains(note, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var updated = prevalidation with
+        {
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Notes = prevalidation.Notes.Concat(new[] { note }).ToArray(),
+        };
+        WriteJsonAtomicWithRetry(GetPrevalidationPath(sessionRoot), updated, GuiSmokeShared.JsonOptions);
+    }
+
+    private static void TryRefreshSupervisorState(string sessionRoot, string context)
+    {
+        try
+        {
+            RefreshSupervisorState(sessionRoot);
+        }
+        catch (Exception exception)
+        {
+            AppendPrevalidationNoteWithoutRefresh(sessionRoot, $"startup-trace-refresh-failed:{context}:{exception.GetType().Name}:{exception.Message}");
+
+            var summary = LoadOrCreateStartupSummary(sessionRoot);
+            var updatedSummary = summary with
+            {
+                UpdatedAt = DateTimeOffset.UtcNow,
+                FailureStage = summary.FailureStage ?? context,
+                FailureReason = summary.FailureReason ?? $"{exception.GetType().Name}: {exception.Message}",
+            };
+            WriteJsonAtomicWithRetry(GetStartupSummaryPath(sessionRoot), updatedSummary, GuiSmokeShared.JsonOptions);
+        }
     }
 
     private static MilestoneEvaluation EvaluateMilestone(

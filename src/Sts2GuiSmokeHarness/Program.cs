@@ -113,7 +113,14 @@ static async Task<int> RunScenarioAsync(
             return;
         }
 
-        LongRunArtifacts.RecordStartupStage(sessionRoot, stage, status, detail, metadata);
+        try
+        {
+            LongRunArtifacts.RecordStartupStage(sessionRoot, stage, status, detail, metadata);
+        }
+        catch (Exception exception)
+        {
+            LogHarness($"startup stage record failed stage={stage} status={status} error={exception.GetType().Name}: {exception.Message}");
+        }
     }
 
     void RecordStartupFailure(
@@ -126,7 +133,14 @@ static async Task<int> RunScenarioAsync(
             return;
         }
 
-        LongRunArtifacts.RecordStartupFailure(sessionRoot, stage, reason, metadata);
+        try
+        {
+            LongRunArtifacts.RecordStartupFailure(sessionRoot, stage, reason, metadata);
+        }
+        catch (Exception exception)
+        {
+            LogHarness($"startup failure record failed stage={stage} reason={reason} error={exception.GetType().Name}: {exception.Message}");
+        }
     }
 
     if (!options.ContainsKey("--skip-deploy"))
