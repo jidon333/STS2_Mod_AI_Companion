@@ -1,5 +1,27 @@
 # Worklog
 
+## 2026-03-16
+
+### Mixed-state bottleneck moved forward again
+- Kept the core `screenshot-first` rule for Smoke Harness progression.
+- Promoted `Observer/export` from pure telemetry/post-check toward candidate generation and validation input, while still keeping it below final action authority.
+- Improved combat enemy-targeting substantially by moving from fixed-anchor assumptions toward live hitbox/export-backed targeting.
+- Advanced `reward/map` recovery with layered state and a short recovery window.
+
+### New current blocker
+- The primary blocker is no longer "cannot read event choices."
+- The latest blocker is `event -> map overlay mixed-state` handling after event resolution.
+- The concrete failure mode is over-promoting map overlay foreground and mistaking the `current-node arrow` for a reachable next node.
+
+### Validation and ops improvements
+- Strengthened latest-state sentinel and `inspect-session` recalculation.
+- Added `replay-step`, `replay-test`, and golden scene regression coverage for offline reproduction.
+- Added `startup-trace.ndjson` and `startup-summary.json` so boot/deploy/first-step failures can be diagnosed separately from gameplay loops.
+
+### Remaining gaps
+- `reward back` and claimable reward extraction still need reinforcement.
+- Mixed-state loop terminalization is improved but not closed.
+
 ## 2026-03-14
 
 ### Observer / Smoke Harness direction reset
