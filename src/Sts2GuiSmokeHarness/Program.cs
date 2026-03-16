@@ -1030,6 +1030,38 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             }
         }
 
+        if (TryClassifyMapOverlayNoOpLoop(phase, request, decision, out var mapOverlayNoOpLoopMessage))
+        {
+            LogHarness($"step={stepIndex} abort {mapOverlayNoOpLoopMessage}");
+            AppendProgressIfLongRun(
+                isLongRun,
+                logger,
+                EvaluateStepProgress(
+                    stepIndex,
+                    phase,
+                    request.SceneSignature,
+                    observer,
+                    latestObserver,
+                    decision,
+                    request.FirstSeenScene,
+                    request.ReasoningMode,
+                    false,
+                    sameActionStallCount,
+                    "map-overlay-noop-loop"));
+            logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                phase.ToString(),
+                mapOverlayNoOpLoopMessage,
+                observer.CurrentScreen,
+                observer.InCombat,
+                screenshotPath));
+            return CompleteAttempt(
+                1,
+                "failed",
+                mapOverlayNoOpLoopMessage,
+                terminalCause: "map-overlay-noop-loop",
+                failureClass: ClassifyFailureForAttempt(phase, observer, "map-overlay-noop-loop", launchFailed: false));
+        }
+
         if (TryClassifyMapTransitionStall(phase, request, decision, out var mapTransitionStallMessage))
         {
             LogHarness($"step={stepIndex} abort {mapTransitionStallMessage}");
@@ -1398,6 +1430,7 @@ static string ClassifyFailureForAttempt(
     return terminalCause switch
     {
         "reward-map-loop" => "reward-map-loop",
+        "map-overlay-noop-loop" => "map-overlay-noop-loop",
         "map-transition-stall" => "map-transition-stall",
         "phase-mismatch-stall" => "phase-mismatch-stall",
         "decision-wait-plateau" => "decision-wait-plateau",
@@ -1434,6 +1467,7 @@ static bool IsSceneDeadEndAttempt(GuiSmokeAttemptResult result)
 
     return string.Equals(result.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.TerminalCause, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.TerminalCause, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.TerminalCause, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.TerminalCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
@@ -1442,6 +1476,7 @@ static bool IsSceneDeadEndAttempt(GuiSmokeAttemptResult result)
            || string.Equals(result.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.FailureClass, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
@@ -2039,6 +2074,114 @@ static void RunSelfTest()
         if (File.Exists(eventContaminationScreenshotPath))
         {
             File.Delete(eventContaminationScreenshotPath);
+        }
+    }
+
+    var mapOverlayScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-map-overlay-self-test-{Guid.NewGuid():N}.png");
+    try
+    {
+        using (var bitmap = new Bitmap(1280, 720))
+        using (var graphics = Graphics.FromImage(bitmap))
+        using (var parchmentBrush = new SolidBrush(Color.FromArgb(201, 176, 132)))
+        using (var arrowBrush = new SolidBrush(Color.FromArgb(220, 55, 48)))
+        using (var nodeBrush = new SolidBrush(Color.FromArgb(63, 54, 42)))
+        using (var legendBrush = new SolidBrush(Color.FromArgb(184, 207, 222)))
+        {
+            graphics.Clear(Color.Black);
+            graphics.FillRectangle(parchmentBrush, new Rectangle(210, 40, 840, 650));
+            graphics.FillEllipse(arrowBrush, new Rectangle(892, 414, 54, 46));
+            graphics.FillEllipse(nodeBrush, new Rectangle(884, 454, 82, 82));
+            graphics.FillEllipse(nodeBrush, new Rectangle(882, 548, 86, 86));
+            graphics.FillRectangle(legendBrush, new Rectangle(1038, 193, 176, 285));
+            graphics.FillPolygon(arrowBrush, new[]
+            {
+                new Point(18, 515),
+                new Point(66, 478),
+                new Point(66, 495),
+                new Point(102, 495),
+                new Point(102, 535),
+                new Point(66, 535),
+                new Point(66, 552),
+            });
+            bitmap.Save(mapOverlayScreenshotPath, ImageFormat.Png);
+        }
+
+        using var mapOverlayStateDocument = JsonDocument.Parse("""{"meta":{"declaringType":"MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen","instanceType":"MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen","choiceExtractorPath":"event","mapOverlayVisible":"true"}}""");
+        var mapOverlayObserver = new ObserverState(
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-map-overlay",
+                true,
+                "mixed",
+                "stable",
+                "episode-map-overlay",
+                "None",
+                "event",
+                80,
+                80,
+                null,
+                new[] { "계속", "LeftArrow", "휴식 (1,2)" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("event-option:0", "event-option", "계속", "922,596,800,100", true),
+                    new ObserverActionNode("back:left", "choice", "LeftArrow", "48,930,88,88", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("choice", "계속", "922,596,800,100", "계속"),
+                    new ObserverChoice("choice", "LeftArrow", "48,930,88,88", "LeftArrow"),
+                    new ObserverChoice("map-node", "휴식 (1,2)", "897,581,124,124", "1,2", "type:Rest;coord:1,2"),
+                },
+                Array.Empty<ObservedCombatHandCard>()),
+            mapOverlayStateDocument,
+            null,
+            null);
+        var mapOverlaySignature = ComputeSceneSignature(mapOverlayScreenshotPath, mapOverlayObserver, GuiSmokePhase.ChooseFirstNode);
+        Assert(mapOverlaySignature.Contains("layer:map-overlay-foreground", StringComparison.OrdinalIgnoreCase), "Map overlay foreground should be modeled explicitly when NMapScreen is open over a stale event context.");
+        Assert(mapOverlaySignature.Contains("stale:event-choice", StringComparison.OrdinalIgnoreCase), "Stale event choices should be marked as stale when the map overlay is foreground.");
+        Assert(mapOverlaySignature.Contains("map-back-navigation-available", StringComparison.OrdinalIgnoreCase), "Map overlay should expose the back-navigation affordance.");
+        Assert(!GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver).Contains("click visible map advance", StringComparer.OrdinalIgnoreCase), "ChooseFirstNode should not expose visible map advance while map overlay foreground is active.");
+        Assert(GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver).Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase), "ChooseFirstNode should promote exported map points to first-class candidates in mixed map-overlay state.");
+        Assert(GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver).Contains("click map back", StringComparer.OrdinalIgnoreCase), "ChooseFirstNode should open map back-navigation in mixed map-overlay state.");
+        var mapOverlayDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            15,
+            GuiSmokePhase.ChooseFirstNode.ToString(),
+            "Click the first reachable map node.",
+            DateTimeOffset.UtcNow,
+            mapOverlayScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            mapOverlaySignature,
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            mapOverlayObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            BuildAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>()),
+            new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "event-resolved-map", null, DateTimeOffset.UtcNow.AddSeconds(-4)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.WaitMap.ToString(), "branch-map", null, DateTimeOffset.UtcNow.AddSeconds(-2)),
+            },
+            "Use exported reachable map points before any screenshot arrow fallback.",
+            null));
+        Assert(string.Equals(mapOverlayDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase), "Map overlay foreground should click the exported reachable map point before any red-arrow fallback.");
+    }
+    finally
+    {
+        if (File.Exists(mapOverlayScreenshotPath))
+        {
+            File.Delete(mapOverlayScreenshotPath);
         }
     }
 
@@ -3286,6 +3429,44 @@ static void RunSelfTest()
         }
     }
 
+    var mapOverlaySentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-map-overlay-sentinel-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(mapOverlaySentinelRoot);
+        var runRoot = Path.Combine(mapOverlaySentinelRoot, "attempts", "0001");
+        Directory.CreateDirectory(runRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(mapOverlaySentinelRoot, "map-overlay-session", "boot-to-long-run", "headless");
+        var progressPath = Path.Combine(runRoot, "progress.ndjson");
+        var progressEntries = new[]
+        {
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-5), 15, GuiSmokePhase.ChooseFirstNode.ToString(), "phase:choosefirstnode|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|map-back-navigation-available|current-node-arrow-visible|reachable-node-candidate-present|shot:A", "event", null, "visible map advance", true, false, false, false, false, new[] { "scene-ready-true", "map-overlay-visible", "stale-event-choice", "current-node-arrow-visible", "reachable-node-candidate-present" }, new[] { "action:click", "target:visible map advance" }),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-4), 16, GuiSmokePhase.WaitMap.ToString(), "phase:waitmap|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|map-back-navigation-available|current-node-arrow-visible|reachable-node-candidate-present|shot:B", "event", null, null, true, false, false, false, false, new[] { "scene-ready-true", "map-overlay-visible", "stale-event-choice", "alternate-branch:ChooseFirstNode" }, Array.Empty<string>()),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-3), 17, GuiSmokePhase.ChooseFirstNode.ToString(), "phase:choosefirstnode|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|map-back-navigation-available|current-node-arrow-visible|reachable-node-candidate-present|shot:C", "event", null, "visible map advance", true, false, false, false, false, new[] { "scene-ready-true", "map-overlay-visible", "stale-event-choice", "current-node-arrow-visible", "reachable-node-candidate-present" }, new[] { "action:click", "target:visible map advance" }),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-2), 18, GuiSmokePhase.WaitMap.ToString(), "phase:waitmap|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|map-back-navigation-available|current-node-arrow-visible|reachable-node-candidate-present|shot:D", "event", null, null, true, false, false, false, false, new[] { "scene-ready-true", "map-overlay-visible", "stale-event-choice", "alternate-branch:ChooseFirstNode" }, Array.Empty<string>()),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-1), 19, GuiSmokePhase.ChooseFirstNode.ToString(), "phase:choosefirstnode|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|map-back-navigation-available|current-node-arrow-visible|reachable-node-candidate-present|shot:E", "event", null, "visible map advance", true, false, false, false, false, new[] { "scene-ready-true", "map-overlay-visible", "stale-event-choice", "current-node-arrow-visible", "reachable-node-candidate-present" }, new[] { "action:click", "target:visible map advance" }),
+        };
+        File.WriteAllLines(progressPath, progressEntries.Select(entry => JsonSerializer.Serialize(entry, GuiSmokeShared.NdjsonOptions)));
+        LongRunArtifacts.RefreshStallSentinel(mapOverlaySentinelRoot);
+        var diagnosisEntries = File.ReadLines(Path.Combine(mapOverlaySentinelRoot, "stall-diagnosis.ndjson"))
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+            .Where(static entry => entry is not null)
+            .Cast<GuiSmokeStallDiagnosisEntry>()
+            .ToArray();
+        Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic map-overlay loop attempt.");
+        Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase), "Map overlay current-node arrow repeats should classify as map-overlay-noop-loop.");
+        Assert(diagnosisEntries[0].Evidence.Contains("mapOverlayVisible:true", StringComparer.OrdinalIgnoreCase), "Map overlay diagnosis should record map-overlay visibility.");
+        Assert(diagnosisEntries[0].Evidence.Contains("staleEventChoicePresent:true", StringComparer.OrdinalIgnoreCase), "Map overlay diagnosis should record stale event choice contamination.");
+        Assert(diagnosisEntries[0].Evidence.Contains("repeatedCurrentNodeArrowClick:true", StringComparer.OrdinalIgnoreCase), "Map overlay diagnosis should record repeated current-node-arrow clicks.");
+    }
+    finally
+    {
+        if (Directory.Exists(mapOverlaySentinelRoot))
+        {
+            Directory.Delete(mapOverlaySentinelRoot, recursive: true);
+        }
+    }
+
     var rewardMapLoopSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-reward-map-loop-sentinel-self-test-{Guid.NewGuid():N}");
     try
     {
@@ -3686,6 +3867,7 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
     var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
     var rewardBackNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
     var claimableRewardPresent = HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath);
+    var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, null, screenshotPath);
     var tags = new List<string>(capacity: 10)
     {
         $"phase:{phase.ToString().ToLowerInvariant()}",
@@ -3726,6 +3908,16 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
             tags.Add("layer:map-background");
         }
 
+        if (mapOverlayState.ForegroundVisible)
+        {
+            tags.Add("layer:map-overlay-foreground");
+        }
+
+        if (mapOverlayState.EventBackgroundPresent)
+        {
+            tags.Add("layer:event-background");
+        }
+
         if (rewardBackNavigationAvailable)
         {
             tags.Add("layer:reward-back-nav");
@@ -3741,9 +3933,34 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
             tags.Add("stale:reward-bounds");
         }
 
+        if (mapOverlayState.StaleEventChoicePresent)
+        {
+            tags.Add("stale:event-choice");
+        }
+
         if (claimableRewardPresent)
         {
             tags.Add("reward:claimable");
+        }
+
+        if (mapOverlayState.MapBackNavigationAvailable)
+        {
+            tags.Add("map-back-navigation-available");
+        }
+
+        if (mapOverlayState.CurrentNodeArrowVisible)
+        {
+            tags.Add("current-node-arrow-visible");
+        }
+
+        if (mapOverlayState.ReachableNodeCandidatePresent)
+        {
+            tags.Add("reachable-node-candidate-present");
+        }
+
+        if (mapOverlayState.ExportedReachableNodeCandidatePresent)
+        {
+            tags.Add("exported-reachable-node-present");
         }
 
         if (LooksLikeInspectOverlayState(observer))
@@ -3761,7 +3978,8 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
             tags.Add("substate:colorless-card-choice");
         }
 
-        if (HasStrongMapTransitionEvidence(observer)
+        if (!mapOverlayState.ForegroundVisible
+            && HasStrongMapTransitionEvidence(observer)
             && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
             && !ShouldPreferRewardProgressionOverMapFallback(observer)
             && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
@@ -3772,11 +3990,14 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
         var mapAnalysis = AutoMapAnalyzer.Analyze(screenshotPath);
         if (mapAnalysis.HasCurrentArrow)
         {
-            tags.Add(rewardMapLayer.RewardPanelVisible && ShouldPreferRewardProgressionOverMapFallback(observer)
-                ? "contamination:map-arrow"
-                : GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+            if (!mapOverlayState.ForegroundVisible)
+            {
+                tags.Add(rewardMapLayer.RewardPanelVisible && ShouldPreferRewardProgressionOverMapFallback(observer)
                     ? "contamination:map-arrow"
-                    : "visible:map-arrow");
+                    : GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+                        ? "contamination:map-arrow"
+                        : "visible:map-arrow");
+            }
         }
 
         if (GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
@@ -4129,6 +4350,7 @@ static string[] BuildAllowedActions(
     var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
     var rewardBackNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
     var claimableRewardPresent = HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath);
+    var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, null, screenshotPath);
     if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out var observedPhase))
     {
         return BuildAllowedActions(observedPhase, observer, combatCardKnowledge, screenshotPath, history);
@@ -4154,6 +4376,10 @@ static string[] BuildAllowedActions(
                 ? new[] { "click first reachable node", "click visible map advance", "click reward back", "wait" }
                 : new[] { "click first reachable node", "click visible map advance", "wait" },
         GuiSmokePhase.HandleRewards => new[] { "click proceed", "click reward", "wait" },
+        GuiSmokePhase.ChooseFirstNode when mapOverlayState.ForegroundVisible
+            => mapOverlayState.MapBackNavigationAvailable
+                ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
+                : new[] { "click exported reachable node", "click first reachable node", "wait" },
         GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
             => new[] { "click rest option", "click smith card", "click smith confirm", "wait" },
         GuiSmokePhase.ChooseFirstNode when LooksLikeTreasureState(observer.Summary)
@@ -4167,6 +4393,10 @@ static string[] BuildAllowedActions(
             => new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", rewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" },
         GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && ShouldPreferRewardProgressionOverMapFallback(observer)
             => new[] { "click reward", "click reward skip", "click proceed", "wait" },
+        GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible
+            => mapOverlayState.MapBackNavigationAvailable
+                ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
+                : new[] { "click exported reachable node", "click first reachable node", "wait" },
         GuiSmokePhase.HandleEvent when HasStrongMapTransitionEvidence(observer)
                                         && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
             => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
@@ -5381,6 +5611,8 @@ static int GetSameActionStallLimit(GuiSmokePhase phase, GuiSmokeStepDecision dec
         "visible map advance" => 4,
         "visible reachable node" => 4,
         "first reachable node" => 4,
+        "exported reachable map node" => 4,
+        "map back" => 4,
         "treasure chest center" => 4,
         "treasure reward icon" => 4,
         "claim reward item" => 3,
@@ -5513,6 +5745,71 @@ static bool TryClassifyMapTransitionStall(
     return true;
 }
 
+static bool TryClassifyMapOverlayNoOpLoop(
+    GuiSmokePhase phase,
+    GuiSmokeStepRequest request,
+    GuiSmokeStepDecision decision,
+    out string message)
+{
+    message = string.Empty;
+    if (phase is not GuiSmokePhase.HandleEvent and not GuiSmokePhase.WaitMap and not GuiSmokePhase.ChooseFirstNode)
+    {
+        return false;
+    }
+
+    var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+    if (!mapOverlayState.ForegroundVisible
+        || !mapOverlayState.StaleEventChoicePresent
+        || (!mapOverlayState.CurrentNodeArrowVisible && !mapOverlayState.MapBackNavigationAvailable))
+    {
+        return false;
+    }
+
+    if (!IsMapOverlayLoopTarget(decision.TargetLabel))
+    {
+        return false;
+    }
+
+    var repeatedLoopCount = 1;
+    var repeatedCurrentNodeArrowClick = string.Equals(decision.TargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+    for (var index = request.History.Count - 1; index >= 0; index -= 1)
+    {
+        var entry = request.History[index];
+        if (entry.Phase is not nameof(GuiSmokePhase.HandleEvent) and not nameof(GuiSmokePhase.WaitMap) and not nameof(GuiSmokePhase.ChooseFirstNode))
+        {
+            break;
+        }
+
+        if (IsMapOverlayLoopTarget(entry.TargetLabel))
+        {
+            repeatedLoopCount += 1;
+            if (string.Equals(entry.TargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase))
+            {
+                repeatedCurrentNodeArrowClick += 1;
+            }
+
+            continue;
+        }
+
+        if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+            || entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase)
+            || entry.Action.StartsWith("observer-", StringComparison.OrdinalIgnoreCase))
+        {
+            continue;
+        }
+
+        break;
+    }
+
+    if (repeatedLoopCount < 4 && repeatedCurrentNodeArrowClick < 2)
+    {
+        return false;
+    }
+
+    message = $"map-overlay-noop-loop phase={phase} target={decision.TargetLabel ?? "null"} observer={request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "null"} repeats={repeatedLoopCount} staleEventChoice={mapOverlayState.StaleEventChoicePresent} backNav={mapOverlayState.MapBackNavigationAvailable} currentArrow={mapOverlayState.CurrentNodeArrowVisible} exportedReachable={mapOverlayState.ExportedReachableNodeCandidatePresent}";
+    return true;
+}
+
 static bool TryClassifyCombatNoOpLoop(
     GuiSmokePhase phase,
     GuiSmokeStepRequest request,
@@ -5555,6 +5852,15 @@ static bool IsMapTransitionLoopTarget(string? targetLabel)
     return string.Equals(targetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase);
+}
+
+static bool IsMapOverlayLoopTarget(string? targetLabel)
+{
+    return string.Equals(targetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "map back", StringComparison.OrdinalIgnoreCase);
 }
 
 static bool IsRewardMapLoopTarget(string? targetLabel)
@@ -6047,6 +6353,36 @@ static GuiSmokeStepProgress EvaluateStepProgress(
         if (sceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase))
         {
             observerSignals.Add("map-background-visible");
+        }
+
+        if (sceneSignature.Contains("layer:map-overlay-foreground", StringComparison.OrdinalIgnoreCase))
+        {
+            observerSignals.Add("map-overlay-visible");
+        }
+
+        if (sceneSignature.Contains("map-back-navigation-available", StringComparison.OrdinalIgnoreCase))
+        {
+            observerSignals.Add("map-back-navigation-available");
+        }
+
+        if (sceneSignature.Contains("stale:event-choice", StringComparison.OrdinalIgnoreCase))
+        {
+            observerSignals.Add("stale-event-choice");
+        }
+
+        if (sceneSignature.Contains("current-node-arrow-visible", StringComparison.OrdinalIgnoreCase))
+        {
+            observerSignals.Add("current-node-arrow-visible");
+        }
+
+        if (sceneSignature.Contains("reachable-node-candidate-present", StringComparison.OrdinalIgnoreCase))
+        {
+            observerSignals.Add("reachable-node-candidate-present");
+        }
+
+        if (sceneSignature.Contains("exported-reachable-node-present", StringComparison.OrdinalIgnoreCase))
+        {
+            observerSignals.Add("exported-reachable-node-present");
         }
 
         if (sceneSignature.Contains("layer:reward-back-nav", StringComparison.OrdinalIgnoreCase))
@@ -6733,6 +7069,15 @@ sealed record RewardMapLayerState(
     bool StaleRewardBoundsPresent,
     bool OffWindowBoundsReused);
 
+sealed record MapOverlayState(
+    bool ForegroundVisible,
+    bool EventBackgroundPresent,
+    bool MapBackNavigationAvailable,
+    bool StaleEventChoicePresent,
+    bool CurrentNodeArrowVisible,
+    bool ReachableNodeCandidatePresent,
+    bool ExportedReachableNodeCandidatePresent);
+
 sealed record ObserverSummary(
     string? CurrentScreen,
     string? VisibleScreen,
@@ -6921,6 +7266,161 @@ static class GuiSmokeForegroundHeuristics
                && float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out height)
                && width > 0f
                && height > 0f;
+    }
+}
+
+static class GuiSmokeMapOverlayHeuristics
+{
+    public static MapOverlayState BuildState(ObserverState observer, WindowBounds? windowBounds, string? screenshotPath)
+    {
+        return BuildStateCore(observer.Summary, observer.StateDocument, windowBounds, screenshotPath);
+    }
+
+    public static MapOverlayState BuildState(ObserverSummary observer, WindowBounds? windowBounds, string? screenshotPath)
+    {
+        return BuildStateCore(observer, null, windowBounds, screenshotPath);
+    }
+
+    private static MapOverlayState BuildStateCore(ObserverSummary observer, JsonDocument? stateDocument, WindowBounds? windowBounds, string? screenshotPath)
+    {
+        var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(screenshotPath ?? string.Empty);
+        var mapAnalysis = AutoMapAnalyzer.Analyze(screenshotPath ?? string.Empty);
+        var declaringType = TryReadMetaString(stateDocument, "declaringType");
+        var instanceType = TryReadMetaString(stateDocument, "instanceType");
+        var rootTypeSummary = TryReadMetaString(stateDocument, "rootTypeSummary");
+        var hasMapAuthority = ContainsMapAuthority(declaringType)
+                              || ContainsMapAuthority(instanceType)
+                              || ContainsMapAuthority(rootTypeSummary)
+                              || string.Equals(TryReadMetaString(stateDocument, "mapOverlayVisible"), "true", StringComparison.OrdinalIgnoreCase);
+        var exportedReachableNodeCandidatePresent = observer.Choices.Any(choice =>
+                                                      string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                                                      && HasActiveBounds(choice.ScreenBounds, windowBounds))
+                                                  || observer.ActionNodes.Any(node =>
+                                                      node.Actionable
+                                                      && string.Equals(node.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                                                      && HasActiveBounds(node.ScreenBounds, windowBounds));
+        var staleEventChoicePresent = HasEventChoiceEvidence(observer, windowBounds);
+        var eventBackgroundPresent = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+                                     || staleEventChoicePresent;
+        var mapBackNavigationAvailable = overlayAnalysis.HasBottomLeftBackArrow
+                                         || observer.CurrentChoices.Any(IsBackChoiceLabel)
+                                         || observer.ActionNodes.Any(node => node.Actionable && IsBackChoiceLabel(node.Label));
+        var foregroundVisible = hasMapAuthority
+                                && (overlayAnalysis.HasBottomLeftBackArrow
+                                    || exportedReachableNodeCandidatePresent
+                                    || mapAnalysis.HasReachableNode
+                                    || mapAnalysis.HasCurrentArrow);
+        return new MapOverlayState(
+            foregroundVisible,
+            eventBackgroundPresent,
+            mapBackNavigationAvailable,
+            foregroundVisible && staleEventChoicePresent,
+            foregroundVisible && mapAnalysis.HasCurrentArrow,
+            foregroundVisible && (exportedReachableNodeCandidatePresent || mapAnalysis.HasReachableNode),
+            foregroundVisible && exportedReachableNodeCandidatePresent);
+    }
+
+    private static bool HasEventChoiceEvidence(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.Choices.Any(choice =>
+                   HasActiveBounds(choice.ScreenBounds, windowBounds)
+                   && (string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase))
+                   && !IsMapChoice(choice)
+                   && !IsBackChoiceLabel(choice.Label))
+               || observer.ActionNodes.Any(node =>
+                   node.Actionable
+                   && HasActiveBounds(node.ScreenBounds, windowBounds)
+                   && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                   && !IsBackChoiceLabel(node.Label));
+    }
+
+    private static bool HasActiveBounds(string? rawBounds, WindowBounds? windowBounds)
+    {
+        if (!TryParseBounds(rawBounds, out var x, out var y, out var width, out var height))
+        {
+            return false;
+        }
+
+        if (windowBounds is null)
+        {
+            return true;
+        }
+
+        var rect = new RectangleF(x, y, width, height);
+        var windowRect = new RectangleF(windowBounds.X, windowBounds.Y, windowBounds.Width, windowBounds.Height);
+        return rect.Width > 0f
+               && rect.Height > 0f
+               && rect.Right > windowRect.Left
+               && rect.Bottom > windowRect.Top
+               && rect.Left < windowRect.Right
+               && rect.Top < windowRect.Bottom;
+    }
+
+    private static bool TryParseBounds(string? rawBounds, out float x, out float y, out float width, out float height)
+    {
+        x = default;
+        y = default;
+        width = default;
+        height = default;
+        if (string.IsNullOrWhiteSpace(rawBounds))
+        {
+            return false;
+        }
+
+        var parts = rawBounds.Split(',', StringSplitOptions.TrimEntries);
+        return parts.Length == 4
+               && float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out x)
+               && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out y)
+               && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out width)
+               && float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out height)
+               && width > 0f
+               && height > 0f;
+    }
+
+    private static bool IsBackChoiceLabel(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        return label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("뒤로", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("Back", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMapChoice(ObserverChoice choice)
+    {
+        return string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+               || (choice.Value?.Contains(",", StringComparison.OrdinalIgnoreCase) ?? false) && (choice.Description?.Contains("coord:", StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private static bool ContainsMapAuthority(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? TryReadMetaString(JsonDocument? document, string propertyName)
+    {
+        if (document is null)
+        {
+            return null;
+        }
+
+        if (document.RootElement.TryGetProperty("meta", out var metaElement)
+            && metaElement.ValueKind == JsonValueKind.Object
+            && metaElement.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.String)
+        {
+            return property.GetString();
+        }
+
+        return null;
     }
 }
 
@@ -7302,6 +7802,15 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request)
     {
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        if (mapOverlayState.ForegroundVisible)
+        {
+            return TryCreateExportedReachableMapPointDecision(request)
+                   ?? TryCreateMapBackNavigationDecision(request)
+                   ?? TryFindFirstReachableMapNodeDecision(request)
+                   ?? CreateWaitDecision("waiting for exported or screenshot-reachable map node", request.Observer.CurrentScreen);
+        }
+
         if (LooksLikeScreenshotFirstRoomState(request))
         {
             var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
@@ -7311,7 +7820,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             }
         }
 
-        return TryFindVisibleMapAdvanceDecision(request)
+        return TryCreateExportedReachableMapPointDecision(request)
+               ?? TryFindVisibleMapAdvanceDecision(request)
                ?? CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen);
     }
 
@@ -7341,6 +7851,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (rewardBackDecision is not null)
         {
             return rewardBackDecision;
+        }
+
+        var mapOverlayDecision = TryCreateMapOverlayForegroundDecision(request);
+        if (mapOverlayDecision is not null)
+        {
+            return mapOverlayDecision;
         }
 
         if (preferEventForeground)
@@ -8641,6 +9157,80 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         return null;
     }
 
+    private static GuiSmokeStepDecision? TryCreateExportedReachableMapPointDecision(GuiSmokeStepRequest request)
+    {
+        var choice = request.Observer.Choices
+            .Where(choice =>
+                string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))
+            .OrderBy(GetChoiceSortY)
+            .ThenBy(GetChoiceSortX)
+            .FirstOrDefault();
+        if (choice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                choice,
+                "exported reachable map node",
+                $"Use the exported reachable map point '{choice.Label}' instead of clicking the red current-node arrow.",
+                0.95,
+                "map",
+                1400);
+        }
+
+        var node = request.Observer.ActionNodes
+            .Where(node =>
+                node.Actionable
+                && string.Equals(node.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))
+            .OrderBy(GetNodeSortY)
+            .ThenBy(GetNodeSortX)
+            .FirstOrDefault();
+        return node is null ? null : CreateClickDecisionFromNode(request, node, "exported reachable map node");
+    }
+
+    private static GuiSmokeStepDecision? TryCreateMapBackNavigationDecision(GuiSmokeStepRequest request)
+    {
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        if (!mapOverlayState.ForegroundVisible || !mapOverlayState.MapBackNavigationAvailable)
+        {
+            return null;
+        }
+
+        var backNode = request.Observer.ActionNodes.FirstOrDefault(node => node.Actionable && IsBackNode(node) && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds));
+        if (backNode is not null)
+        {
+            return CreateClickDecisionFromNode(request, backNode, "map back");
+        }
+
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            0.045,
+            0.905,
+            "map back",
+            "Map overlay foreground is visible and the bottom-left red back arrow can return to the underlying event context.",
+            0.86,
+            "map",
+            1200,
+            true,
+            null);
+    }
+
+    private static GuiSmokeStepDecision? TryCreateMapOverlayForegroundDecision(GuiSmokeStepRequest request)
+    {
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        if (!mapOverlayState.ForegroundVisible)
+        {
+            return null;
+        }
+
+        return TryCreateExportedReachableMapPointDecision(request)
+               ?? TryCreateMapBackNavigationDecision(request)
+               ?? TryFindFirstReachableMapNodeDecision(request);
+    }
+
     private static string GetCombatSlotHotkey(int slotIndex)
     {
         return slotIndex == 10
@@ -8967,8 +9557,10 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     private static GuiSmokeStepDecision? TryCreateScreenshotFirstRoomDecision(GuiSmokeStepRequest request)
     {
         var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (!rewardMapLayer.RewardPanelVisible
-            && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer))
+            && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer)
+            && !mapOverlayState.ForegroundVisible)
         {
             var visibleMapNodeDecision = TryFindFirstReachableMapNodeDecision(request);
             if (visibleMapNodeDecision is not null)
@@ -9035,8 +9627,10 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     private static bool LooksLikeMapTransitionState(GuiSmokeStepRequest request)
     {
         var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (rewardMapLayer.RewardPanelVisible
-            || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer))
+            || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer)
+            || mapOverlayState.ForegroundVisible)
         {
             return false;
         }
@@ -9181,6 +9775,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     private static GuiSmokeStepDecision? TryFindVisibleMapAdvanceDecision(GuiSmokeStepRequest request)
     {
         if (BuildRewardMapLayerState(request.Observer, request.WindowBounds).RewardPanelVisible)
+        {
+            return null;
+        }
+
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        if (mapOverlayState.ForegroundVisible || mapOverlayState.ExportedReachableNodeCandidatePresent)
         {
             return null;
         }

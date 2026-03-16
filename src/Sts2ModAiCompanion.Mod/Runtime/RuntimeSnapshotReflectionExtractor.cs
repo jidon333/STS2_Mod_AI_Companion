@@ -282,6 +282,21 @@ internal static class RuntimeSnapshotReflectionExtractor
                 combatTargetChoices.Select(choice => $"{choice.NodeId ?? choice.Label}@logical:{choice.ScreenBounds}@normalized:{FormatNormalizedBounds(choice.ScreenBounds)}"));
         }
 
+        var mapPointChoices = choices
+            .Where(choice => string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (mapPointChoices.Length > 0)
+        {
+            meta["mapPointCount"] = mapPointChoices.Length.ToString(CultureInfo.InvariantCulture);
+            meta["mapPointSummary"] = string.Join(
+                ";",
+                mapPointChoices.Select(choice => $"{choice.NodeId ?? choice.Label}@logical:{choice.ScreenBounds}@normalized:{FormatNormalizedBounds(choice.ScreenBounds)}"));
+            if (string.Equals(screen, "event", StringComparison.OrdinalIgnoreCase))
+            {
+                meta["mapOverlayVisible"] = "true";
+            }
+        }
+
         if (act is not null)
         {
             payload["act"] = act;
@@ -890,6 +905,17 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         var strictSuccess = strictAttempts.FirstOrDefault(result => result.Choices.Count > 0);
+        var mapStrict = strictAttempts.FirstOrDefault(result =>
+            string.Equals(result.Decision.ExtractorPath, "map", StringComparison.OrdinalIgnoreCase)
+            && result.Choices.Count > 0);
+        var eventStrict = strictAttempts.FirstOrDefault(result =>
+            string.Equals(result.Decision.ExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+            && result.Choices.Count > 0);
+        if (mapStrict is not null && eventStrict is not null)
+        {
+            strictSuccess = MergeMixedContextChoices(eventStrict, mapStrict, maxEntries);
+        }
+
         if (strictSuccess is not null)
         {
             return strictSuccess;
@@ -913,6 +939,42 @@ internal static class RuntimeSnapshotReflectionExtractor
                 FailureReason = JoinFailureReasons(strictAttempts.Select(result => result.Decision.FailureReason), generic.Decision.FailureReason),
             },
         };
+    }
+
+    private static ChoiceExtractionResult MergeMixedContextChoices(ChoiceExtractionResult primary, ChoiceExtractionResult secondary, int maxEntries)
+    {
+        var choices = primary.Choices
+            .Concat(secondary.Choices)
+            .GroupBy(choice => $"{choice.Kind}|{choice.Label}|{choice.ScreenBounds}|{choice.NodeId}", StringComparer.OrdinalIgnoreCase)
+            .Select(static group => group.First())
+            .Take(maxEntries)
+            .ToArray();
+        var candidates = primary.Candidates
+            .Concat(secondary.Candidates)
+            .Take(512)
+            .ToArray();
+        var failureReason = JoinFailureReasons(
+            new[]
+            {
+                primary.Decision.FailureReason,
+                secondary.Decision.FailureReason,
+            },
+            null);
+        return new ChoiceExtractionResult(
+            choices,
+            candidates,
+            new LiveExportChoiceDecision(
+                "event+map",
+                UsedStrictExtractor: true,
+                CandidateCount: primary.Decision.CandidateCount + secondary.Decision.CandidateCount,
+                AcceptedCount: choices.Length,
+                choices.Length == 0 ? "none" : "accepted",
+                failureReason,
+                primary.Decision.PlaceholderLabels
+                    .Concat(secondary.Decision.PlaceholderLabels)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(64)
+                    .ToArray()));
     }
 
     private static LiveExportEncounterSummary? ExtractEncounter(

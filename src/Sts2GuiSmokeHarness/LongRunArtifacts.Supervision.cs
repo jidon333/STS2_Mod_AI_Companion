@@ -254,6 +254,27 @@ static partial class LongRunArtifacts
         string? SceneSignature,
         string? LastLoopTarget);
 
+    private sealed record MapOverlayNoOpLoopAnalysis(
+        string DiagnosisKind,
+        bool LoopDetected,
+        int RepeatedLoopCount,
+        string? Phase,
+        string? ObserverScreen,
+        string? SceneSignature,
+        string? LastLoopTarget,
+        bool MapOverlayVisible,
+        bool MapBackNavigationAvailable,
+        bool StaleEventChoicePresent,
+        bool CurrentNodeArrowVisible,
+        bool ReachableNodeCandidatePresent,
+        bool RepeatedCurrentNodeArrowClick);
+
+    private sealed record LatestStepContext(
+        string? Phase,
+        string? ObserverScreen,
+        string? ScreenshotPath,
+        MapOverlayState? MapOverlayState);
+
     private sealed record RewardMapLoopAnalysis(
         string DiagnosisKind,
         bool LoopDetected,
@@ -1144,18 +1165,21 @@ static partial class LongRunArtifacts
         var failureSummary = TryReadJson<GuiSmokeFailureSummary>(Path.Combine(runRoot, "failure-summary.json"));
         var selfMetaReview = TryReadJson<GuiSmokeSelfMetaReview>(Path.Combine(runRoot, "self-meta-review.json"));
         var progress = ReadNdjson<GuiSmokeStepProgress>(Path.Combine(runRoot, "progress.ndjson"));
+        var latestStepContext = LoadLatestStepContext(runRoot);
         var latestProgress = progress.LastOrDefault();
         var sameActionStallCount = progress.Count(entry => entry.ObserverSignals.Contains("same-action-stall", StringComparer.OrdinalIgnoreCase));
         var decisionWaitPlateau = AnalyzeDecisionWaitPlateau(progress);
         var inspectOverlayLoop = AnalyzeInspectOverlayLoop(progress);
         var rewardMapLoop = AnalyzeRewardMapLoop(progress);
+        var mapOverlayNoOpLoop = AnalyzeMapOverlayNoOpLoop(progress, latestStepContext);
         var mapTransitionStall = AnalyzeMapTransitionStall(progress);
         var combatNoOpLoop = AnalyzeCombatNoOpLoop(progress);
-        var latestPhase = failureSummary?.Phase ?? latestProgress?.Phase;
-        var latestObserverScreen = failureSummary?.ObserverScreen ?? latestProgress?.PostActionScreen ?? latestProgress?.ObserverScreen;
-        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop, rewardMapLoop, mapTransitionStall, combatNoOpLoop, latestPhase, latestObserverScreen);
+        var latestPhase = failureSummary?.Phase ?? latestStepContext?.Phase ?? latestProgress?.Phase;
+        var latestObserverScreen = failureSummary?.ObserverScreen ?? latestStepContext?.ObserverScreen ?? latestProgress?.PostActionScreen ?? latestProgress?.ObserverScreen;
+        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop, rewardMapLoop, mapOverlayNoOpLoop, mapTransitionStall, combatNoOpLoop, latestPhase, latestObserverScreen);
         var useCombatAnalysis = string.Equals(diagnosisKind, "combat-noop-loop", StringComparison.OrdinalIgnoreCase);
         var useRewardAnalysis = string.Equals(diagnosisKind, "reward-map-loop", StringComparison.OrdinalIgnoreCase);
+        var useMapOverlayAnalysis = string.Equals(diagnosisKind, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase);
         var useMapTransitionAnalysis = string.Equals(diagnosisKind, "map-transition-stall", StringComparison.OrdinalIgnoreCase);
         var useOverlayAnalysis = string.Equals(diagnosisKind, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase);
         var useWaitAnalysis = string.Equals(diagnosisKind, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
@@ -1163,6 +1187,7 @@ static partial class LongRunArtifacts
         var phase = failureSummary?.Phase
                     ?? (useCombatAnalysis ? combatNoOpLoop.Phase : null)
                     ?? (useRewardAnalysis ? rewardMapLoop.Phase : null)
+                    ?? (useMapOverlayAnalysis ? mapOverlayNoOpLoop.Phase : null)
                     ?? (useMapTransitionAnalysis ? mapTransitionStall.Phase : null)
                     ?? (useOverlayAnalysis ? inspectOverlayLoop.Phase : null)
                     ?? (useWaitAnalysis ? decisionWaitPlateau.Phase : null)
@@ -1170,12 +1195,13 @@ static partial class LongRunArtifacts
         var observerScreen = failureSummary?.ObserverScreen
                              ?? (useCombatAnalysis ? combatNoOpLoop.ObserverScreen : null)
                              ?? (useRewardAnalysis ? rewardMapLoop.ObserverScreen : null)
+                             ?? (useMapOverlayAnalysis ? mapOverlayNoOpLoop.ObserverScreen : null)
                              ?? (useMapTransitionAnalysis ? mapTransitionStall.ObserverScreen : null)
                              ?? (useOverlayAnalysis ? inspectOverlayLoop.ObserverScreen : null)
                              ?? (useWaitAnalysis ? decisionWaitPlateau.ObserverScreen : null)
                              ?? latestProgress?.PostActionScreen
                              ?? latestProgress?.ObserverScreen;
-        var screenshotPath = failureSummary?.ScreenshotPath ?? FindLatestScreenshotPath(runRoot);
+        var screenshotPath = failureSummary?.ScreenshotPath ?? latestStepContext?.ScreenshotPath ?? FindLatestScreenshotPath(runRoot);
         var backlogRoute = ShouldRouteToDecompilerBacklog(diagnosisKind, phase, observerScreen)
             ? "decompiled-source-first-observer"
             : null;
@@ -1188,6 +1214,7 @@ static partial class LongRunArtifacts
             $"repeatedDecisionWaits:{decisionWaitPlateau.RepeatedWaitCount}",
             $"overlayLoopCount:{inspectOverlayLoop.OverlayCloseCount}",
             $"rewardMapLoopCount:{rewardMapLoop.RepeatedLoopCount}",
+            $"mapOverlayLoopCount:{mapOverlayNoOpLoop.RepeatedLoopCount}",
             $"mapTransitionLoopCount:{mapTransitionStall.RepeatedLoopCount}",
             $"combatNoOpLoopCount:{combatNoOpLoop.RepeatedLoopCount}",
             $"trustStateAtStart:{attemptEntry.TrustStateAtStart}",
@@ -1210,6 +1237,41 @@ static partial class LongRunArtifacts
         if (!string.IsNullOrWhiteSpace(inspectOverlayLoop.LastMisdirectedTarget))
         {
             evidence.Add($"overlayLoopMisdirectedTarget:{inspectOverlayLoop.LastMisdirectedTarget}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(mapOverlayNoOpLoop.LastLoopTarget))
+        {
+            evidence.Add($"mapOverlayLoopTarget:{mapOverlayNoOpLoop.LastLoopTarget}");
+        }
+
+        if (mapOverlayNoOpLoop.MapOverlayVisible)
+        {
+            evidence.Add("mapOverlayVisible:true");
+        }
+
+        if (mapOverlayNoOpLoop.MapBackNavigationAvailable)
+        {
+            evidence.Add("mapBackNavigationAvailable:true");
+        }
+
+        if (mapOverlayNoOpLoop.StaleEventChoicePresent)
+        {
+            evidence.Add("staleEventChoicePresent:true");
+        }
+
+        if (mapOverlayNoOpLoop.CurrentNodeArrowVisible)
+        {
+            evidence.Add("currentNodeArrowVisible:true");
+        }
+
+        if (mapOverlayNoOpLoop.ReachableNodeCandidatePresent)
+        {
+            evidence.Add("reachableNodeCandidatePresent:true");
+        }
+
+        if (mapOverlayNoOpLoop.RepeatedCurrentNodeArrowClick)
+        {
+            evidence.Add("repeatedCurrentNodeArrowClick:true");
         }
 
         if (!string.IsNullOrWhiteSpace(rewardMapLoop.LastLoopTarget))
@@ -1289,7 +1351,7 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-transition-stall" or "combat-noop-loop",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
@@ -1300,6 +1362,7 @@ static partial class LongRunArtifacts
             || decisionWaitPlateau.PlateauDetected
             || inspectOverlayLoop.LoopDetected
             || rewardMapLoop.LoopDetected
+            || mapOverlayNoOpLoop.LoopDetected
             || mapTransitionStall.StallDetected
             || combatNoOpLoop.LoopDetected,
             backlogRoute,
@@ -1507,6 +1570,7 @@ static partial class LongRunArtifacts
         DecisionWaitPlateauAnalysis decisionWaitPlateau,
         InspectOverlayLoopAnalysis inspectOverlayLoop,
         RewardMapLoopAnalysis rewardMapLoop,
+        MapOverlayNoOpLoopAnalysis mapOverlayNoOpLoop,
         MapTransitionStallAnalysis mapTransitionStall,
         CombatNoOpLoopAnalysis combatNoOpLoop,
         string? latestPhase,
@@ -1535,6 +1599,13 @@ static partial class LongRunArtifacts
             || (!latestStateLooksCombat && !latestStateLooksEvent && latestStateLooksReward && rewardMapLoop.LoopDetected))
         {
             return "reward-map-loop";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
+            || (latestStateLooksEvent && mapOverlayNoOpLoop.LoopDetected))
+        {
+            return "map-overlay-noop-loop";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
@@ -1905,6 +1976,99 @@ static partial class LongRunArtifacts
             lastLoopTarget);
     }
 
+    private static MapOverlayNoOpLoopAnalysis AnalyzeMapOverlayNoOpLoop(IReadOnlyList<GuiSmokeStepProgress> progress, LatestStepContext? latestStepContext)
+    {
+        if (progress.Count == 0)
+        {
+            return new MapOverlayNoOpLoopAnalysis("no-stall", false, 0, null, null, null, null, false, false, false, false, false, false);
+        }
+
+        var latestOverlayState = latestStepContext?.MapOverlayState;
+        var shouldUseLatestOverlayFallback = latestOverlayState?.ForegroundVisible == true;
+        var lastLoopEntry = progress.LastOrDefault(entry =>
+            IsMapOverlayProgressEntry(entry)
+            || (shouldUseLatestOverlayFallback && IsMapTransitionProgressEntry(entry)));
+        if (lastLoopEntry is null)
+        {
+            return new MapOverlayNoOpLoopAnalysis("no-stall", false, 0, null, null, null, null, false, false, false, false, false, false);
+        }
+
+        var normalizedSignature = NormalizeSceneSignatureForPlateau(lastLoopEntry.SceneSignature);
+        var repeatedLoopCount = 0;
+        var repeatedCurrentNodeArrowClick = false;
+        string? lastLoopTarget = null;
+        for (var index = progress.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = progress[index];
+            if (!(IsMapOverlayProgressEntry(entry)
+                  || (shouldUseLatestOverlayFallback && IsMapTransitionProgressEntry(entry)))
+                || !string.Equals(entry.ObserverScreen, lastLoopEntry.ObserverScreen, StringComparison.OrdinalIgnoreCase)
+                || (!shouldUseLatestOverlayFallback
+                    && !string.Equals(NormalizeSceneSignatureForPlateau(entry.SceneSignature), normalizedSignature, StringComparison.OrdinalIgnoreCase)))
+            {
+                break;
+            }
+
+            if (IsMapOverlayLoopTarget(entry.DecisionTargetLabel))
+            {
+                repeatedLoopCount += 1;
+                lastLoopTarget ??= entry.DecisionTargetLabel;
+                if (string.Equals(entry.DecisionTargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase))
+                {
+                    repeatedCurrentNodeArrowClick = true;
+                }
+
+                continue;
+            }
+
+            if (entry.DecisionTargetLabel is null
+                || entry.ObserverSignals.Contains("alternate-branch:WaitMap", StringComparer.OrdinalIgnoreCase)
+                || entry.ObserverSignals.Contains("alternate-branch:ChooseFirstNode", StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        var mapOverlayVisible = normalizedSignature.Contains("layer:map-overlay-foreground", StringComparison.OrdinalIgnoreCase)
+                                || lastLoopEntry.ObserverSignals.Contains("map-overlay-visible", StringComparer.OrdinalIgnoreCase)
+                                || latestOverlayState?.ForegroundVisible == true;
+        var mapBackNavigationAvailable = normalizedSignature.Contains("map-back-navigation-available", StringComparison.OrdinalIgnoreCase)
+                                         || lastLoopEntry.ObserverSignals.Contains("map-back-navigation-available", StringComparer.OrdinalIgnoreCase)
+                                         || latestOverlayState?.MapBackNavigationAvailable == true;
+        var staleEventChoicePresent = normalizedSignature.Contains("stale:event-choice", StringComparison.OrdinalIgnoreCase)
+                                      || lastLoopEntry.ObserverSignals.Contains("stale-event-choice", StringComparer.OrdinalIgnoreCase)
+                                      || latestOverlayState?.StaleEventChoicePresent == true;
+        var currentNodeArrowVisible = normalizedSignature.Contains("current-node-arrow-visible", StringComparison.OrdinalIgnoreCase)
+                                      || lastLoopEntry.ObserverSignals.Contains("current-node-arrow-visible", StringComparer.OrdinalIgnoreCase)
+                                      || latestOverlayState?.CurrentNodeArrowVisible == true;
+        var reachableNodeCandidatePresent = normalizedSignature.Contains("reachable-node-candidate-present", StringComparison.OrdinalIgnoreCase)
+                                            || lastLoopEntry.ObserverSignals.Contains("reachable-node-candidate-present", StringComparer.OrdinalIgnoreCase)
+                                            || normalizedSignature.Contains("exported-reachable-node-present", StringComparison.OrdinalIgnoreCase)
+                                            || lastLoopEntry.ObserverSignals.Contains("exported-reachable-node-present", StringComparer.OrdinalIgnoreCase)
+                                            || latestOverlayState?.ReachableNodeCandidatePresent == true
+                                            || latestOverlayState?.ExportedReachableNodeCandidatePresent == true;
+        var loopDetected = repeatedLoopCount >= 3
+                           && mapOverlayVisible
+                           && staleEventChoicePresent
+                           && currentNodeArrowVisible;
+        return new MapOverlayNoOpLoopAnalysis(
+            loopDetected ? "map-overlay-noop-loop" : "no-stall",
+            loopDetected,
+            repeatedLoopCount,
+            lastLoopEntry.Phase,
+            lastLoopEntry.ObserverScreen,
+            normalizedSignature,
+            lastLoopTarget,
+            mapOverlayVisible,
+            mapBackNavigationAvailable,
+            staleEventChoicePresent,
+            currentNodeArrowVisible,
+            reachableNodeCandidatePresent,
+            repeatedCurrentNodeArrowClick);
+    }
+
     private static CombatNoOpLoopAnalysis AnalyzeCombatNoOpLoop(IReadOnlyList<GuiSmokeStepProgress> progress)
     {
         if (progress.Count == 0)
@@ -2078,6 +2242,49 @@ static partial class LongRunArtifacts
                    || LooksLikeEventMapFallbackWait(entry));
     }
 
+    private static bool IsMapOverlayProgressEntry(GuiSmokeStepProgress entry)
+    {
+        return (string.Equals(entry.Phase, GuiSmokePhase.HandleEvent.ToString(), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Phase, GuiSmokePhase.WaitMap.ToString(), StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Phase, GuiSmokePhase.ChooseFirstNode.ToString(), StringComparison.OrdinalIgnoreCase))
+               && (entry.SceneSignature.Contains("layer:map-overlay-foreground", StringComparison.OrdinalIgnoreCase)
+                   || entry.ObserverSignals.Contains("map-overlay-visible", StringComparer.OrdinalIgnoreCase)
+                   || entry.ObserverSignals.Contains("stale-event-choice", StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static LatestStepContext? LoadLatestStepContext(string runRoot)
+    {
+        var stepsRoot = Path.Combine(runRoot, "steps");
+        if (!Directory.Exists(stepsRoot))
+        {
+            return null;
+        }
+
+        var latestRequestPath = Directory.GetFiles(stepsRoot, "*.request.json", SearchOption.TopDirectoryOnly)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .LastOrDefault();
+        if (latestRequestPath is null)
+        {
+            return null;
+        }
+
+        var request = TryReadJson<GuiSmokeStepRequest>(latestRequestPath);
+        if (request is null)
+        {
+            return null;
+        }
+
+        var observerStatePath = latestRequestPath.Replace(".request.json", ".observer.state.json", StringComparison.OrdinalIgnoreCase);
+        using var observerStateDocument = TryReadJsonDocument(observerStatePath);
+        var overlayObserver = new ObserverState(request.Observer, observerStateDocument, null, null);
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(overlayObserver, request.WindowBounds, request.ScreenshotPath);
+        return new LatestStepContext(
+            request.Phase,
+            request.Observer.CurrentScreen ?? request.Observer.VisibleScreen,
+            request.ScreenshotPath,
+            mapOverlayState);
+    }
+
     private static bool IsMapTransitionLoopTarget(string? decisionTargetLabel)
     {
         return string.Equals(decisionTargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
@@ -2085,6 +2292,15 @@ static partial class LongRunArtifacts
                || string.Equals(decisionTargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMapOverlayLoopTarget(string? decisionTargetLabel)
+    {
+        return string.Equals(decisionTargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "map back", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsRewardMapLoopTarget(string? decisionTargetLabel)
