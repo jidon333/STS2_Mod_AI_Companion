@@ -1144,27 +1144,31 @@ static partial class LongRunArtifacts
         var failureSummary = TryReadJson<GuiSmokeFailureSummary>(Path.Combine(runRoot, "failure-summary.json"));
         var selfMetaReview = TryReadJson<GuiSmokeSelfMetaReview>(Path.Combine(runRoot, "self-meta-review.json"));
         var progress = ReadNdjson<GuiSmokeStepProgress>(Path.Combine(runRoot, "progress.ndjson"));
+        var latestProgress = progress.LastOrDefault();
         var sameActionStallCount = progress.Count(entry => entry.ObserverSignals.Contains("same-action-stall", StringComparer.OrdinalIgnoreCase));
         var decisionWaitPlateau = AnalyzeDecisionWaitPlateau(progress);
         var inspectOverlayLoop = AnalyzeInspectOverlayLoop(progress);
         var rewardMapLoop = AnalyzeRewardMapLoop(progress);
         var mapTransitionStall = AnalyzeMapTransitionStall(progress);
         var combatNoOpLoop = AnalyzeCombatNoOpLoop(progress);
-        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop, rewardMapLoop, mapTransitionStall, combatNoOpLoop);
+        var latestPhase = failureSummary?.Phase ?? latestProgress?.Phase;
+        var latestObserverScreen = failureSummary?.ObserverScreen ?? latestProgress?.PostActionScreen ?? latestProgress?.ObserverScreen;
+        var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop, rewardMapLoop, mapTransitionStall, combatNoOpLoop, latestPhase, latestObserverScreen);
         var phase = failureSummary?.Phase
+                    ?? (string.Equals(diagnosisKind, "combat-noop-loop", StringComparison.OrdinalIgnoreCase) ? combatNoOpLoop.Phase : null)
                     ?? rewardMapLoop.Phase
                     ?? mapTransitionStall.Phase
-                    ?? combatNoOpLoop.Phase
                     ?? inspectOverlayLoop.Phase
                     ?? decisionWaitPlateau.Phase
-                    ?? progress.LastOrDefault()?.Phase;
+                    ?? latestProgress?.Phase;
         var observerScreen = failureSummary?.ObserverScreen
+                             ?? (string.Equals(diagnosisKind, "combat-noop-loop", StringComparison.OrdinalIgnoreCase) ? combatNoOpLoop.ObserverScreen : null)
                              ?? rewardMapLoop.ObserverScreen
                              ?? mapTransitionStall.ObserverScreen
-                             ?? combatNoOpLoop.ObserverScreen
                              ?? inspectOverlayLoop.ObserverScreen
                              ?? decisionWaitPlateau.ObserverScreen
-                             ?? progress.LastOrDefault()?.ObserverScreen;
+                             ?? latestProgress?.PostActionScreen
+                             ?? latestProgress?.ObserverScreen;
         var screenshotPath = failureSummary?.ScreenshotPath ?? FindLatestScreenshotPath(runRoot);
         var backlogRoute = ShouldRouteToDecompilerBacklog(diagnosisKind, phase, observerScreen)
             ? "decompiled-source-first-observer"
@@ -1498,16 +1502,27 @@ static partial class LongRunArtifacts
         InspectOverlayLoopAnalysis inspectOverlayLoop,
         RewardMapLoopAnalysis rewardMapLoop,
         MapTransitionStallAnalysis mapTransitionStall,
-        CombatNoOpLoopAnalysis combatNoOpLoop)
+        CombatNoOpLoopAnalysis combatNoOpLoop,
+        string? latestPhase,
+        string? latestObserverScreen)
     {
+        var latestStateLooksCombat = string.Equals(latestPhase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(latestObserverScreen, "combat", StringComparison.OrdinalIgnoreCase);
         if (string.Equals(attemptEntry.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase))
         {
             return "scene-authority-invalid";
         }
 
+        if (string.Equals(attemptEntry.TerminalCause, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
+            || (latestStateLooksCombat && combatNoOpLoop.LoopDetected))
+        {
+            return "combat-noop-loop";
+        }
+
         if (string.Equals(attemptEntry.TerminalCause, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(attemptEntry.FailureClass, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
-            || rewardMapLoop.LoopDetected)
+            || (!latestStateLooksCombat && rewardMapLoop.LoopDetected))
         {
             return "reward-map-loop";
         }
@@ -1705,6 +1720,14 @@ static partial class LongRunArtifacts
             return new RewardMapLoopAnalysis("no-stall", false, 0, null, null, null, null, false, false, false, false, false, false, false, false, false, false);
         }
 
+        var latestProgress = progress[^1];
+        if (string.Equals(latestProgress.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(latestProgress.ObserverScreen, "combat", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(latestProgress.PostActionScreen, "combat", StringComparison.OrdinalIgnoreCase))
+        {
+            return new RewardMapLoopAnalysis("no-stall", false, 0, latestProgress.Phase, latestProgress.PostActionScreen ?? latestProgress.ObserverScreen, NormalizeSceneSignatureForPlateau(latestProgress.SceneSignature), null, false, false, false, false, false, false, false, false, false, false);
+        }
+
         var lastLoopEntry = progress.LastOrDefault(IsRewardMapLoopProgressEntry);
         if (lastLoopEntry is null)
         {
@@ -1891,12 +1914,19 @@ static partial class LongRunArtifacts
         var blockedTargetLabel = progress
             .Where(entry =>
                 string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
-                && entry.DecisionTargetLabel is not null
-                && entry.DecisionTargetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
-            .Select(static entry => entry.DecisionTargetLabel)
-            .LastOrDefault();
+                && entry.ObserverSignals.Any(signal => signal.StartsWith("combat-noop-observed:combat lane slot ", StringComparison.OrdinalIgnoreCase)))
+            .Select(entry => entry.ObserverSignals.Last(signal => signal.StartsWith("combat-noop-observed:combat lane slot ", StringComparison.OrdinalIgnoreCase)).Split(':', 2)[1])
+            .LastOrDefault()
+            ?? progress
+                .Where(entry =>
+                    string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                    && entry.DecisionTargetLabel is not null
+                    && entry.DecisionTargetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
+                .Select(static entry => entry.DecisionTargetLabel)
+                .LastOrDefault();
         var repeatedSelectionCount = 0;
         var enemyTargetCount = 0;
+        var combatLoopActionCount = 0;
         for (var index = progress.Count - 1; index >= 0; index -= 1)
         {
             var entry = progress[index];
@@ -1907,16 +1937,40 @@ static partial class LongRunArtifacts
                 break;
             }
 
-            if (!string.IsNullOrWhiteSpace(blockedTargetLabel)
-                && string.Equals(entry.DecisionTargetLabel, blockedTargetLabel, StringComparison.OrdinalIgnoreCase))
+            if (entry.ObserverSignals.Any(signal => string.Equals(signal, $"combat-noop-observed:{blockedTargetLabel}", StringComparison.OrdinalIgnoreCase)))
             {
                 repeatedSelectionCount += 1;
+                if (string.Equals(entry.DecisionTargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(entry.DecisionTargetLabel, "auto-target enemy recenter", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(entry.DecisionTargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase))
+                {
+                    enemyTargetCount += 1;
+                }
+
+                combatLoopActionCount += 1;
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(blockedTargetLabel)
+                && string.Equals(entry.DecisionTargetLabel, blockedTargetLabel.Replace("combat lane ", "combat select attack ", StringComparison.OrdinalIgnoreCase), StringComparison.OrdinalIgnoreCase))
+            {
+                repeatedSelectionCount += 1;
+                combatLoopActionCount += 1;
                 continue;
             }
 
             if (string.Equals(entry.DecisionTargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase))
             {
                 enemyTargetCount += 1;
+                combatLoopActionCount += 1;
+                continue;
+            }
+
+            if (string.Equals(entry.DecisionTargetLabel, "auto-target enemy recenter", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.DecisionTargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase))
+            {
+                enemyTargetCount += 1;
+                combatLoopActionCount += 1;
                 continue;
             }
 
@@ -1925,11 +1979,40 @@ static partial class LongRunArtifacts
                 continue;
             }
 
+            if (entry.DecisionTargetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
+            {
+                combatLoopActionCount += 1;
+                continue;
+            }
+
             break;
         }
 
+        if (repeatedSelectionCount == 0 && string.IsNullOrWhiteSpace(blockedTargetLabel))
+        {
+            blockedTargetLabel = progress
+                .Where(entry =>
+                    string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                    && entry.DecisionTargetLabel is not null
+                    && entry.DecisionTargetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
+                .GroupBy(static entry => entry.DecisionTargetLabel, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(static group => group.Count())
+                .Select(static group => group.Key)
+                .FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(blockedTargetLabel))
+            {
+                repeatedSelectionCount = progress.Count(entry =>
+                    string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(entry.DecisionTargetLabel, blockedTargetLabel, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+
+        var explicitNoOpSignalsObserved = progress.Any(entry =>
+            string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+            && entry.ObserverSignals.Any(signal => signal.StartsWith("combat-noop-observed:", StringComparison.OrdinalIgnoreCase)));
         var loopDetected = repeatedSelectionCount >= 2
-                           && enemyTargetCount >= 2
+                           && enemyTargetCount >= (explicitNoOpSignalsObserved ? 2 : 3)
+                           && combatLoopActionCount >= 5
                            && !string.IsNullOrWhiteSpace(blockedTargetLabel);
         if (!loopDetected)
         {
