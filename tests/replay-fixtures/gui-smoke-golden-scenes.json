@@ -1,0 +1,87 @@
+[
+  {
+    "name": "event-foreground-explicit-option",
+    "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-9/attempts/0001/steps/0005.request.json",
+    "expectedTargetContains": "event option",
+    "expectedForegroundKind": "event",
+    "requiredCandidateLabels": [
+      "click event choice"
+    ],
+    "requiredSuppressedLabels": [],
+    "forbiddenTargetLabels": [
+      "visible map advance",
+      "map back"
+    ]
+  },
+  {
+    "name": "mixed-overlay-suppresses-stale-event",
+    "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-9/attempts/0001/steps/0015.request.json",
+    "expectedForegroundKind": "map-overlay",
+    "expectedBackgroundKind": "event",
+    "requiredCandidateLabels": [
+      "click exported reachable node",
+      "click map back",
+      "click first reachable node"
+    ],
+    "requiredSuppressedLabels": [
+      "click event choice",
+      "click visible map advance"
+    ],
+    "forbiddenTargetLabels": [
+      "visible map advance"
+    ]
+  },
+  {
+    "name": "mixed-overlay-loop-regression",
+    "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-9/attempts/0001/steps/0064.request.json",
+    "expectedForegroundKind": "map-overlay",
+    "expectedBackgroundKind": "event",
+    "requiredCandidateLabels": [
+      "click exported reachable node",
+      "click map back",
+      "click first reachable node"
+    ],
+    "requiredSuppressedLabels": [
+      "click event choice",
+      "click visible map advance"
+    ],
+    "forbiddenTargetLabels": [
+      "visible map advance"
+    ]
+  },
+  {
+    "name": "overlay-candidates-prefer-reachable-node",
+    "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-10/attempts/0001/steps/0008.request.json",
+    "expectedForegroundKind": "map-overlay",
+    "expectedBackgroundKind": "event",
+    "requiredCandidateLabels": [
+      "click exported reachable node",
+      "click map back",
+      "click first reachable node"
+    ],
+    "requiredSuppressedLabels": [
+      "click event choice",
+      "click visible map advance"
+    ],
+    "forbiddenTargetLabels": [
+      "visible map advance"
+    ]
+  },
+  {
+    "name": "rest-site-explicit-over-current-arrow",
+    "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-10/attempts/0001/steps/0010.request.json",
+    "expectedForegroundKind": "map-overlay",
+    "expectedBackgroundKind": "map",
+    "requiredCandidateLabels": [
+      "click exported reachable node",
+      "click map back",
+      "click first reachable node"
+    ],
+    "requiredSuppressedLabels": [
+      "click visible map advance"
+    ],
+    "forbiddenTargetLabels": [
+      "visible map advance"
+    ]
+  }
+]

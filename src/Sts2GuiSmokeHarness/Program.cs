@@ -33,6 +33,12 @@ try
         case "inspect-session":
             return InspectSession(options, workspaceRoot);
 
+        case "replay-step":
+            return ReplayStep(options, workspaceRoot);
+
+        case "replay-test":
+            return ReplayGoldenScenes(options, workspaceRoot);
+
         case "self-test":
             RunSelfTest();
             Console.WriteLine("GUI smoke harness self-test passed.");
@@ -83,6 +89,9 @@ static async Task<int> RunScenarioAsync(
         ?? (isLongRun ? int.MaxValue : 1);
     var maxConsecutiveLaunchFailures = TryGetPositiveIntOption(options, "--max-consecutive-launch-failures") ?? 3;
     var maxSceneDeadEnds = TryGetPositiveIntOption(options, "--max-scene-dead-ends") ?? 5;
+    var maxSteps = TryGetPositiveIntOption(options, "--max-steps");
+    var stopOnFirstTerminal = options.ContainsKey("--stop-on-first-terminal");
+    var stopOnFirstLoop = options.ContainsKey("--stop-on-first-loop");
 
     if (isLongRun)
     {
@@ -192,10 +201,29 @@ static async Task<int> RunScenarioAsync(
             attemptId,
             attemptOrdinal,
             sessionDeadline,
-            trustStateAtStart).ConfigureAwait(false);
+            trustStateAtStart,
+            maxSteps).ConfigureAwait(false);
 
         if (!isLongRun)
         {
+            return lastAttempt.ExitCode;
+        }
+
+        if (stopOnFirstTerminal)
+        {
+            LongRunArtifacts.UpdateRunnerSessionState(
+                sessionRoot,
+                GuiSmokeContractStates.SessionAborted,
+                $"runner stopped after first terminal attempt {attemptId}.");
+            return lastAttempt.ExitCode;
+        }
+
+        if (stopOnFirstLoop && IsLoopLikeAttempt(lastAttempt))
+        {
+            LongRunArtifacts.UpdateRunnerSessionState(
+                sessionRoot,
+                GuiSmokeContractStates.SessionAborted,
+                $"runner stopped after first loop-classified attempt {attemptId}.");
             return lastAttempt.ExitCode;
         }
 
@@ -258,7 +286,8 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     string attemptId,
     int attemptOrdinal,
     DateTimeOffset sessionDeadline,
-    string trustStateAtStart)
+    string trustStateAtStart,
+    int? maxSteps)
 {
     const int PassiveWaitMs = 1000;
     const int ActionSettleMinimumMs = 900;
@@ -437,6 +466,15 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
     while (DateTimeOffset.UtcNow < waitDeadline)
     {
+        if (maxSteps is int stepLimit && stepIndex >= stepLimit)
+        {
+            return CompleteAttempt(
+                0,
+                "completed",
+                $"max-steps-reached:{stepLimit}",
+                terminalCause: "max-steps-reached");
+        }
+
         stepIndex += 1;
         var window = WindowLocator.TryFindSts2Window()
                      ?? WindowLocator.GetPrimaryMonitorFallback();
@@ -768,7 +806,19 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         var decisionPath = stepPrefix + ".decision.json";
         logger.WriteRequest(requestPath, request);
         LogHarness($"step={stepIndex} request={requestPath}");
-        var decision = await provider.GetDecisionAsync(requestPath, decisionPath, TimeSpan.FromMinutes(3), CancellationToken.None).ConfigureAwait(false);
+        GuiSmokeReplayEvaluation replayEvaluation;
+        GuiSmokeStepDecision decision;
+        if (provider is AutoDecisionProvider)
+        {
+            replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request);
+            decision = replayEvaluation.Decision;
+        }
+        else
+        {
+            decision = await provider.GetDecisionAsync(requestPath, decisionPath, TimeSpan.FromMinutes(3), CancellationToken.None).ConfigureAwait(false);
+            replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request, decision);
+        }
+        WriteCandidateDumpArtifact(stepPrefix + ".candidates.json", replayEvaluation.CandidateDump);
         logger.WriteDecision(decisionPath, decision);
         LogHarness($"step={stepIndex} decision status={decision.Status} action={decision.ActionKind ?? "null"} target={decision.TargetLabel ?? "null"} confidence={decision.Confidence?.ToString("0.00") ?? "null"} reason={decision.Reason ?? "null"}");
         if (isLongRun)
@@ -1409,6 +1459,14 @@ static bool ShouldMarkSessionStalled(GuiSmokeAttemptResult result)
            && !string.Equals(result.FailureClass, "launch-runtime-noise", StringComparison.OrdinalIgnoreCase);
 }
 
+static bool IsLoopLikeAttempt(GuiSmokeAttemptResult result)
+{
+    return (result.TerminalCause?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
+           || (result.TerminalCause?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false)
+           || (result.FailureClass?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
+           || (result.FailureClass?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false);
+}
+
 static string ClassifyFailureForAttempt(
     GuiSmokePhase phase,
     ObserverState? observer,
@@ -1616,6 +1674,182 @@ static int InspectSession(IReadOnlyDictionary<string, string> options, string wo
         SupervisorState = supervisorState,
     }, GuiSmokeShared.JsonOptions));
     return 0;
+}
+
+static int ReplayStep(IReadOnlyDictionary<string, string> options, string workspaceRoot)
+{
+    if (!options.TryGetValue("--request", out var requestPath))
+    {
+        throw new InvalidOperationException("--request is required.");
+    }
+
+    var resolvedRequestPath = Path.GetFullPath(requestPath, workspaceRoot);
+    if (!File.Exists(resolvedRequestPath))
+    {
+        throw new FileNotFoundException("Replay request not found.", resolvedRequestPath);
+    }
+
+    var request = LoadReplayRequest(resolvedRequestPath);
+    GuiSmokeStepDecision? existingDecision = null;
+    if (options.TryGetValue("--decision", out var decisionPath))
+    {
+        var resolvedDecisionPath = Path.GetFullPath(decisionPath, workspaceRoot);
+        if (!File.Exists(resolvedDecisionPath))
+        {
+            throw new FileNotFoundException("Replay decision not found.", resolvedDecisionPath);
+        }
+
+        existingDecision = JsonSerializer.Deserialize<GuiSmokeStepDecision>(File.ReadAllText(resolvedDecisionPath), GuiSmokeShared.JsonOptions);
+    }
+
+    var replayEvaluation = EvaluateAutoDecisionWithDiagnostics(resolvedRequestPath, request, existingDecision);
+    var artifact = replayEvaluation.CandidateDump;
+    if (options.TryGetValue("--out", out var outputPath))
+    {
+        var resolvedOutputPath = Path.GetFullPath(outputPath, workspaceRoot);
+        WriteCandidateDumpArtifact(resolvedOutputPath, artifact);
+    }
+
+    Console.WriteLine(JsonSerializer.Serialize(artifact, GuiSmokeShared.JsonOptions));
+    return 0;
+}
+
+static int ReplayGoldenScenes(IReadOnlyDictionary<string, string> options, string workspaceRoot)
+{
+    var suitePath = options.TryGetValue("--suite", out var explicitSuitePath)
+        ? Path.GetFullPath(explicitSuitePath, workspaceRoot)
+        : Path.Combine(workspaceRoot, "tests", "replay-fixtures", "gui-smoke-golden-scenes.json");
+    if (!File.Exists(suitePath))
+    {
+        throw new FileNotFoundException("Golden scene suite not found.", suitePath);
+    }
+
+    var fixtures = JsonSerializer.Deserialize<IReadOnlyList<GuiSmokeReplayGoldenSceneFixture>>(File.ReadAllText(suitePath), GuiSmokeShared.JsonOptions)
+                   ?? throw new InvalidOperationException("Failed to parse golden scene suite.");
+    var results = new List<object>(fixtures.Count);
+    foreach (var fixture in fixtures)
+    {
+        var requestPath = Path.GetFullPath(fixture.RequestPath, workspaceRoot);
+        var request = LoadReplayRequest(requestPath);
+        var artifact = EvaluateAutoDecisionWithDiagnostics(requestPath, request).CandidateDump;
+
+        if (!string.IsNullOrWhiteSpace(fixture.ExpectedTargetContains))
+        {
+            Assert((artifact.FinalDecision.TargetLabel ?? string.Empty).Contains(fixture.ExpectedTargetContains, StringComparison.OrdinalIgnoreCase),
+                $"Golden scene '{fixture.Name}' expected target containing '{fixture.ExpectedTargetContains}' but got '{artifact.FinalDecision.TargetLabel ?? "null"}'.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(fixture.ExpectedForegroundKind))
+        {
+            Assert(string.Equals(artifact.DebugSummary.ForegroundKind, fixture.ExpectedForegroundKind, StringComparison.OrdinalIgnoreCase),
+                $"Golden scene '{fixture.Name}' expected foreground '{fixture.ExpectedForegroundKind}' but got '{artifact.DebugSummary.ForegroundKind ?? "null"}'.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(fixture.ExpectedBackgroundKind))
+        {
+            Assert(string.Equals(artifact.DebugSummary.BackgroundKind, fixture.ExpectedBackgroundKind, StringComparison.OrdinalIgnoreCase),
+                $"Golden scene '{fixture.Name}' expected background '{fixture.ExpectedBackgroundKind}' but got '{artifact.DebugSummary.BackgroundKind ?? "null"}'.");
+        }
+
+        foreach (var requiredLabel in fixture.RequiredCandidateLabels)
+        {
+            Assert(artifact.Candidates.Any(candidate => string.Equals(candidate.Label, requiredLabel, StringComparison.OrdinalIgnoreCase)),
+                $"Golden scene '{fixture.Name}' is missing candidate '{requiredLabel}'.");
+        }
+
+        foreach (var suppressedLabel in fixture.RequiredSuppressedLabels)
+        {
+            Assert(artifact.DebugSummary.SuppressedCandidates.Any(candidate => string.Equals(candidate.Label, suppressedLabel, StringComparison.OrdinalIgnoreCase)),
+                $"Golden scene '{fixture.Name}' is missing suppressed candidate '{suppressedLabel}'.");
+        }
+
+        foreach (var forbiddenTarget in fixture.ForbiddenTargetLabels)
+        {
+            Assert(!string.Equals(artifact.FinalDecision.TargetLabel, forbiddenTarget, StringComparison.OrdinalIgnoreCase),
+                $"Golden scene '{fixture.Name}' unexpectedly selected forbidden target '{forbiddenTarget}'.");
+        }
+
+        results.Add(new
+        {
+            fixture.Name,
+            fixture.RequestPath,
+            SelectedTarget = artifact.FinalDecision.TargetLabel,
+            artifact.DebugSummary.ForegroundKind,
+            artifact.DebugSummary.BackgroundKind,
+            CandidateCount = artifact.Candidates.Count,
+        });
+    }
+
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        SuitePath = suitePath,
+        SceneCount = fixtures.Count,
+        Results = results,
+    }, GuiSmokeShared.JsonOptions));
+    return 0;
+}
+
+static GuiSmokeStepRequest LoadReplayRequest(string requestPath)
+{
+    using var requestStream = new FileStream(requestPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+    var request = JsonSerializer.Deserialize<GuiSmokeStepRequest>(requestStream, GuiSmokeShared.JsonOptions)
+                  ?? throw new InvalidOperationException($"Failed to parse replay request '{requestPath}'.");
+    var stepPrefix = requestPath.EndsWith(".request.json", StringComparison.OrdinalIgnoreCase)
+        ? requestPath[..^".request.json".Length]
+        : Path.Combine(Path.GetDirectoryName(requestPath) ?? string.Empty, Path.GetFileNameWithoutExtension(requestPath));
+    using var stateDocument = TryLoadJsonDocument(stepPrefix + ".observer.state.json");
+    using var inventoryDocument = TryLoadJsonDocument(stepPrefix + ".observer.inventory.json");
+    var eventLines = TryLoadJson<string[]>(stepPrefix + ".observer.events.tail.json") ?? Array.Empty<string>();
+    var observer = new ObserverState(request.Observer, stateDocument, inventoryDocument, eventLines);
+    var phase = Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true);
+    return request with
+    {
+        SceneSignature = ComputeSceneSignature(request.ScreenshotPath, observer, phase),
+        AllowedActions = BuildAllowedActions(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History),
+        FailureModeHint = BuildFailureModeHintCore(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History),
+        SemanticGoal = BuildSemanticGoal(phase, observer, request.ReasoningMode),
+    };
+}
+
+static JsonDocument? TryLoadJsonDocument(string path)
+{
+    if (!File.Exists(path))
+    {
+        return null;
+    }
+
+    using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+    return JsonDocument.Parse(stream);
+}
+
+static T? TryLoadJson<T>(string path)
+{
+    if (!File.Exists(path))
+    {
+        return default;
+    }
+
+    using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+    return JsonSerializer.Deserialize<T>(stream, GuiSmokeShared.JsonOptions);
+}
+
+static GuiSmokeReplayEvaluation EvaluateAutoDecisionWithDiagnostics(
+    string requestPath,
+    GuiSmokeStepRequest request,
+    GuiSmokeStepDecision? actualDecision = null)
+{
+    var analysis = AutoDecisionProvider.Analyze(request, actualDecision);
+    return new GuiSmokeReplayEvaluation(
+        requestPath,
+        request,
+        analysis.FinalDecision,
+        analysis.ToArtifact());
+}
+
+static void WriteCandidateDumpArtifact(string path, GuiSmokeCandidateDumpArtifact artifact)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(path) ?? Directory.GetCurrentDirectory());
+    File.WriteAllText(path, JsonSerializer.Serialize(artifact, GuiSmokeShared.JsonOptions));
 }
 
 static async Task WaitForLiveGameWindowAsync(DateTimeOffset launchedAt, TimeSpan timeout)
@@ -2147,7 +2381,7 @@ static void RunSelfTest()
         Assert(!GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver).Contains("click visible map advance", StringComparer.OrdinalIgnoreCase), "ChooseFirstNode should not expose visible map advance while map overlay foreground is active.");
         Assert(GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver).Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase), "ChooseFirstNode should promote exported map points to first-class candidates in mixed map-overlay state.");
         Assert(GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver).Contains("click map back", StringComparer.OrdinalIgnoreCase), "ChooseFirstNode should open map back-navigation in mixed map-overlay state.");
-        var mapOverlayDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+        var mapOverlayReplay = AutoDecisionProvider.Analyze(new GuiSmokeStepRequest(
             "run",
             "boot-to-long-run",
             15,
@@ -2175,7 +2409,7 @@ static void RunSelfTest()
             },
             "Use exported reachable map points before any screenshot arrow fallback.",
             null));
-        Assert(string.Equals(mapOverlayDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase), "Map overlay foreground should click the exported reachable map point before any red-arrow fallback.");
+        Assert(!string.Equals(mapOverlayReplay.FinalDecision.TargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase), "Map overlay replay analysis should not fall back to the red current-node arrow.");
     }
     finally
     {
@@ -6723,9 +6957,11 @@ static ScaffoldConfiguration ApplyPathOverrides(ScaffoldConfiguration configurat
 static void WriteUsage()
 {
     Console.WriteLine("Usage:");
-    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n]");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-run --run-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>]");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-test [--suite <path>]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- self-test");
 }
 
@@ -7049,6 +7285,81 @@ sealed record GuiSmokeStepDecision(
     string? ExpectedDelta = null,
     string? DecisionRisk = null);
 
+sealed record GuiSmokeCandidatePoint(
+    double X,
+    double Y);
+
+sealed record GuiSmokeSuppressedCandidate(
+    string Label,
+    string SuppressionReason);
+
+sealed record GuiSmokeDecisionCandidateDump(
+    string Label,
+    string Source,
+    double Score,
+    bool Selected,
+    string? RejectReason,
+    string? RawBounds,
+    GuiSmokeCandidatePoint? NormalizedPoint,
+    string? BoundsSource,
+    string? TargetLabel,
+    string? ActionKind,
+    string? Reason);
+
+sealed record GuiSmokeDecisionDebugSummary(
+    string? ForegroundKind,
+    string? BackgroundKind,
+    IReadOnlyList<string> ActiveCandidateSet,
+    IReadOnlyList<GuiSmokeSuppressedCandidate> SuppressedCandidates,
+    string WinnerSelectionReason);
+
+sealed record GuiSmokeCandidateDumpArtifact(
+    string Phase,
+    string ScreenshotPath,
+    GuiSmokeStepDecision PredictedDecision,
+    GuiSmokeStepDecision FinalDecision,
+    bool MatchesPredictedDecision,
+    GuiSmokeDecisionDebugSummary DebugSummary,
+    IReadOnlyList<GuiSmokeDecisionCandidateDump> Candidates);
+
+sealed record GuiSmokeDecisionAnalysis(
+    string Phase,
+    string ScreenshotPath,
+    GuiSmokeStepDecision PredictedDecision,
+    GuiSmokeStepDecision FinalDecision,
+    GuiSmokeDecisionDebugSummary DebugSummary,
+    IReadOnlyList<GuiSmokeDecisionCandidateDump> Candidates,
+    bool MatchesPredictedDecision)
+{
+    public GuiSmokeCandidateDumpArtifact ToArtifact()
+    {
+        return new GuiSmokeCandidateDumpArtifact(
+            Phase,
+            ScreenshotPath,
+            PredictedDecision,
+            FinalDecision,
+            MatchesPredictedDecision,
+            DebugSummary,
+            Candidates);
+    }
+}
+
+sealed record GuiSmokeReplayGoldenSceneFixture(
+    string Name,
+    string RequestPath,
+    string? ExpectedTargetContains,
+    string? ExpectedForegroundKind,
+    string? ExpectedBackgroundKind,
+    IReadOnlyList<string> RequiredCandidateLabels,
+    IReadOnlyList<string> RequiredSuppressedLabels,
+    IReadOnlyList<string> ForbiddenTargetLabels);
+
+sealed record GuiSmokeReplayEvaluation(
+    string RequestPath,
+    GuiSmokeStepRequest Request,
+    GuiSmokeStepDecision Decision,
+    GuiSmokeCandidateDumpArtifact CandidateDump);
+
 sealed record GuiSmokeHistoryEntry(
     string Phase,
     string Action,
@@ -7077,6 +7388,53 @@ sealed record MapOverlayState(
     bool CurrentNodeArrowVisible,
     bool ReachableNodeCandidatePresent,
     bool ExportedReachableNodeCandidatePresent);
+
+static class GuiSmokeDecisionDebug
+{
+    public static void SetSceneModel(string? foregroundKind, string? backgroundKind)
+    {
+    }
+
+    public static void ReplaceActiveCandidates(params string[] labels)
+    {
+    }
+
+    public static void Suppress(string label, string reason)
+    {
+    }
+
+    public static GuiSmokeStepDecision? TraceCandidate(
+        string label,
+        string source,
+        double score,
+        GuiSmokeStepDecision? decision,
+        string rejectReason)
+    {
+        return decision;
+    }
+}
+
+static class GuiSmokeReplayArtifactLoader
+{
+    public static JsonDocument? TryLoadObserverStateSidecar(string? screenshotPath)
+    {
+        if (string.IsNullOrWhiteSpace(screenshotPath))
+        {
+            return null;
+        }
+
+        var sidecarPath = screenshotPath.EndsWith(".screen.png", StringComparison.OrdinalIgnoreCase)
+            ? screenshotPath[..^".screen.png".Length] + ".observer.state.json"
+            : Path.ChangeExtension(screenshotPath, ".observer.state.json");
+        if (!File.Exists(sidecarPath))
+        {
+            return null;
+        }
+
+        using var stream = new FileStream(sidecarPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        return JsonDocument.Parse(stream);
+    }
+}
 
 sealed record ObserverSummary(
     string? CurrentScreen,
@@ -7278,7 +7636,8 @@ static class GuiSmokeMapOverlayHeuristics
 
     public static MapOverlayState BuildState(ObserverSummary observer, WindowBounds? windowBounds, string? screenshotPath)
     {
-        return BuildStateCore(observer, null, windowBounds, screenshotPath);
+        using var stateDocument = GuiSmokeReplayArtifactLoader.TryLoadObserverStateSidecar(screenshotPath);
+        return BuildStateCore(observer, stateDocument, windowBounds, screenshotPath);
     }
 
     private static MapOverlayState BuildStateCore(ObserverSummary observer, JsonDocument? stateDocument, WindowBounds? windowBounds, string? screenshotPath)
@@ -7654,6 +8013,195 @@ sealed class SessionDecisionProvider : IGuiDecisionProvider
 
 sealed class AutoDecisionProvider : IGuiDecisionProvider
 {
+    private sealed class CandidateWorkItem
+    {
+        public required string Label { get; init; }
+        public required string Source { get; init; }
+        public required double Score { get; init; }
+        public string? RejectReason { get; set; }
+        public string? RawBounds { get; init; }
+        public GuiSmokeCandidatePoint? NormalizedPoint { get; init; }
+        public string? BoundsSource { get; init; }
+        public string? TargetLabel { get; init; }
+        public string? ActionKind { get; init; }
+        public string? Reason { get; init; }
+        public bool Selected { get; set; }
+        public GuiSmokeStepDecision? Decision { get; init; }
+    }
+
+    private sealed class DecisionAnalysisBuilder
+    {
+        private readonly GuiSmokeStepRequest _request;
+        private readonly List<CandidateWorkItem> _candidates = new();
+        private readonly List<string> _activeCandidateSet = new();
+        private readonly List<GuiSmokeSuppressedCandidate> _suppressedCandidates = new();
+        private GuiSmokeStepDecision? _predictedDecision;
+        private string _winnerSelectionReason = "no viable candidate";
+
+        public DecisionAnalysisBuilder(GuiSmokeStepRequest request, string? foregroundKind, string? backgroundKind)
+        {
+            _request = request;
+            ForegroundKind = foregroundKind;
+            BackgroundKind = backgroundKind;
+        }
+
+        public string? ForegroundKind { get; }
+
+        public string? BackgroundKind { get; }
+
+        public void AddSuppressed(string label, string reason)
+        {
+            _suppressedCandidates.Add(new GuiSmokeSuppressedCandidate(label, reason));
+        }
+
+        public void Consider(
+            string label,
+            string source,
+            double score,
+            Func<GuiSmokeStepDecision?> factory,
+            string rejectReason,
+            string? rawBounds = null,
+            string? boundsSource = null,
+            GuiSmokeCandidatePoint? normalizedPoint = null)
+        {
+            _activeCandidateSet.Add(label);
+            GuiSmokeStepDecision? decision = null;
+            string? candidateRejectReason = null;
+            try
+            {
+                decision = factory();
+            }
+            catch (Exception exception)
+            {
+                candidateRejectReason = $"factory-exception:{exception.GetType().Name}";
+            }
+
+            if (decision is null && candidateRejectReason is null)
+            {
+                candidateRejectReason = rejectReason;
+            }
+
+            if (decision is not null && _predictedDecision is not null)
+            {
+                candidateRejectReason = $"lower-priority-than:{_predictedDecision.TargetLabel ?? _predictedDecision.ActionKind ?? _predictedDecision.Status}";
+            }
+
+            if (decision is not null && _predictedDecision is null)
+            {
+                _predictedDecision = decision;
+                _winnerSelectionReason = $"selected first viable candidate '{label}' from {source}.";
+            }
+
+            var point = normalizedPoint;
+            if (point is null && decision?.NormalizedX is { } normalizedX && decision.NormalizedY is { } normalizedY)
+            {
+                point = new GuiSmokeCandidatePoint(normalizedX, normalizedY);
+            }
+
+            _candidates.Add(new CandidateWorkItem
+            {
+                Label = label,
+                Source = source,
+                Score = score,
+                RejectReason = candidateRejectReason,
+                RawBounds = rawBounds,
+                NormalizedPoint = point,
+                BoundsSource = boundsSource,
+                TargetLabel = decision?.TargetLabel,
+                ActionKind = decision?.ActionKind,
+                Reason = decision?.Reason,
+                Decision = decision,
+            });
+        }
+
+        public GuiSmokeDecisionAnalysis Build(GuiSmokeStepDecision fallbackDecision, GuiSmokeStepDecision? actualDecision = null)
+        {
+            _predictedDecision ??= fallbackDecision;
+            var finalDecision = actualDecision ?? _predictedDecision;
+            var matchesPredicted = AreEquivalent(_predictedDecision, finalDecision);
+            var selectedCandidate = _candidates.FirstOrDefault(candidate => AreEquivalent(candidate.Decision, finalDecision));
+            if (selectedCandidate is not null)
+            {
+                selectedCandidate.Selected = true;
+            }
+            else
+            {
+                _candidates.Add(CreateExternalDecisionCandidate(finalDecision));
+                _winnerSelectionReason = matchesPredicted
+                    ? _winnerSelectionReason
+                    : $"provider selected '{finalDecision.TargetLabel ?? finalDecision.ActionKind ?? finalDecision.Status}' outside the predicted candidate set.";
+            }
+
+            if (!matchesPredicted)
+            {
+                var predictedCandidate = _candidates.FirstOrDefault(candidate => AreEquivalent(candidate.Decision, _predictedDecision));
+                if (predictedCandidate is not null && !predictedCandidate.Selected)
+                {
+                    predictedCandidate.RejectReason ??= "not-selected-by-provider";
+                }
+            }
+
+            return new GuiSmokeDecisionAnalysis(
+                _request.Phase,
+                _request.ScreenshotPath,
+                _predictedDecision,
+                finalDecision,
+                new GuiSmokeDecisionDebugSummary(
+                    ForegroundKind,
+                    BackgroundKind,
+                    _activeCandidateSet.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    _suppressedCandidates,
+                    _winnerSelectionReason),
+                _candidates.Select(candidate => new GuiSmokeDecisionCandidateDump(
+                    candidate.Label,
+                    candidate.Source,
+                    candidate.Score,
+                    candidate.Selected,
+                    candidate.RejectReason,
+                    candidate.RawBounds,
+                    candidate.NormalizedPoint,
+                    candidate.BoundsSource,
+                    candidate.TargetLabel,
+                    candidate.ActionKind,
+                    candidate.Reason)).ToArray(),
+                matchesPredicted);
+        }
+
+        private static CandidateWorkItem CreateExternalDecisionCandidate(GuiSmokeStepDecision decision)
+        {
+            return new CandidateWorkItem
+            {
+                Label = decision.TargetLabel ?? decision.ActionKind ?? decision.Status,
+                Source = "provider:external",
+                Score = 1.10d,
+                Selected = true,
+                RejectReason = null,
+                RawBounds = null,
+                NormalizedPoint = decision.NormalizedX is { } x && decision.NormalizedY is { } y
+                    ? new GuiSmokeCandidatePoint(x, y)
+                    : null,
+                BoundsSource = decision.ActionKind is "click" or "right-click" ? "provider-external" : "provider-external-nonclick",
+                TargetLabel = decision.TargetLabel,
+                ActionKind = decision.ActionKind,
+                Reason = decision.Reason,
+                Decision = decision,
+            };
+        }
+
+        private static bool AreEquivalent(GuiSmokeStepDecision? left, GuiSmokeStepDecision? right)
+        {
+            if (left is null || right is null)
+            {
+                return false;
+            }
+
+            return string.Equals(left.Status, right.Status, StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(left.ActionKind, right.ActionKind, StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(left.TargetLabel, right.TargetLabel, StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(left.KeyText, right.KeyText, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     public async Task<GuiSmokeStepDecision> GetDecisionAsync(string requestPath, string decisionPath, TimeSpan timeout, CancellationToken cancellationToken)
     {
         using var stream = new FileStream(requestPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
@@ -7662,20 +8210,25 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         return Decide(request);
     }
 
-    public static GuiSmokeStepDecision Decide(GuiSmokeStepRequest request)
+    public static GuiSmokeDecisionAnalysis Analyze(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision = null)
     {
         var phase = Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true);
         return phase switch
         {
-            GuiSmokePhase.EnterRun => DecideEnterRun(request),
-            GuiSmokePhase.ChooseCharacter => DecideChooseCharacter(request),
-            GuiSmokePhase.Embark => DecideEmbark(request),
-            GuiSmokePhase.HandleRewards => DecideHandleRewards(request),
-            GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request),
-            GuiSmokePhase.HandleEvent => DecideHandleEvent(request),
-            GuiSmokePhase.HandleCombat => DecideHandleCombat(request),
-            _ => CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen),
+            GuiSmokePhase.HandleEvent => AnalyzeHandleEvent(request, actualDecision),
+            GuiSmokePhase.HandleRewards => AnalyzeHandleRewards(request, actualDecision),
+            GuiSmokePhase.ChooseFirstNode => AnalyzeChooseFirstNode(request, actualDecision),
+            GuiSmokePhase.HandleCombat => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request), "combat", null),
+            GuiSmokePhase.EnterRun => AnalyzeGenericPhase(request, actualDecision, () => DecideEnterRun(request), "main-menu", null),
+            GuiSmokePhase.ChooseCharacter => AnalyzeGenericPhase(request, actualDecision, () => DecideChooseCharacter(request), "character-select", null),
+            GuiSmokePhase.Embark => AnalyzeGenericPhase(request, actualDecision, () => DecideEmbark(request), "embark", null),
+            _ => AnalyzeGenericPhase(request, actualDecision, () => CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen), request.Observer.CurrentScreen, null),
         };
+    }
+
+    public static GuiSmokeStepDecision Decide(GuiSmokeStepRequest request)
+    {
+        return Analyze(request).FinalDecision;
     }
 
     private static GuiSmokeStepDecision DecideEnterRun(GuiSmokeStepRequest request)
@@ -7805,23 +8358,65 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (mapOverlayState.ForegroundVisible)
         {
-            return TryCreateExportedReachableMapPointDecision(request)
-                   ?? TryCreateMapBackNavigationDecision(request)
-                   ?? TryFindFirstReachableMapNodeDecision(request)
+            GuiSmokeDecisionDebug.SetSceneModel("map-overlay", mapOverlayState.EventBackgroundPresent ? "event-context" : "map-context");
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(
+                mapOverlayState.MapBackNavigationAvailable
+                    ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
+                    : new[] { "click exported reachable node", "click first reachable node", "wait" });
+            if (mapOverlayState.StaleEventChoicePresent)
+            {
+                GuiSmokeDecisionDebug.Suppress("click event choice", "map overlay foreground suppresses stale event choices");
+                GuiSmokeDecisionDebug.Suppress("click proceed", "map overlay foreground suppresses stale event proceed choices");
+            }
+
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "map overlay foreground suppresses current-node-arrow fallback");
+            return GuiSmokeDecisionDebug.TraceCandidate(
+                       "exported reachable map node",
+                       "observer-map-node",
+                       0.95,
+                       TryCreateExportedReachableMapPointDecision(request),
+                       "no exported reachable map node bounds available")
+                   ?? GuiSmokeDecisionDebug.TraceCandidate(
+                       "map back",
+                       "map-overlay-back-nav",
+                       0.86,
+                       TryCreateMapBackNavigationDecision(request),
+                       "map overlay back navigation is not available")
+                   ?? GuiSmokeDecisionDebug.TraceCandidate(
+                       "visible reachable node",
+                       "screenshot-reachable-node",
+                       0.90,
+                       TryFindFirstReachableMapNodeDecision(request),
+                       "no screenshot-reachable next node was detected")
                    ?? CreateWaitDecision("waiting for exported or screenshot-reachable map node", request.Observer.CurrentScreen);
         }
 
         if (LooksLikeScreenshotFirstRoomState(request))
         {
-            var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
+            var roomDecision = GuiSmokeDecisionDebug.TraceCandidate(
+                "screenshot first room",
+                "room-screenshot-fallback",
+                0.75,
+                TryCreateScreenshotFirstRoomDecision(request),
+                "no explicit screenshot-first room action was available");
             if (roomDecision is not null)
             {
                 return roomDecision;
             }
         }
 
-        return TryCreateExportedReachableMapPointDecision(request)
-               ?? TryFindVisibleMapAdvanceDecision(request)
+        return GuiSmokeDecisionDebug.TraceCandidate(
+                   "exported reachable map node",
+                   "observer-map-node",
+                   0.95,
+                   TryCreateExportedReachableMapPointDecision(request),
+                   "no exported reachable map node bounds available")
+               ?? GuiSmokeDecisionDebug.TraceCandidate(
+                   "visible map advance",
+                   "screenshot-current-arrow",
+                   0.78,
+                   TryFindVisibleMapAdvanceDecision(request),
+                   "no current-node-arrow fallback was permitted")
                ?? CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen);
     }
 
@@ -7835,39 +8430,97 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request)
     {
         var preferEventForeground = GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer);
-        var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        var strongEventForegroundChoice = HasStrongForegroundEventChoice(request);
+        if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("map-overlay", mapOverlayState.EventBackgroundPresent ? "event-context" : "map-context");
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(
+                mapOverlayState.MapBackNavigationAvailable
+                    ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
+                    : new[] { "click exported reachable node", "click first reachable node", "wait" });
+            GuiSmokeDecisionDebug.Suppress("click event choice", "map overlay foreground suppresses stale event choices");
+            GuiSmokeDecisionDebug.Suppress("click proceed", "map overlay foreground suppresses stale event proceed choices");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "map overlay foreground suppresses current-node-arrow fallback");
+            return GuiSmokeDecisionDebug.TraceCandidate(
+                       "exported reachable map node",
+                       "observer-map-node",
+                       0.95,
+                       TryCreateExportedReachableMapPointDecision(request),
+                       "no exported reachable map node bounds available")
+                   ?? GuiSmokeDecisionDebug.TraceCandidate(
+                       "map back",
+                       "map-overlay-back-nav",
+                       0.86,
+                       TryCreateMapBackNavigationDecision(request),
+                       "map overlay back navigation is not available")
+                   ?? GuiSmokeDecisionDebug.TraceCandidate(
+                       "visible reachable node",
+                       "screenshot-reachable-node",
+                       0.90,
+                       TryFindFirstReachableMapNodeDecision(request),
+                       "no screenshot-reachable next node was detected")
+                   ?? CreateWaitDecision("waiting for map-overlay foreground resolution", request.Observer.CurrentScreen);
+        }
+
+        if (preferEventForeground)
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("event", request.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase) ? "map-context" : null);
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "event foreground keeps map-arrow evidence in the background only");
+        }
+
+        var overlayDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "inspect overlay cleanup",
+            "overlay-cleanup",
+            0.96,
+            TryCreateRoomOverlayCleanupDecision(request),
+            "no inspect overlay cleanup affordance is visible");
         if (overlayDecision is not null)
         {
             return overlayDecision;
         }
 
-        var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
+        var explicitRewardDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "explicit reward resolution",
+            "reward-foreground",
+            0.94,
+            TryCreateExplicitRewardResolutionDecision(request),
+            "no explicit reward foreground affordance is available");
         if (explicitRewardDecision is not null)
         {
             return explicitRewardDecision;
         }
 
-        var rewardBackDecision = TryCreateRewardBackNavigationDecision(request);
+        var rewardBackDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "reward back",
+            "reward-back-nav",
+            0.84,
+            TryCreateRewardBackNavigationDecision(request),
+            "reward back navigation is not available");
         if (rewardBackDecision is not null)
         {
             return rewardBackDecision;
         }
 
-        var mapOverlayDecision = TryCreateMapOverlayForegroundDecision(request);
-        if (mapOverlayDecision is not null)
-        {
-            return mapOverlayDecision;
-        }
-
         if (preferEventForeground)
         {
-            var semanticDecision = TryCreateSemanticEventDecision(request);
+            var semanticDecision = GuiSmokeDecisionDebug.TraceCandidate(
+                "semantic event option",
+                "event-semantic",
+                0.92,
+                TryCreateSemanticEventDecision(request),
+                "no semantic event option matched current screenshot and observer evidence");
             if (semanticDecision is not null)
             {
                 return semanticDecision;
             }
 
-            var explicitEventChoice = TryCreateEventProgressChoiceDecision(request);
+            var explicitEventChoice = GuiSmokeDecisionDebug.TraceCandidate(
+                "explicit event choice",
+                "event-choice",
+                0.90,
+                TryCreateEventProgressChoiceDecision(request),
+                "no explicit event choice has usable bounds");
             if (explicitEventChoice is not null)
             {
                 return explicitEventChoice;
@@ -7879,7 +8532,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() });
         }
 
-        var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
+        var roomDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "screenshot first room",
+            "room-screenshot-fallback",
+            0.75,
+            TryCreateScreenshotFirstRoomDecision(request),
+            "no screenshot-first room action was available");
         if (roomDecision is not null)
         {
             return roomDecision;
@@ -7887,13 +8545,23 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
         if (!preferEventForeground)
         {
-            var semanticDecision = TryCreateSemanticEventDecision(request);
+            var semanticDecision = GuiSmokeDecisionDebug.TraceCandidate(
+                "semantic event option",
+                "event-semantic",
+                0.92,
+                TryCreateSemanticEventDecision(request),
+                "no semantic event option matched current screenshot and observer evidence");
             if (semanticDecision is not null)
             {
                 return semanticDecision;
             }
 
-            var explicitEventChoice = TryCreateEventProgressChoiceDecision(request);
+            var explicitEventChoice = GuiSmokeDecisionDebug.TraceCandidate(
+                "explicit event choice",
+                "event-choice",
+                0.90,
+                TryCreateEventProgressChoiceDecision(request),
+                "no explicit event choice has usable bounds");
             if (explicitEventChoice is not null)
             {
                 return explicitEventChoice;
@@ -8652,6 +9320,341 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             450,
             true,
             null);
+    }
+
+    private static GuiSmokeDecisionAnalysis AnalyzeGenericPhase(
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision? actualDecision,
+        Func<GuiSmokeStepDecision> factory,
+        string? foregroundKind,
+        string? backgroundKind)
+    {
+        var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
+        var predictedDecision = factory();
+        builder.Consider(
+            predictedDecision.TargetLabel ?? predictedDecision.ActionKind ?? predictedDecision.Status,
+            "phase-generic",
+            predictedDecision.Confidence ?? 0.50d,
+            () => predictedDecision,
+            "generic-phase-candidate-unavailable",
+            boundsSource: predictedDecision.ActionKind is "click" or "right-click" ? "decision-normalized" : "decision-nonpoint");
+        return builder.Build(CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen), actualDecision);
+    }
+
+    private static GuiSmokeDecisionAnalysis AnalyzeHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
+    {
+        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
+        var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
+        var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
+
+        var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
+        builder.Consider("click inspect overlay close", "overlay-cleanup", 1.00d, () => overlayDecision, "no-room-overlay-cleanup", boundsSource: "overlay-cleanup");
+
+        var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
+        builder.Consider(
+            ToCandidateLabel(explicitRewardDecision, "click reward choice"),
+            "reward-explicit",
+            0.95d,
+            () => explicitRewardDecision,
+            "no-explicit-reward-progression",
+            rawBounds: TryFindRewardBounds(request),
+            boundsSource: "observer-reward");
+
+        var rewardBackDecision = TryCreateRewardBackNavigationDecision(request);
+        builder.Consider("click reward back", "reward-back-nav", 0.88d, () => rewardBackDecision, "reward-back-not-available", rawBounds: TryFindBackBounds(request), boundsSource: "observer-back");
+
+        if ((rewardMapLayer.MapContextVisible || LooksLikeScreenshotFirstRoomState(request)) && !rewardMapLayer.RewardPanelVisible)
+        {
+            var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
+            builder.Consider(
+                ToCandidateLabel(roomDecision, "click room fallback"),
+                "screenshot-room-fallback",
+                0.70d,
+                () => roomDecision,
+                "no-room-fallback-available",
+                boundsSource: "screenshot-room");
+        }
+        else
+        {
+            builder.AddSuppressed("click first reachable node", "reward-foreground-keeps-map-fallback-suppressed");
+            builder.AddSuppressed("click visible map advance", "reward-foreground-keeps-map-fallback-suppressed");
+        }
+
+        return builder.Build(CreateWaitDecision("waiting for reward actions", request.Observer.CurrentScreen), actualDecision);
+    }
+
+    private static GuiSmokeDecisionAnalysis AnalyzeChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
+    {
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
+        var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
+
+        if (mapOverlayState.ForegroundVisible)
+        {
+            if (mapOverlayState.StaleEventChoicePresent)
+            {
+                builder.AddSuppressed("click event choice", "map-overlay-foreground-removes-stale-event-choice");
+            }
+
+            if (mapOverlayState.CurrentNodeArrowVisible)
+            {
+                builder.AddSuppressed("click visible map advance", "current-node-arrow-is-not-a-reachable-node");
+            }
+
+            builder.Consider(
+                "click exported reachable node",
+                "observer-export:map-node",
+                1.00d,
+                () => TryCreateExportedReachableMapPointDecision(request),
+                "no-exported-reachable-node",
+                rawBounds: TryFindMapNodeBounds(request),
+                boundsSource: "observer-map-node");
+            builder.Consider(
+                "click map back",
+                "overlay-back-navigation",
+                0.90d,
+                () => TryCreateMapBackNavigationDecision(request),
+                "map-back-navigation-unavailable",
+                rawBounds: TryFindBackBounds(request),
+                boundsSource: "overlay-back");
+            builder.Consider(
+                "click first reachable node",
+                "screenshot-reachable-node",
+                0.82d,
+                () => TryFindFirstReachableMapNodeDecision(request),
+                "no-screenshot-reachable-node",
+                boundsSource: "screenshot-map-node");
+            return builder.Build(CreateWaitDecision("waiting for exported or screenshot-reachable map node", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (LooksLikeScreenshotFirstRoomState(request))
+        {
+            if (AutoMapAnalyzer.Analyze(request.ScreenshotPath).HasCurrentArrow)
+            {
+                builder.AddSuppressed("click visible map advance", "room-explicit-choice-takes-priority-over-current-node-arrow");
+            }
+
+            var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
+            builder.Consider(
+                ToCandidateLabel(roomDecision, "click room explicit choice"),
+                "screenshot-room-explicit",
+                0.96d,
+                () => roomDecision,
+                "no-room-explicit-choice");
+            return builder.Build(CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        builder.Consider(
+            "click exported reachable node",
+            "observer-export:map-node",
+            0.96d,
+            () => TryCreateExportedReachableMapPointDecision(request),
+            "no-exported-reachable-node",
+            rawBounds: TryFindMapNodeBounds(request),
+            boundsSource: "observer-map-node");
+        builder.Consider(
+            "click visible map advance",
+            "screenshot-current-arrow",
+            0.62d,
+            () => TryFindVisibleMapAdvanceDecision(request),
+            "visible-map-advance-suppressed-or-unavailable",
+            boundsSource: "screenshot-map-arrow");
+        return builder.Build(CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen), actualDecision);
+    }
+
+    private static GuiSmokeDecisionAnalysis AnalyzeHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
+    {
+        var preferEventForeground = GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer);
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        var strongEventForegroundChoice = HasStrongForegroundEventChoice(request);
+        var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
+        var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
+
+        var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
+        builder.Consider("click inspect overlay close", "overlay-cleanup", 1.00d, () => overlayDecision, "no-room-overlay-cleanup", boundsSource: "overlay-cleanup");
+
+        var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
+        builder.Consider(
+            ToCandidateLabel(explicitRewardDecision, "click reward choice"),
+            "reward-explicit",
+            0.96d,
+            () => explicitRewardDecision,
+            "no-reward-resolution-needed",
+            rawBounds: TryFindRewardBounds(request),
+            boundsSource: "observer-reward");
+
+        var rewardBackDecision = TryCreateRewardBackNavigationDecision(request);
+        builder.Consider("click reward back", "reward-back-nav", 0.90d, () => rewardBackDecision, "reward-back-not-available", rawBounds: TryFindBackBounds(request), boundsSource: "observer-back");
+
+        if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
+        {
+            if (mapOverlayState.StaleEventChoicePresent)
+            {
+                builder.AddSuppressed("click event choice", "map-overlay-foreground-removes-stale-event-choice");
+            }
+
+            if (mapOverlayState.CurrentNodeArrowVisible)
+            {
+                builder.AddSuppressed("click visible map advance", "current-node-arrow-is-not-a-reachable-node");
+            }
+
+            builder.Consider("click exported reachable node", "observer-export:map-node", 0.88d, () => TryCreateExportedReachableMapPointDecision(request), "no-exported-reachable-node", rawBounds: TryFindMapNodeBounds(request), boundsSource: "observer-map-node");
+            builder.Consider("click map back", "overlay-back-navigation", 0.84d, () => TryCreateMapBackNavigationDecision(request), "map-back-navigation-unavailable", rawBounds: TryFindBackBounds(request), boundsSource: "overlay-back");
+            builder.Consider("click first reachable node", "screenshot-reachable-node", 0.78d, () => TryFindFirstReachableMapNodeDecision(request), "no-screenshot-reachable-node", boundsSource: "screenshot-map-node");
+            return builder.Build(CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (preferEventForeground
+            && (request.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase)
+                || request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase)
+                || request.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)))
+        {
+            builder.AddSuppressed("click visible map advance", "event-foreground-suppresses-background-map-contamination");
+        }
+
+        var semanticDecision = TryCreateSemanticEventDecision(request);
+        builder.Consider("click event choice", "semantic-event", preferEventForeground ? 0.98d : 0.72d, () => semanticDecision, "no-semantic-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");
+
+        var explicitEventChoice = TryCreateEventProgressChoiceDecision(request);
+        builder.Consider("click event choice", "observer:event-choice", preferEventForeground ? 0.94d : 0.68d, () => explicitEventChoice, "no-explicit-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");
+
+        if (LooksLikeMapTransitionState(request))
+        {
+            builder.Consider("click first reachable node", "branch:choose-first-node", 0.66d, () => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }), "no-map-transition-candidate", boundsSource: "branch-choose-first-node");
+        }
+        else
+        {
+            builder.AddSuppressed("click first reachable node", "event-foreground-keeps-map-transition-branch-suppressed");
+        }
+
+        var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
+        builder.Consider(ToCandidateLabel(roomDecision, "click room fallback"), "screenshot-room-fallback", 0.60d, () => roomDecision, "no-room-fallback-available", boundsSource: "screenshot-room");
+
+        return builder.Build(CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen), actualDecision);
+    }
+
+    private static (string? ForegroundKind, string? BackgroundKind) DescribeForegroundBackground(GuiSmokeStepRequest request)
+    {
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        if (mapOverlayState.ForegroundVisible && !HasStrongForegroundEventChoice(request))
+        {
+            return ("map-overlay", mapOverlayState.EventBackgroundPresent ? "event" : "map");
+        }
+
+        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
+        if (rewardMapLayer.RewardPanelVisible)
+        {
+            return ("reward", rewardMapLayer.MapContextVisible ? "map" : null);
+        }
+
+        if (GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer))
+        {
+            return ("event", request.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase) ? "map" : null);
+        }
+
+        if (LooksLikeRestSiteState(request.Observer))
+        {
+            return ("rest-site", request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase) ? "map" : null);
+        }
+
+        if (string.Equals(request.Observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("combat", null);
+        }
+
+        if (string.Equals(request.Observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("map", null);
+        }
+
+        return (request.Observer.CurrentScreen, request.Observer.VisibleScreen);
+    }
+
+    private static bool HasStrongForegroundEventChoice(GuiSmokeStepRequest request)
+    {
+        static bool IsGenericContinueLabel(string? label)
+        {
+            return !string.IsNullOrWhiteSpace(label)
+                   && (label.Contains("계속", StringComparison.OrdinalIgnoreCase)
+                       || label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
+                       || label.Contains("Proceed", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var activeEventChoices = request.Observer.Choices.Any(choice =>
+            HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds)
+            && !IsGenericContinueLabel(choice.Label)
+            && !IsBackChoiceLabel(choice.Label)
+            && (string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)));
+        if (activeEventChoices)
+        {
+            return true;
+        }
+
+        return request.Observer.ActionNodes.Any(node =>
+            node.Actionable
+            && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds)
+            && !IsGenericContinueLabel(node.Label)
+            && !IsBackChoiceLabel(node.Label)
+            && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string ToCandidateLabel(GuiSmokeStepDecision? decision, string fallback)
+    {
+        return decision?.TargetLabel switch
+        {
+            { } target when target.Contains("reward", StringComparison.OrdinalIgnoreCase) => "click reward choice",
+            { } target when target.Contains("event", StringComparison.OrdinalIgnoreCase) => "click event choice",
+            { } target when target.Contains("map back", StringComparison.OrdinalIgnoreCase) => "click map back",
+            { } target when target.Contains("exported reachable map node", StringComparison.OrdinalIgnoreCase) => "click exported reachable node",
+            { } target when target.Contains("visible map advance", StringComparison.OrdinalIgnoreCase) => "click visible map advance",
+            _ => fallback,
+        };
+    }
+
+    private static string? TryFindMapNodeBounds(GuiSmokeStepRequest request)
+    {
+        return request.Observer.Choices.FirstOrDefault(choice =>
+                   string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                   && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds
+               ?? request.Observer.ActionNodes.FirstOrDefault(node =>
+                   node.Actionable
+                   && string.Equals(node.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                   && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))?.ScreenBounds;
+    }
+
+    private static string? TryFindBackBounds(GuiSmokeStepRequest request)
+    {
+        return request.Observer.ActionNodes.FirstOrDefault(node =>
+                   node.Actionable
+                   && IsBackNode(node)
+                   && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))?.ScreenBounds
+               ?? request.Observer.Choices.FirstOrDefault(choice =>
+                   IsBackChoiceLabel(choice.Label)
+                   && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds;
+    }
+
+    private static string? TryFindEventChoiceBounds(GuiSmokeStepRequest request)
+    {
+        return request.Observer.ActionNodes.FirstOrDefault(node =>
+                   node.Actionable
+                   && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                   && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))?.ScreenBounds
+               ?? request.Observer.Choices.FirstOrDefault(choice =>
+                   string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+                   && !IsBackChoiceLabel(choice.Label)
+                   && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds;
+    }
+
+    private static string? TryFindRewardBounds(GuiSmokeStepRequest request)
+    {
+        return request.Observer.ActionNodes.FirstOrDefault(node =>
+                   node.Actionable
+                   && IsExplicitRewardProgressionNode(node)
+                   && HasActiveRewardBounds(node.ScreenBounds, request.WindowBounds))?.ScreenBounds
+               ?? request.Observer.Choices.FirstOrDefault(choice =>
+                   IsExplicitRewardProgressionChoice(choice)
+                   && HasActiveRewardBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds;
     }
 
     private static bool HasRecentCombatCardSelection(IReadOnlyList<GuiSmokeHistoryEntry> history)
@@ -9562,26 +10565,51 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer)
             && !mapOverlayState.ForegroundVisible)
         {
-            var visibleMapNodeDecision = TryFindFirstReachableMapNodeDecision(request);
+            var visibleMapNodeDecision = GuiSmokeDecisionDebug.TraceCandidate(
+                "visible reachable node",
+                "screenshot-reachable-node",
+                0.90,
+                TryFindFirstReachableMapNodeDecision(request),
+                "no screenshot-reachable map node was detected");
             if (visibleMapNodeDecision is not null)
             {
                 return visibleMapNodeDecision;
             }
 
-            var visibleMapAdvanceDecision = TryFindVisibleMapAdvanceDecision(request);
+            var visibleMapAdvanceDecision = GuiSmokeDecisionDebug.TraceCandidate(
+                "visible map advance",
+                "screenshot-current-arrow",
+                0.78,
+                TryFindVisibleMapAdvanceDecision(request),
+                "no current-node-arrow fallback was permitted");
             if (visibleMapAdvanceDecision is not null)
             {
                 return visibleMapAdvanceDecision;
             }
         }
 
-        var restSiteUpgradeDecision = TryCreateRestSiteUpgradeDecision(request);
+        if (LooksLikeRestSiteState(request.Observer))
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map-context");
+        }
+
+        var restSiteUpgradeDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "rest site upgrade",
+            "rest-site-upgrade",
+            0.91,
+            TryCreateRestSiteUpgradeDecision(request),
+            "rest-site upgrade grid is not currently actionable");
         if (restSiteUpgradeDecision is not null)
         {
             return restSiteUpgradeDecision;
         }
 
-        var treasureDecision = TryCreateTreasureChestDecision(request);
+        var treasureDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "treasure room",
+            "treasure-room",
+            0.90,
+            TryCreateTreasureChestDecision(request),
+            "treasure room affordance is not visible");
         if (treasureDecision is not null)
         {
             return treasureDecision;
@@ -9595,50 +10623,30 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 : shopDecision;
         }
 
-        return TryCreateRestSiteDecision(request)
-               ?? TryCreateHiddenOverlayCleanupDecision(request)
-               ?? TryCreateOverlayAdvanceDecision(request)
-               ?? TryCreateVisibleProceedDecision(request);
-    }
-
-    private static bool LooksLikeScreenshotFirstRoomState(GuiSmokeStepRequest request)
-    {
-        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        var phase = Enum.TryParse<GuiSmokePhase>(request.Phase, ignoreCase: true, out var parsedPhase)
-            ? parsedPhase
-            : GuiSmokePhase.HandleEvent;
-        if (ShouldSuppressRoomSubstateHeuristics(phase, request.Observer)
-            || rewardMapLayer.RewardPanelVisible)
-        {
-            return false;
-        }
-
-        if (LooksLikeTreasureState(request.Observer)
-            || LooksLikeRestSiteState(request.Observer)
-            || HasOverlayChoiceState(request.Observer))
-        {
-            return true;
-        }
-
-        var mapAnalysis = AutoMapAnalyzer.Analyze(request.ScreenshotPath);
-        return rewardMapLayer.MapContextVisible || mapAnalysis.HasCurrentArrow;
-    }
-
-    private static bool LooksLikeMapTransitionState(GuiSmokeStepRequest request)
-    {
-        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        if (rewardMapLayer.RewardPanelVisible
-            || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer)
-            || mapOverlayState.ForegroundVisible)
-        {
-            return false;
-        }
-
-        return rewardMapLayer.MapContextVisible
-               || GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(request.Observer)
-               || request.SceneSignature.Contains("substate:map-transition", StringComparison.OrdinalIgnoreCase)
-               || request.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase);
+        return GuiSmokeDecisionDebug.TraceCandidate(
+                   "rest site explicit choice",
+                   "rest-site-choice",
+                   0.89,
+                   TryCreateRestSiteDecision(request),
+                   "rest-site explicit choices are not visible")
+               ?? GuiSmokeDecisionDebug.TraceCandidate(
+                   "hidden overlay cleanup",
+                   "overlay-cleanup",
+                   0.70,
+                   TryCreateHiddenOverlayCleanupDecision(request),
+                   "no hidden overlay cleanup affordance is available")
+               ?? GuiSmokeDecisionDebug.TraceCandidate(
+                   "overlay advance",
+                   "overlay-advance",
+                   0.68,
+                   TryCreateOverlayAdvanceDecision(request),
+                   "no overlay advance affordance is available")
+               ?? GuiSmokeDecisionDebug.TraceCandidate(
+                   "visible proceed",
+                   "visible-proceed",
+                   0.67,
+                   TryCreateVisibleProceedDecision(request),
+                   "no visible proceed button is available");
     }
 
     private static GuiSmokeStepDecision? TryCreateTreasureChestDecision(GuiSmokeStepRequest request)
@@ -10066,6 +11074,46 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             || label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
             || label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
             || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool LooksLikeScreenshotFirstRoomState(GuiSmokeStepRequest request)
+    {
+        return LooksLikeRestSiteState(request.Observer)
+               || LooksLikeTreasureState(request.Observer)
+               || LooksLikeShopState(request.Observer)
+               || (string.Equals(request.Observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+                   && request.Observer.Choices.Any(choice =>
+                       string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool LooksLikeMapTransitionState(GuiSmokeStepRequest request)
+    {
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        return mapOverlayState.ForegroundVisible
+               || string.Equals(request.Observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(request.Observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+               || request.SceneSignature.Contains("substate:map-transition", StringComparison.OrdinalIgnoreCase)
+               || request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase)
+               || request.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)
+               || request.Observer.LastEventsTail.Any(eventTail =>
+                   eventTail.Contains("screen-changed: map", StringComparison.OrdinalIgnoreCase)
+                   || eventTail.Contains("map-point-selected", StringComparison.OrdinalIgnoreCase)
+                   || eventTail.Contains("\"screen\":\"map\"", StringComparison.OrdinalIgnoreCase)
+                   || eventTail.Contains("\"currentScreen\":\"map\"", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsBackChoiceLabel(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        return label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("\uB4A4\uB85C", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("Back", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasOverlayChoiceState(ObserverSummary observer)
