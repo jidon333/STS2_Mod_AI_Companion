@@ -102,31 +102,91 @@ static async Task<int> RunScenarioAsync(
         LongRunArtifacts.InitializeSessionArtifacts(sessionRoot, sessionId, scenarioId, providerKind);
     }
 
+    void RecordStartupStage(
+        string stage,
+        string status,
+        string? detail = null,
+        IReadOnlyDictionary<string, string?>? metadata = null)
+    {
+        if (!isLongRun)
+        {
+            return;
+        }
+
+        LongRunArtifacts.RecordStartupStage(sessionRoot, stage, status, detail, metadata);
+    }
+
+    void RecordStartupFailure(
+        string stage,
+        string reason,
+        IReadOnlyDictionary<string, string?>? metadata = null)
+    {
+        if (!isLongRun)
+        {
+            return;
+        }
+
+        LongRunArtifacts.RecordStartupFailure(sessionRoot, stage, reason, metadata);
+    }
+
     if (!options.ContainsKey("--skip-deploy"))
     {
+        var startupStage = "game-stopped-before-deploy";
         try
         {
             EnsureGameNotRunning();
             if (isLongRun)
             {
                 LongRunArtifacts.RecordGameStoppedBeforeDeployEvidence(sessionRoot);
+                RecordStartupStage(startupStage, "finished");
             }
 
-            await RunDeployNativePackageAsync(workspaceRoot).ConfigureAwait(false);
+            var deployCommand = BuildDeployNativePackageCommand(workspaceRoot);
+            startupStage = "deploy-command-selected";
+            RecordStartupStage(
+                startupStage,
+                "finished",
+                $"{deployCommand.Mode}:{deployCommand.Reason}",
+                new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["deployMode"] = deployCommand.Mode,
+                    ["toolPath"] = deployCommand.ToolPath,
+                    ["reason"] = deployCommand.Reason,
+                });
+
+            startupStage = "deploy-command-started";
+            RecordStartupStage(startupStage, "started");
+            await RunDeployNativePackageAsync(workspaceRoot, deployCommand).ConfigureAwait(false);
+            startupStage = "deploy-command-finished";
+            RecordStartupStage(startupStage, "finished");
+
             EnsureHarnessEnabledInRuntimeConfig(configuration);
             if (isLongRun)
             {
+                startupStage = "deploy-verification-started";
+                RecordStartupStage(startupStage, "started");
                 LongRunArtifacts.RecordDeployVerificationEvidence(
                     sessionRoot,
                     configuration,
                     workspaceRoot,
                     includeHarnessBridge: true);
+                var deployPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(
+                    File.ReadAllText(Path.Combine(sessionRoot, "prevalidation.json")),
+                    GuiSmokeShared.JsonOptions);
+                startupStage = "deploy-verification-finished";
+                RecordStartupStage(
+                    startupStage,
+                    "finished",
+                    deployPrevalidation is null
+                        ? "prevalidation-unreadable"
+                        : $"modsPayloadReconciled={deployPrevalidation.ModsPayloadReconciled};deployIdentityVerified={deployPrevalidation.DeployIdentityVerified}");
             }
         }
         catch (Exception exception)
         {
             if (isLongRun)
             {
+                RecordStartupFailure(startupStage, $"{exception.GetType().Name}: {exception.Message}");
                 LongRunArtifacts.UpdatePrevalidation(
                     sessionRoot,
                     note: BuildDeployFailureNote(exception));
@@ -323,6 +383,40 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         harnessLayout.HarnessRoot,
         configuration.GamePaths.GameDirectory));
     var stepIndex = 0;
+    var startupStage = "attempt-0001-started";
+    var isStartupTrackedAttempt = isLongRun && attemptOrdinal == 1;
+
+    void RecordAttemptStartupStage(
+        string stage,
+        string status,
+        string? detail = null,
+        IReadOnlyDictionary<string, string?>? metadata = null)
+    {
+        if (!isStartupTrackedAttempt)
+        {
+            return;
+        }
+
+        startupStage = stage;
+        LongRunArtifacts.RecordStartupStage(sessionRoot, stage, status, detail, metadata);
+    }
+
+    void RecordAttemptStartupFailure(
+        string reason,
+        IReadOnlyDictionary<string, string?>? metadata = null)
+    {
+        if (!isStartupTrackedAttempt)
+        {
+            return;
+        }
+
+        LongRunArtifacts.RecordStartupFailure(sessionRoot, startupStage, reason, metadata);
+    }
+
+    if (isStartupTrackedAttempt)
+    {
+        RecordAttemptStartupStage("attempt-0001-started", "finished", runRoot);
+    }
 
     GuiSmokeAttemptResult CompleteAttempt(
         int exitCode,
@@ -386,24 +480,29 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             await StopGameProcessesAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
             EnsureGameNotRunning();
             var launchIssuedAt = DateTimeOffset.UtcNow;
+            startupStage = "manual-clean-boot-launch-issued";
             await GuiSmokeShared.RunProcessAsync(
                 Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
                 "/c start \"\" \"steam://rungameid/2868840\"",
                 workspaceRoot,
                 TimeSpan.FromSeconds(10),
                 waitForExit: false).ConfigureAwait(false);
+            RecordAttemptStartupStage("manual-clean-boot-launch-issued", "finished", launchIssuedAt.ToString("O"));
             if (isLongRun)
             {
                 LongRunArtifacts.RecordRunnerLaunchIssued(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart);
             }
 
+            startupStage = "game-window-detected";
             await WaitForLiveGameWindowAsync(launchIssuedAt, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
-            await MaintainLaunchFocusAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
-            await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            RecordAttemptStartupStage("game-window-detected", "finished");
+            await MaintainLaunchFocusAsync(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
         }
     }
     catch (Exception exception)
     {
+        RecordAttemptStartupFailure($"{exception.GetType().Name}: {exception.Message}");
         logger.WriteFailureSummary(new GuiSmokeFailureSummary(
             GuiSmokePhase.WaitMainMenu.ToString(),
             $"launch-failed: {exception.Message}",
@@ -503,6 +602,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                 consecutiveFallbackCapturesWithoutProcess += 1;
                 if (consecutiveFallbackCapturesWithoutProcess >= 3)
                 {
+                    RecordAttemptStartupFailure("process-lost");
                     logger.WriteFailureSummary(new GuiSmokeFailureSummary(
                         phase.ToString(),
                         "process-lost",
@@ -535,6 +635,10 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         }
         consecutiveBlackFrames = 0;
         consecutiveFallbackCapturesWithoutProcess = 0;
+        if (isStartupTrackedAttempt && stepIndex == 1)
+        {
+            RecordAttemptStartupStage("first-screenshot-captured", "finished", screenshotPath);
+        }
         if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
         {
             LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
@@ -546,13 +650,28 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         logger.WriteObserverCopies(stepPrefix, observer);
         if (isLongRun)
         {
-            LongRunArtifacts.TryMarkManualCleanBootVerified(
+            if (isStartupTrackedAttempt && stepIndex == 1)
+            {
+                RecordAttemptStartupStage("manual-clean-boot-evaluation-started", "started", screenshotPath);
+            }
+
+            var manualCleanBootVerified = LongRunArtifacts.TryMarkManualCleanBootVerified(
                 sessionRoot,
                 harnessLayout,
                 observer,
                 history,
                 screenshotPath,
                 stepPrefix + ".observer.state.json");
+            if (isStartupTrackedAttempt && stepIndex == 1)
+            {
+                var startupPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(
+                    File.ReadAllText(Path.Combine(sessionRoot, "prevalidation.json")),
+                    GuiSmokeShared.JsonOptions);
+                var manualCleanBootDetail = startupPrevalidation?.ManualCleanBootEvidence?.BlockingReasons is { Count: > 0 } blockingReasons
+                    ? $"verified={manualCleanBootVerified};blockers={string.Join(",", blockingReasons)}"
+                    : $"verified={manualCleanBootVerified}";
+                RecordAttemptStartupStage("manual-clean-boot-evaluation-finished", "finished", manualCleanBootDetail);
+            }
         }
 
         LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
@@ -2047,9 +2166,10 @@ static async Task WaitForLiveGameWindowAsync(DateTimeOffset launchedAt, TimeSpan
     throw new TimeoutException("Timed out waiting for a live STS2 game window.");
 }
 
-static async Task MaintainLaunchFocusAsync(TimeSpan duration)
+static async Task MaintainLaunchFocusAsync(TimeSpan duration, TimeSpan requiredStableWindow)
 {
     var deadline = DateTimeOffset.UtcNow.Add(duration);
+    DateTimeOffset? stableSince = null;
     while (DateTimeOffset.UtcNow < deadline)
     {
         var window = WindowLocator.TryFindSts2Window();
@@ -2062,6 +2182,15 @@ static async Task MaintainLaunchFocusAsync(TimeSpan duration)
 
             window = WindowLocator.EnsureInteractive(window);
             LogHarness($"launch focus check title={window.Title} bounds={DescribeBounds(window.Bounds)}");
+            stableSince ??= DateTimeOffset.UtcNow;
+            if (DateTimeOffset.UtcNow - stableSince >= requiredStableWindow)
+            {
+                return;
+            }
+        }
+        else
+        {
+            stableSince = null;
         }
 
         await Task.Delay(1000).ConfigureAwait(false);
@@ -2209,6 +2338,56 @@ static void RunSelfTest()
         if (Directory.Exists(deployToolWorkspaceRoot))
         {
             Directory.Delete(deployToolWorkspaceRoot, recursive: true);
+        }
+    }
+
+    var startupTraceRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-startup-trace-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        LongRunArtifacts.InitializeSessionArtifacts(startupTraceRoot, "startup-trace-session", "boot-to-long-run", "headless");
+        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "game-stopped-before-deploy", "finished");
+        LongRunArtifacts.RecordStartupStage(
+            startupTraceRoot,
+            "deploy-command-selected",
+            "finished",
+            "fast-path:self-test",
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["deployMode"] = "fast-path",
+                ["toolPath"] = @"C:\fake\Sts2ModKit.Tool.dll",
+                ["reason"] = "self-test",
+            });
+        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "attempt-0001-started", "finished", "attempts/0001");
+        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "first-screenshot-captured", "finished", "attempts/0001/steps/0001.screen.png");
+        LongRunArtifacts.RecordStartupFailure(startupTraceRoot, "deploy-verification-finished", "deploy report missing");
+
+        var startupSummary = JsonSerializer.Deserialize<GuiSmokeStartupSummary>(
+                                 File.ReadAllText(Path.Combine(startupTraceRoot, "startup-summary.json")),
+                                 GuiSmokeShared.JsonOptions)
+                             ?? throw new InvalidOperationException("Failed to read startup summary self-test artifact.");
+        Assert(startupSummary.GameStoppedBeforeDeployRecorded, "Startup summary should record the game-stop stage.");
+        Assert(startupSummary.DeployCommandSelected
+               && string.Equals(startupSummary.DeployMode, "fast-path", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(startupSummary.SelectedDeployToolPath, @"C:\fake\Sts2ModKit.Tool.dll", StringComparison.OrdinalIgnoreCase),
+            "Startup summary should preserve deploy command selection details.");
+        Assert(startupSummary.FirstAttemptCreated && startupSummary.FirstScreenshotCaptured, "Startup summary should record the first attempt and first screenshot stages.");
+        Assert(string.Equals(startupSummary.FailureStage, "deploy-verification-finished", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(startupSummary.FailureReason, "deploy report missing", StringComparison.OrdinalIgnoreCase),
+            "Startup summary should preserve the last startup failure stage and reason.");
+
+        var startupPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(
+                                       File.ReadAllText(Path.Combine(startupTraceRoot, "prevalidation.json")),
+                                       GuiSmokeShared.JsonOptions)
+                                   ?? throw new InvalidOperationException("Failed to read startup prevalidation self-test artifact.");
+        Assert(startupPrevalidation.Notes.Contains("startup-failure:deploy-verification-finished:deploy report missing", StringComparer.OrdinalIgnoreCase),
+            "Startup failure notes should be durably recorded in prevalidation.");
+        Assert(File.ReadAllLines(Path.Combine(startupTraceRoot, "startup-trace.ndjson")).Length >= 5, "Startup trace should record each staged transition.");
+    }
+    finally
+    {
+        if (Directory.Exists(startupTraceRoot))
+        {
+            Directory.Delete(startupTraceRoot, recursive: true);
         }
     }
 
@@ -7394,26 +7573,46 @@ static bool TryResolveWslPathViaExe(string wslPath, out string translatedPath)
     }
 }
 
-static async Task RunDeployNativePackageAsync(string workspaceRoot)
+static async Task RunDeployNativePackageAsync(string workspaceRoot, GuiSmokeDeployCommand? deployCommand = null)
+{
+    var resolvedDeployCommand = deployCommand ?? BuildDeployNativePackageCommand(workspaceRoot);
+    if (string.Equals(resolvedDeployCommand.Mode, "fast-path", StringComparison.OrdinalIgnoreCase))
+    {
+        LogHarness($"deploy fast-path tool={resolvedDeployCommand.ToolPath} reason={resolvedDeployCommand.Reason}");
+    }
+    else
+    {
+        LogHarness($"deploy fast-path unavailable; falling back to dotnet run --project src\\Sts2ModKit.Tool reason={resolvedDeployCommand.Reason}");
+    }
+
+    await GuiSmokeShared.RunProcessAsync(
+        resolvedDeployCommand.FileName,
+        resolvedDeployCommand.Arguments,
+        workspaceRoot,
+        resolvedDeployCommand.Timeout).ConfigureAwait(false);
+}
+
+static GuiSmokeDeployCommand BuildDeployNativePackageCommand(string workspaceRoot)
 {
     var builtTool = TryFindBuiltDeployToolDll(workspaceRoot);
     if (builtTool is not null)
     {
-        LogHarness($"deploy fast-path tool={builtTool.Path} reason={builtTool.Reason}");
-        await GuiSmokeShared.RunProcessAsync(
+        return new GuiSmokeDeployCommand(
+            "fast-path",
             "dotnet",
             $"\"{builtTool.Path}\" deploy-native-package --include-harness-bridge",
-            workspaceRoot,
-            TimeSpan.FromMinutes(2)).ConfigureAwait(false);
-        return;
+            TimeSpan.FromMinutes(2),
+            builtTool.Path,
+            builtTool.Reason);
     }
 
-    LogHarness("deploy fast-path unavailable; falling back to dotnet run --project src\\Sts2ModKit.Tool");
-    await GuiSmokeShared.RunProcessAsync(
+    return new GuiSmokeDeployCommand(
+        "fallback",
         "dotnet",
         "run --project src\\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge",
-        workspaceRoot,
-        TimeSpan.FromMinutes(5)).ConfigureAwait(false);
+        TimeSpan.FromMinutes(5),
+        null,
+        "built deploy tool unavailable");
 }
 
 static GuiSmokeDeployToolSelection? TryFindBuiltDeployToolDll(string workspaceRoot)
@@ -7759,6 +7958,14 @@ sealed record GuiSmokeFailureSummary(
 
 sealed record GuiSmokeDeployToolSelection(
     string Path,
+    string Reason);
+
+sealed record GuiSmokeDeployCommand(
+    string Mode,
+    string FileName,
+    string Arguments,
+    TimeSpan Timeout,
+    string? ToolPath,
     string Reason);
 
 sealed record GuiSmokeValidationSummary(

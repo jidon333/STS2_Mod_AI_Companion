@@ -137,6 +137,38 @@ sealed record GuiSmokePrevalidation(
     GuiSmokeManualCleanBootEvidence? ManualCleanBootEvidence,
     IReadOnlyList<string> Notes);
 
+sealed record GuiSmokeStartupTraceEntry(
+    DateTimeOffset RecordedAt,
+    string SessionId,
+    string Stage,
+    string Status,
+    string? Detail,
+    IReadOnlyDictionary<string, string?> Metadata);
+
+sealed record GuiSmokeStartupSummary(
+    string SessionId,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    string? LatestStage,
+    string? LatestStatus,
+    bool GameStoppedBeforeDeployRecorded,
+    bool DeployCommandSelected,
+    string? DeployMode,
+    string? SelectedDeployToolPath,
+    string? SelectedDeployReason,
+    bool DeployCommandStarted,
+    bool DeployCommandFinished,
+    bool DeployVerificationStarted,
+    bool DeployVerificationFinished,
+    bool LaunchIssued,
+    bool WindowDetected,
+    bool ManualCleanBootEvaluationStarted,
+    bool ManualCleanBootEvaluationFinished,
+    bool FirstAttemptCreated,
+    bool FirstScreenshotCaptured,
+    string? FailureStage,
+    string? FailureReason);
+
 sealed record GuiSmokeRestartEvent(
     DateTimeOffset RecordedAt,
     string EventType,
@@ -377,6 +409,36 @@ static partial class LongRunArtifacts
                 GuiSmokeShared.JsonOptions);
         }
 
+        if (!File.Exists(GetStartupSummaryPath(sessionRoot)))
+        {
+            WriteJsonAtomicWithRetry(
+                GetStartupSummaryPath(sessionRoot),
+                new GuiSmokeStartupSummary(
+                    sessionId,
+                    now,
+                    now,
+                    LatestStage: null,
+                    LatestStatus: null,
+                    GameStoppedBeforeDeployRecorded: false,
+                    DeployCommandSelected: false,
+                    DeployMode: null,
+                    SelectedDeployToolPath: null,
+                    SelectedDeployReason: null,
+                    DeployCommandStarted: false,
+                    DeployCommandFinished: false,
+                    DeployVerificationStarted: false,
+                    DeployVerificationFinished: false,
+                    LaunchIssued: false,
+                    WindowDetected: false,
+                    ManualCleanBootEvaluationStarted: false,
+                    ManualCleanBootEvaluationFinished: false,
+                    FirstAttemptCreated: false,
+                    FirstScreenshotCaptured: false,
+                    FailureStage: null,
+                    FailureReason: null),
+                GuiSmokeShared.JsonOptions);
+        }
+
         RefreshSupervisorState(sessionRoot);
     }
 
@@ -446,6 +508,43 @@ static partial class LongRunArtifacts
         WriteJsonAtomicWithRetry(GetPrevalidationPath(sessionRoot), updated, GuiSmokeShared.JsonOptions);
         RefreshSupervisorState(sessionRoot);
         return updated;
+    }
+
+    public static void RecordStartupStage(
+        string sessionRoot,
+        string stage,
+        string status,
+        string? detail = null,
+        IReadOnlyDictionary<string, string?>? metadata = null)
+    {
+        var safeMetadata = metadata ?? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        AppendNdjson(
+            GetStartupTracePath(sessionRoot),
+            new GuiSmokeStartupTraceEntry(
+                DateTimeOffset.UtcNow,
+                Path.GetFileName(sessionRoot),
+                stage,
+                status,
+                detail,
+                safeMetadata));
+        var summary = ApplyStartupStageUpdate(
+            LoadOrCreateStartupSummary(sessionRoot),
+            stage,
+            status,
+            detail,
+            safeMetadata);
+        WriteJsonAtomicWithRetry(GetStartupSummaryPath(sessionRoot), summary, GuiSmokeShared.JsonOptions);
+        RefreshSupervisorState(sessionRoot);
+    }
+
+    public static void RecordStartupFailure(
+        string sessionRoot,
+        string stage,
+        string reason,
+        IReadOnlyDictionary<string, string?>? metadata = null)
+    {
+        RecordStartupStage(sessionRoot, stage, "failed", reason, metadata);
+        UpdatePrevalidation(sessionRoot, note: $"startup-failure:{stage}:{reason}");
     }
 
     public static void RecordGameStoppedBeforeDeployEvidence(string sessionRoot)
@@ -974,6 +1073,38 @@ static partial class LongRunArtifacts
             }
         }
 
+        var startupSummary = LoadOrCreateStartupSummary(sessionRoot);
+        if (!string.IsNullOrWhiteSpace(startupSummary.LatestStage))
+        {
+            evidence.Add($"startup-last-stage:{startupSummary.LatestStage}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(startupSummary.LatestStatus))
+        {
+            evidence.Add($"startup-last-status:{startupSummary.LatestStatus}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(startupSummary.DeployMode))
+        {
+            evidence.Add($"startup-deploy-mode:{startupSummary.DeployMode}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(startupSummary.SelectedDeployToolPath))
+        {
+            evidence.Add($"startup-deploy-tool:{startupSummary.SelectedDeployToolPath}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(startupSummary.FailureStage))
+        {
+            evidence.Add($"startup-failure-stage:{startupSummary.FailureStage}");
+            blockers.Add($"startup-failure:{startupSummary.FailureStage}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(startupSummary.FailureReason))
+        {
+            evidence.Add($"startup-failure-reason:{startupSummary.FailureReason}");
+        }
+
         var supervisorState = new GuiSmokeSupervisorState(
             now,
             updatedGoal.SessionId,
@@ -1422,6 +1553,119 @@ static partial class LongRunArtifacts
             Notes: Array.Empty<string>());
         WriteJsonAtomicWithRetry(GetPrevalidationPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
         return fallback;
+    }
+
+    private static GuiSmokeStartupSummary LoadOrCreateStartupSummary(string sessionRoot)
+    {
+        var existing = TryReadJson<GuiSmokeStartupSummary>(GetStartupSummaryPath(sessionRoot));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var fallback = new GuiSmokeStartupSummary(
+            Path.GetFileName(sessionRoot),
+            now,
+            now,
+            LatestStage: null,
+            LatestStatus: null,
+            GameStoppedBeforeDeployRecorded: false,
+            DeployCommandSelected: false,
+            DeployMode: null,
+            SelectedDeployToolPath: null,
+            SelectedDeployReason: null,
+            DeployCommandStarted: false,
+            DeployCommandFinished: false,
+            DeployVerificationStarted: false,
+            DeployVerificationFinished: false,
+            LaunchIssued: false,
+            WindowDetected: false,
+            ManualCleanBootEvaluationStarted: false,
+            ManualCleanBootEvaluationFinished: false,
+            FirstAttemptCreated: false,
+            FirstScreenshotCaptured: false,
+            FailureStage: null,
+            FailureReason: null);
+        WriteJsonAtomicWithRetry(GetStartupSummaryPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
+        return fallback;
+    }
+
+    private static GuiSmokeStartupSummary ApplyStartupStageUpdate(
+        GuiSmokeStartupSummary summary,
+        string stage,
+        string status,
+        string? detail,
+        IReadOnlyDictionary<string, string?> metadata)
+    {
+        var updated = summary with
+        {
+            UpdatedAt = DateTimeOffset.UtcNow,
+            LatestStage = stage,
+            LatestStatus = status,
+            FailureStage = string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase)
+                ? stage
+                : summary.FailureStage,
+            FailureReason = string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase)
+                ? detail
+                : summary.FailureReason,
+        };
+
+        return stage switch
+        {
+            "game-stopped-before-deploy" => updated with
+            {
+                GameStoppedBeforeDeployRecorded = !string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase),
+            },
+            "deploy-command-selected" => updated with
+            {
+                DeployCommandSelected = true,
+                DeployMode = metadata.TryGetValue("deployMode", out var deployMode) ? deployMode : updated.DeployMode,
+                SelectedDeployToolPath = metadata.TryGetValue("toolPath", out var toolPath) ? toolPath : updated.SelectedDeployToolPath,
+                SelectedDeployReason = metadata.TryGetValue("reason", out var reason) ? reason : updated.SelectedDeployReason,
+            },
+            "deploy-command-started" => updated with
+            {
+                DeployCommandStarted = true,
+            },
+            "deploy-command-finished" => updated with
+            {
+                DeployCommandFinished = !string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase),
+            },
+            "deploy-verification-started" => updated with
+            {
+                DeployVerificationStarted = true,
+            },
+            "deploy-verification-finished" => updated with
+            {
+                DeployVerificationFinished = !string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase),
+            },
+            "manual-clean-boot-launch-issued" => updated with
+            {
+                LaunchIssued = !string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase),
+            },
+            "game-window-detected" => updated with
+            {
+                WindowDetected = !string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase),
+            },
+            "manual-clean-boot-evaluation-started" => updated with
+            {
+                ManualCleanBootEvaluationStarted = true,
+            },
+            "manual-clean-boot-evaluation-finished" => updated with
+            {
+                ManualCleanBootEvaluationFinished = true,
+            },
+            "attempt-0001-started" => updated with
+            {
+                FirstAttemptCreated = !string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase),
+            },
+            "first-screenshot-captured" => updated with
+            {
+                FirstScreenshotCaptured = !string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase),
+            },
+            _ => updated,
+        };
     }
 
     private static MilestoneEvaluation EvaluateMilestone(
@@ -2763,4 +3007,8 @@ static partial class LongRunArtifacts
     private static string GetSupervisorStatePath(string sessionRoot) => Path.Combine(sessionRoot, "supervisor-state.json");
 
     private static string GetStallDiagnosisPath(string sessionRoot) => Path.Combine(sessionRoot, "stall-diagnosis.ndjson");
+
+    private static string GetStartupTracePath(string sessionRoot) => Path.Combine(sessionRoot, "startup-trace.ndjson");
+
+    private static string GetStartupSummaryPath(string sessionRoot) => Path.Combine(sessionRoot, "startup-summary.json");
 }
