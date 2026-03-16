@@ -1933,42 +1933,112 @@ static void RunSelfTest()
             null);
         Assert(GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(mapTransitionObserver, out var postMapPhase) && postMapPhase == GuiSmokePhase.ChooseFirstNode, "Map-screen authority should win over stale event labels when observer meta already points at NMapScreen.");
         Assert(GetAllowedActions(GuiSmokePhase.HandleEvent, mapTransitionObserver).Contains("click visible map advance", StringComparer.OrdinalIgnoreCase), "Event allowlist should open map affordances when map transition evidence is stronger than the stale event screen.");
-        var mapTransitionDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
-            "run",
-            "boot-to-long-run",
-            9,
-            GuiSmokePhase.HandleEvent.ToString(),
-            "Resolve the map transition.",
-            DateTimeOffset.UtcNow,
-            mapTransitionScreenshotPath,
-            new WindowBounds(0, 0, 1280, 720),
-            "phase:handleevent|screen:event|visible:event|ready:true|stability:stable|substate:map-transition|visible:map-arrow",
-            "0001",
-            1,
-            3,
-            true,
-            "tactical",
-            null,
-            mapTransitionObserver.Summary,
-            Array.Empty<KnownRecipeHint>(),
-            Array.Empty<EventKnowledgeCandidate>(),
-            Array.Empty<CombatCardKnowledgeHint>(),
-            GetAllowedActions(GuiSmokePhase.HandleEvent, mapTransitionObserver),
-            new[]
-            {
-                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "event progression choice", DateTimeOffset.UtcNow.AddSeconds(-6)),
-                new GuiSmokeHistoryEntry(GuiSmokePhase.WaitMap.ToString(), "branch-event", null, DateTimeOffset.UtcNow.AddSeconds(-4)),
-                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "event progression choice", DateTimeOffset.UtcNow.AddSeconds(-2)),
-            },
-            "prefer map affordances over stale event progression",
-            null));
-        Assert(string.Equals(mapTransitionDecision.TargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase), "Map transition decisioning should click a map affordance instead of repeating event progression.");
     }
     finally
     {
         if (File.Exists(mapTransitionScreenshotPath))
         {
             File.Delete(mapTransitionScreenshotPath);
+        }
+    }
+
+    var eventContaminationScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-event-contamination-self-test-{Guid.NewGuid():N}.png");
+    try
+    {
+        using (var bitmap = new Bitmap(1280, 720))
+        using (var graphics = Graphics.FromImage(bitmap))
+        using (var panelBrush = new SolidBrush(Color.FromArgb(90, 64, 42)))
+        using (var choiceBrush = new SolidBrush(Color.FromArgb(215, 188, 124)))
+        using (var arrowBrush = new SolidBrush(Color.FromArgb(220, 60, 55)))
+        {
+            graphics.Clear(Color.Black);
+            graphics.FillRectangle(panelBrush, new Rectangle(720, 150, 470, 420));
+            graphics.FillRectangle(choiceBrush, new Rectangle(880, 430, 280, 66));
+            graphics.FillRectangle(choiceBrush, new Rectangle(880, 520, 280, 66));
+            graphics.FillEllipse(arrowBrush, new Rectangle(590, 452, 94, 74));
+            bitmap.Save(eventContaminationScreenshotPath, ImageFormat.Png);
+        }
+
+        using var eventStateDocument = JsonDocument.Parse("""{"meta":{"declaringType":"MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom","instanceType":"MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom"}}""");
+        var eventObserverState = new ObserverState(
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-event-foreground",
+                true,
+                "mixed",
+                "stable",
+                "episode-event-foreground",
+                "None",
+                "event",
+                80,
+                80,
+                null,
+                new[] { "그래도 휴식한다", "나무들을 베어낸다" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("event-option:0", "event-option", "그래도 휴식한다", "922,596,800,100", true),
+                    new ObserverActionNode("event-option:1", "event-option", "나무들을 베어낸다", "922,700,800,100", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("choice", "그래도 휴식한다", "922,596,800,100", "그래도 휴식한다"),
+                    new ObserverChoice("choice", "나무들을 베어낸다", "922,700,800,100", "나무들을 베어낸다"),
+                },
+                Array.Empty<ObservedCombatHandCard>()),
+            eventStateDocument,
+            null,
+            null);
+        var eventSceneSignature = ComputeSceneSignature(eventContaminationScreenshotPath, eventObserverState, GuiSmokePhase.HandleEvent);
+        Assert(eventSceneSignature.Contains("layer:event-foreground", StringComparison.OrdinalIgnoreCase), "Explicit event choices should mark the event as foreground-authoritative.");
+        Assert(eventSceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase), "Background map arrows on event scenes should be tagged as contamination.");
+        Assert(!eventSceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase), "Event foreground authority should suppress visible map advance tags.");
+        Assert(!GetAllowedActions(GuiSmokePhase.HandleEvent, eventObserverState).Contains("click visible map advance", StringComparer.OrdinalIgnoreCase), "HandleEvent allowlist should not expose map fallback when explicit event options are visible.");
+        var eventDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            43,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "Resolve the event choice.",
+            DateTimeOffset.UtcNow,
+            eventContaminationScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            eventSceneSignature,
+            "0001",
+            1,
+            3,
+            true,
+            "semantic",
+            null,
+            eventObserverState.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            new[]
+            {
+                new EventKnowledgeCandidate(
+                    "uneasy-rest-site",
+                    "불안한 휴식 장소",
+                    "self-test event foreground",
+                    new[]
+                    {
+                        new EventOptionKnowledgeCandidate("그래도 휴식한다", "휴식을 시도한다.", "rest"),
+                        new EventOptionKnowledgeCandidate("나무들을 베어낸다", "나무를 베어 길을 연다.", "chop"),
+                    }),
+            },
+            Array.Empty<CombatCardKnowledgeHint>(),
+            GetAllowedActions(GuiSmokePhase.HandleEvent, eventObserverState),
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Explicit event options must outrank background map contamination.",
+            null));
+        Assert(eventDecision.TargetLabel is not null && eventDecision.TargetLabel.Contains("event", StringComparison.OrdinalIgnoreCase), "Event decisioning should click an explicit event option instead of a map fallback when NEventRoom authority is present.");
+    }
+    finally
+    {
+        if (File.Exists(eventContaminationScreenshotPath))
+        {
+            File.Delete(eventContaminationScreenshotPath);
         }
     }
 
@@ -3179,6 +3249,43 @@ static void RunSelfTest()
         }
     }
 
+    var latestEventSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-latest-event-sentinel-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(latestEventSentinelRoot);
+        var runRoot = Path.Combine(latestEventSentinelRoot, "attempts", "0001");
+        Directory.CreateDirectory(runRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(latestEventSentinelRoot, "latest-event-session", "boot-to-long-run", "headless");
+        var progressPath = Path.Combine(runRoot, "progress.ndjson");
+        var progressEntries = new[]
+        {
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-6), 5, GuiSmokePhase.HandleRewards.ToString(), "phase:handlerewards|screen:rewards|visible:map|stale:reward-choice|stale:reward-bounds|layer:map-background|visible:map-arrow|shot:R1", "rewards", null, "visible map advance", true, false, false, false, false, new[] { "scene-ready-true", "reward-map-layered" }, new[] { "action:click", "target:visible map advance" }),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-5), 6, GuiSmokePhase.WaitMap.ToString(), "phase:waitmap|screen:rewards|visible:map|stale:reward-choice|stale:reward-bounds|layer:map-background|visible:map-arrow|shot:R2", "rewards", null, null, true, false, false, false, false, new[] { "scene-ready-true", "reward-map-layered" }, Array.Empty<string>()),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-3), 43, GuiSmokePhase.HandleEvent.ToString(), "phase:handleevent|screen:event|visible:event|layer:event-foreground|contamination:map-arrow|shot:E1", "event", null, "visible reachable node", true, false, false, false, false, new[] { "scene-ready-true", "map-transition-evidence" }, new[] { "action:click", "target:visible reachable node" }),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-2), 44, GuiSmokePhase.WaitCombat.ToString(), "phase:waitcombat|screen:event|visible:event|layer:event-foreground|contamination:map-arrow|shot:E2", "event", null, null, true, false, false, false, false, new[] { "scene-ready-true", "alternate-branch:HandleEvent", "map-transition-evidence", "choice-extractor:event", "reward-explicit-progression" }, Array.Empty<string>()),
+            new GuiSmokeStepProgress(DateTimeOffset.UtcNow.AddSeconds(-1), 45, GuiSmokePhase.HandleEvent.ToString(), "phase:handleevent|screen:event|visible:event|layer:event-foreground|contamination:map-arrow|shot:E3", "event", null, "visible map advance", true, false, false, false, false, new[] { "scene-ready-true", "map-transition-evidence" }, new[] { "action:click", "target:visible map advance" }),
+        };
+        File.WriteAllLines(progressPath, progressEntries.Select(entry => JsonSerializer.Serialize(entry, GuiSmokeShared.NdjsonOptions)));
+        LongRunArtifacts.RefreshStallSentinel(latestEventSentinelRoot);
+        var diagnosisEntries = File.ReadLines(Path.Combine(latestEventSentinelRoot, "stall-diagnosis.ndjson"))
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+            .Where(static entry => entry is not null)
+            .Cast<GuiSmokeStallDiagnosisEntry>()
+            .ToArray();
+        Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the latest-event sentinel attempt.");
+        Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "map-transition-stall", StringComparison.OrdinalIgnoreCase), "Latest event/map contamination loop should classify as map-transition-stall.");
+        Assert(string.Equals(diagnosisEntries[0].Phase, GuiSmokePhase.HandleEvent.ToString(), StringComparison.OrdinalIgnoreCase), "Latest event authority should win over stale reward summaries in stall diagnosis.");
+        Assert(string.Equals(diagnosisEntries[0].ObserverScreen, "event", StringComparison.OrdinalIgnoreCase), "Latest event observer screen should win over stale reward summaries in stall diagnosis.");
+    }
+    finally
+    {
+        if (Directory.Exists(latestEventSentinelRoot))
+        {
+            Directory.Delete(latestEventSentinelRoot, recursive: true);
+        }
+    }
+
     var rewardMapLoopSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-reward-map-loop-sentinel-self-test-{Guid.NewGuid():N}");
     try
     {
@@ -3656,7 +3763,8 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
 
         if (HasStrongMapTransitionEvidence(observer)
             && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-            && !ShouldPreferRewardProgressionOverMapFallback(observer))
+            && !ShouldPreferRewardProgressionOverMapFallback(observer)
+            && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
         {
             tags.Add("substate:map-transition");
         }
@@ -3666,7 +3774,14 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
         {
             tags.Add(rewardMapLayer.RewardPanelVisible && ShouldPreferRewardProgressionOverMapFallback(observer)
                 ? "contamination:map-arrow"
-                : "visible:map-arrow");
+                : GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+                    ? "contamination:map-arrow"
+                    : "visible:map-arrow");
+        }
+
+        if (GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
+        {
+            tags.Add("layer:event-foreground");
         }
     }
 
@@ -4053,6 +4168,7 @@ static string[] BuildAllowedActions(
         GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && ShouldPreferRewardProgressionOverMapFallback(observer)
             => new[] { "click reward", "click reward skip", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent when HasStrongMapTransitionEvidence(observer)
+                                        && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
             => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent when LooksLikeTreasureState(observer.Summary)
             => new[] { "click treasure chest", "click treasure reward icon", "click proceed", "click first event option", "wait" },
@@ -4706,15 +4822,17 @@ static bool TryParseNodeBounds(string? raw, out RectangleF bounds)
 
 static bool HasStrongMapTransitionEvidence(ObserverState observer)
 {
-    return GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer);
+    return GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
+           && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer);
 }
 
 static bool HasStrongMapTransitionEvidenceFromScene(ObserverSummary observer, string? sceneSignature)
 {
-    return GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
+    return !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+           && (GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
            || (!string.IsNullOrWhiteSpace(sceneSignature)
                && (sceneSignature.Contains("substate:map-transition", StringComparison.OrdinalIgnoreCase)
-                   || sceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)));
+                   || sceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase))));
 }
 
 static RewardMapLayerState BuildRewardMapLayerStateForObserver(ObserverSummary observer, WindowBounds? windowBounds)
@@ -6685,6 +6803,127 @@ sealed record ObserverState(
     public string? ChoiceExtractorPath => Summary.ChoiceExtractorPath;
 }
 
+static class GuiSmokeForegroundHeuristics
+{
+    public static bool ShouldPreferEventProgressionOverMapFallback(ObserverState observer)
+    {
+        var declaringType = TryReadMetaString(observer.StateDocument, "declaringType");
+        var instanceType = TryReadMetaString(observer.StateDocument, "instanceType");
+        if (ContainsMapAuthority(declaringType) || ContainsMapAuthority(instanceType))
+        {
+            return false;
+        }
+
+        return HasEventForegroundAuthority(observer.Summary)
+               || ContainsEventAuthority(declaringType)
+               || ContainsEventAuthority(instanceType);
+    }
+
+    public static bool ShouldPreferEventProgressionOverMapFallback(ObserverSummary observer)
+    {
+        return HasEventForegroundAuthority(observer);
+    }
+
+    private static bool HasEventForegroundAuthority(ObserverSummary observer)
+    {
+        if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var eventScreenAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+        if (!eventScreenAuthority)
+        {
+            return false;
+        }
+
+        return observer.ActionNodes.Any(node =>
+                   node.Actionable
+                   && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                   && HasUsableBounds(node.ScreenBounds))
+               || observer.Choices.Any(choice =>
+                   HasUsableBounds(choice.ScreenBounds)
+                   && !LooksLikeProceedOrSkip(choice.Label));
+    }
+
+    private static bool HasUsableBounds(string? rawBounds)
+    {
+        return TryParseBounds(rawBounds, out _, out _, out _, out _);
+    }
+
+    private static bool LooksLikeProceedOrSkip(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        return label.Contains("넘기", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("skip", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("proceed", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("continue", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("진행", StringComparison.OrdinalIgnoreCase)
+               || label.Contains("확인", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsEventAuthority(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NEventRoom", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsMapAuthority(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? TryReadMetaString(JsonDocument? document, string propertyName)
+    {
+        if (document is null)
+        {
+            return null;
+        }
+
+        if (document.RootElement.TryGetProperty("meta", out var metaElement)
+            && metaElement.ValueKind == JsonValueKind.Object
+            && metaElement.TryGetProperty(propertyName, out var property)
+            && property.ValueKind == JsonValueKind.String)
+        {
+            return property.GetString();
+        }
+
+        return null;
+    }
+
+    private static bool TryParseBounds(string? rawBounds, out float x, out float y, out float width, out float height)
+    {
+        x = default;
+        y = default;
+        width = default;
+        height = default;
+        if (string.IsNullOrWhiteSpace(rawBounds))
+        {
+            return false;
+        }
+
+        var parts = rawBounds.Split(',', StringSplitOptions.TrimEntries);
+        return parts.Length == 4
+               && float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out x)
+               && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out y)
+               && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out width)
+               && float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out height)
+               && width > 0f
+               && height > 0f;
+    }
+}
+
 static class GuiSmokeObserverPhaseHeuristics
 {
     public static bool TryGetPostEmbarkPhase(ObserverState observer, out GuiSmokePhase nextPhase)
@@ -7085,6 +7324,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request)
     {
+        var preferEventForeground = GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer);
         var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
         if (overlayDecision is not null)
         {
@@ -7103,6 +7343,21 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return rewardBackDecision;
         }
 
+        if (preferEventForeground)
+        {
+            var semanticDecision = TryCreateSemanticEventDecision(request);
+            if (semanticDecision is not null)
+            {
+                return semanticDecision;
+            }
+
+            var explicitEventChoice = TryCreateEventProgressChoiceDecision(request);
+            if (explicitEventChoice is not null)
+            {
+                return explicitEventChoice;
+            }
+        }
+
         if (LooksLikeMapTransitionState(request))
         {
             return DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() });
@@ -7114,16 +7369,19 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return roomDecision;
         }
 
-        var semanticDecision = TryCreateSemanticEventDecision(request);
-        if (semanticDecision is not null)
+        if (!preferEventForeground)
         {
-            return semanticDecision;
-        }
+            var semanticDecision = TryCreateSemanticEventDecision(request);
+            if (semanticDecision is not null)
+            {
+                return semanticDecision;
+            }
 
-        var explicitEventChoice = TryCreateEventProgressChoiceDecision(request);
-        if (explicitEventChoice is not null)
-        {
-            return explicitEventChoice;
+            var explicitEventChoice = TryCreateEventProgressChoiceDecision(request);
+            if (explicitEventChoice is not null)
+            {
+                return explicitEventChoice;
+            }
         }
 
         return CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen);
@@ -8709,7 +8967,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     private static GuiSmokeStepDecision? TryCreateScreenshotFirstRoomDecision(GuiSmokeStepRequest request)
     {
         var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        if (!rewardMapLayer.RewardPanelVisible)
+        if (!rewardMapLayer.RewardPanelVisible
+            && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer))
         {
             var visibleMapNodeDecision = TryFindFirstReachableMapNodeDecision(request);
             if (visibleMapNodeDecision is not null)
@@ -8776,7 +9035,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     private static bool LooksLikeMapTransitionState(GuiSmokeStepRequest request)
     {
         var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        if (rewardMapLayer.RewardPanelVisible)
+        if (rewardMapLayer.RewardPanelVisible
+            || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer))
         {
             return false;
         }

@@ -1154,19 +1154,25 @@ static partial class LongRunArtifacts
         var latestPhase = failureSummary?.Phase ?? latestProgress?.Phase;
         var latestObserverScreen = failureSummary?.ObserverScreen ?? latestProgress?.PostActionScreen ?? latestProgress?.ObserverScreen;
         var diagnosisKind = DetermineDiagnosisKind(attemptEntry, failureSummary, sameActionStallCount, decisionWaitPlateau, inspectOverlayLoop, rewardMapLoop, mapTransitionStall, combatNoOpLoop, latestPhase, latestObserverScreen);
+        var useCombatAnalysis = string.Equals(diagnosisKind, "combat-noop-loop", StringComparison.OrdinalIgnoreCase);
+        var useRewardAnalysis = string.Equals(diagnosisKind, "reward-map-loop", StringComparison.OrdinalIgnoreCase);
+        var useMapTransitionAnalysis = string.Equals(diagnosisKind, "map-transition-stall", StringComparison.OrdinalIgnoreCase);
+        var useOverlayAnalysis = string.Equals(diagnosisKind, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase);
+        var useWaitAnalysis = string.Equals(diagnosisKind, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(diagnosisKind, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase);
         var phase = failureSummary?.Phase
-                    ?? (string.Equals(diagnosisKind, "combat-noop-loop", StringComparison.OrdinalIgnoreCase) ? combatNoOpLoop.Phase : null)
-                    ?? rewardMapLoop.Phase
-                    ?? mapTransitionStall.Phase
-                    ?? inspectOverlayLoop.Phase
-                    ?? decisionWaitPlateau.Phase
+                    ?? (useCombatAnalysis ? combatNoOpLoop.Phase : null)
+                    ?? (useRewardAnalysis ? rewardMapLoop.Phase : null)
+                    ?? (useMapTransitionAnalysis ? mapTransitionStall.Phase : null)
+                    ?? (useOverlayAnalysis ? inspectOverlayLoop.Phase : null)
+                    ?? (useWaitAnalysis ? decisionWaitPlateau.Phase : null)
                     ?? latestProgress?.Phase;
         var observerScreen = failureSummary?.ObserverScreen
-                             ?? (string.Equals(diagnosisKind, "combat-noop-loop", StringComparison.OrdinalIgnoreCase) ? combatNoOpLoop.ObserverScreen : null)
-                             ?? rewardMapLoop.ObserverScreen
-                             ?? mapTransitionStall.ObserverScreen
-                             ?? inspectOverlayLoop.ObserverScreen
-                             ?? decisionWaitPlateau.ObserverScreen
+                             ?? (useCombatAnalysis ? combatNoOpLoop.ObserverScreen : null)
+                             ?? (useRewardAnalysis ? rewardMapLoop.ObserverScreen : null)
+                             ?? (useMapTransitionAnalysis ? mapTransitionStall.ObserverScreen : null)
+                             ?? (useOverlayAnalysis ? inspectOverlayLoop.ObserverScreen : null)
+                             ?? (useWaitAnalysis ? decisionWaitPlateau.ObserverScreen : null)
                              ?? latestProgress?.PostActionScreen
                              ?? latestProgress?.ObserverScreen;
         var screenshotPath = failureSummary?.ScreenshotPath ?? FindLatestScreenshotPath(runRoot);
@@ -1508,6 +1514,10 @@ static partial class LongRunArtifacts
     {
         var latestStateLooksCombat = string.Equals(latestPhase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
                                      || string.Equals(latestObserverScreen, "combat", StringComparison.OrdinalIgnoreCase);
+        var latestStateLooksEvent = string.Equals(latestPhase, GuiSmokePhase.HandleEvent.ToString(), StringComparison.OrdinalIgnoreCase)
+                                    || string.Equals(latestObserverScreen, "event", StringComparison.OrdinalIgnoreCase);
+        var latestStateLooksReward = string.Equals(latestPhase, GuiSmokePhase.HandleRewards.ToString(), StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(latestObserverScreen, "rewards", StringComparison.OrdinalIgnoreCase);
         if (string.Equals(attemptEntry.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase))
         {
             return "scene-authority-invalid";
@@ -1522,7 +1532,7 @@ static partial class LongRunArtifacts
 
         if (string.Equals(attemptEntry.TerminalCause, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(attemptEntry.FailureClass, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
-            || (!latestStateLooksCombat && rewardMapLoop.LoopDetected))
+            || (!latestStateLooksCombat && !latestStateLooksEvent && latestStateLooksReward && rewardMapLoop.LoopDetected))
         {
             return "reward-map-loop";
         }
@@ -2060,15 +2070,19 @@ static partial class LongRunArtifacts
     {
         return (string.Equals(entry.Phase, GuiSmokePhase.HandleEvent.ToString(), StringComparison.OrdinalIgnoreCase)
                 || string.Equals(entry.Phase, GuiSmokePhase.WaitMap.ToString(), StringComparison.OrdinalIgnoreCase)
-                || string.Equals(entry.Phase, GuiSmokePhase.ChooseFirstNode.ToString(), StringComparison.OrdinalIgnoreCase))
+                || string.Equals(entry.Phase, GuiSmokePhase.ChooseFirstNode.ToString(), StringComparison.OrdinalIgnoreCase)
+                || LooksLikeEventMapFallbackWait(entry))
                && (entry.ObserverSignals.Contains("map-transition-evidence", StringComparer.OrdinalIgnoreCase)
                    || entry.SceneSignature.Contains("substate:map-transition", StringComparison.OrdinalIgnoreCase)
-                   || entry.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase));
+                   || entry.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)
+                   || LooksLikeEventMapFallbackWait(entry));
     }
 
     private static bool IsMapTransitionLoopTarget(string? decisionTargetLabel)
     {
         return string.Equals(decisionTargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionTargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase);
     }
@@ -2094,6 +2108,15 @@ static partial class LongRunArtifacts
                || string.Equals(decisionTargetLabel, "overlay close", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "overlay backdrop close", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionTargetLabel, "inspect overlay escape", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeEventMapFallbackWait(GuiSmokeStepProgress entry)
+    {
+        return string.Equals(entry.Phase, GuiSmokePhase.WaitCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+               && string.Equals(entry.ObserverScreen, "event", StringComparison.OrdinalIgnoreCase)
+               && entry.ObserverSignals.Contains("alternate-branch:HandleEvent", StringComparer.OrdinalIgnoreCase)
+               && (entry.ObserverSignals.Contains("reward-explicit-progression", StringComparer.OrdinalIgnoreCase)
+                   || entry.ObserverSignals.Contains("choice-extractor:event", StringComparer.OrdinalIgnoreCase));
     }
 
     private static string NormalizeSceneSignatureForPlateau(string? sceneSignature)

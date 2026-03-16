@@ -275,9 +275,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (combatTargetChoices.Length > 0)
         {
             meta["combatTargetCount"] = combatTargetChoices.Length.ToString(CultureInfo.InvariantCulture);
+            meta["combatTargetCoordinateSpace"] = "logical-render";
+            meta["combatTargetClickCoordinateSpace"] = "current-window-normalized";
             meta["combatTargetSummary"] = string.Join(
                 ";",
-                combatTargetChoices.Select(choice => $"{choice.NodeId ?? choice.Label}@{choice.ScreenBounds}"));
+                combatTargetChoices.Select(choice => $"{choice.NodeId ?? choice.Label}@logical:{choice.ScreenBounds}@normalized:{FormatNormalizedBounds(choice.ScreenBounds)}"));
         }
 
         if (act is not null)
@@ -1281,7 +1283,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             "enemy-target",
             label,
             TryReadString(entity, "Id", "Name", "DisplayName"),
-            $"target-source:{targetSource}")
+            $"target-source:{targetSource}|coord-space:logical-render|click-space:current-window-normalized|normalized:{FormatNormalizedBounds(screenBounds)}")
         {
             NodeId = $"enemy-target:{ordinal}",
             ScreenBounds = screenBounds,
@@ -1360,6 +1362,33 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static string FormatBounds(double x, double y, double width, double height)
     {
         return string.Create(CultureInfo.InvariantCulture, $"{x:0.###},{y:0.###},{width:0.###},{height:0.###}");
+    }
+
+    private static string FormatNormalizedBounds(string? rawBounds)
+    {
+        if (!TryParseBounds(rawBounds ?? string.Empty, out var x, out var y, out var width, out var height))
+        {
+            return "unknown";
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{Clamp01(x / 1920d):0.####},{Clamp01(y / 1080d):0.####},{Clamp01(width / 1920d):0.####},{Clamp01(height / 1080d):0.####}");
+    }
+
+    private static double Clamp01(double value)
+    {
+        if (value < 0d)
+        {
+            return 0d;
+        }
+
+        if (value > 1d)
+        {
+            return 1d;
+        }
+
+        return value;
     }
 
     private static double TryGetBoundsSortX(string? rawBounds)
