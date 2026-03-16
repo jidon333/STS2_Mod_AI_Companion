@@ -2160,6 +2160,58 @@ static void RunSelfTest()
     Assert(new FileInfo(replayOutputPath).Length > 0, "Replay candidate dump file should not be empty.");
     Assert(File.ReadAllText(replayOutputPath) == replayDumpJson, "Replay candidate dump file should contain the same JSON that replay-step writes to stdout.");
     File.Delete(replayOutputPath);
+
+    var deployToolWorkspaceRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-deploy-tool-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        var toolProjectRoot = Path.Combine(deployToolWorkspaceRoot, "src", "Sts2ModKit.Tool");
+        Directory.CreateDirectory(toolProjectRoot);
+        File.WriteAllText(
+            Path.Combine(toolProjectRoot, "Sts2ModKit.Tool.csproj"),
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net7.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        static void WriteDeployToolOutput(string root, string configuration, string framework, string contents)
+        {
+            var outputRoot = Path.Combine(root, "bin", configuration, framework);
+            Directory.CreateDirectory(outputRoot);
+            var dllPath = Path.Combine(outputRoot, "Sts2ModKit.Tool.dll");
+            File.WriteAllText(dllPath, contents);
+            File.WriteAllText(Path.ChangeExtension(dllPath, ".deps.json"), "{}");
+            File.WriteAllText(Path.ChangeExtension(dllPath, ".runtimeconfig.json"), "{}");
+        }
+
+        WriteDeployToolOutput(toolProjectRoot, "Debug", "net7.0", "debug-net7");
+        WriteDeployToolOutput(toolProjectRoot, "Release", "net7.0", "release-net7");
+        WriteDeployToolOutput(toolProjectRoot, "Debug", "net8.0", "debug-net8");
+        File.SetLastWriteTimeUtc(Path.Combine(toolProjectRoot, "bin", "Debug", "net8.0", "Sts2ModKit.Tool.dll"), DateTime.UtcNow.AddMinutes(5));
+
+        var preferredDeployTool = TryFindBuiltDeployToolDll(deployToolWorkspaceRoot);
+        Assert(preferredDeployTool is not null
+               && preferredDeployTool.Path.EndsWith(Path.Combine("Debug", "net7.0", "Sts2ModKit.Tool.dll"), StringComparison.OrdinalIgnoreCase)
+               && preferredDeployTool.Reason.Contains("Debug/net7.0", StringComparison.OrdinalIgnoreCase),
+            "Deploy fast-path should prefer the explicit Debug/net7.0 tool output over newer but less preferred artifacts.");
+
+        Directory.Delete(Path.Combine(toolProjectRoot, "bin", "Debug", "net7.0"), recursive: true);
+        var fallbackDeployTool = TryFindBuiltDeployToolDll(deployToolWorkspaceRoot);
+        Assert(fallbackDeployTool is not null
+               && fallbackDeployTool.Path.EndsWith(Path.Combine("Release", "net7.0", "Sts2ModKit.Tool.dll"), StringComparison.OrdinalIgnoreCase)
+               && fallbackDeployTool.Reason.Contains("Release/net7.0", StringComparison.OrdinalIgnoreCase),
+            "Deploy fast-path should fall back to Release/net7.0 when the preferred Debug/net7.0 output is unavailable.");
+    }
+    finally
+    {
+        if (Directory.Exists(deployToolWorkspaceRoot))
+        {
+            Directory.Delete(deployToolWorkspaceRoot, recursive: true);
+        }
+    }
+
     ValidateDecision(
         GuiSmokePhase.EnterRun,
         request,
@@ -7344,17 +7396,19 @@ static bool TryResolveWslPathViaExe(string wslPath, out string translatedPath)
 
 static async Task RunDeployNativePackageAsync(string workspaceRoot)
 {
-    var builtToolDll = TryFindBuiltDeployToolDll(workspaceRoot);
-    if (!string.IsNullOrWhiteSpace(builtToolDll))
+    var builtTool = TryFindBuiltDeployToolDll(workspaceRoot);
+    if (builtTool is not null)
     {
+        LogHarness($"deploy fast-path tool={builtTool.Path} reason={builtTool.Reason}");
         await GuiSmokeShared.RunProcessAsync(
             "dotnet",
-            $"\"{builtToolDll}\" deploy-native-package --include-harness-bridge",
+            $"\"{builtTool.Path}\" deploy-native-package --include-harness-bridge",
             workspaceRoot,
             TimeSpan.FromMinutes(2)).ConfigureAwait(false);
         return;
     }
 
+    LogHarness("deploy fast-path unavailable; falling back to dotnet run --project src\\Sts2ModKit.Tool");
     await GuiSmokeShared.RunProcessAsync(
         "dotnet",
         "run --project src\\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge",
@@ -7362,17 +7416,115 @@ static async Task RunDeployNativePackageAsync(string workspaceRoot)
         TimeSpan.FromMinutes(5)).ConfigureAwait(false);
 }
 
-static string? TryFindBuiltDeployToolDll(string workspaceRoot)
+static GuiSmokeDeployToolSelection? TryFindBuiltDeployToolDll(string workspaceRoot)
 {
-    var toolBinRoot = Path.Combine(workspaceRoot, "src", "Sts2ModKit.Tool", "bin");
+    var toolProjectRoot = Path.Combine(workspaceRoot, "src", "Sts2ModKit.Tool");
+    var toolBinRoot = Path.Combine(toolProjectRoot, "bin");
     if (!Directory.Exists(toolBinRoot))
     {
         return null;
     }
 
+    var preferredFramework = TryReadDeployToolTargetFramework(toolProjectRoot) ?? "net7.0";
+    var preferredCandidates = new[]
+    {
+        new GuiSmokeDeployToolSelection(
+            Path.Combine(toolBinRoot, "Debug", preferredFramework, "Sts2ModKit.Tool.dll"),
+            $"preferred exact output path Debug/{preferredFramework}"),
+        new GuiSmokeDeployToolSelection(
+            Path.Combine(toolBinRoot, "Release", preferredFramework, "Sts2ModKit.Tool.dll"),
+            $"fallback exact output path Release/{preferredFramework}"),
+    };
+    foreach (var preferredCandidate in preferredCandidates)
+    {
+        if (IsUsableDeployToolArtifact(preferredCandidate.Path))
+        {
+            return preferredCandidate;
+        }
+    }
+
     return Directory.GetFiles(toolBinRoot, "Sts2ModKit.Tool.dll", SearchOption.AllDirectories)
-        .OrderByDescending(static path => File.GetLastWriteTimeUtc(path))
+        .Where(IsUsableDeployToolArtifact)
+        .Select(path => new GuiSmokeDeployToolSelection(
+            path,
+            $"validated fallback {DescribeDeployToolCandidate(path, toolBinRoot, preferredFramework)}"))
+        .OrderByDescending(selection => ScoreDeployToolCandidate(selection.Path, toolBinRoot, preferredFramework))
+        .ThenByDescending(selection => File.GetLastWriteTimeUtc(selection.Path))
         .FirstOrDefault();
+}
+
+static string? TryReadDeployToolTargetFramework(string toolProjectRoot)
+{
+    var projectPath = Path.Combine(toolProjectRoot, "Sts2ModKit.Tool.csproj");
+    if (!File.Exists(projectPath))
+    {
+        return null;
+    }
+
+    var projectText = File.ReadAllText(projectPath);
+    const string startTag = "<TargetFramework>";
+    const string endTag = "</TargetFramework>";
+    var startIndex = projectText.IndexOf(startTag, StringComparison.OrdinalIgnoreCase);
+    if (startIndex < 0)
+    {
+        return null;
+    }
+
+    startIndex += startTag.Length;
+    var endIndex = projectText.IndexOf(endTag, startIndex, StringComparison.OrdinalIgnoreCase);
+    if (endIndex < 0)
+    {
+        return null;
+    }
+
+    var targetFramework = projectText[startIndex..endIndex].Trim();
+    return string.IsNullOrWhiteSpace(targetFramework) ? null : targetFramework;
+}
+
+static bool IsUsableDeployToolArtifact(string path)
+{
+    if (!File.Exists(path))
+    {
+        return false;
+    }
+
+    var runtimeConfigPath = Path.ChangeExtension(path, ".runtimeconfig.json");
+    var depsPath = Path.ChangeExtension(path, ".deps.json");
+    return File.Exists(runtimeConfigPath)
+           && File.Exists(depsPath)
+           && new FileInfo(path).Length > 0;
+}
+
+static int ScoreDeployToolCandidate(string path, string toolBinRoot, string preferredFramework)
+{
+    var relativePath = Path.GetRelativePath(toolBinRoot, path).Replace('\\', '/');
+    if (string.Equals(relativePath, $"Debug/{preferredFramework}/Sts2ModKit.Tool.dll", StringComparison.OrdinalIgnoreCase))
+    {
+        return 400;
+    }
+
+    if (string.Equals(relativePath, $"Release/{preferredFramework}/Sts2ModKit.Tool.dll", StringComparison.OrdinalIgnoreCase))
+    {
+        return 300;
+    }
+
+    if (relativePath.Contains($"/{preferredFramework}/", StringComparison.OrdinalIgnoreCase))
+    {
+        return 200;
+    }
+
+    return 100;
+}
+
+static string DescribeDeployToolCandidate(string path, string toolBinRoot, string preferredFramework)
+{
+    var relativePath = Path.GetRelativePath(toolBinRoot, path).Replace('\\', '/');
+    if (relativePath.Contains($"/{preferredFramework}/", StringComparison.OrdinalIgnoreCase))
+    {
+        return $"{relativePath} (matches preferred framework {preferredFramework})";
+    }
+
+    return $"{relativePath} (fallback outside preferred framework {preferredFramework})";
 }
 
 static string BuildDeployFailureNote(Exception exception)
@@ -7604,6 +7756,10 @@ sealed record GuiSmokeFailureSummary(
     string? ObserverScreen,
     bool? ObserverInCombat,
     string? ScreenshotPath);
+
+sealed record GuiSmokeDeployToolSelection(
+    string Path,
+    string Reason);
 
 sealed record GuiSmokeValidationSummary(
     string RunId,
