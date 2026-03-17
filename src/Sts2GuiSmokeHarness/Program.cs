@@ -1072,9 +1072,44 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                     failureClass: ClassifyFailureForAttempt(phase, observer, plateauTerminalCause, launchFailed: false));
             }
 
+            if (TryClassifyRestSitePostClickNoOp(phase, request, decision, out var restSitePostClickNoOpMessage))
+            {
+                LogHarness($"step={stepIndex} abort {restSitePostClickNoOpMessage}");
+                AppendProgressIfLongRun(
+                    isLongRun,
+                    logger,
+                    EvaluateStepProgress(
+                        stepIndex,
+                        phase,
+                        request.SceneSignature,
+                        observer,
+                        null,
+                        decision,
+                        request.FirstSeenScene,
+                        request.ReasoningMode,
+                        false,
+                        sameActionStallCount,
+                        "rest-site-post-click-noop"));
+                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                    phase.ToString(),
+                    restSitePostClickNoOpMessage,
+                    observer.CurrentScreen,
+                    observer.InCombat,
+                    screenshotPath));
+                return CompleteAttempt(
+                    1,
+                    "failed",
+                    restSitePostClickNoOpMessage,
+                    terminalCause: "rest-site-post-click-noop",
+                    failureClass: ClassifyFailureForAttempt(phase, observer, "rest-site-post-click-noop", launchFailed: false));
+            }
+
             var waitMinimumMs = GetDecisionWaitMinimumMs(phase);
             LogHarness($"step={stepIndex} wait requested ms={Math.Max(250, decision.WaitMs ?? waitMinimumMs)}");
-            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "wait", decision.TargetLabel, DateTimeOffset.UtcNow));
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "wait", decision.TargetLabel, DateTimeOffset.UtcNow)
+            {
+                Metadata = AutoDecisionProvider.BuildRestSiteHistoryMetadataForDecision(request, decision),
+            });
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "wait", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
             AppendProgressIfLongRun(
                 isLongRun,
@@ -1461,7 +1496,10 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             var clickPoint = MouseInputDriver.TransformNormalizedPoint(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
             LogHarness($"step={stepIndex} click target={decision.TargetLabel ?? "null"} normalized=({decision.NormalizedX:0.000},{decision.NormalizedY:0.000}) absolute=({clickPoint.X},{clickPoint.Y}) bounds={DescribeBounds(clickWindow.Bounds)}");
             inputDriver.Click(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
-            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "click", decision.TargetLabel, DateTimeOffset.UtcNow));
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "click", decision.TargetLabel, DateTimeOffset.UtcNow)
+            {
+                Metadata = AutoDecisionProvider.BuildRestSiteHistoryMetadataForDecision(request, decision),
+            });
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "click", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
             LogHarness($"step={stepIndex} click sent target={decision.TargetLabel ?? "null"}");
         }
@@ -1630,8 +1668,10 @@ static bool IsLoopLikeAttempt(GuiSmokeAttemptResult result)
 {
     return (result.TerminalCause?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
            || (result.TerminalCause?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false)
+           || string.Equals(result.TerminalCause, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase)
            || (result.FailureClass?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
-           || (result.FailureClass?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false);
+           || (result.FailureClass?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false)
+           || string.Equals(result.FailureClass, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase);
 }
 
 static string ClassifyFailureForAttempt(
@@ -1661,6 +1701,7 @@ static string ClassifyFailureForAttempt(
         "decision-wait-plateau" => "decision-wait-plateau",
         "inspect-overlay-loop" => "inspect-overlay-loop",
         "combat-noop-loop" => "combat-noop-loop",
+        "rest-site-post-click-noop" => "rest-site-post-click-noop",
         "same-action-stall" => "screenshot-heuristic-drift",
         "decision-abort" => "semantic-scene-ambiguity",
         "phase-timeout" => "observer-blindspot",
@@ -1698,6 +1739,7 @@ static bool IsSceneDeadEndAttempt(GuiSmokeAttemptResult result)
            || string.Equals(result.TerminalCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.TerminalCause, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.TerminalCause, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.TerminalCause, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
@@ -1707,6 +1749,7 @@ static bool IsSceneDeadEndAttempt(GuiSmokeAttemptResult result)
            || string.Equals(result.FailureClass, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(result.FailureClass, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "observer-blindspot", StringComparison.OrdinalIgnoreCase)
            || string.Equals(result.FailureClass, "semantic-scene-ambiguity", StringComparison.OrdinalIgnoreCase)
@@ -2903,6 +2946,263 @@ static void RunSelfTest()
         if (File.Exists(eventContaminationScreenshotPath))
         {
             File.Delete(eventContaminationScreenshotPath);
+        }
+    }
+
+    using (var choiceMetadataDocument = JsonDocument.Parse(
+               """
+               {
+                 "currentChoices": [
+                   {
+                     "kind": "rest-option",
+                     "label": "Smith",
+                     "value": "SMITH",
+                     "description": "Upgrade a card.",
+                     "nodeId": "rest-site:SMITH",
+                     "screenBounds": "820,260,200,110",
+                     "bindingKind": "rest-site-option",
+                     "bindingId": "SMITH",
+                     "enabled": true,
+                     "iconAssetPath": "res://smith.png",
+                     "semanticHints": [
+                       "scene:rest-site",
+                       "option-id:SMITH",
+                       "source:button"
+                     ]
+                   }
+                 ]
+               }
+               """))
+    {
+        var parsedMetadataChoices = ObserverSnapshotReader.ParseChoicesForTesting(choiceMetadataDocument);
+        Assert(parsedMetadataChoices.Count == 1
+               && string.Equals(parsedMetadataChoices[0].NodeId, "rest-site:SMITH", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(parsedMetadataChoices[0].BindingKind, "rest-site-option", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(parsedMetadataChoices[0].BindingId, "SMITH", StringComparison.OrdinalIgnoreCase)
+               && parsedMetadataChoices[0].Enabled == true
+               && string.Equals(parsedMetadataChoices[0].IconAssetPath, "res://smith.png", StringComparison.OrdinalIgnoreCase)
+               && parsedMetadataChoices[0].SemanticHints.Contains("option-id:SMITH", StringComparer.OrdinalIgnoreCase),
+            "Observer choice reader should preserve rest-site binding metadata and semantic hints.");
+    }
+
+    using (var legacyChoiceDocument = JsonDocument.Parse(
+               """
+               {
+                 "currentChoices": [
+                   {
+                     "kind": "choice",
+                     "label": "Smith",
+                     "value": "smith",
+                     "screenBounds": "820,260,200,110"
+                   }
+                 ]
+               }
+               """))
+    {
+        var parsedLegacyChoices = ObserverSnapshotReader.ParseChoicesForTesting(legacyChoiceDocument);
+        Assert(parsedLegacyChoices.Count == 1
+               && parsedLegacyChoices[0].BindingId is null
+               && string.Equals(parsedLegacyChoices[0].Label, "Smith", StringComparison.OrdinalIgnoreCase),
+            "Observer choice reader should keep old artifacts readable when choice metadata fields are absent.");
+    }
+
+    var restSiteMetadataScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-rest-site-metadata-self-test-{Guid.NewGuid():N}.png");
+    try
+    {
+        using (var bitmap = new Bitmap(1280, 720))
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            graphics.Clear(Color.Black);
+            bitmap.Save(restSiteMetadataScreenshotPath, ImageFormat.Png);
+        }
+
+        var restSiteMetadataSummary = new ObserverSummary(
+            "map",
+            "map",
+            false,
+            DateTimeOffset.UtcNow,
+            "inv-rest-site",
+            true,
+            "mixed",
+            "stable",
+            "episode-rest-site",
+            "RestSite",
+            "rest",
+            70,
+            80,
+            null,
+            new[] { "Rest", "Smith", "Hatch", "Mend" },
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            new[]
+            {
+                new ObserverChoice("rest-option", "Rest", "520,260,200,110", "HEAL", "Recover HP")
+                {
+                    NodeId = "rest-site:HEAL",
+                    BindingKind = "rest-site-option",
+                    BindingId = "HEAL",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:rest-site", "option-id:HEAL", "source:button" },
+                },
+                new ObserverChoice("rest-option", "Smith", "820,260,200,110", "SMITH", "Upgrade a card")
+                {
+                    NodeId = "rest-site:SMITH",
+                    BindingKind = "rest-site-option",
+                    BindingId = "SMITH",
+                    Enabled = true,
+                    IconAssetPath = "res://smith.png",
+                    SemanticHints = new[] { "scene:rest-site", "option-id:SMITH", "source:button" },
+                },
+                new ObserverChoice("rest-option", "Hatch", "1120,260,200,110", "HATCH", "Hatch a card")
+                {
+                    NodeId = "rest-site:HATCH",
+                    BindingKind = "rest-site-option",
+                    BindingId = "HATCH",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:rest-site", "option-id:HATCH", "source:button" },
+                },
+                new ObserverChoice("rest-option", "Mend", "1420,260,200,110", "MEND", "Special rest-site option")
+                {
+                    NodeId = "rest-site:MEND",
+                    BindingKind = "rest-site-option",
+                    BindingId = "MEND",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:rest-site", "option-id:MEND", "source:button" },
+                },
+            },
+            Array.Empty<ObservedCombatHandCard>());
+        var restSiteMetadataObserver = new ObserverState(restSiteMetadataSummary, null, null, null);
+        var restSiteMetadataRequest = new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            10,
+            GuiSmokePhase.ChooseFirstNode.ToString(),
+            "Choose the authoritative rest-site option.",
+            DateTimeOffset.UtcNow,
+            restSiteMetadataScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:choosefirstnode|screen:map|visible:map|encounter:restsite|ready:true|stability:stable|room:rest-site|layer:map-background|layer:map-overlay-foreground",
+            "0001",
+            1,
+            3,
+            true,
+            "semantic",
+            null,
+            restSiteMetadataSummary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteMetadataObserver),
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Authoritative rest-site buttons must supply metadata and hitboxes.",
+            null);
+        var restSiteMetadataAnalysis = AutoDecisionProvider.Analyze(restSiteMetadataRequest);
+        Assert(string.Equals(restSiteMetadataAnalysis.FinalDecision.TargetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase),
+            "Metadata-first rest-site decisioning should prefer smith when HP is healthy.");
+        var selectedRestSiteCandidate = restSiteMetadataAnalysis.Candidates.Single(candidate => candidate.Selected);
+        Assert(!string.IsNullOrWhiteSpace(selectedRestSiteCandidate.RawBounds)
+               && !string.IsNullOrWhiteSpace(selectedRestSiteCandidate.BoundsSource)
+               && !string.Equals(selectedRestSiteCandidate.BoundsSource, "provider-external", StringComparison.OrdinalIgnoreCase),
+            "Selected authoritative rest-site candidate should retain raw bounds and a non-external bounds source.");
+        Assert(restSiteMetadataAnalysis.DebugSummary.SuppressedCandidates.Any(candidate => string.Equals(candidate.Label, "click visible map advance", StringComparison.OrdinalIgnoreCase))
+               && restSiteMetadataAnalysis.DebugSummary.SuppressedCandidates.Any(candidate => string.Equals(candidate.Label, "click exported reachable node", StringComparison.OrdinalIgnoreCase))
+               && restSiteMetadataAnalysis.DebugSummary.SuppressedCandidates.Any(candidate => string.Equals(candidate.Label, "click first reachable node", StringComparison.OrdinalIgnoreCase))
+               && restSiteMetadataAnalysis.DebugSummary.SuppressedCandidates.Any(candidate => string.Equals(candidate.Label, "click map back", StringComparison.OrdinalIgnoreCase)),
+            "Authoritative rest-site choices should keep map-routing fallbacks suppressed.");
+        Assert(restSiteMetadataAnalysis.Candidates.Any(candidate =>
+                string.Equals(candidate.Label, "click option:MEND", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(candidate.RejectReason, "not-default-auto-pick", StringComparison.OrdinalIgnoreCase)),
+            "Additional rest-site options should be visible in candidates but excluded from default auto-pick.");
+
+        var missingHitboxSummary = restSiteMetadataSummary with
+        {
+            Choices = new[]
+            {
+                new ObserverChoice("rest-option", "Smith", null, "SMITH", "Upgrade a card")
+                {
+                    NodeId = "rest-site:SMITH",
+                    BindingKind = "rest-site-option",
+                    BindingId = "SMITH",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:rest-site", "option-id:SMITH", "source:button" },
+                },
+            },
+            CurrentChoices = new[] { "Smith" },
+        };
+        var missingHitboxRequest = restSiteMetadataRequest with
+        {
+            Observer = missingHitboxSummary,
+            AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(missingHitboxSummary, null, null, null)),
+        };
+        var missingHitboxAnalysis = AutoDecisionProvider.Analyze(missingHitboxRequest);
+        Assert(string.Equals(missingHitboxAnalysis.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+               && missingHitboxAnalysis.Candidates.Any(candidate =>
+                   string.Equals(candidate.Label, "click rest site choice", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(candidate.RejectReason, "missing-hitbox-for-explicit-choice", StringComparison.OrdinalIgnoreCase)),
+            "Authoritative rest-site options without hitboxes should wait and record missing-hitbox-for-explicit-choice instead of using fixed coordinates.");
+
+        var fingerprint = RestSiteChoiceSupport.BuildExplicitChoiceFingerprint(restSiteMetadataSummary);
+        var firstSmithClick = new GuiSmokeHistoryEntry(
+            GuiSmokePhase.ChooseFirstNode.ToString(),
+            "click",
+            "rest site: smith",
+            DateTimeOffset.UtcNow.AddSeconds(-2))
+        {
+            Metadata = JsonSerializer.Serialize(
+                new RestSiteActionMetadata("explicit-click", "rest site: smith", fingerprint),
+                GuiSmokeShared.JsonOptions),
+        };
+        var graceRequest = restSiteMetadataRequest with
+        {
+            History = new[] { firstSmithClick },
+        };
+        var graceDecision = AutoDecisionProvider.Decide(graceRequest);
+        Assert(string.Equals(graceDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(graceDecision.DecisionRisk, "rest-site-post-click-recapture-grace", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(graceDecision.TargetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase),
+            "After a rest-site option click, the next identical fingerprint should yield a single recapture grace wait instead of another smith click.");
+
+        var graceHistoryEntry = new GuiSmokeHistoryEntry(
+            GuiSmokePhase.ChooseFirstNode.ToString(),
+            "wait",
+            graceDecision.TargetLabel,
+            DateTimeOffset.UtcNow.AddSeconds(-1))
+        {
+            Metadata = AutoDecisionProvider.BuildRestSiteHistoryMetadataForDecision(graceRequest, graceDecision),
+        };
+        var noOpRequest = restSiteMetadataRequest with
+        {
+            History = new[] { firstSmithClick, graceHistoryEntry },
+        };
+        var noOpDecision = AutoDecisionProvider.Decide(noOpRequest);
+        Assert(string.Equals(noOpDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(noOpDecision.DecisionRisk, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase)
+               && TryClassifyRestSitePostClickNoOp(GuiSmokePhase.ChooseFirstNode, noOpRequest, noOpDecision, out var noOpMessage)
+               && noOpMessage.Contains("rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase),
+            "A repeated explicit rest-site fingerprint after grace should escalate to rest-site-post-click-noop and stop repeated smith clicks.");
+
+        var legacyRestSiteRequestPath = Path.Combine(
+            Directory.GetCurrentDirectory(),
+            "artifacts",
+            "gui-smoke",
+            "verify-longrun-20260316-10",
+            "attempts",
+            "0001",
+            "steps",
+            "0010.request.json");
+        if (File.Exists(legacyRestSiteRequestPath))
+        {
+            var legacyReplayRequest = LoadReplayRequest(legacyRestSiteRequestPath).Request;
+            var legacyReplayArtifact = EvaluateAutoDecisionWithDiagnostics(legacyRestSiteRequestPath, legacyReplayRequest).CandidateDump;
+            Assert(string.Equals(legacyReplayArtifact.FinalDecision.TargetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase),
+                "Legacy replay artifact without binding metadata should still choose rest site: smith.");
+        }
+    }
+    finally
+    {
+        if (File.Exists(restSiteMetadataScreenshotPath))
+        {
+            File.Delete(restSiteMetadataScreenshotPath);
         }
     }
 
@@ -4111,6 +4411,63 @@ static void RunSelfTest()
         if (Directory.Exists(supervisorWriteStabilityRoot))
         {
             Directory.Delete(supervisorWriteStabilityRoot, recursive: true);
+        }
+    }
+
+    var restSiteNoOpSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-rest-site-noop-sentinel-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(restSiteNoOpSentinelRoot);
+        var runRoot = Path.Combine(restSiteNoOpSentinelRoot, "attempts", "0001");
+        Directory.CreateDirectory(runRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(restSiteNoOpSentinelRoot, "rest-site-noop-session", "boot-to-long-run", "headless");
+        File.WriteAllLines(
+            Path.Combine(restSiteNoOpSentinelRoot, "attempt-index.ndjson"),
+            new[]
+            {
+                JsonSerializer.Serialize(
+                    new GuiSmokeAttemptIndexEntry(
+                        "0001",
+                        1,
+                        "rest-site-noop-session",
+                        "failed",
+                        "synthetic rest-site post-click noop",
+                        DateTimeOffset.UtcNow.AddSeconds(-30),
+                        DateTimeOffset.UtcNow.AddSeconds(-5),
+                        6,
+                        "rest-site-post-click-noop",
+                        false,
+                        "rest-site-post-click-noop",
+                        GuiSmokeContractStates.TrustValid),
+                    GuiSmokeShared.NdjsonOptions),
+            });
+        File.WriteAllText(
+            Path.Combine(runRoot, "failure-summary.json"),
+            JsonSerializer.Serialize(
+                new GuiSmokeFailureSummary(
+                    GuiSmokePhase.ChooseFirstNode.ToString(),
+                    "rest-site-post-click-noop synthetic failure",
+                    "map",
+                    false,
+                    "synthetic-rest-site-post-click-noop.png"),
+                GuiSmokeShared.JsonOptions));
+        LongRunArtifacts.RefreshStallSentinel(restSiteNoOpSentinelRoot);
+        var diagnosisEntries = File.ReadLines(Path.Combine(restSiteNoOpSentinelRoot, "stall-diagnosis.ndjson"))
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+            .Where(static entry => entry is not null)
+            .Cast<GuiSmokeStallDiagnosisEntry>()
+            .ToArray();
+        Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic rest-site post-click noop attempt.");
+        Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase)
+               && diagnosisEntries[0].StallDetected,
+            "Stall sentinel should preserve rest-site-post-click-noop as a first-class diagnosis kind.");
+    }
+    finally
+    {
+        if (Directory.Exists(restSiteNoOpSentinelRoot))
+        {
+            Directory.Delete(restSiteNoOpSentinelRoot, recursive: true);
         }
     }
 
@@ -6204,82 +6561,12 @@ static bool HasRestSiteAuthority(ObserverSummary observer)
 
 static bool HasExplicitRestSiteChoiceAffordance(ObserverSummary observer)
 {
-    return observer.CurrentChoices.Any(IsExplicitRestSiteChoiceLabel)
-           || observer.Choices.Any(static choice => IsExplicitRestSiteChoiceLabel(choice.Label))
-           || observer.ActionNodes.Any(static node => node.Actionable && IsExplicitRestSiteChoiceLabel(node.Label));
+    return RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
 }
 
 static string[] BuildExplicitRestSiteAllowedActions(ObserverSummary observer)
 {
-    var actions = new List<string>(capacity: 6);
-    if (HasRestSiteRestChoice(observer))
-    {
-        actions.Add("click rest option");
-    }
-
-    if (HasRestSiteSmithChoice(observer))
-    {
-        actions.Add("click smith option");
-    }
-
-    if (HasRestSiteHatchChoice(observer))
-    {
-        actions.Add("click hatch option");
-    }
-
-    actions.Add("click smith card");
-    actions.Add("click smith confirm");
-    actions.Add("wait");
-    return actions.ToArray();
-}
-
-static bool IsExplicitRestSiteChoiceLabel(string? label)
-{
-    return HasRestSiteRestLabel(label)
-           || HasRestSiteSmithLabel(label)
-           || HasRestSiteHatchLabel(label);
-}
-
-static bool HasRestSiteRestChoice(ObserverSummary observer)
-{
-    return observer.CurrentChoices.Any(HasRestSiteRestLabel)
-           || observer.Choices.Any(choice => HasRestSiteRestLabel(choice.Label))
-           || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteRestLabel(node.Label));
-}
-
-static bool HasRestSiteSmithChoice(ObserverSummary observer)
-{
-    return observer.CurrentChoices.Any(HasRestSiteSmithLabel)
-           || observer.Choices.Any(choice => HasRestSiteSmithLabel(choice.Label))
-           || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteSmithLabel(node.Label));
-}
-
-static bool HasRestSiteHatchChoice(ObserverSummary observer)
-{
-    return observer.CurrentChoices.Any(HasRestSiteHatchLabel)
-           || observer.Choices.Any(choice => HasRestSiteHatchLabel(choice.Label))
-           || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteHatchLabel(node.Label));
-}
-
-static bool HasRestSiteRestLabel(string? label)
-{
-    return !string.IsNullOrWhiteSpace(label)
-           && (label.Contains("휴식", StringComparison.OrdinalIgnoreCase)
-               || label.Contains("Rest", StringComparison.OrdinalIgnoreCase));
-}
-
-static bool HasRestSiteSmithLabel(string? label)
-{
-    return !string.IsNullOrWhiteSpace(label)
-           && (label.Contains("재련", StringComparison.OrdinalIgnoreCase)
-               || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
-}
-
-static bool HasRestSiteHatchLabel(string? label)
-{
-    return !string.IsNullOrWhiteSpace(label)
-           && (label.Contains("부화", StringComparison.OrdinalIgnoreCase)
-               || label.Contains("Hatch", StringComparison.OrdinalIgnoreCase));
+    return RestSiteChoiceSupport.BuildAllowedActions(observer).ToArray();
 }
 
 static bool LooksLikeSingleplayerSubmenuState(ObserverSummary observer)
@@ -6411,7 +6698,10 @@ static bool IsRoomProgressTarget(string? targetLabel)
            || string.Equals(targetLabel, "overlay close", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "overlay backdrop close", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "rest site: rest", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(targetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase);
+           || string.Equals(targetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "rest site: hatch", StringComparison.OrdinalIgnoreCase)
+           || (!string.IsNullOrWhiteSpace(targetLabel)
+               && targetLabel.StartsWith("rest site: option:", StringComparison.OrdinalIgnoreCase));
 }
 
 static bool KeepsCurrentRoomPhase(string? targetLabel)
@@ -6774,6 +7064,30 @@ static bool TryClassifyCombatNoOpLoop(
     }
 
     message = $"combat-noop-loop phase={phase} blockedSlot={blockedSlot} energy={request.Observer.PlayerEnergy?.ToString(CultureInfo.InvariantCulture) ?? "null"} repeats={analysis.RepeatedSelectionCount}";
+    return true;
+}
+
+static bool TryClassifyRestSitePostClickNoOp(
+    GuiSmokePhase phase,
+    GuiSmokeStepRequest request,
+    GuiSmokeStepDecision decision,
+    out string message)
+{
+    message = string.Empty;
+    if (phase is not GuiSmokePhase.ChooseFirstNode and not GuiSmokePhase.WaitMap)
+    {
+        return false;
+    }
+
+    if (!string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(decision.DecisionRisk, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase)
+        || !AutoDecisionProvider.HasExplicitRestSiteChoiceAuthorityForRequest(request)
+        || !AutoDecisionProvider.IsExplicitRestSiteOptionTargetLabel(decision.TargetLabel))
+    {
+        return false;
+    }
+
+    message = $"rest-site-post-click-noop phase={phase} target={decision.TargetLabel ?? "null"} observer={request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "null"} fingerprint={RestSiteChoiceSupport.BuildExplicitChoiceFingerprint(request.Observer)}";
     return true;
 }
 
@@ -8825,7 +9139,10 @@ sealed record GuiSmokeHistoryEntry(
     string Phase,
     string Action,
     string? TargetLabel,
-    DateTimeOffset RecordedAt);
+    DateTimeOffset RecordedAt)
+{
+    public string? Metadata { get; init; }
+}
 
 sealed record WindowBounds(
     int X,
@@ -8995,13 +9312,59 @@ sealed record ObserverChoice(
     string Label,
     string? ScreenBounds,
     string? Value = null,
-    string? Description = null);
+    string? Description = null)
+{
+    public string? NodeId { get; init; }
+
+    public string? BindingKind { get; init; }
+
+    public string? BindingId { get; init; }
+
+    public bool? Enabled { get; init; }
+
+    public string? IconAssetPath { get; init; }
+
+    public IReadOnlyList<string> SemanticHints { get; init; } = Array.Empty<string>();
+}
 
 sealed record ObservedCombatHandCard(
     int SlotIndex,
     string Name,
     string? Type,
     int? Cost);
+
+sealed record RestSiteObservedChoice(
+    string OptionId,
+    string TargetLabel,
+    string CandidateLabel,
+    string Label,
+    string? Description,
+    bool HasMetadata,
+    bool IsEnabled,
+    bool IsDefaultAutoPick,
+    ObserverChoice? Choice,
+    ObserverActionNode? ActionNode);
+
+sealed record RestSiteDecisionCandidate(
+    string Label,
+    string Source,
+    double Score,
+    string? RejectReason,
+    string? RawBounds,
+    string? BoundsSource,
+    GuiSmokeStepDecision? Decision);
+
+sealed record RestSiteActionMetadata(
+    string Kind,
+    string TargetLabel,
+    string Fingerprint);
+
+enum RestSiteExplicitChoiceRepeatState
+{
+    None,
+    GraceNeeded,
+    NoOpDetected,
+}
 
 sealed record ObserverState(
     ObserverSummary Summary,
@@ -9030,6 +9393,364 @@ sealed record ObserverState(
 
     public string? EncounterKind => Summary.EncounterKind;
     public string? ChoiceExtractorPath => Summary.ChoiceExtractorPath;
+}
+
+static class RestSiteChoiceSupport
+{
+    private static readonly string[] DefaultAutoPickIds = { "HEAL", "SMITH", "HATCH" };
+
+    public static IReadOnlyList<RestSiteObservedChoice> GetObservedChoices(ObserverSummary observer)
+    {
+        var metadataChoices = observer.Choices
+            .Where(HasAuthoritativeMetadata)
+            .Select(choice => CreateObservedChoiceFromMetadata(observer, choice))
+            .Where(static choice => choice is not null)
+            .Cast<RestSiteObservedChoice>()
+            .GroupBy(static choice => choice.OptionId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderBy(static choice => string.IsNullOrWhiteSpace(choice.Choice?.ScreenBounds) ? 1 : 0)
+                .ThenBy(static choice => TryGetSortX(choice.Choice?.ScreenBounds))
+                .ThenBy(static choice => TryGetSortY(choice.Choice?.ScreenBounds))
+                .ThenBy(static choice => choice.Label, StringComparer.Ordinal)
+                .First())
+            .OrderBy(static choice => TryGetSortX(choice.Choice?.ScreenBounds))
+            .ThenBy(static choice => TryGetSortY(choice.Choice?.ScreenBounds))
+            .ThenBy(static choice => choice.OptionId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (metadataChoices.Length > 0)
+        {
+            return metadataChoices;
+        }
+
+        return DefaultAutoPickIds
+            .Select(optionId => CreateObservedChoiceFromLegacy(observer, optionId))
+            .Where(static choice => choice is not null)
+            .Cast<RestSiteObservedChoice>()
+            .ToArray();
+    }
+
+    public static bool HasExplicitRestSiteChoiceAffordance(ObserverSummary observer)
+        => GetObservedChoices(observer).Count > 0;
+
+    public static bool HasRestSiteRestChoice(ObserverSummary observer)
+        => GetObservedChoices(observer).Any(static choice => string.Equals(choice.OptionId, "HEAL", StringComparison.OrdinalIgnoreCase));
+
+    public static bool HasRestSiteSmithChoice(ObserverSummary observer)
+        => GetObservedChoices(observer).Any(static choice => string.Equals(choice.OptionId, "SMITH", StringComparison.OrdinalIgnoreCase));
+
+    public static bool HasRestSiteHatchChoice(ObserverSummary observer)
+        => GetObservedChoices(observer).Any(static choice => string.Equals(choice.OptionId, "HATCH", StringComparison.OrdinalIgnoreCase));
+
+    public static IReadOnlyList<string> BuildAllowedActions(ObserverSummary observer)
+    {
+        return GetObservedChoices(observer)
+            .Select(static choice => choice.CandidateLabel)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Concat(new[] { "click smith card", "click smith confirm", "wait" })
+            .ToArray();
+    }
+
+    public static IReadOnlyList<string> BuildCandidateLabels(ObserverSummary observer)
+        => BuildAllowedActions(observer);
+
+    public static bool HasAuthoritativeMetadata(ObserverSummary observer)
+        => GetObservedChoices(observer).Any(static choice => choice.HasMetadata);
+
+    public static bool HasAuthoritativeMetadata(ObserverChoice choice)
+    {
+        if (choice is null)
+        {
+            return false;
+        }
+
+        return string.Equals(choice.BindingKind, "rest-site-option", StringComparison.OrdinalIgnoreCase)
+               || !string.IsNullOrWhiteSpace(choice.BindingId)
+               || string.Equals(choice.Kind, "rest-option", StringComparison.OrdinalIgnoreCase)
+               || (!string.IsNullOrWhiteSpace(choice.NodeId)
+                   && choice.NodeId.StartsWith("rest-site:", StringComparison.OrdinalIgnoreCase))
+               || choice.SemanticHints.Any(static hint => hint.StartsWith("option-id:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static string? NormalizeOptionId(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var trimmed = raw.Trim();
+        if (trimmed.StartsWith("rest-site:", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed["rest-site:".Length..];
+        }
+
+        if (trimmed.StartsWith("option:", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed["option:".Length..];
+        }
+
+        if (trimmed.StartsWith("OPTION_", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed["OPTION_".Length..];
+        }
+
+        trimmed = trimmed.ToUpperInvariant();
+        return trimmed switch
+        {
+            "REST" => "HEAL",
+            "SMITH" => "SMITH",
+            "HATCH" => "HATCH",
+            "HEAL" => "HEAL",
+            _ when string.IsNullOrWhiteSpace(trimmed) => null,
+            _ => trimmed,
+        };
+    }
+
+    public static string? MapLabelToOptionId(string? label)
+    {
+        if (HasRestSiteRestLabelInternal(label))
+        {
+            return "HEAL";
+        }
+
+        if (HasRestSiteSmithLabelInternal(label))
+        {
+            return "SMITH";
+        }
+
+        if (HasRestSiteHatchLabelInternal(label))
+        {
+            return "HATCH";
+        }
+
+        return null;
+    }
+
+    public static string? TryResolveOptionId(ObserverChoice choice)
+    {
+        var semanticOptionId = choice.SemanticHints
+            .FirstOrDefault(static hint => hint.StartsWith("option-id:", StringComparison.OrdinalIgnoreCase));
+        return NormalizeOptionId(
+            choice.BindingId
+            ?? ExtractOptionIdFromNodeId(choice.NodeId)
+            ?? choice.Value
+            ?? semanticOptionId?["option-id:".Length..]
+            ?? MapLabelToOptionId(choice.Label));
+    }
+
+    public static string MapOptionIdToTargetLabel(string optionId)
+    {
+        return NormalizeOptionId(optionId) switch
+        {
+            "HEAL" => "rest site: rest",
+            "SMITH" => "rest site: smith",
+            "HATCH" => "rest site: hatch",
+            { Length: > 0 } normalized => $"rest site: option:{normalized}",
+            _ => "rest site: smith",
+        };
+    }
+
+    public static string MapOptionIdToCandidateLabel(string optionId)
+    {
+        return NormalizeOptionId(optionId) switch
+        {
+            "HEAL" => "click rest site choice",
+            "SMITH" => "click rest site choice",
+            "HATCH" => "click rest site choice",
+            { Length: > 0 } normalized => $"click option:{normalized}",
+            _ => "click rest site choice",
+        };
+    }
+
+    public static string BuildExplicitChoiceFingerprint(ObserverSummary observer)
+    {
+        var options = GetObservedChoices(observer)
+            .Select(static choice => $"{choice.OptionId}:{choice.IsEnabled.ToString().ToLowerInvariant()}")
+            .ToArray();
+        return string.Join(
+            "|",
+            "rest-site",
+            observer.EncounterKind ?? "none",
+            observer.ChoiceExtractorPath ?? "unknown",
+            string.Join(",", options));
+    }
+
+    public static string? DetermineAutoPickOptionId(ObserverSummary observer)
+    {
+        var options = GetObservedChoices(observer);
+        if (options.Count == 0)
+        {
+            return null;
+        }
+
+        var hasMetadata = options.Any(static option => option.HasMetadata);
+        static bool IsActionable(RestSiteObservedChoice option, bool hasMetadata)
+            => !hasMetadata || option.IsEnabled;
+
+        var maxHp = observer.PlayerMaxHp ?? 0;
+        var currentHp = observer.PlayerCurrentHp ?? 0;
+        var shouldRest = options.Any(option => string.Equals(option.OptionId, "HEAL", StringComparison.OrdinalIgnoreCase) && IsActionable(option, hasMetadata))
+                         && (maxHp <= 0 || currentHp <= Math.Ceiling(maxHp * 0.70d));
+        if (shouldRest)
+        {
+            return "HEAL";
+        }
+
+        if (options.Any(option => string.Equals(option.OptionId, "SMITH", StringComparison.OrdinalIgnoreCase) && IsActionable(option, hasMetadata)))
+        {
+            return "SMITH";
+        }
+
+        if (options.Any(option => string.Equals(option.OptionId, "HATCH", StringComparison.OrdinalIgnoreCase) && IsActionable(option, hasMetadata)))
+        {
+            return "HATCH";
+        }
+
+        return null;
+    }
+
+    private static RestSiteObservedChoice? CreateObservedChoiceFromMetadata(ObserverSummary observer, ObserverChoice choice)
+    {
+        var optionId = TryResolveOptionId(choice);
+        if (string.IsNullOrWhiteSpace(optionId))
+        {
+            return null;
+        }
+
+        var normalizedOptionId = NormalizeOptionId(optionId);
+        if (string.IsNullOrWhiteSpace(normalizedOptionId))
+        {
+            return null;
+        }
+
+        var matchingNode = FindMatchingActionNode(observer, choice, normalizedOptionId);
+        return new RestSiteObservedChoice(
+            normalizedOptionId,
+            MapOptionIdToTargetLabel(normalizedOptionId),
+            MapOptionIdToCandidateLabel(normalizedOptionId),
+            choice.Label,
+            choice.Description,
+            HasMetadata: true,
+            IsEnabled: choice.Enabled ?? matchingNode?.Actionable ?? true,
+            IsDefaultAutoPick: DefaultAutoPickIds.Contains(normalizedOptionId, StringComparer.OrdinalIgnoreCase),
+            Choice: choice,
+            ActionNode: matchingNode);
+    }
+
+    private static RestSiteObservedChoice? CreateObservedChoiceFromLegacy(ObserverSummary observer, string optionId)
+    {
+        var matchingChoice = observer.Choices.FirstOrDefault(choice => MatchesOption(choice.Label, optionId));
+        var matchingNode = observer.ActionNodes.FirstOrDefault(node => node.Actionable && MatchesOption(node.Label, optionId));
+        if (matchingChoice is null
+            && matchingNode is null
+            && !observer.CurrentChoices.Any(label => MatchesOption(label, optionId)))
+        {
+            return null;
+        }
+
+        return new RestSiteObservedChoice(
+            optionId,
+            MapOptionIdToTargetLabel(optionId),
+            MapOptionIdToCandidateLabel(optionId),
+            matchingChoice?.Label ?? matchingNode?.Label ?? MapOptionIdToTargetLabel(optionId),
+            matchingChoice?.Description,
+            HasMetadata: false,
+            IsEnabled: matchingNode?.Actionable ?? true,
+            IsDefaultAutoPick: true,
+            Choice: matchingChoice,
+            ActionNode: matchingNode);
+    }
+
+    private static ObserverActionNode? FindMatchingActionNode(ObserverSummary observer, ObserverChoice choice, string optionId)
+    {
+        if (!string.IsNullOrWhiteSpace(choice.NodeId))
+        {
+            var nodeById = observer.ActionNodes.FirstOrDefault(node => string.Equals(node.NodeId, choice.NodeId, StringComparison.OrdinalIgnoreCase));
+            if (nodeById is not null)
+            {
+                return nodeById;
+            }
+        }
+
+        return observer.ActionNodes.FirstOrDefault(node =>
+            MatchesOption(node.Label, optionId)
+            || string.Equals(ExtractOptionIdFromNodeId(node.NodeId), optionId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? ExtractOptionIdFromNodeId(string? nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(nodeId))
+        {
+            return null;
+        }
+
+        var prefix = "rest-site:";
+        return nodeId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? NormalizeOptionId(nodeId[prefix.Length..])
+            : null;
+    }
+
+    private static bool MatchesOption(string? label, string optionId)
+    {
+        return NormalizeOptionId(optionId) switch
+        {
+            "HEAL" => HasRestSiteRestLabelInternal(label),
+            "SMITH" => HasRestSiteSmithLabelInternal(label),
+            "HATCH" => HasRestSiteHatchLabelInternal(label),
+            _ => false,
+        };
+    }
+
+    private static double TryGetSortX(string? rawBounds)
+        => TryParseBoundsInternal(rawBounds, out var bounds) ? bounds.X : double.MaxValue;
+
+    private static double TryGetSortY(string? rawBounds)
+        => TryParseBoundsInternal(rawBounds, out var bounds) ? bounds.Y : double.MaxValue;
+
+    private static bool HasRestSiteRestLabelInternal(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("휴식", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Rest", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasRestSiteSmithLabelInternal(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("재련", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasRestSiteHatchLabelInternal(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("부화", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Hatch", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool TryParseBoundsInternal(string? rawBounds, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(rawBounds))
+        {
+            return false;
+        }
+
+        var parts = rawBounds.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height)
+            || width <= 0f
+            || height <= 0f)
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return true;
+    }
 }
 
 static class GuiSmokeForegroundHeuristics
@@ -10944,12 +11665,19 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             builder.AddSuppressed("click first reachable node", "rest-site-explicit-choices-outrank-screenshot-map-routing");
             builder.AddSuppressed("click visible map advance", "rest-site-explicit-choices-suppress-current-node-arrow");
             builder.AddSuppressed("click map back", "rest-site-explicit-choices-are-the-progression-lane");
-            builder.Consider(
-                ToCandidateLabel(TryCreateRestSiteDecision(request), "click rest site choice"),
-                "rest-site-choice",
-                1.00d,
-                () => TryCreateRestSiteDecision(request),
-                "no-rest-site-explicit-choice");
+            foreach (var restSiteCandidate in BuildRestSiteDecisionCandidates(request))
+            {
+                var capturedCandidate = restSiteCandidate;
+                builder.Consider(
+                    capturedCandidate.Label,
+                    capturedCandidate.Source,
+                    capturedCandidate.Score,
+                    () => capturedCandidate.Decision,
+                    capturedCandidate.RejectReason ?? "no-rest-site-explicit-choice",
+                    rawBounds: capturedCandidate.RawBounds,
+                    boundsSource: capturedCandidate.BoundsSource);
+            }
+
             builder.Consider(
                 ToCandidateLabel(TryCreateRestSiteUpgradeDecision(request), "click smith card"),
                 "rest-site-upgrade",
@@ -11160,54 +11888,27 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static string[] BuildExplicitRestSiteCandidateLabels(ObserverSummary observer)
     {
-        var labels = new List<string>(capacity: 6);
-        if (HasRestSiteRestChoice(observer))
-        {
-            labels.Add("click rest option");
-        }
-
-        if (HasRestSiteSmithChoice(observer))
-        {
-            labels.Add("click smith option");
-        }
-
-        if (HasRestSiteHatchChoice(observer))
-        {
-            labels.Add("click hatch option");
-        }
-
-        labels.Add("click smith card");
-        labels.Add("click smith confirm");
-        labels.Add("wait");
-        return labels.ToArray();
+        return RestSiteChoiceSupport.BuildCandidateLabels(observer).ToArray();
     }
 
     private static bool HasExplicitRestSiteChoiceAffordance(ObserverSummary observer)
     {
-        return observer.CurrentChoices.Any(IsExplicitRestSiteChoiceLabel)
-               || observer.Choices.Any(static choice => IsExplicitRestSiteChoiceLabel(choice.Label))
-               || observer.ActionNodes.Any(static node => node.Actionable && IsExplicitRestSiteChoiceLabel(node.Label));
+        return RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
     }
 
     private static bool HasRestSiteRestChoice(ObserverSummary observer)
     {
-        return observer.CurrentChoices.Any(HasRestSiteRestLabel)
-               || observer.Choices.Any(choice => HasRestSiteRestLabel(choice.Label))
-               || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteRestLabel(node.Label));
+        return RestSiteChoiceSupport.HasRestSiteRestChoice(observer);
     }
 
     private static bool HasRestSiteSmithChoice(ObserverSummary observer)
     {
-        return observer.CurrentChoices.Any(HasRestSiteSmithLabel)
-               || observer.Choices.Any(choice => HasRestSiteSmithLabel(choice.Label))
-               || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteSmithLabel(node.Label));
+        return RestSiteChoiceSupport.HasRestSiteSmithChoice(observer);
     }
 
     private static bool HasRestSiteHatchChoice(ObserverSummary observer)
     {
-        return observer.CurrentChoices.Any(HasRestSiteHatchLabel)
-               || observer.Choices.Any(choice => HasRestSiteHatchLabel(choice.Label))
-               || observer.ActionNodes.Any(node => node.Actionable && HasRestSiteHatchLabel(node.Label));
+        return RestSiteChoiceSupport.HasRestSiteHatchChoice(observer);
     }
 
     private static bool IsExplicitRestSiteChoiceLabel(string? label)
@@ -11269,13 +11970,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool MatchesRestSiteTarget(string? label, string targetLabel)
     {
-        return targetLabel switch
-        {
-            "rest site: rest" => HasRestSiteRestLabel(label),
-            "rest site: smith" => HasRestSiteSmithLabel(label),
-            "rest site: hatch" => HasRestSiteHatchLabel(label),
-            _ => false,
-        };
+        return RestSiteChoiceSupport.MapOptionIdToTargetLabel(RestSiteChoiceSupport.MapLabelToOptionId(label) ?? string.Empty)
+            .Equals(targetLabel, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildRestSiteChoiceReason(string targetLabel, int currentHp, int maxHp)
@@ -11286,6 +11982,309 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             "rest site: hatch" => "Rest site detected from explicit choices. Hatch is visible and no stronger rest/smith lane is available.",
             _ => "Rest site detected from explicit choices. HP is healthy enough to prefer smithing over generic map routing.",
         };
+    }
+
+    private static IReadOnlyList<RestSiteDecisionCandidate> BuildRestSiteDecisionCandidates(GuiSmokeStepRequest request)
+    {
+        var observedChoices = RestSiteChoiceSupport.GetObservedChoices(request.Observer);
+        if (observedChoices.Count == 0)
+        {
+            return Array.Empty<RestSiteDecisionCandidate>();
+        }
+
+        var selectedOptionId = RestSiteChoiceSupport.DetermineAutoPickOptionId(request.Observer);
+        return observedChoices
+            .Select(choice => BuildRestSiteDecisionCandidate(request, choice, selectedOptionId))
+            .ToArray();
+    }
+
+    private static RestSiteDecisionCandidate BuildRestSiteDecisionCandidate(
+        GuiSmokeStepRequest request,
+        RestSiteObservedChoice choice,
+        string? selectedOptionId)
+    {
+        var targetLabel = choice.TargetLabel;
+        var rawBounds = choice.HasMetadata
+            ? choice.Choice?.ScreenBounds
+            : choice.Choice?.ScreenBounds ?? choice.ActionNode?.ScreenBounds;
+        var boundsSource = choice.HasMetadata
+            ? !string.IsNullOrWhiteSpace(choice.Choice?.ScreenBounds) ? "observer-rest-site-choice" : null
+            : !string.IsNullOrWhiteSpace(choice.Choice?.ScreenBounds)
+                ? "observer-rest-site-choice-legacy"
+                : !string.IsNullOrWhiteSpace(choice.ActionNode?.ScreenBounds)
+                    ? "observer-rest-site-node-legacy"
+                    : "fixed-rest-site-fallback";
+        var rejectReason = "no-rest-site-decision";
+        GuiSmokeStepDecision? decision = null;
+
+        if (!choice.IsDefaultAutoPick)
+        {
+            rejectReason = "not-default-auto-pick";
+        }
+        else if (string.IsNullOrWhiteSpace(selectedOptionId)
+                 || !string.Equals(choice.OptionId, selectedOptionId, StringComparison.OrdinalIgnoreCase))
+        {
+            rejectReason = "not-selected-by-rest-site-policy";
+        }
+        else if (choice.HasMetadata && !choice.IsEnabled)
+        {
+            rejectReason = "disabled-explicit-choice";
+        }
+        else
+        {
+            var repeatState = GetRestSiteExplicitChoiceRepeatState(request, targetLabel);
+            if (repeatState == RestSiteExplicitChoiceRepeatState.NoOpDetected)
+            {
+                decision = CreateRestSitePostClickNoOpWaitDecision(targetLabel, request.Observer.CurrentScreen);
+            }
+            else if (repeatState == RestSiteExplicitChoiceRepeatState.GraceNeeded)
+            {
+                decision = CreateRestSiteGraceWaitDecision(targetLabel, request.Observer.CurrentScreen);
+            }
+            else if (choice.HasMetadata)
+            {
+                if (string.IsNullOrWhiteSpace(choice.Choice?.ScreenBounds))
+                {
+                    rejectReason = "missing-hitbox-for-explicit-choice";
+                }
+                else if (choice.Choice is null || !HasActiveNodeBounds(choice.Choice.ScreenBounds, request.WindowBounds))
+                {
+                    rejectReason = "stale-hitbox-for-explicit-choice";
+                }
+                else
+                {
+                    var currentHp = request.Observer.PlayerCurrentHp ?? 0;
+                    var maxHp = request.Observer.PlayerMaxHp ?? 0;
+                    decision = CreateClickDecisionFromChoice(
+                        request,
+                        choice.Choice,
+                        targetLabel,
+                        BuildRestSiteChoiceReason(targetLabel, currentHp, maxHp),
+                        0.92,
+                        request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                        1400);
+                }
+            }
+            else
+            {
+                decision = TryCreateLegacyRestSiteDecision(request, choice);
+                rejectReason = decision is null
+                    ? "legacy-rest-site-choice-unavailable"
+                    : "legacy-rest-site-choice-selected";
+            }
+        }
+
+        return new RestSiteDecisionCandidate(
+            choice.CandidateLabel,
+            choice.HasMetadata ? "observer-rest-site-choice" : "legacy-rest-site-choice",
+            GetRestSiteCandidateScore(choice.OptionId),
+            rejectReason,
+            rawBounds,
+            boundsSource,
+            decision);
+    }
+
+    private static GuiSmokeStepDecision? TryCreateLegacyRestSiteDecision(GuiSmokeStepRequest request, RestSiteObservedChoice choice)
+    {
+        var currentHp = request.Observer.PlayerCurrentHp ?? 0;
+        var maxHp = request.Observer.PlayerMaxHp ?? 0;
+        if (choice.Choice is not null
+            && HasActiveNodeBounds(choice.Choice.ScreenBounds, request.WindowBounds))
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                choice.Choice,
+                choice.TargetLabel,
+                BuildRestSiteChoiceReason(choice.TargetLabel, currentHp, maxHp),
+                0.92,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                1400);
+        }
+
+        if (choice.ActionNode is not null
+            && choice.ActionNode.Actionable
+            && HasActiveNodeBounds(choice.ActionNode.ScreenBounds, request.WindowBounds))
+        {
+            return CreateClickDecisionFromNode(request, choice.ActionNode, choice.TargetLabel);
+        }
+
+        var normalizedX = choice.TargetLabel switch
+        {
+            "rest site: rest" => 0.405,
+            "rest site: smith" => 0.575,
+            "rest site: hatch" => 0.745,
+            _ => 0.575,
+        };
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            normalizedX,
+            0.305,
+            choice.TargetLabel,
+            BuildRestSiteChoiceReason(choice.TargetLabel, currentHp, maxHp),
+            0.86,
+            "map",
+            1500,
+            true,
+            null);
+    }
+
+    private static double GetRestSiteCandidateScore(string optionId)
+    {
+        return RestSiteChoiceSupport.NormalizeOptionId(optionId) switch
+        {
+            "HEAL" => 1.00d,
+            "SMITH" => 0.98d,
+            "HATCH" => 0.94d,
+            _ => 0.72d,
+        };
+    }
+
+    private static GuiSmokeStepDecision CreateRestSiteGraceWaitDecision(string targetLabel, string? expectedScreen)
+    {
+        return new GuiSmokeStepDecision(
+            "wait",
+            null,
+            null,
+            null,
+            null,
+            targetLabel,
+            $"Rest-site explicit choice '{targetLabel}' persisted after a click. Allow one recapture before escalating to a no-op diagnosis.",
+            0.70d,
+            expectedScreen,
+            700,
+            true,
+            null,
+            DecisionRisk: "rest-site-post-click-recapture-grace");
+    }
+
+    private static GuiSmokeStepDecision CreateRestSitePostClickNoOpWaitDecision(string targetLabel, string? expectedScreen)
+    {
+        return new GuiSmokeStepDecision(
+            "wait",
+            null,
+            null,
+            null,
+            null,
+            targetLabel,
+            $"Rest-site explicit choice '{targetLabel}' remained on the same fingerprint after grace recapture. Stop repeating the click and escalate to rest-site-post-click-noop.",
+            0.72d,
+            expectedScreen,
+            250,
+            true,
+            null,
+            DecisionRisk: "rest-site-post-click-noop");
+    }
+
+    private static RestSiteExplicitChoiceRepeatState GetRestSiteExplicitChoiceRepeatState(GuiSmokeStepRequest request, string targetLabel)
+    {
+        if (!HasExplicitRestSiteChoiceAuthority(request)
+            || !IsExplicitRestSiteOptionTarget(targetLabel))
+        {
+            return RestSiteExplicitChoiceRepeatState.None;
+        }
+
+        var fingerprint = RestSiteChoiceSupport.BuildExplicitChoiceFingerprint(request.Observer);
+        for (var index = request.History.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = request.History[index];
+            if (TryParseRestSiteActionMetadata(entry.Metadata, out var metadata))
+            {
+                if (!string.Equals(metadata.TargetLabel, targetLabel, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(metadata.Fingerprint, fingerprint, StringComparison.Ordinal))
+                {
+                    return RestSiteExplicitChoiceRepeatState.None;
+                }
+
+                return string.Equals(metadata.Kind, "explicit-grace-wait", StringComparison.OrdinalIgnoreCase)
+                    ? RestSiteExplicitChoiceRepeatState.NoOpDetected
+                    : string.Equals(metadata.Kind, "explicit-click", StringComparison.OrdinalIgnoreCase)
+                        ? RestSiteExplicitChoiceRepeatState.GraceNeeded
+                        : RestSiteExplicitChoiceRepeatState.None;
+            }
+
+            if (entry.Action is "click" or "click-current" or "right-click" or "press-key")
+            {
+                return RestSiteExplicitChoiceRepeatState.None;
+            }
+        }
+
+        return RestSiteExplicitChoiceRepeatState.None;
+    }
+
+    private static bool IsExplicitRestSiteOptionTarget(string? targetLabel)
+    {
+        return string.Equals(targetLabel, "rest site: rest", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(targetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(targetLabel, "rest site: hatch", StringComparison.OrdinalIgnoreCase)
+               || (!string.IsNullOrWhiteSpace(targetLabel)
+                   && targetLabel.StartsWith("rest site: option:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? BuildRestSiteHistoryMetadata(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
+    {
+        if (!HasExplicitRestSiteChoiceAuthority(request)
+            || !IsExplicitRestSiteOptionTarget(decision.TargetLabel))
+        {
+            return null;
+        }
+
+        var kind = string.Equals(decision.Status, "act", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(decision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
+            ? "explicit-click"
+            : string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+              && string.Equals(decision.DecisionRisk, "rest-site-post-click-recapture-grace", StringComparison.OrdinalIgnoreCase)
+                ? "explicit-grace-wait"
+                : null;
+        if (kind is null)
+        {
+            return null;
+        }
+
+        return JsonSerializer.Serialize(
+            new RestSiteActionMetadata(
+                kind,
+                decision.TargetLabel!,
+                RestSiteChoiceSupport.BuildExplicitChoiceFingerprint(request.Observer)),
+            GuiSmokeShared.JsonOptions);
+    }
+
+    private static bool TryParseRestSiteActionMetadata(string? metadata, out RestSiteActionMetadata parsed)
+    {
+        parsed = default!;
+        if (string.IsNullOrWhiteSpace(metadata))
+        {
+            return false;
+        }
+
+        try
+        {
+            parsed = JsonSerializer.Deserialize<RestSiteActionMetadata>(metadata, GuiSmokeShared.JsonOptions)!;
+            return parsed is not null
+                   && !string.IsNullOrWhiteSpace(parsed.Kind)
+                   && !string.IsNullOrWhiteSpace(parsed.TargetLabel)
+                   && !string.IsNullOrWhiteSpace(parsed.Fingerprint);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static string? BuildRestSiteHistoryMetadataForDecision(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
+    {
+        return BuildRestSiteHistoryMetadata(request, decision);
+    }
+
+    public static bool HasExplicitRestSiteChoiceAuthorityForRequest(GuiSmokeStepRequest request)
+    {
+        return HasExplicitRestSiteChoiceAuthority(request);
+    }
+
+    public static bool IsExplicitRestSiteOptionTargetLabel(string? targetLabel)
+    {
+        return IsExplicitRestSiteOptionTarget(targetLabel);
     }
 
     private static string ToCandidateLabel(GuiSmokeStepDecision? decision, string fallback)
@@ -12542,73 +13541,9 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateRestSiteDecision(GuiSmokeStepRequest request)
     {
-        if (!HasExplicitRestSiteChoiceAffordance(request.Observer))
-        {
-            return null;
-        }
-
-        var hasRest = HasRestSiteRestChoice(request.Observer);
-        var hasSmith = HasRestSiteSmithChoice(request.Observer);
-        var hasHatch = HasRestSiteHatchChoice(request.Observer);
-        if (!hasRest && !hasSmith && !hasHatch)
-        {
-            return null;
-        }
-
-        var maxHp = request.Observer.PlayerMaxHp ?? 0;
-        var currentHp = request.Observer.PlayerCurrentHp ?? 0;
-        var shouldRest = hasRest && (maxHp <= 0 || currentHp <= Math.Ceiling(maxHp * 0.70));
-        var targetLabel = shouldRest
-            ? "rest site: rest"
-            : hasSmith
-                ? "rest site: smith"
-                : hasHatch
-                    ? "rest site: hatch"
-                    : "rest site: rest";
-        var explicitChoice = request.Observer.Choices
-            .Where(choice => HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))
-            .FirstOrDefault(choice => MatchesRestSiteTarget(choice.Label, targetLabel));
-        if (explicitChoice is not null)
-        {
-            return CreateClickDecisionFromChoice(
-                request,
-                explicitChoice,
-                targetLabel,
-                BuildRestSiteChoiceReason(targetLabel, currentHp, maxHp),
-                0.92,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
-                1400);
-        }
-
-        var explicitNode = request.Observer.ActionNodes
-            .Where(node => node.Actionable && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))
-            .FirstOrDefault(node => MatchesRestSiteTarget(node.Label, targetLabel));
-        if (explicitNode is not null)
-        {
-            return CreateClickDecisionFromNode(request, explicitNode, targetLabel);
-        }
-
-        var normalizedX = targetLabel switch
-        {
-            "rest site: rest" => 0.405,
-            "rest site: smith" => 0.575,
-            "rest site: hatch" => 0.745,
-            _ => 0.575,
-        };
-        var normalizedY = 0.305;
-        return new GuiSmokeStepDecision(
-            "act",
-            "click",
-            null,
-            normalizedX,
-            normalizedY,
-            targetLabel,
-            BuildRestSiteChoiceReason(targetLabel, currentHp, maxHp),
-            0.86,
-            "map",
-            1500,
-            true,
-            null);
+        return BuildRestSiteDecisionCandidates(request)
+            .Select(static candidate => candidate.Decision)
+            .FirstOrDefault(static decision => decision is not null);
     }
 
     private static GuiSmokeStepDecision? TryCreateVisibleProceedDecision(GuiSmokeStepRequest request)
@@ -15711,6 +16646,11 @@ sealed class ObserverSnapshotReader
             eventLines);
     }
 
+    public static IReadOnlyList<ObserverChoice> ParseChoicesForTesting(JsonDocument? document)
+    {
+        return ReadChoices(document);
+    }
+
     private static JsonDocument? TryReadJson(string path)
     {
         if (!File.Exists(path))
@@ -15861,12 +16801,26 @@ sealed class ObserverSnapshotReader
             var screenBounds = TryReadString(choice, "screenBounds");
             var value = TryReadString(choice, "value");
             var description = TryReadString(choice, "description");
+            var nodeId = TryReadString(choice, "nodeId");
+            var bindingKind = TryReadString(choice, "bindingKind");
+            var bindingId = TryReadString(choice, "bindingId");
+            var enabled = TryReadBool(choice, "enabled");
+            var iconAssetPath = TryReadString(choice, "iconAssetPath");
+            var semanticHints = TryReadStringArray(choice, "semanticHints");
             if (string.IsNullOrWhiteSpace(label))
             {
                 continue;
             }
 
-            choices.Add(new ObserverChoice(kind, label, screenBounds, value, description));
+            choices.Add(new ObserverChoice(kind, label, screenBounds, value, description)
+            {
+                NodeId = nodeId,
+                BindingKind = bindingKind,
+                BindingId = bindingId,
+                Enabled = enabled,
+                IconAssetPath = iconAssetPath,
+                SemanticHints = semanticHints,
+            });
         }
 
         return choices;
@@ -15916,6 +16870,24 @@ sealed class ObserverSnapshotReader
                && property.ValueKind == JsonValueKind.String
             ? property.GetString()
             : null;
+    }
+
+    private static IReadOnlyList<string> TryReadStringArray(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(propertyName, out var property)
+            || property.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        return property
+            .EnumerateArray()
+            .Where(static item => item.ValueKind == JsonValueKind.String)
+            .Select(static item => item.GetString())
+            .Where(static item => !string.IsNullOrWhiteSpace(item))
+            .Cast<string>()
+            .ToArray();
     }
 
     private static string? TryReadNestedString(JsonElement? element, string objectPropertyName, string stringPropertyName)

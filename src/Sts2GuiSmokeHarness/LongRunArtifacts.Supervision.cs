@@ -1622,7 +1622,7 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "rest-site-post-click-noop",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
@@ -1635,7 +1635,8 @@ static partial class LongRunArtifacts
             || rewardMapLoop.LoopDetected
             || mapOverlayNoOpLoop.LoopDetected
             || mapTransitionStall.StallDetected
-            || combatNoOpLoop.LoopDetected,
+            || combatNoOpLoop.LoopDetected
+            || string.Equals(diagnosisKind, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase),
             backlogRoute,
             evidence);
         UpsertNdjson(GetStallDiagnosisPath(sessionRoot), diagnosis, static existing => existing.AttemptId, diagnosis.AttemptId);
@@ -2122,6 +2123,12 @@ static partial class LongRunArtifacts
             || mapTransitionStall.StallDetected)
         {
             return "map-transition-stall";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rest-site-post-click-noop";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)

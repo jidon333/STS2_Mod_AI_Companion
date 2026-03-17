@@ -108,6 +108,20 @@ internal static class RuntimeSnapshotReflectionExtractor
         IReadOnlyList<LiveExportChoiceCandidate> Candidates,
         LiveExportChoiceDecision Decision);
 
+    private sealed record RestSiteExtractorCandidate(
+        object Source,
+        string TypeName,
+        string SourceKind,
+        string OptionId,
+        string Label,
+        string? Description,
+        string? ScreenBounds,
+        bool? Enabled,
+        string? IconAssetPath,
+        int Score,
+        string? RejectReason,
+        LiveExportChoiceSummary Summary);
+
     public static LiveExportObservation Capture(
         RuntimeHookBinding binding,
         AiCompanionRuntimeConfig config,
@@ -860,12 +874,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         if (LooksLikeRestContext(triggerKind, screenHint, choiceRoots))
         {
-            strictAttempts.Add(
-                EvaluateChoiceSet(
-                    "rest",
-                    CollectRestChoiceItems(choiceRoots),
-                    maxEntries,
-                    strictExtractor: true));
+            strictAttempts.Add(ExtractRestSiteChoices(choiceRoots, maxEntries));
         }
 
         if (LooksLikeEventContext(triggerKind, screenHint, choiceRoots))
@@ -1195,6 +1204,330 @@ internal static class RuntimeSnapshotReflectionExtractor
             "Buttons",
             "_options",
             "_restSiteOptions");
+    }
+
+    private static ChoiceExtractionResult ExtractRestSiteChoices(IEnumerable<object> roots, int maxEntries)
+    {
+        var candidates = new List<RestSiteExtractorCandidate>();
+        foreach (var button in CollectRestSiteButtons(roots)
+                     .DistinctBy(RuntimeHelpers.GetHashCode))
+        {
+            var candidate = TryCreateRestSiteButtonCandidate(button);
+            if (candidate is not null)
+            {
+                candidates.Add(candidate);
+            }
+        }
+
+        foreach (var option in CollectRestSiteRawOptions(roots)
+                     .DistinctBy(RuntimeHelpers.GetHashCode))
+        {
+            var candidate = TryCreateRestSiteRawOptionCandidate(option);
+            if (candidate is not null)
+            {
+                candidates.Add(candidate);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            return new ChoiceExtractionResult(
+                Array.Empty<LiveExportChoiceSummary>(),
+                Array.Empty<LiveExportChoiceCandidate>(),
+                new LiveExportChoiceDecision(
+                    "rest",
+                    UsedStrictExtractor: true,
+                    CandidateCount: 0,
+                    AcceptedCount: 0,
+                    "strict-miss",
+                    "strict extractor 'rest' did not resolve any rest-site buttons or options.",
+                    Array.Empty<string>()));
+        }
+
+        var grouped = candidates
+            .GroupBy(static candidate => candidate.OptionId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var winners = grouped
+            .Select(static group => group
+                .OrderBy(static candidate => candidate.SourceKind == "button" && !string.IsNullOrWhiteSpace(candidate.ScreenBounds) ? 0 : candidate.SourceKind == "button" ? 1 : 2)
+                .ThenByDescending(static candidate => candidate.Score)
+                .ThenBy(static candidate => candidate.Label, StringComparer.Ordinal)
+                .First())
+            .ToArray();
+        var acceptedChoiceKeys = winners
+            .Take(maxEntries)
+            .Select(static candidate => candidate.OptionId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var choices = winners
+            .Where(candidate => acceptedChoiceKeys.Contains(candidate.OptionId))
+            .Select(static candidate => candidate.Summary)
+            .OrderBy(static choice => TryGetBoundsSortX(choice.ScreenBounds))
+            .ThenBy(static choice => TryGetBoundsSortY(choice.ScreenBounds))
+            .ThenBy(static choice => choice.BindingId, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(static choice => choice.Label, StringComparer.Ordinal)
+            .Take(maxEntries)
+            .ToArray();
+
+        var strictCandidates = candidates
+            .Select(candidate =>
+            {
+                var accepted = acceptedChoiceKeys.Contains(candidate.OptionId)
+                               && winners.Any(winner => ReferenceEquals(winner, candidate));
+                var rejectReason = accepted
+                    ? null
+                    : candidate.RejectReason;
+                if (!accepted && string.IsNullOrWhiteSpace(rejectReason))
+                {
+                    rejectReason = grouped.First(group => string.Equals(group.Key, candidate.OptionId, StringComparison.OrdinalIgnoreCase))
+                        .Any(groupCandidate => groupCandidate.SourceKind == "button" && !ReferenceEquals(groupCandidate, candidate))
+                        && string.Equals(candidate.SourceKind, "raw-option", StringComparison.OrdinalIgnoreCase)
+                        ? "shadowed-by-button-candidate"
+                        : "not-selected";
+                }
+
+                return new LiveExportChoiceCandidate(
+                    "rest",
+                    candidate.TypeName,
+                    candidate.Label,
+                    candidate.OptionId,
+                    candidate.Description,
+                    candidate.Score,
+                    accepted,
+                    rejectReason);
+            })
+            .ToArray();
+
+        var failureReason = choices.Length == 0
+            ? "strict extractor 'rest' did not resolve any valid rest-site choices."
+            : null;
+        return new ChoiceExtractionResult(
+            choices,
+            strictCandidates,
+            new LiveExportChoiceDecision(
+                "rest",
+                UsedStrictExtractor: true,
+                CandidateCount: strictCandidates.Length,
+                AcceptedCount: choices.Length,
+                choices.Length == 0 ? "strict-miss" : "accepted",
+                failureReason,
+                Array.Empty<string>()));
+    }
+
+    private static IEnumerable<object> CollectRestSiteButtons(IEnumerable<object> roots)
+    {
+        var buttons = new List<object>();
+        foreach (var root in roots)
+        {
+            AddRestSiteButton(buttons, root);
+
+            var roomTypeName = root.GetType().FullName ?? root.GetType().Name;
+            if (!roomTypeName.Contains("NRestSiteRoom", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var choicesContainer = TryGetMemberValue(root, "_choicesContainer")
+                                   ?? TryGetMemberValue(root, "ChoicesContainer");
+            AddRestSiteButton(buttons, choicesContainer);
+            foreach (var child in TryEnumerateChildren(choicesContainer).Take(32))
+            {
+                AddRestSiteButton(buttons, child);
+            }
+        }
+
+        return buttons;
+    }
+
+    private static IEnumerable<object> CollectRestSiteRawOptions(IEnumerable<object> roots)
+    {
+        var options = new List<object>();
+        foreach (var root in roots)
+        {
+            AddRestSiteOption(options, root);
+            AddRestSiteOption(options, TryGetMemberValue(root, "Option"));
+            AddRestSiteOption(options, TryGetMemberValue(root, "_option"));
+
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (!typeName.Contains("NRestSiteRoom", StringComparison.OrdinalIgnoreCase)
+                && !typeName.Contains("RestSiteRoom", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var option in ExpandEnumerable(TryGetMemberValue(root, "Options")))
+            {
+                AddRestSiteOption(options, option);
+            }
+        }
+
+        return options;
+    }
+
+    private static void AddRestSiteButton(List<object> buttons, object? candidate)
+    {
+        if (candidate is null)
+        {
+            return;
+        }
+
+        var typeName = candidate.GetType().FullName ?? candidate.GetType().Name;
+        if (typeName.Contains("NRestSiteButton", StringComparison.OrdinalIgnoreCase))
+        {
+            AddIfUseful(buttons, candidate);
+        }
+    }
+
+    private static void AddRestSiteOption(List<object> options, object? candidate)
+    {
+        if (candidate is null)
+        {
+            return;
+        }
+
+        var typeName = candidate.GetType().FullName ?? candidate.GetType().Name;
+        if (typeName.Contains("RestSiteOption", StringComparison.OrdinalIgnoreCase))
+        {
+            AddIfUseful(options, candidate);
+        }
+    }
+
+    private static RestSiteExtractorCandidate? TryCreateRestSiteButtonCandidate(object button)
+    {
+        var option = TryGetMemberValue(button, "Option") ?? TryGetMemberValue(button, "_option");
+        if (option is null)
+        {
+            return null;
+        }
+
+        return TryCreateRestSiteCandidate(
+            button,
+            option,
+            "button",
+            TryResolveScreenBounds(button),
+            score: !string.IsNullOrWhiteSpace(TryResolveScreenBounds(button)) ? 120 : 95,
+            rejectReason: string.IsNullOrWhiteSpace(TryResolveScreenBounds(button))
+                ? "missing-hitbox-for-explicit-choice"
+                : null);
+    }
+
+    private static RestSiteExtractorCandidate? TryCreateRestSiteRawOptionCandidate(object option)
+    {
+        return TryCreateRestSiteCandidate(
+            option,
+            option,
+            "raw-option",
+            screenBounds: null,
+            score: 70,
+            rejectReason: null);
+    }
+
+    private static RestSiteExtractorCandidate? TryCreateRestSiteCandidate(
+        object source,
+        object option,
+        string sourceKind,
+        string? screenBounds,
+        int score,
+        string? rejectReason)
+    {
+        var optionId = TryResolveRestSiteOptionId(option, source);
+        if (string.IsNullOrWhiteSpace(optionId))
+        {
+            return null;
+        }
+
+        var label = FirstNonEmpty(
+            TryResolveChoiceLabel(source),
+            TryResolveChoiceLabel(option),
+            optionId);
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        var description = FirstNonEmpty(
+            TryResolveChoiceDescription(source),
+            TryResolveChoiceDescription(option));
+        var enabled = TryReadBool(option, "IsEnabled");
+        var iconAssetPath = TryResolveRestSiteIconAssetPath(option, source);
+        var typeName = source.GetType().FullName ?? source.GetType().Name;
+        var normalizedOptionId = optionId.Trim().ToUpperInvariant();
+        var summary = new LiveExportChoiceSummary(
+            "rest-option",
+            label.Trim(),
+            normalizedOptionId,
+            description)
+        {
+            NodeId = $"rest-site:{normalizedOptionId}",
+            ScreenBounds = screenBounds,
+            BindingKind = "rest-site-option",
+            BindingId = normalizedOptionId,
+            Enabled = enabled,
+            IconAssetPath = iconAssetPath,
+            SemanticHints = BuildRestSiteSemanticHints(normalizedOptionId, sourceKind),
+        };
+
+        return new RestSiteExtractorCandidate(
+            source,
+            typeName,
+            sourceKind,
+            normalizedOptionId,
+            summary.Label,
+            summary.Description,
+            summary.ScreenBounds,
+            summary.Enabled,
+            summary.IconAssetPath,
+            score,
+            rejectReason,
+            summary);
+    }
+
+    private static string? TryResolveRestSiteOptionId(object option, object source)
+    {
+        var raw = FirstNonEmpty(
+            TryReadString(option, "OptionId", "Id", "Value"),
+            TryReadString(source, "OptionId", "Id", "Value"),
+            TryReadString(TryGetMemberValue(option, "Title"), "Key", "Value"),
+            TryReadString(TryGetMemberValue(source, "Title"), "Key", "Value"));
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var trimmed = raw.Trim();
+        const string optionPrefix = "OPTION_";
+        if (trimmed.StartsWith(optionPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed[optionPrefix.Length..];
+        }
+
+        return trimmed.ToUpperInvariant();
+    }
+
+    private static string? TryResolveRestSiteIconAssetPath(object option, object source)
+    {
+        foreach (var assetPath in ExpandEnumerable(TryGetMemberValue(option, "AssetPaths"))
+                     .Select(TryConvertToDisplayString)
+                     .Where(static value => !string.IsNullOrWhiteSpace(value))
+                     .Cast<string>())
+        {
+            return assetPath;
+        }
+
+        return FirstNonEmpty(
+            TryReadString(TryGetMemberValue(option, "Icon"), "ResourcePath", "Path"),
+            TryReadString(TryGetMemberValue(source, "Icon"), "ResourcePath", "Path"),
+            TryReadString(TryGetMemberValue(source, "_icon"), "ResourcePath", "Path"));
+    }
+
+    private static IReadOnlyList<string> BuildRestSiteSemanticHints(string optionId, string sourceKind)
+    {
+        return new[]
+        {
+            "scene:rest-site",
+            $"option-id:{optionId}",
+            $"source:{sourceKind}",
+        };
     }
 
     private static IEnumerable<object> CollectEventChoiceItems(IEnumerable<object> choiceRoots)

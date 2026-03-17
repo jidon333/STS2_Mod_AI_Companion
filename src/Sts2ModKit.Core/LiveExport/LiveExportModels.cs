@@ -54,6 +54,16 @@ public sealed record LiveExportChoiceSummary(
     public string? NodeId { get; init; }
 
     public string? ScreenBounds { get; init; }
+
+    public string? BindingKind { get; init; }
+
+    public string? BindingId { get; init; }
+
+    public bool? Enabled { get; init; }
+
+    public string? IconAssetPath { get; init; }
+
+    public IReadOnlyList<string> SemanticHints { get; init; } = Array.Empty<string>();
 }
 
 public sealed record LiveExportChoiceCandidate(
