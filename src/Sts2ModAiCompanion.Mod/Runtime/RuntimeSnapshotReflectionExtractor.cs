@@ -133,7 +133,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         object Holder,
         string Label,
         string? CardId,
-        string ScreenBounds);
+        string ScreenBounds,
+        bool Enabled,
+        string BoundsSource);
 
     private sealed record RestSiteUpgradeObservation(
         bool ScreenDetected,
@@ -1389,6 +1391,12 @@ internal static class RuntimeSnapshotReflectionExtractor
                     Array.Empty<string>()));
         }
 
+        var includeConfirmChoice = upgradeObservation.ConfirmVisible
+                                 && !string.IsNullOrWhiteSpace(upgradeObservation.ConfirmBounds);
+        var maxCardEntries = includeConfirmChoice
+            ? Math.Max(0, maxEntries - 1)
+            : maxEntries;
+
         var choices = upgradeObservation.VisibleCards
             .OrderBy(static card => TryGetBoundsSortX(card.ScreenBounds))
             .ThenBy(static card => TryGetBoundsSortY(card.ScreenBounds))
@@ -1405,21 +1413,19 @@ internal static class RuntimeSnapshotReflectionExtractor
                     ScreenBounds = card.ScreenBounds,
                     BindingKind = "rest-site-smith-card",
                     BindingId = card.CardId ?? bindingId,
-                    Enabled = true,
+                    Enabled = card.Enabled,
                     SemanticHints = new[]
                     {
                         "scene:rest-site",
                         "substate:smith-grid",
-                        "source:grid-holder",
+                        $"source:{card.BoundsSource}",
                     },
                 };
             })
-            .Take(maxEntries)
+            .Take(maxCardEntries)
             .ToList();
 
-        if (upgradeObservation.ConfirmVisible
-            && !string.IsNullOrWhiteSpace(upgradeObservation.ConfirmBounds)
-            && choices.Count < maxEntries)
+        if (includeConfirmChoice)
         {
             choices.Add(
                 new LiveExportChoiceSummary(
@@ -1612,6 +1618,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         var selectedCardCount = 0;
         var screenDetected = upgradeScreens.Length > 0;
         var forceScreenVisible = string.Equals(screenHint, "upgrade", StringComparison.OrdinalIgnoreCase);
+        var visibleUpgradeScreen = false;
 
         foreach (var screen in upgradeScreens)
         {
@@ -1620,33 +1627,17 @@ internal static class RuntimeSnapshotReflectionExtractor
                 continue;
             }
 
+            visibleUpgradeScreen = true;
+
             foreach (var node in EnumerateUpgradeCardHolders(screen))
             {
-                if (!IsVisibleNode(node) && string.IsNullOrWhiteSpace(TryResolveScreenBounds(node)))
+                var cardCandidate = TryCreateRestSiteUpgradeCardCandidate(node);
+                if (cardCandidate is null)
                 {
                     continue;
                 }
 
-                var screenBounds = TryResolveScreenBounds(node);
-                if (string.IsNullOrWhiteSpace(screenBounds))
-                {
-                    continue;
-                }
-
-                var label = FirstNonEmpty(
-                    TryResolveChoiceLabel(node),
-                    TryReadString(TryGetMemberValue(node, "CardModel"), "Id", "CardId", "Name"),
-                    $"Smith Card {visibleCards.Count + 1}");
-                if (string.IsNullOrWhiteSpace(label))
-                {
-                    continue;
-                }
-
-                var cardId = FirstNonEmpty(
-                    TryReadString(TryGetMemberValue(node, "CardModel"), "Id", "CardId", "Name"),
-                    TryReadString(TryGetMemberValue(node, "Card"), "Id", "CardId", "Name"),
-                    TryReadString(TryGetMemberValue(node, "CardNode"), "Id", "CardId", "Name"));
-                visibleCards.Add(new RestSiteUpgradeCardCandidate(node, label, cardId, screenBounds));
+                visibleCards.Add(cardCandidate);
             }
 
             visibleConfirmButton ??= TryResolveVisibleUpgradeConfirmButton(screen, out previewMode);
@@ -1664,12 +1655,10 @@ internal static class RuntimeSnapshotReflectionExtractor
             }
         }
 
-        var confirmVisible = visibleConfirmButton is not null
-                             && (!forceScreenVisible ? IsVisibleNode(visibleConfirmButton) : true)
-                             && !string.IsNullOrWhiteSpace(TryResolveScreenBounds(visibleConfirmButton));
-        var confirmEnabled = confirmVisible && (TryResolveControlEnabled(visibleConfirmButton) ?? true);
-        var confirmBounds = confirmVisible ? TryResolveScreenBounds(visibleConfirmButton) : null;
-        var screenVisible = visibleCards.Count > 0 || confirmVisible || (screenDetected && forceScreenVisible);
+        var confirmBounds = TryResolveInteractiveScreenBounds(visibleConfirmButton, out _);
+        var confirmVisible = visibleConfirmButton is not null && !string.IsNullOrWhiteSpace(confirmBounds);
+        var confirmEnabled = confirmVisible && (TryResolveInteractiveEnabled(visibleConfirmButton) ?? true);
+        var screenVisible = visibleUpgradeScreen || visibleCards.Count > 0 || confirmVisible || (screenDetected && forceScreenVisible);
         var observerMiss = screenVisible && visibleCards.Count == 0 && !confirmVisible;
 
         return new RestSiteUpgradeObservation(
@@ -1695,19 +1684,51 @@ internal static class RuntimeSnapshotReflectionExtractor
         var seen = new HashSet<int>();
 
         var grid = TryGetMemberValue(screen, "_grid") ?? TryGetMemberValue(screen, "Grid");
-        foreach (var holder in ExpandEnumerable(TryGetMemberValue(grid, "CurrentlyDisplayedCardHolders")))
+        if (grid is not null)
         {
-            if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+            foreach (var holder in ExpandEnumerable(TryGetMemberValue(grid, "CurrentlyDisplayedCardHolders")))
             {
-                yield return holder;
+                if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+                {
+                    yield return holder;
+                }
             }
-        }
 
-        foreach (var holder in ExpandEnumerable(TryInvokeMethod(grid, "GetTopRowOfCardNodes")))
-        {
-            if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+            foreach (var row in ExpandEnumerable(TryGetMemberValue(grid, "_cardRows")))
             {
-                yield return holder;
+                foreach (var holder in ExpandEnumerable(row))
+                {
+                    if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+                    {
+                        yield return holder;
+                    }
+                }
+            }
+
+            foreach (var card in ExpandEnumerable(TryGetMemberValue(grid, "CurrentlyDisplayedCards")))
+            {
+                var holder = card is null ? null : TryInvokeMethod(grid, "GetCardHolder", card);
+                if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+                {
+                    yield return holder;
+                }
+            }
+
+            foreach (var card in ExpandEnumerable(TryGetMemberValue(grid, "_cards")))
+            {
+                var holder = card is null ? null : TryInvokeMethod(grid, "GetCardHolder", card);
+                if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+                {
+                    yield return holder;
+                }
+            }
+
+            foreach (var holder in ExpandEnumerable(TryInvokeMethod(grid, "GetTopRowOfCardNodes")))
+            {
+                if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+                {
+                    yield return holder;
+                }
             }
         }
 
@@ -1747,6 +1768,46 @@ internal static class RuntimeSnapshotReflectionExtractor
         return null;
     }
 
+    private static RestSiteUpgradeCardCandidate? TryCreateRestSiteUpgradeCardCandidate(object holder)
+    {
+        var screenBounds = TryResolveInteractiveScreenBounds(holder, out var boundsSource);
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return null;
+        }
+
+        var hitbox = TryGetMemberValue(holder, "Hitbox") ?? TryGetMemberValue(holder, "_hitbox");
+        if (!IsVisibleNode(holder)
+            && (hitbox is null || !IsVisibleNode(hitbox)))
+        {
+            return null;
+        }
+
+        var cardModel = TryGetMemberValue(holder, "CardModel")
+                        ?? TryGetMemberValue(holder, "Card")
+                        ?? TryGetMemberValue(holder, "CardNode");
+        var label = FirstNonEmpty(
+            TryResolveChoiceLabel(cardModel ?? holder),
+            TryReadString(cardModel, "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
+            $"Smith Card {RuntimeHelpers.GetHashCode(holder)}");
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        var cardId = FirstNonEmpty(
+            TryReadString(cardModel, "Id", "CardId", "Name", "Title"),
+            TryReadString(TryGetMemberValue(holder, "CardNode"), "Id", "CardId", "Name", "Title"),
+            TryReadString(TryGetMemberValue(holder, "Card"), "Id", "CardId", "Name", "Title"));
+        return new RestSiteUpgradeCardCandidate(
+            holder,
+            label,
+            cardId,
+            screenBounds,
+            TryResolveInteractiveEnabled(holder) ?? true,
+            boundsSource);
+    }
+
     private static bool TryResolveRestSiteButtonEnabled(object button, object? option)
     {
         var isUnclickable = TryReadBool(button, "_isUnclickable");
@@ -1767,13 +1828,13 @@ internal static class RuntimeSnapshotReflectionExtractor
             return null;
         }
 
-        var enabled = TryReadBool(control, "IsEnabled", "Enabled");
+        var enabled = TryReadBool(control, "IsEnabled", "Enabled", "_isEnabled");
         if (enabled is not null)
         {
             return enabled;
         }
 
-        var disabled = TryReadBool(control, "Disabled", "IsDisabled");
+        var disabled = TryReadBool(control, "Disabled", "IsDisabled", "_isDisabled");
         return disabled is null ? null : !disabled.Value;
     }
 
@@ -3764,6 +3825,67 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return string.Create(CultureInfo.InvariantCulture, $"{x.Value:0.###},{y.Value:0.###},{width.Value:0.###},{height.Value:0.###}");
+    }
+
+    private static string? TryResolveInteractiveScreenBounds(object? item, out string boundsSource)
+    {
+        boundsSource = "control";
+        if (item is null)
+        {
+            return null;
+        }
+
+        var interactiveControl = TryResolveInteractiveControl(item, out boundsSource);
+        if (interactiveControl is not null)
+        {
+            var interactiveBounds = TryResolveScreenBounds(interactiveControl);
+            if (!string.IsNullOrWhiteSpace(interactiveBounds))
+            {
+                return interactiveBounds;
+            }
+        }
+
+        boundsSource = "holder";
+        return TryResolveScreenBounds(item);
+    }
+
+    private static bool? TryResolveInteractiveEnabled(object? item)
+    {
+        if (item is null)
+        {
+            return null;
+        }
+
+        var interactiveControl = TryResolveInteractiveControl(item, out _);
+        return TryResolveControlEnabled(interactiveControl)
+               ?? TryResolveControlEnabled(item)
+               ?? TryReadBool(item, "_isClickable");
+    }
+
+    private static object? TryResolveInteractiveControl(object? item, out string boundsSource)
+    {
+        boundsSource = "control";
+        if (item is null)
+        {
+            return null;
+        }
+
+        var hitbox = TryGetMemberValue(item, "Hitbox") ?? TryGetMemberValue(item, "_hitbox");
+        if (hitbox is not null)
+        {
+            boundsSource = "grid-hitbox";
+            return hitbox;
+        }
+
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        if (typeName.Contains("NConfirmButton", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("NClickableControl", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("NButton", StringComparison.OrdinalIgnoreCase))
+        {
+            boundsSource = "confirm-button";
+        }
+
+        return item;
     }
 
     private static bool LooksLikeChoiceCandidate(object item)

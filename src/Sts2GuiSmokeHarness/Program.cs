@@ -3291,6 +3291,37 @@ static void RunSelfTest()
         Assert(string.Equals(smithUpgradeDecision.TargetLabel, "rest site: smith confirm", StringComparison.OrdinalIgnoreCase),
             "Observer-exported smith confirm should outrank screenshot fallback once the confirm button is visible.");
 
+        var disabledConfirmSmithUpgradeSummary = smithUpgradeSummary with
+        {
+            Choices = new[]
+            {
+                smithUpgradeSummary.Choices[0],
+                smithUpgradeSummary.Choices[1],
+                smithUpgradeSummary.Choices[2] with
+                {
+                    Enabled = false,
+                },
+            },
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["restSiteSelectionCurrentStatus"] = "confirm-visible",
+                ["restSiteSelectionCurrentOptionId"] = "SMITH",
+                ["restSiteUpgradeScreenVisible"] = "true",
+                ["restSiteUpgradeCardCount"] = "2",
+                ["restSiteUpgradeConfirmVisible"] = "true",
+                ["restSiteUpgradeConfirmEnabled"] = "false",
+                ["restSiteViewKind"] = "smith-confirm",
+            },
+        };
+        var disabledConfirmSmithUpgradeRequest = restSiteMetadataRequest with
+        {
+            Observer = disabledConfirmSmithUpgradeSummary,
+            AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(disabledConfirmSmithUpgradeSummary, null, null, null)),
+        };
+        var disabledConfirmSmithUpgradeDecision = AutoDecisionProvider.Decide(disabledConfirmSmithUpgradeRequest);
+        Assert(string.Equals(disabledConfirmSmithUpgradeDecision.TargetLabel, "rest site: smith card", StringComparison.OrdinalIgnoreCase),
+            "Disabled smith confirm should not be clicked while exported smith card choices remain actionable.");
+
         var legacyRestSiteRequestPath = Path.Combine(
             Directory.GetCurrentDirectory(),
             "artifacts",
@@ -9608,11 +9639,24 @@ static class RestSiteObserverSignals
                || string.Equals(TryGetMetaValue(observer, "restSiteViewKind"), "smith-confirm", StringComparison.OrdinalIgnoreCase);
     }
 
+    public static bool HasExportedSmithUpgradeChoices(ObserverSummary observer)
+    {
+        return observer.Choices.Any(static choice =>
+            string.Equals(choice.Kind, "rest-site-smith-card", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.BindingKind, "rest-site-smith-card", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.Kind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.BindingKind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase));
+    }
+
     public static ObserverChoice? TryGetSmithConfirmChoice(ObserverSummary observer)
     {
-        return observer.Choices.FirstOrDefault(static choice =>
-            string.Equals(choice.Kind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(choice.BindingKind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase));
+        return observer.Choices
+            .Where(static choice =>
+                string.Equals(choice.Kind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(choice.BindingKind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static choice => choice.Enabled == false ? 1 : 0)
+            .ThenBy(static choice => string.IsNullOrWhiteSpace(choice.ScreenBounds) ? 1 : 0)
+            .FirstOrDefault();
     }
 
     public static ObserverChoice? TryGetFirstSmithCardChoice(ObserverSummary observer)
@@ -9621,7 +9665,9 @@ static class RestSiteObserverSignals
             .Where(static choice =>
                 string.Equals(choice.Kind, "rest-site-smith-card", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(choice.BindingKind, "rest-site-smith-card", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(static choice => TryGetSortX(choice.ScreenBounds))
+            .OrderBy(static choice => choice.Enabled == false ? 1 : 0)
+            .ThenBy(static choice => string.IsNullOrWhiteSpace(choice.ScreenBounds) ? 1 : 0)
+            .ThenBy(static choice => TryGetSortX(choice.ScreenBounds))
             .ThenBy(static choice => TryGetSortY(choice.ScreenBounds))
             .FirstOrDefault();
     }
@@ -13896,6 +13942,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
         var observerConfirmChoice = RestSiteObserverSignals.TryGetSmithConfirmChoice(request.Observer);
         if (observerConfirmChoice is not null
+            && observerConfirmChoice.Enabled != false
             && !string.IsNullOrWhiteSpace(observerConfirmChoice.ScreenBounds)
             && HasActiveNodeBounds(observerConfirmChoice.ScreenBounds, request.WindowBounds))
         {
@@ -13911,6 +13958,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
         var observerSmithCardChoice = RestSiteObserverSignals.TryGetFirstSmithCardChoice(request.Observer);
         if (observerSmithCardChoice is not null
+            && observerSmithCardChoice.Enabled != false
             && !string.IsNullOrWhiteSpace(observerSmithCardChoice.ScreenBounds)
             && HasActiveNodeBounds(observerSmithCardChoice.ScreenBounds, request.WindowBounds))
         {
@@ -13922,6 +13970,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 0.94,
                 request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "upgrade",
                 1400);
+        }
+
+        if (RestSiteObserverSignals.HasExportedSmithUpgradeChoices(request.Observer))
+        {
+            return null;
         }
 
         var lastUpgradeAction = request.History
