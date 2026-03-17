@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Sts2AiCompanion.Foundation\Sts2AiCompanion.Foundation.csproj" />
+    <ProjectReference Include="..\Sts2ModAiCompanion.Mod\Sts2ModAiCompanion.Mod.csproj" />
     <ProjectReference Include="..\Sts2ModKit.Core\Sts2ModKit.Core.csproj" />
   </ItemGroup>
 

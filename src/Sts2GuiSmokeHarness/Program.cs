@@ -11,6 +11,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 using System.Windows.Forms;
 using Sts2AiCompanion.Foundation.Contracts;
+using Sts2ModAiCompanion.Mod;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
@@ -155,7 +156,7 @@ static async Task<int> RunScenarioAsync(
                 RecordStartupStage(startupStage, "finished");
             }
 
-            var deployCommand = BuildDeployNativePackageCommand(workspaceRoot);
+            var deployCommand = BuildDeployNativePackageCommand(configuration, workspaceRoot, options);
             startupStage = "deploy-command-selected";
             RecordStartupStage(
                 startupStage,
@@ -170,7 +171,7 @@ static async Task<int> RunScenarioAsync(
 
             startupStage = "deploy-command-started";
             RecordStartupStage(startupStage, "started");
-            var deployResult = await RunDeployNativePackageAsync(workspaceRoot, deployCommand).ConfigureAwait(false);
+            var deployResult = await RunDeployNativePackageAsync(configuration, workspaceRoot, options, deployCommand).ConfigureAwait(false);
             var deployFailureReason = BuildDeployCommandFailureReason(deployResult);
             if (isLongRun)
             {
@@ -2370,14 +2371,14 @@ static void RunSelfTest()
         Assert(preferredDeployTool is not null
                && preferredDeployTool.Path.EndsWith(Path.Combine("Debug", "net7.0", "Sts2ModKit.Tool.dll"), StringComparison.OrdinalIgnoreCase)
                && preferredDeployTool.Reason.Contains("Debug/net7.0", StringComparison.OrdinalIgnoreCase),
-            "Deploy fast-path should prefer the explicit Debug/net7.0 tool output over newer but less preferred artifacts.");
+            "Deploy subprocess tool selection should prefer the explicit Debug/net7.0 output over newer but less preferred artifacts.");
 
         Directory.Delete(Path.Combine(toolProjectRoot, "bin", "Debug", "net7.0"), recursive: true);
         var fallbackDeployTool = TryFindBuiltDeployToolDll(deployToolWorkspaceRoot);
         Assert(fallbackDeployTool is not null
                && fallbackDeployTool.Path.EndsWith(Path.Combine("Release", "net7.0", "Sts2ModKit.Tool.dll"), StringComparison.OrdinalIgnoreCase)
                && fallbackDeployTool.Reason.Contains("Release/net7.0", StringComparison.OrdinalIgnoreCase),
-            "Deploy fast-path should fall back to Release/net7.0 when the preferred Debug/net7.0 output is unavailable.");
+            "Deploy subprocess tool selection should fall back to Release/net7.0 when the preferred Debug/net7.0 output is unavailable.");
     }
     finally
     {
@@ -2396,11 +2397,11 @@ static void RunSelfTest()
             startupTraceRoot,
             "deploy-command-selected",
             "finished",
-            "fast-path:self-test",
+            "in-process:self-test",
             new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
             {
-                ["deployMode"] = "fast-path",
-                ["toolPath"] = @"C:\fake\Sts2ModKit.Tool.dll",
+                ["deployMode"] = "in-process",
+                ["toolPath"] = @"C:\fake\Sts2ModAiCompanion.Mod.dll",
                 ["reason"] = "self-test",
             });
         LongRunArtifacts.RecordStartupStage(startupTraceRoot, "attempt-0001-started", "finished", "attempts/0001");
@@ -2413,8 +2414,8 @@ static void RunSelfTest()
                              ?? throw new InvalidOperationException("Failed to read startup summary self-test artifact.");
         Assert(startupSummary.GameStoppedBeforeDeployRecorded, "Startup summary should record the game-stop stage.");
         Assert(startupSummary.DeployCommandSelected
-               && string.Equals(startupSummary.DeployMode, "fast-path", StringComparison.OrdinalIgnoreCase)
-               && string.Equals(startupSummary.SelectedDeployToolPath, @"C:\fake\Sts2ModKit.Tool.dll", StringComparison.OrdinalIgnoreCase),
+               && string.Equals(startupSummary.DeployMode, "in-process", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(startupSummary.SelectedDeployToolPath, @"C:\fake\Sts2ModAiCompanion.Mod.dll", StringComparison.OrdinalIgnoreCase),
             "Startup summary should preserve deploy command selection details.");
         Assert(startupSummary.FirstAttemptCreated && startupSummary.FirstScreenshotCaptured, "Startup summary should record the first attempt and first screenshot stages.");
         Assert(string.Equals(startupSummary.FailureStage, "deploy-verification-finished", StringComparison.OrdinalIgnoreCase)
@@ -2443,7 +2444,7 @@ static void RunSelfTest()
         LongRunArtifacts.RecordDeployCommandResult(
             startupTraceRoot,
             new GuiSmokeDeployCommand(
-                "fast-path",
+                "subprocess",
                 "dotnet",
                 "\"C:\\fake\\Sts2ModKit.Tool.dll\" deploy-native-package --include-harness-bridge",
                 TimeSpan.FromMinutes(2),
@@ -2484,7 +2485,7 @@ static void RunSelfTest()
         LongRunArtifacts.RecordDeployCommandResult(
             startupTraceRoot,
             new GuiSmokeDeployCommand(
-                "fast-path",
+                "subprocess",
                 "dotnet",
                 "\"C:\\missing\\Sts2ModKit.Tool.dll\" deploy-native-package --include-harness-bridge",
                 TimeSpan.FromMinutes(2),
@@ -2507,6 +2508,40 @@ static void RunSelfTest()
         Assert(!string.IsNullOrWhiteSpace(deployCommandSummary.FailureReason)
                && deployCommandSummary.FailureReason.Contains("process-start-failure", StringComparison.OrdinalIgnoreCase),
             "Deploy command summary should preserve process-start failure reasons.");
+        Assert(string.Equals(deployCommandSummary.FailureKind, "process-start-failure", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(deployCommandSummary.ExceptionType, failedProcessResult.ExceptionType, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(deployCommandSummary.ExceptionMessage, failedProcessResult.ExceptionMessage, StringComparison.Ordinal),
+            "Deploy command summary should preserve process failure classification details.");
+
+        var timedOutDeployResult = RunTimedInProcessDeployAsync(
+                new GuiSmokeDeployCommand(
+                    "in-process",
+                    "AiCompanionModEntryPoint.DeployNativePackage",
+                    "--self-test-timeout",
+                    TimeSpan.FromMilliseconds(100),
+                    @"C:\fake\Sts2ModAiCompanion.Mod.dll",
+                    "timeout self-test"),
+                () =>
+                {
+                    Thread.Sleep(250);
+                    return new GuiSmokeProcessExecutionResult(
+                        "AiCompanionModEntryPoint.DeployNativePackage",
+                        "--self-test-timeout",
+                        0,
+                        false,
+                        TimeSpan.FromMilliseconds(250),
+                        "unexpected-success",
+                        string.Empty,
+                        null,
+                        null,
+                        null);
+                })
+            .GetAwaiter()
+            .GetResult();
+        Assert(timedOutDeployResult.TimedOut
+               && timedOutDeployResult.Duration >= TimeSpan.FromMilliseconds(90)
+               && timedOutDeployResult.Duration < TimeSpan.FromSeconds(1),
+            "In-process deploy timeout guard should mark the result as timed out without waiting for the worker to finish.");
     }
     finally
     {
@@ -7698,16 +7733,26 @@ static bool TryResolveWslPathViaExe(string wslPath, out string translatedPath)
     }
 }
 
-static async Task<GuiSmokeProcessExecutionResult> RunDeployNativePackageAsync(string workspaceRoot, GuiSmokeDeployCommand? deployCommand = null)
+static async Task<GuiSmokeProcessExecutionResult> RunDeployNativePackageAsync(
+    ScaffoldConfiguration configuration,
+    string workspaceRoot,
+    IReadOnlyDictionary<string, string> options,
+    GuiSmokeDeployCommand? deployCommand = null)
 {
-    var resolvedDeployCommand = deployCommand ?? BuildDeployNativePackageCommand(workspaceRoot);
-    if (string.Equals(resolvedDeployCommand.Mode, "fast-path", StringComparison.OrdinalIgnoreCase))
+    var resolvedDeployCommand = deployCommand ?? BuildDeployNativePackageCommand(configuration, workspaceRoot, options);
+    if (string.Equals(resolvedDeployCommand.Mode, "in-process", StringComparison.OrdinalIgnoreCase))
     {
-        LogHarness($"deploy fast-path tool={resolvedDeployCommand.ToolPath} reason={resolvedDeployCommand.Reason}");
+        LogHarness($"deploy in-process assembly={resolvedDeployCommand.ToolPath ?? "unknown"} reason={resolvedDeployCommand.Reason}");
+        return await RunDeployNativePackageInProcessAsync(configuration, workspaceRoot, options, resolvedDeployCommand).ConfigureAwait(false);
+    }
+
+    if (resolvedDeployCommand.ToolPath is not null)
+    {
+        LogHarness($"deploy subprocess tool={resolvedDeployCommand.ToolPath} reason={resolvedDeployCommand.Reason}");
     }
     else
     {
-        LogHarness($"deploy fast-path unavailable; falling back to dotnet run --project src\\Sts2ModKit.Tool reason={resolvedDeployCommand.Reason}");
+        LogHarness($"deploy subprocess fallback uses dotnet run --project src\\Sts2ModKit.Tool reason={resolvedDeployCommand.Reason}");
     }
 
     return await GuiSmokeShared.RunProcessDetailedAsync(
@@ -7717,13 +7762,31 @@ static async Task<GuiSmokeProcessExecutionResult> RunDeployNativePackageAsync(st
         resolvedDeployCommand.Timeout).ConfigureAwait(false);
 }
 
-static GuiSmokeDeployCommand BuildDeployNativePackageCommand(string workspaceRoot)
+static GuiSmokeDeployCommand BuildDeployNativePackageCommand(
+    ScaffoldConfiguration configuration,
+    string workspaceRoot,
+    IReadOnlyDictionary<string, string> options)
 {
+    var deployMode = ResolveDeployMode(options);
+    if (string.Equals(deployMode, "in-process", StringComparison.OrdinalIgnoreCase))
+    {
+        var outputRoot = ResolveDeployArtifactsRoot(configuration, workspaceRoot);
+        var runtimeAssemblyRoot = ResolveDeployRuntimeAssemblyRoot(options, workspaceRoot);
+        var layoutKind = ResolveDeployLayoutKind(options);
+        return new GuiSmokeDeployCommand(
+            "in-process",
+            "AiCompanionModEntryPoint.DeployNativePackage",
+            BuildInProcessDeployArguments(outputRoot, runtimeAssemblyRoot, layoutKind),
+            TimeSpan.FromMinutes(2),
+            typeof(AiCompanionModEntryPoint).Assembly.Location,
+            "default in-process deploy");
+    }
+
     var builtTool = TryFindBuiltDeployToolDll(workspaceRoot);
     if (builtTool is not null)
     {
         return new GuiSmokeDeployCommand(
-            "fast-path",
+            "subprocess",
             "dotnet",
             $"\"{builtTool.Path}\" deploy-native-package --include-harness-bridge",
             TimeSpan.FromMinutes(2),
@@ -7732,12 +7795,183 @@ static GuiSmokeDeployCommand BuildDeployNativePackageCommand(string workspaceRoo
     }
 
     return new GuiSmokeDeployCommand(
-        "fallback",
+        "subprocess",
         "dotnet",
         "run --project src\\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge",
         TimeSpan.FromMinutes(5),
         null,
         "built deploy tool unavailable");
+}
+
+static string ResolveDeployMode(IReadOnlyDictionary<string, string> options)
+{
+    if (!options.TryGetValue("--deploy-mode", out var deployModeRaw) || string.IsNullOrWhiteSpace(deployModeRaw))
+    {
+        return "in-process";
+    }
+
+    return deployModeRaw.Trim().ToLowerInvariant() switch
+    {
+        "in-process" => "in-process",
+        "subprocess" => "subprocess",
+        _ => throw new InvalidOperationException($"Unsupported deploy mode: {deployModeRaw}"),
+    };
+}
+
+static string ResolveDeployArtifactsRoot(ScaffoldConfiguration configuration, string workspaceRoot)
+{
+    return Path.GetFullPath(configuration.GamePaths.ArtifactsRoot, workspaceRoot);
+}
+
+static string ResolveDeployRuntimeAssemblyRoot(IReadOnlyDictionary<string, string> options, string workspaceRoot)
+{
+    if (options.TryGetValue("--runtime-assembly-root", out var explicitRoot))
+    {
+        return ResolveCliPath(explicitRoot, workspaceRoot);
+    }
+
+    var modBuildOutput = Path.Combine(workspaceRoot, "src", "Sts2ModAiCompanion.Mod", "bin", "Debug", "net7.0");
+    if (Directory.Exists(modBuildOutput))
+    {
+        return modBuildOutput;
+    }
+
+    return AppContext.BaseDirectory;
+}
+
+static string ResolveDeployLayoutKind(IReadOnlyDictionary<string, string> options)
+{
+    return options.TryGetValue("--deploy-layout", out var requestedLayout) && !string.IsNullOrWhiteSpace(requestedLayout)
+        ? requestedLayout
+        : "flat";
+}
+
+static string BuildInProcessDeployArguments(string outputRoot, string runtimeAssemblyRoot, string layoutKind)
+{
+    return $"--artifacts-root \"{outputRoot}\" --runtime-assembly-root \"{runtimeAssemblyRoot}\" --layout {layoutKind} --include-harness-bridge";
+}
+
+static async Task<GuiSmokeProcessExecutionResult> RunDeployNativePackageInProcessAsync(
+    ScaffoldConfiguration configuration,
+    string workspaceRoot,
+    IReadOnlyDictionary<string, string> options,
+    GuiSmokeDeployCommand command)
+{
+    return await RunTimedInProcessDeployAsync(
+        command,
+        () =>
+        {
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                var outputRoot = ResolveDeployArtifactsRoot(configuration, workspaceRoot);
+                var runtimeAssemblyRoot = ResolveDeployRuntimeAssemblyRoot(options, workspaceRoot);
+                var layoutKind = ResolveDeployLayoutKind(options);
+                var result = AiCompanionModEntryPoint.DeployNativePackage(configuration, outputRoot, runtimeAssemblyRoot, layoutKind);
+                MaterializeHarnessBridge(workspaceRoot, result.DeployedRoot);
+                stopwatch.Stop();
+                return new GuiSmokeProcessExecutionResult(
+                    command.FileName,
+                    command.Arguments,
+                    0,
+                    false,
+                    stopwatch.Elapsed,
+                    JsonSerializer.Serialize(result, GuiSmokeShared.JsonOptions),
+                    string.Empty,
+                    null,
+                    null,
+                    null);
+            }
+            catch (Exception exception)
+            {
+                stopwatch.Stop();
+                return new GuiSmokeProcessExecutionResult(
+                    command.FileName,
+                    command.Arguments,
+                    1,
+                    false,
+                    stopwatch.Elapsed,
+                    string.Empty,
+                    exception.ToString(),
+                    "deploy-in-process-failure",
+                    exception.GetType().Name,
+                    exception.Message);
+            }
+        }).ConfigureAwait(false);
+}
+
+static async Task<GuiSmokeProcessExecutionResult> RunTimedInProcessDeployAsync(
+    GuiSmokeDeployCommand command,
+    Func<GuiSmokeProcessExecutionResult> operation)
+{
+    var completion = new TaskCompletionSource<GuiSmokeProcessExecutionResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+    var stopwatch = Stopwatch.StartNew();
+    var worker = new Thread(() =>
+    {
+        try
+        {
+            completion.TrySetResult(operation());
+        }
+        catch (Exception exception)
+        {
+            completion.TrySetResult(
+                new GuiSmokeProcessExecutionResult(
+                    command.FileName,
+                    command.Arguments,
+                    1,
+                    false,
+                    stopwatch.Elapsed,
+                    string.Empty,
+                    exception.ToString(),
+                    "deploy-in-process-failure",
+                    exception.GetType().Name,
+                    exception.Message));
+        }
+    })
+    {
+        IsBackground = true,
+        Name = "gui-smoke-in-process-deploy",
+    };
+
+    worker.Start();
+    var completedTask = await Task.WhenAny(completion.Task, Task.Delay(command.Timeout)).ConfigureAwait(false);
+    if (ReferenceEquals(completedTask, completion.Task))
+    {
+        return await completion.Task.ConfigureAwait(false);
+    }
+
+    stopwatch.Stop();
+    return new GuiSmokeProcessExecutionResult(
+        command.FileName,
+        command.Arguments,
+        null,
+        true,
+        stopwatch.Elapsed,
+        string.Empty,
+        $"in-process deploy timed out after {command.Timeout.TotalSeconds:F1}s; runner will abort to terminate the background worker.",
+        null,
+        null,
+        null);
+}
+
+static void MaterializeHarnessBridge(string workspaceRoot, string destinationRoot)
+{
+    Directory.CreateDirectory(destinationRoot);
+
+    foreach (var (sourceRoot, fileName) in new[]
+             {
+                 (Path.Combine(workspaceRoot, "src", "Sts2ModAiCompanion.HarnessBridge", "bin", "Debug", "net7.0"), "Sts2ModAiCompanion.HarnessBridge.dll"),
+                 (Path.Combine(workspaceRoot, "src", "Sts2AiCompanion.Foundation", "bin", "Debug", "net7.0"), "Sts2AiCompanion.Foundation.dll"),
+             })
+    {
+        var sourcePath = Path.Combine(sourceRoot, fileName);
+        if (!File.Exists(sourcePath))
+        {
+            throw new FileNotFoundException("Harness deployment dependency was not found.", sourcePath);
+        }
+
+        File.Copy(sourcePath, Path.Combine(destinationRoot, fileName), overwrite: true);
+    }
 }
 
 static string? BuildDeployCommandFailureReason(GuiSmokeProcessExecutionResult result)
@@ -7936,7 +8170,7 @@ static ScaffoldConfiguration ApplyPathOverrides(ScaffoldConfiguration configurat
 static void WriteUsage()
 {
     Console.WriteLine("Usage:");
-    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop]");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--deploy-mode in-process|subprocess] [--runtime-assembly-root path] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-run --run-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>] [--trace] [--full-request-rebuild]");

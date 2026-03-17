@@ -186,7 +186,10 @@ sealed record GuiSmokeDeployCommandSummary(
     double DurationMs,
     string StdoutTail,
     string StderrTail,
-    string? FailureReason);
+    string? FailureReason,
+    string? FailureKind,
+    string? ExceptionType,
+    string? ExceptionMessage);
 
 sealed record GuiSmokeRestartEvent(
     DateTimeOffset RecordedAt,
@@ -590,63 +593,72 @@ static partial class LongRunArtifacts
             result.Duration.TotalMilliseconds,
             TrimOutputTail(result.Stdout),
             TrimOutputTail(result.Stderr),
-            failureReason);
-        string? persistFailureReason = null;
-        try
-        {
-            WriteJsonWithFallback(GetDeployCommandSummaryPath(sessionRoot), summary, GuiSmokeShared.JsonOptions);
-        }
-        catch (Exception exception)
-        {
-            persistFailureReason = $"summary-persist-failure:deploy-command-summary:{exception.GetType().Name}:{exception.Message}";
-        }
+            failureReason,
+            result.FailureKind,
+            result.ExceptionType,
+            result.ExceptionMessage);
+        var persistFailureReason = TryWriteJsonWithFallback(
+            GetDeployCommandSummaryPath(sessionRoot),
+            summary,
+            GuiSmokeShared.JsonOptions,
+            "deploy-command-summary");
 
-        var startupSummary = LoadOrCreateStartupSummary(sessionRoot) with
+        var combinedFailureReason = CombineFailureReasons(failureReason, persistFailureReason);
+        var existingStartupSummary = LoadOrCreateStartupSummary(sessionRoot);
+        var startupSummary = existingStartupSummary with
         {
             UpdatedAt = DateTimeOffset.UtcNow,
             DeployCommandExitCode = result.ExitCode,
             DeployCommandTimedOut = result.TimedOut,
             DeployCommandDurationMs = result.Duration.TotalMilliseconds,
-            DeployCommandFailureReason = CombineFailureReasons(failureReason, persistFailureReason),
+            DeployCommandFailureReason = combinedFailureReason,
+            FailureStage = string.IsNullOrWhiteSpace(combinedFailureReason) ? existingStartupSummary.FailureStage : "deploy-command-finished",
+            FailureReason = string.IsNullOrWhiteSpace(combinedFailureReason) ? existingStartupSummary.FailureReason : combinedFailureReason,
         };
-        try
-        {
-            WriteJsonWithFallback(GetStartupSummaryPath(sessionRoot), startupSummary, GuiSmokeShared.JsonOptions);
-        }
-        catch (Exception exception)
-        {
-            persistFailureReason = CombineFailureReasons(
-                persistFailureReason,
-                $"summary-persist-failure:startup-summary:{exception.GetType().Name}:{exception.Message}");
-        }
+        persistFailureReason = CombineFailureReasons(
+            persistFailureReason,
+            TryWriteJsonWithFallback(
+                GetStartupSummaryPath(sessionRoot),
+                startupSummary,
+                GuiSmokeShared.JsonOptions,
+                "startup-summary"));
 
         if (!string.IsNullOrWhiteSpace(failureReason))
         {
-            AppendPrevalidationNoteWithoutRefresh(sessionRoot, $"deploy-command-failure:{failureReason}");
+            persistFailureReason = CombineFailureReasons(
+                persistFailureReason,
+                TryAppendPrevalidationNoteWithoutRefresh(sessionRoot, $"deploy-command-failure:{failureReason}"));
         }
 
         if (!string.IsNullOrWhiteSpace(persistFailureReason))
         {
-            AppendPrevalidationNoteWithoutRefresh(sessionRoot, persistFailureReason);
+            persistFailureReason = CombineFailureReasons(
+                persistFailureReason,
+                TryAppendPrevalidationNoteWithoutRefresh(sessionRoot, persistFailureReason));
 
-            try
+            var recoveredStartupSummary = LoadOrCreateStartupSummary(sessionRoot) with
             {
-                var recoveredStartupSummary = LoadOrCreateStartupSummary(sessionRoot) with
-                {
-                    UpdatedAt = DateTimeOffset.UtcNow,
-                    DeployCommandExitCode = result.ExitCode,
-                    DeployCommandTimedOut = result.TimedOut,
-                    DeployCommandDurationMs = result.Duration.TotalMilliseconds,
-                    DeployCommandFailureReason = CombineFailureReasons(failureReason, persistFailureReason),
-                    FailureStage = "deploy-command-finished",
-                    FailureReason = CombineFailureReasons(persistFailureReason, failureReason),
-                };
-                File.WriteAllText(
+                UpdatedAt = DateTimeOffset.UtcNow,
+                DeployCommandExitCode = result.ExitCode,
+                DeployCommandTimedOut = result.TimedOut,
+                DeployCommandDurationMs = result.Duration.TotalMilliseconds,
+                DeployCommandFailureReason = CombineFailureReasons(failureReason, persistFailureReason),
+                FailureStage = "deploy-command-finished",
+                FailureReason = CombineFailureReasons(failureReason, persistFailureReason),
+            };
+            persistFailureReason = CombineFailureReasons(
+                persistFailureReason,
+                TryWritePlainJson(
                     GetStartupSummaryPath(sessionRoot),
-                    JsonSerializer.Serialize(recoveredStartupSummary, GuiSmokeShared.JsonOptions));
-            }
-            catch
+                    recoveredStartupSummary,
+                    GuiSmokeShared.JsonOptions,
+                    "startup-summary-plain"));
+            var durablePersistFailureReason = persistFailureReason;
+            if (!string.IsNullOrWhiteSpace(durablePersistFailureReason))
             {
+                persistFailureReason = CombineFailureReasons(
+                    persistFailureReason,
+                    TryAppendPrevalidationNoteWithoutRefresh(sessionRoot, durablePersistFailureReason));
             }
         }
 
@@ -1858,6 +1870,45 @@ static partial class LongRunArtifacts
         catch
         {
             File.WriteAllText(path, JsonSerializer.Serialize(value, options));
+        }
+    }
+
+    private static string? TryWriteJsonWithFallback<T>(string path, T value, JsonSerializerOptions options, string artifactName)
+    {
+        try
+        {
+            WriteJsonWithFallback(path, value, options);
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return $"summary-persist-failure:{artifactName}:{exception.GetType().Name}:{exception.Message}";
+        }
+    }
+
+    private static string? TryWritePlainJson<T>(string path, T value, JsonSerializerOptions options, string artifactName)
+    {
+        try
+        {
+            File.WriteAllText(path, JsonSerializer.Serialize(value, options));
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return $"summary-persist-failure:{artifactName}:{exception.GetType().Name}:{exception.Message}";
+        }
+    }
+
+    private static string? TryAppendPrevalidationNoteWithoutRefresh(string sessionRoot, string note)
+    {
+        try
+        {
+            AppendPrevalidationNoteWithoutRefresh(sessionRoot, note);
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return $"prevalidation-note-failure:{exception.GetType().Name}:{exception.Message}";
         }
     }
 
