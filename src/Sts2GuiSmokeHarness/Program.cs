@@ -3322,6 +3322,73 @@ static void RunSelfTest()
         Assert(string.Equals(disabledConfirmSmithUpgradeDecision.TargetLabel, "rest site: smith card", StringComparison.OrdinalIgnoreCase),
             "Disabled smith confirm should not be clicked while exported smith card choices remain actionable.");
 
+        var restSiteProceedSummary = restSiteMetadataSummary with
+        {
+            CurrentScreen = "rest-site",
+            VisibleScreen = "rest-site",
+            ChoiceExtractorPath = "generic",
+            CurrentChoices = new[] { "진행", "불타는 혈액" },
+            Choices = new[]
+            {
+                new ObserverChoice("choice", "진행", "1576.3,761.3,282.45,113.4", null, "진행"),
+                new ObserverChoice("relic", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD"),
+            },
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["restSiteSelectionLastSignal"] = "after-select-success",
+                ["restSiteSelectionLastSuccess"] = "true",
+            },
+        };
+        var restSiteProceedObserver = new ObserverState(restSiteProceedSummary, null, null, null);
+        Assert(LooksLikeRestSiteProceedState(restSiteProceedSummary),
+            "Rest-site proceed helper should recognize post-confirm proceed-visible observer state.");
+        var restSiteProceedRequest = restSiteMetadataRequest with
+        {
+            Observer = restSiteProceedSummary,
+            AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteProceedObserver),
+        };
+        var restSiteProceedDecision = AutoDecisionProvider.Decide(restSiteProceedRequest);
+        Assert(string.Equals(restSiteProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
+            "Observer-visible rest-site proceed choice should create a visible proceed decision without waiting for screenshot arrows.");
+
+        var restSiteProceedLabelOnlySummary = restSiteProceedSummary with
+        {
+            Choices = new[]
+            {
+                new ObserverChoice("relic", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD"),
+            },
+        };
+        Assert(LooksLikeRestSiteProceedState(restSiteProceedLabelOnlySummary),
+            "Rest-site proceed helper should still promote post-confirm proceed when currentChoices expose the proceed affordance before structured choice export stabilizes.");
+        var restSiteProceedBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-rest-site-proceed-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(restSiteProceedBranchRoot);
+        try
+        {
+            var restSiteProceedBranchLogger = new ArtifactRecorder(restSiteProceedBranchRoot);
+            var restSiteProceedBranchHistory = new List<GuiSmokeHistoryEntry>();
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.WaitMap,
+                    restSiteProceedObserver,
+                    restSiteProceedBranchHistory,
+                    restSiteProceedBranchLogger,
+                    9,
+                    true,
+                    out var restSiteProceedNextPhase)
+                && restSiteProceedNextPhase == GuiSmokePhase.ChooseFirstNode,
+                "WaitMap should branch immediately to ChooseFirstNode when a post-confirm rest-site proceed affordance is visible.");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(restSiteProceedBranchRoot, true);
+            }
+            catch
+            {
+            }
+        }
+
         var legacyRestSiteRequestPath = Path.Combine(
             Directory.GetCurrentDirectory(),
             "artifacts",
@@ -6329,6 +6396,13 @@ static bool IsProceedNode(ObserverActionNode node)
            || node.Kind.Contains("proceed", StringComparison.OrdinalIgnoreCase);
 }
 
+static bool IsProceedChoice(ObserverChoice choice)
+{
+    return !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
+           && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+           && IsProceedLikeLabel(choice.Label);
+}
+
 static bool IsBackNode(ObserverActionNode node)
 {
     return node.Label.Contains("Back", StringComparison.OrdinalIgnoreCase)
@@ -6699,6 +6773,56 @@ static bool LooksLikeRestSiteState(ObserverSummary observer)
                || label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
                || label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
                || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+}
+
+static bool LooksLikeRestSiteProceedState(ObserverSummary observer)
+{
+    if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer))
+    {
+        return false;
+    }
+
+    var onRestSiteScreen = string.Equals(observer.CurrentScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(observer.VisibleScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase);
+    if (!onRestSiteScreen)
+    {
+        return false;
+    }
+
+    var hasProceedActionNode = observer.ActionNodes.Any(static node =>
+        node.Actionable
+        && IsProceedNode(node)
+        && TryParseNodeBounds(node.ScreenBounds, out _));
+    var hasProceedChoice = observer.Choices.Any(static choice =>
+        IsProceedChoice(choice)
+        && HasLargeChoiceBounds(choice.ScreenBounds));
+    var hasProceedLabel = observer.CurrentChoices.Any(IsProceedLikeLabel);
+    if (!hasProceedActionNode && !hasProceedChoice && !hasProceedLabel)
+    {
+        return false;
+    }
+
+    var hasExplicitRestChoice = observer.Choices.Any(static choice =>
+        string.Equals(choice.Kind, "rest-option", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(choice.BindingKind, "rest-site-option", StringComparison.OrdinalIgnoreCase)
+        || (HasLargeChoiceBounds(choice.ScreenBounds)
+            && (choice.Label.Contains("\uD734\uC2DD", StringComparison.OrdinalIgnoreCase)
+                || choice.Label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
+                || choice.Label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
+                || choice.Label.Contains("Smith", StringComparison.OrdinalIgnoreCase)
+                || choice.Label.Contains("\uBD80\uD654", StringComparison.OrdinalIgnoreCase)
+                || choice.Label.Contains("Hatch", StringComparison.OrdinalIgnoreCase))));
+    if (!hasExplicitRestChoice)
+    {
+        return true;
+    }
+
+    return string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteSelectionLastSignal"), "after-select-success", StringComparison.OrdinalIgnoreCase)
+           || (hasProceedLabel
+               && !observer.CurrentChoices.Any(static label =>
+                   ContainsAny(label, "휴식", "Rest", "재련", "Smith", "부화", "Hatch")));
 }
 
 static bool HasExplicitRestSiteChoiceAuthority(ObserverState observer, string? screenshotPath)
@@ -7483,6 +7607,14 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
+        if (LooksLikeRestSiteProceedState(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site-proceed", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site-proceed", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
         if (GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
@@ -7536,6 +7668,14 @@ static bool TryAdvanceAlternateBranch(
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site-upgrade", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site-upgrade", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (LooksLikeRestSiteProceedState(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site-proceed", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site-proceed", observer.CurrentScreen, observer.InCombat, null));
             nextPhase = GuiSmokePhase.ChooseFirstNode;
             return true;
         }
@@ -14107,16 +14247,36 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateVisibleProceedDecision(GuiSmokeStepRequest request)
     {
+        var proceedNode = request.Observer.ActionNodes.FirstOrDefault(node =>
+            node.Actionable
+            && IsProceedNode(node)
+            && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds));
+        if (proceedNode is not null)
+        {
+            return CreateClickDecisionFromNode(request, proceedNode, "visible proceed");
+        }
+
+        var proceedChoice = request.Observer.Choices.FirstOrDefault(choice =>
+            !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+            && IsProceedLikeLabel(choice.Label)
+            && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds));
+        if (proceedChoice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                proceedChoice,
+                "visible proceed",
+                "Observer-exported proceed choice is visible. Advance the room flow before attempting any map click.",
+                0.96,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                1400);
+        }
+
         var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(request.ScreenshotPath);
         if (!overlayAnalysis.HasRightProceedArrow || overlayAnalysis.HasBottomLeftBackArrow || overlayAnalysis.HasCentralOverlayPanel)
         {
             return null;
-        }
-
-        var proceedNode = request.Observer.ActionNodes.FirstOrDefault(node => node.Actionable && IsProceedNode(node));
-        if (proceedNode is not null && TryParseNodeBounds(proceedNode.ScreenBounds, out _))
-        {
-            return CreateClickDecisionFromNode(request, proceedNode, "visible proceed");
         }
 
         if (overlayAnalysis.RightProceedNormalizedX is not null && overlayAnalysis.RightProceedNormalizedY is not null)
