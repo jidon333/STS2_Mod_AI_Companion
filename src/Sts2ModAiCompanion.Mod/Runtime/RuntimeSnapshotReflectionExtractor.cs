@@ -122,6 +122,31 @@ internal static class RuntimeSnapshotReflectionExtractor
         string? RejectReason,
         LiveExportChoiceSummary Summary);
 
+    private sealed record RestSiteButtonObservation(
+        int VisibleButtonCount,
+        string? HoveredOptionId,
+        string? ExecutingOptionId,
+        bool OptionsInteractive,
+        string? VisibleOptionSummary);
+
+    private sealed record RestSiteUpgradeCardCandidate(
+        object Holder,
+        string Label,
+        string? CardId,
+        string ScreenBounds);
+
+    private sealed record RestSiteUpgradeObservation(
+        bool ScreenDetected,
+        bool ScreenVisible,
+        IReadOnlyList<RestSiteUpgradeCardCandidate> VisibleCards,
+        bool ConfirmVisible,
+        bool ConfirmEnabled,
+        string? ConfirmBounds,
+        int SelectedCardCount,
+        string? SelectedCardsSummary,
+        string? PreviewMode,
+        bool ObserverMiss);
+
     public static LiveExportObservation Capture(
         RuntimeHookBinding binding,
         AiCompanionRuntimeConfig config,
@@ -147,6 +172,8 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             meta["instanceType"] = instance.GetType().FullName;
         }
+
+        AppendRestSiteLifecycleMetadata(binding, observedAt, args, payload, meta);
 
         return BuildObservation(
             binding.Candidate.SemanticKind,
@@ -275,6 +302,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (!string.IsNullOrWhiteSpace(choiceResult.Decision.ExtractorPath))
         {
             meta["choiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
+            payload["choiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
         }
 
         if (combatHand.Count > 0)
@@ -324,7 +352,10 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (choices.Count > 0)
         {
             payload["choiceCount"] = choices.Count;
+            payload["choiceSignature"] = BuildChoiceSignature(choices);
         }
+
+        AppendRestSiteRuntimeMetadata(roots, choices, screen, meta, payload);
 
         return new LiveExportObservation(
             triggerKind,
@@ -872,6 +903,13 @@ internal static class RuntimeSnapshotReflectionExtractor
                     strictExtractor: true));
         }
 
+        ChoiceExtractionResult? restSiteUpgradeStrict = null;
+        if (LooksLikeRestSiteUpgradeContext(triggerKind, screenHint, choiceRoots))
+        {
+            restSiteUpgradeStrict = ExtractRestSiteSmithUpgradeChoices(choiceRoots, maxEntries, screenHint);
+            strictAttempts.Add(restSiteUpgradeStrict);
+        }
+
         if (LooksLikeRestContext(triggerKind, screenHint, choiceRoots))
         {
             strictAttempts.Add(ExtractRestSiteChoices(choiceRoots, maxEntries));
@@ -923,6 +961,22 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (mapStrict is not null && eventStrict is not null)
         {
             strictSuccess = MergeMixedContextChoices(eventStrict, mapStrict, maxEntries);
+        }
+
+        if (restSiteUpgradeStrict is not null
+            && string.Equals(screenHint, "upgrade", StringComparison.OrdinalIgnoreCase))
+        {
+            return restSiteUpgradeStrict with
+            {
+                Candidates = strictAttempts
+                    .SelectMany(result => result.Candidates)
+                    .Take(512)
+                    .ToArray(),
+                Decision = restSiteUpgradeStrict.Decision with
+                {
+                    FailureReason = JoinFailureReasons(strictAttempts.Select(result => result.Decision.FailureReason), null),
+                },
+            };
         }
 
         if (strictSuccess is not null)
@@ -1314,6 +1368,105 @@ internal static class RuntimeSnapshotReflectionExtractor
                 Array.Empty<string>()));
     }
 
+    private static ChoiceExtractionResult ExtractRestSiteSmithUpgradeChoices(IEnumerable<object> roots, int maxEntries, string? screenHint)
+    {
+        var upgradeObservation = ObserveRestSiteUpgrade(roots, screenHint);
+        if (!upgradeObservation.ScreenDetected
+            || (upgradeObservation.VisibleCards.Count == 0 && !upgradeObservation.ConfirmVisible))
+        {
+            return new ChoiceExtractionResult(
+                Array.Empty<LiveExportChoiceSummary>(),
+                Array.Empty<LiveExportChoiceCandidate>(),
+                new LiveExportChoiceDecision(
+                    "rest-smith-upgrade",
+                    UsedStrictExtractor: true,
+                    CandidateCount: 0,
+                    AcceptedCount: 0,
+                    upgradeObservation.ScreenVisible ? "observer-miss" : "strict-miss",
+                    upgradeObservation.ScreenVisible
+                        ? "strict extractor 'rest-smith-upgrade' detected the smith upgrade screen, but did not resolve upgrade card or confirm hitboxes."
+                        : "strict extractor 'rest-smith-upgrade' did not detect an active smith upgrade screen.",
+                    Array.Empty<string>()));
+        }
+
+        var choices = upgradeObservation.VisibleCards
+            .OrderBy(static card => TryGetBoundsSortX(card.ScreenBounds))
+            .ThenBy(static card => TryGetBoundsSortY(card.ScreenBounds))
+            .Select((card, index) =>
+            {
+                var bindingId = SanitizeNodeKey(card.CardId ?? card.Label ?? $"card-{index + 1}");
+                return new LiveExportChoiceSummary(
+                    "rest-site-smith-card",
+                    card.Label,
+                    card.CardId ?? bindingId,
+                    "rest-site smith upgrade card")
+                {
+                    NodeId = $"rest-site:smith-card:{bindingId}",
+                    ScreenBounds = card.ScreenBounds,
+                    BindingKind = "rest-site-smith-card",
+                    BindingId = card.CardId ?? bindingId,
+                    Enabled = true,
+                    SemanticHints = new[]
+                    {
+                        "scene:rest-site",
+                        "substate:smith-grid",
+                        "source:grid-holder",
+                    },
+                };
+            })
+            .Take(maxEntries)
+            .ToList();
+
+        if (upgradeObservation.ConfirmVisible
+            && !string.IsNullOrWhiteSpace(upgradeObservation.ConfirmBounds)
+            && choices.Count < maxEntries)
+        {
+            choices.Add(
+                new LiveExportChoiceSummary(
+                    "rest-site-smith-confirm",
+                    "Smith Confirm",
+                    "SMITH_CONFIRM",
+                    "rest-site smith confirm button")
+                {
+                    NodeId = "rest-site:smith-confirm",
+                    ScreenBounds = upgradeObservation.ConfirmBounds,
+                    BindingKind = "rest-site-smith-confirm",
+                    BindingId = "SMITH_CONFIRM",
+                    Enabled = upgradeObservation.ConfirmEnabled,
+                    SemanticHints = new[]
+                    {
+                        "scene:rest-site",
+                        "substate:smith-confirm",
+                        "source:confirm-button",
+                    },
+                });
+        }
+
+        var strictCandidates = choices
+            .Select(choice => new LiveExportChoiceCandidate(
+                "rest-smith-upgrade",
+                choice.Kind,
+                choice.Label,
+                choice.Value,
+                choice.Description,
+                choice.Kind == "rest-site-smith-confirm" ? 125 : 120,
+                Accepted: true,
+                RejectReason: null))
+            .ToArray();
+
+        return new ChoiceExtractionResult(
+            choices,
+            strictCandidates,
+            new LiveExportChoiceDecision(
+                "rest-smith-upgrade",
+                UsedStrictExtractor: true,
+                CandidateCount: strictCandidates.Length,
+                AcceptedCount: choices.Count,
+                "accepted",
+                null,
+                Array.Empty<string>()));
+    }
+
     private static IEnumerable<object> CollectRestSiteButtons(IEnumerable<object> roots)
     {
         var buttons = new List<object>();
@@ -1390,6 +1543,238 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             AddIfUseful(options, candidate);
         }
+    }
+
+    private static RestSiteButtonObservation ObserveRestSiteButtons(IEnumerable<object> roots)
+    {
+        var visibleButtons = new List<(string OptionId, bool Enabled, bool Executing)>();
+        string? hoveredOptionId = null;
+
+        foreach (var room in roots.Where(static root =>
+                     (root.GetType().FullName ?? root.GetType().Name).Contains("NRestSiteRoom", StringComparison.OrdinalIgnoreCase))
+                     .DistinctBy(RuntimeHelpers.GetHashCode))
+        {
+            var focusedButton = TryGetMemberValue(room, "_lastFocused");
+            var focusedOption = focusedButton is null ? null : TryGetMemberValue(focusedButton, "Option") ?? TryGetMemberValue(focusedButton, "_option");
+            hoveredOptionId ??= focusedOption is null ? null : TryResolveRestSiteOptionId(focusedOption, focusedButton!);
+        }
+
+        foreach (var button in CollectRestSiteButtons(roots).DistinctBy(RuntimeHelpers.GetHashCode))
+        {
+            var option = TryGetMemberValue(button, "Option") ?? TryGetMemberValue(button, "_option");
+            if (option is null)
+            {
+                continue;
+            }
+
+            var optionId = TryResolveRestSiteOptionId(option, button);
+            if (string.IsNullOrWhiteSpace(optionId))
+            {
+                continue;
+            }
+
+            if (!IsVisibleNode(button) && string.IsNullOrWhiteSpace(TryResolveScreenBounds(button)))
+            {
+                continue;
+            }
+
+            var enabled = TryResolveRestSiteButtonEnabled(button, option);
+            var executing = TryReadBool(button, "_executingOption") == true;
+            visibleButtons.Add((optionId, enabled, executing));
+        }
+
+        var optionsInteractive = visibleButtons.Count > 0 && visibleButtons.All(static button => button.Enabled && !button.Executing);
+        var visibleOptionSummary = visibleButtons.Count == 0
+            ? null
+            : string.Join(
+                ",",
+                visibleButtons.Select(static button =>
+                    $"{button.OptionId}:{(button.Executing ? "executing" : button.Enabled ? "enabled" : "disabled")}"));
+
+        return new RestSiteButtonObservation(
+            visibleButtons.Count,
+            hoveredOptionId,
+            visibleButtons.FirstOrDefault(static button => button.Executing).OptionId,
+            optionsInteractive,
+            visibleOptionSummary);
+    }
+
+    private static RestSiteUpgradeObservation ObserveRestSiteUpgrade(IEnumerable<object> roots, string? screenHint)
+    {
+        var upgradeScreens = roots.Where(static root =>
+                (root.GetType().FullName ?? root.GetType().Name).Contains("NDeckUpgradeSelectScreen", StringComparison.OrdinalIgnoreCase))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        var visibleCards = new List<RestSiteUpgradeCardCandidate>();
+        object? visibleConfirmButton = null;
+        string? previewMode = null;
+        var selectedCardLabels = new List<string>();
+        var selectedCardCount = 0;
+        var screenDetected = upgradeScreens.Length > 0;
+        var forceScreenVisible = string.Equals(screenHint, "upgrade", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var screen in upgradeScreens)
+        {
+            if (!forceScreenVisible && !IsVisibleNode(screen))
+            {
+                continue;
+            }
+
+            foreach (var node in EnumerateUpgradeCardHolders(screen))
+            {
+                if (!IsVisibleNode(node) && string.IsNullOrWhiteSpace(TryResolveScreenBounds(node)))
+                {
+                    continue;
+                }
+
+                var screenBounds = TryResolveScreenBounds(node);
+                if (string.IsNullOrWhiteSpace(screenBounds))
+                {
+                    continue;
+                }
+
+                var label = FirstNonEmpty(
+                    TryResolveChoiceLabel(node),
+                    TryReadString(TryGetMemberValue(node, "CardModel"), "Id", "CardId", "Name"),
+                    $"Smith Card {visibleCards.Count + 1}");
+                if (string.IsNullOrWhiteSpace(label))
+                {
+                    continue;
+                }
+
+                var cardId = FirstNonEmpty(
+                    TryReadString(TryGetMemberValue(node, "CardModel"), "Id", "CardId", "Name"),
+                    TryReadString(TryGetMemberValue(node, "Card"), "Id", "CardId", "Name"),
+                    TryReadString(TryGetMemberValue(node, "CardNode"), "Id", "CardId", "Name"));
+                visibleCards.Add(new RestSiteUpgradeCardCandidate(node, label, cardId, screenBounds));
+            }
+
+            visibleConfirmButton ??= TryResolveVisibleUpgradeConfirmButton(screen, out previewMode);
+
+            foreach (var selectedCard in ExpandEnumerable(TryGetMemberValue(screen, "_selectedCards")))
+            {
+                selectedCardCount += 1;
+                var label = FirstNonEmpty(
+                    TryReadString(selectedCard, "Id", "CardId", "Name"),
+                    TryResolveChoiceLabel(selectedCard));
+                if (!string.IsNullOrWhiteSpace(label))
+                {
+                    selectedCardLabels.Add(label);
+                }
+            }
+        }
+
+        var confirmVisible = visibleConfirmButton is not null
+                             && (!forceScreenVisible ? IsVisibleNode(visibleConfirmButton) : true)
+                             && !string.IsNullOrWhiteSpace(TryResolveScreenBounds(visibleConfirmButton));
+        var confirmEnabled = confirmVisible && (TryResolveControlEnabled(visibleConfirmButton) ?? true);
+        var confirmBounds = confirmVisible ? TryResolveScreenBounds(visibleConfirmButton) : null;
+        var screenVisible = visibleCards.Count > 0 || confirmVisible || (screenDetected && forceScreenVisible);
+        var observerMiss = screenVisible && visibleCards.Count == 0 && !confirmVisible;
+
+        return new RestSiteUpgradeObservation(
+            ScreenDetected: screenDetected,
+            ScreenVisible: screenVisible,
+            VisibleCards: visibleCards
+                .OrderBy(static card => TryGetBoundsSortX(card.ScreenBounds))
+                .ThenBy(static card => TryGetBoundsSortY(card.ScreenBounds))
+                .ToArray(),
+            ConfirmVisible: confirmVisible,
+            ConfirmEnabled: confirmEnabled,
+            ConfirmBounds: confirmBounds,
+            SelectedCardCount: selectedCardCount,
+            SelectedCardsSummary: selectedCardLabels.Count == 0
+                ? null
+                : string.Join(",", selectedCardLabels.Distinct(StringComparer.OrdinalIgnoreCase)),
+            PreviewMode: previewMode,
+            ObserverMiss: observerMiss);
+    }
+
+    private static IEnumerable<object> EnumerateUpgradeCardHolders(object screen)
+    {
+        var seen = new HashSet<int>();
+
+        var grid = TryGetMemberValue(screen, "_grid") ?? TryGetMemberValue(screen, "Grid");
+        foreach (var holder in ExpandEnumerable(TryGetMemberValue(grid, "CurrentlyDisplayedCardHolders")))
+        {
+            if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+            {
+                yield return holder;
+            }
+        }
+
+        foreach (var holder in ExpandEnumerable(TryInvokeMethod(grid, "GetTopRowOfCardNodes")))
+        {
+            if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+            {
+                yield return holder;
+            }
+        }
+
+        foreach (var node in EnumerateDescendants(screen, 256))
+        {
+            var typeName = node.GetType().FullName ?? node.GetType().Name;
+            if (!typeName.Contains("NGridCardHolder", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (seen.Add(RuntimeHelpers.GetHashCode(node)))
+            {
+                yield return node;
+            }
+        }
+    }
+
+    private static object? TryResolveVisibleUpgradeConfirmButton(object screen, out string? previewMode)
+    {
+        previewMode = null;
+
+        var singlePreviewContainer = TryGetMemberValue(screen, "_upgradeSinglePreviewContainer");
+        if (singlePreviewContainer is not null && IsVisibleNode(singlePreviewContainer))
+        {
+            previewMode = "single";
+            return TryGetMemberValue(screen, "_singlePreviewConfirmButton");
+        }
+
+        var multiPreviewContainer = TryGetMemberValue(screen, "_upgradeMultiPreviewContainer");
+        if (multiPreviewContainer is not null && IsVisibleNode(multiPreviewContainer))
+        {
+            previewMode = "multi";
+            return TryGetMemberValue(screen, "_multiPreviewConfirmButton");
+        }
+
+        return null;
+    }
+
+    private static bool TryResolveRestSiteButtonEnabled(object button, object? option)
+    {
+        var isUnclickable = TryReadBool(button, "_isUnclickable");
+        if (isUnclickable is not null)
+        {
+            return !isUnclickable.Value;
+        }
+
+        return TryResolveControlEnabled(button)
+               ?? TryReadBool(option, "IsEnabled")
+               ?? true;
+    }
+
+    private static bool? TryResolveControlEnabled(object? control)
+    {
+        if (control is null)
+        {
+            return null;
+        }
+
+        var enabled = TryReadBool(control, "IsEnabled", "Enabled");
+        if (enabled is not null)
+        {
+            return enabled;
+        }
+
+        var disabled = TryReadBool(control, "Disabled", "IsDisabled");
+        return disabled is null ? null : !disabled.Value;
     }
 
     private static RestSiteExtractorCandidate? TryCreateRestSiteButtonCandidate(object button)
@@ -1875,6 +2260,20 @@ internal static class RuntimeSnapshotReflectionExtractor
                });
     }
 
+    private static bool LooksLikeRestSiteUpgradeContext(string triggerKind, string? screenHint, IEnumerable<object> roots)
+    {
+        if (!LooksLikeRestContext(triggerKind, screenHint, roots))
+        {
+            return false;
+        }
+
+        return roots.Any(root =>
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            return typeName.Contains("NDeckUpgradeSelectScreen", StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
     private static bool LooksLikeEventContext(string triggerKind, string? screenHint, IEnumerable<object> roots)
     {
         return triggerKind.Contains("event", StringComparison.OrdinalIgnoreCase)
@@ -2004,6 +2403,28 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
     }
 
+    private static IEnumerable<object> EnumerateDescendants(object root, int maxNodes)
+    {
+        var queue = new Queue<object>();
+        var seen = new HashSet<int>();
+        queue.Enqueue(root);
+        seen.Add(RuntimeHelpers.GetHashCode(root));
+
+        while (queue.Count > 0 && seen.Count <= maxNodes)
+        {
+            var current = queue.Dequeue();
+            yield return current;
+
+            foreach (var child in TryEnumerateChildren(current))
+            {
+                if (seen.Add(RuntimeHelpers.GetHashCode(child)))
+                {
+                    queue.Enqueue(child);
+                }
+            }
+        }
+    }
+
     private static bool IsInterestingSceneNode(object node)
     {
         var typeName = node.GetType().FullName ?? node.GetType().Name;
@@ -2037,6 +2458,329 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return warnings.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    private static void AppendRestSiteLifecycleMetadata(
+        RuntimeHookBinding binding,
+        DateTimeOffset observedAt,
+        object?[]? args,
+        IDictionary<string, object?> payload,
+        IDictionary<string, string?> meta)
+    {
+        if (!string.Equals(binding.Candidate.Category, "rest-site", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var option = args?.FirstOrDefault(arg =>
+            arg is not null
+            && (arg.GetType().FullName ?? arg.GetType().Name).Contains("RestSiteOption", StringComparison.OrdinalIgnoreCase));
+        var optionId = option is null ? null : TryResolveRestSiteOptionId(option, option);
+        if (string.IsNullOrWhiteSpace(optionId))
+        {
+            return;
+        }
+
+        string signal;
+        string? successValue = null;
+        switch (binding.Candidate.SemanticKind)
+        {
+            case "rest-site-option-selection-started":
+                signal = "before-select";
+                break;
+            case "rest-site-option-selection-finished":
+            {
+                var success = args is { Length: >= 2 } ? TryConvertToBool(args[1]) : null;
+                signal = success == true ? "after-select-success" : "after-select-failure";
+                successValue = success?.ToString().ToLowerInvariant();
+                payload["restSiteSelectionSuccess"] = success;
+                break;
+            }
+            default:
+                return;
+        }
+
+        meta["restSiteSelectionLastSignal"] = signal;
+        meta["restSiteSelectionLastOptionId"] = optionId;
+        meta["restSiteSelectionLastSuccess"] = successValue;
+        meta["restSiteSelectionLastSignalAt"] = observedAt.ToString("O", CultureInfo.InvariantCulture);
+        payload["restSiteSelectionSignal"] = signal;
+        payload["restSiteSelectionOptionId"] = optionId;
+    }
+
+    private static void AppendRestSiteRuntimeMetadata(
+        IReadOnlyList<object> roots,
+        IReadOnlyList<LiveExportChoiceSummary> choices,
+        string screen,
+        IDictionary<string, string?> meta,
+        IDictionary<string, object?> payload)
+    {
+        var buttonObservation = ObserveRestSiteButtons(roots);
+        var upgradeObservation = ObserveRestSiteUpgrade(roots, screen);
+        var restSiteRelevant = choices.Any(static choice =>
+                                  string.Equals(choice.Kind, "rest-option", StringComparison.OrdinalIgnoreCase)
+                                  || string.Equals(choice.Kind, "rest-site-smith-card", StringComparison.OrdinalIgnoreCase)
+                                  || string.Equals(choice.Kind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase))
+                               || upgradeObservation.ScreenDetected
+                               || roots.Any(static root =>
+                               {
+                                   var typeName = root.GetType().FullName ?? root.GetType().Name;
+                                   return typeName.Contains("NRestSiteRoom", StringComparison.OrdinalIgnoreCase)
+                                          || typeName.Contains("NRestSiteButton", StringComparison.OrdinalIgnoreCase)
+                                          || typeName.Contains("RestSiteOption", StringComparison.OrdinalIgnoreCase);
+                               });
+
+        var lastSignal = meta.TryGetValue("restSiteSelectionLastSignal", out var rawLastSignal) ? rawLastSignal : null;
+        var lastOptionId = meta.TryGetValue("restSiteSelectionLastOptionId", out var rawLastOptionId) ? rawLastOptionId : null;
+        var currentStatus = DetermineRestSiteCurrentStatus(buttonObservation, upgradeObservation, choices, lastSignal);
+        var currentOptionId = DetermineRestSiteCurrentOptionId(buttonObservation, upgradeObservation);
+        var viewKind = DetermineRestSiteViewKind(buttonObservation, upgradeObservation, choices);
+        var transitionAuthority = DetermineRestSiteTransitionAuthority(buttonObservation, upgradeObservation);
+        var selectionOutcome = DetermineRestSiteSelectionOutcome(buttonObservation, upgradeObservation, lastSignal);
+        var selectionOutcomeEvidence = DetermineRestSiteSelectionOutcomeEvidence(buttonObservation, upgradeObservation, lastSignal);
+        var observedOptionId = currentOptionId ?? lastOptionId;
+
+        meta["restSiteButtonsVisible"] = buttonObservation.VisibleButtonCount > 0 ? "true" : "false";
+        meta["restSiteHoveredOptionId"] = restSiteRelevant ? buttonObservation.HoveredOptionId : null;
+        meta["restSiteExecutingOptionId"] = restSiteRelevant ? buttonObservation.ExecutingOptionId : null;
+        meta["restSiteOptionsInteractive"] = buttonObservation.OptionsInteractive ? "true" : "false";
+        meta["restSiteVisibleOptionSummary"] = restSiteRelevant ? buttonObservation.VisibleOptionSummary : null;
+        meta["restSiteUpgradeScreenVisible"] = upgradeObservation.ScreenVisible ? "true" : "false";
+        meta["restSiteUpgradeScreenDetected"] = upgradeObservation.ScreenDetected ? "true" : "false";
+        meta["restSiteUpgradeObserverMiss"] = upgradeObservation.ObserverMiss ? "true" : "false";
+        meta["restSiteUpgradeCardCount"] = upgradeObservation.VisibleCards.Count.ToString(CultureInfo.InvariantCulture);
+        meta["restSiteUpgradeCardSummary"] = upgradeObservation.VisibleCards.Count == 0
+            ? null
+            : string.Join(";", upgradeObservation.VisibleCards.Select(static card => $"{card.CardId ?? SanitizeNodeKey(card.Label)}@{card.ScreenBounds}"));
+        meta["restSiteUpgradeConfirmVisible"] = upgradeObservation.ConfirmVisible ? "true" : "false";
+        meta["restSiteUpgradeConfirmEnabled"] = upgradeObservation.ConfirmEnabled ? "true" : "false";
+        meta["restSiteUpgradeConfirmBounds"] = upgradeObservation.ConfirmBounds;
+        meta["restSiteUpgradeSelectedCardCount"] = upgradeObservation.SelectedCardCount.ToString(CultureInfo.InvariantCulture);
+        meta["restSiteUpgradeSelectedCards"] = upgradeObservation.SelectedCardsSummary;
+        meta["restSiteUpgradePreviewMode"] = upgradeObservation.PreviewMode;
+        meta["restSiteSelectionCurrentStatus"] = restSiteRelevant ? currentStatus : null;
+        meta["restSiteSelectionCurrentOptionId"] = restSiteRelevant ? currentOptionId : null;
+        meta["restSiteSelectionObservedOptionId"] = restSiteRelevant ? observedOptionId : null;
+        meta["restSiteSelectionOutcome"] = restSiteRelevant ? selectionOutcome : null;
+        meta["restSiteSelectionOutcomeEvidence"] = restSiteRelevant ? selectionOutcomeEvidence : null;
+        meta["restSiteViewKind"] = restSiteRelevant ? viewKind : null;
+        meta["restSiteTransitionAuthority"] = restSiteRelevant ? transitionAuthority : null;
+
+        payload["restSiteButtonsVisible"] = buttonObservation.VisibleButtonCount > 0;
+        payload["restSiteUpgradeScreenVisible"] = upgradeObservation.ScreenVisible;
+        payload["restSiteUpgradeScreenDetected"] = upgradeObservation.ScreenDetected;
+        payload["restSiteUpgradeObserverMiss"] = upgradeObservation.ObserverMiss;
+        payload["restSiteUpgradeCardCount"] = upgradeObservation.VisibleCards.Count;
+        payload["restSiteUpgradeConfirmVisible"] = upgradeObservation.ConfirmVisible;
+        payload["restSiteUpgradeConfirmEnabled"] = upgradeObservation.ConfirmEnabled;
+        if (!string.IsNullOrWhiteSpace(currentStatus))
+        {
+            payload["restSiteSelectionCurrentStatus"] = currentStatus;
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentOptionId))
+        {
+            payload["restSiteSelectionCurrentOptionId"] = currentOptionId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(observedOptionId))
+        {
+            payload["restSiteSelectionObservedOptionId"] = observedOptionId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectionOutcome))
+        {
+            payload["restSiteSelectionOutcome"] = selectionOutcome;
+        }
+
+        if (!string.IsNullOrWhiteSpace(viewKind))
+        {
+            payload["restSiteViewKind"] = viewKind;
+        }
+    }
+
+    private static string BuildChoiceSignature(IReadOnlyList<LiveExportChoiceSummary> choices)
+    {
+        return string.Join(
+            ";",
+            choices.Take(12).Select(static choice =>
+                $"{choice.Kind}:{choice.BindingId ?? choice.NodeId ?? choice.Label}:{choice.Enabled?.ToString().ToLowerInvariant() ?? "null"}"));
+    }
+
+    private static string? DetermineRestSiteCurrentStatus(
+        RestSiteButtonObservation buttonObservation,
+        RestSiteUpgradeObservation upgradeObservation,
+        IReadOnlyList<LiveExportChoiceSummary> choices,
+        string? lastSignal)
+    {
+        if (upgradeObservation.ConfirmVisible)
+        {
+            return "confirm-visible";
+        }
+
+        if (upgradeObservation.VisibleCards.Count > 0)
+        {
+            return "grid-visible";
+        }
+
+        if (upgradeObservation.ObserverMiss)
+        {
+            return "grid-observer-miss";
+        }
+
+        if (!string.IsNullOrWhiteSpace(buttonObservation.ExecutingOptionId))
+        {
+            return "selecting";
+        }
+
+        if (string.Equals(lastSignal, "after-select-failure", StringComparison.OrdinalIgnoreCase))
+        {
+            return "selection-failed";
+        }
+
+        if (buttonObservation.VisibleButtonCount > 0
+            && choices.Any(static choice => string.Equals(choice.Kind, "rest-option", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "explicit-choice";
+        }
+
+        if (buttonObservation.VisibleButtonCount > 0 && !buttonObservation.OptionsInteractive)
+        {
+            return "options-disabled";
+        }
+
+        return null;
+    }
+
+    private static string? DetermineRestSiteCurrentOptionId(
+        RestSiteButtonObservation buttonObservation,
+        RestSiteUpgradeObservation upgradeObservation)
+    {
+        if (upgradeObservation.ScreenVisible)
+        {
+            return "SMITH";
+        }
+
+        return buttonObservation.ExecutingOptionId ?? buttonObservation.HoveredOptionId;
+    }
+
+    private static string? DetermineRestSiteViewKind(
+        RestSiteButtonObservation buttonObservation,
+        RestSiteUpgradeObservation upgradeObservation,
+        IReadOnlyList<LiveExportChoiceSummary> choices)
+    {
+        if (upgradeObservation.ConfirmVisible)
+        {
+            return "smith-confirm";
+        }
+
+        if (upgradeObservation.VisibleCards.Count > 0)
+        {
+            return "smith-grid";
+        }
+
+        if (upgradeObservation.ObserverMiss)
+        {
+            return "smith-grid-observer-miss";
+        }
+
+        if (buttonObservation.VisibleButtonCount > 0
+            || choices.Any(static choice => string.Equals(choice.Kind, "rest-option", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "explicit-choice";
+        }
+
+        return null;
+    }
+
+    private static string? DetermineRestSiteTransitionAuthority(
+        RestSiteButtonObservation buttonObservation,
+        RestSiteUpgradeObservation upgradeObservation)
+    {
+        if (upgradeObservation.ConfirmVisible || upgradeObservation.VisibleCards.Count > 0)
+        {
+            return "runtime-poll:deck-upgrade-screen";
+        }
+
+        if (upgradeObservation.ScreenVisible)
+        {
+            return "runtime-screen:upgrade";
+        }
+
+        if (buttonObservation.VisibleButtonCount > 0 || !string.IsNullOrWhiteSpace(buttonObservation.ExecutingOptionId))
+        {
+            return "runtime-poll:rest-site-button";
+        }
+
+        return null;
+    }
+
+    private static string? DetermineRestSiteSelectionOutcome(
+        RestSiteButtonObservation buttonObservation,
+        RestSiteUpgradeObservation upgradeObservation,
+        string? lastSignal)
+    {
+        if (string.Equals(lastSignal, "after-select-failure", StringComparison.OrdinalIgnoreCase))
+        {
+            return "failure";
+        }
+
+        if (upgradeObservation.ScreenVisible
+            || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase))
+        {
+            return "success";
+        }
+
+        if (!string.IsNullOrWhiteSpace(buttonObservation.ExecutingOptionId)
+            || string.Equals(lastSignal, "before-select", StringComparison.OrdinalIgnoreCase))
+        {
+            return "in-progress";
+        }
+
+        return null;
+    }
+
+    private static string? DetermineRestSiteSelectionOutcomeEvidence(
+        RestSiteButtonObservation buttonObservation,
+        RestSiteUpgradeObservation upgradeObservation,
+        string? lastSignal)
+    {
+        if (string.Equals(lastSignal, "after-select-failure", StringComparison.OrdinalIgnoreCase))
+        {
+            return "hook:after-select-failure";
+        }
+
+        if (upgradeObservation.ConfirmVisible)
+        {
+            return "runtime-poll:smith-confirm";
+        }
+
+        if (upgradeObservation.VisibleCards.Count > 0)
+        {
+            return "runtime-poll:smith-grid";
+        }
+
+        if (upgradeObservation.ObserverMiss)
+        {
+            return "runtime-screen:upgrade-without-exported-hitboxes";
+        }
+
+        if (string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase))
+        {
+            return "hook:after-select-success";
+        }
+
+        if (!string.IsNullOrWhiteSpace(buttonObservation.ExecutingOptionId))
+        {
+            return "runtime-poll:executing-option";
+        }
+
+        if (string.Equals(lastSignal, "before-select", StringComparison.OrdinalIgnoreCase))
+        {
+            return "hook:before-select";
+        }
+
+        return null;
     }
 
     private static IEnumerable<object> FindRoots(IEnumerable<object> roots, params string[] memberNames)
@@ -2100,6 +2844,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (string.Equals(screen, "rewards", StringComparison.Ordinal)
             || string.Equals(screen, "event", StringComparison.Ordinal)
             || string.Equals(screen, "rest-site", StringComparison.Ordinal)
+            || string.Equals(screen, "upgrade", StringComparison.Ordinal)
+            || string.Equals(screen, "transform", StringComparison.Ordinal)
+            || string.Equals(screen, "card-choice", StringComparison.Ordinal)
             || string.Equals(screen, "shop", StringComparison.Ordinal)
             || string.Equals(screen, "map", StringComparison.Ordinal)
             || string.Equals(screen, "character-select", StringComparison.Ordinal))
@@ -2188,6 +2935,23 @@ internal static class RuntimeSnapshotReflectionExtractor
             return "modding";
         }
 
+        if (joined.Contains("DeckUpgradeSelect", StringComparison.OrdinalIgnoreCase)
+            || joined.Contains("UpgradeSelect", StringComparison.OrdinalIgnoreCase))
+        {
+            return "upgrade";
+        }
+
+        if (joined.Contains("TransformSelect", StringComparison.OrdinalIgnoreCase)
+            || joined.Contains("DeckTransform", StringComparison.OrdinalIgnoreCase))
+        {
+            return "transform";
+        }
+
+        if (joined.Contains("ChooseACardSelection", StringComparison.OrdinalIgnoreCase))
+        {
+            return "card-choice";
+        }
+
         if (joined.Contains("Event", StringComparison.OrdinalIgnoreCase))
         {
             return "event";
@@ -2198,11 +2962,6 @@ internal static class RuntimeSnapshotReflectionExtractor
             return "rewards";
         }
 
-        if (joined.Contains("Map", StringComparison.OrdinalIgnoreCase))
-        {
-            return "map";
-        }
-
         if (joined.Contains("Rest", StringComparison.OrdinalIgnoreCase))
         {
             return "rest-site";
@@ -2211,6 +2970,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (joined.Contains("Shop", StringComparison.OrdinalIgnoreCase) || joined.Contains("Merchant", StringComparison.OrdinalIgnoreCase))
         {
             return "shop";
+        }
+
+        if (joined.Contains("Map", StringComparison.OrdinalIgnoreCase))
+        {
+            return "map";
         }
 
         if (joined.Contains("Combat", StringComparison.OrdinalIgnoreCase))

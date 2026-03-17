@@ -54,6 +54,8 @@ internal static class RuntimeHookCatalog
         new("screen", "event-screen-opened", "MegaCrit.Sts2.Core.Nodes.Events.NEventLayout", new[] { "_EnterTree", "SetEvent" }, "event"),
         new("screen", "event-screen-opened", "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom", new[] { "Create", "_Ready" }, "event"),
         new("screen", "choice-list-presented", "MegaCrit.Sts2.Core.Nodes.Rooms.NRestSiteRoom", new[] { "Create", "_Ready", "UpdateRestSiteOptions" }, "rest-site"),
+        new("rest-site", "rest-site-option-selection-started", "MegaCrit.Sts2.Core.Nodes.Rooms.NRestSiteRoom", new[] { "OnBeforePlayerSelectedRestSiteOption" }, "rest-site"),
+        new("rest-site", "rest-site-option-selection-finished", "MegaCrit.Sts2.Core.Nodes.Rooms.NRestSiteRoom", new[] { "OnAfterPlayerSelectedRestSiteOption" }, "rest-site"),
         new("screen", "choice-list-presented", "MegaCrit.Sts2.Core.Nodes.Screens.Shops.NMerchantInventory", new[] { "Initialize", "Open", "Setup", "Fill" }, "shop"),
     };
 

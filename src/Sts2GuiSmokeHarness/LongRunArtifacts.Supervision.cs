@@ -1622,7 +1622,7 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "rest-site-post-click-noop",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "rest-site-post-click-noop" or "rest-site-selection-failed" or "rest-site-grid-not-visible-after-selection" or "rest-site-grid-observer-miss",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
@@ -1636,7 +1636,10 @@ static partial class LongRunArtifacts
             || mapOverlayNoOpLoop.LoopDetected
             || mapTransitionStall.StallDetected
             || combatNoOpLoop.LoopDetected
-            || string.Equals(diagnosisKind, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase),
+            || string.Equals(diagnosisKind, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "rest-site-selection-failed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "rest-site-grid-not-visible-after-selection", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase),
             backlogRoute,
             evidence);
         UpsertNdjson(GetStallDiagnosisPath(sessionRoot), diagnosis, static existing => existing.AttemptId, diagnosis.AttemptId);
@@ -2129,6 +2132,24 @@ static partial class LongRunArtifacts
             || string.Equals(attemptEntry.FailureClass, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase))
         {
             return "rest-site-post-click-noop";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "rest-site-selection-failed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "rest-site-selection-failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rest-site-selection-failed";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "rest-site-grid-not-visible-after-selection", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "rest-site-grid-not-visible-after-selection", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rest-site-grid-not-visible-after-selection";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rest-site-grid-observer-miss";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
