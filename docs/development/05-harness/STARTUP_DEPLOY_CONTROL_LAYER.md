@@ -1,0 +1,449 @@
+# Startup/Deploy Control Layer
+
+## 1. 문서 목적
+
+이 문서는 `Sts2GuiSmokeHarness`의 `run` 경로 안에서, startup/deploy 제어층이 실제로 어떤 순서로 동작하는지 설명한다.
+
+특히 아래 흐름을 코드와 artifact 기준으로 정리한다.
+
+1. `run`
+2. 게임 종료 확인
+3. deploy command 선택
+4. deploy subprocess 실행
+5. deploy verification
+6. Steam launch
+7. game window detect
+8. manual clean boot
+9. `attempt 0001`
+10. step loop
+11. observer + decision + input
+12. supervision/diagnosis 기록
+
+중요:
+
+- 이 문서는 `startup/deploy 제어층`에 집중한다.
+- reward/event/combat 의사결정 규칙 자체를 전부 설명하는 문서는 아니다.
+- authoritative source는 여전히 [Program.cs](../../../src/Sts2GuiSmokeHarness/Program.cs)와 [LongRunArtifacts.Supervision.cs](../../../src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs)다.
+
+## 2. 한눈에 보는 구조
+
+```mermaid
+flowchart TD
+    A["run"] --> B["Game Stop Check"]
+    B --> C["Deploy Command Select"]
+    C --> D["Deploy Subprocess"]
+    D --> E["Deploy Verification"]
+    E --> F["Steam Launch"]
+    F --> G["Window Detect"]
+    G --> H["Manual Clean Boot"]
+    H --> I["Attempt 0001"]
+    I --> J["Step Loop"]
+    J --> K["Observer Decision Input"]
+    K --> L["Supervision Diagnosis"]
+```
+
+이 흐름에서 역할을 나누면 다음과 같다.
+
+- `runner`는 실제 실행 순서를 진행한다.
+- `startup trace / prevalidation`은 startup/deploy의 증거를 남긴다.
+- `supervisor`는 trust/milestone/health를 재계산한다.
+- `stall sentinel`은 step loop 이후 누적된 시도를 보고 stall 분류를 쓴다.
+
+즉 `supervisor`와 `stall sentinel`은 deploy subprocess를 직접 제어하지 않는다. 제어는 runner가 하고, 둘은 artifact를 읽어 판정만 한다.
+
+## 3. 왜 이 제어층이 따로 중요한가
+
+이 계층이 중요한 이유는, gameplay가 그럴듯해 보여도 아래가 깨져 있으면 결과를 신뢰하면 안 되기 때문이다.
+
+- 게임이 완전히 종료되지 않은 상태에서 deploy함
+- 잘못된 deploy tool 또는 오래된 output으로 deploy함
+- mods payload reconciliation이 깨짐
+- deployed DLL identity가 source와 다름
+- main menu 이전에 stale harness state가 자동 실행됨
+- manual clean boot gate를 통과하지 못함
+
+그래서 현재 long-run은 `게임 플레이 루프`보다 앞에 `startup/deploy 제어층`을 둔다.
+
+## 4. 실제 제어 흐름
+
+이 섹션은 사용자 관점의 12단계를 코드/artifact와 연결해서 설명한다.
+
+| 단계 | 실제 코드 의미 | 주요 stage 또는 artifact | 실패 시 결과 |
+|---|---|---|---|
+| 1. `run` | `RunScenarioAsync` 진입, scenario/provider/session root 계산 | `goal-contract.json`, 세션 폴더 초기화 | long-run 초기화 실패 |
+| 2. 게임 종료 확인 | deploy 전 게임이 살아 있지 않은지 확인 | `game-stopped-before-deploy`, `prevalidation.json` | deploy 전 abort |
+| 3. deploy command 선택 | fast-path 또는 fallback 명령 선택 | `deploy-command-selected`, `startup-summary.json` | 잘못된 경로면 이후 deploy 실패 |
+| 4. deploy subprocess 실행 | 선택된 명령으로 실제 subprocess 실행 | `deploy-command-started`, `deploy-command-finished`, `deploy-command-summary.json` | long-run abort |
+| 5. deploy verification | deploy report와 실제 파일 identity 검증 | `deploy-verification-started`, `deploy-verification-finished`, `prevalidation.json` | trust invalid 유지 또는 abort |
+| 6. Steam launch | Steam URI로 게임 실행 | `manual-clean-boot-launch-issued`, `restart-events.ndjson` | launch-failed |
+| 7. game window detect | STS2 윈도우 탐지 및 focus 안정화 | `game-window-detected`, `startup-summary.json` | launch-failed |
+| 8. manual clean boot | 첫 step에서 contamination 없는 clean boot 증거 평가 | `manual-clean-boot-evaluation-started`, `manual-clean-boot-evaluation-finished`, `prevalidation.json` | trust invalid 유지 |
+| 9. `attempt 0001` | first attempt 생성과 first screenshot 기록 | `attempt-0001-started`, `first-screenshot-captured`, `restart-events.ndjson` | startup incomplete |
+| 10. step loop | 매 step screenshot/observer/progress를 남기며 phase를 진행 | `progress.ndjson`, `run.log`, `steps/*.screen.png` | terminal 또는 failed |
+| 11. observer + decision + input | request 생성, decision 선택, drift guard 후 실제 입력 | `*.request.json`, `*.decision.json`, `*.candidates.json`, trace | loop/stall/abort 분류 |
+| 12. supervision/diagnosis 기록 | supervisor/sentinel이 artifact를 읽고 상태를 재계산 | `supervisor-state.json`, `stall-diagnosis.ndjson` | blocker/evidence 반영 |
+
+## 5. 단계별 상세 설명
+
+### 5.1 `run`
+
+`run` 명령은 [Program.cs](../../../src/Sts2GuiSmokeHarness/Program.cs)에서 `RunScenarioAsync(...)`로 들어간다.
+
+현재 이 제어층이 가장 중요하게 쓰이는 scenario는 `boot-to-long-run`이다.
+
+이 시점에 runner는 다음을 정한다.
+
+- scenario id
+- provider kind
+- session id
+- session root
+- max attempts
+- session deadline
+
+`boot-to-long-run`이면 session root와 `attempts/` 폴더를 만들고 session-level artifact를 초기화한다.
+
+## 5.2 게임 종료 확인
+
+deploy 전에 runner는 `EnsureGameNotRunning()`을 호출한다.
+
+의미는 단순하다.
+
+- 게임 창이 아직 살아 있으면 deploy를 진행하지 않는다.
+- long-run이면 `RecordGameStoppedBeforeDeployEvidence(...)`로 process-stop evidence를 남긴다.
+
+이 단계의 목적은 gameplay correctness가 아니라 `신뢰 가능한 deploy 조건 확보`다.
+
+### 이 단계에서 쓰는 artifact
+
+- `prevalidation.json`
+- `startup-trace.ndjson`
+- `startup-summary.json`
+
+### trace stage
+
+- `game-stopped-before-deploy`
+
+## 5.3 deploy command 선택
+
+runner는 `BuildDeployNativePackageCommand(...)`로 deploy subprocess 경로를 고른다.
+
+현재 구조는 다음 순서다.
+
+1. `src/Sts2ModKit.Tool/bin/Debug/<tfm>/Sts2ModKit.Tool.dll`
+2. 없으면 `Release/<tfm>/Sts2ModKit.Tool.dll`
+3. 그래도 없으면 `bin` 아래 usable artifact 중 점수 높은 fallback
+4. 그것도 없으면 `dotnet run --project src\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge`
+
+즉 현재 deploy는 가능하면 `built tool dll fast-path`를 선호하고, 없을 때만 `dotnet run` fallback으로 내려간다.
+
+### 왜 이렇게 하나
+
+- startup latency를 줄이기 위해
+- 매번 project build를 다시 거는 비용을 줄이기 위해
+- 그래도 usable built artifact가 없으면 fallback으로 살리기 위해
+
+### trace stage
+
+- `deploy-command-selected`
+
+### startup summary에 올라가는 것
+
+- `DeployCommandSelected`
+- `DeployMode`
+- `SelectedDeployToolPath`
+- `SelectedDeployReason`
+
+## 5.4 deploy subprocess 실행
+
+실제 subprocess 실행은 `RunDeployNativePackageAsync(...)`가 담당한다.
+
+실행 형태:
+
+- fast-path면 `dotnet "<built-tool-dll>" deploy-native-package --include-harness-bridge`
+- fallback이면 `dotnet run --project src\Sts2ModKit.Tool -- deploy-native-package --include-harness-bridge`
+
+timeout도 다르다.
+
+- fast-path: 2분
+- fallback: 5분
+
+실행 결과는 단순히 콘솔 로그로만 남지 않는다.
+
+- `deploy-command-summary.json`
+- `startup-summary.json`
+- `prevalidation.json` note
+
+까지 같이 갱신된다.
+
+### trace stage
+
+- `deploy-command-started`
+- `deploy-command-finished`
+
+### 실패 판정
+
+아래면 failure로 본다.
+
+- timeout
+- non-zero exit code
+
+이 경우 runner는 startup failure를 기록하고 long-run session을 abort 방향으로 밀어 넣는다.
+
+## 5.5 deploy verification
+
+deploy subprocess가 끝났다고 해서 곧바로 신뢰하지 않는다.
+
+그 다음에 `RecordDeployVerificationEvidence(...)`가 아래를 확인한다.
+
+- deploy report 존재 여부
+- deploy report JSON 파싱 가능 여부
+- expected source file 존재 여부
+- deployed destination file 존재 여부
+- source/deployed SHA-256 일치 여부
+- unexpected companion family file 존재 여부
+- harness bridge 포함 여부
+
+이 검증 결과는 `prevalidation.json`의 두 gate에 직접 반영된다.
+
+- `ModsPayloadReconciled`
+- `DeployIdentityVerified`
+
+### trace stage
+
+- `deploy-verification-started`
+- `deploy-verification-finished`
+
+### 여기서 중요한 점
+
+이 단계는 gameplay loop 이전의 `배포 동일성`을 판정하는 단계다.
+
+즉 screen이 맞아 보여도 이 단계가 invalid면 trust는 invalid다.
+
+## 5.6 Steam launch
+
+attempt 0001 안으로 들어오면, `--skip-launch`가 아닌 경우 runner는 다시 게임 프로세스를 멈추고 Steam URI로 실행한다.
+
+실행 명령은 현재 guardrail과 동일하다.
+
+```text
+cmd /c start "" "steam://rungameid/2868840"
+```
+
+이 단계는 `runner가 launch를 발행했다`는 사실도 event로 남긴다.
+
+### trace stage
+
+- `manual-clean-boot-launch-issued`
+
+### 관련 artifact
+
+- `startup-trace.ndjson`
+- `startup-summary.json`
+- `restart-events.ndjson`
+
+`restart-events.ndjson`에는 `runner-launch-issued`가 남는다. 즉 launch 자체도 milestone chain과 분리된 순서 증거로 남는다.
+
+## 5.7 game window detect
+
+launch 직후 runner는 `WaitForLiveGameWindowAsync(...)`로 STS2 window가 실제로 나타날 때까지 기다린다.
+
+이 단계에서 하는 일:
+
+- STS2 window poll
+- minimized면 restore
+- interactive 상태로 bring-up
+- launch focus stabilization
+
+여기서 timeout 나면 `launch-failed` 계열로 attempt가 실패한다.
+
+### trace stage
+
+- `game-window-detected`
+
+## 5.8 manual clean boot
+
+이 단계는 startup/deploy 제어층에서 가장 오해되기 쉬운 부분이다.
+
+manual clean boot는 launch 직후 별도 독립 phase가 길게 도는 것이 아니라, `attempt 0001`의 `첫 screenshot` 시점에서 evidence로 평가된다.
+
+runner는 step 1에서:
+
+1. 첫 screenshot을 저장한다.
+2. observer 복사본을 저장한다.
+3. `TryMarkManualCleanBootVerified(...)`를 호출한다.
+
+이 함수는 아래 조건을 함께 본다.
+
+- `FirstStepEligible`
+- `MainMenuObserved`
+- `ArmSessionClear`
+- `ActionsQueueClear`
+- `HarnessDormant`
+
+즉 "게임이 떴다"만 보는 것이 아니라, "첫 action 전에 contamination이 없는가"를 본다.
+
+### 대표 blocker 예시
+
+- `arm-session-present`
+- `actions-pending-active`
+- `harness-inventory-not-dormant`
+
+### trace stage
+
+- `manual-clean-boot-evaluation-started`
+- `manual-clean-boot-evaluation-finished`
+
+### 관련 artifact
+
+- `prevalidation.json`
+- `startup-trace.ndjson`
+- `startup-summary.json`
+
+이 단계가 false면 gameplay가 진행돼도 trust gate는 valid가 되지 않는다.
+
+## 5.9 `attempt 0001`
+
+`attempt 0001`은 startup/deploy 제어층과 step loop의 경계다.
+
+이 시점에서 기록되는 핵심은 다음이다.
+
+- `attempt-0001-started`
+- `first-screenshot-captured`
+- `restart-events.ndjson` 안의 first-screen event
+
+주의:
+
+- long-run에서 first screenshot은 단순 이미지가 아니라 startup proof다.
+- 구현상 first screenshot은 `restart-events.ndjson`의 `next-attempt-started` 이벤트 형식을 재사용해 기록된다.
+- 이후 restart progression에서도 "next attempt first screen"이 milestone `done`의 핵심 증거로 다시 쓰인다.
+
+## 5.10 step loop
+
+step loop는 runner의 본체다.
+
+한 step마다 대략 다음 순서가 반복된다.
+
+1. window 확인/복원
+2. screenshot capture
+3. observer snapshot read
+4. scene signature 계산
+5. passive wait phase 또는 alternate branch 확인
+6. request 생성
+7. decision 선택
+8. recapture/drift/stale guards 확인
+9. input 실행
+10. progress/trace/history 기록
+
+### 이 단계에서 주로 쓰는 artifact
+
+- `attempts/<id>/steps/*.screen.png`
+- `attempts/<id>/steps/*.request.json`
+- `attempts/<id>/steps/*.decision.json`
+- `attempts/<id>/steps/*.candidates.json`
+- `attempts/<id>/progress.ndjson`
+- `attempts/<id>/run.log`
+
+## 5.11 observer + decision + input
+
+이 구간은 "observer가 결정한다"가 아니라, "observer를 읽고 request를 만들고, provider가 decision을 만들고, runner가 안전장치를 거쳐 입력한다"에 가깝다.
+
+현재 루프는 대략 이렇게 묶인다.
+
+- `ObserverSnapshotReader`가 observer export를 읽는다.
+- `CreateStepRequest(...)`가 screenshot, observer, history를 묶어 request를 만든다.
+- provider가 decision을 만든다.
+  - `AutoDecisionProvider`
+  - `HeadlessCodexDecisionProvider`
+  - `SessionDecisionProvider`
+- replay diagnostics가 candidate dump를 같이 만든다.
+- runner는 stale decision, observer drift, overlay loop, reward-map loop, map transition stall, combat noop loop를 먼저 검사한다.
+- 그 다음에야 `MouseInputDriver`로 click/right-click/key를 보낸다.
+
+즉 입력은 decision 직후 바로 나가지 않는다. 항상 guard가 하나 더 있다.
+
+### 이 구조가 중요한 이유
+
+startup/deploy 제어층의 목적은 clean boot까지 닫는 것이고, step loop의 목적은 `잘못된 화면/잘못된 deploy/잘못된 stale state` 위에서 입력하지 않는 것이다.
+
+## 5.12 supervision/diagnosis 기록
+
+이 단계는 runner의 제어와 별개로 artifact 기반 판정을 갱신하는 층이다.
+
+### supervisor가 하는 일
+
+- `prevalidation.json` 기반 trust gate 계산
+- `restart-events.ndjson`와 `attempt-index.ndjson` 기반 milestone 계산
+- health 계산
+- `goal-contract.json` 갱신
+- `supervisor-state.json` 기록
+
+### stall sentinel이 하는 일
+
+- attempt artifact를 보고 diagnosis 생성
+- `stall-diagnosis.ndjson` 기록
+
+### 중요한 개입 시점
+
+- startup stage를 기록할 때마다 `TryRefreshSupervisorState(...)`
+- deploy command result를 기록할 때 `TryRefreshSupervisorState(...)`
+- attempt terminal을 기록할 때 `RefreshSupervisorState(...)`
+- session summary를 쓸 때 `RefreshStallSentinel(...)`와 `RefreshSupervisorState(...)`
+
+즉 supervision은 "마지막에 한 번만" 도는 것이 아니라, startup/deploy와 attempt terminal 시점에도 계속 재계산된다.
+
+## 6. startup trace stage 빠른 표
+
+| Stage | 의미 |
+|---|---|
+| `game-stopped-before-deploy` | deploy 전에 게임이 실제로 내려가 있었는지 |
+| `deploy-command-selected` | 어떤 deploy command를 선택했는지 |
+| `deploy-command-started` | deploy subprocess를 시작했는지 |
+| `deploy-command-finished` | deploy subprocess가 성공적으로 끝났는지 |
+| `deploy-verification-started` | deploy report와 file identity 검증을 시작했는지 |
+| `deploy-verification-finished` | deploy verification이 끝났는지 |
+| `attempt-0001-started` | first attempt run root가 만들어졌는지 |
+| `manual-clean-boot-launch-issued` | Steam launch가 발행됐는지 |
+| `game-window-detected` | 실제 STS2 game window가 잡혔는지 |
+| `first-screenshot-captured` | 첫 step screenshot이 남았는지 |
+| `manual-clean-boot-evaluation-started` | first-step clean boot 판정이 시작됐는지 |
+| `manual-clean-boot-evaluation-finished` | clean boot 판정이 끝났는지 |
+
+`startup-summary.json`은 이 stage들의 주요 결과를 요약 필드로 승격해서 저장한다.
+
+## 7. startup/deploy 제어층의 핵심 artifact
+
+| Artifact | 의미 | 누가 쓴다 | 이 문맥에서 하는 역할 |
+|---|---|---|---|
+| `prevalidation.json` | trust gate 4개를 담는 전처 검증 파일 | runner | `gameStoppedBeforeDeploy`, `modsPayloadReconciled`, `deployIdentityVerified`, `manualCleanBootVerified` 유지 |
+| `startup-trace.ndjson` | startup stage의 순서 로그 | runner | deploy/launch/first-step 어느 지점에서 실패했는지 추적 |
+| `startup-summary.json` | startup trace의 요약 스냅샷 | runner | latest stage, deploy mode, launch/window/manual clean boot 여부를 빠르게 확인 |
+| `deploy-command-summary.json` | deploy subprocess의 명령/출력/시간 요약 | runner | deploy command 자체 실패 triage |
+| `restart-events.ndjson` | attempt terminal, launch issued, restart, next attempt 시작 기록 | runner | milestone chain 계산 |
+| `supervisor-state.json` | trust/milestone/health 재계산 결과 | supervisor | startup/deploy 결과를 신뢰 가능한 세션 상태로 해석 |
+| `stall-diagnosis.ndjson` | stall 분류 | stall sentinel | gameplay loop 이후 병목 진단 |
+
+## 8. skip 옵션이 이 경로에 주는 영향
+
+### `--skip-deploy`
+
+- deploy subprocess와 deploy verification을 생략한다.
+- long-run이면 `prevalidation.json`에 `skip-deploy` note가 남는다.
+- trust gate는 필요한 deploy proof가 없으므로 보통 invalid로 남는다.
+
+### `--skip-launch`
+
+- Steam launch와 manual clean boot proof를 runner가 직접 수집하지 않는다.
+- long-run이면 `manual clean boot proof was not recorded by the runner` note가 남는다.
+- `maxAttempts`도 1로 제한된다.
+
+즉 이 옵션들은 디버깅용일 수는 있어도, canonical long-run trust evidence를 닫는 기본 경로는 아니다.
+
+## 9. 이 문서를 읽은 뒤 어디를 보면 좋은가
+
+- 전체 long-run artifact 계약까지 이어서 보려면 [RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](./RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)
+- live smoke 검증 절차를 보려면 [SMOKE_TEST_CHECKLIST.md](../../SMOKE_TEST_CHECKLIST.md)
+- 지금 마일스톤과 세션 done 체크리스트를 보려면 [CURRENT_MILESTONE_CHECKLIST.md](../01-overview/CURRENT_MILESTONE_CHECKLIST.md)
+
+## 10. 한 줄 결론
+
+현재 startup/deploy 제어층은 `run -> clean deploy proof -> clean boot proof -> attempt 0001 -> step loop -> supervision` 순서로 짜여 있고, 핵심은 "게임을 실행하는 것"이 아니라 "그 실행이 신뢰 가능한 조건에서 시작되었다는 것을 artifact로 증명하는 것"이다.
