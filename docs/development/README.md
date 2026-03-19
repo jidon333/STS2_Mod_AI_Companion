@@ -25,35 +25,37 @@
    - 문서별 목적과 읽기 경로를 정리한 메타 문서입니다.
 2. `01-overview/PROJECT_STATUS.md`
    - 지금 무엇이 구현됐고 무엇이 아직 남아 있는지 빠르게 확인합니다.
-3. `01-overview/DUAL_MODE_ARCHITECTURE.md`
+3. `01-overview/AI_HANDOFF_PROMPT_KO.md`
+   - 다음 구현 세션이 바로 들어갈 현재 blocker와 bounded 작업을 봅니다.
+4. `01-overview/DUAL_MODE_ARCHITECTURE.md`
    - 저장소를 `shared foundation + advisor mode + harness mode`로 어떻게 재해석하는지 설명합니다.
-4. `05-harness/HARNESS_MODE.md`
+5. `05-harness/HARNESS_MODE.md`
    - test-only action-enabled harness가 production read-only advisor와 어떻게 분리되는지 설명합니다.
-5. `01-overview/MODDING_FROM_ZERO.md`
+6. `01-overview/MODDING_FROM_ZERO.md`
    - Slay the Spire 2 모딩과 현재 저장소의 핵심 개념을 처음부터 설명합니다.
-6. `02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
+7. `02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
    - 실제 게임을 켰을 때 mod, live export, Host, WPF가 어떤 순서로 움직이는지 설명합니다.
-7. `02-runtime/LOAD_CHAIN.md`
+8. `02-runtime/LOAD_CHAIN.md`
    - `mods` 폴더 로드부터 WPF 조언 창까지 데이터가 흐르는 전체 경로를 설명합니다.
-8. `01-overview/REPO_STRUCTURE.md`
+9. `01-overview/REPO_STRUCTURE.md`
    - 저장소 구조를 실제 플레이 흐름과 연결해서 설명합니다.
-9. `02-runtime/LIVE_EXPORT_SEMANTICS.md`
+10. `02-runtime/LIVE_EXPORT_SEMANTICS.md`
    - `events.ndjson`, `state.latest.json`, `state.latest.txt`, `session.json`의 의미와 해석 규칙을 설명합니다.
-10. `03-knowledge/KNOWLEDGE_EXTRACTION.md`
+11. `03-knowledge/KNOWLEDGE_EXTRACTION.md`
    - 카드, 유물, 이벤트, 상점 정보를 어떻게 오프라인/관찰 기반으로 수집하는지 설명합니다.
-11. `04-advisor/AI_ASSISTANT_ARCHITECTURE.md`
+12. `04-advisor/AI_ASSISTANT_ARCHITECTURE.md`
    - live export, knowledge slice, Codex session, WPF UI가 어떻게 연결되는지 설명합니다.
-12. `04-advisor/WPF_USER_FLOW.md`
+13. `04-advisor/WPF_USER_FLOW.md`
    - 사용자가 앱을 켜고 게임을 실행했을 때 어떤 화면과 버튼을 보게 되는지 시나리오 중심으로 설명합니다.
-13. `02-runtime/PENDING_HOOKS_AND_RISKS.md`
+14. `02-runtime/PENDING_HOOKS_AND_RISKS.md`
     - 아직 붙이지 않은 훅, 아직 검증되지 않은 화면, 구조적 리스크를 정리합니다.
-14. `06-history/WORKLOG.md`
+15. `06-history/WORKLOG.md`
     - 큰 작업 흐름을 시간순으로 요약한 기록입니다.
-15. `06-history/DETAILED_INVESTIGATION_LOG.md`
+16. `06-history/DETAILED_INVESTIGATION_LOG.md`
     - 실패 원인, 로그 근거, 시행착오, 폐기한 가설까지 자세히 적어 둔 조사 로그입니다.
-16. `02-runtime/MOD_LOADING_STRATEGIES.md`
+17. `02-runtime/MOD_LOADING_STRATEGIES.md`
     - 왜 현재 경로를 선택했고 다른 접근은 왜 택하지 않았는지 비교 설명합니다.
-17. `01-overview/MOD_BEGINNER_GUIDE.md`
+18. `01-overview/MOD_BEGINNER_GUIDE.md`
     - 저장소 구조와 첫 실행 명령을 빠르게 익히기 위한 입문 가이드입니다.
 
 문서 작성 기준은 아래와 같습니다.
@@ -66,9 +68,8 @@
 현재 상태를 가장 빠르게 동기화해서 보려면 아래 3개를 기준 문서로 봅니다.
 
 - `01-overview/PROJECT_STATUS.md`
-- `01-overview/DUAL_MODE_ARCHITECTURE.md`
-- `03-knowledge/KNOWLEDGE_EXTRACTION.md`
-- `04-advisor/AI_ASSISTANT_ARCHITECTURE.md`
+- `01-overview/AI_HANDOFF_PROMPT_KO.md`
+- `DOCUMENT_MAP.md`
 
 `06-history/WORKLOG.md`와 `06-history/DETAILED_INVESTIGATION_LOG.md`는 역사 기록이므로, 현재 상태 판단은 위 기준 문서를 우선합니다.
 

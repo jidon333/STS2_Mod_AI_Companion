@@ -190,10 +190,11 @@ AI가 읽는 파일:
 
 1. `docs/development/DOCUMENT_MAP.md`
 2. `docs/development/01-overview/PROJECT_STATUS.md`
-3. `docs/development/01-overview/DUAL_MODE_ARCHITECTURE.md`
-4. `docs/ARCHITECTURE.md`
-5. `docs/development/02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
-6. `docs/development/04-advisor/AI_ASSISTANT_ARCHITECTURE.md`
+3. `docs/development/01-overview/AI_HANDOFF_PROMPT_KO.md`
+4. `docs/development/01-overview/DUAL_MODE_ARCHITECTURE.md`
+5. `docs/ARCHITECTURE.md`
+6. `docs/development/02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
+7. `docs/development/04-advisor/AI_ASSISTANT_ARCHITECTURE.md`
 
 - `docs/ARCHITECTURE.md`
 - `docs/BOUNDARIES.md`

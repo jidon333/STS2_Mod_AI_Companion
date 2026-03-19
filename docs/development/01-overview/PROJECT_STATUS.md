@@ -1,72 +1,98 @@
 # Project Status
 
 ## Date
-- 2026-03-16
+- 2026-03-19
+
+## Current Milestone Pointer
+
+- current rail: `startup / trust`
+- active milestone: `M2. 모드 로드 진입 증명`
+- next milestone: `M3. 런타임 부트스트랩 가동`
+- long-term goal: 사람이 실제 플레이 중 참고할 수 있는 `read-only advisor` 완성
 
 ## Current Priority
-- current critical path is `GUI Smoke Harness`
-- latest blocker is `event -> map overlay mixed-state` after event resolution
-- goal: stabilize `boot-to-long-run` screenshot-first smoke playthrough so it can drive the game, close artifact-based completion, and generate high-quality evidence for validation
+
+- current critical path is no longer `event -> map overlay mixed-state`
+- latest blocker is `startup/load-chain`
+- immediate goal: prove why the current run does not produce current-execution loader/runtime signals even when startup artifact truthfulness is already high
 
 ## Progress Snapshot
 
-| Area | Percent |
-|---|---:|
-| Overall | 76% |
-| Evidence | 90% |
-| Observer | 77% |
-| Actuator | 66% |
-| Loop | 63% |
-| Ops | 86% |
+| Rail | Status | Notes |
+|---|---|---|
+| Startup / Trust | In Progress | startup timeline truthfulness improved, but loader entry and trusted run are still not closed |
+| Gameplay Safety | Partially Stable | several stale/no-op regressions were reduced, but authoritative valid-trust gameplay evidence is still limited |
+| Replay / Evidence | Partially Stable | parity and artifact quality advanced, but live authoritative replay proof is not yet fully closed |
+| Advisor Product | Queued | product surface remains downstream of startup/trust and gameplay stability |
+
+## Current State
+
+### What Is Stable Enough To Build On
+
+- startup artifact truthfulness improved materially via launch delta, module-initializer probe, and startup timeline capture
+- `session-summary.json` now reflects live restart state more honestly and no longer overcounts invalid attempts as success
+- several combat safety regressions were reduced:
+  - stale curse/status non-enemy promotion
+  - enemy-turn closure
+  - repeated non-enemy stale loop
+  - slot-4 combat no-op loop
+- replay-step / replay-test / self-test remain the primary offline regression gate
+
+### What Is The Actual Current Blocker
+
+- latest startup roots still do not show current-execution loader/runtime signals
+- current-execution sentinel, runtime exporter, harness bridge, and fresh snapshot are all absent in the latest authoritative startup roots
+- startup artifact truthfulness is now good enough to say the blocker is in `loader / runtime bootstrap`, not in simple observer heuristics
+
+## Authoritative Roots To Read First
+
+- startup sentinel root:
+  - [verify-startup-sentinel-20260319-193531](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-sentinel-20260319-193531)
+- startup timeline root:
+  - [verify-startup-timeline-20260319-212903](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903)
+
+핵심 요약:
+
+- latest diagnosis is still conservative
+- `earlier positive`와 `later negative`는 이제 같은 root 안에서 분리해 읽을 수 있다
+- 하지만 root cause itself is still open: `primary DLL load-chain`이 current execution에서 실제로 initializer/exporter edge까지 닿는지 아직 닫히지 않았다
 
 ## What Is Stable
 
-- `combat` truth is stable via `CombatManager.IsInProgress`
-- `logicalScreen`, `visibleScreen`, `flowScreen` are exported
-- `combat` enemy-targeting has moved substantially from fixed anchors to live hitbox/export-backed targeting
-- `reward/map` recovery has advanced via layered state and a short recovery window
-- `inspect-session` latest-state recalculation and stall sentinel classification are materially stronger than before
-- `replay-step`, `replay-test`, and the golden scene regression suite now exist for offline validation
-- startup tracing and deploy fast-path hardening improved boot diagnostics and ops reliability
+- startup timeline / reviewer summary artifact now separates `latest` from `ever`
+- stale snapshot, fresh snapshot, and no-snapshot states are no longer flattened into one missing-state explanation
+- deploy verification normalization and startup runtime-config rewrite are stable enough to use in repeated startup investigations
+- combat replay spot-checks for known regressions remain intact while startup work proceeds
 
 ## What Is Partially Stable
 
-- `Observer/export` is no longer only telemetry and post-check; it now helps with candidate generation and validation input, but it is still not the final action authority
-- `reward back` navigation and claimable reward extraction exist, but they remain weaker than the main reward/map lane
-- mixed-state sentinel classifications such as `reward-map-loop`, `map-transition-stall`, and `combat-noop-loop` are improved, but loop terminalization still needs reinforcement
-
-## Smoke Harness primitives
-
-- screenshot capture
-- click / right-click / press-key
-- human-readable console logging
-- `run.log` persistence
-- action settle / wait timing tuned for human-paced play
-- actual combat primitives verified
+- module-initializer probe exists, but current-execution sentinel is still absent in the latest roots
+- runtime exporter and harness bridge paths still need current-execution proof, not just historical traces
+- trusted attempt creation is blocked by startup/load-chain, so gameplay confidence cannot yet be promoted to authoritative acceptance
 
 ## What Is Not Yet Stable
-- `event` foreground and `map overlay` background handling in the same frame
-- distinguishing a `current-node arrow` from a real reachable next node on the overlaid map
-- autonomous long-run closure when mixed-state loops need early terminalization
-- reward back / claimable reward fallback coverage
+
+- current-execution loader entry proof
+- runtime bootstrap proof in fresh startup runs
+- trusted attempt generation on fresh clean-boot runs
+- authoritative live parity proof on a valid-trust attempt
 
 ## Current Architecture Direction
-- `Smoke Harness` is a dev-only black-box tester
-- `Observer/export` is telemetry, internal truth export, candidate generation support, and validation input
-- `Observer/export` must not dictate the final Smoke Harness action by itself
-- action authority must remain with screenshot + AI judgment
+
+- `Smoke Harness` remains a dev-only validation tool, not the product
+- startup/trust and gameplay must stay separated in diagnosis and acceptance
+- observer/export remains a mixed `event + polling` observer and must not be promoted to scene authority from transient snapshots alone
+- authoritative acceptance is still artifact-first and layer-specific
 
 ## Immediate Next Steps
-1. harden `event/map overlay` foreground authority and contamination suppression
-2. stop treating the `current-node arrow` as a reachable next node candidate
-3. strengthen `reward back` and claimable reward fallback handling
-4. expand replay fixtures for mixed-state and loop terminalization regressions
-5. keep validating live sessions with `inspect-session`, `startup-trace.ndjson`, and golden scene replay
+
+1. debug `ModManager.TryLoadModFromPck(...)` branch behavior directly instead of adding more diagnostic layers
+2. compare current deployed payload, `.pck` contents, manifest, and primary DLL identity against the decompiled loader contract
+3. recover at least one current-execution positive loader/runtime signal
+4. only after loader entry and runtime bootstrap are proven, return to trusted attempt closure and gameplay validation
 
 ## Deferred Work
-- resident `supervisor / stall sentinel` processes
-- lightweight orchestration layer above current human-coordinated workflow
-- AI-first fallback lane for novel screens
-- post-observer refactor of DLL boundaries and bridge/actuator responsibility split
-- broader commander integration work
-- document pruning beyond canonical architecture and handoff set
+
+- product-surface refinement beyond the current advisor concept
+- broader gameplay policy quality work not backed by valid-trust live evidence
+- non-critical document pruning outside the canonical overview/handoff set
