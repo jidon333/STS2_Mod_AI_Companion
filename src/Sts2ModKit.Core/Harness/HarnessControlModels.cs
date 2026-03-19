@@ -14,6 +14,9 @@ public sealed record HarnessNodeInventory(
     string? SceneEpisodeId,
     string Mode,
     string? BlockingModal,
+    bool? SceneReady,
+    string? SceneAuthority,
+    string? SceneStability,
     IReadOnlyList<HarnessNodeInventoryItem> Nodes);
 
 public sealed record HarnessNodeInventoryItem(

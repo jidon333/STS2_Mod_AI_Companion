@@ -108,11 +108,6 @@ public static class CompanionSceneNormalizer
             return new CompanionNormalizedScene("combat", "combat", 0.96, "raw/meta:combat");
         }
 
-        if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMapScreen"))
-        {
-            return new CompanionNormalizedScene("map", "map", 0.94, "meta:map");
-        }
-
         if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NCardRewardSelectionScreen")
             || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NRewardsScreen"))
         {
@@ -136,6 +131,11 @@ public static class CompanionSceneNormalizer
             || ContainsSceneMarker(currentSceneType, rootTypeSummary, "NRestSite"))
         {
             return new CompanionNormalizedScene("rest-site", "rest-site", 0.94, "meta:rest-site");
+        }
+
+        if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMapScreen"))
+        {
+            return new CompanionNormalizedScene("map", "map", 0.94, "meta:map");
         }
 
         if (ContainsSceneMarker(currentSceneType, rootTypeSummary, "NMainMenu")

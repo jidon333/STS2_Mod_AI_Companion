@@ -19,6 +19,8 @@ internal sealed class HarnessBridgeHost
     private string? _lastActionId;
     private string? _lastResultStatus;
     private string? _lastMessage;
+    private string? _lastGuardState;
+    private string? _lastGuardReason;
 
     public HarnessBridgeHost(HarnessQueueLayout layout, string liveSnapshotPath, int pollIntervalMs)
     {
@@ -66,7 +68,9 @@ internal sealed class HarnessBridgeHost
                     LastActionId: _lastActionId,
                     LastResultStatus: _lastResultStatus,
                     UpdatedAt: DateTimeOffset.UtcNow,
-                    Message: _lastMessage));
+                    Message: _lastMessage,
+                    GuardState: "error",
+                    LastGuardReason: exception.Message));
                 _traceWriter.Write("bridge-error", _lastActionId, new { message = exception.Message });
             }
 
@@ -89,8 +93,12 @@ internal sealed class HarnessBridgeHost
             out var sessionTokenPresent,
             out var modeMessage);
         var mode = armSession is null ? "dormant" : "armed";
+        _lastGuardState = armSession is null ? "dormant" : "armed-no-inventory";
+        _lastGuardReason = modeMessage;
 
         var inventoryAttempt = _inventoryPublisher.TryPublish(_liveSnapshotReader, mode);
+        var currentInventory = inventoryAttempt.Inventory;
+        UpdateGuardSurface(armSession, currentInventory, modeMessage);
         if (inventoryAttempt.Suppressed && inventoryAttempt.Inventory is not null)
         {
             _traceWriter.Write("inventory-suppressed", null, new
@@ -98,6 +106,9 @@ internal sealed class HarnessBridgeHost
                 rawSceneType = inventoryAttempt.RawSceneType,
                 sceneType = inventoryAttempt.Inventory.SceneType,
                 reason = inventoryAttempt.SuppressionReason,
+                sceneReady = inventoryAttempt.Inventory.SceneReady,
+                sceneAuthority = inventoryAttempt.Inventory.SceneAuthority,
+                sceneStability = inventoryAttempt.Inventory.SceneStability,
                 mode,
             });
         }
@@ -110,6 +121,9 @@ internal sealed class HarnessBridgeHost
                 rawSceneType = inventoryAttempt.RawSceneType,
                 sceneType = inventoryAttempt.Inventory.SceneType,
                 nodeCount = inventoryAttempt.Inventory.Nodes.Count,
+                sceneReady = inventoryAttempt.Inventory.SceneReady,
+                sceneAuthority = inventoryAttempt.Inventory.SceneAuthority,
+                sceneStability = inventoryAttempt.Inventory.SceneStability,
                 mode = inventoryAttempt.Inventory.Mode,
             });
         }
@@ -135,6 +149,8 @@ internal sealed class HarnessBridgeHost
                 targetLabel = action.TargetLabel,
                 requestedAt = action.RequestedAt,
                 sessionToken = action.SessionToken,
+                inventoryId = action.InventoryId,
+                nodeId = action.NodeId,
             });
 
             _lastActionId = action.ActionId;
@@ -142,6 +158,8 @@ internal sealed class HarnessBridgeHost
             {
                 _lastResultStatus = "ignored";
                 _lastMessage = "bridge-dormant-no-arm";
+                _lastGuardState = "dormant";
+                _lastGuardReason = _lastMessage;
                 _traceWriter.Write("action-ignored", action.ActionId, new
                 {
                     reason = _lastMessage,
@@ -150,12 +168,18 @@ internal sealed class HarnessBridgeHost
                 continue;
             }
 
+            var guardResult = EvaluateGuard(action, armSession, currentInventory);
             _lastResultStatus = "rejected";
-            _lastMessage = "actuator-disabled-until-post-clean-boot";
+            _lastMessage = guardResult.Reason;
+            _lastGuardState = guardResult.GuardState;
+            _lastGuardReason = guardResult.Reason;
             _traceWriter.Write("action-rejected", action.ActionId, new
             {
                 reason = _lastMessage,
+                guardState = guardResult.GuardState,
                 kind = action.Kind,
+                inventoryId = action.InventoryId,
+                nodeId = action.NodeId,
             });
         }
 
@@ -165,6 +189,97 @@ internal sealed class HarnessBridgeHost
             LastActionId: _lastActionId,
             LastResultStatus: _lastResultStatus,
             UpdatedAt: DateTimeOffset.UtcNow,
-            Message: _lastMessage ?? modeMessage));
+            Message: _lastMessage ?? modeMessage,
+            GuardState: _lastGuardState,
+            LastGuardReason: _lastGuardReason));
     }
+
+    private void UpdateGuardSurface(HarnessArmSession? armSession, HarnessNodeInventory? inventory, string modeMessage)
+    {
+        if (armSession is null)
+        {
+            _lastGuardState = "dormant";
+            _lastGuardReason = modeMessage;
+            return;
+        }
+
+        if (inventory is null)
+        {
+            _lastGuardState = "armed-no-inventory";
+            _lastGuardReason = "inventory-unavailable";
+            return;
+        }
+
+        if (inventory.SceneReady != true)
+        {
+            _lastGuardState = "armed-but-unsafe";
+            _lastGuardReason = "scene-not-ready";
+            return;
+        }
+
+        if (!string.Equals(inventory.SceneStability, "stable", StringComparison.OrdinalIgnoreCase))
+        {
+            _lastGuardState = "armed-but-unsafe";
+            _lastGuardReason = $"scene-not-stable:{inventory.SceneStability ?? "unknown"}";
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(inventory.BlockingModal))
+        {
+            _lastGuardState = "armed-but-unsafe";
+            _lastGuardReason = $"blocking-modal:{inventory.BlockingModal}";
+            return;
+        }
+
+        _lastGuardState = "armed-safe-for-future-dispatch";
+        _lastGuardReason = "guard-checks-passed";
+    }
+
+    private static GuardEvaluation EvaluateGuard(
+        ActionQueueScanner.QueuedHarnessAction action,
+        HarnessArmSession armSession,
+        HarnessNodeInventory? inventory)
+    {
+        if (!string.IsNullOrWhiteSpace(action.SessionToken)
+            && !string.Equals(action.SessionToken, armSession.SessionToken, StringComparison.Ordinal))
+        {
+            return new GuardEvaluation("armed-but-unsafe", "session-token-mismatch");
+        }
+
+        if (inventory is null)
+        {
+            return new GuardEvaluation("armed-but-unsafe", "inventory-unavailable");
+        }
+
+        if (!string.IsNullOrWhiteSpace(action.InventoryId)
+            && !string.Equals(action.InventoryId, inventory.InventoryId, StringComparison.Ordinal))
+        {
+            return new GuardEvaluation("armed-but-unsafe", "inventory-mismatch");
+        }
+
+        if (inventory.SceneReady != true)
+        {
+            return new GuardEvaluation("armed-but-unsafe", "scene-not-ready");
+        }
+
+        if (!string.Equals(inventory.SceneStability, "stable", StringComparison.OrdinalIgnoreCase))
+        {
+            return new GuardEvaluation("armed-but-unsafe", $"scene-not-stable:{inventory.SceneStability ?? "unknown"}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(inventory.BlockingModal))
+        {
+            return new GuardEvaluation("armed-but-unsafe", $"blocking-modal:{inventory.BlockingModal}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(action.NodeId)
+            && inventory.Nodes.All(node => !string.Equals(node.NodeId, action.NodeId, StringComparison.Ordinal)))
+        {
+            return new GuardEvaluation("armed-but-unsafe", "node-not-found");
+        }
+
+        return new GuardEvaluation("armed-safe-for-future-dispatch", "actuator-disabled-until-post-clean-boot");
+    }
+
+    private sealed record GuardEvaluation(string GuardState, string Reason);
 }

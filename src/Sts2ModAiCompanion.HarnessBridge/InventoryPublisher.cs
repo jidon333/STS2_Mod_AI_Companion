@@ -97,6 +97,9 @@ internal sealed class InventoryPublisher
             SceneEpisodeId: TryGetMeta(snapshot.Meta, "screen-episode"),
             Mode: mode,
             BlockingModal: blockingModal,
+            SceneReady: ResolveSceneReady(snapshot, normalizedScene, blockingModal),
+            SceneAuthority: ResolveSceneAuthority(snapshot, normalizedScene),
+            SceneStability: ResolveSceneStability(snapshot, normalizedScene, blockingModal),
             Nodes: nodes);
     }
 
@@ -226,6 +229,88 @@ internal sealed class InventoryPublisher
         }
 
         return TryGetMeta(snapshot.Meta, "modal-type") ?? "blocking";
+    }
+
+    private static bool? ResolveSceneReady(
+        LiveExportSnapshot snapshot,
+        CompanionNormalizedScene normalizedScene,
+        string? blockingModal)
+    {
+        if (bool.TryParse(TryGetMeta(snapshot.Meta, "sceneReady"), out var sceneReady))
+        {
+            return sceneReady;
+        }
+
+        if (!string.IsNullOrWhiteSpace(blockingModal))
+        {
+            return false;
+        }
+
+        if (normalizedScene.SceneType is "unknown" or "startup" or "feedback-overlay" or "blocking-overlay")
+        {
+            return false;
+        }
+
+        if (normalizedScene.SceneType == "combat")
+        {
+            return snapshot.Encounter?.InCombat == true;
+        }
+
+        var visibleScreen = NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"));
+        if (normalizedScene.SceneType == "rewards" && visibleScreen == "map")
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string? ResolveSceneAuthority(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
+    {
+        var explicitAuthority = TryGetMeta(snapshot.Meta, "sceneAuthority");
+        if (!string.IsNullOrWhiteSpace(explicitAuthority))
+        {
+            return explicitAuthority;
+        }
+
+        var source = TryGetMeta(snapshot.Meta, "source");
+        if (!string.IsNullOrWhiteSpace(source) && !string.Equals(source, "scene-poll", StringComparison.OrdinalIgnoreCase))
+        {
+            return "hook";
+        }
+
+        return normalizedScene.Source.StartsWith("meta:", StringComparison.OrdinalIgnoreCase)
+            ? "mixed"
+            : "polling";
+    }
+
+    private static string? ResolveSceneStability(
+        LiveExportSnapshot snapshot,
+        CompanionNormalizedScene normalizedScene,
+        string? blockingModal)
+    {
+        var explicitStability = TryGetMeta(snapshot.Meta, "sceneStability");
+        if (!string.IsNullOrWhiteSpace(explicitStability))
+        {
+            return explicitStability;
+        }
+
+        if (!string.IsNullOrWhiteSpace(blockingModal))
+        {
+            return "blocked";
+        }
+
+        if (normalizedScene.SceneType is "unknown" or "startup" or "feedback-overlay" or "blocking-overlay")
+        {
+            return "transient";
+        }
+
+        if (ResolveSceneReady(snapshot, normalizedScene, blockingModal) == true)
+        {
+            return "stable";
+        }
+
+        return "stabilizing";
     }
 
     private static string? TryGetMeta(IReadOnlyDictionary<string, string?> meta, string key)

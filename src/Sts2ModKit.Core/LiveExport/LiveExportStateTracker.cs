@@ -474,12 +474,20 @@ public sealed class LiveExportStateTracker
         LiveExportObservation observation,
         string logicalScreen)
     {
+        var visibleScreen = ResolveVisibleScreen(previousMeta, mergedMeta, observation, logicalScreen);
+        var sceneReady = ResolveSceneReady(logicalScreen, visibleScreen, observation, mergedMeta);
+        var sceneAuthority = ResolveSceneAuthority(observation, mergedMeta);
+        var sceneStability = ResolveSceneStability(logicalScreen, sceneReady, mergedMeta);
         var updated = new Dictionary<string, string?>(mergedMeta, StringComparer.OrdinalIgnoreCase)
         {
             ["screen"] = logicalScreen,
             ["logicalScreen"] = logicalScreen,
             ["flowScreen"] = logicalScreen,
-            ["visibleScreen"] = ResolveVisibleScreen(previousMeta, mergedMeta, observation, logicalScreen),
+            ["visibleScreen"] = visibleScreen,
+            ["sceneReady"] = sceneReady ? "true" : "false",
+            ["sceneAuthority"] = sceneAuthority,
+            ["sceneStability"] = sceneStability,
+            ["readyMarker"] = sceneReady ? observation.TriggerKind : "waiting-for-stable-scene",
         };
 
         if (mergedMeta.TryGetValue("screen", out var rawObservedScreen)
@@ -489,6 +497,74 @@ public sealed class LiveExportStateTracker
         }
 
         return updated;
+    }
+
+    private static bool ResolveSceneReady(
+        string logicalScreen,
+        string visibleScreen,
+        LiveExportObservation observation,
+        IReadOnlyDictionary<string, string?> mergedMeta)
+    {
+        if (string.IsNullOrWhiteSpace(logicalScreen)
+            || logicalScreen is "unknown" or "startup" or "bootstrap" or "shutdown")
+        {
+            return false;
+        }
+
+        if (IsBlockingModal(mergedMeta))
+        {
+            return false;
+        }
+
+        if (string.Equals(logicalScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(visibleScreen, "map", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (string.Equals(logicalScreen, "combat", StringComparison.OrdinalIgnoreCase))
+        {
+            return observation.Encounter?.InCombat == true;
+        }
+
+        return true;
+    }
+
+    private static string ResolveSceneAuthority(
+        LiveExportObservation observation,
+        IReadOnlyDictionary<string, string?> mergedMeta)
+    {
+        if (!string.Equals(observation.TriggerKind, "runtime-poll", StringComparison.OrdinalIgnoreCase))
+        {
+            return "hook";
+        }
+
+        if (ContainsTypeMarker(mergedMeta, "currentSceneType", "N")
+            || ContainsTypeMarker(mergedMeta, "rootTypeSummary", "N"))
+        {
+            return "mixed";
+        }
+
+        return "polling";
+    }
+
+    private static string ResolveSceneStability(
+        string logicalScreen,
+        bool sceneReady,
+        IReadOnlyDictionary<string, string?> mergedMeta)
+    {
+        if (IsBlockingModal(mergedMeta))
+        {
+            return "blocked";
+        }
+
+        if (string.IsNullOrWhiteSpace(logicalScreen)
+            || logicalScreen is "unknown" or "startup" or "bootstrap" or "shutdown")
+        {
+            return "transient";
+        }
+
+        return sceneReady ? "stable" : "stabilizing";
     }
 
     private static string ResolveVisibleScreen(
@@ -544,6 +620,13 @@ public sealed class LiveExportStateTracker
         return meta.TryGetValue("rootTypeSummary", out var rootTypeSummary)
                && !string.IsNullOrWhiteSpace(rootTypeSummary)
                && rootTypeSummary.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsBlockingModal(IReadOnlyDictionary<string, string?> meta)
+    {
+        return meta.TryGetValue("modal-blocking", out var blockingValue)
+               && bool.TryParse(blockingValue, out var blocking)
+               && blocking;
     }
 
     private static bool ContainsTypeMarker(

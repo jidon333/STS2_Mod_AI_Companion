@@ -56,4 +56,6 @@ public sealed record HarnessBridgeStatus(
     string? LastActionId,
     string? LastResultStatus,
     DateTimeOffset UpdatedAt,
-    string? Message);
+    string? Message,
+    string? GuardState,
+    string? LastGuardReason);

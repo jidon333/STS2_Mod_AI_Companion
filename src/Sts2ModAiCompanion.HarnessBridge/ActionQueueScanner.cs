@@ -54,17 +54,21 @@ internal sealed class ActionQueueScanner
             var targetLabel = ReadString(actionElement, "targetLabel");
             var requestedAt = ReadDateTimeOffset(actionElement, "requestedAt");
             string? sessionToken = null;
+            string? inventoryId = null;
+            string? nodeId = null;
             if (actionElement.TryGetProperty("metadata", out var metadata)
                 && metadata.ValueKind == JsonValueKind.Object)
             {
                 sessionToken = ReadString(metadata, "sessionToken");
+                inventoryId = ReadString(metadata, "inventoryId");
+                nodeId = ReadString(metadata, "nodeId");
             }
 
-            return new QueuedHarnessAction(actionId, kind, targetLabel, sessionToken, requestedAt);
+            return new QueuedHarnessAction(actionId, kind, targetLabel, sessionToken, inventoryId, nodeId, requestedAt);
         }
         catch (JsonException)
         {
-            return new QueuedHarnessAction(ComputeHash(line), "invalid-json", null, null, null);
+            return new QueuedHarnessAction(ComputeHash(line), "invalid-json", null, null, null, null, null);
         }
     }
 
@@ -95,5 +99,7 @@ internal sealed class ActionQueueScanner
         string Kind,
         string? TargetLabel,
         string? SessionToken,
+        string? InventoryId,
+        string? NodeId,
         DateTimeOffset? RequestedAt);
 }
