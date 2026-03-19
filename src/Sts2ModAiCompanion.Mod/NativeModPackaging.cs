@@ -262,7 +262,11 @@ public static partial class AiCompanionModEntryPoint
             warnings.Add("SlayTheSpire2.exe is running during deploy. A locked stale DLL can survive until the next restart.");
         }
 
-        foreach (var file in Directory.GetFiles(package.PackageRoot, "*", SearchOption.TopDirectoryOnly))
+        var deployableFiles = Directory.GetFiles(package.PackageRoot, "*", SearchOption.TopDirectoryOnly)
+            .Where(path => !string.Equals(Path.GetFileName(path), "runtime-assembly-manifest.json", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        foreach (var file in deployableFiles)
         {
             var fileName = Path.GetFileName(file);
             var destinationPath = Path.Combine(deployedRoot, fileName);
@@ -284,6 +288,22 @@ public static partial class AiCompanionModEntryPoint
             {
                 warnings.Add($"Deploy verification: {fileName} hash={deployedHash}");
             }
+        }
+
+        foreach (var staleFileName in new[]
+                 {
+                     "runtime-assembly-manifest.json",
+                     "sts2-mod-ai-companion.config.json",
+                 })
+        {
+            var stalePath = Path.Combine(deployedRoot, staleFileName);
+            if (!File.Exists(stalePath))
+            {
+                continue;
+            }
+
+            File.Delete(stalePath);
+            warnings.Add($"Removed stale deploy artifact: {staleFileName}");
         }
 
         if (!files.Any(file => file.DestinationPath.EndsWith(".pck", StringComparison.OrdinalIgnoreCase)))

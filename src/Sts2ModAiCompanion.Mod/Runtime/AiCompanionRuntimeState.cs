@@ -11,7 +11,7 @@ internal static class AiCompanionRuntimeState
     private static DateTimeOffset _lastLoadedAt = DateTimeOffset.MinValue;
     private static DateTime _lastObservedConfigWriteUtc = DateTime.MinValue;
 
-    public const string RuntimeConfigFileName = "sts2-mod-ai-companion.config.json";
+    public const string RuntimeConfigFileName = "sts2-mod-ai-companion.runtime-config";
 
     public const string RuntimeLogFileName = "sts2-mod-ai-companion.runtime.log";
 

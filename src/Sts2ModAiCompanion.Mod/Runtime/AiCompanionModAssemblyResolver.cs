@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
@@ -24,6 +25,52 @@ internal static class AiCompanionModAssemblyResolver
             AppDomain.CurrentDomain.AssemblyResolve += ResolveFromModDirectory;
             AssemblyLoadContext.Default.Resolving += ResolveFromModDirectory;
             _installed = true;
+        }
+
+        TryBootstrapRuntimeExporterForGameProcess();
+    }
+
+    private static void TryBootstrapRuntimeExporterForGameProcess()
+    {
+        if (!IsGameProcess())
+        {
+            return;
+        }
+
+        try
+        {
+            var initialized = RuntimeExportContext.EnsureInitialized();
+            AiCompanionRuntimeLog.WriteLine(
+                $"module initializer bootstrap result: initialized={initialized} process={GetCurrentProcessName()}");
+        }
+        catch (Exception exception)
+        {
+            AiCompanionRuntimeLog.WriteLine(
+                $"module initializer bootstrap failure: {exception.GetType().Name}:{exception.Message}");
+        }
+    }
+
+    private static bool IsGameProcess()
+    {
+        var processName = GetCurrentProcessName();
+        return string.Equals(processName, "SlayTheSpire2", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetCurrentProcessName()
+    {
+        try
+        {
+            using var process = Process.GetCurrentProcess();
+            if (!string.IsNullOrWhiteSpace(process.ProcessName))
+            {
+                return process.ProcessName;
+            }
+
+            return Path.GetFileNameWithoutExtension(process.MainModule?.ModuleName);
+        }
+        catch
+        {
+            return null;
         }
     }
 

@@ -123,7 +123,7 @@ public sealed record AiCompanionModOptions
     public string RuntimeAssemblyFileName => "Sts2ModAiCompanion.Mod.dll";
 
     [JsonIgnore]
-    public string RuntimeConfigFileName => "sts2-mod-ai-companion.config.json";
+    public string RuntimeConfigFileName => "sts2-mod-ai-companion.runtime-config";
 
     [JsonIgnore]
     public string RuntimeLogFileName => "sts2-mod-ai-companion.runtime.log";

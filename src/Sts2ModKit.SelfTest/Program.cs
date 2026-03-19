@@ -137,7 +137,7 @@ static void TestSnapshotPlanner()
     var existingSpeedModPath = Path.Combine(modsRoot, "sts2-speed-skeleton.pck");
     var trackedAiPaths = new[]
     {
-        Path.Combine(modsRoot, "sts2-mod-ai-companion.config.json"),
+        Path.Combine(modsRoot, ScaffoldConfiguration.CreateLocalDefault().AiCompanionMod.RuntimeConfigFileName),
         Path.Combine(modsRoot, "sts2-mod-ai-companion.dll"),
         Path.Combine(modsRoot, "sts2-mod-ai-companion.pck"),
         Path.Combine(modsRoot, "Sts2ModKit.Core.dll"),
@@ -321,7 +321,7 @@ static void TestMaterializeNativePackage()
 
         var result = AiCompanionModEntryPoint.MaterializeNativePackage(configuration, configuration.GamePaths.ArtifactsRoot, AppContext.BaseDirectory, "subdir");
 
-        Assert(File.Exists(Path.Combine(result.PackageRoot, "sts2-mod-ai-companion.config.json")), "Native staging package should include the AI companion runtime config file.");
+        Assert(File.Exists(Path.Combine(result.PackageRoot, configuration.AiCompanionMod.RuntimeConfigFileName)), "Native staging package should include the AI companion runtime config file.");
         Assert(File.Exists(Path.Combine(result.PackageRoot, "sts2-mod-ai-companion.dll")), "Native staging package should include the pck-matching managed payload.");
         Assert(!File.Exists(Path.Combine(result.PackageRoot, "mod_manifest.json")), "Native staging package should keep mod_manifest.json inside the generated pck rather than as a loose file.");
         Assert(result.MissingArtifacts.Any(artifact => artifact.RelativePath.EndsWith(".pck", StringComparison.OrdinalIgnoreCase)), "Native staging package should report that a .pck artifact is still missing.");
@@ -354,7 +354,7 @@ static void TestNativePackageContents()
         };
 
         var result = AiCompanionModEntryPoint.MaterializeNativePackage(configuration, configuration.GamePaths.ArtifactsRoot, AppContext.BaseDirectory, "flat");
-        var configJson = File.ReadAllText(Path.Combine(result.PackageRoot, "sts2-mod-ai-companion.config.json"));
+        var configJson = File.ReadAllText(Path.Combine(result.PackageRoot, configuration.AiCompanionMod.RuntimeConfigFileName));
         var runtimeConfig = System.Text.Json.JsonSerializer.Deserialize<AiCompanionRuntimeConfig>(configJson, ConfigurationLoader.JsonOptions);
 
         Assert(runtimeConfig is not null, "Expected packaged runtime config to deserialize.");
