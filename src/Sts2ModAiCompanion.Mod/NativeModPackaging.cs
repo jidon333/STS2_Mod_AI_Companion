@@ -90,6 +90,13 @@ public static partial class AiCompanionModEntryPoint
             BuildRuntimeConfigContents(configuration),
             "generated"));
 
+        var manifestFileName = Path.ChangeExtension(descriptor.PckName, ".json");
+        files.Add(WriteNativeTextFile(
+            packageRoot,
+            manifestFileName,
+            CreateLoaderManifestJson(descriptor),
+            "generated"));
+
         var primaryAssemblySourcePath = Path.Combine(runtimeAssemblyRoot, configuration.AiCompanionMod.RuntimeAssemblyFileName);
         var primaryAssemblyTargetName = descriptor.PckName.Replace(".pck", ".dll", StringComparison.OrdinalIgnoreCase);
         if (File.Exists(primaryAssemblySourcePath))
@@ -368,6 +375,25 @@ public static partial class AiCompanionModEntryPoint
             author = descriptor.Author,
             description = descriptor.Description,
             version = descriptor.Version,
+        };
+
+        return JsonSerializer.Serialize(manifest, JsonOptions);
+    }
+
+    private static string CreateLoaderManifestJson(AiCompanionModDescriptor descriptor)
+    {
+        var modId = Path.GetFileNameWithoutExtension(descriptor.PckName);
+        var manifest = new
+        {
+            id = modId,
+            name = descriptor.Name,
+            author = descriptor.Author,
+            description = descriptor.Description,
+            version = descriptor.Version,
+            has_pck = true,
+            has_dll = true,
+            dependencies = Array.Empty<string>(),
+            affects_gameplay = true,
         };
 
         return JsonSerializer.Serialize(manifest, JsonOptions);

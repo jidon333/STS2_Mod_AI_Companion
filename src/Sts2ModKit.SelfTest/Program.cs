@@ -323,6 +323,8 @@ static void TestMaterializeNativePackage()
 
         Assert(File.Exists(Path.Combine(result.PackageRoot, configuration.AiCompanionMod.RuntimeConfigFileName)), "Native staging package should include the AI companion runtime config file.");
         Assert(File.Exists(Path.Combine(result.PackageRoot, "sts2-mod-ai-companion.dll")), "Native staging package should include the pck-matching managed payload.");
+        Assert(File.Exists(Path.Combine(result.PackageRoot, "sts2-mod-ai-companion.json")), "Native staging package should include the loose loader manifest required by the current game loader.");
+        Assert(!result.Files.Any(file => file.RelativePath.Contains("loader-sentinel", StringComparison.OrdinalIgnoreCase)), "Native staging package should not include startup sentinel runtime evidence.");
         Assert(!File.Exists(Path.Combine(result.PackageRoot, "mod_manifest.json")), "Native staging package should keep mod_manifest.json inside the generated pck rather than as a loose file.");
         Assert(result.MissingArtifacts.Any(artifact => artifact.RelativePath.EndsWith(".pck", StringComparison.OrdinalIgnoreCase)), "Native staging package should report that a .pck artifact is still missing.");
         Assert(result.LayoutKind == "subdir", "Native staging package should normalize the requested layout kind.");
@@ -355,13 +357,19 @@ static void TestNativePackageContents()
 
         var result = AiCompanionModEntryPoint.MaterializeNativePackage(configuration, configuration.GamePaths.ArtifactsRoot, AppContext.BaseDirectory, "flat");
         var configJson = File.ReadAllText(Path.Combine(result.PackageRoot, configuration.AiCompanionMod.RuntimeConfigFileName));
+        var loaderManifestJson = File.ReadAllText(Path.Combine(result.PackageRoot, "packaged-template.json"));
         var runtimeConfig = System.Text.Json.JsonSerializer.Deserialize<AiCompanionRuntimeConfig>(configJson, ConfigurationLoader.JsonOptions);
+        using var loaderManifest = System.Text.Json.JsonDocument.Parse(loaderManifestJson);
 
         Assert(runtimeConfig is not null, "Expected packaged runtime config to deserialize.");
         Assert(runtimeConfig!.Enabled, "Expected packaged runtime config to enable the AI companion payload.");
         Assert(runtimeConfig.GamePaths.SteamAccountId == configuration.GamePaths.SteamAccountId, "Expected runtime config to carry the game paths used for live export.");
         Assert(runtimeConfig.LiveExport.RelativeLiveRoot == configuration.LiveExport.RelativeLiveRoot, "Expected runtime config to carry live export settings.");
         Assert(File.Exists(Path.Combine(result.PackageRoot, "packaged-template.dll")), "Expected packaged dll to follow the configured pck basename.");
+        Assert(loaderManifest.RootElement.GetProperty("id").GetString() == "packaged-template", "Expected the loose loader manifest to use the pck basename as the loader mod id.");
+        Assert(loaderManifest.RootElement.GetProperty("has_pck").GetBoolean(), "Expected the loose loader manifest to declare the packaged PCK.");
+        Assert(loaderManifest.RootElement.GetProperty("has_dll").GetBoolean(), "Expected the loose loader manifest to declare the packaged DLL.");
+        Assert(!Directory.Exists(Path.Combine(result.PackageRoot, "ai_companion", "startup")), "Native staging package should not emit startup sentinel files into the managed mods payload.");
     }
     finally
     {
