@@ -3,6 +3,19 @@ using Sts2ModKit.Core.Configuration;
 
 namespace Sts2ModAiCompanion.Mod.Runtime;
 
+public sealed record AiCompanionStartupSentinelConfig
+{
+    public string? SessionId { get; init; }
+
+    public string? RunId { get; init; }
+
+    public string? LaunchToken { get; init; }
+
+    public DateTimeOffset? LaunchIssuedAtUtc { get; init; }
+
+    public string? SentinelRelativePath { get; init; }
+}
+
 public sealed record AiCompanionRuntimeConfig
 {
     public bool Enabled { get; init; } = true;
@@ -12,6 +25,8 @@ public sealed record AiCompanionRuntimeConfig
     public LiveExportOptions LiveExport { get; init; } = LiveExportOptions.Defaults;
 
     public HarnessOptions Harness { get; init; } = HarnessOptions.Defaults;
+
+    public AiCompanionStartupSentinelConfig StartupSentinel { get; init; } = new();
 
     public static AiCompanionRuntimeConfig Defaults { get; } = new();
 }

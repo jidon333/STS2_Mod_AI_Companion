@@ -207,7 +207,6 @@ static async Task<int> RunScenarioAsync(
                     ["durationMs"] = deployResult.Duration.TotalMilliseconds.ToString("F0", CultureInfo.InvariantCulture),
                 });
 
-            EnsureHarnessEnabledInRuntimeConfig(configuration);
             if (isLongRun)
             {
                 startupStage = "deploy-verification-started";
@@ -527,6 +526,16 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             await StopGameProcessesAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
             EnsureGameNotRunning();
             var launchIssuedAt = DateTimeOffset.UtcNow;
+            var startupRuntimeConfig = EnsureStartupRuntimeConfig(configuration, sessionId, runId, launchIssuedAt);
+            if (isLongRun)
+            {
+                LongRunArtifacts.RecordStartupLogBaseline(
+                    sessionRoot,
+                    configuration,
+                    runId,
+                    startupRuntimeConfig.LaunchToken,
+                    launchIssuedAt);
+            }
             startupStage = "manual-clean-boot-launch-issued";
             await GuiSmokeShared.RunProcessAsync(
                 Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
@@ -700,6 +709,11 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             if (isStartupTrackedAttempt && stepIndex == 1)
             {
                 RecordAttemptStartupStage("manual-clean-boot-evaluation-started", "started", screenshotPath);
+            }
+
+            if (stepIndex == 1)
+            {
+                LongRunArtifacts.RecordStartupRuntimeEvidence(sessionRoot, configuration, liveLayout, harnessLayout);
             }
 
             var manualCleanBootVerified = LongRunArtifacts.TryMarkManualCleanBootVerified(
@@ -2301,9 +2315,13 @@ static async Task MaintainLaunchFocusAsync(TimeSpan duration, TimeSpan requiredS
     }
 }
 
-static void EnsureHarnessEnabledInRuntimeConfig(ScaffoldConfiguration configuration)
+static (string LaunchToken, string SentinelRelativePath) EnsureStartupRuntimeConfig(
+    ScaffoldConfiguration configuration,
+    string sessionId,
+    string runId,
+    DateTimeOffset launchIssuedAtUtc)
 {
-    var runtimeConfigPath = Path.Combine(configuration.GamePaths.GameDirectory, "mods", "sts2-mod-ai-companion.config.json");
+    var runtimeConfigPath = Path.Combine(configuration.GamePaths.GameDirectory, "mods", configuration.AiCompanionMod.RuntimeConfigFileName);
     if (!File.Exists(runtimeConfigPath))
     {
         throw new FileNotFoundException("Runtime config was not deployed.", runtimeConfigPath);
@@ -2317,9 +2335,20 @@ static void EnsureHarnessEnabledInRuntimeConfig(ScaffoldConfiguration configurat
         throw new InvalidOperationException("Runtime config does not contain a harness section.");
     }
 
+    var launchToken = Guid.NewGuid().ToString("N");
+    const string sentinelRelativePath = "ai_companion/startup/loader-sentinel.latest.json";
     harnessObject["enabled"] = true;
+    rootObject["startupSentinel"] = new JsonObject
+    {
+        ["sessionId"] = sessionId,
+        ["runId"] = runId,
+        ["launchToken"] = launchToken,
+        ["launchIssuedAtUtc"] = launchIssuedAtUtc.ToString("O"),
+        ["sentinelRelativePath"] = sentinelRelativePath,
+    };
     File.WriteAllText(runtimeConfigPath, rootObject.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-    LogHarness($"runtime config ensured harness.enabled=true path={runtimeConfigPath}");
+    LogHarness($"runtime config ensured harness.enabled=true startupSentinel.launchToken={launchToken} path={runtimeConfigPath}");
+    return (launchToken, sentinelRelativePath);
 }
 
 static void RunSelfTest()

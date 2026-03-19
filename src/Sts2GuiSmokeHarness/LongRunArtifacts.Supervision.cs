@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Sts2AiCompanion.Foundation.Contracts;
@@ -173,6 +174,89 @@ sealed record GuiSmokeStartupSummary(
     string? FailureStage,
     string? FailureReason);
 
+sealed record GuiSmokeStartupLogBaseline(
+    DateTimeOffset RecordedAt,
+    string SessionId,
+    string RunId,
+    string LaunchToken,
+    DateTimeOffset LaunchIssuedAtUtc,
+    string RuntimeLogPath,
+    bool RuntimeLogPresent,
+    long RuntimeLogSizeBytes,
+    DateTimeOffset? RuntimeLogLastWriteAt,
+    string GodotLogPath,
+    bool GodotLogPresent,
+    long GodotLogSizeBytes,
+    DateTimeOffset? GodotLogLastWriteAt);
+
+sealed record GuiSmokeStartupRuntimeEvidence(
+    DateTimeOffset CapturedAt,
+    string ExpectedLoadChain,
+    string FailureEdge,
+    string ModsRoot,
+    bool CompanionPckPresent,
+    bool CompanionDllPresent,
+    bool CompanionRuntimeConfigPresent,
+    string RuntimeConfigPath,
+    bool RuntimeConfigPresent,
+    bool RuntimeConfigEnabled,
+    bool RuntimeConfigHarnessEnabled,
+    string SettingsPath,
+    bool SettingsPresent,
+    bool SettingsModsEnabled,
+    bool SettingsCompanionDisabled,
+    string PackagedManifestPath,
+    bool PackagedManifestPresent,
+    string? PackagedManifestPckName,
+    string? ExpectedAssemblyFileName,
+    string StartupLogBaselinePath,
+    DateTimeOffset? StartupLogBaselineRecordedAt,
+    string? StartupSentinelSessionId,
+    string? StartupSentinelRunId,
+    string? StartupSentinelLaunchToken,
+    DateTimeOffset? StartupSentinelLaunchIssuedAtUtc,
+    string? StartupSentinelRelativePath,
+    string RuntimeLogPath,
+    bool RuntimeLogPresent,
+    DateTimeOffset? RuntimeLogLastWriteAt,
+    string RuntimeLogTailPath,
+    IReadOnlyList<string> RuntimeLogMatches,
+    string RuntimeLogDeltaPath,
+    IReadOnlyList<string> RuntimeLogDeltaMatches,
+    bool RuntimeLogDeltaTreatedAsCurrentExecution,
+    bool ModuleInitializerBootstrapLogged,
+    bool RuntimeExporterInitializedLogged,
+    bool HarnessBridgeInitializeLogged,
+    string GodotLogPath,
+    bool GodotLogPresent,
+    DateTimeOffset? GodotLogLastWriteAt,
+    string GodotLogTailPath,
+    IReadOnlyList<string> GodotLogMatches,
+    string GodotLogDeltaPath,
+    IReadOnlyList<string> GodotLogDeltaMatches,
+    bool GodotLogDeltaTreatedAsCurrentExecution,
+    bool GodotReachedMainMenu,
+    bool LoaderSawAnyModLoaderSignal,
+    bool LoaderSawModsDirectoryScan,
+    bool LoaderSawCompanionPckScan,
+    bool LoaderSawCompanionSkippedWarning,
+    bool LoaderSawCompanionDisabled,
+    bool LoaderSawCompanionDuplicate,
+    bool LoaderSawCompanionAssembly,
+    bool LoaderSawInitializerCall,
+    bool LoaderSawNoModInitializerAttribute,
+    bool LoaderSawModInitialization,
+    bool LoaderSawPatchAll,
+    bool LoaderSawPatchAllFailure,
+    bool LoaderSawModLoadFailure,
+    string LiveSnapshotPath,
+    bool LiveSnapshotPresent,
+    string HarnessInventoryPath,
+    bool HarnessInventoryPresent,
+    string HarnessStatusPath,
+    bool HarnessStatusPresent,
+    string Diagnosis);
+
 sealed record GuiSmokeDeployCommandSummary(
     DateTimeOffset RecordedAt,
     string SessionId,
@@ -205,6 +289,10 @@ sealed record GuiSmokeRestartEvent(
     string? FailureClass,
     string? TrustStateAtStart,
     string? StepScreenPath);
+
+sealed record GuiSmokeRelevantLogDelta(
+    IReadOnlyList<string> Matches,
+    bool TreatedAsCurrentExecution);
 
 sealed record GuiSmokeSupervisorState(
     DateTimeOffset RecordedAt,
@@ -465,6 +553,7 @@ static partial class LongRunArtifacts
                 GuiSmokeShared.JsonOptions);
         }
 
+        RefreshSessionSummary(sessionRoot);
         RefreshSupervisorState(sessionRoot);
     }
 
@@ -830,13 +919,98 @@ static partial class LongRunArtifacts
             note: "runner captured deploy identity evidence from the native deploy report and deployed payload.");
     }
 
+    public static GuiSmokeStartupRuntimeEvidence RecordStartupRuntimeEvidence(
+        string sessionRoot,
+        ScaffoldConfiguration configuration,
+        LiveExportLayout liveLayout,
+        HarnessQueueLayout harnessLayout)
+    {
+        var evidence = BuildStartupRuntimeEvidence(sessionRoot, configuration, liveLayout, harnessLayout);
+        WriteJsonAtomicWithRetry(GetStartupRuntimeEvidencePath(sessionRoot), evidence, GuiSmokeShared.JsonOptions);
+        File.WriteAllText(evidence.RuntimeLogTailPath, BuildLogTailBody(evidence.RuntimeLogPath, evidence.RuntimeLogMatches), new UTF8Encoding(false));
+        File.WriteAllText(evidence.GodotLogTailPath, BuildLogTailBody(evidence.GodotLogPath, evidence.GodotLogMatches), new UTF8Encoding(false));
+        File.WriteAllText(evidence.RuntimeLogDeltaPath, BuildLogTailBody(evidence.RuntimeLogPath, evidence.RuntimeLogDeltaMatches), new UTF8Encoding(false));
+        File.WriteAllText(evidence.GodotLogDeltaPath, BuildLogTailBody(evidence.GodotLogPath, evidence.GodotLogDeltaMatches), new UTF8Encoding(false));
+        AppendPrevalidationNoteWithoutRefresh(sessionRoot, $"startup-runtime-diagnosis:{evidence.Diagnosis}");
+        RecordStartupStage(
+            sessionRoot,
+            "manual-clean-boot-runtime-evidence",
+            "finished",
+            evidence.Diagnosis,
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["failureEdge"] = evidence.FailureEdge,
+                ["runtimeLogPresent"] = evidence.RuntimeLogPresent.ToString(),
+                ["runtimeLogDeltaMatches"] = evidence.RuntimeLogDeltaMatches.Count.ToString(),
+                ["runtimeLogDeltaTreatedAsCurrentExecution"] = evidence.RuntimeLogDeltaTreatedAsCurrentExecution.ToString(),
+                ["moduleInitializerBootstrapLogged"] = evidence.ModuleInitializerBootstrapLogged.ToString(),
+                ["runtimeExporterInitializedLogged"] = evidence.RuntimeExporterInitializedLogged.ToString(),
+                ["harnessBridgeInitializeLogged"] = evidence.HarnessBridgeInitializeLogged.ToString(),
+                ["godotLogPresent"] = evidence.GodotLogPresent.ToString(),
+                ["godotLogDeltaMatches"] = evidence.GodotLogDeltaMatches.Count.ToString(),
+                ["godotLogDeltaTreatedAsCurrentExecution"] = evidence.GodotLogDeltaTreatedAsCurrentExecution.ToString(),
+                ["godotReachedMainMenu"] = evidence.GodotReachedMainMenu.ToString(),
+                ["loaderSawAnyModLoaderSignal"] = evidence.LoaderSawAnyModLoaderSignal.ToString(),
+                ["loaderSawModsDirectoryScan"] = evidence.LoaderSawModsDirectoryScan.ToString(),
+                ["loaderSawCompanionPckScan"] = evidence.LoaderSawCompanionPckScan.ToString(),
+                ["loaderSawCompanionAssembly"] = evidence.LoaderSawCompanionAssembly.ToString(),
+                ["loaderSawPatchAll"] = evidence.LoaderSawPatchAll.ToString(),
+                ["loaderSawPatchAllFailure"] = evidence.LoaderSawPatchAllFailure.ToString(),
+                ["loaderSawModInitialization"] = evidence.LoaderSawModInitialization.ToString(),
+                ["loaderSawModLoadFailure"] = evidence.LoaderSawModLoadFailure.ToString(),
+                ["settingsModsEnabled"] = evidence.SettingsModsEnabled.ToString(),
+                ["settingsCompanionDisabled"] = evidence.SettingsCompanionDisabled.ToString(),
+                ["runtimeConfigEnabled"] = evidence.RuntimeConfigEnabled.ToString(),
+                ["runtimeConfigHarnessEnabled"] = evidence.RuntimeConfigHarnessEnabled.ToString(),
+                ["companionPckPresent"] = evidence.CompanionPckPresent.ToString(),
+                ["companionDllPresent"] = evidence.CompanionDllPresent.ToString(),
+                ["companionRuntimeConfigPresent"] = evidence.CompanionRuntimeConfigPresent.ToString(),
+                ["liveSnapshotPresent"] = evidence.LiveSnapshotPresent.ToString(),
+                ["harnessInventoryPresent"] = evidence.HarnessInventoryPresent.ToString(),
+                ["harnessStatusPresent"] = evidence.HarnessStatusPresent.ToString(),
+                ["diagnosis"] = evidence.Diagnosis,
+            });
+        return evidence;
+    }
+
+    public static GuiSmokeStartupLogBaseline RecordStartupLogBaseline(
+        string sessionRoot,
+        ScaffoldConfiguration configuration,
+        string runId,
+        string launchToken,
+        DateTimeOffset launchIssuedAtUtc)
+    {
+        var modsRoot = Path.Combine(configuration.GamePaths.GameDirectory, "mods");
+        var runtimeLogPath = Path.Combine(modsRoot, configuration.AiCompanionMod.RuntimeLogFileName);
+        var godotLogPath = Path.Combine(configuration.GamePaths.UserDataRoot, "logs", "godot.log");
+        var runtimeInfo = File.Exists(runtimeLogPath) ? new FileInfo(runtimeLogPath) : null;
+        var godotInfo = File.Exists(godotLogPath) ? new FileInfo(godotLogPath) : null;
+        var baseline = new GuiSmokeStartupLogBaseline(
+            RecordedAt: DateTimeOffset.UtcNow,
+            SessionId: Path.GetFileName(sessionRoot),
+            RunId: runId,
+            LaunchToken: launchToken,
+            LaunchIssuedAtUtc: launchIssuedAtUtc,
+            RuntimeLogPath: runtimeLogPath,
+            RuntimeLogPresent: runtimeInfo is not null,
+            RuntimeLogSizeBytes: runtimeInfo?.Length ?? 0,
+            RuntimeLogLastWriteAt: runtimeInfo?.LastWriteTimeUtc,
+            GodotLogPath: godotLogPath,
+            GodotLogPresent: godotInfo is not null,
+            GodotLogSizeBytes: godotInfo?.Length ?? 0,
+            GodotLogLastWriteAt: godotInfo?.LastWriteTimeUtc);
+        WriteJsonAtomicWithRetry(GetStartupLogBaselinePath(sessionRoot), baseline, GuiSmokeShared.JsonOptions);
+        return baseline;
+    }
+
     public static bool TryMarkManualCleanBootVerified(
         string sessionRoot,
         HarnessQueueLayout harnessLayout,
         ObserverState observer,
         IReadOnlyList<GuiSmokeHistoryEntry> history,
         string screenshotPath,
-        string? observerStatePath)
+        string? observerStatePath,
+        DateTimeOffset? observerFreshnessFloor = null)
     {
         var prevalidation = LoadOrCreatePrevalidation(sessionRoot);
         if (prevalidation.ManualCleanBootVerified)
@@ -845,8 +1019,10 @@ static partial class LongRunArtifacts
         }
 
         var firstStepEligible = history.Count == 0;
-        var mainMenuObserved = string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
-                               || string.Equals(observer.VisibleScreen, "main-menu", StringComparison.OrdinalIgnoreCase);
+        var observedScreen = ResolveObservedScreen(observer);
+        var observerFresh = observerFreshnessFloor is null || observer.IsFreshSince(observerFreshnessFloor.Value);
+        var observerReady = observerFresh && !IsUnknownObservedScreen(observedScreen);
+        var mainMenuObserved = observerReady && string.Equals(observedScreen, "main-menu", StringComparison.OrdinalIgnoreCase);
         var armSessionPresent = HasActiveArmSession(harnessLayout.ArmSessionPath);
         var actionsPending = HasPendingHarnessActions(harnessLayout.ActionsPath);
         var status = TryReadJson<HarnessBridgeStatus>(harnessLayout.StatusPath);
@@ -861,9 +1037,13 @@ static partial class LongRunArtifacts
             blockingReasons.Add("not-first-step");
         }
 
-        if (!mainMenuObserved)
+        if (!observerReady)
         {
-            blockingReasons.Add($"observer-not-main-menu:{observer.CurrentScreen ?? observer.VisibleScreen ?? "unknown"}");
+            blockingReasons.Add("observer-not-ready");
+        }
+        else if (!mainMenuObserved)
+        {
+            blockingReasons.Add($"observer-not-main-menu:{observedScreen}");
         }
 
         if (armSessionPresent)
@@ -883,6 +1063,11 @@ static partial class LongRunArtifacts
         if (!inventoryDormant)
         {
             blockingReasons.Add("harness-inventory-not-dormant");
+        }
+
+        if (!observerFresh)
+        {
+            evaluationNotes.Add("observer-stale");
         }
 
         if (!string.IsNullOrWhiteSpace(status?.Mode)
@@ -914,7 +1099,7 @@ static partial class LongRunArtifacts
             actionsPending,
             status?.Mode,
             inventory?.Mode,
-            observer.CurrentScreen,
+            observedScreen,
             firstStepEligible,
             mainMenuObserved,
             !armSessionPresent,
@@ -936,6 +1121,19 @@ static partial class LongRunArtifacts
         }
 
         return verified;
+    }
+
+    private static string? ResolveObservedScreen(ObserverState observer)
+    {
+        return IsUnknownObservedScreen(observer.CurrentScreen)
+            ? observer.VisibleScreen
+            : observer.CurrentScreen;
+    }
+
+    private static bool IsUnknownObservedScreen(string? screen)
+    {
+        return string.IsNullOrWhiteSpace(screen)
+               || string.Equals(screen, "unknown", StringComparison.OrdinalIgnoreCase);
     }
 
     public static void RecordAttemptStarted(
@@ -962,6 +1160,7 @@ static partial class LongRunArtifacts
                 null,
                 trustStateAtStart,
                 firstScreenPath));
+        RefreshSessionSummary(sessionRoot);
         RefreshSupervisorState(sessionRoot);
     }
 
@@ -988,6 +1187,7 @@ static partial class LongRunArtifacts
                 null,
                 trustStateAtStart,
                 null));
+        RefreshSessionSummary(sessionRoot);
         RefreshSupervisorState(sessionRoot);
     }
 
@@ -1013,6 +1213,7 @@ static partial class LongRunArtifacts
                 previousAttempt.FailureClass,
                 previousAttempt.TrustStateAtStart,
                 null));
+        RefreshSessionSummary(sessionRoot);
         RefreshSupervisorState(sessionRoot);
     }
 
@@ -1042,6 +1243,103 @@ static partial class LongRunArtifacts
                 failureClass,
                 trustStateAtStart,
                 null));
+        RefreshSessionSummary(sessionRoot);
+    }
+
+    public static GuiSmokeSessionSummary RefreshSessionSummary(string sessionRoot)
+    {
+        var goal = LoadOrCreateGoalContract(sessionRoot);
+        var attemptEntries = ReadNdjson<GuiSmokeAttemptIndexEntry>(Path.Combine(sessionRoot, "attempt-index.ndjson"))
+            .OrderBy(static entry => entry.AttemptOrdinal)
+            .ToArray();
+        var restartEvents = ReadNdjson<GuiSmokeRestartEvent>(GetRestartEventsPath(sessionRoot))
+            .OrderBy(static entry => entry.RecordedAt)
+            .ThenBy(static entry => entry.AttemptOrdinal)
+            .ToArray();
+        var startedAttemptIds = restartEvents
+            .Where(static entry =>
+                string.Equals(entry.EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase))
+            .Select(static entry => entry.AttemptId)
+            .Where(static attemptId => !string.IsNullOrWhiteSpace(attemptId))
+            .Concat(attemptEntries.Select(static entry => entry.AttemptId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var sessionEventTimes = restartEvents
+            .Select(static entry => (DateTimeOffset?)entry.RecordedAt)
+            .Concat(attemptEntries.Select(static entry => (DateTimeOffset?)(entry.CompletedAt ?? entry.StartedAt)))
+            .Where(static entry => entry is not null)
+            .Select(static entry => entry!.Value)
+            .ToArray();
+        var startedAt = restartEvents
+            .Where(static entry =>
+                string.Equals(entry.EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase))
+            .Select(static entry => (DateTimeOffset?)entry.RecordedAt)
+            .Concat(attemptEntries.Select(static entry => (DateTimeOffset?)entry.StartedAt))
+            .Where(static entry => entry is not null)
+            .Select(static entry => entry!.Value)
+            .DefaultIfEmpty(goal.CreatedAt)
+            .Min();
+        var completedAt = attemptEntries
+            .Select(static entry => entry.CompletedAt ?? entry.StartedAt)
+            .DefaultIfEmpty(sessionEventTimes.LastOrDefault(goal.CreatedAt))
+            .Max();
+        var lastEventAt = sessionEventTimes.Length == 0
+            ? goal.CreatedAt
+            : sessionEventTimes.Max();
+        var passedAttempts = attemptEntries.Count(static entry =>
+            IsPassedAttempt(entry));
+        var failedAttempts = attemptEntries.Length - passedAttempts;
+        var totalSteps = attemptEntries.Sum(static entry => entry.StepCount);
+        var validationEvents = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in attemptEntries)
+        {
+            var attemptValidationPath = Path.Combine(sessionRoot, "attempts", entry.AttemptId, "validation-summary.json");
+            if (!File.Exists(attemptValidationPath))
+            {
+                continue;
+            }
+
+            GuiSmokeValidationSummary? attemptValidation;
+            try
+            {
+                attemptValidation = JsonSerializer.Deserialize<GuiSmokeValidationSummary>(File.ReadAllText(attemptValidationPath), GuiSmokeShared.JsonOptions);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (attemptValidation is null)
+            {
+                continue;
+            }
+
+            foreach (var pair in attemptValidation.EventCounts)
+            {
+                validationEvents[pair.Key] = validationEvents.TryGetValue(pair.Key, out var current)
+                    ? current + pair.Value
+                    : pair.Value;
+            }
+        }
+
+        var summary = new GuiSmokeSessionSummary(
+            SessionId: Path.GetFileName(sessionRoot),
+            ScenarioId: goal.ScenarioId,
+            Provider: goal.Provider,
+            StartedAt: startedAt,
+            CompletedAt: completedAt,
+            AttemptCount: startedAttemptIds.Length,
+            TerminalAttemptCount: attemptEntries.Length,
+            ActiveAttemptId: DetermineActiveAttemptId(restartEvents),
+            LastEventAt: lastEventAt,
+            PassedAttempts: passedAttempts,
+            FailedAttempts: failedAttempts,
+            TotalSteps: totalSteps,
+            ValidationEvents: validationEvents);
+        WriteJsonAtomicWithRetry(Path.Combine(sessionRoot, "session-summary.json"), summary, GuiSmokeShared.JsonOptions);
+        return summary;
     }
 
     public static GuiSmokeSupervisorState RefreshSupervisorState(string sessionRoot)
@@ -1245,6 +1543,83 @@ static partial class LongRunArtifacts
             evidence.Add($"startup-failure-reason:{startupSummary.FailureReason}");
         }
 
+        var startupRuntimeEvidence = TryReadJson<GuiSmokeStartupRuntimeEvidence>(GetStartupRuntimeEvidencePath(sessionRoot));
+        if (startupRuntimeEvidence is not null)
+        {
+            evidence.Add($"startup-runtime-diagnosis:{startupRuntimeEvidence.Diagnosis}");
+            evidence.Add($"startup-runtime-failure-edge:{startupRuntimeEvidence.FailureEdge}");
+            evidence.Add($"startup-runtime-expected-load-chain:{startupRuntimeEvidence.ExpectedLoadChain}");
+            evidence.Add($"startup-runtime-log-present:{startupRuntimeEvidence.RuntimeLogPresent}");
+            evidence.Add($"startup-runtime-log-delta-path:{startupRuntimeEvidence.RuntimeLogDeltaPath}");
+            evidence.Add($"startup-runtime-log-delta-matches:{startupRuntimeEvidence.RuntimeLogDeltaMatches.Count}");
+            evidence.Add($"startup-module-initializer-logged:{startupRuntimeEvidence.ModuleInitializerBootstrapLogged}");
+            evidence.Add($"startup-runtime-exporter-logged:{startupRuntimeEvidence.RuntimeExporterInitializedLogged}");
+            evidence.Add($"startup-harness-bridge-logged:{startupRuntimeEvidence.HarnessBridgeInitializeLogged}");
+            evidence.Add($"startup-godot-log-present:{startupRuntimeEvidence.GodotLogPresent}");
+            evidence.Add($"startup-godot-log-delta-path:{startupRuntimeEvidence.GodotLogDeltaPath}");
+            evidence.Add($"startup-godot-log-delta-matches:{startupRuntimeEvidence.GodotLogDeltaMatches.Count}");
+            evidence.Add($"startup-godot-reached-main-menu:{startupRuntimeEvidence.GodotReachedMainMenu}");
+            evidence.Add($"startup-loader-any-signal:{startupRuntimeEvidence.LoaderSawAnyModLoaderSignal}");
+            evidence.Add($"startup-loader-mod-scan-seen:{startupRuntimeEvidence.LoaderSawModsDirectoryScan}");
+            evidence.Add($"startup-loader-companion-pck-scan:{startupRuntimeEvidence.LoaderSawCompanionPckScan}");
+            evidence.Add($"startup-loader-companion-seen:{startupRuntimeEvidence.LoaderSawCompanionAssembly}");
+            evidence.Add($"startup-loader-initializer-call-seen:{startupRuntimeEvidence.LoaderSawInitializerCall}");
+            evidence.Add($"startup-loader-no-modinitializer-seen:{startupRuntimeEvidence.LoaderSawNoModInitializerAttribute}");
+            evidence.Add($"startup-loader-patchall-seen:{startupRuntimeEvidence.LoaderSawPatchAll}");
+            evidence.Add($"startup-loader-patchall-failure:{startupRuntimeEvidence.LoaderSawPatchAllFailure}");
+            evidence.Add($"startup-loader-mod-load-failure:{startupRuntimeEvidence.LoaderSawModLoadFailure}");
+            evidence.Add($"startup-settings-path:{startupRuntimeEvidence.SettingsPath}");
+            evidence.Add($"startup-settings-present:{startupRuntimeEvidence.SettingsPresent}");
+            evidence.Add($"startup-settings-mods-enabled:{startupRuntimeEvidence.SettingsModsEnabled}");
+            evidence.Add($"startup-settings-companion-disabled:{startupRuntimeEvidence.SettingsCompanionDisabled}");
+            evidence.Add($"startup-runtime-config-path:{startupRuntimeEvidence.RuntimeConfigPath}");
+            evidence.Add($"startup-runtime-config-present:{startupRuntimeEvidence.RuntimeConfigPresent}");
+            evidence.Add($"startup-runtime-config-enabled:{startupRuntimeEvidence.RuntimeConfigEnabled}");
+            evidence.Add($"startup-runtime-config-harness-enabled:{startupRuntimeEvidence.RuntimeConfigHarnessEnabled}");
+            evidence.Add($"startup-sentinel-session-id:{startupRuntimeEvidence.StartupSentinelSessionId ?? "null"}");
+            evidence.Add($"startup-sentinel-run-id:{startupRuntimeEvidence.StartupSentinelRunId ?? "null"}");
+            evidence.Add($"startup-sentinel-launch-token:{startupRuntimeEvidence.StartupSentinelLaunchToken ?? "null"}");
+            evidence.Add($"startup-sentinel-relative-path:{startupRuntimeEvidence.StartupSentinelRelativePath ?? "null"}");
+            evidence.Add($"startup-companion-pck-present:{startupRuntimeEvidence.CompanionPckPresent}");
+            evidence.Add($"startup-companion-dll-present:{startupRuntimeEvidence.CompanionDllPresent}");
+            evidence.Add($"startup-companion-runtime-config-present:{startupRuntimeEvidence.CompanionRuntimeConfigPresent}");
+            evidence.Add($"startup-live-snapshot-present:{startupRuntimeEvidence.LiveSnapshotPresent}");
+            evidence.Add($"startup-harness-inventory-present:{startupRuntimeEvidence.HarnessInventoryPresent}");
+            evidence.Add($"startup-harness-status-present:{startupRuntimeEvidence.HarnessStatusPresent}");
+            evidence.Add($"startup-runtime-evidence:{GetStartupRuntimeEvidencePath(sessionRoot)}");
+
+            if (string.Equals(startupRuntimeEvidence.Diagnosis, "runtime-bootstrap-missing", StringComparison.OrdinalIgnoreCase))
+            {
+                blockers.Add("startup-runtime-bootstrap-missing");
+            }
+            else if (string.Equals(startupRuntimeEvidence.Diagnosis, "runtime-loader-failed", StringComparison.OrdinalIgnoreCase))
+            {
+                blockers.Add("startup-runtime-loader-failed");
+            }
+            else if (string.Equals(startupRuntimeEvidence.Diagnosis, "runtime-loader-preconditions-blocked", StringComparison.OrdinalIgnoreCase))
+            {
+                blockers.Add("startup-runtime-loader-preconditions-blocked");
+            }
+            else if (string.Equals(startupRuntimeEvidence.Diagnosis, "runtime-loader-entry-not-observed", StringComparison.OrdinalIgnoreCase))
+            {
+                blockers.Add("startup-runtime-loader-entry-not-observed");
+            }
+            else if (string.Equals(startupRuntimeEvidence.Diagnosis, "runtime-loader-scan-not-observed", StringComparison.OrdinalIgnoreCase))
+            {
+                blockers.Add("startup-runtime-loader-scan-not-observed");
+            }
+            else if (string.Equals(startupRuntimeEvidence.Diagnosis, "runtime-loader-not-observed", StringComparison.OrdinalIgnoreCase))
+            {
+                blockers.Add("startup-runtime-loader-not-observed");
+            }
+
+            if (!string.IsNullOrWhiteSpace(startupRuntimeEvidence.FailureEdge)
+                && !string.Equals(startupRuntimeEvidence.Diagnosis, "runtime-started-snapshots-present", StringComparison.OrdinalIgnoreCase))
+            {
+                blockers.Add($"startup-load-chain-failure:{startupRuntimeEvidence.FailureEdge}");
+            }
+        }
+
         var supervisorState = new GuiSmokeSupervisorState(
             now,
             updatedGoal.SessionId,
@@ -1429,6 +1804,40 @@ static partial class LongRunArtifacts
         }
 
         return attemptEntries.LastOrDefault()?.AttemptId;
+    }
+
+    private static string? DetermineActiveAttemptId(IReadOnlyList<GuiSmokeRestartEvent> restartEvents)
+    {
+        var activeAttempt = restartEvents
+            .Where(static entry => !string.IsNullOrWhiteSpace(entry.AttemptId))
+            .GroupBy(static entry => entry.AttemptId, StringComparer.OrdinalIgnoreCase)
+            .Select(static group =>
+            {
+                var lastStartAt = group
+                    .Where(static entry =>
+                        string.Equals(entry.EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(entry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase))
+                    .Select(static entry => (DateTimeOffset?)entry.RecordedAt)
+                    .DefaultIfEmpty(null)
+                    .Max();
+                var lastTerminalAt = group
+                    .Where(static entry => string.Equals(entry.EventType, GuiSmokeContractStates.EventAttemptTerminal, StringComparison.OrdinalIgnoreCase))
+                    .Select(static entry => (DateTimeOffset?)entry.RecordedAt)
+                    .DefaultIfEmpty(null)
+                    .Max();
+                return new
+                {
+                    AttemptId = group.Key,
+                    AttemptOrdinal = group.Max(static entry => entry.AttemptOrdinal),
+                    LastStartAt = lastStartAt,
+                    LastTerminalAt = lastTerminalAt,
+                };
+            })
+            .Where(static entry => entry.LastStartAt is not null && (entry.LastTerminalAt is null || entry.LastStartAt > entry.LastTerminalAt))
+            .OrderByDescending(static entry => entry.LastStartAt)
+            .ThenByDescending(static entry => entry.AttemptOrdinal)
+            .FirstOrDefault();
+        return activeAttempt?.AttemptId;
     }
 
     private static void WriteStallDiagnosis(string sessionRoot, string runRoot, GuiSmokeAttemptIndexEntry attemptEntry)
@@ -1737,6 +2146,639 @@ static partial class LongRunArtifacts
             FailureReason: null);
         WriteJsonAtomicWithRetry(GetStartupSummaryPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
         return fallback;
+    }
+
+    private static GuiSmokeStartupRuntimeEvidence BuildStartupRuntimeEvidence(
+        string sessionRoot,
+        ScaffoldConfiguration configuration,
+        LiveExportLayout liveLayout,
+        HarnessQueueLayout harnessLayout)
+    {
+        var companionPckName = configuration.AiCompanionMod.PckName;
+        var companionPckBaseName = Path.GetFileNameWithoutExtension(companionPckName);
+        var expectedAssemblyFileName = companionPckBaseName + ".dll";
+        var modsRoot = Path.Combine(configuration.GamePaths.GameDirectory, "mods");
+        var runtimeLogPath = Path.Combine(modsRoot, configuration.AiCompanionMod.RuntimeLogFileName);
+        var runtimeConfigPath = Path.Combine(modsRoot, configuration.AiCompanionMod.RuntimeConfigFileName);
+        var companionPckPath = Path.Combine(modsRoot, companionPckName);
+        var companionDllPath = Path.Combine(modsRoot, expectedAssemblyFileName);
+        var packagedManifestPath = ResolvePackagedManifestPath(sessionRoot);
+        var settingsPath = ResolveSettingsSavePath(configuration.GamePaths);
+        var godotLogPath = Path.Combine(configuration.GamePaths.UserDataRoot, "logs", "godot.log");
+        var startupLogBaseline = TryReadJson<GuiSmokeStartupLogBaseline>(GetStartupLogBaselinePath(sessionRoot));
+        var runtimeLogMatches = ReadRelevantLogTail(runtimeLogPath, IsRelevantRuntimeLogLine);
+        var godotLogMatches = ReadRelevantLogTail(godotLogPath, IsRelevantGodotLogLine);
+        var runtimeLogDelta = startupLogBaseline is null
+            ? new GuiSmokeRelevantLogDelta(Array.Empty<string>(), TreatedAsCurrentExecution: false)
+            : ReadRelevantLogDelta(
+                runtimeLogPath,
+                startupLogBaseline.RuntimeLogSizeBytes,
+                IsRelevantRuntimeLogLine,
+                startupLogBaseline.RuntimeLogPresent);
+        var godotLogDelta = startupLogBaseline is null
+            ? new GuiSmokeRelevantLogDelta(Array.Empty<string>(), TreatedAsCurrentExecution: false)
+            : ReadRelevantLogDelta(
+                godotLogPath,
+                startupLogBaseline.GodotLogSizeBytes,
+                IsRelevantGodotLogLine,
+                startupLogBaseline.GodotLogPresent);
+        var runtimeDiagnosticLines = startupLogBaseline is null ? runtimeLogMatches : runtimeLogDelta.Matches;
+        var godotDiagnosticLines = startupLogBaseline is null ? godotLogMatches : godotLogDelta.Matches;
+        var runtimeLogInfo = File.Exists(runtimeLogPath) ? new FileInfo(runtimeLogPath) : null;
+        var godotLogInfo = File.Exists(godotLogPath) ? new FileInfo(godotLogPath) : null;
+        var moduleInitializerLogged = runtimeDiagnosticLines.Any(static line => line.Contains("module initializer bootstrap result", StringComparison.OrdinalIgnoreCase));
+        var runtimeExporterLogged = runtimeDiagnosticLines.Any(static line => line.Contains("runtime exporter initialized", StringComparison.OrdinalIgnoreCase));
+        var harnessBridgeLogged = runtimeDiagnosticLines.Any(static line => line.Contains("harness bridge initialize result", StringComparison.OrdinalIgnoreCase));
+        var godotReachedMainMenu = godotDiagnosticLines.Any(static line => line.Contains("Time to main menu", StringComparison.OrdinalIgnoreCase));
+        var loaderSawModsDirectoryScan = godotDiagnosticLines.Any(static line => line.Contains("Found mod pck file", StringComparison.OrdinalIgnoreCase));
+        var loaderSawCompanionPckScan = godotDiagnosticLines.Any(line =>
+            line.Contains("Found mod pck file", StringComparison.OrdinalIgnoreCase)
+            && line.Contains(companionPckName, StringComparison.OrdinalIgnoreCase));
+        var loaderSawCompanionSkippedWarning = godotDiagnosticLines.Any(line =>
+            line.Contains("Skipping loading mod", StringComparison.OrdinalIgnoreCase)
+            && line.Contains(companionPckName, StringComparison.OrdinalIgnoreCase)
+            && line.Contains("mods warning", StringComparison.OrdinalIgnoreCase));
+        var loaderSawCompanionDisabled = godotDiagnosticLines.Any(line =>
+            line.Contains("Skipping loading mod", StringComparison.OrdinalIgnoreCase)
+            && line.Contains(companionPckName, StringComparison.OrdinalIgnoreCase)
+            && line.Contains("disabled in settings", StringComparison.OrdinalIgnoreCase));
+        var loaderSawCompanionDuplicate = godotDiagnosticLines.Any(line =>
+            line.Contains("Tried to load mod with PCK name", StringComparison.OrdinalIgnoreCase)
+            && line.Contains(companionPckBaseName, StringComparison.OrdinalIgnoreCase));
+        var loaderSawCompanionAssembly = godotDiagnosticLines.Any(line =>
+            line.Contains("Loading assembly DLL", StringComparison.OrdinalIgnoreCase)
+            && line.Contains(expectedAssemblyFileName, StringComparison.OrdinalIgnoreCase));
+        var loaderSawInitializerCall = godotDiagnosticLines.Any(line =>
+            line.Contains("Calling initializer method of type", StringComparison.OrdinalIgnoreCase)
+            && (line.Contains(companionPckBaseName, StringComparison.OrdinalIgnoreCase)
+                || line.Contains(configuration.AiCompanionMod.Name, StringComparison.OrdinalIgnoreCase)
+                || line.Contains(expectedAssemblyFileName, StringComparison.OrdinalIgnoreCase)));
+        var loaderSawNoModInitializerAttribute = godotDiagnosticLines.Any(static line =>
+            line.Contains("No ModInitializerAttribute detected", StringComparison.OrdinalIgnoreCase));
+        var loaderSawPatchAll = loaderSawNoModInitializerAttribute
+                                || godotDiagnosticLines.Any(static line => line.Contains("Harmony.PatchAll", StringComparison.OrdinalIgnoreCase) || line.Contains("PatchAll", StringComparison.OrdinalIgnoreCase));
+        var loaderSawPatchAllFailure = godotDiagnosticLines.Any(static line => line.Contains("Exception caught while trying to run PatchAll", StringComparison.OrdinalIgnoreCase));
+        var loaderSawModLoadFailure = godotDiagnosticLines.Any(line =>
+            line.Contains("Error loading mod", StringComparison.OrdinalIgnoreCase)
+            && line.Contains(companionPckBaseName, StringComparison.OrdinalIgnoreCase));
+        var loaderSawModInitialization = godotDiagnosticLines.Any(line =>
+            line.Contains("Finished mod initialization", StringComparison.OrdinalIgnoreCase)
+            && (line.Contains(companionPckBaseName, StringComparison.OrdinalIgnoreCase)
+                || line.Contains(configuration.AiCompanionMod.Name, StringComparison.OrdinalIgnoreCase)));
+        var loaderSawAnyModLoaderSignal = loaderSawModsDirectoryScan
+                                          || loaderSawCompanionSkippedWarning
+                                          || loaderSawCompanionDisabled
+                                          || loaderSawCompanionDuplicate
+                                          || loaderSawCompanionAssembly
+                                          || loaderSawInitializerCall
+                                          || loaderSawNoModInitializerAttribute
+                                          || loaderSawPatchAll
+                                          || loaderSawPatchAllFailure
+                                          || loaderSawModInitialization
+                                          || loaderSawModLoadFailure;
+        var runtimeConfigPresent = File.Exists(runtimeConfigPath);
+        var runtimeConfigRoot = TryReadJsonNode(runtimeConfigPath) as JsonObject;
+        var runtimeConfigEnabled = TryReadBoolean(runtimeConfigRoot?["enabled"]) ?? false;
+        var runtimeConfigHarnessEnabled = TryReadBoolean(runtimeConfigRoot?["harness"]?["enabled"]) ?? false;
+        var startupSentinelRoot = runtimeConfigRoot?["startupSentinel"] as JsonObject;
+        var startupSentinelSessionId = TryReadString(startupSentinelRoot?["sessionId"]);
+        var startupSentinelRunId = TryReadString(startupSentinelRoot?["runId"]);
+        var startupSentinelLaunchToken = TryReadString(startupSentinelRoot?["launchToken"]);
+        var startupSentinelLaunchIssuedAtUtc = TryReadDateTimeOffset(startupSentinelRoot?["launchIssuedAtUtc"]);
+        var startupSentinelRelativePath = TryReadString(startupSentinelRoot?["sentinelRelativePath"]);
+        var settingsPresent = !string.IsNullOrWhiteSpace(settingsPath) && File.Exists(settingsPath);
+        var settingsRoot = TryReadJsonNode(settingsPath) as JsonObject;
+        var settingsModsEnabled = TryReadBoolean(settingsRoot?["mod_settings"]?["mods_enabled"]) ?? false;
+        var settingsCompanionDisabled = IsCompanionDisabledInSettings(settingsRoot, companionPckBaseName);
+        var packagedManifestPresent = File.Exists(packagedManifestPath);
+        var packagedManifestRoot = TryReadJsonNode(packagedManifestPath) as JsonObject;
+        var packagedManifestPckName = TryReadString(packagedManifestRoot?["pck_name"]);
+        var liveSnapshotPresent = File.Exists(liveLayout.SnapshotPath);
+        var harnessInventoryPresent = File.Exists(harnessLayout.InventoryPath);
+        var harnessStatusPresent = File.Exists(harnessLayout.StatusPath);
+        var expectedLoadChain = "NGame.GameStartup -> OneTimeInitialization.ExecuteEssential -> ModManager.Initialize -> LoadModsInDirRecursive(mods) -> TryLoadModFromPck -> ModInitializerAttribute|Harmony.PatchAll -> RuntimeExportContext.EnsureInitialized";
+        var failureEdge = DetermineStartupRuntimeFailureEdge(
+            runtimeConfigPresent,
+            runtimeConfigEnabled,
+            settingsPresent,
+            settingsModsEnabled,
+            settingsCompanionDisabled,
+            File.Exists(companionPckPath),
+            File.Exists(companionDllPath),
+            loaderSawPatchAllFailure,
+            loaderSawModLoadFailure,
+            moduleInitializerLogged,
+            runtimeExporterLogged,
+            harnessBridgeLogged,
+            liveSnapshotPresent,
+            harnessInventoryPresent,
+            harnessStatusPresent,
+            godotReachedMainMenu,
+            loaderSawAnyModLoaderSignal,
+            loaderSawModsDirectoryScan,
+            loaderSawCompanionPckScan,
+            loaderSawCompanionSkippedWarning,
+            loaderSawCompanionDisabled,
+            loaderSawCompanionDuplicate,
+            loaderSawCompanionAssembly,
+            loaderSawInitializerCall,
+            loaderSawNoModInitializerAttribute,
+            loaderSawModInitialization,
+            loaderSawPatchAll);
+        return new GuiSmokeStartupRuntimeEvidence(
+            DateTimeOffset.UtcNow,
+            expectedLoadChain,
+            failureEdge,
+            modsRoot,
+            File.Exists(companionPckPath),
+            File.Exists(companionDllPath),
+            File.Exists(runtimeConfigPath),
+            runtimeConfigPath,
+            runtimeConfigPresent,
+            runtimeConfigEnabled,
+            runtimeConfigHarnessEnabled,
+            settingsPath,
+            settingsPresent,
+            settingsModsEnabled,
+            settingsCompanionDisabled,
+            packagedManifestPath,
+            packagedManifestPresent,
+            packagedManifestPckName,
+            expectedAssemblyFileName,
+            GetStartupLogBaselinePath(sessionRoot),
+            startupLogBaseline?.RecordedAt,
+            startupSentinelSessionId,
+            startupSentinelRunId,
+            startupSentinelLaunchToken,
+            startupSentinelLaunchIssuedAtUtc,
+            startupSentinelRelativePath,
+            runtimeLogPath,
+            runtimeLogInfo is not null,
+            runtimeLogInfo?.LastWriteTimeUtc,
+            GetStartupRuntimeLogTailPath(sessionRoot),
+            runtimeLogMatches,
+            GetStartupRuntimeLogDeltaPath(sessionRoot),
+            runtimeLogDelta.Matches,
+            runtimeLogDelta.TreatedAsCurrentExecution,
+            moduleInitializerLogged,
+            runtimeExporterLogged,
+            harnessBridgeLogged,
+            godotLogPath,
+            godotLogInfo is not null,
+            godotLogInfo?.LastWriteTimeUtc,
+            GetStartupGodotLogTailPath(sessionRoot),
+            godotLogMatches,
+            GetStartupGodotLogDeltaPath(sessionRoot),
+            godotLogDelta.Matches,
+            godotLogDelta.TreatedAsCurrentExecution,
+            godotReachedMainMenu,
+            loaderSawAnyModLoaderSignal,
+            loaderSawModsDirectoryScan,
+            loaderSawCompanionPckScan,
+            loaderSawCompanionSkippedWarning,
+            loaderSawCompanionDisabled,
+            loaderSawCompanionDuplicate,
+            loaderSawCompanionAssembly,
+            loaderSawInitializerCall,
+            loaderSawNoModInitializerAttribute,
+            loaderSawModInitialization,
+            loaderSawPatchAll,
+            loaderSawPatchAllFailure,
+            loaderSawModLoadFailure,
+            liveLayout.SnapshotPath,
+            liveSnapshotPresent,
+            harnessLayout.InventoryPath,
+            harnessInventoryPresent,
+            harnessLayout.StatusPath,
+            harnessStatusPresent,
+            DetermineStartupRuntimeDiagnosis(
+                moduleInitializerLogged,
+                runtimeExporterLogged,
+                harnessBridgeLogged,
+                loaderSawCompanionAssembly,
+                loaderSawModInitialization,
+                loaderSawPatchAll,
+                loaderSawPatchAllFailure,
+                loaderSawModLoadFailure,
+                liveSnapshotPresent,
+                harnessInventoryPresent,
+                harnessStatusPresent,
+                failureEdge));
+    }
+
+    private static string DetermineStartupRuntimeDiagnosis(
+        bool moduleInitializerLogged,
+        bool runtimeExporterLogged,
+        bool harnessBridgeLogged,
+        bool loaderSawCompanionAssembly,
+        bool loaderSawModInitialization,
+        bool loaderSawPatchAll,
+        bool loaderSawPatchAllFailure,
+        bool loaderSawModLoadFailure,
+        bool liveSnapshotPresent,
+        bool harnessInventoryPresent,
+        bool harnessStatusPresent,
+        string failureEdge)
+    {
+        var runtimeStarted = moduleInitializerLogged || runtimeExporterLogged || harnessBridgeLogged;
+        var observerArtifactsPresent = liveSnapshotPresent || harnessInventoryPresent || harnessStatusPresent;
+        if (runtimeStarted)
+        {
+            return observerArtifactsPresent
+                ? "runtime-started-snapshots-present"
+                : "runtime-started-observer-missing";
+        }
+
+        if (loaderSawPatchAllFailure || loaderSawModLoadFailure)
+        {
+            return "runtime-loader-failed";
+        }
+
+        if (string.Equals(failureEdge, "runtime-config-disabled", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(failureEdge, "mods-disabled-in-settings", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(failureEdge, "companion-disabled-in-settings", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(failureEdge, "companion-payload-missing", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(failureEdge, "ModManager.TryLoadModFromPck(companion)->PlayerAgreedToModLoading", StringComparison.OrdinalIgnoreCase))
+        {
+            return "runtime-loader-preconditions-blocked";
+        }
+
+        if (string.Equals(failureEdge, "OneTimeInitialization.ExecuteEssential->ModManager.Initialize->LoadModsInDirRecursive(mods)", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(failureEdge, "ModManager.Initialize->LoadModsInDirRecursive(mods)->TryLoadModFromPck(companion)", StringComparison.OrdinalIgnoreCase))
+        {
+            return "runtime-loader-scan-not-observed";
+        }
+
+        if (string.Equals(failureEdge, "NGame.GameStartup->OneTimeInitialization.ExecuteEssential->ModManager.Initialize", StringComparison.OrdinalIgnoreCase))
+        {
+            return "runtime-loader-entry-not-observed";
+        }
+
+        if (loaderSawCompanionAssembly || loaderSawModInitialization || loaderSawPatchAll)
+        {
+            return "runtime-bootstrap-missing";
+        }
+
+        return "runtime-loader-not-observed";
+    }
+
+    private static string DetermineStartupRuntimeFailureEdge(
+        bool runtimeConfigPresent,
+        bool runtimeConfigEnabled,
+        bool settingsPresent,
+        bool settingsModsEnabled,
+        bool settingsCompanionDisabled,
+        bool companionPckPresent,
+        bool companionDllPresent,
+        bool loaderSawPatchAllFailure,
+        bool loaderSawModLoadFailure,
+        bool moduleInitializerLogged,
+        bool runtimeExporterLogged,
+        bool harnessBridgeLogged,
+        bool liveSnapshotPresent,
+        bool harnessInventoryPresent,
+        bool harnessStatusPresent,
+        bool godotReachedMainMenu,
+        bool loaderSawAnyModLoaderSignal,
+        bool loaderSawModsDirectoryScan,
+        bool loaderSawCompanionPckScan,
+        bool loaderSawCompanionSkippedWarning,
+        bool loaderSawCompanionDisabled,
+        bool loaderSawCompanionDuplicate,
+        bool loaderSawCompanionAssembly,
+        bool loaderSawInitializerCall,
+        bool loaderSawNoModInitializerAttribute,
+        bool loaderSawModInitialization,
+        bool loaderSawPatchAll)
+    {
+        var runtimeStarted = moduleInitializerLogged || runtimeExporterLogged || harnessBridgeLogged;
+        var observerArtifactsPresent = liveSnapshotPresent || harnessInventoryPresent || harnessStatusPresent;
+        if (runtimeStarted)
+        {
+            return observerArtifactsPresent
+                ? "RuntimeExportContext.EnsureInitialized->observer-snapshots"
+                : "RuntimeExportContext.EnsureInitialized->observer-snapshots-missing";
+        }
+
+        if (!runtimeConfigPresent || !companionPckPresent || !companionDllPresent)
+        {
+            return "companion-payload-missing";
+        }
+
+        if (!runtimeConfigEnabled)
+        {
+            return "runtime-config-disabled";
+        }
+
+        if (!settingsPresent || !settingsModsEnabled)
+        {
+            return "mods-disabled-in-settings";
+        }
+
+        if (settingsCompanionDisabled || loaderSawCompanionDisabled)
+        {
+            return "companion-disabled-in-settings";
+        }
+
+        if (loaderSawCompanionSkippedWarning)
+        {
+            return "ModManager.TryLoadModFromPck(companion)->PlayerAgreedToModLoading";
+        }
+
+        if (loaderSawCompanionDuplicate)
+        {
+            return "ModManager.TryLoadModFromPck(companion)->duplicate-pck-name";
+        }
+
+        if (loaderSawPatchAllFailure || loaderSawModLoadFailure)
+        {
+            return "ModManager.TryLoadModFromPck(companion)->load-or-patch-failure";
+        }
+
+        if (loaderSawCompanionAssembly || loaderSawInitializerCall || loaderSawNoModInitializerAttribute || loaderSawModInitialization || loaderSawPatchAll)
+        {
+            return "TryLoadModFromPck(companion)->RuntimeExportContext.EnsureInitialized";
+        }
+
+        if (loaderSawModsDirectoryScan && !loaderSawCompanionPckScan)
+        {
+            return "ModManager.Initialize->LoadModsInDirRecursive(mods)->TryLoadModFromPck(companion)";
+        }
+
+        if (!loaderSawAnyModLoaderSignal)
+        {
+            return godotReachedMainMenu
+                ? "OneTimeInitialization.ExecuteEssential->ModManager.Initialize->LoadModsInDirRecursive(mods)"
+                : "NGame.GameStartup->OneTimeInitialization.ExecuteEssential->ModManager.Initialize";
+        }
+
+        return "mod-load-chain-not-observed";
+    }
+
+    private static bool IsRelevantRuntimeLogLine(string line)
+    {
+        return line.Contains("module initializer bootstrap result", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("runtime exporter initialized", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("harness bridge initialize result", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("game mod initializer", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("runtime config refreshed", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("exporter patch prepare", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRelevantGodotLogLine(string line)
+    {
+        return line.Contains("Time to main menu", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Found mod pck file", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Skipping loading mod", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Calling initializer method of type", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("No ModInitializerAttribute detected", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("sts2-mod-ai-companion", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Sts2ModAiCompanion", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Harmony.PatchAll", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("PatchAll", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Tried to load mod with PCK name", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("RUNNING MODDED", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Error loading mod", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Loading assembly DLL", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Finished mod initialization", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<string> ReadRelevantLogTail(string path, Func<string, bool> predicate, int maxLines = 200)
+    {
+        if (!File.Exists(path))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            return File.ReadLines(path)
+                .Where(predicate)
+                .TakeLast(maxLines)
+                .ToArray();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static GuiSmokeRelevantLogDelta ReadRelevantLogDelta(
+        string path,
+        long baselineSizeBytes,
+        Func<string, bool> predicate,
+        bool baselineFilePresent,
+        int maxLines = 200)
+    {
+        if (!File.Exists(path))
+        {
+            return new GuiSmokeRelevantLogDelta(Array.Empty<string>(), TreatedAsCurrentExecution: false);
+        }
+
+        try
+        {
+            var fileInfo = new FileInfo(path);
+            var treatCurrentFileAsDelta = !baselineFilePresent || fileInfo.Length < baselineSizeBytes;
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (!treatCurrentFileAsDelta && baselineSizeBytes > 0)
+            {
+                stream.Seek(Math.Min(baselineSizeBytes, stream.Length), SeekOrigin.Begin);
+            }
+
+            using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
+            var matches = new Queue<string>();
+            while (reader.ReadLine() is { } line)
+            {
+                if (!predicate(line))
+                {
+                    continue;
+                }
+
+                if (matches.Count >= maxLines)
+                {
+                    matches.Dequeue();
+                }
+
+                matches.Enqueue(line);
+            }
+
+            return new GuiSmokeRelevantLogDelta(matches.ToArray(), treatCurrentFileAsDelta);
+        }
+        catch
+        {
+            return new GuiSmokeRelevantLogDelta(Array.Empty<string>(), TreatedAsCurrentExecution: false);
+        }
+    }
+
+    private static string ResolvePackagedManifestPath(string sessionRoot)
+    {
+        var workspaceRoot = Directory.GetCurrentDirectory();
+        return Path.Combine(workspaceRoot, "artifacts", "native-package-layout", "flat", "export-project", "mod_manifest.json");
+    }
+
+    private static string ResolveSettingsSavePath(GamePathOptions gamePaths)
+    {
+        var directPath = Path.Combine(gamePaths.UserDataRoot, "steam", gamePaths.SteamAccountId, "settings.save");
+        if (File.Exists(directPath))
+        {
+            return directPath;
+        }
+
+        var steamRoot = Path.Combine(gamePaths.UserDataRoot, "steam");
+        if (!Directory.Exists(steamRoot))
+        {
+            return directPath;
+        }
+
+        try
+        {
+            return Directory.EnumerateFiles(steamRoot, "settings.save", SearchOption.AllDirectories)
+                .OrderByDescending(static path => File.GetLastWriteTimeUtc(path))
+                .FirstOrDefault()
+                ?? directPath;
+        }
+        catch
+        {
+            return directPath;
+        }
+    }
+
+    private static JsonNode? TryReadJsonNode(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonNode.Parse(File.ReadAllText(path));
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool? TryReadBoolean(JsonNode? node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return node.GetValue<bool>();
+        }
+        catch (InvalidOperationException)
+        {
+            try
+            {
+                var text = node.GetValue<string>();
+                return bool.TryParse(text, out var parsed)
+                    ? parsed
+                    : null;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+    }
+
+    private static DateTimeOffset? TryReadDateTimeOffset(JsonNode? node)
+    {
+        var text = TryReadString(node);
+        return DateTimeOffset.TryParse(text, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static string? TryReadString(JsonNode? node)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return node.GetValue<string>();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsCompanionDisabledInSettings(JsonObject? settingsRoot, string companionPckBaseName)
+    {
+        if (settingsRoot?["mod_settings"] is not JsonObject modSettings
+            || modSettings["disabled_mods"] is not JsonArray disabledMods)
+        {
+            return false;
+        }
+
+        foreach (var entry in disabledMods)
+        {
+            if (entry is not JsonObject disabledMod)
+            {
+                continue;
+            }
+
+            var name = TryReadString(disabledMod["name"]);
+            if (string.Equals(name, companionPckBaseName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPassedAttempt(GuiSmokeAttemptIndexEntry entry)
+    {
+        var completedLike = string.Equals(entry.Status, "passed", StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(entry.Status, "completed", StringComparison.OrdinalIgnoreCase);
+        if (!completedLike)
+        {
+            return false;
+        }
+
+        if (!string.Equals(entry.TrustStateAtStart, GuiSmokeContractStates.TrustValid, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (entry.LaunchFailed)
+        {
+            return false;
+        }
+
+        return !string.Equals(entry.TerminalCause, "max-steps-reached", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildLogTailBody(string sourcePath, IReadOnlyList<string> matchedLines)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine($"source: {sourcePath}");
+        if (matchedLines.Count == 0)
+        {
+            builder.AppendLine("<no-matching-lines>");
+            return builder.ToString();
+        }
+
+        foreach (var line in matchedLines)
+        {
+            builder.AppendLine(line);
+        }
+
+        return builder.ToString();
     }
 
     private static GuiSmokeStartupSummary ApplyStartupStageUpdate(
@@ -3068,7 +4110,8 @@ static partial class LongRunArtifacts
                || fileName.StartsWith("Sts2AiCompanion", StringComparison.OrdinalIgnoreCase)
                || fileName.StartsWith("Sts2ModKit", StringComparison.OrdinalIgnoreCase)
                || string.Equals(fileName, "runtime-assembly-manifest.json", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(fileName, "sts2-mod-ai-companion.config.json", StringComparison.OrdinalIgnoreCase);
+               || string.Equals(fileName, "sts2-mod-ai-companion.config.json", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(fileName, "sts2-mod-ai-companion.runtime-config", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryMatchIntentionalRewrite(
@@ -3078,7 +4121,7 @@ static partial class LongRunArtifacts
         out string? rewriteNote)
     {
         rewriteNote = null;
-        if (!string.Equals(relativePath, "sts2-mod-ai-companion.config.json", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(relativePath, "sts2-mod-ai-companion.runtime-config", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -3122,6 +4165,7 @@ static partial class LongRunArtifacts
             }
 
             harness["enabled"] = true;
+            root.Remove("startupSentinel");
             return root.ToJsonString();
         }
         catch (IOException)
@@ -3304,6 +4348,18 @@ static partial class LongRunArtifacts
     private static string GetStartupTracePath(string sessionRoot) => Path.Combine(sessionRoot, "startup-trace.ndjson");
 
     private static string GetStartupSummaryPath(string sessionRoot) => Path.Combine(sessionRoot, "startup-summary.json");
+
+    private static string GetStartupLogBaselinePath(string sessionRoot) => Path.Combine(sessionRoot, "startup-log-baseline.json");
+
+    private static string GetStartupRuntimeEvidencePath(string sessionRoot) => Path.Combine(sessionRoot, "startup-runtime-evidence.json");
+
+    private static string GetStartupRuntimeLogTailPath(string sessionRoot) => Path.Combine(sessionRoot, "startup-runtime-log.tail.txt");
+
+    private static string GetStartupRuntimeLogDeltaPath(string sessionRoot) => Path.Combine(sessionRoot, "startup-runtime-log.delta.txt");
+
+    private static string GetStartupGodotLogTailPath(string sessionRoot) => Path.Combine(sessionRoot, "startup-godot-log.tail.txt");
+
+    private static string GetStartupGodotLogDeltaPath(string sessionRoot) => Path.Combine(sessionRoot, "startup-godot-log.delta.txt");
 
     private static string GetDeployCommandSummaryPath(string sessionRoot) => Path.Combine(sessionRoot, "deploy-command-summary.json");
 }
