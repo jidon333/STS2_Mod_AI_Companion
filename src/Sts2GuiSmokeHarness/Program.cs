@@ -265,6 +265,30 @@ static async Task<int> RunScenarioAsync(
             note: "skip-launch was enabled; manual clean boot proof was not recorded by the runner.");
     }
 
+    if (isLongRun && !options.ContainsKey("--skip-launch"))
+    {
+        LongRunArtifacts.UpdateRunnerSessionState(
+            sessionRoot,
+            GuiSmokeContractStates.SessionCollecting,
+            "runner performing bootstrap before authoritative attempt 0001.");
+        var bootstrapSucceeded = await RunBootstrapPhaseAsync(
+            configuration,
+            workspaceRoot,
+            liveLayout,
+            harnessLayout,
+            sessionId,
+            sessionRoot,
+            sessionDeadline).ConfigureAwait(false);
+        if (!bootstrapSucceeded)
+        {
+            LongRunArtifacts.UpdateRunnerSessionState(
+                sessionRoot,
+                GuiSmokeContractStates.SessionAborted,
+                "runner aborted before authoritative attempt 0001 because bootstrap did not verify manual clean boot.");
+            return 1;
+        }
+    }
+
     GuiSmokeAttemptResult? lastAttempt = null;
     var consecutiveLaunchFailures = 0;
     var consecutiveSceneDeadEnds = 0;
@@ -379,6 +403,245 @@ static async Task<int> RunScenarioAsync(
     return lastAttempt?.ExitCode ?? 1;
 }
 
+static bool IsPreAttemptBootstrapBoundary(GuiSmokePhase phase, IReadOnlyList<GuiSmokeHistoryEntry> history)
+{
+    return phase == GuiSmokePhase.WaitMainMenu && history.Count == 0;
+}
+
+static bool CanCompleteBootstrap(
+    bool manualCleanBootVerified,
+    string trustState,
+    GuiSmokeStartupRuntimeEvidence startupRuntimeEvidence,
+    GuiSmokePhase phase,
+    IReadOnlyList<GuiSmokeHistoryEntry> history)
+{
+    return manualCleanBootVerified
+           && string.Equals(trustState, GuiSmokeContractStates.TrustValid, StringComparison.OrdinalIgnoreCase)
+           && startupRuntimeEvidence.RuntimeExporterInitializedLogged
+           && startupRuntimeEvidence.FreshSnapshotPresent
+           && IsPreAttemptBootstrapBoundary(phase, history);
+}
+
+static string ResolveTrustStateAtAttemptStart(string sessionRoot)
+{
+    return LongRunArtifacts.RefreshSupervisorState(sessionRoot).TrustState;
+}
+
+static void WriteObserverBootstrapCopy(string observerStatePath, ObserverState observer)
+{
+    var directory = Path.GetDirectoryName(observerStatePath);
+    if (!string.IsNullOrWhiteSpace(directory))
+    {
+        Directory.CreateDirectory(directory);
+    }
+
+    File.WriteAllText(observerStatePath, JsonSerializer.Serialize(observer, GuiSmokeShared.JsonOptions));
+}
+
+static async Task<bool> RunBootstrapPhaseAsync(
+    ScaffoldConfiguration configuration,
+    string workspaceRoot,
+    LiveExportLayout liveLayout,
+    HarnessQueueLayout harnessLayout,
+    string sessionId,
+    string sessionRoot,
+    DateTimeOffset sessionDeadline)
+{
+    const int TransitionSettleMs = 2000;
+    const int ManualCleanBootObserverBootstrapPollMs = 500;
+    const int ManualCleanBootObserverBootstrapPollCount = 12;
+
+    var bootstrapRunId = $"{sessionId}-bootstrap";
+    var startupStage = "bootstrap-started";
+    var bootstrapRoot = Path.Combine(sessionRoot, "bootstrap");
+    Directory.CreateDirectory(bootstrapRoot);
+
+    void RecordBootstrapStage(
+        string stage,
+        string status,
+        string? detail = null,
+        IReadOnlyDictionary<string, string?>? metadata = null)
+    {
+        startupStage = stage;
+        LongRunArtifacts.RecordStartupStage(sessionRoot, stage, status, detail, metadata);
+    }
+
+    void RecordBootstrapFailure(
+        string reason,
+        IReadOnlyDictionary<string, string?>? metadata = null)
+    {
+        LongRunArtifacts.RecordStartupFailure(sessionRoot, startupStage, reason, metadata);
+    }
+
+    RecordBootstrapStage("bootstrap-started", "finished", bootstrapRunId);
+
+    try
+    {
+        await StopGameProcessesAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+        EnsureGameNotRunning();
+
+        var launchIssuedAt = DateTimeOffset.UtcNow;
+        var startupRuntimeConfig = EnsureStartupRuntimeConfig(configuration, sessionId, bootstrapRunId, launchIssuedAt);
+        LongRunArtifacts.RecordStartupLogBaseline(
+            sessionRoot,
+            configuration,
+            bootstrapRunId,
+            startupRuntimeConfig.LaunchToken,
+            launchIssuedAt);
+
+        RecordBootstrapStage("bootstrap-launch-issued", "started", launchIssuedAt.ToString("O"));
+        await GuiSmokeShared.RunProcessAsync(
+            Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
+            "/c start \"\" \"steam://rungameid/2868840\"",
+            workspaceRoot,
+            TimeSpan.FromSeconds(10),
+            waitForExit: false).ConfigureAwait(false);
+        RecordBootstrapStage("bootstrap-launch-issued", "finished", launchIssuedAt.ToString("O"));
+
+        await WaitForLiveGameWindowAsync(launchIssuedAt, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
+        RecordBootstrapStage("bootstrap-window-detected", "finished");
+        await MaintainLaunchFocusAsync(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+    }
+    catch (Exception exception)
+    {
+        RecordBootstrapFailure($"{exception.GetType().Name}: {exception.Message}");
+        try
+        {
+            await StopGameProcessesAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+        }
+        catch
+        {
+        }
+
+        return false;
+    }
+
+    var captureService = new ScreenCaptureService();
+    var observerReader = new ObserverSnapshotReader(liveLayout, harnessLayout);
+    var phase = GuiSmokePhase.WaitMainMenu;
+    var history = Array.Empty<GuiSmokeHistoryEntry>();
+    var freshnessFloor = DateTimeOffset.UtcNow.AddSeconds(-5);
+    var captureIndex = 0;
+    var firstScreenshotRecorded = false;
+    var evaluationStarted = false;
+    var consecutiveFallbackCapturesWithoutProcess = 0;
+
+    while (DateTimeOffset.UtcNow < sessionDeadline)
+    {
+        captureIndex += 1;
+        var window = WindowLocator.TryFindSts2Window()
+                     ?? WindowLocator.GetPrimaryMonitorFallback();
+        if (window.IsMinimized)
+        {
+            window = WindowLocator.EnsureRestored(window);
+        }
+
+        if (!window.IsFallback)
+        {
+            window = WindowLocator.EnsureInteractive(window);
+        }
+
+        var capturePrefix = Path.Combine(bootstrapRoot, captureIndex.ToString("0000"));
+        var screenshotPath = capturePrefix + ".screen.png";
+        var observerStatePath = capturePrefix + ".observer.state.json";
+        if (!captureService.TryCapture(window, screenshotPath))
+        {
+            if (window.IsFallback && !HasLiveGameProcess())
+            {
+                consecutiveFallbackCapturesWithoutProcess += 1;
+                if (consecutiveFallbackCapturesWithoutProcess >= 3)
+                {
+                    RecordBootstrapFailure("bootstrap-process-lost");
+                    try
+                    {
+                        await StopGameProcessesAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                    }
+
+                    return false;
+                }
+            }
+            else
+            {
+                consecutiveFallbackCapturesWithoutProcess = 0;
+            }
+
+            await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
+            continue;
+        }
+
+        consecutiveFallbackCapturesWithoutProcess = 0;
+        if (!firstScreenshotRecorded)
+        {
+            RecordBootstrapStage("bootstrap-first-screenshot-captured", "finished", screenshotPath);
+            firstScreenshotRecorded = true;
+        }
+
+        var observer = observerReader.Read();
+        if (!IsManualCleanBootObserverReady(observer, freshnessFloor))
+        {
+            observer = await BootstrapManualCleanBootObserverAsync(
+                    observer,
+                    observerReader.Read,
+                    freshnessFloor,
+                    ManualCleanBootObserverBootstrapPollCount,
+                    ManualCleanBootObserverBootstrapPollMs)
+                .ConfigureAwait(false);
+        }
+
+        WriteObserverBootstrapCopy(observerStatePath, observer);
+        if (!evaluationStarted)
+        {
+            RecordBootstrapStage("bootstrap-manual-clean-boot-evaluation-started", "started", screenshotPath);
+            evaluationStarted = true;
+        }
+
+        var startupRuntimeEvidence = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            sessionRoot,
+            configuration,
+            liveLayout,
+            harnessLayout,
+            stage: "manual-clean-boot-runtime-evidence",
+            captureReason: $"bootstrap-wait-main-menu-step-{captureIndex:D4}");
+
+        var manualCleanBootVerified = LongRunArtifacts.TryMarkManualCleanBootVerified(
+            sessionRoot,
+            harnessLayout,
+            observer,
+            history,
+            screenshotPath,
+            observerStatePath,
+            freshnessFloor,
+            stillInWaitMainMenu: IsPreAttemptBootstrapBoundary(phase, history));
+        var trustState = ResolveTrustStateAtAttemptStart(sessionRoot);
+        if (CanCompleteBootstrap(manualCleanBootVerified, trustState, startupRuntimeEvidence, phase, history))
+        {
+            var detail = $"verified={manualCleanBootVerified};trustState={trustState};runtimeExporter={startupRuntimeEvidence.RuntimeExporterInitializedLogged};freshSnapshot={startupRuntimeEvidence.FreshSnapshotPresent}";
+            RecordBootstrapStage("bootstrap-manual-clean-boot-evaluation-finished", "finished", detail);
+            await StopGameProcessesAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+            EnsureGameNotRunning();
+            RecordBootstrapStage("bootstrap-finished", "finished", detail);
+            return true;
+        }
+
+        await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
+    }
+
+    RecordBootstrapFailure("bootstrap-timeout");
+    try
+    {
+        await StopGameProcessesAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+    }
+    catch
+    {
+    }
+
+    return false;
+}
+
 static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     ScaffoldConfiguration configuration,
     string workspaceRoot,
@@ -400,6 +663,8 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     const int ActionSettleMinimumMs = 900;
     const int CombatActionSettleMinimumMs = 300;
     const int TransitionSettleMs = 2000;
+    const int ManualCleanBootObserverBootstrapPollMs = 500;
+    const int ManualCleanBootObserverBootstrapPollCount = 12;
 
     var runId = isLongRun
         ? $"{sessionId}-attempt-{attemptId}"
@@ -429,8 +694,8 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         harnessLayout.HarnessRoot,
         configuration.GamePaths.GameDirectory));
     var stepIndex = 0;
-    var startupStage = "attempt-0001-started";
-    var isStartupTrackedAttempt = isLongRun && attemptOrdinal == 1;
+    var startupStage = "authoritative-attempt-started";
+    var isAuthoritativeFirstAttempt = isLongRun && attemptOrdinal == 1;
 
     void RecordAttemptStartupStage(
         string stage,
@@ -438,7 +703,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         string? detail = null,
         IReadOnlyDictionary<string, string?>? metadata = null)
     {
-        if (!isStartupTrackedAttempt)
+        if (!isAuthoritativeFirstAttempt)
         {
             return;
         }
@@ -451,7 +716,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         string reason,
         IReadOnlyDictionary<string, string?>? metadata = null)
     {
-        if (!isStartupTrackedAttempt)
+        if (!isAuthoritativeFirstAttempt)
         {
             return;
         }
@@ -459,9 +724,9 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         LongRunArtifacts.RecordStartupFailure(sessionRoot, startupStage, reason, metadata);
     }
 
-    if (isStartupTrackedAttempt)
+    if (isAuthoritativeFirstAttempt)
     {
-        RecordAttemptStartupStage("attempt-0001-started", "finished", runRoot);
+        RecordAttemptStartupStage("authoritative-attempt-started", "finished", runRoot);
     }
 
     GuiSmokeAttemptResult CompleteAttempt(
@@ -526,32 +791,21 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             await StopGameProcessesAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
             EnsureGameNotRunning();
             var launchIssuedAt = DateTimeOffset.UtcNow;
-            var startupRuntimeConfig = EnsureStartupRuntimeConfig(configuration, sessionId, runId, launchIssuedAt);
-            if (isLongRun)
-            {
-                LongRunArtifacts.RecordStartupLogBaseline(
-                    sessionRoot,
-                    configuration,
-                    runId,
-                    startupRuntimeConfig.LaunchToken,
-                    launchIssuedAt);
-            }
-            startupStage = "manual-clean-boot-launch-issued";
+            EnsureStartupRuntimeConfig(configuration, sessionId, runId, launchIssuedAt);
+            startupStage = "authoritative-attempt-launch-issued";
             await GuiSmokeShared.RunProcessAsync(
                 Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
                 "/c start \"\" \"steam://rungameid/2868840\"",
                 workspaceRoot,
                 TimeSpan.FromSeconds(10),
                 waitForExit: false).ConfigureAwait(false);
-            RecordAttemptStartupStage("manual-clean-boot-launch-issued", "finished", launchIssuedAt.ToString("O"));
             if (isLongRun)
             {
                 LongRunArtifacts.RecordRunnerLaunchIssued(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart);
             }
 
-            startupStage = "game-window-detected";
+            startupStage = "authoritative-attempt-window-detected";
             await WaitForLiveGameWindowAsync(launchIssuedAt, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
-            RecordAttemptStartupStage("game-window-detected", "finished");
             await MaintainLaunchFocusAsync(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
         }
@@ -691,9 +945,9 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         }
         consecutiveBlackFrames = 0;
         consecutiveFallbackCapturesWithoutProcess = 0;
-        if (isStartupTrackedAttempt && stepIndex == 1)
+        if (isAuthoritativeFirstAttempt && stepIndex == 1)
         {
-            RecordAttemptStartupStage("first-screenshot-captured", "finished", screenshotPath);
+            RecordAttemptStartupStage("authoritative-first-screenshot-captured", "finished", screenshotPath);
         }
         if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
         {
@@ -703,38 +957,21 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         LogHarness($"step={stepIndex} captured={screenshotPath}");
 
         var observer = observerReader.Read();
-        logger.WriteObserverCopies(stepPrefix, observer);
-        if (isLongRun)
+        if (isLongRun
+            && history.Count == 0
+            && phase == GuiSmokePhase.WaitMainMenu
+            && !IsManualCleanBootObserverReady(observer, freshnessFloor))
         {
-            if (isStartupTrackedAttempt && stepIndex == 1)
-            {
-                RecordAttemptStartupStage("manual-clean-boot-evaluation-started", "started", screenshotPath);
-            }
-
-            if (stepIndex == 1)
-            {
-                LongRunArtifacts.RecordStartupRuntimeEvidence(sessionRoot, configuration, liveLayout, harnessLayout);
-            }
-
-            var manualCleanBootVerified = LongRunArtifacts.TryMarkManualCleanBootVerified(
-                sessionRoot,
-                harnessLayout,
-                observer,
-                history,
-                screenshotPath,
-                stepPrefix + ".observer.state.json");
-            if (isStartupTrackedAttempt && stepIndex == 1)
-            {
-                var startupPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(
-                    File.ReadAllText(Path.Combine(sessionRoot, "prevalidation.json")),
-                    GuiSmokeShared.JsonOptions);
-                var manualCleanBootDetail = startupPrevalidation?.ManualCleanBootEvidence?.BlockingReasons is { Count: > 0 } blockingReasons
-                    ? $"verified={manualCleanBootVerified};blockers={string.Join(",", blockingReasons)}"
-                    : $"verified={manualCleanBootVerified}";
-                RecordAttemptStartupStage("manual-clean-boot-evaluation-finished", "finished", manualCleanBootDetail);
-            }
+            observer = await BootstrapManualCleanBootObserverAsync(
+                    observer,
+                    observerReader.Read,
+                    freshnessFloor,
+                    ManualCleanBootObserverBootstrapPollCount,
+                    ManualCleanBootObserverBootstrapPollMs)
+                .ConfigureAwait(false);
         }
 
+        logger.WriteObserverCopies(stepPrefix, observer);
         LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
         var iterationSceneSignature = ComputeSceneSignature(screenshotPath, observer, phase);
         var iterationFirstSeenScene = isLongRun && !HasSceneSignatureHistory(sessionRoot, iterationSceneSignature);
@@ -1978,7 +2215,11 @@ static int ReplayStep(IReadOnlyDictionary<string, string> options, string worksp
             alwaysLog: true);
     }
 
-    trace.Info($"result target={artifact.FinalDecision.TargetLabel ?? artifact.FinalDecision.ActionKind ?? artifact.FinalDecision.Status} foreground={artifact.DebugSummary.ForegroundKind ?? "null"} background={artifact.DebugSummary.BackgroundKind ?? "null"} suppressed={BuildSuppressedCandidateSummary(artifact.DebugSummary)}");
+    var finalDecisionSemanticAction = string.Equals(request.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                                      && CombatDecisionContract.TryMapSemanticAction(request, artifact.FinalDecision, out var mappedSemanticAction)
+        ? mappedSemanticAction
+        : null;
+    trace.Info($"result target={artifact.FinalDecision.TargetLabel ?? artifact.FinalDecision.ActionKind ?? artifact.FinalDecision.Status} semantic={finalDecisionSemanticAction ?? "null"} foreground={artifact.DebugSummary.ForegroundKind ?? "null"} background={artifact.DebugSummary.BackgroundKind ?? "null"} suppressed={BuildSuppressedCandidateSummary(artifact.DebugSummary)}");
     Console.WriteLine(serializedArtifact);
     return 0;
 }
@@ -2351,6 +2592,114 @@ static (string LaunchToken, string SentinelRelativePath) EnsureStartupRuntimeCon
     return (launchToken, sentinelRelativePath);
 }
 
+static string WriteStartupSentinelFixture(
+    GamePathOptions gamePaths,
+    string sentinelRelativePath,
+    string sessionId,
+    string runId,
+    string launchToken)
+{
+    var sentinelPath = Path.Combine(gamePaths.UserDataRoot, sentinelRelativePath);
+    Directory.CreateDirectory(Path.GetDirectoryName(sentinelPath)!);
+    var sentinelRoot = new JsonObject
+    {
+        ["capturedAtUtc"] = DateTimeOffset.UtcNow.ToString("O"),
+        ["sessionId"] = sessionId,
+        ["runId"] = runId,
+        ["launchToken"] = launchToken,
+        ["processName"] = "SlayTheSpire2",
+        ["assemblyPath"] = @"D:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\sts2-mod-ai-companion.dll",
+    };
+    File.WriteAllText(sentinelPath, sentinelRoot.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    return sentinelPath;
+}
+
+static void WriteRuntimeConfigFixture(
+    ScaffoldConfiguration configuration,
+    string modsRoot,
+    bool harnessEnabled)
+{
+    var runtimeConfigPath = Path.Combine(modsRoot, configuration.AiCompanionMod.RuntimeConfigFileName);
+    var runtimeConfig = new JsonObject
+    {
+        ["enabled"] = true,
+        ["gamePaths"] = JsonSerializer.SerializeToNode(configuration.GamePaths, GuiSmokeShared.JsonOptions),
+        ["liveExport"] = JsonSerializer.SerializeToNode(configuration.LiveExport, GuiSmokeShared.JsonOptions),
+        ["harness"] = JsonSerializer.SerializeToNode(configuration.Harness with { Enabled = harnessEnabled }, GuiSmokeShared.JsonOptions),
+    };
+    File.WriteAllText(runtimeConfigPath, runtimeConfig.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+}
+
+static List<T> ReadNdjsonFixture<T>(string path)
+{
+    var entries = new List<T>();
+    if (!File.Exists(path))
+    {
+        return entries;
+    }
+
+    foreach (var line in File.ReadLines(path))
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            continue;
+        }
+
+        var entry = JsonSerializer.Deserialize<T>(line, GuiSmokeShared.JsonOptions);
+        if (entry is not null)
+        {
+            entries.Add(entry);
+        }
+    }
+
+    return entries;
+}
+
+static async Task<ObserverState> BootstrapManualCleanBootObserverAsync(
+    ObserverState observer,
+    Func<ObserverState> readObserver,
+    DateTimeOffset freshnessFloor,
+    int maxAdditionalPolls,
+    int pollDelayMs,
+    Func<int, Task>? delayAsync = null)
+{
+    if (IsManualCleanBootObserverReady(observer, freshnessFloor))
+    {
+        return observer;
+    }
+
+    var delay = delayAsync ?? (milliseconds => Task.Delay(milliseconds));
+    for (var pollIndex = 0; pollIndex < maxAdditionalPolls; pollIndex += 1)
+    {
+        await delay(pollDelayMs).ConfigureAwait(false);
+        observer = readObserver();
+        if (IsManualCleanBootObserverReady(observer, freshnessFloor))
+        {
+            break;
+        }
+    }
+
+    return observer;
+}
+
+static bool IsManualCleanBootObserverReady(ObserverState observer, DateTimeOffset freshnessFloor)
+{
+    return observer.IsFreshSince(freshnessFloor) && !IsUnknownObserverScreen(GetObservedScreen(observer));
+}
+
+static string? GetObservedScreen(ObserverState observer)
+{
+    return IsUnknownObserverScreen(observer.CurrentScreen)
+        ? observer.VisibleScreen
+        : observer.CurrentScreen;
+}
+
+static bool IsUnknownObserverScreen(string? screen)
+{
+    return string.IsNullOrWhiteSpace(screen)
+           || string.Equals(screen, "unknown", StringComparison.OrdinalIgnoreCase);
+}
+
 static void RunSelfTest()
 {
     var point = MouseInputDriver.TransformNormalizedPoint(
@@ -2490,8 +2839,12 @@ static void RunSelfTest()
                 ["toolPath"] = @"C:\fake\Sts2ModAiCompanion.Mod.dll",
                 ["reason"] = "self-test",
             });
-        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "attempt-0001-started", "finished", "attempts/0001");
-        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "first-screenshot-captured", "finished", "attempts/0001/steps/0001.screen.png");
+        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "bootstrap-launch-issued", "finished", DateTimeOffset.UtcNow.ToString("O"));
+        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "bootstrap-window-detected", "finished");
+        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "bootstrap-manual-clean-boot-evaluation-started", "started", "bootstrap/0001.screen.png");
+        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "bootstrap-manual-clean-boot-evaluation-finished", "finished", "verified=true");
+        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "authoritative-attempt-started", "finished", "attempts/0001");
+        LongRunArtifacts.RecordStartupStage(startupTraceRoot, "authoritative-first-screenshot-captured", "finished", "attempts/0001/steps/0001.screen.png");
         LongRunArtifacts.RecordStartupFailure(startupTraceRoot, "deploy-verification-finished", "deploy report missing");
 
         var startupSummary = JsonSerializer.Deserialize<GuiSmokeStartupSummary>(
@@ -2503,6 +2856,8 @@ static void RunSelfTest()
                && string.Equals(startupSummary.DeployMode, "in-process", StringComparison.OrdinalIgnoreCase)
                && string.Equals(startupSummary.SelectedDeployToolPath, @"C:\fake\Sts2ModAiCompanion.Mod.dll", StringComparison.OrdinalIgnoreCase),
             "Startup summary should preserve deploy command selection details.");
+        Assert(startupSummary.LaunchIssued && startupSummary.WindowDetected, "Startup summary should treat bootstrap launch/window stages as session startup progress.");
+        Assert(startupSummary.ManualCleanBootEvaluationStarted && startupSummary.ManualCleanBootEvaluationFinished, "Startup summary should treat bootstrap manual clean boot evaluation as the startup gate.");
         Assert(startupSummary.FirstAttemptCreated && startupSummary.FirstScreenshotCaptured, "Startup summary should record the first attempt and first screenshot stages.");
         Assert(string.Equals(startupSummary.FailureStage, "deploy-verification-finished", StringComparison.OrdinalIgnoreCase)
                && string.Equals(startupSummary.FailureReason, "deploy report missing", StringComparison.OrdinalIgnoreCase),
@@ -3832,6 +4187,7 @@ static void RunSelfTest()
     }
 
     var combatNoOpScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-noop-self-test-{Guid.NewGuid():N}.png");
+    var handleCombatParityRequestPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-handle-combat-parity-{Guid.NewGuid():N}.request.json");
     try
     {
         using (var bitmap = new Bitmap(1280, 720))
@@ -3941,6 +4297,608 @@ static void RunSelfTest()
             new CombatCardKnowledgeHint(3, "CARD.BASH", "Attack", "AnyEnemy", 1, "self-test"),
         }, combatNoOpScreenshotPath, combatNoOpHistory);
         Assert(!blockedEnemyActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Combat allowlist should close direct enemy targeting when the currently pending attack lane has already produced repeated no-op outcomes.");
+
+        var recoveredPendingSelectionHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 4", DateTimeOffset.UtcNow.AddSeconds(-6)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 4", DateTimeOffset.UtcNow.AddSeconds(-5)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "click", "combat enemy target 압축벌레 recenter", DateTimeOffset.UtcNow.AddSeconds(-4)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat enemy target 압축벌레 recenter", DateTimeOffset.UtcNow.AddSeconds(-3)),
+        };
+        var recoveredPendingSelection = CombatHistorySupport.TryGetPendingCombatSelection(recoveredPendingSelectionHistory);
+        Assert(recoveredPendingSelection is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: 4 }, "Combat pending selection recovery should preserve lane 4 across combat-noop and enemy-target labels.");
+        Assert(CombatHistorySupport.GetCombatNoOpCountsBySlot(recoveredPendingSelectionHistory).TryGetValue(4, out var recoveredPendingSelectionNoOpCount)
+               && recoveredPendingSelectionNoOpCount == 2,
+            "Combat no-op counting should attribute enemy-target no-ops back to the recovered lane 4 selection.");
+
+        var artifact0020Observer = new ObserverSummary(
+            "combat",
+            "combat",
+            true,
+            DateTimeOffset.UtcNow,
+            "inv-artifact-0020",
+            true,
+            "mixed",
+            "stable",
+            "episode-artifact-0020",
+            "Monster",
+            "combat",
+            80,
+            80,
+            3,
+            new[] { "압축벌레" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("enemy-target:2", "enemy-target", "압축벌레", "1398.24,621.6,83.52,88", true),
+            },
+            new[]
+            {
+                new ObserverChoice("enemy-target", "압축벌레", "1398.24,621.6,83.52,88", "압축벌레", "target-source:vfx-spawn-hitbox")
+                {
+                    NodeId = "enemy-target:2",
+                },
+            },
+            new[]
+            {
+                new ObservedCombatHandCard(1, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                new ObservedCombatHandCard(2, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                new ObservedCombatHandCard(4, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+            });
+        var artifact0020Knowledge = new[]
+        {
+            new CombatCardKnowledgeHint(1, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            new CombatCardKnowledgeHint(2, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            new CombatCardKnowledgeHint(3, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            new CombatCardKnowledgeHint(4, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+        };
+        var artifact0020History = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 4", DateTimeOffset.UtcNow.AddSeconds(-10)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "click", "combat enemy target 압축벌레 recenter", DateTimeOffset.UtcNow.AddSeconds(-9)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat enemy target 압축벌레 recenter", DateTimeOffset.UtcNow.AddSeconds(-8)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 4", DateTimeOffset.UtcNow.AddSeconds(-7)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 4", DateTimeOffset.UtcNow.AddSeconds(-6)),
+        };
+        var artifact0020AllowedActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(artifact0020Observer, null, null, null),
+            artifact0020Knowledge,
+            combatNoOpScreenshotPath,
+            artifact0020History);
+        Assert(!artifact0020AllowedActions.Contains("select attack slot 4", StringComparer.OrdinalIgnoreCase), "Artifact-like 0020 allowlist should close slot 4 after repeated no-op lane evidence.");
+        Assert(!artifact0020AllowedActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Artifact-like 0020 allowlist should close enemy targeting once the pending lane is blocked.");
+        var artifact0020Request = new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            20,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Replay the artifact-like blocked lane state.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            artifact0020Observer,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            artifact0020Knowledge,
+            artifact0020AllowedActions,
+            artifact0020History,
+            "Close illegal attack selection and target retries.",
+            null);
+        var artifact0020Decision = AutoDecisionProvider.Decide(artifact0020Request);
+        Assert(!string.Equals(artifact0020Decision.TargetLabel, "combat select attack slot 4", StringComparison.OrdinalIgnoreCase), "Artifact-like 0020 regression should not reissue illegal slot 4 selection.");
+        Assert(CombatDecisionContract.IsAllowed(artifact0020Request, artifact0020Decision, out var artifact0020SemanticAction)
+               && !string.Equals(artifact0020SemanticAction, "select attack slot 4", StringComparison.OrdinalIgnoreCase),
+            "Artifact-like 0020 regression should end with a legal combat semantic action.");
+
+        var artifact0021Observer = artifact0020Observer with
+        {
+            InventoryId = "inv-artifact-0021",
+            SceneEpisodeId = "episode-artifact-0021",
+            CombatHand = new[]
+            {
+                new ObservedCombatHandCard(1, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                new ObservedCombatHandCard(2, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                new ObservedCombatHandCard(4, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                new ObservedCombatHandCard(5, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+            },
+        };
+        var artifact0021Knowledge = new[]
+        {
+            new CombatCardKnowledgeHint(1, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            new CombatCardKnowledgeHint(2, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            new CombatCardKnowledgeHint(3, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            new CombatCardKnowledgeHint(4, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            new CombatCardKnowledgeHint(5, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+        };
+        var artifact0021History = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "click", "combat enemy target 압축벌레 recenter", DateTimeOffset.UtcNow.AddSeconds(-10)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat enemy target 압축벌레 recenter", DateTimeOffset.UtcNow.AddSeconds(-9)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 4", DateTimeOffset.UtcNow.AddSeconds(-8)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 4", DateTimeOffset.UtcNow.AddSeconds(-7)),
+        };
+        var artifact0021AllowedActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(artifact0021Observer, null, null, null),
+            artifact0021Knowledge,
+            combatNoOpScreenshotPath,
+            artifact0021History);
+        Assert(artifact0021AllowedActions.Contains("select attack slot 5", StringComparer.OrdinalIgnoreCase), "Artifact-like 0021 allowlist should keep alternate slot 5 open.");
+        Assert(!artifact0021AllowedActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Artifact-like 0021 allowlist should keep enemy targeting closed while slot 4 remains blocked.");
+        var artifact0021Request = new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            21,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Replay the artifact-like blocked target fallback state.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            artifact0021Observer,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            artifact0021Knowledge,
+            artifact0021AllowedActions,
+            artifact0021History,
+            "Prefer the legal alternate slot over an illegal enemy click.",
+            null);
+        var artifact0021Decision = AutoDecisionProvider.Decide(artifact0021Request);
+        Assert(!(artifact0021Decision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) ?? false), "Artifact-like 0021 regression should not emit any illegal enemy-target click.");
+        Assert(CombatDecisionContract.IsAllowed(artifact0021Request, artifact0021Decision, out var artifact0021SemanticAction)
+               && !string.Equals(artifact0021SemanticAction, "click enemy", StringComparison.OrdinalIgnoreCase),
+            "Artifact-like 0021 regression should end with a legal non-enemy-click combat semantic action.");
+
+        var combatEligibility0015Observer = new ObserverSummary(
+            "combat",
+            "combat",
+            true,
+            DateTimeOffset.UtcNow,
+            "inv-combat-eligibility-0015",
+            true,
+            "mixed",
+            "stable",
+            "episode-combat-eligibility-0015",
+            "Monster",
+            "combat-targets",
+            73,
+            80,
+            2,
+            new[] { "압축벌레" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("enemy-target:2", "enemy-target", "압축벌레", "1398.24,621.6,83.52,88", true),
+            },
+            new[]
+            {
+                new ObserverChoice("enemy-target", "압축벌레", "1398.24,621.6,83.52,88", "압축벌레", "target-source:vfx-spawn-hitbox")
+                {
+                    NodeId = "enemy-target:2",
+                },
+            },
+            new[]
+            {
+                new ObservedCombatHandCard(1, "CARD.POOR_SLEEP", "Curse", null),
+                new ObservedCombatHandCard(2, "CARD.DEFEND_IRONCLAD", "Skill", null),
+                new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", null),
+                new ObservedCombatHandCard(4, "CARD.STRIKE_IRONCLAD", "Attack", null),
+            })
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+            },
+        };
+        var combatEligibility0015Knowledge = new[]
+        {
+            new CombatCardKnowledgeHint(1, "CARD.POOR_SLEEP", "Curse", "None", -1, "self-test"),
+            new CombatCardKnowledgeHint(2, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            new CombatCardKnowledgeHint(3, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            new CombatCardKnowledgeHint(4, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+        };
+        var combatEligibility0015History = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 2", DateTimeOffset.UtcNow.AddSeconds(-5)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "auto-end turn", DateTimeOffset.UtcNow.AddSeconds(-4)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 2", DateTimeOffset.UtcNow.AddSeconds(-3)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "click", "combat enemy target 압축벌레 recenter", DateTimeOffset.UtcNow.AddSeconds(-2)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 2", DateTimeOffset.UtcNow.AddSeconds(-1)),
+        };
+        var combatEligibility0015Actions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(combatEligibility0015Observer, null, null, null),
+            combatEligibility0015Knowledge,
+            combatNoOpScreenshotPath,
+            combatEligibility0015History);
+        Assert(!combatEligibility0015Actions.Contains("select non-enemy slot 1", StringComparer.OrdinalIgnoreCase), "0015-like combat allowlist should not promote the curse in slot 1 as a playable non-enemy action.");
+
+        var enemyTurn0021Observer = new ObserverSummary(
+            "combat",
+            "combat",
+            true,
+            DateTimeOffset.UtcNow,
+            "inv-enemy-turn-0021",
+            true,
+            "mixed",
+            "stable",
+            "episode-enemy-turn-0021",
+            "Monster",
+            "combat-targets",
+            53,
+            80,
+            3,
+            new[] { "압축벌레" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("enemy-target:2", "enemy-target", "압축벌레", "1398.24,621.6,83.52,88", true),
+            },
+            new[]
+            {
+                new ObserverChoice("enemy-target", "압축벌레", "1398.24,621.6,83.52,88", "압축벌레", "target-source:vfx-spawn-hitbox")
+                {
+                    NodeId = "enemy-target:2",
+                },
+            },
+            new[]
+            {
+                new ObservedCombatHandCard(1, "CARD.POOR_SLEEP", "Curse", null),
+                new ObservedCombatHandCard(2, "CARD.BASH", "Attack", null),
+                new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", null),
+            })
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatCrossCheck"] = "CombatManager.IsPlayPhase=false;CombatManager.IsEnemyTurnStarted=true;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+            },
+        };
+        var enemyTurn0021Knowledge = new[]
+        {
+            new CombatCardKnowledgeHint(1, "CARD.POOR_SLEEP", "Curse", "None", -1, "self-test"),
+            new CombatCardKnowledgeHint(2, "CARD.BASH", "Attack", "AnyEnemy", 2, "self-test"),
+            new CombatCardKnowledgeHint(3, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+        };
+        var enemyTurn0021Actions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(enemyTurn0021Observer, null, null, null),
+            enemyTurn0021Knowledge,
+            combatNoOpScreenshotPath,
+            Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(enemyTurn0021Actions.Length == 1
+               && string.Equals(enemyTurn0021Actions[0], "wait", StringComparison.OrdinalIgnoreCase),
+            "0021-like enemy-turn combat allowlist should collapse to wait only.");
+        var enemyTurn0021Request = new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            21,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Hold during enemy turn.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            enemyTurn0021Observer,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            enemyTurn0021Knowledge,
+            enemyTurn0021Actions,
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Do not act during enemy turn.",
+            null);
+        var enemyTurn0021Decision = AutoDecisionProvider.Decide(enemyTurn0021Request);
+        Assert(string.Equals(enemyTurn0021Decision.Status, "wait", StringComparison.OrdinalIgnoreCase), "0021-like enemy-turn combat decision should wait instead of issuing a player action.");
+
+        var repeatedNonEnemyHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 1", DateTimeOffset.UtcNow.AddSeconds(-4)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 1", DateTimeOffset.UtcNow.AddSeconds(-3)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 1", DateTimeOffset.UtcNow.AddSeconds(-2)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 1", DateTimeOffset.UtcNow.AddSeconds(-1)),
+        };
+        var repeatedNonEnemyActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(combatEligibility0015Observer, null, null, null),
+            combatEligibility0015Knowledge,
+            combatNoOpScreenshotPath,
+            repeatedNonEnemyHistory);
+        Assert(!repeatedNonEnemyActions.Contains("select non-enemy slot 1", StringComparer.OrdinalIgnoreCase), "Repeated non-enemy regression should keep slot 1 closed when it only contains a curse.");
+        var repeatedNonEnemyRequest = new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            22,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Do not repeat the illegal curse selection loop.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            combatEligibility0015Observer,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            combatEligibility0015Knowledge,
+            repeatedNonEnemyActions,
+            repeatedNonEnemyHistory,
+            "Close the non-enemy repeat loop.",
+            null);
+        var repeatedNonEnemyDecision = AutoDecisionProvider.Decide(repeatedNonEnemyRequest);
+        Assert(!string.Equals(repeatedNonEnemyDecision.TargetLabel, "combat select non-enemy slot 1", StringComparison.OrdinalIgnoreCase), "Repeated non-enemy regression should not reissue slot 1.");
+        Assert(!CombatDecisionContract.IsAllowed(
+                repeatedNonEnemyRequest with { AllowedActions = new[] { "select non-enemy slot 2", "wait" } },
+                new GuiSmokeStepDecision("act", "click-current", null, null, null, "confirm selected non-enemy card", "test", 0.5, "combat", 0, true, null),
+                out _),
+            "click-current should not be legal without actual selected-state evidence.");
+
+        var pendingNonEnemySlot3History = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 3", DateTimeOffset.UtcNow.AddSeconds(-1)),
+        };
+        var pendingNonEnemySlot3Observer = new ObserverSummary(
+            "combat",
+            "combat",
+            true,
+            DateTimeOffset.UtcNow,
+            "inv-pending-non-enemy-slot3",
+            true,
+            "mixed",
+            "stable",
+            "episode-pending-non-enemy-slot3",
+            "Monster",
+            "combat-targets",
+            73,
+            80,
+            2,
+            new[] { "압축벌레" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("enemy-target:2", "enemy-target", "압축벌레", "1398.24,621.6,83.52,88", true),
+            },
+            new[]
+            {
+                new ObserverChoice("enemy-target", "압축벌레", "1398.24,621.6,83.52,88", "압축벌레", "target-source:vfx-spawn-hitbox")
+                {
+                    NodeId = "enemy-target:2",
+                },
+            },
+            new[]
+            {
+                new ObservedCombatHandCard(1, "CARD.POOR_SLEEP", "Curse", null),
+                new ObservedCombatHandCard(2, "CARD.STRIKE_IRONCLAD", "Attack", null),
+                new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", null),
+            })
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+            },
+        };
+        var pendingNonEnemySlot3Knowledge = new[]
+        {
+            new CombatCardKnowledgeHint(1, "CARD.POOR_SLEEP", "Curse", "None", -1, "self-test"),
+            new CombatCardKnowledgeHint(2, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            new CombatCardKnowledgeHint(3, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+        };
+        var pendingNonEnemySlot3Actions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(pendingNonEnemySlot3Observer, null, null, null),
+            pendingNonEnemySlot3Knowledge,
+            combatNoOpScreenshotPath,
+            pendingNonEnemySlot3History);
+        Assert(!pendingNonEnemySlot3Actions.Contains("select non-enemy slot 3", StringComparer.OrdinalIgnoreCase), "Pending non-enemy slot should not reopen without current selected-state evidence.");
+        var pendingNonEnemySlot3Request = new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            23,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Do not reselect the same non-enemy slot without evidence that it stayed selected.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            pendingNonEnemySlot3Observer,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            pendingNonEnemySlot3Knowledge,
+            pendingNonEnemySlot3Actions,
+            pendingNonEnemySlot3History,
+            "Do not reissue the same non-enemy slot without selected-state evidence.",
+            null);
+        var pendingNonEnemySlot3Decision = AutoDecisionProvider.Decide(pendingNonEnemySlot3Request);
+        Assert(!string.Equals(pendingNonEnemySlot3Decision.TargetLabel, "combat select non-enemy slot 3", StringComparison.OrdinalIgnoreCase), "Pending non-enemy slot regression should not reissue slot 3 without selected-state evidence.");
+
+        var recentRetriedNonEnemySlot3History = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 2", DateTimeOffset.UtcNow.AddSeconds(-4)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 3", DateTimeOffset.UtcNow.AddSeconds(-3)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "auto-end turn", DateTimeOffset.UtcNow.AddSeconds(-2)),
+        };
+        var recentRetriedNonEnemySlot3Actions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(pendingNonEnemySlot3Observer, null, null, null),
+            pendingNonEnemySlot3Knowledge,
+            combatNoOpScreenshotPath,
+            recentRetriedNonEnemySlot3History);
+        Assert(!recentRetriedNonEnemySlot3Actions.Contains("select non-enemy slot 3", StringComparer.OrdinalIgnoreCase), "Recently retried non-enemy slot should stay closed without current selected-state evidence.");
+        var recentRetriedNonEnemySlot3Request = new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            24,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Do not reopen a recently retried non-enemy slot without selected-state evidence.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            pendingNonEnemySlot3Observer,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            pendingNonEnemySlot3Knowledge,
+            recentRetriedNonEnemySlot3Actions,
+            recentRetriedNonEnemySlot3History,
+            "Do not reissue a recently retried non-enemy lane without selected-state evidence.",
+            null);
+        var recentRetriedNonEnemySlot3Decision = AutoDecisionProvider.Decide(recentRetriedNonEnemySlot3Request);
+        Assert(!string.Equals(recentRetriedNonEnemySlot3Decision.TargetLabel, "combat select non-enemy slot 3", StringComparison.OrdinalIgnoreCase), "Recently retried non-enemy regression should not reissue slot 3 without selected-state evidence.");
+
+        var parityCombatObserver = new ObserverSummary(
+            "combat",
+            "combat",
+            true,
+            DateTimeOffset.UtcNow,
+            "inv-handle-combat-parity",
+            true,
+            "mixed",
+            "stable",
+            "episode-handle-combat-parity",
+            "Monster",
+            "combat-targets",
+            73,
+            80,
+            3,
+            new[] { "압축벌레" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("enemy-target:2", "enemy-target", "압축벌레", "1398.24,621.6,83.52,88", true),
+            },
+            new[]
+            {
+                new ObserverChoice("enemy-target", "압축벌레", "1398.24,621.6,83.52,88", "압축벌레", "target-source:vfx-spawn-hitbox")
+                {
+                    NodeId = "enemy-target:2",
+                },
+            },
+            new[]
+            {
+                new ObservedCombatHandCard(1, "CARD.POOR_SLEEP", "Curse", null),
+                new ObservedCombatHandCard(2, "CARD.STRIKE_IRONCLAD", "Attack", null),
+                new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", null),
+                new ObservedCombatHandCard(4, "CARD.STRIKE_IRONCLAD", "Attack", null),
+            })
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+            },
+        };
+        var parityCombatKnowledge = new[]
+        {
+            new CombatCardKnowledgeHint(1, "CARD.POOR_SLEEP", "Curse", "None", -1, "self-test"),
+            new CombatCardKnowledgeHint(2, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            new CombatCardKnowledgeHint(3, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            new CombatCardKnowledgeHint(4, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+        };
+        var parityFullCombatHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "click", "combat enemy target 압축벌레", DateTimeOffset.UtcNow.AddSeconds(-12)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "auto-end turn", DateTimeOffset.UtcNow.AddSeconds(-11)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "wait", null, DateTimeOffset.UtcNow.AddSeconds(-10)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 4", DateTimeOffset.UtcNow.AddSeconds(-9)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 4", DateTimeOffset.UtcNow.AddSeconds(-8)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 4", DateTimeOffset.UtcNow.AddSeconds(-7)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 4", DateTimeOffset.UtcNow.AddSeconds(-6)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 2", DateTimeOffset.UtcNow.AddSeconds(-5)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 2", DateTimeOffset.UtcNow.AddSeconds(-4)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 2", DateTimeOffset.UtcNow.AddSeconds(-3)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 2", DateTimeOffset.UtcNow.AddSeconds(-2)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 2", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 3", DateTimeOffset.UtcNow),
+        };
+        var paritySerializedHistory = BuildSerializedStepHistory(GuiSmokePhase.HandleCombat, parityFullCombatHistory);
+        Assert(paritySerializedHistory.Count == HandleCombatContextSupport.SerializedHistoryWindow, "HandleCombat request serialization should retain the last 12 combat entries for parity rebuilds.");
+        Assert(paritySerializedHistory.All(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)), "HandleCombat request serialization should only persist combat-phase history.");
+        var parityObserverState = new ObserverState(parityCombatObserver, null, null, null);
+        var parityAllowedActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            parityObserverState,
+            parityCombatKnowledge,
+            combatNoOpScreenshotPath,
+            paritySerializedHistory);
+        Assert(!parityAllowedActions.Contains("select attack slot 2", StringComparer.OrdinalIgnoreCase), "Step19-like parity regression should keep blocked attack slot 2 closed.");
+        Assert(!parityAllowedActions.Contains("select attack slot 4", StringComparer.OrdinalIgnoreCase), "Step19-like parity regression should keep blocked attack slot 4 closed.");
+        var parityRequest = new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            19,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Preserve enough combat history for live/rebuild parity.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0002",
+            2,
+            3,
+            false,
+            "tactical",
+            null,
+            parityCombatObserver,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            parityCombatKnowledge,
+            parityAllowedActions,
+            paritySerializedHistory,
+            BuildFailureModeHintCore(
+                GuiSmokePhase.HandleCombat,
+                parityObserverState,
+                parityCombatKnowledge,
+                combatNoOpScreenshotPath,
+                paritySerializedHistory),
+            null);
+        File.WriteAllText(handleCombatParityRequestPath, JsonSerializer.Serialize(parityRequest, GuiSmokeShared.JsonOptions), Encoding.UTF8);
+        var parityNonRebuild = LoadReplayRequest(handleCombatParityRequestPath, fullRequestRebuild: false).Request;
+        var parityRebuilt = LoadReplayRequest(handleCombatParityRequestPath, fullRequestRebuild: true).Request;
+        Assert(parityNonRebuild.AllowedActions.OrderBy(static action => action, StringComparer.OrdinalIgnoreCase)
+               .SequenceEqual(parityRebuilt.AllowedActions.OrderBy(static action => action, StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+            "Saved-vs-rebuilt HandleCombat parity should preserve the same allowlist on the synthetic step19-like request.");
+        var parityNonRebuildDecision = EvaluateAutoDecisionWithDiagnostics(handleCombatParityRequestPath, parityNonRebuild).Decision;
+        var parityRebuiltDecision = EvaluateAutoDecisionWithDiagnostics(handleCombatParityRequestPath, parityRebuilt).Decision;
+        Assert(CombatDecisionContract.TryMapSemanticAction(parityNonRebuild, parityNonRebuildDecision, out var parityNonRebuildSemantic), "Saved synthetic HandleCombat parity request should map to a combat semantic action.");
+        Assert(CombatDecisionContract.TryMapSemanticAction(parityRebuilt, parityRebuiltDecision, out var parityRebuiltSemantic), "Rebuilt synthetic HandleCombat parity request should map to a combat semantic action.");
+        Assert(string.Equals(parityNonRebuildSemantic, parityRebuiltSemantic, StringComparison.OrdinalIgnoreCase), "Step19-like synthetic parity regression should keep saved and rebuilt final semantics aligned.");
+        Assert(string.Equals(parityNonRebuildSemantic, "click end turn", StringComparison.OrdinalIgnoreCase), "Step19-like synthetic parity regression should still close on end turn.");
+        Assert(!string.Equals(parityRebuiltDecision.TargetLabel, "combat select attack slot 2", StringComparison.OrdinalIgnoreCase), "Step19-like synthetic parity regression should not rebuild to illegal attack slot 2.");
 
         var slotAlignmentObserver = new ObserverState(
             new ObserverSummary(
@@ -4214,6 +5172,11 @@ static void RunSelfTest()
     }
     finally
     {
+        if (File.Exists(handleCombatParityRequestPath))
+        {
+            File.Delete(handleCombatParityRequestPath);
+        }
+
         if (File.Exists(combatNoOpScreenshotPath))
         {
             File.Delete(combatNoOpScreenshotPath);
@@ -4398,6 +5361,7 @@ static void RunSelfTest()
         LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootRoot, "clean-boot-session", "boot-to-long-run", "headless");
         var screenshotPath = Path.Combine(manualCleanBootRoot, "main-menu.png");
         var observerPath = Path.Combine(manualCleanBootRoot, "main-menu.observer.json");
+        var manualCleanBootFreshnessFloor = DateTimeOffset.UtcNow.AddSeconds(-5);
         File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
         File.WriteAllText(observerPath, "{}");
         Assert(
@@ -4430,7 +5394,8 @@ static void RunSelfTest()
                     null),
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 screenshotPath,
-                observerPath),
+                observerPath,
+                manualCleanBootFreshnessFloor),
             "Manual clean boot should verify on a clean main-menu first step even when status mode is transiently non-dormant.");
         var cleanBootPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(File.ReadAllText(Path.Combine(manualCleanBootRoot, "prevalidation.json")), GuiSmokeShared.JsonOptions)
                                   ?? throw new InvalidOperationException("Failed to read manual clean boot prevalidation self-test.");
@@ -4491,6 +5456,7 @@ static void RunSelfTest()
         LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootBlockedRoot, "clean-boot-blocked-session", "boot-to-long-run", "headless");
         var screenshotPath = Path.Combine(manualCleanBootBlockedRoot, "main-menu.png");
         var observerPath = Path.Combine(manualCleanBootBlockedRoot, "main-menu.observer.json");
+        var blockedManualCleanBootFreshnessFloor = DateTimeOffset.UtcNow.AddSeconds(-5);
         File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
         File.WriteAllText(observerPath, "{}");
         Assert(
@@ -4503,17 +5469,17 @@ static void RunSelfTest()
                         "main-menu",
                         false,
                         DateTimeOffset.UtcNow,
-                        "inv-main-menu-blocked",
+                        "inv-bootstrap-boundary",
                         true,
                         "mixed",
                         "stable",
-                        "episode-main-menu-blocked",
+                        "episode-bootstrap-boundary",
                         null,
                         "main-menu",
                         null,
                         null,
                         null,
-                        new[] { "Continue" },
+                        Array.Empty<string>(),
                         Array.Empty<string>(),
                         Array.Empty<ObserverActionNode>(),
                         Array.Empty<ObserverChoice>(),
@@ -4523,7 +5489,8 @@ static void RunSelfTest()
                     null),
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 screenshotPath,
-                observerPath),
+                observerPath,
+                blockedManualCleanBootFreshnessFloor),
             "Manual clean boot should remain invalid when an external arm session is present.");
         var blockedPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(File.ReadAllText(Path.Combine(manualCleanBootBlockedRoot, "prevalidation.json")), GuiSmokeShared.JsonOptions)
                                  ?? throw new InvalidOperationException("Failed to read blocked manual clean boot prevalidation self-test.");
@@ -4534,6 +5501,845 @@ static void RunSelfTest()
         if (Directory.Exists(manualCleanBootBlockedRoot))
         {
             Directory.Delete(manualCleanBootBlockedRoot, recursive: true);
+        }
+    }
+
+    var manualCleanBootBootstrapRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-clean-boot-bootstrap-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(manualCleanBootBootstrapRoot);
+        var harnessRoot = Path.Combine(manualCleanBootBootstrapRoot, "harness");
+        var inboxRoot = Path.Combine(harnessRoot, "inbox");
+        var outboxRoot = Path.Combine(harnessRoot, "outbox");
+        var liveRoot = Path.Combine(manualCleanBootBootstrapRoot, "live");
+        Directory.CreateDirectory(inboxRoot);
+        Directory.CreateDirectory(outboxRoot);
+        Directory.CreateDirectory(liveRoot);
+        var harnessLayout = new HarnessQueueLayout(
+            manualCleanBootBootstrapRoot,
+            harnessRoot,
+            inboxRoot,
+            Path.Combine(inboxRoot, "actions.ndjson"),
+            outboxRoot,
+            Path.Combine(outboxRoot, "results.ndjson"),
+            Path.Combine(harnessRoot, "status.json"),
+            Path.Combine(outboxRoot, "trace.ndjson"),
+            Path.Combine(harnessRoot, "arm.json"),
+            Path.Combine(outboxRoot, "inventory.latest.json"));
+        var liveLayout = new LiveExportLayout(
+            manualCleanBootBootstrapRoot,
+            liveRoot,
+            Path.Combine(liveRoot, "events.ndjson"),
+            Path.Combine(liveRoot, "state.latest.json"),
+            Path.Combine(liveRoot, "state.latest.txt"),
+            Path.Combine(liveRoot, "session.json"))
+        {
+            SemanticSnapshotsRoot = Path.Combine(liveRoot, "semantic-snapshots"),
+        };
+        var inventoryCapturedAt = DateTimeOffset.UtcNow;
+        File.WriteAllText(
+            harnessLayout.InventoryPath,
+            JsonSerializer.Serialize(
+                new HarnessNodeInventory(
+                    "inventory-main-menu-only",
+                    inventoryCapturedAt,
+                    null,
+                    "main-menu",
+                    "episode-main-menu-only",
+                    "dormant",
+                    null,
+                    true,
+                    "mixed",
+                    "stable",
+                    Array.Empty<HarnessNodeInventoryItem>()),
+                GuiSmokeShared.JsonOptions));
+
+        var inventoryOnlyObserver = new ObserverSnapshotReader(liveLayout, harnessLayout).Read();
+        Assert(string.Equals(inventoryOnlyObserver.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Observer should fall back to harness inventory sceneType when state.latest.json is not available.");
+        Assert(string.Equals(inventoryOnlyObserver.VisibleScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Observer visibleScreen should fall back to harness inventory sceneType when state.latest.json is not available.");
+        Assert(inventoryOnlyObserver.CapturedAt == inventoryCapturedAt, "Observer capturedAt should fall back to harness inventory when state.latest.json is not available.");
+
+        LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootBootstrapRoot, "clean-boot-bootstrap-session", "boot-to-long-run", "headless");
+        var screenshotPath = Path.Combine(manualCleanBootBootstrapRoot, "main-menu.png");
+        var observerPath = Path.Combine(manualCleanBootBootstrapRoot, "main-menu.observer.json");
+        File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
+        File.WriteAllText(observerPath, "{}");
+        Assert(
+            LongRunArtifacts.TryMarkManualCleanBootVerified(
+                manualCleanBootBootstrapRoot,
+                harnessLayout,
+                inventoryOnlyObserver,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                screenshotPath,
+                observerPath,
+                inventoryCapturedAt.AddSeconds(-5)),
+            "Manual clean boot should verify from fresh harness inventory main-menu evidence when state.latest.json is not available yet.");
+
+        var bootstrapStates = new[]
+        {
+            new ObserverState(
+                new ObserverSummary(
+                    null,
+                    null,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    Array.Empty<ObserverChoice>(),
+                    Array.Empty<ObservedCombatHandCard>()),
+                null,
+                null,
+                null),
+            new ObserverState(
+                new ObserverSummary(
+                    "main-menu",
+                    "main-menu",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-main-menu-bootstrap",
+                    null,
+                    "main-menu",
+                    null,
+                    null,
+                    null,
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    Array.Empty<ObserverChoice>(),
+                    Array.Empty<ObservedCombatHandCard>()),
+                null,
+                null,
+                null),
+        };
+        var bootstrapIndex = 0;
+        var bootstrappedObserver = BootstrapManualCleanBootObserverAsync(
+                bootstrapStates[bootstrapIndex],
+                () => bootstrapStates[Math.Min(++bootstrapIndex, bootstrapStates.Length - 1)],
+                DateTimeOffset.UtcNow.AddSeconds(-5),
+                2,
+                0,
+                static _ => Task.CompletedTask)
+            .GetAwaiter()
+            .GetResult();
+        Assert(string.Equals(bootstrappedObserver.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Manual clean boot bootstrap should keep polling until a fresh main-menu observer arrives.");
+    }
+    finally
+    {
+        if (Directory.Exists(manualCleanBootBootstrapRoot))
+        {
+            Directory.Delete(manualCleanBootBootstrapRoot, recursive: true);
+        }
+    }
+
+    var manualCleanBootObserverNotReadyRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-clean-boot-observer-not-ready-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(manualCleanBootObserverNotReadyRoot);
+        var harnessRoot = Path.Combine(manualCleanBootObserverNotReadyRoot, "harness");
+        var inboxRoot = Path.Combine(harnessRoot, "inbox");
+        var outboxRoot = Path.Combine(harnessRoot, "outbox");
+        Directory.CreateDirectory(inboxRoot);
+        Directory.CreateDirectory(outboxRoot);
+        var harnessLayout = new HarnessQueueLayout(
+            manualCleanBootObserverNotReadyRoot,
+            harnessRoot,
+            inboxRoot,
+            Path.Combine(inboxRoot, "actions.ndjson"),
+            outboxRoot,
+            Path.Combine(outboxRoot, "results.ndjson"),
+            Path.Combine(harnessRoot, "status.json"),
+            Path.Combine(outboxRoot, "trace.ndjson"),
+            Path.Combine(harnessRoot, "arm.json"),
+            Path.Combine(outboxRoot, "inventory.latest.json"));
+        LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootObserverNotReadyRoot, "clean-boot-observer-not-ready-session", "boot-to-long-run", "headless");
+        var screenshotPath = Path.Combine(manualCleanBootObserverNotReadyRoot, "unknown.png");
+        var observerPath = Path.Combine(manualCleanBootObserverNotReadyRoot, "unknown.observer.json");
+        File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
+        File.WriteAllText(observerPath, "{}");
+        Assert(
+            !LongRunArtifacts.TryMarkManualCleanBootVerified(
+                manualCleanBootObserverNotReadyRoot,
+                harnessLayout,
+                new ObserverState(
+                    new ObserverSummary(
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Array.Empty<string>(),
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                screenshotPath,
+                observerPath,
+                DateTimeOffset.UtcNow.AddSeconds(-5)),
+            "Manual clean boot should remain invalid while observer evidence is not ready.");
+        var notReadyPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(
+                                        File.ReadAllText(Path.Combine(manualCleanBootObserverNotReadyRoot, "prevalidation.json")),
+                                        GuiSmokeShared.JsonOptions)
+                                    ?? throw new InvalidOperationException("Failed to read observer-not-ready manual clean boot self-test.");
+        Assert(notReadyPrevalidation.ManualCleanBootEvidence?.BlockingReasons?.Contains("observer-not-ready", StringComparer.OrdinalIgnoreCase) == true, "Manual clean boot should report observer-not-ready instead of observer-not-main-menu:unknown.");
+    }
+    finally
+    {
+        if (Directory.Exists(manualCleanBootObserverNotReadyRoot))
+        {
+            Directory.Delete(manualCleanBootObserverNotReadyRoot, recursive: true);
+        }
+    }
+
+    var startupRuntimeEvidenceRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-startup-runtime-evidence-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(startupRuntimeEvidenceRoot);
+        var gameRoot = Path.Combine(startupRuntimeEvidenceRoot, "game");
+        var modsRoot = Path.Combine(gameRoot, "mods");
+        var userDataRoot = Path.Combine(startupRuntimeEvidenceRoot, "userdata");
+        var logsRoot = Path.Combine(userDataRoot, "logs");
+        var settingsRoot = Path.Combine(userDataRoot, "steam", "self-test");
+        Directory.CreateDirectory(modsRoot);
+        Directory.CreateDirectory(logsRoot);
+        Directory.CreateDirectory(settingsRoot);
+        var startupConfiguration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = new GamePathOptions
+            {
+                GameDirectory = gameRoot,
+                UserDataRoot = userDataRoot,
+                SteamAccountId = "self-test",
+                ProfileIndex = 1,
+                ArtifactsRoot = "artifacts",
+            },
+        };
+        var startupLiveLayout = LiveExportPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.LiveExport);
+        var startupHarnessLayout = HarnessPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.Harness);
+        LiveExportPathResolver.EnsureDirectory(startupLiveLayout);
+        HarnessPathResolver.EnsureDirectories(startupHarnessLayout);
+        LongRunArtifacts.InitializeSessionArtifacts(startupRuntimeEvidenceRoot, "startup-runtime-evidence-session", "boot-to-long-run", "headless");
+        WriteRuntimeConfigFixture(startupConfiguration, modsRoot, harnessEnabled: false);
+        File.WriteAllBytes(Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.PckName), Array.Empty<byte>());
+        File.WriteAllBytes(Path.Combine(modsRoot, "sts2-mod-ai-companion.dll"), Array.Empty<byte>());
+        File.WriteAllText(
+            Path.Combine(settingsRoot, "settings.save"),
+            """{"mod_settings":{"mods_enabled":true}}""");
+        var runtimeLogPath = Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.RuntimeLogFileName);
+        var godotLogPath = Path.Combine(logsRoot, "godot.log");
+        File.WriteAllText(
+            runtimeLogPath,
+            string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    "[STS2 Mod AI Companion] module initializer bootstrap result: initialized=False process=OldRun",
+                    "[STS2 Mod AI Companion] old irrelevant line",
+                }));
+        File.WriteAllText(
+            godotLogPath,
+            string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    "[INFO] Found mod pck file stale-mod.pck",
+                    "[INFO] old irrelevant line",
+                }));
+        var launchIssuedAt = DateTimeOffset.UtcNow;
+        var startupRuntimeConfig = EnsureStartupRuntimeConfig(
+            startupConfiguration,
+            "startup-runtime-evidence-session",
+            "startup-runtime-evidence-run",
+            launchIssuedAt);
+        WriteStartupSentinelFixture(
+            startupConfiguration.GamePaths,
+            startupRuntimeConfig.SentinelRelativePath,
+            "startup-runtime-evidence-session",
+            "startup-runtime-evidence-run",
+            startupRuntimeConfig.LaunchToken);
+        LongRunArtifacts.RecordStartupLogBaseline(
+            startupRuntimeEvidenceRoot,
+            startupConfiguration,
+            "startup-runtime-evidence-run",
+            startupRuntimeConfig.LaunchToken,
+            launchIssuedAt);
+        File.AppendAllText(
+            runtimeLogPath,
+            Environment.NewLine + string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    "[STS2 Mod AI Companion] runtime exporter initialized. live_root=C:\\fake\\live",
+                    "[STS2 Mod AI Companion] harness bridge initialize result: True root=C:\\fake\\harness live_snapshot=C:\\fake\\state.latest.json poll_ms=250",
+                }));
+        File.AppendAllText(
+            godotLogPath,
+            Environment.NewLine + string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    "[INFO] Loading assembly DLL sts2-mod-ai-companion.dll",
+                    "[INFO] Finished mod initialization for 'STS2 Mod AI Companion' (sts2-mod-ai-companion).",
+                    "[INFO] [Startup] Time to main menu: 12,869ms",
+                }));
+        File.WriteAllText(startupLiveLayout.SnapshotPath, "{}");
+        var startupEvidence = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            startupRuntimeEvidenceRoot,
+            startupConfiguration,
+            startupLiveLayout,
+            startupHarnessLayout);
+        Assert(startupEvidence.RuntimeExporterInitializedLogged, "Startup runtime evidence should record runtime exporter initialization.");
+        Assert(startupEvidence.HarnessBridgeInitializeLogged, "Startup runtime evidence should record harness bridge initialization.");
+        Assert(startupEvidence.SettingsModsEnabled, "Startup runtime evidence should capture mods_enabled=true from settings.save.");
+        Assert(startupEvidence.RuntimeConfigEnabled && startupEvidence.RuntimeConfigHarnessEnabled, "Startup runtime evidence should capture deployed runtime-config enabled flags.");
+        Assert(string.Equals(startupEvidence.StartupSentinelLaunchToken, startupRuntimeConfig.LaunchToken, StringComparison.Ordinal), "Startup runtime evidence should capture the rewritten startupSentinel launch token.");
+        Assert(startupEvidence.SentinelPresent, "Startup runtime evidence should capture the current-execution sentinel file.");
+        Assert(startupEvidence.SentinelSessionMatch && startupEvidence.SentinelRunMatch && startupEvidence.SentinelLaunchTokenMatch, "Startup runtime evidence should verify the sentinel session/run/launch-token match.");
+        Assert(startupEvidence.CompanionPckPresent && startupEvidence.CompanionDllPresent, "Startup runtime evidence should capture deployed companion payload presence.");
+        Assert(startupEvidence.FreshSnapshotPresent && !startupEvidence.StaleSnapshotObserved && !startupEvidence.NoSnapshotEvidence, "Fresh startup snapshot evidence should stay distinct from stale or absent snapshot states.");
+        Assert(string.Equals(startupEvidence.Diagnosis, "runtime-started-snapshots-present", StringComparison.OrdinalIgnoreCase), "Runtime evidence with exporter markers and snapshots should diagnose runtime-started-snapshots-present.");
+        Assert(startupEvidence.CaptureCount == 1, "Single startup runtime evidence call should create one startup capture.");
+        Assert(string.Equals(startupEvidence.FirstPositiveReason, "godot-reached-main-menu", StringComparison.Ordinal), "First positive startup reason should retain the earliest observed progress signal.");
+        Assert(startupEvidence.EverReachedMainMenu && startupEvidence.EverSawRuntimeExporter && startupEvidence.EverSawFreshSnapshot, "Startup reviewer summary should preserve ever-positive startup signals.");
+        Assert(startupEvidence.RuntimeLogDeltaMatches.Count == 2 && startupEvidence.GodotLogDeltaMatches.Count == 3, "Startup runtime evidence should use only post-baseline appended lines as delta matches.");
+        Assert(File.Exists(Path.Combine(startupRuntimeEvidenceRoot, "startup-runtime-evidence.json")), "Startup runtime evidence should persist a structured artifact.");
+        Assert(File.Exists(Path.Combine(startupRuntimeEvidenceRoot, "startup-runtime-captures.ndjson")), "Startup runtime evidence should persist a startup capture sequence artifact.");
+        Assert(File.Exists(Path.Combine(startupRuntimeEvidenceRoot, "startup-log-baseline.json")), "Startup runtime evidence should persist the launch-time log baseline artifact.");
+        Assert(File.Exists(Path.Combine(startupRuntimeEvidenceRoot, "startup-runtime-log.tail.txt")), "Startup runtime evidence should persist a runtime-log tail artifact.");
+        Assert(File.Exists(Path.Combine(startupRuntimeEvidenceRoot, "startup-godot-log.tail.txt")), "Startup runtime evidence should persist a Godot-log tail artifact.");
+        Assert(File.Exists(Path.Combine(startupRuntimeEvidenceRoot, "startup-runtime-log.delta.txt")), "Startup runtime evidence should persist a runtime-log delta artifact.");
+        Assert(File.Exists(Path.Combine(startupRuntimeEvidenceRoot, "startup-godot-log.delta.txt")), "Startup runtime evidence should persist a Godot-log delta artifact.");
+        Assert(ReadNdjsonFixture<GuiSmokeStartupRuntimeCapture>(Path.Combine(startupRuntimeEvidenceRoot, "startup-runtime-captures.ndjson")).Count == 1, "Startup runtime capture sequence should record the latest capture.");
+        var runtimeDeltaBody = File.ReadAllText(Path.Combine(startupRuntimeEvidenceRoot, "startup-runtime-log.delta.txt"));
+        var godotDeltaBody = File.ReadAllText(Path.Combine(startupRuntimeEvidenceRoot, "startup-godot-log.delta.txt"));
+        Assert(!runtimeDeltaBody.Contains("OldRun", StringComparison.OrdinalIgnoreCase), "Runtime-log delta should exclude relevant lines that predated the launch baseline.");
+        Assert(!godotDeltaBody.Contains("stale-mod.pck", StringComparison.OrdinalIgnoreCase), "Godot-log delta should exclude relevant lines that predated the launch baseline.");
+    }
+    finally
+    {
+        if (Directory.Exists(startupRuntimeEvidenceRoot))
+        {
+            Directory.Delete(startupRuntimeEvidenceRoot, recursive: true);
+        }
+    }
+
+    var startupRuntimeTruncatedRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-startup-runtime-truncated-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(startupRuntimeTruncatedRoot);
+        var gameRoot = Path.Combine(startupRuntimeTruncatedRoot, "game");
+        var modsRoot = Path.Combine(gameRoot, "mods");
+        var userDataRoot = Path.Combine(startupRuntimeTruncatedRoot, "userdata");
+        var logsRoot = Path.Combine(userDataRoot, "logs");
+        var settingsRoot = Path.Combine(userDataRoot, "steam", "self-test");
+        Directory.CreateDirectory(modsRoot);
+        Directory.CreateDirectory(logsRoot);
+        Directory.CreateDirectory(settingsRoot);
+        var startupConfiguration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = new GamePathOptions
+            {
+                GameDirectory = gameRoot,
+                UserDataRoot = userDataRoot,
+                SteamAccountId = "self-test",
+                ProfileIndex = 1,
+                ArtifactsRoot = "artifacts",
+            },
+        };
+        var startupLiveLayout = LiveExportPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.LiveExport);
+        var startupHarnessLayout = HarnessPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.Harness);
+        LiveExportPathResolver.EnsureDirectory(startupLiveLayout);
+        HarnessPathResolver.EnsureDirectories(startupHarnessLayout);
+        LongRunArtifacts.InitializeSessionArtifacts(startupRuntimeTruncatedRoot, "startup-runtime-truncated-session", "boot-to-long-run", "headless");
+        WriteRuntimeConfigFixture(startupConfiguration, modsRoot, harnessEnabled: false);
+        File.WriteAllBytes(Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.PckName), Array.Empty<byte>());
+        File.WriteAllBytes(Path.Combine(modsRoot, "sts2-mod-ai-companion.dll"), Array.Empty<byte>());
+        File.WriteAllText(Path.Combine(settingsRoot, "settings.save"), """{"mod_settings":{"mods_enabled":true}}""");
+        var runtimeLogPath = Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.RuntimeLogFileName);
+        File.WriteAllText(runtimeLogPath, new string('x', 2048));
+        var launchIssuedAt = DateTimeOffset.UtcNow;
+        var startupRuntimeConfig = EnsureStartupRuntimeConfig(
+            startupConfiguration,
+            "startup-runtime-truncated-session",
+            "startup-runtime-truncated-run",
+            launchIssuedAt);
+        LongRunArtifacts.RecordStartupLogBaseline(
+            startupRuntimeTruncatedRoot,
+            startupConfiguration,
+            "startup-runtime-truncated-run",
+            startupRuntimeConfig.LaunchToken,
+            launchIssuedAt);
+        File.WriteAllText(
+            runtimeLogPath,
+            "[STS2 Mod AI Companion] runtime exporter initialized. live_root=C:\\fake\\live");
+        var truncatedEvidence = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            startupRuntimeTruncatedRoot,
+            startupConfiguration,
+            startupLiveLayout,
+            startupHarnessLayout);
+        Assert(truncatedEvidence.RuntimeLogDeltaTreatedAsCurrentExecution, "Runtime-log truncation should be treated as current-execution delta evidence.");
+        Assert(truncatedEvidence.RuntimeLogDeltaMatches.Count == 1, "Truncated runtime-log current file should be fully treated as current-execution delta.");
+    }
+    finally
+    {
+        if (Directory.Exists(startupRuntimeTruncatedRoot))
+        {
+            Directory.Delete(startupRuntimeTruncatedRoot, recursive: true);
+        }
+    }
+
+    var startupRuntimeMissingRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-startup-runtime-missing-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(startupRuntimeMissingRoot);
+        var gameRoot = Path.Combine(startupRuntimeMissingRoot, "game");
+        var modsRoot = Path.Combine(gameRoot, "mods");
+        var userDataRoot = Path.Combine(startupRuntimeMissingRoot, "userdata");
+        var logsRoot = Path.Combine(userDataRoot, "logs");
+        var settingsRoot = Path.Combine(userDataRoot, "steam", "self-test");
+        Directory.CreateDirectory(modsRoot);
+        Directory.CreateDirectory(logsRoot);
+        Directory.CreateDirectory(settingsRoot);
+        var startupConfiguration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = new GamePathOptions
+            {
+                GameDirectory = gameRoot,
+                UserDataRoot = userDataRoot,
+                SteamAccountId = "self-test",
+                ProfileIndex = 1,
+                ArtifactsRoot = "artifacts",
+            },
+        };
+        var startupLiveLayout = LiveExportPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.LiveExport);
+        var startupHarnessLayout = HarnessPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.Harness);
+        LiveExportPathResolver.EnsureDirectory(startupLiveLayout);
+        HarnessPathResolver.EnsureDirectories(startupHarnessLayout);
+        LongRunArtifacts.InitializeSessionArtifacts(startupRuntimeMissingRoot, "startup-runtime-missing-session", "boot-to-long-run", "headless");
+        WriteRuntimeConfigFixture(startupConfiguration, modsRoot, harnessEnabled: true);
+        File.WriteAllBytes(Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.PckName), Array.Empty<byte>());
+        File.WriteAllBytes(Path.Combine(modsRoot, "sts2-mod-ai-companion.dll"), Array.Empty<byte>());
+        File.WriteAllText(
+            Path.Combine(settingsRoot, "settings.save"),
+            """{"mod_settings":{"mods_enabled":true}}""");
+        File.WriteAllText(
+            Path.Combine(logsRoot, "godot.log"),
+            "[INFO] No ModInitializerAttribute detected. Calling Harmony.PatchAll for Sts2ModAiCompanion.Mod");
+        var missingEvidence = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            startupRuntimeMissingRoot,
+            startupConfiguration,
+            startupLiveLayout,
+            startupHarnessLayout);
+        var missingSupervisor = LongRunArtifacts.RefreshSupervisorState(startupRuntimeMissingRoot);
+        Assert(string.Equals(missingEvidence.Diagnosis, "runtime-bootstrap-missing", StringComparison.OrdinalIgnoreCase), "PatchAll-only startup evidence without runtime markers should diagnose runtime-bootstrap-missing.");
+        Assert(missingSupervisor.Blockers.Contains("startup-runtime-bootstrap-missing", StringComparer.OrdinalIgnoreCase), "Supervisor should surface runtime-bootstrap-missing as a blocker when observer/export never starts.");
+    }
+    finally
+    {
+        if (Directory.Exists(startupRuntimeMissingRoot))
+        {
+            Directory.Delete(startupRuntimeMissingRoot, recursive: true);
+        }
+    }
+
+    var startupRuntimeSentinelOnlyRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-startup-runtime-sentinel-only-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(startupRuntimeSentinelOnlyRoot);
+        var gameRoot = Path.Combine(startupRuntimeSentinelOnlyRoot, "game");
+        var modsRoot = Path.Combine(gameRoot, "mods");
+        var userDataRoot = Path.Combine(startupRuntimeSentinelOnlyRoot, "userdata");
+        var logsRoot = Path.Combine(userDataRoot, "logs");
+        var settingsRoot = Path.Combine(userDataRoot, "steam", "self-test");
+        Directory.CreateDirectory(modsRoot);
+        Directory.CreateDirectory(logsRoot);
+        Directory.CreateDirectory(settingsRoot);
+        var startupConfiguration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = new GamePathOptions
+            {
+                GameDirectory = gameRoot,
+                UserDataRoot = userDataRoot,
+                SteamAccountId = "self-test",
+                ProfileIndex = 1,
+                ArtifactsRoot = "artifacts",
+            },
+        };
+        var startupLiveLayout = LiveExportPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.LiveExport);
+        var startupHarnessLayout = HarnessPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.Harness);
+        LiveExportPathResolver.EnsureDirectory(startupLiveLayout);
+        HarnessPathResolver.EnsureDirectories(startupHarnessLayout);
+        LongRunArtifacts.InitializeSessionArtifacts(startupRuntimeSentinelOnlyRoot, "startup-runtime-sentinel-only-session", "boot-to-long-run", "headless");
+        WriteRuntimeConfigFixture(startupConfiguration, modsRoot, harnessEnabled: true);
+        File.WriteAllBytes(Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.PckName), Array.Empty<byte>());
+        File.WriteAllBytes(Path.Combine(modsRoot, "sts2-mod-ai-companion.dll"), Array.Empty<byte>());
+        File.WriteAllText(
+            Path.Combine(settingsRoot, "settings.save"),
+            """{"mod_settings":{"mods_enabled":true}}""");
+        var launchIssuedAt = DateTimeOffset.UtcNow;
+        var startupRuntimeConfig = EnsureStartupRuntimeConfig(
+            startupConfiguration,
+            "startup-runtime-sentinel-only-session",
+            "startup-runtime-sentinel-only-run",
+            launchIssuedAt);
+        WriteStartupSentinelFixture(
+            startupConfiguration.GamePaths,
+            startupRuntimeConfig.SentinelRelativePath,
+            "startup-runtime-sentinel-only-session",
+            "startup-runtime-sentinel-only-run",
+            startupRuntimeConfig.LaunchToken);
+        File.WriteAllText(
+            Path.Combine(logsRoot, "godot.log"),
+            string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    "[INFO] [Startup] Time to main menu (Godot ticks): 12743ms",
+                    "[INFO] [Startup] Time to main menu: 12,869ms",
+                }));
+        var sentinelOnlyEvidence = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            startupRuntimeSentinelOnlyRoot,
+            startupConfiguration,
+            startupLiveLayout,
+            startupHarnessLayout);
+        Assert(string.Equals(sentinelOnlyEvidence.Diagnosis, "runtime-bootstrap-missing", StringComparison.OrdinalIgnoreCase), "Matching current-execution sentinel without exporter markers should diagnose runtime-bootstrap-missing.");
+        Assert(sentinelOnlyEvidence.SentinelPresent && sentinelOnlyEvidence.SentinelLaunchTokenMatch, "Current-execution sentinel should be present and match the launch token.");
+        Assert(sentinelOnlyEvidence.EverSawCurrentExecutionSentinel, "Sentinel-only startup evidence should preserve current-execution sentinel visibility in the reviewer summary.");
+    }
+    finally
+    {
+        if (Directory.Exists(startupRuntimeSentinelOnlyRoot))
+        {
+            Directory.Delete(startupRuntimeSentinelOnlyRoot, recursive: true);
+        }
+    }
+
+    var startupRuntimeBridgeMissingRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-startup-runtime-bridge-missing-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(startupRuntimeBridgeMissingRoot);
+        var gameRoot = Path.Combine(startupRuntimeBridgeMissingRoot, "game");
+        var modsRoot = Path.Combine(gameRoot, "mods");
+        var userDataRoot = Path.Combine(startupRuntimeBridgeMissingRoot, "userdata");
+        var logsRoot = Path.Combine(userDataRoot, "logs");
+        var settingsRoot = Path.Combine(userDataRoot, "steam", "self-test");
+        Directory.CreateDirectory(modsRoot);
+        Directory.CreateDirectory(logsRoot);
+        Directory.CreateDirectory(settingsRoot);
+        var startupConfiguration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = new GamePathOptions
+            {
+                GameDirectory = gameRoot,
+                UserDataRoot = userDataRoot,
+                SteamAccountId = "self-test",
+                ProfileIndex = 1,
+                ArtifactsRoot = "artifacts",
+            },
+        };
+        var startupLiveLayout = LiveExportPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.LiveExport);
+        var startupHarnessLayout = HarnessPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.Harness);
+        LiveExportPathResolver.EnsureDirectory(startupLiveLayout);
+        HarnessPathResolver.EnsureDirectories(startupHarnessLayout);
+        LongRunArtifacts.InitializeSessionArtifacts(startupRuntimeBridgeMissingRoot, "startup-runtime-bridge-missing-session", "boot-to-long-run", "headless");
+        WriteRuntimeConfigFixture(startupConfiguration, modsRoot, harnessEnabled: true);
+        File.WriteAllBytes(Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.PckName), Array.Empty<byte>());
+        File.WriteAllBytes(Path.Combine(modsRoot, "sts2-mod-ai-companion.dll"), Array.Empty<byte>());
+        File.WriteAllText(
+            Path.Combine(settingsRoot, "settings.save"),
+            """{"mod_settings":{"mods_enabled":true}}""");
+        var launchIssuedAt = DateTimeOffset.UtcNow;
+        var startupRuntimeConfig = EnsureStartupRuntimeConfig(
+            startupConfiguration,
+            "startup-runtime-bridge-missing-session",
+            "startup-runtime-bridge-missing-run",
+            launchIssuedAt);
+        WriteStartupSentinelFixture(
+            startupConfiguration.GamePaths,
+            startupRuntimeConfig.SentinelRelativePath,
+            "startup-runtime-bridge-missing-session",
+            "startup-runtime-bridge-missing-run",
+            startupRuntimeConfig.LaunchToken);
+        File.WriteAllText(
+            Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.RuntimeLogFileName),
+            "[STS2 Mod AI Companion] runtime exporter initialized. live_root=C:\\fake\\live");
+        File.WriteAllText(
+            Path.Combine(logsRoot, "godot.log"),
+            "[INFO] [Startup] Time to main menu: 12,869ms");
+        var bridgeMissingEvidence = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            startupRuntimeBridgeMissingRoot,
+            startupConfiguration,
+            startupLiveLayout,
+            startupHarnessLayout);
+        var bridgeMissingSupervisor = LongRunArtifacts.RefreshSupervisorState(startupRuntimeBridgeMissingRoot);
+        Assert(string.Equals(bridgeMissingEvidence.Diagnosis, "observer-bootstrap-bridge-missing", StringComparison.OrdinalIgnoreCase), "Exporter markers without observer artifacts should diagnose observer-bootstrap-bridge-missing.");
+        Assert(bridgeMissingEvidence.NoSnapshotEvidence && bridgeMissingEvidence.EverSawRuntimeExporter, "Observer-bootstrap-bridge-missing should keep exporter progress while still showing that no fresh snapshot evidence arrived.");
+        Assert(bridgeMissingSupervisor.Blockers.Contains("startup-observer-bootstrap-bridge-missing", StringComparer.OrdinalIgnoreCase), "Supervisor should surface observer-bootstrap-bridge-missing as a blocker.");
+    }
+    finally
+    {
+        if (Directory.Exists(startupRuntimeBridgeMissingRoot))
+        {
+            Directory.Delete(startupRuntimeBridgeMissingRoot, recursive: true);
+        }
+    }
+
+    var startupRuntimeScanMissingRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-startup-runtime-scan-missing-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(startupRuntimeScanMissingRoot);
+        var gameRoot = Path.Combine(startupRuntimeScanMissingRoot, "game");
+        var modsRoot = Path.Combine(gameRoot, "mods");
+        var userDataRoot = Path.Combine(startupRuntimeScanMissingRoot, "userdata");
+        var logsRoot = Path.Combine(userDataRoot, "logs");
+        var settingsRoot = Path.Combine(userDataRoot, "steam", "self-test");
+        Directory.CreateDirectory(modsRoot);
+        Directory.CreateDirectory(logsRoot);
+        Directory.CreateDirectory(settingsRoot);
+        var startupConfiguration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = new GamePathOptions
+            {
+                GameDirectory = gameRoot,
+                UserDataRoot = userDataRoot,
+                SteamAccountId = "self-test",
+                ProfileIndex = 1,
+                ArtifactsRoot = "artifacts",
+            },
+        };
+        var startupLiveLayout = LiveExportPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.LiveExport);
+        var startupHarnessLayout = HarnessPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.Harness);
+        LiveExportPathResolver.EnsureDirectory(startupLiveLayout);
+        HarnessPathResolver.EnsureDirectories(startupHarnessLayout);
+        LongRunArtifacts.InitializeSessionArtifacts(startupRuntimeScanMissingRoot, "startup-runtime-scan-missing-session", "boot-to-long-run", "headless");
+        WriteRuntimeConfigFixture(startupConfiguration, modsRoot, harnessEnabled: true);
+        File.WriteAllBytes(Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.PckName), Array.Empty<byte>());
+        File.WriteAllBytes(Path.Combine(modsRoot, "sts2-mod-ai-companion.dll"), Array.Empty<byte>());
+        File.WriteAllText(
+            Path.Combine(settingsRoot, "settings.save"),
+            """{"mod_settings":{"mods_enabled":true}}""");
+        var launchIssuedAt = DateTimeOffset.UtcNow;
+        var startupRuntimeConfig = EnsureStartupRuntimeConfig(
+            startupConfiguration,
+            "startup-runtime-scan-missing-session",
+            "startup-runtime-scan-missing-run",
+            launchIssuedAt);
+        WriteStartupSentinelFixture(
+            startupConfiguration.GamePaths,
+            startupRuntimeConfig.SentinelRelativePath,
+            "stale-session",
+            "stale-run",
+            "stale-token");
+        File.WriteAllText(
+            Path.Combine(logsRoot, "godot.log"),
+            string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    "[INFO] [Startup] Time to main menu (Godot ticks): 12743ms",
+                    "[INFO] [Startup] Time to main menu: 12,869ms",
+                }));
+        var scanMissingEvidence = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            startupRuntimeScanMissingRoot,
+            startupConfiguration,
+            startupLiveLayout,
+            startupHarnessLayout);
+        var scanMissingSupervisor = LongRunArtifacts.RefreshSupervisorState(startupRuntimeScanMissingRoot);
+        Assert(string.Equals(scanMissingEvidence.Diagnosis, "loader-entry-before-initializer-not-proven", StringComparison.OrdinalIgnoreCase), "Main-menu startup without sentinel or exporter markers should diagnose loader-entry-before-initializer-not-proven.");
+        Assert(scanMissingEvidence.SentinelPresent && !scanMissingEvidence.SentinelLaunchTokenMatch, "Stale sentinel should remain visible in evidence but should not match the current execution.");
+        Assert(!scanMissingEvidence.EverSawCurrentExecutionSentinel, "Mismatched sentinel should stay visible without being promoted to a current-execution sentinel hit.");
+        Assert(string.Equals(scanMissingEvidence.FailureEdge, "OneTimeInitialization.ExecuteEssential->ModManager.Initialize->LoadModsInDirRecursive(mods)", StringComparison.OrdinalIgnoreCase), "Main-menu startup without mod-loader signal should point at the ModManager scan edge.");
+        Assert(scanMissingSupervisor.Blockers.Contains("startup-loader-entry-before-initializer-not-proven", StringComparer.OrdinalIgnoreCase), "Supervisor should surface loader-entry-before-initializer-not-proven as a startup blocker.");
+    }
+    finally
+    {
+        if (Directory.Exists(startupRuntimeScanMissingRoot))
+        {
+            Directory.Delete(startupRuntimeScanMissingRoot, recursive: true);
+        }
+    }
+
+    var startupRuntimeTimelineRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-startup-runtime-timeline-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(startupRuntimeTimelineRoot);
+        var gameRoot = Path.Combine(startupRuntimeTimelineRoot, "game");
+        var modsRoot = Path.Combine(gameRoot, "mods");
+        var userDataRoot = Path.Combine(startupRuntimeTimelineRoot, "userdata");
+        var logsRoot = Path.Combine(userDataRoot, "logs");
+        var settingsRoot = Path.Combine(userDataRoot, "steam", "self-test");
+        Directory.CreateDirectory(modsRoot);
+        Directory.CreateDirectory(logsRoot);
+        Directory.CreateDirectory(settingsRoot);
+        var startupConfiguration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = new GamePathOptions
+            {
+                GameDirectory = gameRoot,
+                UserDataRoot = userDataRoot,
+                SteamAccountId = "self-test",
+                ProfileIndex = 1,
+                ArtifactsRoot = "artifacts",
+            },
+        };
+        var startupLiveLayout = LiveExportPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.LiveExport);
+        var startupHarnessLayout = HarnessPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.Harness);
+        LiveExportPathResolver.EnsureDirectory(startupLiveLayout);
+        HarnessPathResolver.EnsureDirectories(startupHarnessLayout);
+        LongRunArtifacts.InitializeSessionArtifacts(startupRuntimeTimelineRoot, "startup-runtime-timeline-session", "boot-to-long-run", "headless");
+        WriteRuntimeConfigFixture(startupConfiguration, modsRoot, harnessEnabled: true);
+        File.WriteAllBytes(Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.PckName), Array.Empty<byte>());
+        File.WriteAllBytes(Path.Combine(modsRoot, "sts2-mod-ai-companion.dll"), Array.Empty<byte>());
+        File.WriteAllText(Path.Combine(settingsRoot, "settings.save"), """{"mod_settings":{"mods_enabled":true}}""");
+
+        var firstLaunchIssuedAt = DateTimeOffset.UtcNow;
+        var firstRuntimeConfig = EnsureStartupRuntimeConfig(
+            startupConfiguration,
+            "startup-runtime-timeline-session",
+            "startup-runtime-timeline-run-1",
+            firstLaunchIssuedAt);
+        LongRunArtifacts.RecordStartupLogBaseline(
+            startupRuntimeTimelineRoot,
+            startupConfiguration,
+            "startup-runtime-timeline-run-1",
+            firstRuntimeConfig.LaunchToken,
+            firstLaunchIssuedAt);
+        File.WriteAllText(
+            Path.Combine(logsRoot, "godot.log"),
+            "[INFO] [Startup] Time to main menu: 12,869ms");
+        var positiveCapture = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            startupRuntimeTimelineRoot,
+            startupConfiguration,
+            startupLiveLayout,
+            startupHarnessLayout,
+            captureReason: "synthetic-early-main-menu");
+        Assert(positiveCapture.GodotReachedMainMenu, "Synthetic startup timeline first capture should retain the early main-menu positive.");
+
+        Thread.Sleep(20);
+        var secondLaunchIssuedAt = DateTimeOffset.UtcNow;
+        var secondRuntimeConfig = EnsureStartupRuntimeConfig(
+            startupConfiguration,
+            "startup-runtime-timeline-session",
+            "startup-runtime-timeline-run-2",
+            secondLaunchIssuedAt);
+        LongRunArtifacts.RecordStartupLogBaseline(
+            startupRuntimeTimelineRoot,
+            startupConfiguration,
+            "startup-runtime-timeline-run-2",
+            secondRuntimeConfig.LaunchToken,
+            secondLaunchIssuedAt);
+        File.WriteAllText(Path.Combine(logsRoot, "godot.log"), string.Empty);
+        var timelineEvidence = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            startupRuntimeTimelineRoot,
+            startupConfiguration,
+            startupLiveLayout,
+            startupHarnessLayout,
+            captureReason: "synthetic-late-negative");
+        Assert(string.Equals(timelineEvidence.Diagnosis, "loader-entry-before-initializer-not-proven", StringComparison.OrdinalIgnoreCase), "Latest startup timeline diagnosis should stay conservative after the later negative capture.");
+        Assert(timelineEvidence.CaptureCount == 2, "Startup runtime timeline summary should retain both captures from the same root.");
+        Assert(timelineEvidence.EverReachedMainMenu, "Startup runtime summary should preserve the earlier main-menu positive.");
+        Assert(timelineEvidence.FirstPositiveCaptureAt is not null && string.Equals(timelineEvidence.FirstPositiveReason, "godot-reached-main-menu", StringComparison.Ordinal), "Startup runtime summary should record the first positive capture and reason.");
+        Assert(ReadNdjsonFixture<GuiSmokeStartupRuntimeCapture>(Path.Combine(startupRuntimeTimelineRoot, "startup-runtime-captures.ndjson")).Count == 2, "Startup runtime capture sequence should persist every capture in order.");
+    }
+    finally
+    {
+        if (Directory.Exists(startupRuntimeTimelineRoot))
+        {
+            Directory.Delete(startupRuntimeTimelineRoot, recursive: true);
+        }
+    }
+
+    var startupRuntimeStaleSnapshotRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-startup-runtime-stale-snapshot-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(startupRuntimeStaleSnapshotRoot);
+        var gameRoot = Path.Combine(startupRuntimeStaleSnapshotRoot, "game");
+        var modsRoot = Path.Combine(gameRoot, "mods");
+        var userDataRoot = Path.Combine(startupRuntimeStaleSnapshotRoot, "userdata");
+        var logsRoot = Path.Combine(userDataRoot, "logs");
+        var settingsRoot = Path.Combine(userDataRoot, "steam", "self-test");
+        Directory.CreateDirectory(modsRoot);
+        Directory.CreateDirectory(logsRoot);
+        Directory.CreateDirectory(settingsRoot);
+        var startupConfiguration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = new GamePathOptions
+            {
+                GameDirectory = gameRoot,
+                UserDataRoot = userDataRoot,
+                SteamAccountId = "self-test",
+                ProfileIndex = 1,
+                ArtifactsRoot = "artifacts",
+            },
+        };
+        var startupLiveLayout = LiveExportPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.LiveExport);
+        var startupHarnessLayout = HarnessPathResolver.Resolve(startupConfiguration.GamePaths, startupConfiguration.Harness);
+        LiveExportPathResolver.EnsureDirectory(startupLiveLayout);
+        HarnessPathResolver.EnsureDirectories(startupHarnessLayout);
+        LongRunArtifacts.InitializeSessionArtifacts(startupRuntimeStaleSnapshotRoot, "startup-runtime-stale-snapshot-session", "boot-to-long-run", "headless");
+        WriteRuntimeConfigFixture(startupConfiguration, modsRoot, harnessEnabled: true);
+        File.WriteAllBytes(Path.Combine(modsRoot, startupConfiguration.AiCompanionMod.PckName), Array.Empty<byte>());
+        File.WriteAllBytes(Path.Combine(modsRoot, "sts2-mod-ai-companion.dll"), Array.Empty<byte>());
+        File.WriteAllText(Path.Combine(settingsRoot, "settings.save"), """{"mod_settings":{"mods_enabled":true}}""");
+        var launchIssuedAt = DateTimeOffset.UtcNow;
+        var runtimeConfig = EnsureStartupRuntimeConfig(
+            startupConfiguration,
+            "startup-runtime-stale-snapshot-session",
+            "startup-runtime-stale-snapshot-run",
+            launchIssuedAt);
+        LongRunArtifacts.RecordStartupLogBaseline(
+            startupRuntimeStaleSnapshotRoot,
+            startupConfiguration,
+            "startup-runtime-stale-snapshot-run",
+            runtimeConfig.LaunchToken,
+            launchIssuedAt);
+        File.WriteAllText(
+            Path.Combine(logsRoot, "godot.log"),
+            "[INFO] [Startup] Time to main menu: 12,869ms");
+        var staleSnapshotEvidence = LongRunArtifacts.RecordStartupRuntimeEvidence(
+            startupRuntimeStaleSnapshotRoot,
+            startupConfiguration,
+            startupLiveLayout,
+            startupHarnessLayout,
+            captureReason: "synthetic-stale-snapshot",
+            staleSnapshotObserved: true);
+        Assert(staleSnapshotEvidence.StaleSnapshotObserved, "Stale observer snapshot should remain visible in startup runtime evidence.");
+        Assert(!staleSnapshotEvidence.FreshSnapshotPresent, "Stale startup snapshot evidence must not be promoted to fresh snapshot evidence.");
+        Assert(!staleSnapshotEvidence.NoSnapshotEvidence, "Stale snapshot evidence should stay distinct from the 'no snapshot evidence' bucket.");
+        Assert(staleSnapshotEvidence.EverSawStaleSnapshot && !staleSnapshotEvidence.EverSawFreshSnapshot, "Startup runtime summary should distinguish stale-only snapshot history from fresh snapshots.");
+    }
+    finally
+    {
+        if (Directory.Exists(startupRuntimeStaleSnapshotRoot))
+        {
+            Directory.Delete(startupRuntimeStaleSnapshotRoot, recursive: true);
         }
     }
 
@@ -4549,10 +6355,10 @@ static void RunSelfTest()
         Directory.CreateDirectory(sourceModsRoot);
         Directory.CreateDirectory(deployedModsRoot);
 
-        var sourceConfigPath = Path.Combine(sourceModsRoot, "sts2-mod-ai-companion.config.json");
-        var deployedConfigPath = Path.Combine(deployedModsRoot, "sts2-mod-ai-companion.config.json");
-        File.WriteAllText(sourceConfigPath, """{"enabled":true,"harness":{"enabled":false},"liveExport":{"collectorModeEnabled":true}}""");
-        File.WriteAllText(deployedConfigPath, """{"enabled":true,"harness":{"enabled":true},"liveExport":{"collectorModeEnabled":true}}""");
+        var sourceConfigPath = Path.Combine(sourceModsRoot, "sts2-mod-ai-companion.runtime-config");
+        var deployedConfigPath = Path.Combine(deployedModsRoot, "sts2-mod-ai-companion.runtime-config");
+        File.WriteAllText(sourceConfigPath, """{"enabled":true,"harness":{"enabled":false},"liveExport":{"collectorModeEnabled":true},"startupSentinel":{"sessionId":"source-session","runId":"source-run","launchToken":"source-token","launchIssuedAtUtc":"2026-03-19T00:00:00.0000000+00:00","sentinelRelativePath":"ai_companion/startup/loader-sentinel.latest.json"}}""");
+        File.WriteAllText(deployedConfigPath, """{"enabled":true,"harness":{"enabled":true},"liveExport":{"collectorModeEnabled":true},"startupSentinel":{"sessionId":"deployed-session","runId":"deployed-run","launchToken":"deployed-token","launchIssuedAtUtc":"2026-03-19T00:01:00.0000000+00:00","sentinelRelativePath":"ai_companion/startup/loader-sentinel.latest.json"}}""");
         File.WriteAllText(
             Path.Combine(artifactsRoot, "native-deploy-report.json"),
             JsonSerializer.Serialize(
@@ -4588,14 +6394,212 @@ static void RunSelfTest()
         LongRunArtifacts.RecordDeployVerificationEvidence(deploySessionRoot, deployConfiguration, workspace, includeHarnessBridge: false);
         var deployPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(File.ReadAllText(Path.Combine(deploySessionRoot, "prevalidation.json")), GuiSmokeShared.JsonOptions)
                                  ?? throw new InvalidOperationException("Failed to read deploy prevalidation self-test.");
-        Assert(deployPrevalidation.DeployIdentityVerified, "Deploy verification should stay valid after the runner's intentional harness-enabled rewrite.");
-        Assert(deployPrevalidation.DeployEvidence?.HashMismatches.Count == 0, "Intentional runtime-config rewrite should not register as a deploy hash mismatch.");
+        Assert(deployPrevalidation.DeployIdentityVerified, "Deploy verification should stay valid after the runner's intentional harness-enabled and startupSentinel rewrite.");
+        Assert(deployPrevalidation.DeployEvidence?.HashMismatches.Count == 0, "Intentional runtime-config startupSentinel rewrite should not register as a deploy hash mismatch.");
     }
     finally
     {
         if (Directory.Exists(deployVerificationRoot))
         {
             Directory.Delete(deployVerificationRoot, recursive: true);
+        }
+    }
+
+    var trustResampleRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-bootstrap-trust-resample-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(trustResampleRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(trustResampleRoot, "bootstrap-trust-resample-session", "boot-to-long-run", "headless");
+        LongRunArtifacts.UpdatePrevalidation(
+            trustResampleRoot,
+            gameStoppedBeforeDeploy: true,
+            modsPayloadReconciled: true,
+            deployIdentityVerified: true,
+            manualCleanBootVerified: true);
+        var cachedTrustState = ResolveTrustStateAtAttemptStart(trustResampleRoot);
+        Assert(string.Equals(cachedTrustState, GuiSmokeContractStates.TrustValid, StringComparison.OrdinalIgnoreCase), "Bootstrap trust resample self-test should begin from a valid post-bootstrap root.");
+        LongRunArtifacts.UpdatePrevalidation(
+            trustResampleRoot,
+            manualCleanBootVerified: false);
+        var resampledTrustState = ResolveTrustStateAtAttemptStart(trustResampleRoot);
+        Assert(string.Equals(resampledTrustState, GuiSmokeContractStates.TrustInvalid, StringComparison.OrdinalIgnoreCase), "Authoritative attempt trust should be resampled from supervisor state after bootstrap instead of carrying a stale in-memory valid flag.");
+    }
+    finally
+    {
+        if (Directory.Exists(trustResampleRoot))
+        {
+            Directory.Delete(trustResampleRoot, recursive: true);
+        }
+    }
+
+    var bootstrapOnlyRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-bootstrap-only-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(bootstrapOnlyRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(bootstrapOnlyRoot, "bootstrap-only-session", "boot-to-long-run", "headless");
+        LongRunArtifacts.UpdatePrevalidation(
+            bootstrapOnlyRoot,
+            gameStoppedBeforeDeploy: true,
+            modsPayloadReconciled: true,
+            deployIdentityVerified: true,
+            manualCleanBootVerified: true);
+        var bootstrapOnlySupervisor = LongRunArtifacts.RefreshSupervisorState(bootstrapOnlyRoot);
+        var bootstrapOnlySummary = JsonSerializer.Deserialize<GuiSmokeSessionSummary>(
+                                       File.ReadAllText(Path.Combine(bootstrapOnlyRoot, "session-summary.json")),
+                                       GuiSmokeShared.JsonOptions)
+                                   ?? throw new InvalidOperationException("Failed to read bootstrap-only session summary self-test artifact.");
+        var bootstrapOnlyAttempts = ReadNdjsonFixture<GuiSmokeAttemptIndexEntry>(Path.Combine(bootstrapOnlyRoot, "attempt-index.ndjson"));
+        var bootstrapOnlyEvents = ReadNdjsonFixture<GuiSmokeRestartEvent>(Path.Combine(bootstrapOnlyRoot, "restart-events.ndjson"));
+        Assert(string.Equals(bootstrapOnlySupervisor.TrustState, GuiSmokeContractStates.TrustValid, StringComparison.OrdinalIgnoreCase), "Bootstrap-only session should allow root trust to become valid before any gameplay attempt exists.");
+        Assert(bootstrapOnlyAttempts.Count == 0, "Bootstrap-only session should not create attempt-index entries before the authoritative first attempt opens.");
+        Assert(bootstrapOnlyEvents.Count == 0, "Bootstrap-only session should not record authoritative restart events before the first gameplay attempt opens.");
+        Assert(bootstrapOnlySummary.AttemptCount == 0 && bootstrapOnlySummary.ActiveAttemptId is null, "Bootstrap-only session summary should report zero attempts and no active attempt.");
+    }
+    finally
+    {
+        if (Directory.Exists(bootstrapOnlyRoot))
+        {
+            Directory.Delete(bootstrapOnlyRoot, recursive: true);
+        }
+    }
+
+    var bootstrapPhaseBoundaryRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-bootstrap-boundary-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(bootstrapPhaseBoundaryRoot);
+        var harnessRoot = Path.Combine(bootstrapPhaseBoundaryRoot, "harness");
+        var inboxRoot = Path.Combine(harnessRoot, "inbox");
+        var outboxRoot = Path.Combine(harnessRoot, "outbox");
+        Directory.CreateDirectory(inboxRoot);
+        Directory.CreateDirectory(outboxRoot);
+        var harnessLayout = new HarnessQueueLayout(
+            bootstrapPhaseBoundaryRoot,
+            harnessRoot,
+            inboxRoot,
+            Path.Combine(inboxRoot, "actions.ndjson"),
+            outboxRoot,
+            Path.Combine(outboxRoot, "results.ndjson"),
+            Path.Combine(harnessRoot, "status.json"),
+            Path.Combine(outboxRoot, "trace.ndjson"),
+            Path.Combine(harnessRoot, "arm.json"),
+            Path.Combine(outboxRoot, "inventory.latest.json"));
+        File.WriteAllText(
+            harnessLayout.InventoryPath,
+            JsonSerializer.Serialize(
+                new HarnessNodeInventory(
+                    "inventory-bootstrap-boundary",
+                    DateTimeOffset.UtcNow,
+                    "pending",
+                    "main-menu",
+                    null,
+                    "dormant",
+                    null,
+                    true,
+                    "mixed",
+                    "stable",
+                    Array.Empty<HarnessNodeInventoryItem>()),
+                GuiSmokeShared.JsonOptions));
+        LongRunArtifacts.InitializeSessionArtifacts(bootstrapPhaseBoundaryRoot, "bootstrap-boundary-session", "boot-to-long-run", "headless");
+        var screenshotPath = Path.Combine(bootstrapPhaseBoundaryRoot, "main-menu.png");
+        var observerPath = Path.Combine(bootstrapPhaseBoundaryRoot, "main-menu.observer.json");
+        File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
+        File.WriteAllText(observerPath, "{}");
+        Assert(
+            !LongRunArtifacts.TryMarkManualCleanBootVerified(
+                bootstrapPhaseBoundaryRoot,
+                harnessLayout,
+                new ObserverState(
+                    new ObserverSummary(
+                        "main-menu",
+                        "main-menu",
+                        false,
+                        DateTimeOffset.UtcNow,
+                        "inv-bootstrap-boundary",
+                        true,
+                        "mixed",
+                        "stable",
+                        "episode-bootstrap-boundary",
+                        null,
+                        "main-menu",
+                        null,
+                        null,
+                        null,
+                        Array.Empty<string>(),
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                screenshotPath,
+                observerPath,
+                DateTimeOffset.UtcNow.AddSeconds(-5),
+                stillInWaitMainMenu: false),
+            "Bootstrap completion should stay blocked when manual clean boot proof is observed outside the WaitMainMenu pre-attempt boundary.");
+        var boundaryPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(
+                                        File.ReadAllText(Path.Combine(bootstrapPhaseBoundaryRoot, "prevalidation.json")),
+                                        GuiSmokeShared.JsonOptions)
+                                    ?? throw new InvalidOperationException("Failed to read bootstrap boundary prevalidation self-test artifact.");
+        var boundarySummary = JsonSerializer.Deserialize<GuiSmokeSessionSummary>(
+                                  File.ReadAllText(Path.Combine(bootstrapPhaseBoundaryRoot, "session-summary.json")),
+                                  GuiSmokeShared.JsonOptions)
+                              ?? throw new InvalidOperationException("Failed to read bootstrap boundary session summary self-test artifact.");
+        var boundaryAttempts = ReadNdjsonFixture<GuiSmokeAttemptIndexEntry>(Path.Combine(bootstrapPhaseBoundaryRoot, "attempt-index.ndjson"));
+        var boundaryEvents = ReadNdjsonFixture<GuiSmokeRestartEvent>(Path.Combine(bootstrapPhaseBoundaryRoot, "restart-events.ndjson"));
+        Assert(boundaryPrevalidation.ManualCleanBootEvidence?.BlockingReasons?.Contains("not-wait-main-menu-phase", StringComparer.OrdinalIgnoreCase) == true, "Bootstrap boundary failures should record the not-wait-main-menu-phase blocker.");
+        Assert(boundaryAttempts.Count == 0 && boundaryEvents.Count == 0, "Bootstrap failure before the pre-attempt boundary should not create authoritative attempt artifacts.");
+        Assert(boundarySummary.AttemptCount == 0 && boundarySummary.ActiveAttemptId is null, "Bootstrap failure before the pre-attempt boundary should keep the session summary at zero attempts.");
+    }
+    finally
+    {
+        if (Directory.Exists(bootstrapPhaseBoundaryRoot))
+        {
+            Directory.Delete(bootstrapPhaseBoundaryRoot, recursive: true);
+        }
+    }
+
+    var relaunchOrderingRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-bootstrap-relaunch-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(relaunchOrderingRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(relaunchOrderingRoot, "bootstrap-relaunch-session", "boot-to-long-run", "headless");
+        LongRunArtifacts.UpdatePrevalidation(
+            relaunchOrderingRoot,
+            gameStoppedBeforeDeploy: true,
+            modsPayloadReconciled: true,
+            deployIdentityVerified: true,
+            manualCleanBootVerified: true);
+        var relaunchTrustState = ResolveTrustStateAtAttemptStart(relaunchOrderingRoot);
+        Assert(string.Equals(relaunchTrustState, GuiSmokeContractStates.TrustValid, StringComparison.OrdinalIgnoreCase), "Bootstrap relaunch self-test should resample valid trust from the root before authoritative attempt 0001 starts.");
+        LongRunArtifacts.RecordRunnerLaunchIssued(relaunchOrderingRoot, "0001", 1, "bootstrap-relaunch-attempt-0001", relaunchTrustState);
+        var relaunchFirstScreen = Path.Combine(relaunchOrderingRoot, "attempts", "0001", "steps", "0001.screen.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(relaunchFirstScreen)!);
+        File.WriteAllBytes(relaunchFirstScreen, Array.Empty<byte>());
+        LongRunArtifacts.RecordAttemptStarted(
+            relaunchOrderingRoot,
+            "0001",
+            1,
+            "bootstrap-relaunch-attempt-0001",
+            relaunchTrustState,
+            relaunchFirstScreen);
+        var relaunchEvents = ReadNdjsonFixture<GuiSmokeRestartEvent>(Path.Combine(relaunchOrderingRoot, "restart-events.ndjson"));
+        Assert(relaunchEvents.Count == 2, "Relaunch sequencing should only emit runner-launch-issued and next-attempt-started once the authoritative attempt opens.");
+        Assert(string.Equals(relaunchEvents[0].AttemptId, "0001", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(relaunchEvents[0].EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(relaunchEvents[0].TrustStateAtStart, GuiSmokeContractStates.TrustValid, StringComparison.OrdinalIgnoreCase),
+            "The second launch should become authoritative attempt 0001 with a valid trustStateAtStart.");
+        Assert(string.Equals(relaunchEvents[1].AttemptId, "0001", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(relaunchEvents[1].EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(relaunchEvents[1].TrustStateAtStart, GuiSmokeContractStates.TrustValid, StringComparison.OrdinalIgnoreCase),
+            "Authoritative attempt 0001 should preserve valid trust on next-attempt-started.");
+    }
+    finally
+    {
+        if (Directory.Exists(relaunchOrderingRoot))
+        {
+            Directory.Delete(relaunchOrderingRoot, recursive: true);
         }
     }
 
@@ -5071,6 +7075,14 @@ static void RunSelfTest()
             "self-test-session-attempt-0002",
             GuiSmokeContractStates.TrustValid,
             attemptTwoFirstScreen);
+        var sessionSummary = JsonSerializer.Deserialize<GuiSmokeSessionSummary>(
+                                 File.ReadAllText(Path.Combine(longRunSessionRoot, "session-summary.json")),
+                                 GuiSmokeShared.JsonOptions)
+                             ?? throw new InvalidOperationException("Failed to read long-run session summary self-test artifact.");
+        Assert(sessionSummary.AttemptCount == 2, "Session summary should count started attempts, not only terminalized attempts.");
+        Assert(sessionSummary.TerminalAttemptCount == 1, "Session summary should preserve terminal attempt count separately from started attempt count.");
+        Assert(string.Equals(sessionSummary.ActiveAttemptId, "0002", StringComparison.OrdinalIgnoreCase), "Session summary should expose the active started attempt id.");
+        Assert(sessionSummary.PassedAttempts == 1 && sessionSummary.FailedAttempts == 0, "Session summary should keep valid completed attempts counted as passed.");
 
         var supervisorState = LongRunArtifacts.RefreshSupervisorState(longRunSessionRoot);
         Assert(supervisorState.TrustState == GuiSmokeContractStates.TrustValid, "Supervisor should mark trust valid when all prevalidation gates are present.");
@@ -5086,6 +7098,79 @@ static void RunSelfTest()
         if (Directory.Exists(longRunSessionRoot))
         {
             Directory.Delete(longRunSessionRoot, recursive: true);
+        }
+    }
+
+    var invalidSummaryRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-invalid-summary-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(invalidSummaryRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(invalidSummaryRoot, "invalid-summary-session", "boot-to-long-run", "headless");
+        Directory.CreateDirectory(Path.Combine(invalidSummaryRoot, "attempts", "0001", "steps"));
+        var invalidAttemptEntry = new GuiSmokeAttemptIndexEntry(
+            "0001",
+            1,
+            "invalid-summary-attempt-0001",
+            "completed",
+            "max-steps-reached:25",
+            DateTimeOffset.UtcNow.AddMinutes(-2),
+            DateTimeOffset.UtcNow.AddMinutes(-1),
+            25,
+            "max-steps-reached",
+            LaunchFailed: false,
+            FailureClass: null,
+            TrustStateAtStart: GuiSmokeContractStates.TrustInvalid);
+        File.WriteAllText(
+            Path.Combine(invalidSummaryRoot, "attempt-index.ndjson"),
+            JsonSerializer.Serialize(invalidAttemptEntry, GuiSmokeShared.NdjsonOptions) + Environment.NewLine);
+        LongRunArtifacts.RefreshSessionSummary(invalidSummaryRoot);
+        var previousInvalidAttempt = new GuiSmokeAttemptResult(
+            "0001",
+            1,
+            "invalid-summary-attempt-0001",
+            Path.Combine(invalidSummaryRoot, "attempts", "0001"),
+            0,
+            "completed",
+            "max-steps-reached:25",
+            25,
+            LaunchFailed: false,
+            TerminalCause: "max-steps-reached",
+            FailureClass: null,
+            TrustStateAtStart: GuiSmokeContractStates.TrustInvalid);
+        LongRunArtifacts.RecordRunnerBeginRestart(invalidSummaryRoot, previousInvalidAttempt, "0002", 2);
+        LongRunArtifacts.RecordRunnerLaunchIssued(
+            invalidSummaryRoot,
+            "0002",
+            2,
+            "invalid-summary-attempt-0002",
+            GuiSmokeContractStates.TrustInvalid);
+
+        var invalidAttemptTwoRunRoot = Path.Combine(invalidSummaryRoot, "attempts", "0002");
+        Directory.CreateDirectory(Path.Combine(invalidAttemptTwoRunRoot, "steps"));
+        var invalidAttemptTwoFirstScreen = Path.Combine(invalidAttemptTwoRunRoot, "steps", "0001.screen.png");
+        File.WriteAllBytes(invalidAttemptTwoFirstScreen, Array.Empty<byte>());
+        LongRunArtifacts.RecordAttemptStarted(
+            invalidSummaryRoot,
+            "0002",
+            2,
+            "invalid-summary-attempt-0002",
+            GuiSmokeContractStates.TrustInvalid,
+            invalidAttemptTwoFirstScreen);
+
+        var invalidSummary = JsonSerializer.Deserialize<GuiSmokeSessionSummary>(
+                                 File.ReadAllText(Path.Combine(invalidSummaryRoot, "session-summary.json")),
+                                 GuiSmokeShared.JsonOptions)
+                             ?? throw new InvalidOperationException("Failed to read invalid summary self-test artifact.");
+        Assert(invalidSummary.AttemptCount == 2, "Session summary should immediately reflect attempt 0002 start in invalid/max-steps sessions.");
+        Assert(invalidSummary.TerminalAttemptCount == 1, "Invalid/max-steps session summary should preserve terminal attempt count separately.");
+        Assert(string.Equals(invalidSummary.ActiveAttemptId, "0002", StringComparison.OrdinalIgnoreCase), "Invalid/max-steps session summary should expose active attempt 0002.");
+        Assert(invalidSummary.PassedAttempts == 0 && invalidSummary.FailedAttempts == 1, "Invalid/max-steps attempts should not be counted as passed.");
+    }
+    finally
+    {
+        if (Directory.Exists(invalidSummaryRoot))
+        {
+            Directory.Delete(invalidSummaryRoot, recursive: true);
         }
     }
 
@@ -5239,6 +7324,15 @@ static void RunSelfTest()
     }
 }
 
+static IReadOnlyList<GuiSmokeHistoryEntry> BuildSerializedStepHistory(
+    GuiSmokePhase phase,
+    IReadOnlyList<GuiSmokeHistoryEntry> history)
+{
+    return phase == GuiSmokePhase.HandleCombat
+        ? HandleCombatContextSupport.BuildSerializedHistoryWindow(history)
+        : history.TakeLast(5).ToArray();
+}
+
 static GuiSmokeStepRequest CreateStepRequest(
     string runId,
     string scenarioId,
@@ -5253,6 +7347,7 @@ static GuiSmokeStepRequest CreateStepRequest(
     string attemptId,
     int attemptOrdinal)
 {
+    var serializedHistory = BuildSerializedStepHistory(phase, history);
     var sceneSignature = ComputeSceneSignature(screenshotPath, observer, phase);
     var knownRecipes = LoadKnownRecipes(sessionRoot, sceneSignature, phase.ToString());
     var firstSeenScene = !HasSceneSignatureHistory(sessionRoot, sceneSignature);
@@ -5279,9 +7374,9 @@ static GuiSmokeStepRequest CreateStepRequest(
         knownRecipes,
         eventKnowledgeCandidates,
         combatCardKnowledge,
-        BuildAllowedActions(phase, observer, combatCardKnowledge, screenshotPath, history),
-        history.TakeLast(5).ToArray(),
-        BuildFailureModeHintCore(phase, observer, combatCardKnowledge, screenshotPath, history),
+        BuildAllowedActions(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory),
+        serializedHistory,
+        BuildFailureModeHintCore(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory),
         BuildDecisionRiskHint(phase, observer, firstSeenScene, reasoningMode));
 }
 
@@ -5997,9 +8092,31 @@ static string[] GetCombatAllowedActions(
     string? screenshotPath,
     IReadOnlyList<GuiSmokeHistoryEntry> history)
 {
+    if (CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary))
+    {
+        return new[] { "wait" };
+    }
+
     var actions = new List<string>();
-    var blockedCombatNoOpCounts = AutoDecisionProvider.GetCombatNoOpCountsBySlot(history);
-    var pendingSelection = TryGetPendingCombatSelection(history);
+    var combatContext = HandleCombatContextSupport.Reconstruct(history);
+    var blockedCombatNoOpCounts = combatContext.CombatNoOpCountsBySlot;
+    var pendingSelection = combatContext.PendingSelection;
+    var analysis = string.IsNullOrWhiteSpace(screenshotPath)
+        ? new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown)
+        : AutoCombatAnalyzer.Analyze(screenshotPath);
+    var hasSelectedNonEnemyConfirmEvidence = CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(analysis, pendingSelection);
+    bool ShouldSuppressNonEnemyReselect(int slotIndex)
+    {
+        if (pendingSelection?.Kind == AutoCombatCardKind.DefendLike
+            && pendingSelection.SlotIndex == slotIndex
+            && !hasSelectedNonEnemyConfirmEvidence)
+        {
+            return true;
+        }
+
+        return !hasSelectedNonEnemyConfirmEvidence
+               && HandleCombatContextSupport.HasRecentNonEnemySelection(combatContext, slotIndex);
+    }
 
     foreach (var slotIndex in GetPlayableCombatAttackSlots(observer, combatCardKnowledge))
     {
@@ -6011,20 +8128,25 @@ static string[] GetCombatAllowedActions(
 
     foreach (var slotIndex in GetPlayableCombatNonEnemySlots(observer, combatCardKnowledge))
     {
+        if (ShouldSuppressNonEnemyReselect(slotIndex))
+        {
+            continue;
+        }
+
         actions.Add($"select non-enemy slot {slotIndex}");
     }
 
     var pendingAttackBlocked = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
                                && blockedCombatNoOpCounts.TryGetValue(pendingSelection.SlotIndex, out var pendingNoOpCount)
                                && pendingNoOpCount >= 2;
-    if (!pendingAttackBlocked && CanResolveEnemyTargetFromCurrentState(observer, combatCardKnowledge, screenshotPath, history))
+    if (!pendingAttackBlocked && CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, analysis, pendingSelection))
     {
         actions.Add("click enemy");
     }
 
     actions.Add("click end turn");
 
-    if (HasCombatSelectionToCancel(observer, combatCardKnowledge, screenshotPath, history))
+    if (HasCombatSelectionToCancelFromAnalysis(observer, combatCardKnowledge, analysis, pendingSelection))
     {
         actions.Add("right-click cancel selected card");
     }
@@ -6064,17 +8186,18 @@ static IEnumerable<int> GetPlayableCombatNonEnemySlots(
 {
     var knowledgeSlots = combatCardKnowledge
         .Where(card => card.SlotIndex is >= 1 and <= 5)
-        .Where(card => IsNonEnemyCombatCard(card) && IsPlayableAtCurrentEnergy(card, observer.PlayerEnergy))
+        .Where(card => CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatCard(card, observer.PlayerEnergy))
         .Select(static card => card.SlotIndex);
     var observerSlots = observer.CombatHand
         .Where(card => card.SlotIndex is >= 1 and <= 5)
-        .Where(card => IsNonEnemyCombatHandCard(card) && IsObservedCombatCardPlayableAtCurrentEnergy(card, observer.PlayerEnergy, combatCardKnowledge))
+        .Where(card => CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatHandCard(card, observer.PlayerEnergy, combatCardKnowledge))
         .Select(static card => card.SlotIndex);
     return knowledgeSlots
         .Concat(observerSlots)
         .Distinct()
         .OrderBy(static slotIndex => slotIndex);
 }
+
 
 static bool CanResolveEnemyTargetFromCurrentState(
     ObserverState observer,
@@ -6085,7 +8208,11 @@ static bool CanResolveEnemyTargetFromCurrentState(
     var analysis = string.IsNullOrWhiteSpace(screenshotPath)
         ? new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown)
         : AutoCombatAnalyzer.Analyze(screenshotPath);
-    return CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, analysis, TryGetPendingCombatSelection(history));
+    return CanResolveEnemyTargetFromStateAnalysis(
+        observer,
+        combatCardKnowledge,
+        analysis,
+        HandleCombatContextSupport.Reconstruct(history).PendingSelection);
 }
 
 static bool CanResolveEnemyTargetFromStateAnalysis(
@@ -6191,20 +8318,14 @@ static bool IsTopLevelBoundsInsideWindow(string? screenBounds, WindowBounds wind
            && bounds.Bottom <= windowBounds.Y + windowBounds.Height;
 }
 
-static bool HasCombatSelectionToCancel(
+static bool HasCombatSelectionToCancelFromAnalysis(
     ObserverState observer,
     IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
-    string? screenshotPath,
-    IReadOnlyList<GuiSmokeHistoryEntry> history)
+    AutoCombatAnalysis analysis,
+    PendingCombatSelection? pendingSelection)
 {
-    if (string.IsNullOrWhiteSpace(screenshotPath))
-    {
-        return false;
-    }
-
-    var analysis = AutoCombatAnalyzer.Analyze(screenshotPath);
     return analysis.HasSelectedCard
-           && !CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, analysis, TryGetPendingCombatSelection(history));
+           && !CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, analysis, pendingSelection);
 }
 
 static string BuildCombatFailureModeHint(
@@ -6241,29 +8362,6 @@ static bool IsEnemyTargetCombatCard(CombatCardKnowledgeHint card)
            || string.Equals(card.Target, "AllEnemies", StringComparison.OrdinalIgnoreCase);
 }
 
-static bool IsNonEnemyCombatHandCard(ObservedCombatHandCard card)
-{
-    return string.Equals(card.Type, "Skill", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(card.Type, "Power", StringComparison.OrdinalIgnoreCase)
-           || card.Name.Contains("DEFEND", StringComparison.OrdinalIgnoreCase);
-}
-
-static bool IsNonEnemyCombatCard(CombatCardKnowledgeHint card)
-{
-    if (string.Equals(card.Target, "AnyEnemy", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(card.Target, "RandomEnemy", StringComparison.OrdinalIgnoreCase))
-    {
-        return false;
-    }
-
-    return string.Equals(card.Type, "Power", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(card.Target, "Self", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(card.Target, "None", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(card.Target, "AllAllies", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(card.Target, "AnyAlly", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(card.Target, "AllEnemies", StringComparison.OrdinalIgnoreCase);
-}
-
 static bool IsPlayableAtCurrentEnergy(CombatCardKnowledgeHint card, int? energy)
 {
     if (energy is null || card.Cost is null)
@@ -6296,88 +8394,6 @@ static bool IsObservedCombatCardPlayableAtCurrentEnergy(
     }
 
     return resolvedCost <= energy;
-}
-
-static PendingCombatSelection? TryGetPendingCombatSelection(IReadOnlyList<GuiSmokeHistoryEntry> history)
-{
-    for (var index = history.Count - 1; index >= 0; index -= 1)
-    {
-        var entry = history[index];
-        if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
-        {
-            continue;
-        }
-
-        if (string.IsNullOrWhiteSpace(entry.TargetLabel))
-        {
-            return null;
-        }
-
-        if (TryParsePendingCombatSelection(entry.TargetLabel, out var selection))
-        {
-            return selection;
-        }
-
-        if (entry.TargetLabel.StartsWith("auto-select slot ", StringComparison.OrdinalIgnoreCase)
-            && ExtractFirstDigit(entry.TargetLabel) is { } legacySlot
-            && legacySlot >= 1
-            && legacySlot <= 5)
-        {
-            return new PendingCombatSelection(legacySlot, AutoCombatCardKind.AttackLike);
-        }
-
-        return null;
-    }
-
-    return null;
-}
-
-static bool TryParsePendingCombatSelection(string targetLabel, out PendingCombatSelection? selection)
-{
-    selection = null;
-    if (string.IsNullOrWhiteSpace(targetLabel))
-    {
-        return false;
-    }
-
-    if (targetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase)
-        && ExtractFirstDigit(targetLabel) is { } attackSlot
-        && attackSlot >= 1
-        && attackSlot <= 5)
-    {
-        selection = new PendingCombatSelection(attackSlot, AutoCombatCardKind.AttackLike);
-        return true;
-    }
-
-    if ((targetLabel.StartsWith("combat select non-enemy slot ", StringComparison.OrdinalIgnoreCase)
-         || targetLabel.StartsWith("combat select defend slot ", StringComparison.OrdinalIgnoreCase))
-        && ExtractFirstDigit(targetLabel) is { } nonEnemySlot
-        && nonEnemySlot >= 1
-        && nonEnemySlot <= 5)
-    {
-        selection = new PendingCombatSelection(nonEnemySlot, AutoCombatCardKind.DefendLike);
-        return true;
-    }
-
-    return false;
-}
-
-static int? ExtractFirstDigit(string? value)
-{
-    if (string.IsNullOrWhiteSpace(value))
-    {
-        return null;
-    }
-
-    foreach (var character in value)
-    {
-        if (char.IsDigit(character))
-        {
-            return character - '0';
-        }
-    }
-
-    return null;
 }
 
 static bool IsSkipLikeLabel(string? label)
@@ -9140,6 +11156,9 @@ sealed record GuiSmokeSessionSummary(
     DateTimeOffset StartedAt,
     DateTimeOffset CompletedAt,
     int AttemptCount,
+    int TerminalAttemptCount,
+    string? ActiveAttemptId,
+    DateTimeOffset LastEventAt,
     int PassedAttempts,
     int FailedAttempts,
     int TotalSteps,
@@ -11797,12 +13816,19 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     {
         var analysis = AutoCombatAnalyzer.Analyze(request.ScreenshotPath);
         var handAnalysis = AutoCombatHandAnalyzer.Analyze(request.ScreenshotPath);
-        var pendingSelection = TryGetPendingCombatSelection(request.History);
+        var combatContext = HandleCombatContextSupport.Reconstruct(request.History);
+        var pendingSelection = combatContext.PendingSelection;
+        if (CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(request.Observer))
+        {
+            return CreateWaitDecision("observer reports enemy turn or a closed combat play phase", request.Observer.CurrentScreen);
+        }
+
+        var hasSelectedNonEnemyConfirmEvidence = CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(analysis, pendingSelection);
         var enemyTargetOpportunity = CanResolveEnemyTargetFromCurrentState(request.Observer, request.CombatCardKnowledge, analysis, pendingSelection);
-        var combatNoOpLoop = AnalyzeCombatNoOpLoop(request.History);
-        var combatNoOpCountsBySlot = GetCombatNoOpCountsBySlot(request.History);
-        var repeatedNonEnemyLoop = HasRecentRepeatedNonEnemyLoop(request.History);
-        var repeatedAttackSelectionLoop = HasRecentRepeatedAttackSelectionLoop(request.History);
+        var combatNoOpLoop = combatContext.CombatNoOpLoop;
+        var combatNoOpCountsBySlot = combatContext.CombatNoOpCountsBySlot;
+        var repeatedNonEnemyLoop = combatContext.RepeatedNonEnemyLoop;
+        var repeatedAttackSelectionLoop = combatContext.RepeatedAttackSelectionLoop;
         var observerHasAttackCard = request.Observer.CombatHand.Any(card =>
             card.SlotIndex >= 1
             && card.SlotIndex <= 5
@@ -11835,19 +13861,68 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             .OrderBy(static slotIndex => slotIndex)
             .ToArray();
         var pendingSelectionNoOpCount = pendingSelection?.Kind == AutoCombatCardKind.AttackLike && pendingSelection.SlotIndex is >= 1 and <= 5
-            ? GetCombatNoOpCountForSlot(request.History, pendingSelection.SlotIndex)
+            ? HandleCombatContextSupport.GetCombatNoOpCountForSlot(combatContext, pendingSelection.SlotIndex)
             : 0;
+        bool ShouldSuppressPendingNonEnemyReselect(int slotIndex)
+        {
+            if (pendingSelection?.Kind == AutoCombatCardKind.DefendLike
+                && pendingSelection.SlotIndex == slotIndex
+                && !hasSelectedNonEnemyConfirmEvidence)
+            {
+                return true;
+            }
+
+            return !hasSelectedNonEnemyConfirmEvidence
+                   && HandleCombatContextSupport.HasRecentNonEnemySelection(combatContext, slotIndex);
+        }
+
+        bool TryUseCombatDecision(GuiSmokeStepDecision? candidate, out GuiSmokeStepDecision allowedDecision)
+        {
+            allowedDecision = default!;
+            if (candidate is null || !CombatDecisionContract.IsAllowed(request, candidate, out _))
+            {
+                return false;
+            }
+
+            allowedDecision = candidate;
+            return true;
+        }
+
+        GuiSmokeStepDecision CloseWithLegalCombatFallback()
+        {
+            var fallbackDecision = new GuiSmokeStepDecision(
+                "act",
+                "press-key",
+                "E",
+                null,
+                null,
+                "auto-end turn",
+                "No clear playable card remains in the screenshot. End the turn.",
+                0.88,
+                "combat",
+                450,
+                true,
+                null);
+            if (TryUseCombatDecision(fallbackDecision, out var allowedFallback))
+            {
+                return allowedFallback;
+            }
+
+            return CreateWaitDecision("waiting for legal combat action", request.Observer.CurrentScreen);
+        }
+
         if (analysis.HasTargetArrow)
         {
-            if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision))
+            if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision)
+                && TryUseCombatDecision(targetDecision, out var allowedTargetDecision))
             {
-                return targetDecision;
+                return allowedTargetDecision;
             }
         }
 
         if (request.Observer.PlayerEnergy is <= 0)
         {
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "press-key",
                 "E",
@@ -11859,14 +13934,15 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 450,
                 true,
-                null);
+                null), out var allowedNoEnergyDecision))
+            {
+                return allowedNoEnergyDecision;
+            }
         }
 
-        if (analysis.HasSelfTargetBrackets
-            && (analysis.SelectedCardKind == AutoCombatCardKind.DefendLike
-                || pendingSelection?.Kind == AutoCombatCardKind.DefendLike))
+        if (hasSelectedNonEnemyConfirmEvidence)
         {
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "click-current",
                 null,
@@ -11878,7 +13954,10 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 300,
                 true,
-                null);
+                null), out var allowedNonEnemyConfirmDecision))
+            {
+                return allowedNonEnemyConfirmDecision;
+            }
         }
 
         if (analysis.HasSelectedCard
@@ -11886,18 +13965,20 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             && pendingSelection?.Kind == AutoCombatCardKind.AttackLike
             && enemyTargetOpportunity)
         {
-            if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision))
+            if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision)
+                && TryUseCombatDecision(targetDecision, out var allowedTargetDecision))
             {
-                return targetDecision;
+                return allowedTargetDecision;
             }
         }
 
         if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
             && enemyTargetOpportunity)
         {
-            if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision))
+            if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision)
+                && TryUseCombatDecision(targetDecision, out var allowedTargetDecision))
             {
-                return targetDecision;
+                return allowedTargetDecision;
             }
         }
 
@@ -11905,7 +13986,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             && analysis.HasSelectedCard
             && !enemyTargetOpportunity)
         {
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "right-click",
                 null,
@@ -11917,13 +13998,15 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 250,
                 true,
-                null);
+                null), out var allowedCancelDecision))
+            {
+                return allowedCancelDecision;
+            }
         }
 
-        if (analysis.HasSelectedCard
-            && analysis.SelectedCardKind == AutoCombatCardKind.DefendLike)
+        if (hasSelectedNonEnemyConfirmEvidence)
         {
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "click-current",
                 null,
@@ -11935,37 +14018,24 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 300,
                 true,
-                null);
-        }
-
-        if (pendingSelection?.Kind == AutoCombatCardKind.DefendLike
-            && request.Observer.CombatHand.Count > 0
-            && request.Observer.CombatHand.All(card => IsNonEnemyCombatHandCard(card) || !IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy, request.CombatCardKnowledge)))
-        {
-            return new GuiSmokeStepDecision(
-                "act",
-                "click-current",
-                null,
-                null,
-                null,
-                "confirm selected non-enemy card",
-                "A non-enemy card was just selected via hotkey. Confirm it even if the screenshot analyzer missed the selected-card overlay.",
-                0.76,
-                "combat",
-                300,
-                true,
-                null);
+                null), out var allowedSelectedDefendDecision))
+            {
+                return allowedSelectedDefendDecision;
+            }
         }
 
         if (repeatedNonEnemyLoop)
         {
             var endTurnNode = FindEndTurnActionNode(request);
-            if (endTurnNode is not null)
+            if (endTurnNode is not null
+                && TryUseCombatDecision(
+                    CreateClickDecisionFromNode(request, endTurnNode, "end turn after repeated non-enemy loop"),
+                    out var allowedRepeatedNonEnemyDecision))
             {
-                return CreateClickDecisionFromNode(request, endTurnNode, "end turn after repeated non-enemy loop");
+                return allowedRepeatedNonEnemyDecision;
             }
 
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "press-key",
                 "E",
@@ -11977,18 +14047,24 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 400,
                 true,
-                null);
+                null), out var allowedRepeatedNonEnemyFallback))
+            {
+                return allowedRepeatedNonEnemyFallback;
+            }
         }
 
         if (repeatedAttackSelectionLoop && !observerHasAttackCard)
         {
             var endTurnNode = FindEndTurnActionNode(request);
-            if (endTurnNode is not null)
+            if (endTurnNode is not null
+                && TryUseCombatDecision(
+                    CreateClickDecisionFromNode(request, endTurnNode, "end turn after repeated attack-select loop"),
+                    out var allowedRepeatedAttackDecision))
             {
-                return CreateClickDecisionFromNode(request, endTurnNode, "end turn after repeated attack-select loop");
+                return allowedRepeatedAttackDecision;
             }
 
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "press-key",
                 "E",
@@ -12000,7 +14076,10 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 400,
                 true,
-                null);
+                null), out var allowedRepeatedAttackFallback))
+            {
+                return allowedRepeatedAttackFallback;
+            }
         }
 
         var knowledgeAttackSlot = request.CombatCardKnowledge
@@ -12051,7 +14130,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                     .FirstOrDefault();
         if (attackSlot is not null)
         {
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "press-key",
                 GetCombatSlotHotkey(attackSlot.SlotIndex),
@@ -12065,17 +14144,22 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 250,
                 true,
-                null);
+                null), out var allowedAttackSlotDecision))
+            {
+                return allowedAttackSlotDecision;
+            }
         }
 
         var knowledgeNonEnemySlot = request.CombatCardKnowledge
             .Where(card => card.SlotIndex >= 1 && card.SlotIndex <= 5)
-            .Where(card => IsNonEnemyCombatCard(card) && IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy))
+            .Where(card => CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatCard(card, request.Observer.PlayerEnergy))
+            .Where(card => !ShouldSuppressPendingNonEnemyReselect(card.SlotIndex))
             .OrderBy(card => card.SlotIndex)
             .FirstOrDefault();
         var observerNonEnemySlot = request.Observer.CombatHand
             .Where(card => card.SlotIndex >= 1 && card.SlotIndex <= 5)
-            .Where(card => IsNonEnemyCombatHandCard(card) && IsPlayableAtCurrentEnergy(card, request.Observer.PlayerEnergy, request.CombatCardKnowledge))
+            .Where(card => CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatHandCard(card, request.Observer.PlayerEnergy, request.CombatCardKnowledge))
+            .Where(card => !ShouldSuppressPendingNonEnemyReselect(card.SlotIndex))
             .OrderBy(card => card.SlotIndex)
             .FirstOrDefault();
         var nonEnemySlot = knowledgeNonEnemySlot is not null
@@ -12100,13 +14184,14 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 .Where(slot =>
                     slot.IsVisible
                     && slot.Kind == AutoCombatCardKind.DefendLike
-                    && IsCompatibleScreenshotCombatSlot(slot, request.Observer, request.CombatCardKnowledge, expectEnemyTarget: false))
+                    && IsCompatibleScreenshotCombatSlot(slot, request.Observer, request.CombatCardKnowledge, expectEnemyTarget: false)
+                    && !ShouldSuppressPendingNonEnemyReselect(slot.SlotIndex))
                 .OrderBy(static slot => slot.RedBlueDelta)
                 .ThenByDescending(static slot => slot.Brightness)
                 .FirstOrDefault();
         if (nonEnemySlot is not null)
         {
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "press-key",
                 GetCombatSlotHotkey(nonEnemySlot.SlotIndex),
@@ -12118,18 +14203,24 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 250,
                 true,
-                null);
+                null), out var allowedNonEnemySlotDecision))
+            {
+                return allowedNonEnemySlotDecision;
+            }
         }
 
         if (combatNoOpLoop.LoopDetected)
         {
             var endTurnNode = FindEndTurnActionNode(request);
-            if (endTurnNode is not null)
+            if (endTurnNode is not null
+                && TryUseCombatDecision(
+                    CreateClickDecisionFromNode(request, endTurnNode, "end turn after combat no-op loop"),
+                    out var allowedCombatNoOpDecision))
             {
-                return CreateClickDecisionFromNode(request, endTurnNode, "end turn after combat no-op loop");
+                return allowedCombatNoOpDecision;
             }
 
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "press-key",
                 "E",
@@ -12141,12 +14232,15 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 450,
                 true,
-                null);
+                null), out var allowedCombatNoOpFallback))
+            {
+                return allowedCombatNoOpFallback;
+            }
         }
 
         if (analysis.HasSelectedCard && HasRecentCombatCardSelection(request.History))
         {
-            return new GuiSmokeStepDecision(
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",
                 "right-click",
                 null,
@@ -12158,22 +14252,13 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "combat",
                 250,
                 true,
-                null);
+                null), out var allowedLingeringSelectionDecision))
+            {
+                return allowedLingeringSelectionDecision;
+            }
         }
 
-        return new GuiSmokeStepDecision(
-            "act",
-            "press-key",
-            "E",
-            null,
-            null,
-            "auto-end turn",
-            "No clear playable card remains in the screenshot. End the turn.",
-            0.88,
-            "combat",
-            450,
-            true,
-            null);
+        return CloseWithLegalCombatFallback();
     }
 
     private static GuiSmokeDecisionAnalysis AnalyzeGenericPhase(
@@ -13017,7 +15102,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool HasRecentCombatCardSelection(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
-        return TryGetPendingCombatSelection(history) is not null;
+        return CombatHistorySupport.TryGetPendingCombatSelection(history) is not null;
     }
 
     private static bool IsCompatibleScreenshotCombatSlot(
@@ -13031,7 +15116,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         {
             return expectEnemyTarget
                 ? IsAttackCombatHandCard(observerCard) && IsPlayableAtCurrentEnergy(observerCard, observer.PlayerEnergy, combatCardKnowledge)
-                : IsNonEnemyCombatHandCard(observerCard) && IsPlayableAtCurrentEnergy(observerCard, observer.PlayerEnergy, combatCardKnowledge);
+                : CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatHandCard(observerCard, observer.PlayerEnergy, combatCardKnowledge);
         }
 
         var knowledgeCard = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == slot.SlotIndex);
@@ -13039,7 +15124,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         {
             return expectEnemyTarget
                 ? IsEnemyTargetCombatCard(knowledgeCard) && IsPlayableAtCurrentEnergy(knowledgeCard, observer.PlayerEnergy)
-                : IsNonEnemyCombatCard(knowledgeCard) && IsPlayableAtCurrentEnergy(knowledgeCard, observer.PlayerEnergy);
+                : CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatCard(knowledgeCard, observer.PlayerEnergy);
         }
 
         return observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0;
@@ -13197,7 +15282,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     public static PendingCombatSelection? TryPeekPendingCombatSelection(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
-        return TryGetPendingCombatSelection(history);
+        return CombatHistorySupport.TryGetPendingCombatSelection(history);
     }
 
     public static bool IsCombatNoOpSensitiveTarget(string? targetLabel)
@@ -13210,188 +15295,37 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     public static string? ResolveCombatLaneLabel(string? targetLabel, IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
-        if (ExtractCombatLaneSlotIndex(targetLabel) is { } slotIndex)
-        {
-            return $"combat lane slot {slotIndex}";
-        }
-
-        if (targetLabel is not null
-            && (targetLabel.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase)
-                || targetLabel.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase))
-            && TryGetPendingCombatSelection(history) is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: >= 1 and <= 5 } pendingSelection)
-        {
-            return $"combat lane slot {pendingSelection.SlotIndex}";
-        }
-
-        return targetLabel;
+        return CombatHistorySupport.ResolveCombatLaneLabel(targetLabel, history);
     }
 
     private static int? ExtractCombatLaneSlotIndex(string? targetLabel)
     {
-        if (string.IsNullOrWhiteSpace(targetLabel))
-        {
-            return null;
-        }
-
-        if (targetLabel.StartsWith("combat lane slot ", StringComparison.OrdinalIgnoreCase)
-            || targetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
-        {
-            return ExtractFirstDigit(targetLabel);
-        }
-
-        return null;
+        return CombatHistorySupport.ExtractCombatLaneSlotIndex(targetLabel);
     }
 
     public static IReadOnlyDictionary<int, int> GetCombatNoOpCountsBySlot(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
-        return history
-            .Where(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
-                            && string.Equals(entry.Action, "combat-noop", StringComparison.OrdinalIgnoreCase))
-            .Select(entry => ExtractCombatLaneSlotIndex(entry.TargetLabel))
-            .Where(static slotIndex => slotIndex.HasValue)
-            .GroupBy(static slotIndex => slotIndex!.Value)
-            .ToDictionary(static group => group.Key, static group => group.Count());
+        return CombatHistorySupport.GetCombatNoOpCountsBySlot(history);
     }
 
     private static int GetCombatNoOpCountForSlot(IReadOnlyList<GuiSmokeHistoryEntry> history, int slotIndex)
     {
-        return GetCombatNoOpCountsBySlot(history).TryGetValue(slotIndex, out var count)
-            ? count
-            : 0;
+        return HandleCombatContextSupport.GetCombatNoOpCountForSlot(HandleCombatContextSupport.Reconstruct(history), slotIndex);
     }
 
     private static bool HasRecentRepeatedNonEnemyLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
-        var labels = history
-            .Where(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
-            .Select(static entry => entry.TargetLabel)
-            .Where(static label =>
-                !string.IsNullOrWhiteSpace(label)
-                && (IsNonEnemySelectionLabel(label)
-                    || string.Equals(label, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)))
-            .TakeLast(6)
-            .ToArray();
-        if (labels.Length < 4)
-        {
-            return false;
-        }
-
-        if (labels.Length >= 4
-            && IsNonEnemySelectionLabel(labels[0])
-            && string.Equals(labels[1], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)
-            && IsNonEnemySelectionLabel(labels[2])
-            && string.Equals(labels[3], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var recentSelectCount = labels.Count(IsNonEnemySelectionLabel);
-        if (recentSelectCount >= 3)
-        {
-            var distinctSelectionLabels = labels
-                .Where(IsNonEnemySelectionLabel)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Count();
-            if (distinctSelectionLabels == 1)
-            {
-                return true;
-            }
-        }
-
-        if (labels.Length >= 5)
-        {
-            var trailingWindow = labels.TakeLast(5).ToArray();
-            var allowedMixedLoop = trailingWindow.All(label =>
-                IsNonEnemySelectionLabel(label)
-                || string.Equals(label, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase));
-            if (allowedMixedLoop && trailingWindow.Count(IsNonEnemySelectionLabel) >= 3)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return HandleCombatContextSupport.Reconstruct(history).RepeatedNonEnemyLoop;
     }
 
     private static bool HasRecentRepeatedAttackSelectionLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
-        var labels = history
-            .Where(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
-            .Select(static entry => entry.TargetLabel)
-            .Where(static label => !string.IsNullOrWhiteSpace(label))
-            .TakeLast(6)
-            .ToArray();
-        if (labels.Length < 3)
-        {
-            return false;
-        }
-
-        var attackSelections = labels
-            .Where(static label => label is not null && label.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
-            .Select(static label => label!)
-            .TakeLast(4)
-            .ToArray();
-        if (attackSelections.Length < 3)
-        {
-            return false;
-        }
-
-        var distinctAttackSelections = attackSelections
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
-        if (distinctAttackSelections > 1)
-        {
-            return true;
-        }
-
-        return attackSelections.Length >= 3;
+        return HandleCombatContextSupport.Reconstruct(history).RepeatedAttackSelectionLoop;
     }
 
     private static CombatNoOpLoopAnalysis AnalyzeCombatNoOpLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
-        var recentCombatHistory = history
-            .Where(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
-            .TakeLast(12)
-            .ToArray();
-        if (recentCombatHistory.Length < 4)
-        {
-            return new CombatNoOpLoopAnalysis(false, null, 0);
-        }
-
-        var recentNoOpCounts = GetCombatNoOpCountsBySlot(recentCombatHistory);
-        if (recentNoOpCounts.Count == 0)
-        {
-            return new CombatNoOpLoopAnalysis(false, null, 0);
-        }
-
-        var mostRecentBlockedSlot = recentCombatHistory
-            .Reverse()
-            .Select(entry => ExtractCombatLaneSlotIndex(entry.TargetLabel))
-            .FirstOrDefault(static slotIndex => slotIndex.HasValue);
-        if (!mostRecentBlockedSlot.HasValue)
-        {
-            mostRecentBlockedSlot = recentNoOpCounts
-                .OrderByDescending(static pair => pair.Value)
-                .ThenBy(static pair => pair.Key)
-                .Select(static pair => (int?)pair.Key)
-                .FirstOrDefault();
-        }
-
-        if (!mostRecentBlockedSlot.HasValue)
-        {
-            return new CombatNoOpLoopAnalysis(false, null, 0);
-        }
-
-        var recentEnemyTargetCount = recentCombatHistory.Count(entry =>
-            string.Equals(entry.TargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(entry.TargetLabel, "auto-target enemy recenter", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(entry.TargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase)
-            || (entry.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) ?? false));
-        var repeatedSameSlotCount = recentNoOpCounts.TryGetValue(mostRecentBlockedSlot.Value, out var blockedCount)
-            ? blockedCount
-            : 0;
-        var loopDetected = repeatedSameSlotCount >= 2 && recentEnemyTargetCount >= 2;
-        return new CombatNoOpLoopAnalysis(loopDetected, mostRecentBlockedSlot, repeatedSameSlotCount);
+        return HandleCombatContextSupport.Reconstruct(history).CombatNoOpLoop;
     }
 
     private static bool IsNonEnemySelectionLabel(string? targetLabel)
@@ -13405,68 +15339,9 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                || targetLabel.StartsWith("combat select defend slot ", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static PendingCombatSelection? TryGetPendingCombatSelection(IReadOnlyList<GuiSmokeHistoryEntry> history)
-    {
-        for (var index = history.Count - 1; index >= 0; index -= 1)
-        {
-            var entry = history[index];
-            if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(entry.TargetLabel))
-            {
-                return null;
-            }
-
-            if (TryParsePendingCombatSelection(entry.TargetLabel, out var selection))
-            {
-                return selection;
-            }
-
-            if (entry.TargetLabel.StartsWith("auto-select slot ", StringComparison.OrdinalIgnoreCase)
-                && ExtractFirstDigit(entry.TargetLabel) is { } legacySlot
-                && legacySlot >= 1
-                && legacySlot <= 5)
-            {
-                return new PendingCombatSelection(legacySlot, AutoCombatCardKind.AttackLike);
-            }
-
-            return null;
-        }
-
-        return null;
-    }
-
     private static bool TryParsePendingCombatSelection(string targetLabel, out PendingCombatSelection? selection)
     {
-        selection = null;
-        if (string.IsNullOrWhiteSpace(targetLabel))
-        {
-            return false;
-        }
-
-        if (targetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase)
-            && ExtractFirstDigit(targetLabel) is { } attackSlot
-            && attackSlot >= 1
-            && attackSlot <= 5)
-        {
-            selection = new PendingCombatSelection(attackSlot, AutoCombatCardKind.AttackLike);
-            return true;
-        }
-
-        if ((targetLabel.StartsWith("combat select non-enemy slot ", StringComparison.OrdinalIgnoreCase)
-             || targetLabel.StartsWith("combat select defend slot ", StringComparison.OrdinalIgnoreCase))
-            && ExtractFirstDigit(targetLabel) is { } nonEnemySlot
-            && nonEnemySlot >= 1
-            && nonEnemySlot <= 5)
-        {
-            selection = new PendingCombatSelection(nonEnemySlot, AutoCombatCardKind.DefendLike);
-            return true;
-        }
-
-        return false;
+        return CombatHistorySupport.TryParsePendingCombatSelection(targetLabel, out selection);
     }
 
     private static int? ExtractFirstDigit(string? value)
@@ -16302,6 +18177,839 @@ sealed record CombatNoOpLoopAnalysis(
     int? BlockedSlotIndex,
     int RepeatedSelectionCount);
 
+sealed record ReconstructedHandleCombatContext(
+    IReadOnlyList<GuiSmokeHistoryEntry> CombatHistory,
+    PendingCombatSelection? PendingSelection,
+    IReadOnlyDictionary<int, int> CombatNoOpCountsBySlot,
+    CombatNoOpLoopAnalysis CombatNoOpLoop,
+    bool RepeatedNonEnemyLoop,
+    bool RepeatedAttackSelectionLoop);
+
+static class HandleCombatContextSupport
+{
+    public const int SerializedHistoryWindow = 12;
+
+    public static IReadOnlyList<GuiSmokeHistoryEntry> BuildSerializedHistoryWindow(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        return history
+            .Where(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
+            .TakeLast(SerializedHistoryWindow)
+            .ToArray();
+    }
+
+    public static ReconstructedHandleCombatContext Reconstruct(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        var combatHistory = BuildSerializedHistoryWindow(history);
+        var pendingSelection = CombatHistorySupport.TryGetPendingCombatSelection(combatHistory);
+        var combatNoOpCountsBySlot = CombatHistorySupport.GetCombatNoOpCountsBySlot(combatHistory);
+        return new ReconstructedHandleCombatContext(
+            combatHistory,
+            pendingSelection,
+            combatNoOpCountsBySlot,
+            AnalyzeCombatNoOpLoop(combatHistory, combatNoOpCountsBySlot),
+            HasRecentRepeatedNonEnemyLoop(combatHistory),
+            HasRecentRepeatedAttackSelectionLoop(combatHistory));
+    }
+
+    public static bool HasRecentNonEnemySelection(ReconstructedHandleCombatContext context, int slotIndex)
+    {
+        return CombatHistorySupport.HasRecentNonEnemySelection(context.CombatHistory, slotIndex);
+    }
+
+    public static int GetCombatNoOpCountForSlot(ReconstructedHandleCombatContext context, int slotIndex)
+    {
+        return context.CombatNoOpCountsBySlot.TryGetValue(slotIndex, out var count)
+            ? count
+            : 0;
+    }
+
+    private static bool HasRecentRepeatedNonEnemyLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        var labels = history
+            .Select(static entry => entry.TargetLabel)
+            .Where(static label =>
+                !string.IsNullOrWhiteSpace(label)
+                && (IsNonEnemySelectionLabel(label)
+                    || string.Equals(label, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)))
+            .TakeLast(6)
+            .ToArray();
+        if (labels.Length < 4)
+        {
+            return false;
+        }
+
+        if (labels.Length >= 4
+            && IsNonEnemySelectionLabel(labels[0])
+            && string.Equals(labels[1], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)
+            && IsNonEnemySelectionLabel(labels[2])
+            && string.Equals(labels[3], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var recentSelectCount = labels.Count(IsNonEnemySelectionLabel);
+        if (recentSelectCount >= 3)
+        {
+            var distinctSelectionLabels = labels
+                .Where(IsNonEnemySelectionLabel)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            if (distinctSelectionLabels == 1)
+            {
+                return true;
+            }
+        }
+
+        if (labels.Length >= 5)
+        {
+            var trailingWindow = labels.TakeLast(5).ToArray();
+            var allowedMixedLoop = trailingWindow.All(label =>
+                IsNonEnemySelectionLabel(label)
+                || string.Equals(label, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase));
+            if (allowedMixedLoop && trailingWindow.Count(IsNonEnemySelectionLabel) >= 3)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasRecentRepeatedAttackSelectionLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        var labels = history
+            .Select(static entry => entry.TargetLabel)
+            .Where(static label => !string.IsNullOrWhiteSpace(label))
+            .TakeLast(6)
+            .ToArray();
+        if (labels.Length < 3)
+        {
+            return false;
+        }
+
+        var attackSelections = labels
+            .Where(static label => label is not null && label.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
+            .Select(static label => label!)
+            .TakeLast(4)
+            .ToArray();
+        if (attackSelections.Length < 3)
+        {
+            return false;
+        }
+
+        var distinctAttackSelections = attackSelections
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+        if (distinctAttackSelections > 1)
+        {
+            return true;
+        }
+
+        return attackSelections.Length >= 3;
+    }
+
+    private static CombatNoOpLoopAnalysis AnalyzeCombatNoOpLoop(
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        IReadOnlyDictionary<int, int> recentNoOpCounts)
+    {
+        if (history.Count < 4 || recentNoOpCounts.Count == 0)
+        {
+            return new CombatNoOpLoopAnalysis(false, null, 0);
+        }
+
+        var mostRecentBlockedSlot = history
+            .Reverse()
+            .Select(entry => CombatHistorySupport.ExtractCombatLaneSlotIndex(entry.TargetLabel))
+            .FirstOrDefault(static slotIndex => slotIndex.HasValue);
+        if (!mostRecentBlockedSlot.HasValue)
+        {
+            mostRecentBlockedSlot = recentNoOpCounts
+                .OrderByDescending(static pair => pair.Value)
+                .ThenBy(static pair => pair.Key)
+                .Select(static pair => (int?)pair.Key)
+                .FirstOrDefault();
+        }
+
+        if (!mostRecentBlockedSlot.HasValue)
+        {
+            return new CombatNoOpLoopAnalysis(false, null, 0);
+        }
+
+        var recentEnemyTargetCount = history.Count(entry =>
+            string.Equals(entry.TargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(entry.TargetLabel, "auto-target enemy recenter", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(entry.TargetLabel, "auto-target enemy alternate", StringComparison.OrdinalIgnoreCase)
+            || (entry.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) ?? false));
+        var repeatedSameSlotCount = recentNoOpCounts.TryGetValue(mostRecentBlockedSlot.Value, out var blockedCount)
+            ? blockedCount
+            : 0;
+        var loopDetected = repeatedSameSlotCount >= 2 && recentEnemyTargetCount >= 2;
+        return new CombatNoOpLoopAnalysis(loopDetected, mostRecentBlockedSlot, repeatedSameSlotCount);
+    }
+
+    private static bool IsNonEnemySelectionLabel(string? targetLabel)
+    {
+        if (string.IsNullOrWhiteSpace(targetLabel))
+        {
+            return false;
+        }
+
+        return targetLabel.StartsWith("combat select non-enemy slot ", StringComparison.OrdinalIgnoreCase)
+               || targetLabel.StartsWith("combat select defend slot ", StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+static class CombatHistorySupport
+{
+    public static PendingCombatSelection? TryGetPendingCombatSelection(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        return TryGetPendingCombatSelection(history, history.Count);
+    }
+
+    public static PendingCombatSelection? TryGetPendingCombatSelection(IReadOnlyList<GuiSmokeHistoryEntry> history, int endExclusive)
+    {
+        for (var index = Math.Min(history.Count, endExclusive) - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (TryParsePendingCombatSelection(entry.TargetLabel, out var selection))
+            {
+                return selection;
+            }
+
+            if (IsSelectionClearingEntry(entry))
+            {
+                return null;
+            }
+
+            if (IsNeutralCombatLabel(entry.TargetLabel))
+            {
+                continue;
+            }
+
+            if (IsCombatDecisionAction(entry.Action))
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    public static IReadOnlyDictionary<int, int> GetCombatNoOpCountsBySlot(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        var counts = new Dictionary<int, int>();
+        for (var index = 0; index < history.Count; index += 1)
+        {
+            var entry = history[index];
+            if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(entry.Action, "combat-noop", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!TryResolveCombatLaneSlotIndex(entry.TargetLabel, history, index + 1, out var slotIndex))
+            {
+                continue;
+            }
+
+            counts[slotIndex] = counts.TryGetValue(slotIndex, out var count)
+                ? count + 1
+                : 1;
+        }
+
+        return counts;
+    }
+
+    public static string? ResolveCombatLaneLabel(string? targetLabel, IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        return TryResolveCombatLaneSlotIndex(targetLabel, history, history.Count, out var slotIndex)
+            ? $"combat lane slot {slotIndex}"
+            : targetLabel;
+    }
+
+    public static bool HasRecentNonEnemySelection(IReadOnlyList<GuiSmokeHistoryEntry> history, int slotIndex)
+    {
+        if (!IsValidSlotIndex(slotIndex))
+        {
+            return false;
+        }
+
+        return history
+            .Where(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
+            .TakeLast(8)
+            .Any(entry =>
+                TryParsePendingCombatSelection(entry.TargetLabel, out var selection)
+                && selection is { Kind: AutoCombatCardKind.DefendLike }
+                && selection.SlotIndex == slotIndex);
+    }
+
+    public static bool TryParsePendingCombatSelection(string? targetLabel, out PendingCombatSelection? selection)
+    {
+        selection = null;
+        if (string.IsNullOrWhiteSpace(targetLabel))
+        {
+            return false;
+        }
+
+        if (targetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase)
+            && ExtractFirstDigit(targetLabel) is { } attackSlot
+            && IsValidSlotIndex(attackSlot))
+        {
+            selection = new PendingCombatSelection(attackSlot, AutoCombatCardKind.AttackLike);
+            return true;
+        }
+
+        if ((targetLabel.StartsWith("combat select non-enemy slot ", StringComparison.OrdinalIgnoreCase)
+             || targetLabel.StartsWith("combat select defend slot ", StringComparison.OrdinalIgnoreCase))
+            && ExtractFirstDigit(targetLabel) is { } nonEnemySlot
+            && IsValidSlotIndex(nonEnemySlot))
+        {
+            selection = new PendingCombatSelection(nonEnemySlot, AutoCombatCardKind.DefendLike);
+            return true;
+        }
+
+        if (targetLabel.StartsWith("auto-select slot ", StringComparison.OrdinalIgnoreCase)
+            && ExtractFirstDigit(targetLabel) is { } legacySlot
+            && IsValidSlotIndex(legacySlot))
+        {
+            selection = new PendingCombatSelection(legacySlot, AutoCombatCardKind.AttackLike);
+            return true;
+        }
+
+        return false;
+    }
+
+    public static int? ExtractCombatLaneSlotIndex(string? targetLabel)
+    {
+        if (string.IsNullOrWhiteSpace(targetLabel))
+        {
+            return null;
+        }
+
+        if (targetLabel.StartsWith("combat lane slot ", StringComparison.OrdinalIgnoreCase)
+            || targetLabel.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
+        {
+            return ExtractFirstDigit(targetLabel);
+        }
+
+        return null;
+    }
+
+    public static bool IsCombatEnemyTargetLabel(string? targetLabel)
+    {
+        return targetLabel is not null
+               && (targetLabel.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase)
+                   || targetLabel.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsCombatEndTurnLabel(string? targetLabel)
+    {
+        return !string.IsNullOrWhiteSpace(targetLabel)
+               && (targetLabel.Contains("end turn", StringComparison.OrdinalIgnoreCase)
+                   || targetLabel.Contains("턴 종료", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsCombatCancelSelectionLabel(string? targetLabel)
+    {
+        return !string.IsNullOrWhiteSpace(targetLabel)
+               && (targetLabel.Contains("cancel", StringComparison.OrdinalIgnoreCase)
+                   || targetLabel.Contains("취소", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool TryResolveCombatLaneSlotIndex(
+        string? targetLabel,
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        int endExclusive,
+        out int slotIndex)
+    {
+        slotIndex = default;
+        if (ExtractCombatLaneSlotIndex(targetLabel) is { } directSlot
+            && IsValidSlotIndex(directSlot))
+        {
+            slotIndex = directSlot;
+            return true;
+        }
+
+        if (!IsCombatEnemyTargetLabel(targetLabel))
+        {
+            return false;
+        }
+
+        if (TryGetPendingCombatSelection(history, endExclusive) is { Kind: AutoCombatCardKind.AttackLike } scopedSelection
+            && IsValidSlotIndex(scopedSelection.SlotIndex))
+        {
+            slotIndex = scopedSelection.SlotIndex;
+            return true;
+        }
+
+        if (TryGetPendingCombatSelection(history) is { Kind: AutoCombatCardKind.AttackLike } recoveredSelection
+            && IsValidSlotIndex(recoveredSelection.SlotIndex))
+        {
+            slotIndex = recoveredSelection.SlotIndex;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsSelectionClearingEntry(GuiSmokeHistoryEntry entry)
+    {
+        return IsCombatEndTurnLabel(entry.TargetLabel)
+               || IsCombatCancelSelectionLabel(entry.TargetLabel)
+               || string.Equals(entry.TargetLabel, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsNeutralCombatLabel(string? targetLabel)
+    {
+        return string.IsNullOrWhiteSpace(targetLabel)
+               || targetLabel.StartsWith("combat lane slot ", StringComparison.OrdinalIgnoreCase)
+               || IsCombatEnemyTargetLabel(targetLabel)
+               || string.Equals(targetLabel, "observer-accepted", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCombatDecisionAction(string action)
+    {
+        return string.Equals(action, "click", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(action, "click-current", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(action, "right-click", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(action, "press-key", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsValidSlotIndex(int slotIndex)
+    {
+        return slotIndex is >= 1 and <= 5;
+    }
+
+    private static int? ExtractFirstDigit(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        foreach (var character in value)
+        {
+            if (char.IsDigit(character))
+            {
+                return character - '0';
+            }
+        }
+
+        return null;
+    }
+}
+
+static class CombatEligibilitySupport
+{
+    public static bool IsCombatPlayerActionWindowClosed(ObserverSummary observer)
+    {
+        if (TryGetCombatCrossCheckFlag(observer, "CombatManager.IsEnemyTurnStarted", out var enemyTurnStarted)
+            && enemyTurnStarted)
+        {
+            return true;
+        }
+
+        if (TryGetCombatCrossCheckFlag(observer, "CombatManager.IsPlayPhase", out var isPlayPhase)
+            && !isPlayPhase)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static bool IsPlayableAutoNonEnemyCombatCard(CombatCardKnowledgeHint card, int? energy)
+    {
+        return IsNonEnemyCombatCard(card)
+               && IsAutoNonEnemyPromotionEligible(card)
+               && IsPlayableAtCurrentEnergy(card, energy);
+    }
+
+    public static bool IsPlayableAutoNonEnemyCombatHandCard(
+        ObservedCombatHandCard card,
+        int? energy,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+    {
+        if (!IsNonEnemyCombatHandCard(card) || IsInertCombatHandCard(card))
+        {
+            return false;
+        }
+
+        if (ResolveObservedCombatCardKnowledge(card, combatCardKnowledge) is { } knowledgeCard
+            && !IsAutoNonEnemyPromotionEligible(knowledgeCard))
+        {
+            return false;
+        }
+
+        var resolvedCost = ResolveObservedCombatCardCost(card, combatCardKnowledge);
+        if (resolvedCost is < 0)
+        {
+            return false;
+        }
+
+        if (energy is null || resolvedCost is null)
+        {
+            return true;
+        }
+
+        return resolvedCost <= energy;
+    }
+
+    public static bool HasSelectedNonEnemyConfirmEvidence(
+        AutoCombatAnalysis analysis,
+        PendingCombatSelection? pendingSelection)
+    {
+        return pendingSelection?.Kind == AutoCombatCardKind.DefendLike
+               && pendingSelection.SlotIndex is >= 1 and <= 5
+               && ((analysis.HasSelectedCard && analysis.SelectedCardKind == AutoCombatCardKind.DefendLike)
+                   || analysis.HasSelfTargetBrackets);
+    }
+
+    public static bool HasSelectedNonEnemyConfirmEvidence(GuiSmokeStepRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.ScreenshotPath))
+        {
+            return false;
+        }
+
+        return HasSelectedNonEnemyConfirmEvidence(
+            AutoCombatAnalyzer.Analyze(request.ScreenshotPath),
+            CombatHistorySupport.TryGetPendingCombatSelection(request.History));
+    }
+
+    private static bool TryGetCombatCrossCheckFlag(ObserverSummary observer, string key, out bool value)
+    {
+        value = false;
+        if (observer.Meta.TryGetValue(key, out var directValue)
+            && bool.TryParse(directValue, out value))
+        {
+            return true;
+        }
+
+        if (!observer.Meta.TryGetValue("combatCrossCheck", out var combatCrossCheck)
+            || string.IsNullOrWhiteSpace(combatCrossCheck))
+        {
+            return false;
+        }
+
+        foreach (var segment in combatCrossCheck.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separatorIndex = segment.IndexOf('=');
+            if (separatorIndex <= 0)
+            {
+                continue;
+            }
+
+            var candidateKey = segment[..separatorIndex].Trim();
+            if (!string.Equals(candidateKey, key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return bool.TryParse(segment[(separatorIndex + 1)..].Trim(), out value);
+        }
+
+        return false;
+    }
+
+    private static bool IsAutoNonEnemyPromotionEligible(CombatCardKnowledgeHint card)
+    {
+        return !string.Equals(card.Type, "Status", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(card.Type, "Curse", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(card.Target, "None", StringComparison.OrdinalIgnoreCase)
+               && card.Cost is not < 0;
+    }
+
+    private static bool IsNonEnemyCombatCard(CombatCardKnowledgeHint card)
+    {
+        if (string.Equals(card.Target, "AnyEnemy", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(card.Target, "RandomEnemy", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(card.Type, "Power", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Target, "Self", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Target, "None", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Target, "AllAllies", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Target, "AnyAlly", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Target, "AllEnemies", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsNonEnemyCombatHandCard(ObservedCombatHandCard card)
+    {
+        return string.Equals(card.Type, "Skill", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Type, "Power", StringComparison.OrdinalIgnoreCase)
+               || card.Name.Contains("DEFEND", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsInertCombatHandCard(ObservedCombatHandCard card)
+    {
+        return string.Equals(card.Type, "Status", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Type, "Curse", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPlayableAtCurrentEnergy(CombatCardKnowledgeHint card, int? energy)
+    {
+        if (energy is null || card.Cost is null)
+        {
+            return true;
+        }
+
+        if (card.Cost < 0)
+        {
+            return energy > 0;
+        }
+
+        return card.Cost <= energy;
+    }
+
+    private static int? ResolveObservedCombatCardCost(
+        ObservedCombatHandCard card,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+    {
+        if (card.Cost is not null)
+        {
+            return card.Cost;
+        }
+
+        var slotMatch = combatCardKnowledge.FirstOrDefault(candidate => candidate.SlotIndex == card.SlotIndex);
+        if (slotMatch?.Cost is not null)
+        {
+            return slotMatch.Cost;
+        }
+
+        var cardKeys = BuildLookupKeys(card.Name);
+        if (cardKeys.Count == 0)
+        {
+            return null;
+        }
+
+        return combatCardKnowledge
+            .Where(candidate => candidate.Cost is not null)
+            .Where(candidate => BuildLookupKeys(candidate.Name).Any(cardKeys.Contains))
+            .Select(static candidate => candidate.Cost)
+            .FirstOrDefault();
+    }
+
+    private static CombatCardKnowledgeHint? ResolveObservedCombatCardKnowledge(
+        ObservedCombatHandCard card,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+    {
+        var slotMatch = combatCardKnowledge.FirstOrDefault(candidate => candidate.SlotIndex == card.SlotIndex);
+        if (slotMatch is not null)
+        {
+            return slotMatch;
+        }
+
+        var cardKeys = BuildLookupKeys(card.Name);
+        if (cardKeys.Count == 0)
+        {
+            return null;
+        }
+
+        return combatCardKnowledge.FirstOrDefault(candidate =>
+            BuildLookupKeys(candidate.Name).Any(cardKeys.Contains));
+    }
+
+    private static IReadOnlyList<string> BuildLookupKeys(string? cardName)
+    {
+        if (string.IsNullOrWhiteSpace(cardName))
+        {
+            return Array.Empty<string>();
+        }
+
+        var keys = new List<string>();
+        var normalizedName = NormalizeLookupKey(cardName);
+        AddLookupKey(keys, normalizedName);
+
+        var parts = cardName
+            .Split(new[] { '.', '_', '-', ' ', ':' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(NormalizeLookupKey)
+            .Where(static part => part.Length > 0)
+            .ToArray();
+        if (parts.Length == 0)
+        {
+            return keys;
+        }
+
+        var trimmedParts = parts[0] == "card"
+            ? parts[1..]
+            : parts;
+        if (trimmedParts.Length == 0)
+        {
+            return keys;
+        }
+
+        AddLookupKey(keys, string.Concat(trimmedParts));
+        AddLookupKey(keys, trimmedParts[0]);
+        if (trimmedParts.Length > 1 && IsCombatClassSuffix(trimmedParts[^1]))
+        {
+            AddLookupKey(keys, string.Concat(trimmedParts[..^1]));
+        }
+
+        foreach (var part in trimmedParts)
+        {
+            AddLookupKey(keys, part);
+        }
+
+        return keys;
+    }
+
+    private static void AddLookupKey(List<string> keys, string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate)
+            || keys.Contains(candidate, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        keys.Add(candidate);
+    }
+
+    private static bool IsCombatClassSuffix(string value)
+    {
+        return value is "ironclad" or "silent" or "defect" or "watcher" or "colorless" or "status" or "curse";
+    }
+
+    private static string NormalizeLookupKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        Span<char> buffer = stackalloc char[value.Length];
+        var length = 0;
+        foreach (var character in value)
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                buffer[length] = char.ToLowerInvariant(character);
+                length += 1;
+            }
+        }
+
+        return length == 0
+            ? string.Empty
+            : new string(buffer[..length]);
+    }
+}
+
+static class CombatDecisionContract
+{
+    public static bool TryMapSemanticAction(
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision decision,
+        out string semanticAction)
+    {
+        return TryMapSemanticAction(request, decision, out semanticAction, out _);
+    }
+
+    public static bool IsAllowed(
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision decision,
+        out string? semanticAction)
+    {
+        semanticAction = null;
+        if (!TryMapSemanticAction(request, decision, out var mappedAction, out var allowLegacyCardAliases))
+        {
+            return false;
+        }
+
+        semanticAction = mappedAction;
+        if (request.AllowedActions.Contains(mappedAction, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return allowLegacyCardAliases
+               && (request.AllowedActions.Contains("click card", StringComparer.OrdinalIgnoreCase)
+                   || request.AllowedActions.Contains("select card from hand", StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static bool TryMapSemanticAction(
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision decision,
+        out string semanticAction,
+        out bool allowLegacyCardAliases)
+    {
+        semanticAction = string.Empty;
+        allowLegacyCardAliases = false;
+
+        if (string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase))
+        {
+            semanticAction = "wait";
+            return true;
+        }
+
+        if (!string.Equals(request.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (string.Equals(decision.ActionKind, "click-current", StringComparison.OrdinalIgnoreCase))
+        {
+            if (CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(request)
+                && CombatHistorySupport.TryGetPendingCombatSelection(request.History) is { Kind: AutoCombatCardKind.DefendLike, SlotIndex: >= 1 and <= 5 } pendingSelection)
+            {
+                semanticAction = $"select non-enemy slot {pendingSelection.SlotIndex}";
+                return true;
+            }
+
+            return false;
+        }
+
+        if (CombatHistorySupport.TryParsePendingCombatSelection(decision.TargetLabel, out var selection)
+            && selection is not null)
+        {
+            semanticAction = selection.Kind == AutoCombatCardKind.AttackLike
+                ? $"select attack slot {selection.SlotIndex}"
+                : $"select non-enemy slot {selection.SlotIndex}";
+            allowLegacyCardAliases = true;
+            return true;
+        }
+
+        if (CombatHistorySupport.IsCombatEnemyTargetLabel(decision.TargetLabel))
+        {
+            semanticAction = "click enemy";
+            return true;
+        }
+
+        if (CombatHistorySupport.IsCombatEndTurnLabel(decision.TargetLabel)
+            || (string.Equals(decision.ActionKind, "press-key", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(decision.KeyText, "E", StringComparison.OrdinalIgnoreCase)))
+        {
+            semanticAction = "click end turn";
+            return true;
+        }
+
+        if (CombatHistorySupport.IsCombatCancelSelectionLabel(decision.TargetLabel)
+            || string.Equals(decision.ActionKind, "right-click", StringComparison.OrdinalIgnoreCase))
+        {
+            semanticAction = "right-click cancel selected card";
+            return true;
+        }
+
+        if (string.Equals(decision.ActionKind, "press-key", StringComparison.OrdinalIgnoreCase)
+            && decision.KeyText?.Length == 1
+            && char.IsDigit(decision.KeyText[0])
+            && decision.KeyText[0] is >= '1' and <= '5')
+        {
+            semanticAction = $"select attack slot {decision.KeyText[0]}";
+            allowLegacyCardAliases = true;
+            return true;
+        }
+
+        return false;
+    }
+}
+
 static class AutoCombatAnalyzer
 {
     public static AutoCombatAnalysis Analyze(string screenshotPath)
@@ -16699,13 +19407,6 @@ static partial class LongRunArtifacts
         string? failureClass,
         string trustStateAtStart)
     {
-        var validationPath = Path.Combine(logger.RunRoot, "validation-summary.json");
-        GuiSmokeValidationSummary? validationSummary = null;
-        if (File.Exists(validationPath))
-        {
-            validationSummary = JsonSerializer.Deserialize<GuiSmokeValidationSummary>(File.ReadAllText(validationPath), GuiSmokeShared.JsonOptions);
-        }
-
         var runManifestPath = Path.Combine(logger.RunRoot, "run.json");
         var runManifest = File.Exists(runManifestPath)
             ? JsonSerializer.Deserialize<GuiSmokeRunManifest>(File.ReadAllText(runManifestPath), GuiSmokeShared.JsonOptions)
@@ -16726,72 +19427,7 @@ static partial class LongRunArtifacts
 
         var attemptIndexPath = Path.Combine(sessionRoot, "attempt-index.ndjson");
         AppendUniqueNdjson(attemptIndexPath, attemptEntry, static existing => existing.RunId, attemptEntry.RunId);
-        var attemptEntries = ReadNdjson<GuiSmokeAttemptIndexEntry>(attemptIndexPath);
-        var startedAt = attemptEntries.Count == 0
-            ? runManifest?.StartedAt ?? DateTimeOffset.UtcNow
-            : attemptEntries.Min(static entry => entry.StartedAt);
-        var completedAt = attemptEntries.Count == 0
-            ? runManifest?.CompletedAt ?? DateTimeOffset.UtcNow
-            : attemptEntries
-                .Select(static entry => entry.CompletedAt ?? entry.StartedAt)
-                .Max();
-        var totalSteps = attemptEntries.Sum(static entry => entry.StepCount);
-        var passedAttempts = attemptEntries.Count(static entry =>
-            string.Equals(entry.Status, "passed", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(entry.Status, "completed", StringComparison.OrdinalIgnoreCase));
-        var failedAttempts = attemptEntries.Count - passedAttempts;
-        var validationEvents = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var entry in attemptEntries)
-        {
-            var attemptValidationPath = Path.Combine(sessionRoot, "attempts", entry.AttemptId, "validation-summary.json");
-            if (!File.Exists(attemptValidationPath))
-            {
-                continue;
-            }
-
-            GuiSmokeValidationSummary? attemptValidation;
-            try
-            {
-                attemptValidation = JsonSerializer.Deserialize<GuiSmokeValidationSummary>(File.ReadAllText(attemptValidationPath), GuiSmokeShared.JsonOptions);
-            }
-            catch (JsonException)
-            {
-                continue;
-            }
-
-            if (attemptValidation is null)
-            {
-                continue;
-            }
-
-            foreach (var pair in attemptValidation.EventCounts)
-            {
-                validationEvents[pair.Key] = validationEvents.TryGetValue(pair.Key, out var current)
-                    ? current + pair.Value
-                    : pair.Value;
-            }
-        }
-
-        if (validationEvents.Count == 0 && validationSummary is not null)
-        {
-            foreach (var pair in validationSummary.EventCounts)
-            {
-                validationEvents[pair.Key] = pair.Value;
-            }
-        }
-
-        var sessionSummary = new GuiSmokeSessionSummary(
-            SessionId: Path.GetFileName(sessionRoot),
-            ScenarioId: scenarioId,
-            Provider: providerKind,
-            StartedAt: startedAt,
-            CompletedAt: completedAt,
-            AttemptCount: attemptEntries.Count,
-            PassedAttempts: passedAttempts,
-            FailedAttempts: failedAttempts,
-            TotalSteps: totalSteps,
-            ValidationEvents: validationEvents);
-        LiveExportAtomicFileWriter.WriteJsonAtomic(Path.Combine(sessionRoot, "session-summary.json"), sessionSummary, GuiSmokeShared.JsonOptions);
+        LongRunArtifacts.RefreshSessionSummary(sessionRoot);
         RefreshStallSentinel(sessionRoot);
         RefreshSupervisorState(sessionRoot);
     }
@@ -17376,10 +20012,18 @@ sealed class ObserverSnapshotReader
         JsonDocument? inventoryDocument = TryReadJson(_harnessLayout.InventoryPath);
         var eventLines = TryReadTail(_liveLayout.EventsPath, 10);
 
-        var currentScreen = TryReadString(stateDocument?.RootElement, "currentScreen");
-        var visibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "visibleScreen") ?? currentScreen;
+        var inventorySceneType = TryReadString(inventoryDocument?.RootElement, "sceneType");
+        var currentScreen = TryReadString(stateDocument?.RootElement, "currentScreen")
+                            ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen")
+                            ?? TryReadNestedString(stateDocument?.RootElement, "meta", "logicalScreen")
+                            ?? TryReadNestedString(stateDocument?.RootElement, "meta", "flowScreen")
+                            ?? inventorySceneType;
+        var visibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "visibleScreen")
+                            ?? currentScreen
+                            ?? inventorySceneType;
         var inCombat = TryReadBool(stateDocument?.RootElement, "encounter", "inCombat");
-        var capturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt");
+        var capturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt")
+                         ?? TryReadDateTimeOffset(inventoryDocument?.RootElement, "capturedAt");
         var inventoryId = inventoryDocument is null
             ? null
             : TryReadString(inventoryDocument.RootElement, "inventoryId");
