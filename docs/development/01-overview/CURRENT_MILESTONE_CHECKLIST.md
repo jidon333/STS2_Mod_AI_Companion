@@ -15,15 +15,15 @@
 ## 현재 포인터
 
 - 전체 목표: `Phase 1: 외부 프로세스 AI 조언 어시스턴트 완성`
-- 현재 active milestone: `M2. 모드 로드 진입 증명`
-- 현재 실제 blocker: `startup/load-chain`
-- 다음 milestone: `M3. 런타임 부트스트랩 가동`
+- 현재 active milestone: `M4. Trusted Attempt 확보`
+- 현재 실제 blocker: `authoritative attempt / session accounting contract`
+- 다음 milestone: `M5. 하네스 장기 실행 증거 닫기`
 
 ## 지금 세션에서 확인할 것
 
-1. 현재 포인터와 blocker는 [PROJECT_STATUS.md](./PROJECT_STATUS.md)에서 본다.
-2. 다음 구현 세션이 바로 해야 할 일은 [AI_HANDOFF_PROMPT_KO.md](./AI_HANDOFF_PROMPT_KO.md)에서 본다.
-3. session done / milestone done 판정은 [RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](../05-harness/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)를 따른다.
+1. first authoritative attempt가 `0001`이고 `trustStateAtStart:"valid"`로 시작하는지 [PROJECT_STATUS.md](./PROJECT_STATUS.md) 기준으로 확인한다.
+2. bootstrap launch가 `attempt-index.ndjson`와 `restart-events.ndjson`의 authoritative attempt accounting을 오염시키지 않는지 [AI_HANDOFF_PROMPT_KO.md](./AI_HANDOFF_PROMPT_KO.md) 기준으로 본다.
+3. `restart-events` / `attempt-index` / `session-summary` / `supervisor-state` 해석 규칙은 [RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](../05-harness/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)를 따른다.
 4. 실행 전후 체크는 [SMOKE_TEST_CHECKLIST.md](../../SMOKE_TEST_CHECKLIST.md)와 [AGENTS.md](../../../AGENTS.md)를 따른다.
 
 ## 읽는 순서

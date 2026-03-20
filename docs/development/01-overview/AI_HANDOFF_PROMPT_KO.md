@@ -36,170 +36,231 @@
 
 ## 현재 방향성
 
-### 1. 장기 목표는 read-only advisor 제품이다
+### 1. 장기 목표는 여전히 read-only advisor 제품이다
 
-- 전체 목표는 여전히 `Phase 1: 외부 프로세스 AI 조언 어시스턴트 완성`이다.
+- 전체 목표는 `Phase 1: 외부 프로세스 AI 조언 어시스턴트 완성`이다.
 - 최종적으로는 사람이 실제 플레이 중 참고 가능한 `read-only advisor`를 만든다.
-- 장기 마일스톤은 [ROADMAP.md](../../ROADMAP.md)의 `M1~M10`을 canonical source로 따른다.
+- 장기 milestone 정의는 [ROADMAP.md](../../ROADMAP.md)의 `M1~M10`을 canonical source로 따른다.
 
-### 2. 현재 critical path는 gameplay가 아니라 startup / trust다
+### 2. 현재 active milestone은 `M4. Trusted Attempt 확보`다
 
-- 최근 몇 차례 문서와 artifact truthfulness 개선으로 `무엇이 보였는가`는 전보다 훨씬 정직하게 읽히게 됐다.
-- 하지만 current-execution 기준으로는 여전히:
-  - loader entry signal 없음
-  - runtime exporter 없음
-  - harness bridge 없음
-  - fresh snapshot 없음
-- 그래서 지금 active milestone은 `M2. 모드 로드 진입 증명`이다.
-- `combat`, `event/map overlay`, `reward fallback`은 중요한 기술 부채이지만 현재 top blocker는 아니다.
+- `M2. 모드 로드 진입 증명`과 `M3. 런타임 부트스트랩 가동`은 최신 fresh roots 기준으로 materially closed 상태다.
+- 현재 critical path는 더 이상 `loader/runtime bring-up`이 아니다.
+- 남은 주 병목은 `authoritative attempt / session accounting contract`다.
+- 다음 milestone은 `M5. 하네스 장기 실행 증거 닫기`다.
 
-### 3. 현재 올바른 표현은 "startup truthfulness는 좋아졌지만 root cause는 아직 loader/runtime rail에 있다"이다
+### 3. 지금 가장 중요한 표현은 "bootstrap-first는 구현됐고, 남은 것은 accounting semantics hardening"이다
 
-- startup timeline, sentinel, delta, reviewer summary는 현재 실행의 progression을 더 정직하게 보여준다.
-- 하지만 이건 `왜 안 되는지를 더 잘 보이게 한 것`이지, `이미 작동한다`는 뜻이 아니다.
-- 지금 필요한 것은 더 많은 진단 레이어가 아니라 `ModManager.TryLoadModFromPck(...)` 기준 failing branch 직접 디버깅이다.
+- latest roots는 current-execution runtime exporter / harness bridge / fresh snapshot / manual clean boot positive를 보여 준다.
+- bootstrap launch는 이제 attempt가 아니라 session-level pre-attempt phase다.
+- first authoritative attempt는 실제로 `0001 + trustStateAtStart:"valid"`로 시작한다.
+- 따라서 지금 필요한 것은 더 많은 startup diagnostic layer가 아니라 chronology/projection contract를 더 선명하게 만드는 일이다.
+
+### 4. Harness와 제품 경계를 계속 지킨다
+
+- `Smoke Harness`는 dev-only validation tool이다.
+- startup/trust/accounting 정리와 gameplay/advice 정책 변경을 섞지 않는다.
+- valid-trust evidence 위에서 최소 advisor value slice를 정의하되, 그 전에 broad recommendation refactor로 새지 않는다.
 
 ## 지금까지 실제로 전진한 일
 
-### A. startup artifact truthfulness 정리
-
-해결 결과:
-
-- launch baseline / delta capture가 생겼다
-- module-initializer probe가 pure probe로 축소됐다
-- startup timeline과 reviewer summary가 생겨 `latest`와 `ever/first-positive`를 분리해서 읽을 수 있다
-- stale snapshot과 fresh snapshot, no-snapshot 상태를 구분해서 기록한다
+### A. loader/runtime positive recovery
 
 대표 root:
 
-- [verify-startup-sentinel-20260319-193531](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-sentinel-20260319-193531)
-- [verify-startup-timeline-20260319-212903](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903)
+- [verify-loader-direct-20260320-000700](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700)
 
-### B. session summary / restart chain honesty 보강
+확인된 점:
 
-해결 결과:
+- `prevalidation.json`에서 `manualCleanBootVerified=true`
+- `supervisor-state.json`에서 `trustState:"valid"`
+- `startup-runtime-evidence.json`에서
+  - `runtimeExporterInitializedLogged=true`
+  - `harnessBridgeInitializeLogged=true`
+  - `liveSnapshotPresent=true`
 
-- `session-summary.json`이 live restart를 즉시 반영한다
-- invalid attempt를 optimistic success로 세지 않게 됐다
-- reviewer가 현재 active attempt와 terminal attempt를 더 일관되게 읽을 수 있다
+의미:
 
-### C. gameplay safety 쪽 최근 전진
+- direct loader debugging work unit은 현재 milestone 관점에서 충분히 성과를 냈다.
+- 더 이상 `ModManager.TryLoadModFromPck(...)` branch debugging이 current critical path는 아니다.
 
-이건 현재 critical path는 아니지만, 이미 닫은 성과로 남는다.
+### B. bootstrap-first sequencing closure
+
+대표 root:
+
+- [verify-bootstrap-first-attempt-20260320-0044](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044)
+
+확인된 점:
+
+- `prevalidation.json`에서 `manualCleanBootVerified=true`
+- `attempt-index.ndjson` first entry가 `attemptId:"0001"`, `trustStateAtStart:"valid"`
+- `restart-events.ndjson` first authoritative launch가 바로 `0001`
+- `supervisor-state.json`에서 `trustState:"valid"`, `milestoneState:"done"`
+
+의미:
+
+- bootstrap은 attempt loop 밖 pre-phase로 분리됐다.
+- `trustStateAtStart` 의미는 바꾸지 않고 first authoritative attempt를 valid-at-start로 만들었다.
+- sequencing 자체보다 남은 건 accounting contract clarity다.
+
+### C. gameplay safety 쪽 최근 전진은 유지되지만 current blocker는 아니다
 
 - stale curse/status non-enemy promotion 차단
 - enemy-turn closure
 - repeated non-enemy stale loop 차단
 - slot-4 combat no-op loop 대응
-- replay / parity self-test와 spot-check 유지
+- replay-step / replay-test / self-test 유지
+
+이 성과들은 계속 중요하지만, 현재 top blocker를 대체하지는 않는다.
 
 ## 현재 가장 중요한 문제
 
-현재 주 병목은 `current execution에서 primary DLL load-chain이 실제로 어디까지 도달하는가`다.
+현재 주 병목은 `bootstrap-first 이후 authoritative attempt / session accounting contract`다.
 
-핵심 root:
+핵심 의미는 아래와 같다.
 
-- [verify-startup-timeline-20260319-212903](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903)
+- `restart-events.ndjson`는 append-only chronology source처럼 동작한다.
+- `attempt-index.ndjson`는 terminal attempt summary projection에 가깝다.
+- `session-summary.json`는 reviewer-facing aggregate projection이다.
+- `supervisor-state.json`는 machine verdict projection이다.
 
-핵심 진단:
+즉 지금 남은 문제는 "현재 실행에서 아무것도 안 보인다"가 아니다.
 
-- [startup-runtime-evidence.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903/startup-runtime-evidence.json)
-  - latest diagnosis = `loader-entry-before-initializer-not-proven`
-  - `everReachedMainMenu=true`
-  - `everSawStaleSnapshot=true`
-  - `everSawCurrentExecutionSentinel=false`
-  - `everSawRuntimeExporter=false`
-- [startup-runtime-captures.ndjson](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903/startup-runtime-captures.ndjson)
-  - earlier positive와 later negative가 같은 root 안에 공존한다
+현재 남은 문제는:
+
+- reviewer가 current attempt와 terminal attempt를 한 번에 읽을 수 있도록 계약이 충분히 선명한가
+- `lastAttemptId` 같은 legacy/ambiguous field를 어떻게 해석해야 하는가
+- chronology source와 projection들의 관계가 docs와 self-test에서 일관되게 닫히는가
 
 ### 이 문제가 왜 중요한가
 
-- 지금은 gameplay가 막힌 것이 아니라 startup rail에서 authoritative current-execution proof가 멈춘 상태다.
-- 이 상태에서 gameplay를 더 파면 false success 위험이 크다.
-- 즉 지금은 "옵저버가 약한가"보다 "`loader / runtime bootstrap`이 실제로 current run에서 안 살아나는가"가 더 중요하다.
+- `M4`를 깔끔하게 닫으려면 first authoritative attempt가 valid로 시작하는 것만으로는 부족하다.
+- operator와 reviewer가 동일한 artifact set에서 동일한 결론을 읽어야 한다.
+- 이 contract가 흐리면 `M5` long-run evidence closure도 다시 해석 비용이 커진다.
 
-### 현재 가장 강한 작업 가설
+## 다음 구현 계획
 
-- 더 이상의 startup diagnostic schema 추가는 한계효용이 낮다.
-- 다음은 `ModManager.TryLoadModFromPck(...)` contract 기준 direct loader debugging이어야 한다.
-- 특히 아래를 직접 대조해야 한다.
-  - deployed `sts2-mod-ai-companion.pck`
-  - deployed `sts2-mod-ai-companion.dll`
-  - embedded `res://mod_manifest.json`
-  - `pck_name` / loose DLL naming / package layout
-  - current binary identity와 stale payload 가능성
+### Work Unit
 
-## 지금 당장 해야 할 일
+`Authoritative Attempt / Session Accounting Contract Hardening`
 
-### 1. direct loader debugging only
+### 목표
 
-다음 세션 목표:
+- `restart-events.ndjson`, `attempt-index.ndjson`, `session-summary.json`, `supervisor-state.json`의 truth contract를 코드와 self-test로 고정한다.
+- bootstrap-first 이후 reviewer가 `current attempt`, `last terminal attempt`, `restart target`, `milestone evidence`를 한 번에 해석할 수 있게 만든다.
+- schema/file set을 더 늘리지 않고 semantics만 선명하게 만든다.
 
-- `sts2-mod-ai-companion.dll`이 왜 game mod loader에 실제로 안 올라오는지 failing branch 1개를 특정한다.
-- 가능하면 같은 세션에서 그 branch를 수정하고 첫 positive loader/runtime signal 1개를 되살린다.
-
-금지:
-
-- 새 sentinel 계층 추가
-- 새 summary / timeline schema 추가
-- trust threshold 변경
-- gameplay / HandleCombat / observer heuristic 튜닝
-
-### 2. source of truth
+### source of truth
 
 가장 먼저 읽을 것:
 
-- [ModManager.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/knowledge/decompiled/MegaCrit/sts2/Core/Modding/ModManager.cs)
-- [STS2_NATIVE_LOADER.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/STS2_NATIVE_LOADER.md)
-- [mod_manifest.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/native-package-layout/flat/export-project/mod_manifest.json)
+- [verify-loader-direct-20260320-000700](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700)
+- [verify-bootstrap-first-attempt-20260320-0044](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044)
+- [Program.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.cs)
+- [LongRunArtifacts.Supervision.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs)
+- [RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](../05-harness/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)
+- [STARTUP_DEPLOY_CONTROL_LAYER.md](../05-harness/STARTUP_DEPLOY_CONTROL_LAYER.md)
 
-### 3. bounded 작업
+### bounded 작업
 
-1. `TryLoadModFromPck` checklist를 branch별로 현재 payload와 대조
-2. package / deploy / `.pck` contents / embedded manifest 직접 검증
-3. current primary DLL identity와 stale binary 가능성 확인
-4. known-good 시점의 payload와 현재 payload 비교 가능하면 수행
-5. failing branch를 찾으면 packaging / deploy / runtime bootstrap 범위 안에서 바로 수정
+1. `restart-events.ndjson`를 canonical chronology source로 고정한다.
+2. `attempt-index.ndjson`는 authoritative attempt당 terminal summary projection으로 유지한다.
+3. `session-summary.json`은 chronology + attempt projection에서만 파생되도록 정리한다.
+4. `supervisor-state.json`는 machine verdict projection으로 유지하되,
+   - `expectedCurrentAttemptId`
+   - `lastTerminalAttemptId`
+   - `latestRestartTargetAttemptId`
+   - `latestNextAttemptId`
+   를 canonical field로 취급한다.
+5. `lastAttemptId`는 wire shape는 유지하되 legacy/ambiguous field로 문서와 reviewer guidance에서 격하한다.
+6. chronology -> projection derivation helper를 한 곳으로 모아 `session-summary`와 `supervisor-state`가 같은 해석을 쓰게 만든다.
+7. docs와 self-test를 같이 갱신해 contract drift를 막는다.
+
+### 금지
+
+- 새 startup diagnostic layer 추가
+- 새 timeline/sentinel/schema field 추가
+- 별도 bootstrap-validation scenario split
+- gameplay / HandleCombat / observer heuristic / trust threshold 변경
+- `reward advisor`를 첫 value slice로 성급히 확정
+- broad recommendation engine refactor
+
+### validation loop
+
+1. `dotnet build`
+2. `dotnet run --project src/Sts2GuiSmokeHarness -- self-test`
+3. fresh `boot-to-long-run` live run 1회
+4. 아래 확인:
+   - first authoritative attempt는 `0001`
+   - `trustStateAtStart:"valid"`
+   - bootstrap launch는 attempt accounting에 포함되지 않음
+   - `session-summary.json`과 `supervisor-state.json`가 current/terminal attempt를 서로 다르게 오독하지 않음
+5. replay spot-check 유지:
+   - `0015 --full-request-rebuild => combat select attack slot 4`
+   - `0021 --full-request-rebuild => wait`
+
+### acceptance
+
+- fresh root에서 first authoritative attempt는 `0001 + valid-at-start`
+- `restart-events.ndjson` 기준 chronology와 `attempt-index/session-summary/supervisor-state` projection이 reviewer 관점에서 모순되지 않음
+- schema/file set 증설 없이 위 semantics가 self-test와 live root 둘 다에서 유지됨
+
+## 구현 백로그 우선순위
+
+1. `Authoritative Attempt / Session Accounting Contract Hardening`
+2. `Observer authority class contract 문서화`
+3. `Minimum advisor value slice 후보 선정`
+4. `State / Knowledge / Recommendation skeleton 설계`
+
+### 지금 backlog에 넣지 않을 것
+
+- scenario split
+- 새 startup diagnostic schema
+- 첫 advisor slice를 reward/shop/event 중 하나로 단정
+- 광범위한 recommendation engine 리팩터링
 
 ## 현재 읽어야 할 가장 중요한 artifact
 
-### 현재 startup blocker 이해용
+### current pointer 확인용
 
-- [verify-startup-sentinel-20260319-193531](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-sentinel-20260319-193531)
-- [verify-startup-timeline-20260319-212903](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903)
-- [startup-runtime-evidence.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903/startup-runtime-evidence.json)
-- [startup-runtime-captures.ndjson](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903/startup-runtime-captures.ndjson)
-- [prevalidation.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903/prevalidation.json)
-- [supervisor-state.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-startup-timeline-20260319-212903/supervisor-state.json)
+- [PROJECT_STATUS.md](./PROJECT_STATUS.md)
+- [CURRENT_MILESTONE_CHECKLIST.md](./CURRENT_MILESTONE_CHECKLIST.md)
 
-### loader contract 이해용
+### accounting contract 이해용
 
-- [ModManager.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/knowledge/decompiled/MegaCrit/sts2/Core/Modding/ModManager.cs)
-- [mod_manifest.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/native-package-layout/flat/export-project/mod_manifest.json)
-- [NativeModPackaging.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2ModAiCompanion.Mod/NativeModPackaging.cs)
+- [restart-events.ndjson](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044/restart-events.ndjson)
+- [attempt-index.ndjson](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044/attempt-index.ndjson)
+- [session-summary.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044/session-summary.json)
+- [supervisor-state.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044/supervisor-state.json)
+
+### runtime/bootstrap positive 이해용
+
+- [verify-loader-direct-20260320-000700](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700)
+- [startup-runtime-evidence.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700/startup-runtime-evidence.json)
+- [prevalidation.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700/prevalidation.json)
 
 ## 중요한 guardrail
 
-1. startup / deploy / trust가 invalid면 gameplay debugging을 하지 않는다
-2. 하네스가 게임 내부 선택 API를 직접 호출하게 만들지 않는다
-3. startup diagnostic layer를 계속 추가하지 않는다
-4. direct loader debugging은 decompiled contract + deployed payload + fresh artifact로 닫는다
-5. 세션 결과는 항상 artifact 기준으로만 판정한다
+1. 더 이상 startup diagnostic layer를 늘리지 않는다.
+2. bootstrap은 attempt가 아니라 session-level pre-attempt phase로 유지한다.
+3. `trustStateAtStart`의 의미를 바꾸지 않는다.
+4. chronology source와 projection을 섞어 읽지 않는다.
+5. gameplay/advice 정책 변경은 `M4` contract hardening과 분리한다.
 
 ## 새 세션 권장 시작 루프
 
 ### 참모 세션
 
-1. latest startup root 읽기
-2. current authoritative blocker를 한 줄로 압축
-3. 구현 범위를 `loader/package/deploy/runtime bootstrap` 안으로 고정
+1. latest authoritative root 읽기
+2. blocker를 `session/accounting contract` 한 줄로 압축
+3. 구현 범위를 chronology/projection hardening 안으로 고정
 4. 구현 세션 프롬프트 승인
 
 ### 구현+테스트 세션
 
 1. `dotnet build`
 2. `dotnet run --project src/Sts2GuiSmokeHarness -- self-test`
-3. payload / `.pck` / manifest / DLL identity branch 점검
-4. 필요 시 packaging/deploy 수정
-5. fresh startup-focused live run 1회
-6. startup artifact 기준으로 loader positive signal 여부 판정
+3. chronology/projection derivation 수정
+4. docs + self-test 동시 갱신
+5. fresh live run 1회
+6. accounting contract 기준으로 acceptance 판정
