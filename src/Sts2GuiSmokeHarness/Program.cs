@@ -6454,6 +6454,8 @@ static void RunSelfTest()
         Assert(bootstrapOnlyAttempts.Count == 0, "Bootstrap-only session should not create attempt-index entries before the authoritative first attempt opens.");
         Assert(bootstrapOnlyEvents.Count == 0, "Bootstrap-only session should not record authoritative restart events before the first gameplay attempt opens.");
         Assert(bootstrapOnlySummary.AttemptCount == 0 && bootstrapOnlySummary.ActiveAttemptId is null, "Bootstrap-only session summary should report zero attempts and no active attempt.");
+        Assert(bootstrapOnlySupervisor.ExpectedCurrentAttemptId is null, "Bootstrap-only session should not infer a current authoritative attempt before any chronology events exist.");
+        Assert(bootstrapOnlySupervisor.LastTerminalAttemptId is null && bootstrapOnlySupervisor.LastAttemptId is null, "Bootstrap-only session should not report terminal attempt ids before any authoritative attempt exists.");
     }
     finally
     {
@@ -6628,6 +6630,87 @@ static void RunSelfTest()
         if (Directory.Exists(eventOrderingRoot))
         {
             Directory.Delete(eventOrderingRoot, recursive: true);
+        }
+    }
+
+    var launchIssuedGapRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-launch-issued-gap-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(launchIssuedGapRoot);
+        LongRunArtifacts.InitializeSessionArtifacts(launchIssuedGapRoot, "launch-issued-gap-session", "boot-to-long-run", "headless");
+        LongRunArtifacts.UpdatePrevalidation(
+            launchIssuedGapRoot,
+            gameStoppedBeforeDeploy: true,
+            modsPayloadReconciled: true,
+            deployIdentityVerified: true,
+            manualCleanBootVerified: true);
+        LongRunArtifacts.UpdateRunnerSessionState(launchIssuedGapRoot, GuiSmokeContractStates.SessionCollecting);
+        var gapAttemptOneRoot = Path.Combine(launchIssuedGapRoot, "attempts", "0001");
+        Directory.CreateDirectory(Path.Combine(gapAttemptOneRoot, "steps"));
+        var gapAttemptOneFirstScreen = Path.Combine(gapAttemptOneRoot, "steps", "0001.screen.png");
+        File.WriteAllBytes(gapAttemptOneFirstScreen, Array.Empty<byte>());
+        var gapPreviousAttempt = new GuiSmokeAttemptResult(
+            "0001",
+            1,
+            "launch-issued-gap-attempt-0001",
+            gapAttemptOneRoot,
+            0,
+            "completed",
+            "max-steps-reached:8",
+            8,
+            LaunchFailed: false,
+            TerminalCause: "max-steps-reached",
+            FailureClass: null,
+            TrustStateAtStart: GuiSmokeContractStates.TrustInvalid);
+        LongRunArtifacts.RecordAttemptTerminal(
+            launchIssuedGapRoot,
+            "0001",
+            1,
+            "launch-issued-gap-attempt-0001",
+            "max-steps-reached",
+            launchFailed: false,
+            failureClass: null,
+            trustStateAtStart: GuiSmokeContractStates.TrustInvalid);
+        LongRunArtifacts.WriteSessionArtifacts(
+            launchIssuedGapRoot,
+            new ArtifactRecorder(gapAttemptOneRoot),
+            "launch-issued-gap-attempt-0001",
+            "boot-to-long-run",
+            "headless",
+            "0001",
+            1,
+            8,
+            "completed",
+            "max-steps-reached:8",
+            "max-steps-reached",
+            launchFailed: false,
+            failureClass: null,
+            trustStateAtStart: GuiSmokeContractStates.TrustInvalid);
+        LongRunArtifacts.RecordRunnerBeginRestart(launchIssuedGapRoot, gapPreviousAttempt, "0002", 2);
+        LongRunArtifacts.RecordRunnerLaunchIssued(
+            launchIssuedGapRoot,
+            "0002",
+            2,
+            "launch-issued-gap-attempt-0002",
+            GuiSmokeContractStates.TrustValid);
+        var gapSummary = JsonSerializer.Deserialize<GuiSmokeSessionSummary>(
+                             File.ReadAllText(Path.Combine(launchIssuedGapRoot, "session-summary.json")),
+                             GuiSmokeShared.JsonOptions)
+                         ?? throw new InvalidOperationException("Failed to read launch-issued gap session summary self-test artifact.");
+        var gapSupervisor = LongRunArtifacts.RefreshSupervisorState(launchIssuedGapRoot);
+        Assert(gapSummary.AttemptCount == 2, "Launch-issued gap chronology should count authoritative attempt 0002 immediately at runner-launch-issued.");
+        Assert(string.Equals(gapSummary.ActiveAttemptId, "0002", StringComparison.OrdinalIgnoreCase), "Session summary should treat a launch-issued/no-first-screen gap as active attempt 0002.");
+        Assert(string.Equals(gapSupervisor.ExpectedCurrentAttemptId, "0002", StringComparison.OrdinalIgnoreCase), "Supervisor should match session summary current attempt during a launch-issued/no-first-screen gap.");
+        Assert(string.Equals(gapSupervisor.LastTerminalAttemptId, "0001", StringComparison.OrdinalIgnoreCase), "Supervisor should keep the last terminal attempt separate from the current launch-issued target.");
+        Assert(string.Equals(gapSupervisor.LastAttemptId, "0001", StringComparison.OrdinalIgnoreCase), "Legacy lastAttemptId should alias the last terminal attempt during chronology gap cases.");
+        Assert(string.Equals(gapSupervisor.LatestRestartTargetAttemptId, "0002", StringComparison.OrdinalIgnoreCase), "Supervisor should expose the latest restart target from chronology.");
+        Assert(gapSupervisor.LatestNextAttemptId is null, "Supervisor should not invent latestNextAttemptId before next-attempt-started is recorded.");
+    }
+    finally
+    {
+        if (Directory.Exists(launchIssuedGapRoot))
+        {
+            Directory.Delete(launchIssuedGapRoot, recursive: true);
         }
     }
 
@@ -7087,6 +7170,12 @@ static void RunSelfTest()
         var supervisorState = LongRunArtifacts.RefreshSupervisorState(longRunSessionRoot);
         Assert(supervisorState.TrustState == GuiSmokeContractStates.TrustValid, "Supervisor should mark trust valid when all prevalidation gates are present.");
         Assert(supervisorState.MilestoneState == GuiSmokeContractStates.MilestoneDone, "Supervisor should require terminal, restart, and next attempt first-screen proof before reporting done.");
+        Assert(string.Equals(supervisorState.ExpectedCurrentAttemptId, sessionSummary.ActiveAttemptId, StringComparison.OrdinalIgnoreCase), "Supervisor current attempt should match the reviewer-facing session summary for a canonical long-run chronology.");
+        Assert(string.Equals(supervisorState.LastTerminalAttemptId, "0001", StringComparison.OrdinalIgnoreCase), "Canonical long-run chronology should preserve the last terminal attempt id.");
+        Assert(string.Equals(supervisorState.LastAttemptId, supervisorState.LastTerminalAttemptId, StringComparison.OrdinalIgnoreCase), "Legacy lastAttemptId should alias lastTerminalAttemptId instead of competing with current attempt semantics.");
+        Assert(string.Equals(supervisorState.LatestRestartTargetAttemptId, "0002", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(supervisorState.LatestNextAttemptId, "0002", StringComparison.OrdinalIgnoreCase),
+            "Canonical long-run chronology should expose restart target and latest next-attempt id separately while they still agree for attempt 0002.");
         Assert(File.Exists(Path.Combine(longRunSessionRoot, "goal-contract.json")), "Expected goal-contract.json to be created.");
         Assert(File.Exists(Path.Combine(longRunSessionRoot, "prevalidation.json")), "Expected prevalidation.json to be created.");
         Assert(File.Exists(Path.Combine(longRunSessionRoot, "restart-events.ndjson")), "Expected restart-events.ndjson to be created.");
@@ -7143,7 +7232,7 @@ static void RunSelfTest()
             "0002",
             2,
             "invalid-summary-attempt-0002",
-            GuiSmokeContractStates.TrustInvalid);
+            GuiSmokeContractStates.TrustValid);
 
         var invalidAttemptTwoRunRoot = Path.Combine(invalidSummaryRoot, "attempts", "0002");
         Directory.CreateDirectory(Path.Combine(invalidAttemptTwoRunRoot, "steps"));
@@ -7154,7 +7243,7 @@ static void RunSelfTest()
             "0002",
             2,
             "invalid-summary-attempt-0002",
-            GuiSmokeContractStates.TrustInvalid,
+            GuiSmokeContractStates.TrustValid,
             invalidAttemptTwoFirstScreen);
 
         var invalidSummary = JsonSerializer.Deserialize<GuiSmokeSessionSummary>(
@@ -7165,6 +7254,14 @@ static void RunSelfTest()
         Assert(invalidSummary.TerminalAttemptCount == 1, "Invalid/max-steps session summary should preserve terminal attempt count separately.");
         Assert(string.Equals(invalidSummary.ActiveAttemptId, "0002", StringComparison.OrdinalIgnoreCase), "Invalid/max-steps session summary should expose active attempt 0002.");
         Assert(invalidSummary.PassedAttempts == 0 && invalidSummary.FailedAttempts == 1, "Invalid/max-steps attempts should not be counted as passed.");
+        var invalidSupervisor = LongRunArtifacts.RefreshSupervisorState(invalidSummaryRoot);
+        Assert(string.Equals(invalidSupervisor.ExpectedCurrentAttemptId, "0002", StringComparison.OrdinalIgnoreCase), "Legacy invalid-0001/valid-0002 chronology should still expose attempt 0002 as the current attempt.");
+        Assert(string.Equals(invalidSupervisor.LastTerminalAttemptId, "0001", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(invalidSupervisor.LastAttemptId, "0001", StringComparison.OrdinalIgnoreCase),
+            "Legacy invalid-0001/valid-0002 chronology should keep lastAttemptId as a last-terminal alias.");
+        Assert(string.Equals(invalidSupervisor.LatestRestartTargetAttemptId, "0002", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(invalidSupervisor.LatestNextAttemptId, "0002", StringComparison.OrdinalIgnoreCase),
+            "Legacy invalid-0001/valid-0002 chronology should continue to expose restart target and latest next attempt separately.");
     }
     finally
     {

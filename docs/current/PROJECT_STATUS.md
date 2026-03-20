@@ -42,8 +42,9 @@
 ### What Is The Actual Current Blocker
 
 - bootstrap-first sequencing 자체는 구현됐다.
-- 하지만 `restart-events.ndjson`, `attempt-index.ndjson`, `session-summary.json`, `supervisor-state.json`의 semantics가 아직 충분히 명문화되거나 self-test로 고정되지는 않았다.
-- 특히 `supervisor-state.json`은 current attempt와 last terminal attempt를 함께 보여 주는데, `lastAttemptId`는 `expectedCurrentAttemptId`나 `lastTerminalAttemptId`보다 의미가 더 흐리다.
+- 다음 단계는 quartet semantics hardening이다.
+- `restart-events.ndjson`는 chronology source, `attempt-index.ndjson`는 terminal projection, `session-summary.json`는 reviewer projection, `supervisor-state.json`는 machine verdict projection으로 고정해야 한다.
+- 특히 `lastAttemptId`는 canonical truth가 아니라 legacy alias로만 읽게 정리해야 한다.
 - 따라서 남은 리스크는 `current-execution loader/runtime proof 부재`가 아니라 `session/accounting truth를 reviewer와 operator가 같은 방식으로 읽지 못하는 것`이다.
 
 ## Authoritative Roots To Read First

@@ -59,6 +59,22 @@ flowchart TD
 
 즉 `supervisor`와 `stall sentinel`은 deploy subprocess를 직접 제어하지 않는다. 제어는 runner가 하고, 둘은 artifact를 읽어 판정만 한다.
 
+### authoritative quartet 읽는 법
+
+- `restart-events.ndjson`는 유일한 append-only chronology source다.
+- `attempt-index.ndjson`는 terminal attempt summary projection이다.
+- `session-summary.json`는 reviewer-facing projection이다.
+- `supervisor-state.json`는 machine verdict projection이다.
+
+current/terminal/restart target을 읽을 때는 아래를 기준으로 본다.
+
+- current attempt: `session-summary.activeAttemptId`, `supervisor-state.expectedCurrentAttemptId`
+- last terminal attempt: `supervisor-state.lastTerminalAttemptId`
+- latest restart target: `supervisor-state.latestRestartTargetAttemptId`
+- latest next-attempt proof: `supervisor-state.latestNextAttemptId`
+
+`lastAttemptId`는 legacy alias다. current attempt를 뜻하지 않으며, 현재 구현에서는 `lastTerminalAttemptId`의 alias로만 읽는다.
+
 ## 3. 왜 이 제어층이 따로 중요한가
 
 이 계층이 중요한 이유는, gameplay가 그럴듯해 보여도 아래가 깨져 있으면 결과를 신뢰하면 안 되기 때문이다.
@@ -480,7 +496,12 @@ startup/deploy 제어층의 목적은 clean boot까지 닫는 것이고, step lo
 | `restart-events.ndjson` | authoritative attempt terminal, launch issued, restart, next attempt start를 append-only로 기록 | runner | chronology source, milestone chain 계산 |
 | `attempt-index.ndjson` | terminal된 authoritative attempt의 요약 row | runner | terminal cause, trustStateAtStart, failure class를 빠르게 읽는 projection |
 | `session-summary.json` | 세션 전체를 짧게 보는 reviewer summary | supervisor helper | attemptCount, terminalAttemptCount, activeAttemptId 같은 aggregate projection |
-| `supervisor-state.json` | trust/milestone/health와 current/terminal attempt 해석 결과 | supervisor | machine verdict projection, blocker/evidence 확인 |
+| `supervisor-state.json` | trust/milestone/health와 current/terminal attempt 해석 결과 | supervisor | machine verdict projection, `expectedCurrentAttemptId`, `lastTerminalAttemptId`, `latestRestartTargetAttemptId`, `latestNextAttemptId` 확인 |
+
+주의:
+
+- `lastAttemptId`는 backward compatibility용 legacy alias다.
+- current attempt를 읽을 때는 `expectedCurrentAttemptId`를 기준으로 보고, `lastAttemptId`는 쓰지 않는다.
 | `stall-diagnosis.ndjson` | stall 분류 | stall sentinel | gameplay loop 이후 병목 진단 |
 
 ## 8. skip 옵션이 이 경로에 주는 영향

@@ -424,6 +424,15 @@ static partial class LongRunArtifacts
         IReadOnlyList<string> Evidence,
         IReadOnlyList<string> Blockers);
 
+    private sealed record AttemptChronologyProjection(
+        IReadOnlyList<string> StartedAttemptIds,
+        string? ActiveAttemptId,
+        string? LastTerminalAttemptId,
+        string? LastTerminalCause,
+        string? LatestRestartTargetAttemptId,
+        string? LatestNextAttemptId,
+        string? LatestNextAttemptFirstScreenPath);
+
     private sealed record DecisionWaitPlateauAnalysis(
         string DiagnosisKind,
         bool PlateauDetected,
@@ -1359,15 +1368,7 @@ static partial class LongRunArtifacts
             .OrderBy(static entry => entry.RecordedAt)
             .ThenBy(static entry => entry.AttemptOrdinal)
             .ToArray();
-        var startedAttemptIds = restartEvents
-            .Where(static entry =>
-                string.Equals(entry.EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(entry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase))
-            .Select(static entry => entry.AttemptId)
-            .Where(static attemptId => !string.IsNullOrWhiteSpace(attemptId))
-            .Concat(attemptEntries.Select(static entry => entry.AttemptId))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var chronology = ProjectAttemptChronology(sessionRoot, attemptEntries, restartEvents);
         var sessionEventTimes = restartEvents
             .Select(static entry => (DateTimeOffset?)entry.RecordedAt)
             .Concat(attemptEntries.Select(static entry => (DateTimeOffset?)(entry.CompletedAt ?? entry.StartedAt)))
@@ -1433,9 +1434,9 @@ static partial class LongRunArtifacts
             Provider: goal.Provider,
             StartedAt: startedAt,
             CompletedAt: completedAt,
-            AttemptCount: startedAttemptIds.Length,
+            AttemptCount: chronology.StartedAttemptIds.Count,
             TerminalAttemptCount: attemptEntries.Length,
-            ActiveAttemptId: DetermineActiveAttemptId(restartEvents),
+            ActiveAttemptId: chronology.ActiveAttemptId,
             LastEventAt: lastEventAt,
             PassedAttempts: passedAttempts,
             FailedAttempts: failedAttempts,
@@ -1515,6 +1516,7 @@ static partial class LongRunArtifacts
             .OrderBy(static entry => entry.RecordedAt)
             .ThenBy(static entry => entry.AttemptOrdinal)
             .ToArray();
+        var chronology = ProjectAttemptChronology(sessionRoot, attemptEntries, restartEvents);
         var trustGateSatisfied = prevalidation.GameStoppedBeforeDeploy
                                  && prevalidation.ModsPayloadReconciled
                                  && prevalidation.DeployIdentityVerified
@@ -1523,7 +1525,7 @@ static partial class LongRunArtifacts
             ? GuiSmokeContractStates.TrustValid
             : GuiSmokeContractStates.TrustInvalid;
         var milestoneEvaluation = EvaluateMilestone(goal, trustState, attemptEntries, restartEvents, sessionRoot);
-        var healthEvaluation = EvaluateHealth(sessionRoot, goal, attemptEntries, restartEvents, now, observationOverride);
+        var healthEvaluation = EvaluateHealth(sessionRoot, goal, chronology, restartEvents, now, observationOverride);
 
         var blockers = new List<string>();
         if (!prevalidation.GameStoppedBeforeDeploy)
@@ -1569,6 +1571,11 @@ static partial class LongRunArtifacts
         var evidence = new List<string>();
         evidence.AddRange(milestoneEvaluation.Evidence);
         evidence.AddRange(healthEvaluation.Evidence);
+        evidence.Add($"chronology-source:{GetRestartEventsPath(sessionRoot)}");
+        evidence.Add("attempt-index-projection:terminal-summary");
+        evidence.Add("session-summary-projection:reviewer-facing");
+        evidence.Add("supervisor-state-projection:machine-verdict");
+        evidence.Add("last-attempt-id:legacy-alias-of-lastTerminalAttemptId");
         if (prevalidation.DeployEvidence is not null)
         {
             evidence.Add($"deploy-report:{prevalidation.DeployEvidence.ReportPath}");
@@ -1751,12 +1758,12 @@ static partial class LongRunArtifacts
             healthEvaluation.LastStepPath,
             healthEvaluation.ExpectedCurrentAttemptId,
             healthEvaluation.ExpectedCurrentAttemptFirstStepPath,
-            attemptEntries.LastOrDefault()?.AttemptId,
-            milestoneEvaluation.LastTerminalAttemptId,
-            milestoneEvaluation.LastTerminalCause,
-            milestoneEvaluation.LatestRestartTargetAttemptId,
-            milestoneEvaluation.LatestNextAttemptId,
-            milestoneEvaluation.LatestNextAttemptFirstScreenPath,
+            chronology.LastTerminalAttemptId,
+            chronology.LastTerminalAttemptId,
+            chronology.LastTerminalCause,
+            chronology.LatestRestartTargetAttemptId,
+            chronology.LatestNextAttemptId,
+            chronology.LatestNextAttemptFirstScreenPath,
             healthEvaluation.Classifications,
             evidence,
             blockers);
@@ -1767,7 +1774,7 @@ static partial class LongRunArtifacts
     private static HealthEvaluation EvaluateHealth(
         string sessionRoot,
         GuiSmokeGoalContract goal,
-        IReadOnlyList<GuiSmokeAttemptIndexEntry> attemptEntries,
+        AttemptChronologyProjection chronology,
         IReadOnlyList<GuiSmokeRestartEvent> restartEvents,
         DateTimeOffset now,
         SupervisorObservationOverride? observationOverride)
@@ -1776,7 +1783,7 @@ static partial class LongRunArtifacts
         var relevantProcessObserved = observationOverride?.RelevantProcessObserved ?? ObserveRelevantProcessHealth();
         var windowDetected = observationOverride?.WindowDetected ?? ObserveGameWindow();
         var runnerOwnerAlive = observationOverride?.RunnerOwnerAlive ?? IsRunnerOwnerAlive(goal.RunnerOwner);
-        var currentAttemptId = DetermineCurrentAttemptId(attemptEntries, restartEvents);
+        var currentAttemptId = chronology.ActiveAttemptId;
         var expectedCurrentAttemptFirstStepPath = string.IsNullOrWhiteSpace(currentAttemptId)
             ? null
             : Path.Combine(sessionRoot, "attempts", currentAttemptId, "steps", "0001.screen.png");
@@ -1906,52 +1913,108 @@ static partial class LongRunArtifacts
             .ToArray();
     }
 
-    private static string? DetermineCurrentAttemptId(
+    private static AttemptChronologyProjection ProjectAttemptChronology(
+        string sessionRoot,
         IReadOnlyList<GuiSmokeAttemptIndexEntry> attemptEntries,
         IReadOnlyList<GuiSmokeRestartEvent> restartEvents)
     {
-        var startedAttempt = restartEvents.LastOrDefault(eventEntry =>
-            string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(startedAttempt?.AttemptId))
+        var startedAttemptIds = new List<string>();
+        var startedAttemptSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string? activeAttemptId = null;
+        string? lastTerminalAttemptId = null;
+        string? latestRestartTargetAttemptId = null;
+        string? latestNextAttemptId = null;
+        string? latestNextAttemptFirstScreenPath = null;
+
+        foreach (var eventEntry in restartEvents)
         {
-            return startedAttempt.AttemptId;
+            if (string.IsNullOrWhiteSpace(eventEntry.AttemptId))
+            {
+                continue;
+            }
+
+            if (string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase))
+            {
+                AddStartedAttemptId(startedAttemptIds, startedAttemptSet, eventEntry.AttemptId);
+                activeAttemptId = eventEntry.AttemptId;
+                continue;
+            }
+
+            if (string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase))
+            {
+                AddStartedAttemptId(startedAttemptIds, startedAttemptSet, eventEntry.AttemptId);
+                activeAttemptId = eventEntry.AttemptId;
+                latestNextAttemptId = eventEntry.AttemptId;
+                latestNextAttemptFirstScreenPath = string.IsNullOrWhiteSpace(eventEntry.StepScreenPath)
+                    ? Path.Combine(sessionRoot, "attempts", eventEntry.AttemptId, "steps", "0001.screen.png")
+                    : eventEntry.StepScreenPath;
+                continue;
+            }
+
+            if (string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventAttemptTerminal, StringComparison.OrdinalIgnoreCase))
+            {
+                lastTerminalAttemptId = eventEntry.AttemptId;
+                if (string.Equals(activeAttemptId, eventEntry.AttemptId, StringComparison.OrdinalIgnoreCase))
+                {
+                    activeAttemptId = null;
+                }
+
+                continue;
+            }
+
+            if (string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventRunnerBeginRestart, StringComparison.OrdinalIgnoreCase))
+            {
+                latestRestartTargetAttemptId = eventEntry.AttemptId;
+            }
         }
 
-        return attemptEntries.LastOrDefault()?.AttemptId;
+        foreach (var attemptEntry in attemptEntries)
+        {
+            AddStartedAttemptId(startedAttemptIds, startedAttemptSet, attemptEntry.AttemptId);
+        }
+
+        lastTerminalAttemptId ??= attemptEntries.LastOrDefault()?.AttemptId;
+        var lastTerminalCause = ResolveLastTerminalCause(attemptEntries, restartEvents, lastTerminalAttemptId);
+        return new AttemptChronologyProjection(
+            startedAttemptIds,
+            activeAttemptId,
+            lastTerminalAttemptId,
+            lastTerminalCause,
+            latestRestartTargetAttemptId,
+            latestNextAttemptId,
+            latestNextAttemptFirstScreenPath);
     }
 
-    private static string? DetermineActiveAttemptId(IReadOnlyList<GuiSmokeRestartEvent> restartEvents)
+    private static void AddStartedAttemptId(ICollection<string> startedAttemptIds, ISet<string> startedAttemptSet, string? attemptId)
     {
-        var activeAttempt = restartEvents
-            .Where(static entry => !string.IsNullOrWhiteSpace(entry.AttemptId))
-            .GroupBy(static entry => entry.AttemptId, StringComparer.OrdinalIgnoreCase)
-            .Select(static group =>
-            {
-                var lastStartAt = group
-                    .Where(static entry =>
-                        string.Equals(entry.EventType, GuiSmokeContractStates.EventRunnerLaunchIssued, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(entry.EventType, GuiSmokeContractStates.EventNextAttemptStarted, StringComparison.OrdinalIgnoreCase))
-                    .Select(static entry => (DateTimeOffset?)entry.RecordedAt)
-                    .DefaultIfEmpty(null)
-                    .Max();
-                var lastTerminalAt = group
-                    .Where(static entry => string.Equals(entry.EventType, GuiSmokeContractStates.EventAttemptTerminal, StringComparison.OrdinalIgnoreCase))
-                    .Select(static entry => (DateTimeOffset?)entry.RecordedAt)
-                    .DefaultIfEmpty(null)
-                    .Max();
-                return new
-                {
-                    AttemptId = group.Key,
-                    AttemptOrdinal = group.Max(static entry => entry.AttemptOrdinal),
-                    LastStartAt = lastStartAt,
-                    LastTerminalAt = lastTerminalAt,
-                };
-            })
-            .Where(static entry => entry.LastStartAt is not null && (entry.LastTerminalAt is null || entry.LastStartAt > entry.LastTerminalAt))
-            .OrderByDescending(static entry => entry.LastStartAt)
-            .ThenByDescending(static entry => entry.AttemptOrdinal)
-            .FirstOrDefault();
-        return activeAttempt?.AttemptId;
+        if (string.IsNullOrWhiteSpace(attemptId) || !startedAttemptSet.Add(attemptId))
+        {
+            return;
+        }
+
+        startedAttemptIds.Add(attemptId);
+    }
+
+    private static string? ResolveLastTerminalCause(
+        IReadOnlyList<GuiSmokeAttemptIndexEntry> attemptEntries,
+        IReadOnlyList<GuiSmokeRestartEvent> restartEvents,
+        string? lastTerminalAttemptId)
+    {
+        if (string.IsNullOrWhiteSpace(lastTerminalAttemptId))
+        {
+            return null;
+        }
+
+        var attemptIndexCause = attemptEntries.LastOrDefault(entry =>
+            string.Equals(entry.AttemptId, lastTerminalAttemptId, StringComparison.OrdinalIgnoreCase))?.TerminalCause;
+        if (!string.IsNullOrWhiteSpace(attemptIndexCause))
+        {
+            return attemptIndexCause;
+        }
+
+        return restartEvents.LastOrDefault(eventEntry =>
+            string.Equals(eventEntry.EventType, GuiSmokeContractStates.EventAttemptTerminal, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(eventEntry.AttemptId, lastTerminalAttemptId, StringComparison.OrdinalIgnoreCase))?.TerminalCause;
     }
 
     private static void WriteStallDiagnosis(string sessionRoot, string runRoot, GuiSmokeAttemptIndexEntry attemptEntry)
