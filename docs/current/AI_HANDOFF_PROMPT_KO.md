@@ -53,14 +53,15 @@
 - 공식 next milestone은 `M6. Replay/Parity 회귀 게이트 고정`이다.
 - 지금 구현 workstream은 `M5` 위에서 첫 advisor value slice를 닫는 것이다.
 
-### 3. 지금 가장 중요한 표현은 "Phase 1~3은 닫혔고, 이제 card reward advisor usefulness closure로 넘어간다"이다
+### 3. 지금 가장 중요한 표현은 "Phase 1~3과 honesty pass는 닫혔고, 이제 valid-trust live reward bundle closure로 넘어간다"이다
 
 - latest roots는 current-execution runtime exporter / harness bridge / fresh snapshot / manual clean boot positive를 보여 준다.
 - bootstrap launch는 이제 attempt가 아니라 session-level pre-attempt phase다.
 - first authoritative attempt는 실제로 `0001 + trustStateAtStart:"valid"`로 시작한다.
 - quartet semantics는 `restart-events` chronology와 projection들이 같은 이야기를 하도록 정렬됐다.
 - Host hot path는 advice와 diagnostics가 이전보다 분리됐고, reward scene에는 deterministic middle layer가 들어갔다.
-- 따라서 지금 필요한 것은 더 많은 startup diagnostic layer가 아니라 `card reward` 조언의 실제 참고 가치를 닫는 일이다.
+- reward scaffold는 honesty pass와 curated parity acceptance 강화까지 끝났다.
+- 따라서 지금 필요한 것은 더 많은 startup diagnostic layer나 scaffold polishing이 아니라 `card reward` 조언의 실제 live reviewer bundle을 닫는 일이다.
 
 ### 4. Harness와 제품 경계를 계속 지킨다
 
@@ -153,7 +154,25 @@
 - `card reward`는 이제 첫 advisor value slice 후보가 아니라 실제 구현된 pilot slice다.
 - 남은 것은 deterministic context를 더 늘리는 일이 아니라 usefulness acceptance를 닫는 일이다.
 
-### F. gameplay safety 쪽 최근 전진은 유지되지만 current blocker는 아니다
+### F. reward artifact honesty pass + curated parity tightening
+
+확인된 점:
+
+- finalizer는 minimal normalization contract로 줄었다.
+- Host second finalization은 제거됐다.
+- curated reward 3개 scenario는 self-test에서
+  - prompt-pack parity
+  - minimal-finalizer honesty
+  - model-rationale readability
+  - non-first-choice case
+  를 같이 본다.
+
+의미:
+
+- reward scaffold는 이전보다 훨씬 정직해졌다.
+- 하지만 이건 `usefulness 완료`가 아니라 `usefulness를 평가할 scaffold 준비 완료`다.
+
+### G. gameplay safety 쪽 최근 전진은 유지되지만 current blocker는 아니다
 
 - stale curse/status non-enemy promotion 차단
 - enemy-turn closure
@@ -165,30 +184,31 @@
 
 ## 현재 가장 중요한 문제
 
-현재 주 병목은 `valid-trust evidence 위의 card reward advisor usefulness closure`다.
+현재 주 병목은 `고정된 curated reward 3개 scenario의 valid-trust live bundle 부재`다.
 
 핵심 의미는 아래와 같다.
 
-- deterministic layer는 들어갔지만, 아직 curated reward scenes에서 reviewer가 artifact만 보고 “실제로 참고 가치 있다”를 닫는 acceptance가 없다.
-- live/replay parity는 deterministic context alignment 수준에서는 좋아졌지만, usefulness 기준이 아직 product acceptance로 고정되지 않았다.
-- reward 외 scene으로 확장하기 전에, `card reward` 하나를 실제 가치 슬라이스로 닫아야 한다.
+- deterministic layer와 honesty scaffold는 이미 있다.
+- 하지만 실제 valid-trust live evidence에서 curated 3개 scenario를 모두 모아 reviewer bundle로 닫은 적은 아직 없다.
+- reward 외 scene으로 확장하기 전에, 이 3개 scenario를 live/replay parity와 usefulness review까지 포함해 실제 bundle로 닫아야 한다.
 
 ### 이 문제가 왜 중요한가
 
-- validation-only trap에서 빠져나오려면 좁은 scene 하나에서 실제 조언 가치를 증명해야 한다.
-- `card reward`는 deterministic option/facts/trace가 이미 있으므로, 지금 가장 싸게 제품 가치를 확인할 수 있는 장면이다.
-- 이 슬라이스를 닫아야 reward 다음 scene 확장도 heuristic 덧칠이 아니라 구조 확장으로 갈 수 있다.
+- validation-only trap에서 빠져나오려면 좁은 scene 하나에서 실제 조언 가치를 live evidence로 증명해야 한다.
+- `card reward`는 deterministic option/facts/trace와 honesty scaffold가 이미 있으므로, 지금 가장 싸게 제품 가치를 확인할 수 있는 장면이다.
+- 이 3개 scenario bundle을 닫아야 reward 다음 scene 확장도 heuristic 덧칠이 아니라 구조 확장으로 갈 수 있다.
 
 ## 다음 구현 계획
 
 ### Work Unit
 
-`Card Reward Advisor Value Closure`
+`Valid-Trust Card Reward Reviewer Bundle`
 
 ### 목표
 
-- valid-trust evidence 위의 `card reward` 장면 3~5개에서, reward advice artifact만으로 reviewer가 실제 참고 가치를 판정할 수 있게 만든다.
-- 이미 들어간 deterministic `option set / assessment facts / trace`를 제품 acceptance로 연결한다.
+- 이번 work unit의 acceptance set은 현재 `CreateCuratedRewardScenarios()`에 있는 3개 scenario로 고정한다.
+- valid-trust live evidence에서 이 3개 scenario를 모두 수집하고, 각 scenario에 대해 reviewer-facing bundle을 만든다.
+- 각 scenario bundle은 usefulness와 deterministic prompt-pack parity를 함께 보여야 한다.
 - reward 외 scene은 건드리지 않고, reward slice 하나만 닫는다.
 
 ### source of truth
@@ -202,20 +222,36 @@
 - [AdvicePromptBuilder.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Reasoning/AdvicePromptBuilder.cs)
 - [ReplayAdvisorValidator.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Replay/ReplayAdvisorValidator.cs)
 - [CompanionHost.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Host/CompanionHost.cs)
+- [Program.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2ModKit.SelfTest/Program.cs)
 
 ### bounded 작업
 
-1. curated `card reward` fixtures/scenes 3~5개를 고른다.
-2. reward advice artifact가 아래를 일관되게 채우도록 한다.
+1. 이번 work unit의 curated acceptance set을 현재 3개 scenario로 고정한다.
+   - attack-gap-duplicate-block
+   - defense-gap
+   - draw-gap-with-unknown-alternative
+2. valid-trust live evidence에서 이 3개 scenario를 모두 수집한다.
+   - 한 root에 다 있지 않아도 된다
+   - 여러 valid-trust attempts/roots를 묶어도 된다
+3. 각 scenario마다 아래 4개 artifact를 reviewer bundle에 포함한다.
+   - live prompt pack
+   - replay prompt pack
+   - live advice artifact
+   - replay advice artifact
+4. deterministic reward payload 기준으로 live/replay prompt-pack parity를 비교한다.
+   - RewardOptionSet
+   - RewardAssessmentFacts
+   - RewardRecommendationTraceSeed
+   - run-local timestamp / session id / 비결정적 metadata는 제외
+5. usefulness review는 advice artifact 기준으로 별도로 판정한다.
    - `recommendedChoiceLabel`
    - `reasoningBullets`
    - `missingInformation`
    - `decisionBlockers`
    - `RewardRecommendationTrace`
-3. deterministic `RewardOptionSet / RewardAssessmentFacts / RewardRecommendationTraceSeed`를 reviewer가 읽기 쉬운 형태로 유지하거나 노출한다.
-4. live/replay reward path에서 같은 deterministic option labels / fact lines / recommendation output을 비교 가능하게 만든다.
-5. reward usefulness acceptance를 self-test/replay/live artifact 기준으로 닫는다.
-6. reward 외 scene은 기존 path 그대로 유지한다.
+6. bounded run/time budget 안에서만 수집한다.
+   - 3개를 다 못 모으면 새 infra 없이 partial closure로 보고하고 종료한다
+7. reward 외 scene은 기존 path 그대로 유지한다.
 
 ### 금지
 
@@ -226,27 +262,31 @@
 - event/shop/rest/combat deterministic layer 확장
 - broad recommendation engine refactor
 - reward 다음 scene을 이번 세션에 같이 열기
+- acceptance set을 구현 도중 늘리는 것
 
 ### validation loop
 
 1. `dotnet build`
 2. `dotnet run --project src/Sts2ModKit.SelfTest`
 3. `dotnet run --project src/Sts2GuiSmokeHarness -- self-test`
-4. curated reward live/replay check
+4. valid-trust live reward bundle 수집
+5. curated 3개 scenario별 live/replay prompt-pack parity 확인
+6. curated 3개 scenario별 reviewer usefulness review
 5. replay spot-check 유지:
    - `0015 --full-request-rebuild => combat select attack slot 4`
    - `0021 --full-request-rebuild => wait`
 
 ### acceptance
 
-- curated `card reward` scenes에서 advice artifact만 보고 reviewer가 usefulness를 판정할 수 있다.
-- `recommendedChoiceLabel`은 항상 visible option set 안에 있다.
-- deterministic reward context와 advice output이 live/replay에서 비교 가능하다.
+- 현재 고정된 curated 3개 scenario가 모두 valid-trust live bundle에 포함된다.
+- 각 scenario에서 `recommendedChoiceLabel`은 visible option set 안에 있다.
+- 각 scenario에서 advice artifact만 보고 reviewer가 usefulness를 판정할 수 있다.
+- 각 scenario에서 deterministic reward payload 기준의 live/replay prompt-pack parity가 맞는다.
 - reward 외 scene behavior는 변하지 않는다.
 
 ## 구현 백로그 우선순위
 
-1. `Card Reward Advisor Value Closure`
+1. `Valid-Trust Card Reward Reviewer Bundle`
 2. `Observer authority consumption contract 문서화`
 3. `Reward 다음 scene class 선택(event / shop / rest)`
 4. `State / Knowledge / Recommendation architecture 확장`
@@ -255,7 +295,7 @@
 
 - scenario split
 - 새 startup diagnostic schema
-- reward usefulness closure 전 다음 scene 확장
+- valid-trust reward bundle closure 전 다음 scene 확장
 - 광범위한 recommendation engine 리팩터링
 
 ## 현재 읽어야 할 가장 중요한 artifact
@@ -284,6 +324,7 @@
 - [RewardDeterministicBuilders.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Reasoning/RewardDeterministicBuilders.cs)
 - [AdvicePromptBuilder.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Reasoning/AdvicePromptBuilder.cs)
 - [ReplayAdvisorValidator.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Replay/ReplayAdvisorValidator.cs)
+- [Program.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2ModKit.SelfTest/Program.cs)
 
 ## 중요한 guardrail
 
@@ -292,13 +333,14 @@
 3. `trustStateAtStart`의 의미를 바꾸지 않는다.
 4. chronology source와 projection을 섞어 읽지 않는다.
 5. reward usefulness closure 전에는 reward 외 scene 확장을 하지 않는다.
+6. 이번 work unit의 curated acceptance set은 3개 scenario로 고정한다.
 
 ## 새 세션 권장 시작 루프
 
 ### 참모 세션
 
 1. latest authoritative root 읽기
-2. blocker를 `card reward usefulness closure` 한 줄로 압축
+2. blocker를 `valid-trust live reward bundle 부재` 한 줄로 압축
 3. 구현 범위를 reward slice 안으로 고정
 4. 구현 세션 프롬프트 승인
 
@@ -307,6 +349,7 @@
 1. `dotnet build`
 2. `dotnet run --project src/Sts2ModKit.SelfTest`
 3. `dotnet run --project src/Sts2GuiSmokeHarness -- self-test`
-4. reward fixture / parity / artifact usefulness 개선
-5. docs + self-test 동시 갱신
-6. reward usefulness 기준으로 acceptance 판정
+4. valid-trust live reward scenario 수집
+5. scenario별 parity + usefulness reviewer bundle 작성
+6. docs + bundle summary 갱신
+7. bounded budget 안에서 acceptance 또는 partial closure 판정
