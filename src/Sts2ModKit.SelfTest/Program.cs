@@ -1888,24 +1888,11 @@ static void TestRewardNonCardFallback()
 
 static void TestRewardLiveReplayDeterministicContext()
 {
-    var result = ExecuteRewardScenario(CreateDefaultRewardScenario(), FakeCodexRewardResponseMode.MinimalModelOutput);
-
-    Assert(result.LivePromptPack.RewardOptionSet is not null, "Expected live reward option set.");
-    Assert(result.LivePromptPack.RewardAssessmentFacts is not null, "Expected live reward assessment facts.");
-    Assert(result.LivePromptPack.RewardRecommendationTraceSeed is not null, "Expected live reward trace seed.");
-    Assert(result.ReplayPromptPack.RewardOptionSet is not null, "Expected replay reward option set.");
-    Assert(result.ReplayPromptPack.RewardAssessmentFacts is not null, "Expected replay reward assessment facts.");
-    Assert(result.ReplayPromptPack.RewardRecommendationTraceSeed is not null, "Expected replay reward trace seed.");
-    Assert(
-        result.LivePromptPack.RewardOptionSet.Options.Select(option => option.Label)
-            .SequenceEqual(result.ReplayPromptPack.RewardOptionSet.Options.Select(option => option.Label), StringComparer.Ordinal),
-        "Expected live and replay option labels to match.");
-    Assert(
-        result.LivePromptPack.RewardAssessmentFacts.FactLines.SequenceEqual(result.ReplayPromptPack.RewardAssessmentFacts.FactLines, StringComparer.Ordinal),
-        "Expected live and replay deterministic fact lines to match.");
-    Assert(
-        result.LivePromptPack.RewardRecommendationTraceSeed.CandidateLabels.SequenceEqual(result.ReplayPromptPack.RewardRecommendationTraceSeed.CandidateLabels, StringComparer.Ordinal),
-        "Expected live and replay trace seed candidate labels to match.");
+    foreach (var scenario in CreateCuratedRewardScenarios())
+    {
+        var result = ExecuteRewardScenario(scenario, FakeCodexRewardResponseMode.MinimalModelOutput);
+        AssertRewardPromptPackParity(result, scenario.Name);
+    }
 }
 
 static void TestRewardFinalizerMinimalNormalization()
@@ -1985,6 +1972,11 @@ static void TestRewardModelRationaleArtifacts()
         Assert(result.LiveAdvice.MissingInformation.SequenceEqual(result.ReplayAdvice.MissingInformation, StringComparer.Ordinal), $"Expected live and replay missing-information parity for scenario {scenario.Name}.");
         Assert(result.LiveAdvice.DecisionBlockers.SequenceEqual(result.ReplayAdvice.DecisionBlockers, StringComparer.Ordinal), $"Expected live and replay decision-blocker parity for scenario {scenario.Name}.");
         Assert(result.LiveAdvice.KnowledgeRefs.SequenceEqual(result.ReplayAdvice.KnowledgeRefs, StringComparer.Ordinal), $"Expected live and replay knowledge-ref parity for scenario {scenario.Name}.");
+        AssertRewardPromptPackParity(result, scenario.Name);
+        AssertReviewerReadableRewardAdvice(result.LiveAdvice, result.LivePromptPack, scenario.Name, "live");
+        AssertReviewerReadableRewardAdvice(result.ReplayAdvice, result.ReplayPromptPack, scenario.Name, "replay");
+        Assert(result.LiveAdvice.DecisionBlockers.Count == 0, $"Expected live decision blockers to stay empty for scenario {scenario.Name}.");
+        Assert(result.ReplayAdvice.DecisionBlockers.Count == 0, $"Expected replay decision blockers to stay empty for scenario {scenario.Name}.");
 
         if (!string.IsNullOrWhiteSpace(scenario.ExpectedRationaleContains))
         {
@@ -2093,6 +2085,80 @@ static RewardScenarioExecutionResult ExecuteRewardScenario(RewardScenarioDefinit
     {
         SafeDeleteDirectory(root);
     }
+}
+
+static void AssertRewardPromptPackParity(RewardScenarioExecutionResult result, string scenarioName)
+{
+    Assert(result.LivePromptPack.RewardOptionSet is not null, $"Expected live reward option set for scenario {scenarioName}.");
+    Assert(result.LivePromptPack.RewardAssessmentFacts is not null, $"Expected live reward assessment facts for scenario {scenarioName}.");
+    Assert(result.LivePromptPack.RewardRecommendationTraceSeed is not null, $"Expected live reward trace seed for scenario {scenarioName}.");
+    Assert(result.ReplayPromptPack.RewardOptionSet is not null, $"Expected replay reward option set for scenario {scenarioName}.");
+    Assert(result.ReplayPromptPack.RewardAssessmentFacts is not null, $"Expected replay reward assessment facts for scenario {scenarioName}.");
+    Assert(result.ReplayPromptPack.RewardRecommendationTraceSeed is not null, $"Expected replay reward trace seed for scenario {scenarioName}.");
+
+    var liveOptionSet = result.LivePromptPack.RewardOptionSet!;
+    var replayOptionSet = result.ReplayPromptPack.RewardOptionSet!;
+    Assert(string.Equals(liveOptionSet.SceneType, replayOptionSet.SceneType, StringComparison.Ordinal), $"Expected reward scene types to match for scenario {scenarioName}.");
+    Assert(liveOptionSet.SkipAllowed == replayOptionSet.SkipAllowed, $"Expected skip visibility to match for scenario {scenarioName}.");
+    Assert(string.Equals(liveOptionSet.SummaryText, replayOptionSet.SummaryText, StringComparison.Ordinal), $"Expected reward option summaries to match for scenario {scenarioName}.");
+    Assert(
+        liveOptionSet.Options.Select(option => (option.Ordinal, option.Kind, option.Label, option.Value, option.Description, option.IsSkipOption))
+            .SequenceEqual(replayOptionSet.Options.Select(option => (option.Ordinal, option.Kind, option.Label, option.Value, option.Description, option.IsSkipOption))),
+        $"Expected reward option payloads to match for scenario {scenarioName}.");
+
+    var liveFacts = result.LivePromptPack.RewardAssessmentFacts!;
+    var replayFacts = result.ReplayPromptPack.RewardAssessmentFacts!;
+    Assert(string.Equals(liveFacts.KnowledgeFingerprint, replayFacts.KnowledgeFingerprint, StringComparison.Ordinal), $"Expected knowledge fingerprints to match for scenario {scenarioName}.");
+    Assert(liveFacts.DeckSize == replayFacts.DeckSize, $"Expected deck size parity for scenario {scenarioName}.");
+    Assert(liveFacts.AttackCount == replayFacts.AttackCount, $"Expected attack count parity for scenario {scenarioName}.");
+    Assert(liveFacts.SkillCount == replayFacts.SkillCount, $"Expected skill count parity for scenario {scenarioName}.");
+    Assert(liveFacts.PowerCount == replayFacts.PowerCount, $"Expected power count parity for scenario {scenarioName}.");
+    Assert(liveFacts.DrawTaggedCardCount == replayFacts.DrawTaggedCardCount, $"Expected draw support count parity for scenario {scenarioName}.");
+    Assert(liveFacts.BlockTaggedCardCount == replayFacts.BlockTaggedCardCount, $"Expected block support count parity for scenario {scenarioName}.");
+    Assert(liveFacts.EnergyTaggedCardCount == replayFacts.EnergyTaggedCardCount, $"Expected energy support count parity for scenario {scenarioName}.");
+    Assert(string.Equals(liveFacts.AttackPressure, replayFacts.AttackPressure, StringComparison.Ordinal), $"Expected attack pressure parity for scenario {scenarioName}.");
+    Assert(string.Equals(liveFacts.DefensePressure, replayFacts.DefensePressure, StringComparison.Ordinal), $"Expected defense pressure parity for scenario {scenarioName}.");
+    Assert(string.Equals(liveFacts.DrawSupportLevel, replayFacts.DrawSupportLevel, StringComparison.Ordinal), $"Expected draw support parity for scenario {scenarioName}.");
+    Assert(string.Equals(liveFacts.EnergySupportLevel, replayFacts.EnergySupportLevel, StringComparison.Ordinal), $"Expected energy support parity for scenario {scenarioName}.");
+    Assert(liveFacts.SynergyHints.SequenceEqual(replayFacts.SynergyHints, StringComparer.Ordinal), $"Expected synergy hints parity for scenario {scenarioName}.");
+    Assert(liveFacts.AntiSynergyHints.SequenceEqual(replayFacts.AntiSynergyHints, StringComparer.Ordinal), $"Expected anti-synergy hints parity for scenario {scenarioName}.");
+    Assert(liveFacts.MissingInformation.SequenceEqual(replayFacts.MissingInformation, StringComparer.Ordinal), $"Expected missing-information parity for scenario {scenarioName}.");
+    Assert(liveFacts.FactLines.SequenceEqual(replayFacts.FactLines, StringComparer.Ordinal), $"Expected fact-line parity for scenario {scenarioName}.");
+    Assert(liveFacts.KnowledgeRefs.SequenceEqual(replayFacts.KnowledgeRefs, StringComparer.Ordinal), $"Expected knowledge-ref parity for scenario {scenarioName}.");
+
+    var liveTrace = result.LivePromptPack.RewardRecommendationTraceSeed!;
+    var replayTrace = result.ReplayPromptPack.RewardRecommendationTraceSeed!;
+    Assert(string.Equals(liveTrace.KnowledgeFingerprint, replayTrace.KnowledgeFingerprint, StringComparison.Ordinal), $"Expected trace knowledge fingerprints to match for scenario {scenarioName}.");
+    Assert(liveTrace.CandidateLabels.SequenceEqual(replayTrace.CandidateLabels, StringComparer.Ordinal), $"Expected trace candidate labels to match for scenario {scenarioName}.");
+    Assert(liveTrace.AssessmentFactLines.SequenceEqual(replayTrace.AssessmentFactLines, StringComparer.Ordinal), $"Expected trace fact lines to match for scenario {scenarioName}.");
+    Assert(liveTrace.InputKnowledgeRefs.SequenceEqual(replayTrace.InputKnowledgeRefs, StringComparer.Ordinal), $"Expected trace knowledge refs to match for scenario {scenarioName}.");
+    Assert(liveTrace.MissingInformation.SequenceEqual(replayTrace.MissingInformation, StringComparer.Ordinal), $"Expected trace missing-information flags to match for scenario {scenarioName}.");
+}
+
+static void AssertReviewerReadableRewardAdvice(AdviceResponse advice, AdviceInputPack promptPack, string scenarioName, string channel)
+{
+    var recommendedChoiceLabel = advice.RecommendedChoiceLabel
+        ?? throw new InvalidOperationException($"Expected {channel} advice to include a recommendation for scenario {scenarioName}.");
+    var optionSet = promptPack.RewardOptionSet
+        ?? throw new InvalidOperationException($"Expected {channel} prompt pack option set for scenario {scenarioName}.");
+    var trace = advice.RewardRecommendationTrace
+        ?? throw new InvalidOperationException($"Expected {channel} advice to include a deterministic trace for scenario {scenarioName}.");
+
+    Assert(optionSet.Options.Select(option => option.Label).Contains(recommendedChoiceLabel, StringComparer.Ordinal), $"Expected {channel} recommendation to stay inside visible option set for scenario {scenarioName}.");
+    Assert(advice.ReasoningBullets.Count >= 2, $"Expected {channel} advice to provide at least two reasoning bullets for scenario {scenarioName}.");
+    Assert(advice.ReasoningBullets.All(bullet => !string.IsNullOrWhiteSpace(bullet)), $"Expected {channel} reasoning bullets to stay non-empty for scenario {scenarioName}.");
+    Assert(advice.ReasoningBullets.Any(bullet => bullet.Contains(recommendedChoiceLabel, StringComparison.Ordinal)), $"Expected {channel} reasoning to mention the recommended card for scenario {scenarioName}.");
+    Assert(
+        advice.ReasoningBullets.Any(bullet =>
+            bullet.Contains("deterministic 사실:", StringComparison.Ordinal)
+            || bullet.Contains("attack_pressure=", StringComparison.Ordinal)
+            || bullet.Contains("defense_pressure=", StringComparison.Ordinal)
+            || bullet.Contains("draw_support=", StringComparison.Ordinal)
+            || bullet.Contains("energy_support=", StringComparison.Ordinal)),
+        $"Expected {channel} reasoning to cite deterministic facts for scenario {scenarioName}.");
+    Assert(trace.CandidateLabels.Count > 0, $"Expected {channel} trace to expose candidate labels for scenario {scenarioName}.");
+    Assert(trace.AssessmentFactLines.Count > 0, $"Expected {channel} trace to expose deterministic fact lines for scenario {scenarioName}.");
+    Assert(trace.InputKnowledgeRefs.Count > 0, $"Expected {channel} trace to expose deterministic knowledge refs for scenario {scenarioName}.");
 }
 
 static void TestHostFoundationConvergence()
