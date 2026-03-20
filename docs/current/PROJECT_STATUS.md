@@ -106,6 +106,8 @@
 - bootstrap은 attempt가 아니라 session-level pre-attempt phase로 다룬다.
 - `restart-events.ndjson`는 chronology source로, `attempt-index.ndjson` / `session-summary.json` / `supervisor-state.json`는 projection으로 읽는다.
 - observer/export는 mixed `event + polling` 전략을 유지하고, transient snapshot 하나만으로 scene authority를 주지 않는다.
+- observer/actuator가 애매한 live state에서 막히면, screenshot heuristic을 더 덧칠하기 전에 먼저 `artifacts/knowledge/decompiled`에서 그 state를 직접 설명하는 runtime 기준을 찾는다.
+- 즉 scene authority뿐 아니라 combat selection / card-play pending / confirm-ready 같은 판단도 가능하면 decompiled-backed state 기준(`InCardPlay`, `_currentCardPlay`, `IsAwaitingPlay` 같은 실제 runtime 신호 후보)부터 찾고, screenshot rule은 마지막 보조로만 늘린다.
 - `card reward` advice는 deterministic `option set / assessment facts / trace`를 거쳐 prompt로 들어간다.
 - 더 이상의 startup diagnostic layer 추가나 broad recommendation refactor는 현재 우선순위가 아니다.
 - curated reward acceptance set은 이번 work unit 기준 3개 scenario로 고정해 읽는다.

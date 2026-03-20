@@ -69,6 +69,22 @@
 - startup/trust/accounting 정리와 gameplay/advice 정책 변경을 섞지 않는다.
 - valid-trust evidence 위에서 최소 advisor value slice를 정의하되, 그 전에 broad recommendation refactor로 새지 않는다.
 
+### 5. observer/actuator가 state 판단에서 막히면 decompiled-backed 기준부터 찾는다
+
+- scene authority 작업뿐 아니라 combat actuation blocker에서도 같은 원칙을 적용한다.
+- screenshot heuristic이나 polling grace를 더 늘리기 전에, 먼저 `artifacts/knowledge/decompiled`에서 현재 막힌 상태를 직접 표현하는 runtime 기준이 있는지 찾는다.
+- 예:
+  - `card selected`
+  - `card play pending`
+  - `confirm ready`
+  - `targeting in progress`
+  - `selection mode vs play mode`
+- 현재 combat 쪽에서는 `NPlayerHand.InCardPlay`, `_currentCardPlay`, `IsAwaitingPlay(...)`, `HoveredModelTracker` 같은 decompiled-backed 후보가 먼저 검토 대상이다.
+- 원칙:
+  - `decompiled state criteria first`
+  - `runtime export/hook second`
+  - `screenshot heuristic last`
+
 ## 지금까지 실제로 전진한 일
 
 ### A. loader/runtime positive recovery
