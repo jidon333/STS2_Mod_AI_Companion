@@ -9,25 +9,25 @@
 
 ## Current Milestone Pointer
 
-- current rail: `startup / trust -> trusted attempt`
-- active milestone: `M4. Trusted Attempt 확보`
-- next milestone: `M5. 하네스 장기 실행 증거 닫기`
+- current rail: `trusted attempt -> advisor value slice`
+- active milestone: `M5. 하네스 장기 실행 증거 닫기`
+- next milestone: `M6. Replay/Parity 회귀 게이트 고정`
 - long-term goal: 사람이 실제 플레이 중 참고할 수 있는 `read-only advisor` 완성
 
 ## Current Priority
 
-- current critical path is no longer `loader entry / runtime bootstrap`
-- latest blocker is `authoritative attempt / session accounting contract`
-- immediate goal: bootstrap-first 이후 `restart-events`, `attempt-index`, `session-summary`, `supervisor-state`가 reviewer-friendly하게 같은 이야기를 하도록 고정하는 것
+- current critical path is no longer `startup / trust / accounting`
+- latest blocker is `valid-trust evidence 위의 card reward advisor usefulness closure`
+- immediate goal: deterministic `card reward` advice artifact를 reviewer가 실제로 참고 가치 있다고 판정할 수 있게 닫는 것
 
 ## Progress Snapshot
 
 | Rail | Status | Notes |
 |---|---|---|
-| Startup / Trust | Late-stage | loader/runtime positive와 bootstrap-first `0001 valid-at-start`는 확보됐고, 남은 갭은 accounting contract hardening이다 |
+| Startup / Trust | Materially Closed Enough To Build On | loader/runtime positive, bootstrap-first `0001 valid-at-start`, quartet semantics가 모두 닫혔다 |
 | Gameplay Safety | Partially Stable | 여러 stale/no-op regressions는 줄었지만, current active milestone은 아니다 |
-| Replay / Evidence | Stable Enough To Build On | replay/self-test와 artifact truthfulness는 강해졌고, 이제 chronology/projection semantics를 더 또렷하게 해야 한다 |
-| Advisor Product | Queued | valid-trust evidence 위에서 최소 advisor value slice를 정해야 한다 |
+| Replay / Evidence | Stable Enough To Build On | replay/self-test와 reward deterministic context parity 기반은 다음 advisor slice 검증을 받쳐 줄 수 있다 |
+| Advisor Product | Pilot In Progress | `card reward` deterministic middle layer는 들어갔고, 이제 usefulness closure가 남았다 |
 
 ## Current State
 
@@ -35,17 +35,25 @@
 
 - [verify-loader-direct-20260320-000700](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700)에서 `runtimeExporterInitializedLogged=true`, `harnessBridgeInitializeLogged=true`, `liveSnapshotPresent=true`가 fresh root 기준으로 회복됐다.
 - [verify-bootstrap-first-attempt-20260320-0044](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044)에서 bootstrap이 non-attempt pre-phase로 분리됐고, 첫 authoritative attempt `0001`이 `trustStateAtStart:"valid"`로 시작한다.
+- [verify-phase1-quartet-20260320-123409](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-phase1-quartet-20260320-123409)에서 `restart-events` chronology와 `session-summary / supervisor-state` projection이 같은 attempt truth를 가리키도록 정렬됐다.
 - deploy identity, manual clean boot, runtime-started snapshot evidence를 fresh root에서 artifact-first로 읽을 수 있다.
 - replay-step / replay-test / self-test는 여전히 가장 중요한 offline regression gate다.
+- `CompanionHost`의 advice path와 diagnostics path는 이전보다 분리됐고, live path는 Foundation prompt/knowledge 경로를 primary로 쓴다.
+- `card reward` scene에는 deterministic `option set / assessment facts / trace`가 들어갔고, non-card reward에서는 이 layer가 꺼지도록 scope correction까지 반영됐다.
 - combat safety 쪽 최근 regression fix는 유지되고 있지만, 현재 critical path를 대체하지는 않는다.
 
 ### What Is The Actual Current Blocker
 
-- bootstrap-first sequencing 자체는 구현됐다.
-- 다음 단계는 quartet semantics hardening이다.
-- `restart-events.ndjson`는 chronology source, `attempt-index.ndjson`는 terminal projection, `session-summary.json`는 reviewer projection, `supervisor-state.json`는 machine verdict projection으로 고정해야 한다.
-- 특히 `lastAttemptId`는 canonical truth가 아니라 legacy alias로만 읽게 정리해야 한다.
-- 따라서 남은 리스크는 `current-execution loader/runtime proof 부재`가 아니라 `session/accounting truth를 reviewer와 operator가 같은 방식으로 읽지 못하는 것`이다.
+- startup/trust/accounting rail은 지금 당장 다시 열 필요가 없다.
+- 현재 부족한 것은 `card reward` advice가 실제로 도움이 되는지에 대한 reviewer-facing closure다.
+- deterministic reward layer는 이미 들어갔지만, curated card reward scenes에서
+  - `recommendedChoiceLabel`
+  - `reasoningBullets`
+  - `missingInformation`
+  - `decisionBlockers`
+  - `RewardRecommendationTrace`
+  를 근거로 “실제로 참고 가치 있다”를 닫는 acceptance가 아직 없다.
+- 따라서 남은 리스크는 더 이상의 startup diagnostic gap이 아니라 `first advisor value slice`를 아직 제품 가치로 증명하지 못했다는 점이다.
 
 ## Authoritative Roots To Read First
 
@@ -53,35 +61,40 @@
   - [verify-loader-direct-20260320-000700](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700)
 - bootstrap-first sequencing root:
   - [verify-bootstrap-first-attempt-20260320-0044](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044)
+- quartet/accounting contract root:
+  - [verify-phase1-quartet-20260320-123409](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-phase1-quartet-20260320-123409)
 
 핵심 요약:
 
 - loader/runtime positive signal은 이제 fresh root에서 보인다
 - bootstrap은 session-level pre-attempt phase로 분리됐다
 - first authoritative attempt는 `0001 + valid-at-start`로 시작할 수 있다
-- 다음 일은 더 많은 startup diagnostics가 아니라 chronology/projection contract hardening이다
+- quartet semantics는 reviewer/operator 관점에서 충분히 정렬됐다
+- 다음 일은 더 많은 startup diagnostics가 아니라 `card reward advisor usefulness`를 닫는 것이다
 
 ## What Is Stable
 
 - `prevalidation.json`의 `modsPayloadReconciled`, `deployIdentityVerified`, `manualCleanBootVerified` gate는 fresh roots에서 신뢰 가능한 증거로 쓸 수 있다.
 - `startup-runtime-evidence.json`의 runtime exporter / harness bridge / fresh snapshot positive는 현재 실행 기준으로 확인된다.
-- bootstrap-first 이후 첫 authoritative attempt `0001`과 restart progression 초기 구간은 artifact로 재현 가능하다.
+- bootstrap-first 이후 첫 authoritative attempt `0001`과 quartet semantics는 artifact로 재현 가능하다.
+- `CompanionHost`의 live advice path는 Foundation prompt/knowledge path를 primary로 사용한다.
+- `card reward` deterministic layer는 `card reward only` gate까지 포함해 self-test로 고정돼 있다.
 - known replay spot-check는 유지되고 있다:
   - `0015 --full-request-rebuild => combat select attack slot 4`
   - `0021 --full-request-rebuild => wait`
 
 ## What Is Partially Stable
 
-- `attempt-index.ndjson`와 `session-summary.json`은 유용하지만, `restart-events.ndjson`를 대체하는 chronology source로 읽으면 안 된다.
-- `supervisor-state.json`는 machine verdict projection으로는 유용하지만, current attempt / terminal attempt semantics는 더 선명하게 고정할 필요가 있다.
-- observer authority classes는 암묵적으로 존재하지만 아직 문서 계약으로 분리돼 있지 않다.
-- advisor value slice는 아직 후보 비교 전이며, 어떤 scene이 첫 slice인지 확정하지 않았다.
+- diagnostics service는 분리됐지만 `collector mode off`에서도 live mirror/current-run write 같은 diagnostics work가 일부 hot path에 남아 있다.
+- WPF/Advisor는 normalized scene authority를 우선 소비하지만, choice 표시 등은 여전히 raw snapshot 의존이 남아 있다.
+- observer authority classes는 코드상 강하지만, 전 계층 소비 계약이 완전히 문서화된 상태는 아니다.
+- reward advice usefulness는 deterministic context는 생겼지만 reviewer-facing closure가 아직 없다.
 
 ## What Is Not Yet Stable
 
-- chronology/projection contract가 docs + self-test + live root 해석에서 완전히 일치하는 상태
-- `M5. 하네스 장기 실행 증거 닫기`를 반복 가능하게 증명하는 fresh-root cadence
-- valid-trust evidence 위에서의 최소 advisor value demonstration
+- `M5. 하네스 장기 실행 증거 닫기`를 반복 가능하게 증명하는 clean long-run cadence
+- curated `card reward` scenes에서 live/replay를 함께 묶은 usefulness acceptance
+- reward 다음 scene class를 어디로 확장할지에 대한 product-value 기준
 
 ## Current Architecture Direction
 
@@ -89,18 +102,19 @@
 - bootstrap은 attempt가 아니라 session-level pre-attempt phase로 다룬다.
 - `restart-events.ndjson`는 chronology source로, `attempt-index.ndjson` / `session-summary.json` / `supervisor-state.json`는 projection으로 읽는다.
 - observer/export는 mixed `event + polling` 전략을 유지하고, transient snapshot 하나만으로 scene authority를 주지 않는다.
-- 더 이상의 startup diagnostic layer 추가나 schema expansion은 현재 우선순위가 아니다.
+- `card reward` advice는 deterministic `option set / assessment facts / trace`를 거쳐 prompt로 들어간다.
+- 더 이상의 startup diagnostic layer 추가나 broad recommendation refactor는 현재 우선순위가 아니다.
 
 ## Immediate Next Steps
 
-1. `restart-events.ndjson`, `attempt-index.ndjson`, `session-summary.json`, `supervisor-state.json`의 truth contract를 문서와 self-test로 고정한다.
-2. observer authority classes를 문서 계약으로 먼저 정리하되, runtime schema는 당장 늘리지 않는다.
-3. valid-trust evidence 위에서 평가할 최소 advisor value slice 후보를 2~3개로 좁힌다.
-4. `state / knowledge / recommendation` 레이어 분리를 broad refactor 없이 skeleton 수준으로 정리한다.
+1. curated `card reward` scenes 3~5개를 정하고, valid-trust/live 또는 replay 기준의 평가 세트를 만든다.
+2. reward advice artifact만 보고 reviewer가 usefulness를 판정할 수 있는 acceptance를 고정한다.
+3. live/replay reward parity에서 deterministic option/fact context와 recommendation output을 같이 확인한다.
+4. reward slice를 닫은 뒤에만 다음 scene class(`event / shop / rest`)를 선택한다.
 
 ## Deferred Work
 
-- 별도 bootstrap-validation scenario split
 - 새 startup diagnostic schema 또는 추가 sentinel/timeline layer
-- reward/shop/event 중 하나를 첫 advisor slice로 성급히 확정하는 일
-- `M5` 전의 광범위한 recommendation engine refactor
+- observer authority runtime schema 확장
+- reward 다음 scene을 근거 없이 확장하는 일
+- `card reward` usefulness closure 전의 광범위한 recommendation engine refactor

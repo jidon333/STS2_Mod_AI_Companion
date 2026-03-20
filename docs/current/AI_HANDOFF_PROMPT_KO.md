@@ -46,19 +46,21 @@
 - 최종적으로는 사람이 실제 플레이 중 참고 가능한 `read-only advisor`를 만든다.
 - 장기 milestone 정의는 [ROADMAP.md](../ROADMAP.md)의 `M1~M10`을 canonical source로 따른다.
 
-### 2. 현재 active milestone은 `M4. Trusted Attempt 확보`다
+### 2. 현재 active milestone은 `M5. 하네스 장기 실행 증거 닫기`다
 
-- `M2. 모드 로드 진입 증명`과 `M3. 런타임 부트스트랩 가동`은 최신 fresh roots 기준으로 materially closed 상태다.
-- 현재 critical path는 더 이상 `loader/runtime bring-up`이 아니다.
-- 남은 주 병목은 `authoritative attempt / session accounting contract`다.
-- 다음 milestone은 `M5. 하네스 장기 실행 증거 닫기`다.
+- `M2. 모드 로드 진입 증명`, `M3. 런타임 부트스트랩 가동`, `M4. Trusted Attempt 확보`는 최신 roots와 self-test 기준으로 materially closed 상태다.
+- 현재 critical path는 더 이상 `startup / trust / accounting`이 아니다.
+- 공식 next milestone은 `M6. Replay/Parity 회귀 게이트 고정`이다.
+- 지금 구현 workstream은 `M5` 위에서 첫 advisor value slice를 닫는 것이다.
 
-### 3. 지금 가장 중요한 표현은 "bootstrap-first는 구현됐고, 남은 것은 accounting semantics hardening"이다
+### 3. 지금 가장 중요한 표현은 "Phase 1~3은 닫혔고, 이제 card reward advisor usefulness closure로 넘어간다"이다
 
 - latest roots는 current-execution runtime exporter / harness bridge / fresh snapshot / manual clean boot positive를 보여 준다.
 - bootstrap launch는 이제 attempt가 아니라 session-level pre-attempt phase다.
 - first authoritative attempt는 실제로 `0001 + trustStateAtStart:"valid"`로 시작한다.
-- 따라서 지금 필요한 것은 더 많은 startup diagnostic layer가 아니라 chronology/projection contract를 더 선명하게 만드는 일이다.
+- quartet semantics는 `restart-events` chronology와 projection들이 같은 이야기를 하도록 정렬됐다.
+- Host hot path는 advice와 diagnostics가 이전보다 분리됐고, reward scene에는 deterministic middle layer가 들어갔다.
+- 따라서 지금 필요한 것은 더 많은 startup diagnostic layer가 아니라 `card reward` 조언의 실제 참고 가치를 닫는 일이다.
 
 ### 4. Harness와 제품 경계를 계속 지킨다
 
@@ -105,9 +107,53 @@
 
 - bootstrap은 attempt loop 밖 pre-phase로 분리됐다.
 - `trustStateAtStart` 의미는 바꾸지 않고 first authoritative attempt를 valid-at-start로 만들었다.
-- sequencing 자체보다 남은 건 accounting contract clarity다.
+- sequencing 자체는 현재 main blocker가 아니다.
 
-### C. gameplay safety 쪽 최근 전진은 유지되지만 current blocker는 아니다
+### C. quartet/accounting contract closure
+
+대표 root:
+
+- [verify-phase1-quartet-20260320-123409](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-phase1-quartet-20260320-123409)
+
+확인된 점:
+
+- `restart-events.ndjson`는 chronology source로 읽는다.
+- `attempt-index.ndjson`는 terminal summary projection으로 유지된다.
+- `session-summary.json`의 `activeAttemptId`와 `supervisor-state.json`의 `expectedCurrentAttemptId`는 같은 chronology projection을 가리킨다.
+- `lastAttemptId`는 canonical truth가 아니라 legacy alias로 내려갔다.
+
+의미:
+
+- quartet/accounting contract는 현재 구현의 blocker가 아니다.
+- 다만 위 root의 tail은 수동 종료 개입이 섞였으므로 recovery/gameplay 해석 근거로는 쓰지 않는다.
+
+### D. Host responsibility split / Foundation convergence
+
+확인된 점:
+
+- `CompanionHost` hot path는 advice orchestration 중심으로 가벼워졌고, collector/postmortem 쪽은 diagnostics service 뒤로 빠졌다.
+- live advice path는 Host-local primary 구현보다 Foundation prompt/knowledge 경로를 primary로 사용한다.
+- manual / retry-last / auto advice path와 collector mode on/off regression은 유지됐다.
+
+의미:
+
+- Host 과적재는 줄었고, 다음 deterministic middle layer를 꽂을 구조가 마련됐다.
+- 다만 collector mode off에서도 diagnostics write 일부가 hot path에 남아 있는 것은 residual risk로 남는다.
+
+### E. deterministic card reward layer
+
+확인된 점:
+
+- reward scene에는 deterministic `RewardOptionSet`, `RewardAssessmentFacts`, `RewardRecommendationTraceSeed`가 들어간다.
+- live/replay path는 같은 deterministic reward context를 공유한다.
+- scope correction 이후 non-card reward에서는 deterministic fields가 null fallback으로 유지된다.
+
+의미:
+
+- `card reward`는 이제 첫 advisor value slice 후보가 아니라 실제 구현된 pilot slice다.
+- 남은 것은 deterministic context를 더 늘리는 일이 아니라 usefulness acceptance를 닫는 일이다.
+
+### F. gameplay safety 쪽 최근 전진은 유지되지만 current blocker는 아니다
 
 - stale curse/status non-enemy promotion 차단
 - enemy-turn closure
@@ -119,40 +165,31 @@
 
 ## 현재 가장 중요한 문제
 
-현재 주 병목은 `bootstrap-first 이후 authoritative attempt / session accounting contract`다.
+현재 주 병목은 `valid-trust evidence 위의 card reward advisor usefulness closure`다.
 
 핵심 의미는 아래와 같다.
 
-- `restart-events.ndjson`는 append-only chronology source처럼 동작한다.
-- `attempt-index.ndjson`는 terminal attempt summary projection에 가깝다.
-- `session-summary.json`는 reviewer-facing aggregate projection이다.
-- `supervisor-state.json`는 machine verdict projection이다.
-
-즉 지금 남은 문제는 "현재 실행에서 아무것도 안 보인다"가 아니다.
-
-현재 남은 문제는:
-
-- reviewer가 current attempt와 terminal attempt를 한 번에 읽을 수 있도록 계약이 충분히 선명한가
-- `lastAttemptId` 같은 legacy/ambiguous field를 어떻게 해석해야 하는가
-- chronology source와 projection들의 관계가 docs와 self-test에서 일관되게 닫히는가
+- deterministic layer는 들어갔지만, 아직 curated reward scenes에서 reviewer가 artifact만 보고 “실제로 참고 가치 있다”를 닫는 acceptance가 없다.
+- live/replay parity는 deterministic context alignment 수준에서는 좋아졌지만, usefulness 기준이 아직 product acceptance로 고정되지 않았다.
+- reward 외 scene으로 확장하기 전에, `card reward` 하나를 실제 가치 슬라이스로 닫아야 한다.
 
 ### 이 문제가 왜 중요한가
 
-- `M4`를 깔끔하게 닫으려면 first authoritative attempt가 valid로 시작하는 것만으로는 부족하다.
-- operator와 reviewer가 동일한 artifact set에서 동일한 결론을 읽어야 한다.
-- 이 contract가 흐리면 `M5` long-run evidence closure도 다시 해석 비용이 커진다.
+- validation-only trap에서 빠져나오려면 좁은 scene 하나에서 실제 조언 가치를 증명해야 한다.
+- `card reward`는 deterministic option/facts/trace가 이미 있으므로, 지금 가장 싸게 제품 가치를 확인할 수 있는 장면이다.
+- 이 슬라이스를 닫아야 reward 다음 scene 확장도 heuristic 덧칠이 아니라 구조 확장으로 갈 수 있다.
 
 ## 다음 구현 계획
 
 ### Work Unit
 
-`Authoritative Attempt / Session Accounting Contract Hardening`
+`Card Reward Advisor Value Closure`
 
 ### 목표
 
-- `restart-events.ndjson`, `attempt-index.ndjson`, `session-summary.json`, `supervisor-state.json`의 truth contract를 코드와 self-test로 고정한다.
-- bootstrap-first 이후 reviewer가 `current attempt`, `last terminal attempt`, `restart target`, `milestone evidence`를 한 번에 해석할 수 있게 만든다.
-- schema/file set을 더 늘리지 않고 semantics만 선명하게 만든다.
+- valid-trust evidence 위의 `card reward` 장면 3~5개에서, reward advice artifact만으로 reviewer가 실제 참고 가치를 판정할 수 있게 만든다.
+- 이미 들어간 deterministic `option set / assessment facts / trace`를 제품 acceptance로 연결한다.
+- reward 외 scene은 건드리지 않고, reward slice 하나만 닫는다.
 
 ### source of truth
 
@@ -160,67 +197,65 @@
 
 - [verify-loader-direct-20260320-000700](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700)
 - [verify-bootstrap-first-attempt-20260320-0044](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044)
-- [Program.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.cs)
-- [LongRunArtifacts.Supervision.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs)
-- [RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](../contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)
-- [STARTUP_DEPLOY_CONTROL_LAYER.md](../contracts/STARTUP_DEPLOY_CONTROL_LAYER.md)
+- [verify-phase1-quartet-20260320-123409](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-phase1-quartet-20260320-123409)
+- [RewardDeterministicBuilders.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Reasoning/RewardDeterministicBuilders.cs)
+- [AdvicePromptBuilder.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Reasoning/AdvicePromptBuilder.cs)
+- [ReplayAdvisorValidator.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Replay/ReplayAdvisorValidator.cs)
+- [CompanionHost.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Host/CompanionHost.cs)
 
 ### bounded 작업
 
-1. `restart-events.ndjson`를 canonical chronology source로 고정한다.
-2. `attempt-index.ndjson`는 authoritative attempt당 terminal summary projection으로 유지한다.
-3. `session-summary.json`은 chronology + attempt projection에서만 파생되도록 정리한다.
-4. `supervisor-state.json`는 machine verdict projection으로 유지하되,
-   - `expectedCurrentAttemptId`
-   - `lastTerminalAttemptId`
-   - `latestRestartTargetAttemptId`
-   - `latestNextAttemptId`
-   를 canonical field로 취급한다.
-5. `lastAttemptId`는 wire shape는 유지하되 legacy/ambiguous field로 문서와 reviewer guidance에서 격하한다.
-6. chronology -> projection derivation helper를 한 곳으로 모아 `session-summary`와 `supervisor-state`가 같은 해석을 쓰게 만든다.
-7. docs와 self-test를 같이 갱신해 contract drift를 막는다.
+1. curated `card reward` fixtures/scenes 3~5개를 고른다.
+2. reward advice artifact가 아래를 일관되게 채우도록 한다.
+   - `recommendedChoiceLabel`
+   - `reasoningBullets`
+   - `missingInformation`
+   - `decisionBlockers`
+   - `RewardRecommendationTrace`
+3. deterministic `RewardOptionSet / RewardAssessmentFacts / RewardRecommendationTraceSeed`를 reviewer가 읽기 쉬운 형태로 유지하거나 노출한다.
+4. live/replay reward path에서 같은 deterministic option labels / fact lines / recommendation output을 비교 가능하게 만든다.
+5. reward usefulness acceptance를 self-test/replay/live artifact 기준으로 닫는다.
+6. reward 외 scene은 기존 path 그대로 유지한다.
 
 ### 금지
 
+- startup/trust/accounting 재작업
 - 새 startup diagnostic layer 추가
-- 새 timeline/sentinel/schema field 추가
-- 별도 bootstrap-validation scenario split
-- gameplay / HandleCombat / observer heuristic / trust threshold 변경
-- `reward advisor`를 첫 value slice로 성급히 확정
+- observer heuristic 변경
+- Host diagnostics 재분리 재논쟁
+- event/shop/rest/combat deterministic layer 확장
 - broad recommendation engine refactor
+- reward 다음 scene을 이번 세션에 같이 열기
 
 ### validation loop
 
 1. `dotnet build`
-2. `dotnet run --project src/Sts2GuiSmokeHarness -- self-test`
-3. fresh `boot-to-long-run` live run 1회
-4. 아래 확인:
-   - first authoritative attempt는 `0001`
-   - `trustStateAtStart:"valid"`
-   - bootstrap launch는 attempt accounting에 포함되지 않음
-   - `session-summary.json`과 `supervisor-state.json`가 current/terminal attempt를 서로 다르게 오독하지 않음
+2. `dotnet run --project src/Sts2ModKit.SelfTest`
+3. `dotnet run --project src/Sts2GuiSmokeHarness -- self-test`
+4. curated reward live/replay check
 5. replay spot-check 유지:
    - `0015 --full-request-rebuild => combat select attack slot 4`
    - `0021 --full-request-rebuild => wait`
 
 ### acceptance
 
-- fresh root에서 first authoritative attempt는 `0001 + valid-at-start`
-- `restart-events.ndjson` 기준 chronology와 `attempt-index/session-summary/supervisor-state` projection이 reviewer 관점에서 모순되지 않음
-- schema/file set 증설 없이 위 semantics가 self-test와 live root 둘 다에서 유지됨
+- curated `card reward` scenes에서 advice artifact만 보고 reviewer가 usefulness를 판정할 수 있다.
+- `recommendedChoiceLabel`은 항상 visible option set 안에 있다.
+- deterministic reward context와 advice output이 live/replay에서 비교 가능하다.
+- reward 외 scene behavior는 변하지 않는다.
 
 ## 구현 백로그 우선순위
 
-1. `Authoritative Attempt / Session Accounting Contract Hardening`
-2. `Observer authority class contract 문서화`
-3. `Minimum advisor value slice 후보 선정`
-4. `State / Knowledge / Recommendation skeleton 설계`
+1. `Card Reward Advisor Value Closure`
+2. `Observer authority consumption contract 문서화`
+3. `Reward 다음 scene class 선택(event / shop / rest)`
+4. `State / Knowledge / Recommendation architecture 확장`
 
 ### 지금 backlog에 넣지 않을 것
 
 - scenario split
 - 새 startup diagnostic schema
-- 첫 advisor slice를 reward/shop/event 중 하나로 단정
+- reward usefulness closure 전 다음 scene 확장
 - 광범위한 recommendation engine 리팩터링
 
 ## 현재 읽어야 할 가장 중요한 artifact
@@ -230,12 +265,13 @@
 - [PROJECT_STATUS.md](./PROJECT_STATUS.md)
 - [docs/README.md](../README.md)
 
-### accounting contract 이해용
+### startup/trust/accounting이 닫혔는지 확인용
 
 - [restart-events.ndjson](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044/restart-events.ndjson)
 - [attempt-index.ndjson](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044/attempt-index.ndjson)
 - [session-summary.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044/session-summary.json)
 - [supervisor-state.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044/supervisor-state.json)
+- [verify-phase1-quartet-20260320-123409](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-phase1-quartet-20260320-123409)
 
 ### runtime/bootstrap positive 이해용
 
@@ -243,28 +279,34 @@
 - [startup-runtime-evidence.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700/startup-runtime-evidence.json)
 - [prevalidation.json](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700/prevalidation.json)
 
+### reward deterministic/value slice 이해용
+
+- [RewardDeterministicBuilders.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Reasoning/RewardDeterministicBuilders.cs)
+- [AdvicePromptBuilder.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Reasoning/AdvicePromptBuilder.cs)
+- [ReplayAdvisorValidator.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Replay/ReplayAdvisorValidator.cs)
+
 ## 중요한 guardrail
 
 1. 더 이상 startup diagnostic layer를 늘리지 않는다.
 2. bootstrap은 attempt가 아니라 session-level pre-attempt phase로 유지한다.
 3. `trustStateAtStart`의 의미를 바꾸지 않는다.
 4. chronology source와 projection을 섞어 읽지 않는다.
-5. gameplay/advice 정책 변경은 `M4` contract hardening과 분리한다.
+5. reward usefulness closure 전에는 reward 외 scene 확장을 하지 않는다.
 
 ## 새 세션 권장 시작 루프
 
 ### 참모 세션
 
 1. latest authoritative root 읽기
-2. blocker를 `session/accounting contract` 한 줄로 압축
-3. 구현 범위를 chronology/projection hardening 안으로 고정
+2. blocker를 `card reward usefulness closure` 한 줄로 압축
+3. 구현 범위를 reward slice 안으로 고정
 4. 구현 세션 프롬프트 승인
 
 ### 구현+테스트 세션
 
 1. `dotnet build`
-2. `dotnet run --project src/Sts2GuiSmokeHarness -- self-test`
-3. chronology/projection derivation 수정
-4. docs + self-test 동시 갱신
-5. fresh live run 1회
-6. accounting contract 기준으로 acceptance 판정
+2. `dotnet run --project src/Sts2ModKit.SelfTest`
+3. `dotnet run --project src/Sts2GuiSmokeHarness -- self-test`
+4. reward fixture / parity / artifact usefulness 개선
+5. docs + self-test 동시 갱신
+6. reward usefulness 기준으로 acceptance 판정
