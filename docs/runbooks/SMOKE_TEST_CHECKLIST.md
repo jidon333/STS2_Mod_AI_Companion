@@ -24,6 +24,20 @@ live runtime 검증은 아래 순서를 기준으로 진행합니다.
 11. collector mode를 켰다면 `dotnet run --project src\Sts2ModKit.Tool -- collector-postprocess --lines 200 --tail 40`
 12. 필요 시 `dotnet run --project src\Sts2ModKit.Tool -- extract-static-knowledge`
 
+## 선택적 비디오 녹화 보조
+
+- `Sts2GuiSmokeHarness`는 `ffmpeg`가 설치되어 있을 때만 attempt/bootstrap 비디오 녹화를 선택적으로 붙일 수 있습니다.
+- 목적은 실패 전후를 사람이 빠르게 훑는 **operator review aid**이며, canonical evidence는 계속 artifact/json/ndjson입니다.
+- 기본 운영 원칙은 `성공 시 삭제`, `실패 시 보존`입니다.
+- WSL에서 `--ffmpeg-path`를 줄 때는 `/mnt/c/.../ffmpeg.exe` 또는 `C:\...\ffmpeg.exe` 둘 다 허용합니다.
+- run root 또는 bootstrap root에는 `video-recording.json`이 남아 아래를 연결합니다.
+  - 어떤 session/attempt/run과 연결되는지
+  - 사용한 `ffmpeg` command
+  - start/end time
+  - kept/deleted/skip reason
+- 1차 구현은 `gdigrab` 기반 윈도우 영역 캡처이며, `ffmpeg`가 없으면 harness는 실패하지 않고 명확히 skip됩니다.
+- skill 분리는 후속 과제이며, 현재는 harness lifecycle에 붙은 최소 침습 보조 기능으로 본다.
+
 ## 최소 성공 신호
 
 - loader crash 없이 게임이 부팅됨

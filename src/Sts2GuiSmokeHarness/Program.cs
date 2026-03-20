@@ -274,6 +274,7 @@ static async Task<int> RunScenarioAsync(
         var bootstrapSucceeded = await RunBootstrapPhaseAsync(
             configuration,
             workspaceRoot,
+            options,
             liveLayout,
             harnessLayout,
             sessionId,
@@ -441,6 +442,7 @@ static void WriteObserverBootstrapCopy(string observerStatePath, ObserverState o
 static async Task<bool> RunBootstrapPhaseAsync(
     ScaffoldConfiguration configuration,
     string workspaceRoot,
+    IReadOnlyDictionary<string, string> options,
     LiveExportLayout liveLayout,
     HarnessQueueLayout harnessLayout,
     string sessionId,
@@ -455,6 +457,15 @@ static async Task<bool> RunBootstrapPhaseAsync(
     var startupStage = "bootstrap-started";
     var bootstrapRoot = Path.Combine(sessionRoot, "bootstrap");
     Directory.CreateDirectory(bootstrapRoot);
+    using var bootstrapVideo = GuiSmokeVideoRecorder.Create(
+        workspaceRoot,
+        options,
+        sessionId,
+        bootstrapRunId,
+        bootstrapRoot,
+        sessionRoot,
+        attemptId: null,
+        scopeKind: "bootstrap");
 
     void RecordBootstrapStage(
         string stage,
@@ -502,10 +513,14 @@ static async Task<bool> RunBootstrapPhaseAsync(
         RecordBootstrapStage("bootstrap-window-detected", "finished");
         await MaintainLaunchFocusAsync(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+        bootstrapVideo.TryStart(WindowLocator.TryFindSts2Window());
     }
     catch (Exception exception)
     {
         RecordBootstrapFailure($"{exception.GetType().Name}: {exception.Message}");
+        bootstrapVideo.Complete(
+            keepRecording: true,
+            completionReason: $"bootstrap-failed:{exception.GetType().Name}:{exception.Message}");
         try
         {
             await StopGameProcessesAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
@@ -553,6 +568,9 @@ static async Task<bool> RunBootstrapPhaseAsync(
                 if (consecutiveFallbackCapturesWithoutProcess >= 3)
                 {
                     RecordBootstrapFailure("bootstrap-process-lost");
+                    bootstrapVideo.Complete(
+                        keepRecording: true,
+                        completionReason: "bootstrap-process-lost");
                     try
                     {
                         await StopGameProcessesAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
@@ -621,6 +639,9 @@ static async Task<bool> RunBootstrapPhaseAsync(
         {
             var detail = $"verified={manualCleanBootVerified};trustState={trustState};runtimeExporter={startupRuntimeEvidence.RuntimeExporterInitializedLogged};freshSnapshot={startupRuntimeEvidence.FreshSnapshotPresent}";
             RecordBootstrapStage("bootstrap-manual-clean-boot-evaluation-finished", "finished", detail);
+            bootstrapVideo.Complete(
+                keepRecording: false,
+                completionReason: "bootstrap-succeeded");
             await StopGameProcessesAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
             EnsureGameNotRunning();
             RecordBootstrapStage("bootstrap-finished", "finished", detail);
@@ -631,6 +652,9 @@ static async Task<bool> RunBootstrapPhaseAsync(
     }
 
     RecordBootstrapFailure("bootstrap-timeout");
+    bootstrapVideo.Complete(
+        keepRecording: true,
+        completionReason: "bootstrap-timeout");
     try
     {
         await StopGameProcessesAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
@@ -683,6 +707,15 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     Directory.CreateDirectory(stepsRoot);
 
     var logger = new ArtifactRecorder(runRoot);
+    using var attemptVideo = GuiSmokeVideoRecorder.Create(
+        workspaceRoot,
+        options,
+        sessionId,
+        runId,
+        runRoot,
+        sessionRoot,
+        attemptId,
+        "attempt");
     SetHarnessLogSink(logger.AppendHumanLog);
     logger.WriteRunManifest(new GuiSmokeRunManifest(
         runId,
@@ -739,6 +772,14 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     {
         logger.CompleteRun(status, message);
         logger.WriteValidationSummary(runId);
+        var keepVideo = status switch
+        {
+            "completed" => false,
+            _ => true,
+        };
+        attemptVideo.Complete(
+            keepVideo,
+            $"attempt-{status}:{terminalCause ?? failureClass ?? message}");
         if (isLongRun)
         {
             LongRunArtifacts.RecordAttemptTerminal(
@@ -808,6 +849,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             await WaitForLiveGameWindowAsync(launchIssuedAt, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
             await MaintainLaunchFocusAsync(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
+            attemptVideo.TryStart(WindowLocator.TryFindSts2Window());
         }
     }
     catch (Exception exception)
@@ -2117,6 +2159,7 @@ static int InspectRun(IReadOnlyDictionary<string, string> options, string worksp
         Status = manifest.Status ?? "in-progress",
         manifest.ResultMessage,
         Failure = failure,
+        Video = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(resolvedRoot, "video-recording.json")),
         Steps = Directory.Exists(Path.Combine(resolvedRoot, "steps"))
             ? Directory.GetFiles(Path.Combine(resolvedRoot, "steps"), "*.screen.png").Length
             : 0,
@@ -2655,6 +2698,23 @@ static List<T> ReadNdjsonFixture<T>(string path)
     return entries;
 }
 
+static T? TryReadJson<T>(string path)
+{
+    if (!File.Exists(path))
+    {
+        return default;
+    }
+
+    try
+    {
+        return JsonSerializer.Deserialize<T>(File.ReadAllText(path), GuiSmokeShared.JsonOptions);
+    }
+    catch
+    {
+        return default;
+    }
+}
+
 static async Task<ObserverState> BootstrapManualCleanBootObserverAsync(
     ObserverState observer,
     Func<ObserverState> readObserver,
@@ -2989,6 +3049,54 @@ static void RunSelfTest()
         if (Directory.Exists(startupTraceRoot))
         {
             Directory.Delete(startupTraceRoot, recursive: true);
+        }
+    }
+
+    var videoSkipRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-video-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(videoSkipRoot);
+        var missingFfmpegPath = Path.Combine(videoSkipRoot, "missing-ffmpeg.exe");
+        var workspaceRoot = Directory.GetCurrentDirectory();
+        var cmdWslPath = "/mnt/c/Windows/System32/cmd.exe";
+        var cmdWindowsPath = @"C:\Windows\System32\cmd.exe";
+        var cmdBindingFromHostPath = GuiSmokeVideoRecorder.ResolveExecutablePathForSelfTest(cmdWslPath, workspaceRoot)
+                                   ?? throw new InvalidOperationException("Expected host ffmpeg-style path binding.");
+        Assert(File.Exists(cmdBindingFromHostPath.HostPath), "Host binding should resolve to an executable path visible to the current runtime.");
+        Assert(string.Equals(cmdBindingFromHostPath.ProcessPath, cmdWindowsPath, StringComparison.OrdinalIgnoreCase), "Host binding should produce Windows process path for child execution.");
+
+        var cmdBindingFromWindowsPath = GuiSmokeVideoRecorder.ResolveExecutablePathForSelfTest(cmdWindowsPath, workspaceRoot)
+                                      ?? throw new InvalidOperationException("Expected Windows ffmpeg-style path binding.");
+        Assert(File.Exists(cmdBindingFromWindowsPath.HostPath), "Windows binding should resolve to an executable path visible to the current runtime.");
+        Assert(string.Equals(cmdBindingFromWindowsPath.ProcessPath, cmdWindowsPath, StringComparison.OrdinalIgnoreCase), "Windows binding should preserve Windows process path.");
+
+        using var recorder = GuiSmokeVideoRecorder.Create(
+            workspaceRoot,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["--ffmpeg-path"] = missingFfmpegPath,
+            },
+            "self-test-session",
+            "self-test-run",
+            videoSkipRoot,
+            videoSkipRoot,
+            attemptId: "0001",
+            scopeKind: "attempt");
+        var started = recorder.TryStart(new WindowCaptureTarget(IntPtr.Zero, "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
+        Assert(!started, "Video recorder should skip when ffmpeg is unavailable.");
+        recorder.Complete(keepRecording: true, completionReason: "self-test-video-skip");
+
+        var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(videoSkipRoot, "video-recording.json"))
+                       ?? throw new InvalidOperationException("Expected video metadata after ffmpeg skip self-test.");
+        Assert(string.Equals(metadata.Status, "skipped", StringComparison.OrdinalIgnoreCase), "Missing ffmpeg should produce skipped metadata.");
+        Assert(metadata.SkipReason is not null && metadata.SkipReason.Contains("ffmpeg-not-found", StringComparison.OrdinalIgnoreCase), "Video skip metadata should explain missing ffmpeg.");
+        Assert(!File.Exists(metadata.OutputPath), "Skipped video capture should not leave a recording file behind.");
+    }
+    finally
+    {
+        if (Directory.Exists(videoSkipRoot))
+        {
+            Directory.Delete(videoSkipRoot, recursive: true);
         }
     }
 
@@ -10949,7 +11057,7 @@ static ScaffoldConfiguration ApplyPathOverrides(ScaffoldConfiguration configurat
 static void WriteUsage()
 {
     Console.WriteLine("Usage:");
-    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--deploy-mode in-process|subprocess] [--runtime-assembly-root path] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop]");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--deploy-mode in-process|subprocess] [--runtime-assembly-root path] [--ffmpeg-path path] [--disable-video-capture] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-run --run-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>] [--trace] [--full-request-rebuild]");
@@ -21081,3 +21189,600 @@ static class NativeMethods
         public int Y;
     }
 }
+
+sealed record GuiSmokeVideoRecordingMetadata(
+    string ScopeKind,
+    string SessionId,
+    string RunId,
+    string RootPath,
+    string SessionRoot,
+    string OutputPath)
+{
+    public string? AttemptId { get; init; }
+
+    public string Status { get; set; } = "pending";
+
+    public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+
+    public DateTimeOffset? RecordingStartedAt { get; set; }
+
+    public DateTimeOffset? RecordingEndedAt { get; set; }
+
+    public string? FfmpegPath { get; set; }
+
+    public bool FfmpegAvailable { get; set; }
+
+    public string? CommandLine { get; set; }
+
+    public bool WindowScopedCaptureRequested { get; set; }
+
+    public string? WindowTitle { get; set; }
+
+    public WindowBounds? CaptureBounds { get; set; }
+
+    public bool? Kept { get; set; }
+
+    public string? CompletionReason { get; set; }
+
+    public string? SkipReason { get; set; }
+
+    public int? ExitCode { get; set; }
+}
+
+sealed class GuiSmokeVideoRecorder : IDisposable
+{
+    private const int StopTimeoutMs = 5000;
+    private const int MinimumCaptureDimension = 2;
+    private const int CaptureFramerate = 15;
+
+    private readonly string _workspaceRoot;
+    private readonly string _metadataPath;
+    private readonly GuiSmokeVideoRecordingMetadata _metadata;
+    private string? _ffmpegProcessPath;
+    private Process? _process;
+    private bool _completed;
+    private bool _disposed;
+
+    private GuiSmokeVideoRecorder(
+        string workspaceRoot,
+        string rootPath,
+        GuiSmokeVideoRecordingMetadata metadata)
+    {
+        _workspaceRoot = workspaceRoot;
+        _metadataPath = Path.Combine(rootPath, "video-recording.json");
+        _metadata = metadata;
+        PersistMetadata();
+    }
+
+    public static GuiSmokeVideoRecorder Create(
+        string workspaceRoot,
+        IReadOnlyDictionary<string, string> options,
+        string sessionId,
+        string runId,
+        string rootPath,
+        string sessionRoot,
+        string? attemptId,
+        string scopeKind)
+    {
+        Directory.CreateDirectory(rootPath);
+        var outputPath = Path.Combine(rootPath, "video.review.mkv");
+        var metadata = new GuiSmokeVideoRecordingMetadata(
+            scopeKind,
+            sessionId,
+            runId,
+            rootPath,
+            sessionRoot,
+            outputPath)
+        {
+            AttemptId = attemptId,
+        };
+        var recorder = new GuiSmokeVideoRecorder(workspaceRoot, rootPath, metadata);
+        recorder.InitializeAvailability(options);
+        return recorder;
+    }
+
+    public bool TryStart(WindowCaptureTarget? target)
+    {
+        if (_completed || _process is not null)
+        {
+            return false;
+        }
+
+        if (string.Equals(_metadata.Status, "skipped", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(_metadata.Status, "start-failed", StringComparison.OrdinalIgnoreCase))
+        {
+            PersistMetadata();
+            return false;
+        }
+
+        if (target is null)
+        {
+            MarkSkipped("window-not-found");
+            return false;
+        }
+
+        var bounds = NormalizeCaptureBounds(target.Bounds);
+        if (bounds.Width < MinimumCaptureDimension || bounds.Height < MinimumCaptureDimension)
+        {
+            MarkSkipped("window-bounds-invalid");
+            return false;
+        }
+
+        _metadata.WindowScopedCaptureRequested = !target.IsFallback;
+        _metadata.WindowTitle = target.Title;
+        _metadata.CaptureBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+
+        var outputProcessPath = GetProcessCompatiblePath(_metadata.OutputPath);
+        var workingDirectory = GetProcessCompatiblePath(_workspaceRoot);
+        var executablePath = _metadata.FfmpegPath!;
+        var commandPath = _ffmpegProcessPath ?? executablePath;
+        var arguments = BuildFfmpegArguments(bounds, outputProcessPath);
+        _metadata.CommandLine = QuoteCommand(commandPath, arguments);
+        try
+        {
+            _process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = executablePath,
+                    Arguments = arguments,
+                    WorkingDirectory = workingDirectory,
+                    UseShellExecute = false,
+                    RedirectStandardInput = true,
+                    CreateNoWindow = true,
+                },
+            };
+            _process.Start();
+            _metadata.Status = "recording";
+            _metadata.RecordingStartedAt = DateTimeOffset.UtcNow;
+            PersistMetadata();
+            return true;
+        }
+        catch (Exception exception)
+        {
+            _metadata.Status = "start-failed";
+            _metadata.SkipReason = $"ffmpeg-start-failed:{exception.GetType().Name}:{SanitizeText(exception.Message)}";
+            PersistMetadata();
+            _process?.Dispose();
+            _process = null;
+            return false;
+        }
+    }
+
+    public void Complete(bool keepRecording, string completionReason)
+    {
+        if (_completed)
+        {
+            return;
+        }
+
+        _completed = true;
+        _metadata.CompletionReason = completionReason;
+        _metadata.RecordingEndedAt = DateTimeOffset.UtcNow;
+
+        if (_process is not null)
+        {
+            StopProcess();
+        }
+
+        if (_process is not null)
+        {
+            _metadata.ExitCode = _process.HasExited ? _process.ExitCode : null;
+            _process.Dispose();
+            _process = null;
+        }
+
+        var outputExists = File.Exists(_metadata.OutputPath);
+        if (string.Equals(_metadata.Status, "recording", StringComparison.OrdinalIgnoreCase))
+        {
+            if (outputExists && keepRecording)
+            {
+                _metadata.Status = "kept";
+                _metadata.Kept = true;
+            }
+            else if (outputExists)
+            {
+                if (TryDeleteOutput())
+                {
+                    _metadata.Status = "deleted";
+                    _metadata.Kept = false;
+                }
+            }
+            else
+            {
+                _metadata.Status = keepRecording ? "kept-missing-output" : "deleted-missing-output";
+                _metadata.Kept = keepRecording;
+            }
+        }
+        else if (string.Equals(_metadata.Status, "pending", StringComparison.OrdinalIgnoreCase))
+        {
+            _metadata.Status = "skipped";
+            _metadata.SkipReason ??= "recording-never-started";
+            _metadata.Kept = false;
+        }
+        else if (!string.Equals(_metadata.Status, "kept", StringComparison.OrdinalIgnoreCase)
+                 && !string.Equals(_metadata.Status, "deleted", StringComparison.OrdinalIgnoreCase))
+        {
+            _metadata.Kept ??= false;
+        }
+
+        PersistMetadata();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        if (!_completed)
+        {
+            Complete(keepRecording: false, completionReason: "disposed-without-explicit-complete");
+        }
+    }
+
+    private void InitializeAvailability(IReadOnlyDictionary<string, string> options)
+    {
+        if (options.ContainsKey("--disable-video-capture"))
+        {
+            _metadata.Status = "skipped";
+            _metadata.SkipReason = "video-capture-disabled";
+            PersistMetadata();
+            return;
+        }
+
+        var ffmpegPath = ResolveFfmpegPath(options, _workspaceRoot);
+        if (ffmpegPath is null)
+        {
+            _metadata.Status = "skipped";
+            _metadata.FfmpegAvailable = false;
+            _metadata.SkipReason = "ffmpeg-not-found";
+            PersistMetadata();
+            return;
+        }
+
+        _metadata.FfmpegPath = ffmpegPath.HostPath;
+        _ffmpegProcessPath = ffmpegPath.ProcessPath;
+        _metadata.FfmpegAvailable = true;
+        PersistMetadata();
+    }
+
+    private static VideoPathBinding? ResolveFfmpegPath(IReadOnlyDictionary<string, string> options, string workspaceRoot)
+    {
+        if (options.TryGetValue("--ffmpeg-path", out var explicitPath))
+        {
+            return ResolveExecutablePath(explicitPath, workspaceRoot);
+        }
+
+        var envPath = Environment.GetEnvironmentVariable("STS2_GUI_SMOKE_FFMPEG_PATH");
+        if (!string.IsNullOrWhiteSpace(envPath))
+        {
+            return ResolveExecutablePath(envPath, workspaceRoot);
+        }
+
+        var pathValue = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrWhiteSpace(pathValue))
+        {
+            return null;
+        }
+
+        foreach (var pathEntry in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            foreach (var candidateName in new[] { "ffmpeg.exe", "ffmpeg" })
+            {
+                try
+                {
+                    var candidatePath = Path.Combine(pathEntry, candidateName);
+                    if (File.Exists(candidatePath))
+                    {
+                        var fullHostPath = Path.GetFullPath(candidatePath);
+                        return new VideoPathBinding(fullHostPath, GetProcessCompatiblePath(fullHostPath));
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        return null;
+    }
+
+    internal static VideoPathBinding? ResolveExecutablePathForSelfTest(string explicitPath, string workspaceRoot)
+    {
+        return ResolveExecutablePath(explicitPath, workspaceRoot);
+    }
+
+    private static Rectangle NormalizeCaptureBounds(Rectangle bounds)
+    {
+        var width = Math.Max(MinimumCaptureDimension, bounds.Width);
+        var height = Math.Max(MinimumCaptureDimension, bounds.Height);
+        if (width % 2 != 0)
+        {
+            width -= 1;
+        }
+
+        if (height % 2 != 0)
+        {
+            height -= 1;
+        }
+
+        width = Math.Max(MinimumCaptureDimension, width);
+        height = Math.Max(MinimumCaptureDimension, height);
+        return new Rectangle(bounds.X, bounds.Y, width, height);
+    }
+
+    private static string BuildFfmpegArguments(Rectangle bounds, string outputPath)
+    {
+        return string.Join(
+            " ",
+            "-hide_banner",
+            "-loglevel error",
+            "-nostats",
+            "-y",
+            "-f gdigrab",
+            $"-framerate {CaptureFramerate.ToString(CultureInfo.InvariantCulture)}",
+            $"-offset_x {bounds.X.ToString(CultureInfo.InvariantCulture)}",
+            $"-offset_y {bounds.Y.ToString(CultureInfo.InvariantCulture)}",
+            $"-video_size {bounds.Width.ToString(CultureInfo.InvariantCulture)}x{bounds.Height.ToString(CultureInfo.InvariantCulture)}",
+            "-draw_mouse 0",
+            "-i desktop",
+            "-c:v libx264",
+            "-preset ultrafast",
+            "-pix_fmt yuv420p",
+            QuoteArgument(outputPath));
+    }
+
+    private static string QuoteArgument(string value)
+    {
+        return $"\"{value.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+    }
+
+    private static string QuoteCommand(string fileName, string arguments)
+    {
+        return $"{QuoteArgument(fileName)} {arguments}";
+    }
+
+    private void MarkSkipped(string reason)
+    {
+        _metadata.Status = "skipped";
+        _metadata.SkipReason = reason;
+        _metadata.Kept = false;
+        PersistMetadata();
+    }
+
+    private void StopProcess()
+    {
+        if (_process is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!_process.HasExited)
+            {
+                _process.StandardInput.WriteLine("q");
+                _process.StandardInput.Flush();
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            if (!_process.WaitForExit(StopTimeoutMs) && !_process.HasExited)
+            {
+                _process.Kill(entireProcessTree: true);
+                _process.WaitForExit(StopTimeoutMs);
+            }
+        }
+        catch
+        {
+            try
+            {
+                if (!_process.HasExited)
+                {
+                    _process.Kill(entireProcessTree: true);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private bool TryDeleteOutput()
+    {
+        try
+        {
+            if (File.Exists(_metadata.OutputPath))
+            {
+                File.Delete(_metadata.OutputPath);
+            }
+
+            return true;
+        }
+        catch (Exception exception)
+        {
+            _metadata.Status = "kept-delete-failed";
+            _metadata.Kept = true;
+            _metadata.CompletionReason = $"{_metadata.CompletionReason};delete-failed:{exception.GetType().Name}:{SanitizeText(exception.Message)}";
+            return false;
+        }
+    }
+
+    private void PersistMetadata()
+    {
+        var directory = Path.GetDirectoryName(_metadataPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllText(_metadataPath, JsonSerializer.Serialize(_metadata, GuiSmokeShared.JsonOptions));
+    }
+
+    private static VideoPathBinding? ResolveExecutablePath(string explicitPath, string workspaceRoot)
+    {
+        if (string.IsNullOrWhiteSpace(explicitPath))
+        {
+            throw new InvalidOperationException("A non-empty ffmpeg path is required.");
+        }
+
+        if (TryNormalizeWindowsPath(explicitPath, out var processPath))
+        {
+            return TryBindExecutable(processPath, fallbackHostPath: null);
+        }
+
+        if (TryConvertHostPathToWindows(explicitPath, out processPath))
+        {
+            return TryBindExecutable(processPath, fallbackHostPath: explicitPath);
+        }
+
+        var fullPath = Path.IsPathRooted(explicitPath)
+            ? Path.GetFullPath(explicitPath)
+            : Path.GetFullPath(explicitPath, workspaceRoot);
+        if (TryConvertHostPathToWindows(fullPath, out processPath))
+        {
+            return TryBindExecutable(processPath, fallbackHostPath: fullPath);
+        }
+
+        return File.Exists(fullPath)
+            ? new VideoPathBinding(fullPath, fullPath)
+            : null;
+    }
+
+    private static VideoPathBinding? TryBindExecutable(string processPath, string? fallbackHostPath)
+    {
+        foreach (var candidate in EnumerateExecutableHostCandidates(processPath, fallbackHostPath))
+        {
+            try
+            {
+                var fullHostPath = Path.GetFullPath(candidate);
+                if (File.Exists(fullHostPath))
+                {
+                    return new VideoPathBinding(fullHostPath, processPath);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> EnumerateExecutableHostCandidates(string processPath, string? fallbackHostPath)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            yield return processPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackHostPath))
+        {
+            yield return fallbackHostPath;
+        }
+
+        if (TryConvertWindowsPathToWslHost(processPath, out var translatedHostPath))
+        {
+            yield return translatedHostPath;
+        }
+    }
+
+    private static string SanitizeText(string? value)
+    {
+        return (value ?? string.Empty)
+            .Replace('\r', ' ')
+            .Replace('\n', ' ')
+            .Trim();
+    }
+
+    private static string GetProcessCompatiblePath(string path)
+    {
+        if (TryConvertHostPathToWindows(path, out var translatedPath))
+        {
+            return translatedPath;
+        }
+
+        return Path.GetFullPath(path);
+    }
+
+    private static string NormalizeWindowsProcessPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return path;
+        }
+
+        return path.Replace('/', '\\');
+    }
+
+    private static bool TryNormalizeWindowsPath(string path, out string translatedPath)
+    {
+        translatedPath = string.Empty;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        if (path.StartsWith(@"\\", StringComparison.OrdinalIgnoreCase)
+            || !(path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':'))
+        {
+            return false;
+        }
+
+        var driveLetter = char.ToUpperInvariant(path[0]);
+        var suffix = path[2..].Replace('/', '\\');
+        translatedPath = $"{driveLetter}:{suffix}";
+        return true;
+    }
+
+    private static bool TryConvertWindowsPathToWslHost(string path, out string translatedPath)
+    {
+        translatedPath = string.Empty;
+        if (!TryNormalizeWindowsPath(path, out var normalizedWindowsPath))
+        {
+            return false;
+        }
+
+        var driveLetter = char.ToLowerInvariant(normalizedWindowsPath[0]);
+        var suffix = normalizedWindowsPath[2..].Replace('\\', '/');
+        translatedPath = $"/mnt/{driveLetter}{suffix}";
+        return true;
+    }
+
+    private static bool TryConvertHostPathToWindows(string path, out string translatedPath)
+    {
+        translatedPath = string.Empty;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        if (path.StartsWith(@"\\", StringComparison.OrdinalIgnoreCase)
+            || (path.Length >= 2 && char.IsLetter(path[0]) && path[1] == ':'))
+        {
+            return false;
+        }
+
+        var normalized = path.Replace('\\', '/');
+        if (!normalized.StartsWith("/mnt/", StringComparison.OrdinalIgnoreCase)
+            || normalized.Length < 7
+            || !char.IsLetter(normalized[5])
+            || normalized[6] != '/')
+        {
+            return false;
+        }
+
+        var driveLetter = char.ToUpperInvariant(normalized[5]);
+        translatedPath = $"{driveLetter}:{normalized[6..].Replace('/', '\\')}";
+        return true;
+    }
+}
+
+sealed record VideoPathBinding(string HostPath, string ProcessPath);
