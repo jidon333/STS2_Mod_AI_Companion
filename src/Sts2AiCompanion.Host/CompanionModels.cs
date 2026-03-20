@@ -1,4 +1,7 @@
 using FoundationCompanionState = Sts2AiCompanion.Foundation.Contracts.CompanionState;
+using FoundationRewardAssessmentFacts = Sts2AiCompanion.Foundation.Contracts.RewardAssessmentFacts;
+using FoundationRewardOptionSet = Sts2AiCompanion.Foundation.Contracts.RewardOptionSet;
+using FoundationRewardRecommendationTrace = Sts2AiCompanion.Foundation.Contracts.RewardRecommendationTrace;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
 
@@ -54,7 +57,11 @@ public sealed record AdviceInputPack(
     IReadOnlyList<LiveExportEventEnvelope> RecentEvents,
     IReadOnlyList<StaticKnowledgeEntry> KnowledgeEntries,
     IReadOnlyList<string> KnowledgeReasons,
-    string ConstraintsText);
+    string ConstraintsText,
+    FoundationCompanionState? NormalizedState = null,
+    FoundationRewardOptionSet? RewardOptionSet = null,
+    FoundationRewardAssessmentFacts? RewardAssessmentFacts = null,
+    FoundationRewardRecommendationTrace? RewardRecommendationTraceSeed = null);
 
 public sealed record AdviceResponse(
     string Status,
@@ -72,7 +79,8 @@ public sealed record AdviceResponse(
     string RunId,
     string TriggerKind,
     string? SessionId,
-    string? RawResponse);
+    string? RawResponse,
+    FoundationRewardRecommendationTrace? RewardRecommendationTrace = null);
 
 public sealed record CodexSessionState(
     string RunId,

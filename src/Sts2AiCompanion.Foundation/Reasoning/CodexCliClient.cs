@@ -104,7 +104,7 @@ public sealed class CodexCliClient : ICodexSessionClient
                     return (CreateDegradedResponse(inputPack, resolvedSessionId, "Codex가 빈 응답을 반환했습니다.", rawOutput), resolvedSessionId);
                 }
 
-                return (new AdviceResponse(
+                var response = new AdviceResponse(
                     "ok",
                     parsed.Headline ?? "AI 조언",
                     parsed.Summary ?? "응답 요약이 비어 있습니다.",
@@ -120,7 +120,8 @@ public sealed class CodexCliClient : ICodexSessionClient
                     inputPack.RunId,
                     inputPack.TriggerKind,
                     resolvedSessionId,
-                    rawOutput), resolvedSessionId);
+                    rawOutput);
+                return (RewardRecommendationTraceBuilder.AlignToOptionSet(inputPack, response), resolvedSessionId);
             }
             catch (JsonException exception)
             {
@@ -313,7 +314,7 @@ public sealed class CodexCliClient : ICodexSessionClient
 
     private static AdviceResponse CreateDegradedResponse(AdviceInputPack inputPack, string? sessionId, string message, string? rawOutput)
     {
-        return new AdviceResponse(
+        var response = new AdviceResponse(
             "degraded",
             "Codex 조언 사용 불가",
             message,
@@ -330,6 +331,7 @@ public sealed class CodexCliClient : ICodexSessionClient
             inputPack.TriggerKind,
             sessionId,
             rawOutput);
+        return RewardRecommendationTraceBuilder.AlignToOptionSet(inputPack, response);
     }
 
     private static string? ExtractJsonObject(string? text)

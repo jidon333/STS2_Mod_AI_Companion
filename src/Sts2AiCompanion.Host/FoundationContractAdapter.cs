@@ -70,7 +70,11 @@ internal static class FoundationContractAdapter
             inputPack.RecentEvents.ToArray(),
             inputPack.KnowledgeEntries.ToArray(),
             inputPack.KnowledgeReasons.ToArray(),
-            inputPack.ConstraintsText);
+            inputPack.ConstraintsText,
+            inputPack.NormalizedState,
+            inputPack.RewardOptionSet,
+            inputPack.RewardAssessmentFacts,
+            inputPack.RewardRecommendationTraceSeed);
     }
 
     public static AdviceInputPack ToHost(this FoundationAdviceInputPack inputPack)
@@ -86,7 +90,11 @@ internal static class FoundationContractAdapter
             inputPack.RecentEvents.ToArray(),
             inputPack.KnowledgeEntries.ToArray(),
             inputPack.KnowledgeReasons.ToArray(),
-            inputPack.ConstraintsText);
+            inputPack.ConstraintsText,
+            inputPack.NormalizedState,
+            inputPack.RewardOptionSet,
+            inputPack.RewardAssessmentFacts,
+            inputPack.RewardRecommendationTraceSeed);
     }
 
     public static FoundationAdviceResponse ToFoundation(this AdviceResponse response)
@@ -107,7 +115,8 @@ internal static class FoundationContractAdapter
             response.RunId,
             response.TriggerKind,
             response.SessionId,
-            response.RawResponse);
+            response.RawResponse,
+            response.RewardRecommendationTrace);
     }
 
     public static AdviceResponse ToHost(this FoundationAdviceResponse response)
@@ -128,7 +137,8 @@ internal static class FoundationContractAdapter
             response.RunId,
             response.TriggerKind,
             response.SessionId,
-            response.RawResponse);
+            response.RawResponse,
+            response.RewardRecommendationTrace);
     }
 
     public static FoundationCodexSessionState ToFoundation(this CodexSessionState state)

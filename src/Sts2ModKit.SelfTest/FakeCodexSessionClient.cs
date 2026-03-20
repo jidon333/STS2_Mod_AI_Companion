@@ -14,13 +14,15 @@ internal sealed class FakeCodexSessionClient : ICodexSessionClient
     {
         RequestCount += 1;
         var resolvedSessionId = sessionId ?? "fake-session-001";
+        var recommendedChoiceLabel = inputPack.RewardOptionSet?.Options.FirstOrDefault(option => !option.IsSkipOption)?.Label
+                                     ?? inputPack.KnowledgeEntries.FirstOrDefault()?.Name;
         return Task.FromResult<(AdviceResponse Response, string? SessionId)>((
             new AdviceResponse(
                 "ok",
                 $"headline-{inputPack.TriggerKind}",
                 $"summary-{inputPack.TriggerKind}",
                 $"action-{inputPack.TriggerKind}",
-                inputPack.KnowledgeEntries.FirstOrDefault()?.Name,
+                recommendedChoiceLabel,
                 new[] { "reason-1", "reason-2" },
                 Array.Empty<string>(),
                 Array.Empty<string>(),
@@ -31,7 +33,8 @@ internal sealed class FakeCodexSessionClient : ICodexSessionClient
                 inputPack.RunId,
                 inputPack.TriggerKind,
                 resolvedSessionId,
-                "{\"status\":\"ok\"}"),
+                "{\"status\":\"ok\"}",
+                inputPack.RewardRecommendationTraceSeed),
             resolvedSessionId));
     }
 }

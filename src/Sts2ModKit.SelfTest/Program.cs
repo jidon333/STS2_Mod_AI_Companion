@@ -14,6 +14,9 @@ using Sts2ModAiCompanion.Mod.Runtime;
 using FoundationKnowledgeCatalogService = Sts2AiCompanion.Foundation.Knowledge.KnowledgeCatalogService;
 using FoundationAdvicePromptBuilder = Sts2AiCompanion.Foundation.Reasoning.AdvicePromptBuilder;
 using FoundationCodexCliClient = Sts2AiCompanion.Foundation.Reasoning.CodexCliClient;
+using FoundationReplayAdvisorValidator = Sts2AiCompanion.Foundation.Replay.ReplayAdvisorValidator;
+using RewardAssessmentFactsBuilder = Sts2AiCompanion.Foundation.Reasoning.RewardAssessmentFactsBuilder;
+using RewardOptionSetBuilder = Sts2AiCompanion.Foundation.Reasoning.RewardOptionSetBuilder;
 
 var failures = new List<string>();
 
@@ -57,6 +60,9 @@ Run("bridge action executor round-trips action results through the queue", TestB
 Run("companion path resolver keeps per-run artifacts under companion root", TestCompanionPathResolver, failures);
 Run("knowledge catalog service builds a bounded relevant slice", TestKnowledgeCatalogService, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
+Run("reward deterministic builders are reproducible", TestRewardDeterministicBuilders, failures);
+Run("reward deterministic layer falls back outside reward scenes", TestRewardDeterministicFallback, failures);
+Run("reward live and replay paths share deterministic context", TestRewardLiveReplayParity, failures);
 Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
 Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
@@ -1774,6 +1780,181 @@ static void TestAdvicePromptBuilder()
     Assert(prompt.Contains("response_instructions:", StringComparison.Ordinal), "Expected prompt to include the response instructions section.");
 }
 
+static void TestRewardDeterministicBuilders()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var runState = CreateRewardRunState("reward-deterministic-run");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var optionBuilder = new RewardOptionSetBuilder();
+        var factsBuilder = new RewardAssessmentFactsBuilder();
+
+        var optionSetA = optionBuilder.Build(ToFoundationRunState(runState));
+        var optionSetB = optionBuilder.Build(ToFoundationRunState(runState));
+        var factsA = factsBuilder.Build(ToFoundationRunState(runState), slice, optionSetA);
+        var factsB = factsBuilder.Build(ToFoundationRunState(runState), slice, optionSetB);
+        var inputPack = new FoundationAdvicePromptBuilder(configuration).BuildInputPack(ToFoundationRunState(runState), ToFoundationTrigger(new AdviceTrigger("reward-screen-opened", DateTimeOffset.UtcNow, false, true, "reward-test", runState.RecentEvents.LastOrDefault())), slice);
+
+        Assert(optionSetA is not null && optionSetB is not null, "Expected reward option set to be built for rewards scene.");
+        Assert(optionSetA.Options.Select(option => option.Label).SequenceEqual(optionSetB.Options.Select(option => option.Label), StringComparer.Ordinal), "Expected reward option labels to be deterministic.");
+        Assert(optionSetA.SkipAllowed, "Expected reward option set to expose skip availability.");
+        Assert(factsA is not null && factsB is not null, "Expected reward assessment facts to be built for rewards scene.");
+        Assert(factsA.KnowledgeFingerprint == factsB.KnowledgeFingerprint, "Expected reward assessment knowledge fingerprint to be reproducible.");
+        Assert(factsA.FactLines.SequenceEqual(factsB.FactLines, StringComparer.Ordinal), "Expected reward assessment fact lines to be reproducible.");
+        Assert(inputPack.RewardOptionSet is not null, "Expected reward input pack to include deterministic option set.");
+        Assert(inputPack.RewardAssessmentFacts is not null, "Expected reward input pack to include deterministic assessment facts.");
+        Assert(inputPack.RewardRecommendationTraceSeed is not null, "Expected reward input pack to include a trace seed.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestRewardDeterministicFallback()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var hostSnapshot = CreateHostSnapshot("shop-fallback-run", "shop");
+        var hostSession = new LiveExportSession("session-shop", "shop-fallback-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, Path.Combine(root, "live"), "choice-list-presented", "shop");
+        var runState = new CompanionRunState(
+            hostSnapshot,
+            hostSession,
+            "shop summary",
+            new[]
+            {
+                new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, "shop-fallback-run", "choice-list-presented", "shop", 1, 3, new Dictionary<string, object?>()),
+            },
+            false)
+        {
+            NormalizedState = CompanionStateMapper.FromLiveExport(hostSnapshot, hostSession, new[]
+            {
+                new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, "shop-fallback-run", "choice-list-presented", "shop", 1, 3, new Dictionary<string, object?>()),
+            }),
+        };
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var inputPack = new FoundationAdvicePromptBuilder(configuration).BuildInputPack(ToFoundationRunState(runState), ToFoundationTrigger(new AdviceTrigger("choice-list-presented", DateTimeOffset.UtcNow, false, true, "shop-test", runState.RecentEvents.Last())), slice);
+
+        Assert(inputPack.RewardOptionSet is null, "Expected reward deterministic option set to stay off outside reward scenes.");
+        Assert(inputPack.RewardAssessmentFacts is null, "Expected reward deterministic facts to stay off outside reward scenes.");
+        Assert(inputPack.RewardRecommendationTraceSeed is null, "Expected reward deterministic trace to stay off outside reward scenes.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestRewardLiveReplayParity()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        SeedRewardKnowledgeCatalog(root);
+
+        var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+        Directory.CreateDirectory(layout.LiveRoot);
+
+        var snapshot = CreateRewardSnapshot("reward-live-run");
+        var session = new LiveExportSession("reward-session-001", "reward-live-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, layout.LiveRoot, "choice-list-presented", "rewards");
+        var events = CreateRewardEvents("reward-live-run");
+
+        WriteJson(layout.SnapshotPath, snapshot);
+        WriteJson(layout.SessionPath, session);
+        File.WriteAllText(layout.SummaryPath, "reward summary", Encoding.UTF8);
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+        File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+        File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+        Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+        var fakeClient = new FakeCodexSessionClient();
+        var host = new CompanionHost(configuration, root, fakeClient);
+        try
+        {
+            host.RefreshAsync().GetAwaiter().GetResult();
+            Assert(fakeClient.RequestCount == 1, "Expected reward refresh to trigger automatic advice.");
+            Assert(host.CurrentSnapshot.LatestAdvice?.RecommendedChoiceLabel == "몸통 박치기", "Expected reward recommendation label to resolve to a visible option.");
+            Assert(host.CurrentSnapshot.LatestAdvice?.RewardRecommendationTrace is not null, "Expected reward advice response to carry deterministic trace.");
+
+            var hostPromptPackPath = Directory.GetFiles(host.CurrentSnapshot.Paths.PromptPacksRoot!, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .First();
+            var hostPromptPack = JsonSerializer.Deserialize<AdviceInputPack>(File.ReadAllText(hostPromptPackPath), ConfigurationLoader.JsonOptions)
+                ?? throw new InvalidOperationException("Expected live reward prompt pack.");
+
+            var fixtureRoot = Path.Combine(root, "reward-fixture");
+            var liveMirrorRoot = Path.Combine(fixtureRoot, "live-mirror");
+            Directory.CreateDirectory(liveMirrorRoot);
+            WriteJson(Path.Combine(liveMirrorRoot, configuration.LiveExport.SnapshotFileName), snapshot);
+            WriteJson(Path.Combine(liveMirrorRoot, configuration.LiveExport.SessionFileName), session);
+            File.WriteAllText(Path.Combine(liveMirrorRoot, configuration.LiveExport.SummaryFileName), "reward summary", Encoding.UTF8);
+            File.WriteAllText(Path.Combine(liveMirrorRoot, configuration.LiveExport.EventsFileName), string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+
+            var mockResponsePath = Path.Combine(root, "reward-mock-response.json");
+            WriteJson(
+                mockResponsePath,
+                new Sts2AiCompanion.Foundation.Contracts.AdviceResponse(
+                    "ok",
+                    "reward headline",
+                    "reward summary",
+                    "Take the stronger reward card.",
+                    "몸통 박치기",
+                    new[] { "reward reason" },
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    0.8,
+                    new[] { "bash" },
+                    DateTimeOffset.UtcNow,
+                    snapshot.RunId,
+                    "replay-validation",
+                    null,
+                    "{}"));
+
+            var replayValidator = new FoundationReplayAdvisorValidator(configuration, root);
+            Sts2AiCompanion.Foundation.Replay.ReplayValidationResult replayResult;
+            try
+            {
+                replayResult = replayValidator.ValidateAsync(fixtureRoot, mockResponsePath, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch (Exception exception)
+            {
+                throw new InvalidOperationException($"Replay reward parity validation failed: {exception}", exception);
+            }
+            var replayPromptPack = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceInputPack>(File.ReadAllText(replayResult.PromptPackPath), ConfigurationLoader.JsonOptions)
+                ?? throw new InvalidOperationException("Expected replay reward prompt pack.");
+            var replayAdvice = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceResponse>(File.ReadAllText(replayResult.AdviceJsonPath), ConfigurationLoader.JsonOptions)
+                ?? throw new InvalidOperationException("Expected replay reward advice response.");
+
+            Assert(hostPromptPack.RewardOptionSet is not null && replayPromptPack.RewardOptionSet is not null, "Expected live and replay reward prompt packs to include deterministic option sets.");
+            Assert(hostPromptPack.RewardAssessmentFacts is not null && replayPromptPack.RewardAssessmentFacts is not null, "Expected live and replay reward prompt packs to include deterministic assessment facts.");
+            Assert(hostPromptPack.RewardOptionSet.Options.Select(option => option.Label).SequenceEqual(replayPromptPack.RewardOptionSet.Options.Select(option => option.Label), StringComparer.Ordinal), "Expected live and replay reward option labels to match.");
+            Assert(hostPromptPack.RewardAssessmentFacts.FactLines.SequenceEqual(replayPromptPack.RewardAssessmentFacts.FactLines, StringComparer.Ordinal), "Expected live and replay reward assessment facts to match.");
+            Assert(replayAdvice.RecommendedChoiceLabel == "몸통 박치기", "Expected replay reward advice label to stay inside the deterministic option set.");
+        }
+        finally
+        {
+            host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestHostFoundationConvergence()
 {
     var root = CreateTempDirectory();
@@ -2004,6 +2185,11 @@ static ScaffoldConfiguration CreateCompanionHostTestConfiguration(string root, b
     };
 }
 
+static ScaffoldConfiguration CreateRewardTestConfiguration(string root)
+{
+    return CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+}
+
 static LiveExportSnapshot CreateHostSnapshot(string runId, string screen)
 {
     return new LiveExportSnapshot(
@@ -2037,6 +2223,88 @@ static LiveExportSnapshot CreateHostSnapshot(string runId, string screen)
             ["flowScreen"] = screen,
             ["visibleScreen"] = screen,
         });
+}
+
+static LiveExportSnapshot CreateRewardSnapshot(string runId)
+{
+    return new LiveExportSnapshot(
+        runId,
+        "active",
+        1,
+        DateTimeOffset.UtcNow,
+        "rewards",
+        1,
+        7,
+        new LiveExportPlayerSummary("Ironclad", 65, 80, 120, 3, new Dictionary<string, string?>()),
+        new[]
+        {
+            new LiveExportCardSummary("Strike", "strike", 1, "Attack", false),
+            new LiveExportCardSummary("Defend", "defend", 1, "Skill", false),
+            new LiveExportCardSummary("수비 강화", "shrug-it-off", 1, "Skill", false),
+        },
+        new[] { "Anchor" },
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("card", "몸통 박치기", "bash", "적에게 피해를 주고 취약을 겁니다."),
+            new LiveExportChoiceSummary("card", "수비 강화", "shrug-it-off", "방어도를 얻고 카드를 뽑습니다."),
+            new LiveExportChoiceSummary("skip", "넘기기", "skip", "보상을 건너뜁니다."),
+        },
+        new[] { "trigger: reward-screen-opened" },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("Card Reward", "Reward", false, null),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choice-extractor"] = "reward._options",
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+            ["flowScreen"] = "rewards",
+            ["visibleScreen"] = "rewards",
+            ["reward-type"] = "card",
+        });
+}
+
+static IReadOnlyList<LiveExportEventEnvelope> CreateRewardEvents(string runId)
+{
+    return new[]
+    {
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            1,
+            runId,
+            "reward-screen-opened",
+            "rewards",
+            1,
+            7,
+            new Dictionary<string, object?>
+            {
+                ["choiceCount"] = 3,
+            }),
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow,
+            2,
+            runId,
+            "choice-list-presented",
+            "rewards",
+            1,
+            7,
+            new Dictionary<string, object?>
+            {
+                ["choices"] = new[] { "몸통 박치기", "수비 강화", "넘기기" },
+            }),
+    };
+}
+
+static CompanionRunState CreateRewardRunState(string runId)
+{
+    var snapshot = CreateRewardSnapshot(runId);
+    var session = new LiveExportSession("reward-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "reward-live"), "choice-list-presented", "rewards");
+    var events = CreateRewardEvents(runId);
+    return new CompanionRunState(snapshot, session, "reward summary", events, false)
+    {
+        NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
+    };
 }
 
 static void SeedKnowledgeCatalog(string root)
@@ -2085,6 +2353,83 @@ static void SeedKnowledgeCatalog(string root)
                 Array.Empty<StaticKnowledgeOption>()),
         },
         Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>());
+    File.WriteAllText(Path.Combine(knowledgeRoot, "catalog.latest.json"), JsonSerializer.Serialize(catalog, ConfigurationLoader.JsonOptions), Encoding.UTF8);
+}
+
+static void SeedRewardKnowledgeCatalog(string root)
+{
+    var knowledgeRoot = Path.Combine(root, "artifacts", "knowledge");
+    Directory.CreateDirectory(knowledgeRoot);
+    var catalog = new StaticKnowledgeCatalog(
+        DateTimeOffset.UtcNow,
+        new StaticKnowledgeMetadata("reward-v1", "reward-test", DateTimeOffset.UtcNow, new Dictionary<string, string?>()),
+        new[]
+        {
+            new StaticKnowledgeEntry(
+                "bash",
+                "몸통 박치기",
+                "observed-merge",
+                true,
+                "적에게 피해를 주고 취약을 겁니다.",
+                new[] { "card", "attack" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "shrug-it-off",
+                "수비 강화",
+                "observed-merge",
+                true,
+                "방어도를 얻고 카드를 뽑습니다.",
+                new[] { "card", "skill" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "strike",
+                "Strike",
+                "observed-merge",
+                true,
+                "Deal damage.",
+                new[] { "card", "attack" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "defend",
+                "Defend",
+                "observed-merge",
+                true,
+                "Gain Block.",
+                new[] { "card", "skill" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+        },
+        new[]
+        {
+            new StaticKnowledgeEntry(
+                "anchor",
+                "Anchor",
+                "observed-merge",
+                true,
+                "Gain block on the first turn.",
+                new[] { "relic" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+        },
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        new[]
+        {
+            new StaticKnowledgeEntry(
+                "card-reward-context",
+                "Card Reward",
+                "strict-domain-scan",
+                true,
+                "Reward screen context.",
+                new[] { "reward" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+        },
         Array.Empty<StaticKnowledgeEntry>());
     File.WriteAllText(Path.Combine(knowledgeRoot, "catalog.latest.json"), JsonSerializer.Serialize(catalog, ConfigurationLoader.JsonOptions), Encoding.UTF8);
 }

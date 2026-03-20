@@ -53,7 +53,11 @@ public sealed record AdviceInputPack(
     IReadOnlyList<LiveExportEventEnvelope> RecentEvents,
     IReadOnlyList<StaticKnowledgeEntry> KnowledgeEntries,
     IReadOnlyList<string> KnowledgeReasons,
-    string ConstraintsText);
+    string ConstraintsText,
+    CompanionState? NormalizedState = null,
+    RewardOptionSet? RewardOptionSet = null,
+    RewardAssessmentFacts? RewardAssessmentFacts = null,
+    RewardRecommendationTrace? RewardRecommendationTraceSeed = null);
 
 public sealed record AdviceResponse(
     string Status,
@@ -71,7 +75,8 @@ public sealed record AdviceResponse(
     string RunId,
     string TriggerKind,
     string? SessionId,
-    string? RawResponse);
+    string? RawResponse,
+    RewardRecommendationTrace? RewardRecommendationTrace = null);
 
 public sealed record CodexSessionState(
     string RunId,

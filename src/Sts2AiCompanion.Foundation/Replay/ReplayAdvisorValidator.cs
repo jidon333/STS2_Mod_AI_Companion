@@ -66,7 +66,7 @@ public sealed class ReplayAdvisorValidator
                 _configuration.Assistant.MaxKnowledgeEntries,
                 _configuration.Assistant.MaxKnowledgeBytes);
             var inputPack = _promptBuilder.BuildInputPack(runState, trigger, slice);
-            var response = await CreateResponseAsync(runState, slice, mockAdviceResponsePath, cancellationToken).ConfigureAwait(false);
+            var response = await CreateResponseAsync(runState, slice, inputPack, mockAdviceResponsePath, cancellationToken).ConfigureAwait(false);
 
             var fixtureName = Path.GetFileName(Path.GetFullPath(resolvedFixtureRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             var runId = $"replay-{fixtureName}";
@@ -125,6 +125,7 @@ public sealed class ReplayAdvisorValidator
     private async Task<AdviceResponse> CreateResponseAsync(
         CompanionRunState runState,
         KnowledgeSlice slice,
+        AdviceInputPack inputPack,
         string? mockAdviceResponsePath,
         CancellationToken cancellationToken)
     {
@@ -133,12 +134,14 @@ public sealed class ReplayAdvisorValidator
             var mock = await ReadJsonAsync<AdviceResponse>(mockAdviceResponsePath, cancellationToken).ConfigureAwait(false);
             if (mock is not null)
             {
-                return mock with
+                return RewardRecommendationTraceBuilder.AlignToOptionSet(
+                    inputPack,
+                    mock with
                 {
                     GeneratedAt = DateTimeOffset.UtcNow,
                     RunId = runState.Snapshot.RunId,
                     TriggerKind = "replay-validation",
-                };
+                });
             }
         }
 
@@ -152,7 +155,7 @@ public sealed class ReplayAdvisorValidator
             blockers.Add("knowledge-slice-empty");
         }
 
-        return new AdviceResponse(
+        var response = new AdviceResponse(
             "degraded",
             "Replay validation fallback",
             "Prompt pack and knowledge slice were generated without live Codex execution. This artifact confirms the advisor pipeline can normalize state and build advice inputs from a replay fixture.",
@@ -177,6 +180,7 @@ public sealed class ReplayAdvisorValidator
             "replay-validation",
             null,
             null);
+        return RewardRecommendationTraceBuilder.AlignToOptionSet(inputPack, response);
     }
 
     private string ResolveFixtureRoot(string fixtureRoot)
@@ -194,7 +198,7 @@ public sealed class ReplayAdvisorValidator
         }
 
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-        return await JsonSerializer.DeserializeAsync<T>(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return await JsonSerializer.DeserializeAsync<T>(stream, ConfigurationLoader.JsonOptions, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<IReadOnlyList<LiveExportEventEnvelope>> ReadEventsAsync(string path, CancellationToken cancellationToken)

@@ -8,6 +8,8 @@ namespace Sts2AiCompanion.Foundation.Reasoning;
 public sealed class AdvicePromptBuilder
 {
     private readonly ScaffoldConfiguration _configuration;
+    private readonly RewardOptionSetBuilder _rewardOptionSetBuilder = new();
+    private readonly RewardAssessmentFactsBuilder _rewardAssessmentFactsBuilder = new();
 
     public AdvicePromptBuilder(ScaffoldConfiguration configuration)
     {
@@ -16,6 +18,10 @@ public sealed class AdvicePromptBuilder
 
     public AdviceInputPack BuildInputPack(CompanionRunState runState, AdviceTrigger trigger, KnowledgeSlice slice)
     {
+        var rewardOptionSet = _rewardOptionSetBuilder.Build(runState);
+        var rewardAssessmentFacts = _rewardAssessmentFactsBuilder.Build(runState, slice, rewardOptionSet);
+        var rewardRecommendationTrace = RewardRecommendationTraceBuilder.Build(rewardOptionSet, rewardAssessmentFacts);
+
         return new AdviceInputPack(
             runState.Snapshot.RunId,
             trigger.Kind,
@@ -29,7 +35,11 @@ public sealed class AdvicePromptBuilder
             slice.Reasons,
             "당신은 Slay the Spire 2 전략 조언 어시스턴트입니다. "
             + "게임을 대신 플레이하지 말고, 입력에 없는 정보는 추정하지 말고, "
-            + "현재 상태와 최근 이벤트, 관련 지식 조각만 근거로 판단하세요.");
+            + "현재 상태와 최근 이벤트, 관련 지식 조각만 근거로 판단하세요.",
+            runState.NormalizedState,
+            rewardOptionSet,
+            rewardAssessmentFacts,
+            rewardRecommendationTrace);
     }
 
     public string FormatPrompt(AdviceInputPack inputPack)
@@ -47,6 +57,12 @@ public sealed class AdvicePromptBuilder
         builder.AppendLine($"manual: {inputPack.Manual}");
         builder.AppendLine($"run_id: {inputPack.RunId}");
         builder.AppendLine($"screen: {inputPack.CurrentScreen}");
+        if (inputPack.NormalizedState is not null)
+        {
+            builder.AppendLine($"normalized_scene: {inputPack.NormalizedState.Scene.SceneType}");
+            builder.AppendLine($"normalized_visible_scene: {inputPack.NormalizedState.Scene.VisibleSceneType}");
+            builder.AppendLine($"normalized_flow_scene: {inputPack.NormalizedState.Scene.FlowSceneType}");
+        }
         builder.AppendLine();
         builder.AppendLine("current_state_summary:");
         builder.AppendLine(inputPack.SummaryText);
@@ -86,6 +102,53 @@ public sealed class AdvicePromptBuilder
         if (inputPack.KnowledgeEntries.Count == 0)
         {
             builder.AppendLine("- none");
+        }
+
+        if (inputPack.RewardOptionSet is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("reward_option_set:");
+            builder.AppendLine($"- scene: {inputPack.RewardOptionSet.SceneType}");
+            builder.AppendLine($"- skip_allowed: {inputPack.RewardOptionSet.SkipAllowed}");
+            builder.AppendLine($"- summary: {inputPack.RewardOptionSet.SummaryText}");
+            foreach (var option in inputPack.RewardOptionSet.Options)
+            {
+                var skipMarker = option.IsSkipOption ? " skip" : string.Empty;
+                builder.AppendLine($"- [{option.Ordinal}] {option.Label} kind={option.Kind}{skipMarker}");
+                if (!string.IsNullOrWhiteSpace(option.Value))
+                {
+                    builder.AppendLine($"  value: {option.Value}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(option.Description))
+                {
+                    builder.AppendLine($"  description: {option.Description}");
+                }
+            }
+        }
+
+        if (inputPack.RewardAssessmentFacts is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("reward_assessment_facts:");
+            builder.AppendLine($"- knowledge_fingerprint: {inputPack.RewardAssessmentFacts.KnowledgeFingerprint}");
+            foreach (var fact in inputPack.RewardAssessmentFacts.FactLines)
+            {
+                builder.AppendLine($"- {fact}");
+            }
+        }
+
+        if (inputPack.RewardRecommendationTraceSeed is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("reward_trace_seed:");
+            builder.AppendLine($"- knowledge_fingerprint: {inputPack.RewardRecommendationTraceSeed.KnowledgeFingerprint}");
+            builder.AppendLine($"- candidate_labels: {string.Join(", ", inputPack.RewardRecommendationTraceSeed.CandidateLabels)}");
+            builder.AppendLine($"- deterministic_knowledge_refs: {string.Join(", ", inputPack.RewardRecommendationTraceSeed.InputKnowledgeRefs)}");
+            foreach (var missing in inputPack.RewardRecommendationTraceSeed.MissingInformation)
+            {
+                builder.AppendLine($"- missing: {missing}");
+            }
         }
 
         builder.AppendLine();
@@ -149,6 +212,25 @@ public sealed class AdvicePromptBuilder
         foreach (var reference in response.KnowledgeRefs.DefaultIfEmpty("없음"))
         {
             builder.AppendLine($"- {reference}");
+        }
+
+        if (response.RewardRecommendationTrace is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("## Reward Deterministic Trace");
+            builder.AppendLine($"- knowledge_fingerprint: {response.RewardRecommendationTrace.KnowledgeFingerprint}");
+            builder.AppendLine($"- candidate_labels: {string.Join(", ", response.RewardRecommendationTrace.CandidateLabels)}");
+            builder.AppendLine("### Deterministic Facts");
+            foreach (var fact in response.RewardRecommendationTrace.AssessmentFactLines.DefaultIfEmpty("없음"))
+            {
+                builder.AppendLine($"- {fact}");
+            }
+
+            builder.AppendLine("### Deterministic Input Knowledge");
+            foreach (var reference in response.RewardRecommendationTrace.InputKnowledgeRefs.DefaultIfEmpty("없음"))
+            {
+                builder.AppendLine($"- {reference}");
+            }
         }
 
         return builder.ToString().TrimEnd();

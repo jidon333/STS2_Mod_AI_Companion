@@ -148,7 +148,8 @@ public sealed class AdvisorCoordinator : IAsyncDisposable
             response.RunId,
             response.TriggerKind,
             response.SessionId,
-            response.RawResponse);
+            response.RawResponse,
+            response.RewardRecommendationTrace);
     }
 
     private static CompanionCollectorStatus MapCollector(LegacyCollectorStatus collector)
