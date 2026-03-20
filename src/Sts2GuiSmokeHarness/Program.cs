@@ -4363,7 +4363,7 @@ static void RunSelfTest()
                 new GuiSmokeStepRequest(
                     "run",
                     "boot-to-long-run",
-                    40,
+                    39,
                     GuiSmokePhase.HandleRewards.ToString(),
                     "Allow one recapture window after a map recovery click.",
                     DateTimeOffset.UtcNow,
@@ -8868,6 +8868,9 @@ static bool IsExplicitRewardProgressionChoice(ObserverChoice choice)
     }
 
     return IsRewardCardChoice(choice)
+           || IsPotionRewardChoice(choice)
+           || IsGoldRewardChoice(choice)
+           || IsRelicRewardChoice(choice)
            || IsSkipOrProceedLabel(choice.Label)
            || choice.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
            || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true
@@ -8895,7 +8898,12 @@ static bool IsExplicitRewardProgressionNode(ObserverActionNode node)
 
 static bool IsRewardCardChoice(ObserverChoice choice)
 {
-    return string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
+    return (string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.Kind, "reward-card", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(choice.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase)
+            || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
+                                                       || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase)))
            && !IsSkipOrProceedLabel(choice.Label)
            && !IsConfirmLikeLabel(choice.Label)
            && !IsDismissLikeLabel(choice.Label)
@@ -8911,6 +8919,40 @@ static bool HasRewardCardLikeBounds(string? screenBounds)
     }
 
     return bounds.Width >= 120f || bounds.Height >= 150f;
+}
+
+static bool IsGoldRewardChoice(ObserverChoice choice)
+{
+    return ContainsAny(choice.Label, "골드", "gold")
+           || ContainsAny(choice.Description, "골드", "gold")
+           || ContainsAny(choice.Value, "GOLD.")
+           || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+              && string.Equals(choice.BindingId, "GoldReward", StringComparison.OrdinalIgnoreCase)
+           || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-gold", StringComparison.OrdinalIgnoreCase)
+                                                      || string.Equals(hint, "reward-type:GoldReward", StringComparison.OrdinalIgnoreCase));
+}
+
+static bool IsPotionRewardChoice(ObserverChoice choice)
+{
+    return string.Equals(choice.Kind, "potion", StringComparison.OrdinalIgnoreCase)
+           || ContainsAny(choice.Label, "포션", "potion")
+           || ContainsAny(choice.Description, "포션", "potion")
+           || choice.Value?.StartsWith("POTION.", StringComparison.OrdinalIgnoreCase) == true
+           || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+              && string.Equals(choice.BindingId, "PotionReward", StringComparison.OrdinalIgnoreCase)
+           || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-potion", StringComparison.OrdinalIgnoreCase)
+                                                      || string.Equals(hint, "reward-type:PotionReward", StringComparison.OrdinalIgnoreCase));
+}
+
+static bool IsRelicRewardChoice(ObserverChoice choice)
+{
+    return string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
+           || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true
+           || ContainsAny(choice.Description, "relic", "유물")
+           || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+              && string.Equals(choice.BindingId, "RelicReward", StringComparison.OrdinalIgnoreCase)
+           || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-relic", StringComparison.OrdinalIgnoreCase)
+                                                      || string.Equals(hint, "reward-type:RelicReward", StringComparison.OrdinalIgnoreCase));
 }
 
 static bool IsInspectPreviewChoice(ObserverChoice choice)
@@ -9510,6 +9552,8 @@ static bool IsProgressionLikeRewardChoice(ObserverChoice choice)
     return choice.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
            || choice.Kind.Contains("card", StringComparison.OrdinalIgnoreCase)
            || choice.Kind.Contains("potion", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+           || choice.SemanticHints.Any(static hint => hint.StartsWith("reward", StringComparison.OrdinalIgnoreCase))
            || choice.Label.Contains("골드", StringComparison.OrdinalIgnoreCase)
            || choice.Label.Contains("gold", StringComparison.OrdinalIgnoreCase)
            || choice.Label.Contains("포션", StringComparison.OrdinalIgnoreCase)
@@ -14443,6 +14487,24 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var rewardCardTarget = LooksLikeColorlessCardChoiceState(request.Observer)
             ? "colorless card choice"
             : "reward card choice";
+        var rewardRowAnalysis = AutoRewardRowAnalyzer.Analyze(request.ScreenshotPath);
+        if (rewardRowAnalysis.HasSelectableRewardRow)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                rewardRowAnalysis.RowNormalizedX,
+                rewardRowAnalysis.RowNormalizedY,
+                rewardCardTarget,
+                "A reward card row is still visible in the screenshot. Click the row before using skip, proceed, or map fallback.",
+                0.94,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                1400,
+                true,
+                null);
+        }
+
         var cardGridAnalysis = AutoEventCardGridAnalyzer.Analyze(request.ScreenshotPath);
         if (!cardGridAnalysis.HasSelectableCard)
         {
@@ -14570,7 +14632,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return false;
         }
 
-        return AutoEventCardGridAnalyzer.Analyze(screenshotPath).HasSelectableCard;
+        return AutoRewardRowAnalyzer.Analyze(screenshotPath).HasSelectableRewardRow
+               || AutoEventCardGridAnalyzer.Analyze(screenshotPath).HasSelectableCard;
     }
 
     private static GuiSmokeStepDecision? TryCreateRewardChoiceDecision(GuiSmokeStepRequest request)
@@ -14625,7 +14688,33 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var rewardCardTarget = LooksLikeColorlessCardChoiceState(request.Observer)
             ? "colorless card choice"
             : "reward card choice";
-        if (!request.Observer.Choices.Any(choice => IsRewardCardChoice(choice) && HasActiveRewardBounds(choice.ScreenBounds, request.WindowBounds)))
+        var explicitRewardCardChoice = request.Observer.Choices
+            .Where(choice => IsRewardCardChoice(choice) && HasActiveRewardBounds(choice.ScreenBounds, request.WindowBounds))
+            .OrderByDescending(ScoreExplicitRewardProgressionChoice)
+            .ThenBy(GetChoiceSortY)
+            .ThenBy(GetChoiceSortX)
+            .FirstOrDefault();
+        if (explicitRewardCardChoice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                explicitRewardCardChoice,
+                rewardCardTarget,
+                "Reward card row is explicitly visible. Open it before using skip or any screenshot-derived fallback.",
+                0.95,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                1400);
+        }
+
+        var hasExplicitRewardCardChoice = false;
+        var cardGridAnalysis = AutoEventCardGridAnalyzer.Analyze(request.ScreenshotPath);
+        var rewardRowAnalysis = AutoRewardRowAnalyzer.Analyze(request.ScreenshotPath);
+        var canRescueMissingRewardCard = !hasExplicitRewardCardChoice
+                                         && HasRewardChoiceAuthority(request.Observer)
+                                         && BuildRewardMapLayerState(request.Observer, request.WindowBounds).RewardPanelVisible
+                                         && (rewardRowAnalysis.HasSelectableRewardRow || cardGridAnalysis.HasSelectableCard)
+                                         && request.Observer.Choices.All(static choice => !IsCurrentRewardProgressionChoice(choice, null) || IsSkipOrProceedLabel(choice.Label));
+        if (!hasExplicitRewardCardChoice && !canRescueMissingRewardCard)
         {
             return null;
         }
@@ -14639,8 +14728,24 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds) && IsConfirmLikeLabel(choice.Label))
             .OrderByDescending(GetChoiceSortX)
             .FirstOrDefault();
-        var cardGridAnalysis = AutoEventCardGridAnalyzer.Analyze(request.ScreenshotPath);
         var canChooseCard = !string.Equals(lastTarget, rewardCardTarget, StringComparison.OrdinalIgnoreCase);
+        if (canChooseCard && rewardRowAnalysis.HasSelectableRewardRow)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                rewardRowAnalysis.RowNormalizedX,
+                rewardRowAnalysis.RowNormalizedY,
+                rewardCardTarget,
+                "A reward card row is still visible in the screenshot. Open it before pressing confirm or skip.",
+                0.94,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                1400,
+                true,
+                null);
+        }
+
         if (canChooseCard && cardGridAnalysis.HasSelectableCard)
         {
             return new GuiSmokeStepDecision(
@@ -17506,6 +17611,9 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         }
 
         return IsRewardCardChoice(choice)
+               || IsPotionRewardChoice(choice)
+               || IsGoldRewardChoice(choice)
+               || IsRelicRewardChoice(choice)
                || IsSkipOrProceedLabel(choice.Label)
                || choice.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
                || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true
@@ -17554,7 +17662,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool IsRewardCardChoice(ObserverChoice choice)
     {
-        return string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
+        return (string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(choice.Kind, "reward-card", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(choice.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase)
+                || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
+                                                           || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase)))
                && !IsSkipOrProceedLabel(choice.Label)
                && !IsConfirmLikeLabel(choice.Label)
                && !IsDismissLikeLabel(choice.Label)
@@ -17585,6 +17698,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (IsRewardCardChoice(choice))
         {
             return 280;
+        }
+
+        if (IsPotionRewardChoice(choice))
+        {
+            return 220;
         }
 
         if (IsRelicRewardChoice(choice))
@@ -17865,14 +17983,34 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     {
         return ContainsAny(choice.Label, "골드", "gold")
                || ContainsAny(choice.Description, "골드", "gold")
-               || ContainsAny(choice.Value, "GOLD.");
+               || ContainsAny(choice.Value, "GOLD.")
+               || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+                  && string.Equals(choice.BindingId, "GoldReward", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-gold", StringComparison.OrdinalIgnoreCase)
+                                                          || string.Equals(hint, "reward-type:GoldReward", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsPotionRewardChoice(ObserverChoice choice)
+    {
+        return string.Equals(choice.Kind, "potion", StringComparison.OrdinalIgnoreCase)
+               || ContainsAny(choice.Label, "포션", "potion")
+               || ContainsAny(choice.Description, "포션", "potion")
+               || choice.Value?.StartsWith("POTION.", StringComparison.OrdinalIgnoreCase) == true
+               || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+                  && string.Equals(choice.BindingId, "PotionReward", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-potion", StringComparison.OrdinalIgnoreCase)
+                                                          || string.Equals(hint, "reward-type:PotionReward", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsRelicRewardChoice(ObserverChoice choice)
     {
         return string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
                || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true
-               || ContainsAny(choice.Description, "relic", "유물");
+               || ContainsAny(choice.Description, "relic", "유물")
+               || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+                  && string.Equals(choice.BindingId, "RelicReward", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-relic", StringComparison.OrdinalIgnoreCase)
+                                                          || string.Equals(hint, "reward-type:RelicReward", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string BuildProgressChoiceReason(ObserverChoice choice, ObserverSummary observer)
@@ -18209,6 +18347,11 @@ sealed record AutoEventCardGridAnalysis(
     double CardNormalizedX,
     double CardNormalizedY);
 
+sealed record AutoRewardRowAnalysis(
+    bool HasSelectableRewardRow,
+    double RowNormalizedX,
+    double RowNormalizedY);
+
 static class AutoRestSiteCardGridAnalyzer
 {
     private static readonly AutoRestSiteCardGridAnalysis None = new(false, 0.5d, 0.5d);
@@ -18428,6 +18571,147 @@ static class AutoEventCardGridAnalyzer
                 true,
                 Math.Clamp(candidate.centerX / bitmap.Width, 0.12d, 0.88d),
                 Math.Clamp(candidate.centerY / bitmap.Height, 0.12d, 0.82d));
+        }
+        catch (ArgumentException)
+        {
+            return None;
+        }
+        catch (IOException)
+        {
+            return None;
+        }
+    }
+
+    private static List<List<Point>> FindClusters(List<Point> points, int maxDx, int maxDy)
+    {
+        var remaining = new HashSet<int>(Enumerable.Range(0, points.Count));
+        var clusters = new List<List<Point>>();
+
+        while (remaining.Count > 0)
+        {
+            var seedIndex = remaining.First();
+            remaining.Remove(seedIndex);
+            var queue = new Queue<int>();
+            var cluster = new List<Point>();
+            queue.Enqueue(seedIndex);
+
+            while (queue.Count > 0)
+            {
+                var currentIndex = queue.Dequeue();
+                var current = points[currentIndex];
+                cluster.Add(current);
+
+                var neighbors = remaining
+                    .Where(index =>
+                    {
+                        var other = points[index];
+                        return Math.Abs(other.X - current.X) <= maxDx
+                               && Math.Abs(other.Y - current.Y) <= maxDy;
+                    })
+                    .ToArray();
+
+                foreach (var neighbor in neighbors)
+                {
+                    remaining.Remove(neighbor);
+                    queue.Enqueue(neighbor);
+                }
+            }
+
+            clusters.Add(cluster);
+        }
+
+        return clusters;
+    }
+}
+
+static class AutoRewardRowAnalyzer
+{
+    private static readonly AutoRewardRowAnalysis None = new(false, 0.5d, 0.5d);
+
+    public static AutoRewardRowAnalysis Analyze(string screenshotPath)
+    {
+        return GuiSmokeScreenshotAnalysisCache.GetOrCreate("reward-row", screenshotPath, () => AnalyzeCore(screenshotPath));
+    }
+
+    private static AutoRewardRowAnalysis AnalyzeCore(string screenshotPath)
+    {
+        if (!File.Exists(screenshotPath))
+        {
+            return None;
+        }
+
+        try
+        {
+            using var bitmap = new Bitmap(screenshotPath);
+            var points = new List<Point>();
+            var xStart = (int)(bitmap.Width * 0.32);
+            var xEnd = (int)(bitmap.Width * 0.68);
+            var yStart = (int)(bitmap.Height * 0.22);
+            var yEnd = (int)(bitmap.Height * 0.52);
+            for (var y = yStart; y < yEnd; y += 2)
+            {
+                for (var x = xStart; x < xEnd; x += 2)
+                {
+                    var pixel = bitmap.GetPixel(x, y);
+                    var brightness = (pixel.R + pixel.G + pixel.B) / 3.0;
+                    var saturation = Math.Max(pixel.R, Math.Max(pixel.G, pixel.B))
+                                     - Math.Min(pixel.R, Math.Min(pixel.G, pixel.B));
+                    if (brightness >= 95
+                        && saturation >= 45
+                        && pixel.G >= 120
+                        && pixel.B >= 120
+                        && pixel.R <= 150)
+                    {
+                        points.Add(new Point(x, y));
+                    }
+                }
+            }
+
+            if (points.Count < 180)
+            {
+                return None;
+            }
+
+            var candidate = FindClusters(points, 10, 8)
+                .Select(cluster =>
+                {
+                    var minX = cluster.Min(static point => point.X);
+                    var maxX = cluster.Max(static point => point.X);
+                    var minY = cluster.Min(static point => point.Y);
+                    var maxY = cluster.Max(static point => point.Y);
+                    var width = maxX - minX;
+                    var height = maxY - minY;
+                    var centerX = cluster.Average(static point => point.X);
+                    var centerY = cluster.Average(static point => point.Y);
+                    return new
+                    {
+                        cluster,
+                        width,
+                        height,
+                        centerX,
+                        centerY,
+                        score = Math.Abs(centerX - bitmap.Width / 2d) + Math.Abs(centerY - bitmap.Height * 0.38d),
+                    };
+                })
+                .Where(entry =>
+                    entry.cluster.Count >= 120
+                    && entry.width is >= 140 and <= 340
+                    && entry.height is >= 30 and <= 110
+                    && entry.centerX >= bitmap.Width * 0.36
+                    && entry.centerX <= bitmap.Width * 0.64
+                    && entry.centerY >= bitmap.Height * 0.24
+                    && entry.centerY <= bitmap.Height * 0.48)
+                .OrderBy(entry => entry.score)
+                .FirstOrDefault();
+            if (candidate is null)
+            {
+                return None;
+            }
+
+            return new AutoRewardRowAnalysis(
+                true,
+                Math.Clamp(candidate.centerX / bitmap.Width, 0.20d, 0.80d),
+                Math.Clamp(candidate.centerY / bitmap.Height, 0.16d, 0.60d));
         }
         catch (ArgumentException)
         {

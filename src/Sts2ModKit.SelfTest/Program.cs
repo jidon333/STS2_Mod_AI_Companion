@@ -41,11 +41,14 @@ Run("localization scan merges into canonical card entries", TestLocalizationKnow
 Run("smoke diagnostics surface startup patch failures", TestSmokeDiagnostics, failures);
 Run("runtime reflection invoker supports optional parameters", TestRuntimeReflectionOptionalParameters, failures);
 Run("runtime reflection string extraction resolves nested label text", TestRuntimeReflectionStringExtraction, failures);
+Run("runtime reflection keeps reward-backed card rows and reward type metadata", TestRuntimeReflectionRewardBackedCardChoiceExtraction, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
 Run("runtime reflection encounter does not override CombatManager IsInProgress false", TestRuntimeReflectionEncounterDoesNotOverrideCombatManagerFalse, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
+Run("runtime reflection exports combat play state metadata", TestRuntimeReflectionCombatMetadataExport, failures);
+Run("runtime reflection capture clears combat slot and success inference", TestRuntimeReflectionCaptureClearsCombatMetadata, failures);
 Run("companion scene normalizer prefers main-menu over hidden character-select markers", TestCompanionSceneNormalizerMainMenuPriority, failures);
 Run("companion scene normalizer detects blocking overlay from placeholder choices", TestCompanionSceneNormalizerBlockingOverlay, failures);
 Run("companion state mapper prefers main-menu over hidden character-select markers", TestCompanionStateMapperMainMenuPriority, failures);
@@ -1174,6 +1177,39 @@ static void TestRuntimeReflectionStringExtraction()
     Assert(description == "카드를 선택하세요.", "Expected LocString.GetFormattedText() to be used for descriptions.");
 }
 
+static void TestRuntimeReflectionRewardBackedCardChoiceExtraction()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var summaryMethod = extractorType!.GetMethod("TryCreateChoiceSummary", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    var placeholderMethod = extractorType.GetMethod("LooksLikePlaceholderChoice", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(summaryMethod is not null, "Expected private TryCreateChoiceSummary helper.");
+    Assert(placeholderMethod is not null, "Expected private LooksLikePlaceholderChoice helper.");
+
+    var rewardButton = new FakeRewardButton
+    {
+        Reward = new FakeCardReward
+        {
+            Description = new FakeLocString("덱에 추가할 카드를 선택하세요."),
+        },
+        _label = new FakeLabel { Text = "덱에 추가할 카드를 선택하세요." },
+        Position = new FakeVector2(758, 278),
+        Size = new FakeVector2(402, 86),
+    };
+
+    var summary = summaryMethod!.Invoke(null, new object?[] { rewardButton }) as LiveExportChoiceSummary;
+    Assert(summary is not null, "Expected reward-backed card row to produce a choice summary.");
+    Assert(summary!.Kind == "card", "Expected CardReward rows to export as card choices.");
+    Assert(summary.Label == "덱에 추가할 카드를 선택하세요.", "Expected CardReward placeholder label to be preserved.");
+    Assert(summary.BindingKind == "reward-type" && summary.BindingId == "CardReward", "Expected reward type binding metadata for CardReward rows.");
+    Assert(summary.SemanticHints.Contains("reward-card", StringComparer.OrdinalIgnoreCase), "Expected reward card semantic hint on CardReward rows.");
+    Assert(summary.ScreenBounds == "758,278,402,86", "Expected reward row bounds to be preserved.");
+
+    var placeholder = placeholderMethod!.Invoke(null, new object?[] { summary, 5 });
+    Assert(placeholder is bool keep && !keep, "Expected reward-backed CardReward rows not to be discarded as placeholders.");
+}
+
 static void TestRuntimeReflectionRejectsOverlayLikePlayerRoots()
 {
     var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
@@ -1290,6 +1326,182 @@ static void TestRuntimeReflectionScreenResolution()
     var resolved = method!.Invoke(null, new object?[] { null, roots, new[] { "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen" } }) as string;
 
     Assert(resolved == "rewards", "Expected overlay reward screen to win over room-type combat fallback.");
+}
+
+static void TestRuntimeReflectionCombatMetadataExport()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod(
+        "AppendCombatRuntimeMetadata",
+        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private combat runtime metadata export helper.");
+
+    var meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+    var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+    var roots = new object[]
+    {
+        new FakeRuntimePlayerHand
+        {
+            InCardPlay = true,
+            CurrentMode = "Combat",
+            _draggedHolderIndex = 1,
+            _holdersAwaitingQueue = new Dictionary<object, int> { [new object()] = 1 },
+            _currentCardPlay = new FakeRuntimeCardPlay
+            {
+                Holder = new FakeRuntimeHandHolder
+                {
+                    CardModel = new FakeRuntimeCombatCard
+                    {
+                        Id = "CARD.DEFEND_IRONCLAD",
+                        Title = "Defend",
+                        Type = "Skill",
+                        TargetType = "Self",
+                    },
+                },
+            },
+        },
+        new FakeRuntimeTargetManager
+        {
+            IsInSelection = true,
+            HoveredNode = new FakeRuntimeTargetNode
+            {
+                Id = "MONSTER.JAW_WORM",
+                DisplayName = "Jaw Worm",
+                Entity = new FakeRuntimeTargetEntity
+                {
+                    Id = "MONSTER.JAW_WORM",
+                    DisplayName = "Jaw Worm",
+                },
+            },
+            LastTargetingFinishedFrame = 77,
+        },
+        new FakeRuntimeCombatHistory
+        {
+            CardPlaysStarted = new object[]
+            {
+                new FakeRuntimeCombatHistoryEntry
+                {
+                    CardPlay = new FakeRuntimeCardPlay
+                    {
+                        Card = new FakeRuntimeCombatCard
+                        {
+                            Id = "CARD.STRIKE_IRONCLAD",
+                            Title = "Strike",
+                            Type = "Attack",
+                            TargetType = "AnyEnemy",
+                        },
+                        Target = new FakeRuntimeTargetNode
+                        {
+                            Id = "MONSTER.JAW_WORM",
+                            DisplayName = "Jaw Worm",
+                        },
+                    },
+                },
+            },
+            CardPlaysFinished = new object[]
+            {
+                new FakeRuntimeCombatHistoryEntry
+                {
+                    CardPlay = new FakeRuntimeCardPlay
+                    {
+                        Card = new FakeRuntimeCombatCard
+                        {
+                            Id = "CARD.DEFEND_IRONCLAD",
+                            Title = "Defend",
+                            Type = "Skill",
+                            TargetType = "Self",
+                        },
+                    },
+                },
+            },
+        },
+        new FakeCombatManagerState { IsInProgress = true, IsPlayPhase = true },
+    };
+
+    method!.Invoke(null, new object?[] { roots, new LiveExportEncounterSummary("Cultist", "Monster", true, 1), meta, payload });
+
+    Assert(meta.TryGetValue("combatCardPlayPending", out var combatCardPlayPending) && combatCardPlayPending == "true", "Expected runtime export to mark combatCardPlayPending.");
+    Assert(meta.TryGetValue("combatSelectedCardId", out var selectedCardId) && selectedCardId == "CARD.DEFEND_IRONCLAD", "Expected runtime export to include selected card id.");
+    Assert(meta.TryGetValue("combatSelectedCardTargetType", out var selectedCardTargetType) && selectedCardTargetType == "Self", "Expected runtime export to include selected card target type.");
+    Assert(meta.TryGetValue("combatSelectedCardSlot", out var selectedCardSlot) && selectedCardSlot == "2", "Expected runtime export to include the active hand slot.");
+    Assert(meta.TryGetValue("combatTargetingInProgress", out var targetingInProgress) && targetingInProgress == "true", "Expected runtime export to include targeting state.");
+    Assert(meta.TryGetValue("combatHoveredTargetLabel", out var hoveredTargetLabel) && hoveredTargetLabel == "Jaw Worm", "Expected runtime export to include hovered target label.");
+    Assert(meta.TryGetValue("combatLastCardPlayFinishedCardId", out var finishedCardId) && finishedCardId == "CARD.DEFEND_IRONCLAD", "Expected runtime export to include the last finished card id.");
+    Assert(meta.TryGetValue("combatLastCardPlayFinishedSuccess", out var finishedSuccess) && finishedSuccess is null, "Expected runtime export not to infer explicit finished success from combat history alone.");
+}
+
+static void TestRuntimeReflectionCaptureClearsCombatMetadata()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var captureMethod = extractorType!.GetMethod("Capture", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+    Assert(captureMethod is not null, "Expected public runtime snapshot capture entry point.");
+
+    var observeMethod = typeof(FakeRuntimeCaptureHook).GetMethod(nameof(FakeRuntimeCaptureHook.Observe));
+    Assert(observeMethod is not null, "Expected fake runtime capture hook method.");
+
+    var binding = CreateRuntimeHookBinding(observeMethod!, "runtime-poll", "combat");
+    var captureObservation = captureMethod!.Invoke(null, new object?[]
+    {
+        binding,
+        AiCompanionRuntimeConfig.Defaults,
+        null,
+        new object?[]
+        {
+            new FakeRuntimePlayerHand
+            {
+                InCardPlay = false,
+                CurrentMode = "Combat",
+                _draggedHolderIndex = -1,
+                _holdersAwaitingQueue = new Dictionary<object, int>(),
+            },
+            new FakeRuntimeCombatHistory
+            {
+                CardPlaysFinished = new object[]
+                {
+                    new FakeRuntimeCombatHistoryEntry
+                    {
+                        CardPlay = new FakeRuntimeCardPlay
+                        {
+                            Card = new FakeRuntimeCombatCard
+                            {
+                                Id = "CARD.DEFEND_IRONCLAD",
+                                Title = "Defend",
+                                Type = "Skill",
+                                TargetType = "Self",
+                            },
+                        },
+                    },
+                },
+            },
+            new FakeCombatManagerState { IsInProgress = true, IsPlayPhase = true },
+        },
+        null,
+    }) as LiveExportObservation;
+    Assert(captureObservation is not null, "Expected Capture to return a live export observation.");
+    Assert(captureObservation!.Meta.TryGetValue("combatSelectedCardSlot", out var selectedCardSlot) && selectedCardSlot is null, "Expected Capture to clear combatSelectedCardSlot when no active slot exists.");
+    Assert(captureObservation.Meta.TryGetValue("combatLastCardPlayFinishedSuccess", out var finishedSuccess) && finishedSuccess is null, "Expected Capture to keep finished-success null without an explicit success source.");
+
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\combat");
+    tracker.Apply(CreateObservation("runtime-poll", "combat", 1, 1, 70, 120, new[] { "Strike" }, Array.Empty<string>(), Array.Empty<string>()) with
+    {
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["combatSelectedCardSlot"] = "2",
+            ["combatLastCardPlayFinishedSuccess"] = "true",
+        },
+    });
+    var merged = tracker.Apply(captureObservation with
+    {
+        RunId = "run-001",
+        RunStatus = "active",
+        Screen = "combat",
+    }).Snapshot;
+    Assert(merged.Meta.TryGetValue("combatSelectedCardSlot", out var mergedSlot) && mergedSlot is null, "Expected tracker merge to clear stale combatSelectedCardSlot when Capture reports no active slot.");
+    Assert(merged.Meta.TryGetValue("combatLastCardPlayFinishedSuccess", out var mergedSuccess) && mergedSuccess is null, "Expected tracker merge to clear stale finished-success inference when Capture reports null.");
 }
 
 static void TestLiveExportTrackerPartialMerge()
@@ -3001,6 +3213,32 @@ static LiveExportObservation CreateObservation(
         new Dictionary<string, string?>());
 }
 
+static object CreateRuntimeHookBinding(System.Reflection.MethodInfo method, string semanticKind, string? screenOverride)
+{
+    var runtimeAssembly = typeof(AiCompanionModEntryPoint).Assembly;
+    var candidateType = runtimeAssembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeHookCandidate");
+    var bindingType = runtimeAssembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeHookBinding");
+    Assert(candidateType is not null, "Expected runtime hook candidate type to exist.");
+    Assert(bindingType is not null, "Expected runtime hook binding type to exist.");
+
+    var candidate = Activator.CreateInstance(
+        candidateType!,
+        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic,
+        binder: null,
+        args: new object?[] { "combat", semanticKind, method.DeclaringType!.FullName!, new[] { method.Name }, screenOverride },
+        culture: null);
+    Assert(candidate is not null, "Expected runtime hook candidate to be constructible.");
+
+    var binding = Activator.CreateInstance(
+        bindingType!,
+        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic,
+        binder: null,
+        args: new object?[] { candidate, method },
+        culture: null);
+    Assert(binding is not null, "Expected runtime hook binding to be constructible.");
+    return binding!;
+}
+
 file sealed class OptionalParameterProbe
 {
     public int GetChildCount(bool includeInternal = false)
@@ -3023,9 +3261,42 @@ file sealed class FakeChoiceButton
     public string? Id { get; init; }
 }
 
+file sealed class FakeRewardButton
+{
+    public object? Reward { get; init; }
+
+    public object? _label { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+}
+
+file class FakeReward
+{
+    public object? Description { get; init; }
+}
+
+file sealed class FakeCardReward : FakeReward
+{
+}
+
 file sealed class FakeLabel
 {
     public string? Text { get; init; }
+}
+
+file sealed class FakeVector2
+{
+    public FakeVector2(double x, double y)
+    {
+        X = x;
+        Y = y;
+    }
+
+    public double X { get; }
+
+    public double Y { get; }
 }
 
 file sealed class FakeLocString
@@ -3107,6 +3378,92 @@ file sealed class FakeEncounterState
 
 file sealed class FakeCombatUiNode
 {
+}
+
+file sealed class FakeRuntimeCaptureHook
+{
+    public void Observe(object? hand, object? history, object? combatManager)
+    {
+    }
+}
+
+file sealed class FakeRuntimePlayerHand
+{
+    public bool InCardPlay { get; init; }
+
+    public string? CurrentMode { get; init; }
+
+    public int _draggedHolderIndex { get; init; }
+
+    public Dictionary<object, int> _holdersAwaitingQueue { get; init; } = new();
+
+    public object? _currentCardPlay { get; init; }
+}
+
+file sealed class FakeRuntimeCardPlay
+{
+    public object? Holder { get; init; }
+
+    public object? Card { get; init; }
+
+    public object? Target { get; init; }
+}
+
+file sealed class FakeRuntimeHandHolder
+{
+    public object? CardModel { get; init; }
+}
+
+file sealed class FakeRuntimeCombatCard
+{
+    public string? Id { get; init; }
+
+    public string? Title { get; init; }
+
+    public string? Type { get; init; }
+
+    public string? TargetType { get; init; }
+}
+
+file sealed class FakeRuntimeTargetManager
+{
+    public bool IsInSelection { get; init; }
+
+    public object? HoveredNode { get; init; }
+
+    public long LastTargetingFinishedFrame { get; init; }
+}
+
+file sealed class FakeRuntimeTargetNode
+{
+    public string? Id { get; init; }
+
+    public string? DisplayName { get; init; }
+
+    public object? Entity { get; init; }
+}
+
+file sealed class FakeRuntimeTargetEntity
+{
+    public string? Id { get; init; }
+
+    public string? DisplayName { get; init; }
+
+    public bool IsPlayer { get; init; }
+
+    public bool IsFriendly { get; init; }
+}
+
+file sealed class FakeRuntimeCombatHistory
+{
+    public object[] CardPlaysStarted { get; init; } = Array.Empty<object>();
+
+    public object[] CardPlaysFinished { get; init; } = Array.Empty<object>();
+}
+
+file sealed class FakeRuntimeCombatHistoryEntry
+{
+    public object? CardPlay { get; init; }
 }
 
 file sealed record RewardScenarioDefinition(

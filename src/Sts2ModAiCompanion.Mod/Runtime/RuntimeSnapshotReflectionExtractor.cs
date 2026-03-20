@@ -358,6 +358,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         AppendRestSiteRuntimeMetadata(roots, choices, screen, meta, payload);
+        AppendCombatRuntimeMetadata(roots, encounter, meta, payload);
 
         return new LiveExportObservation(
             triggerKind,
@@ -1128,6 +1129,300 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return new LiveExportEncounterSummary(name, kind, inCombat, turn);
+    }
+
+    private static void AppendCombatRuntimeMetadata(
+        IReadOnlyList<object> roots,
+        LiveExportEncounterSummary? encounter,
+        IDictionary<string, string?> meta,
+        IDictionary<string, object?> payload)
+    {
+        if (encounter?.InCombat != true
+            && !roots.Any(root =>
+            {
+                var typeName = root.GetType().FullName ?? root.GetType().Name;
+                return typeName.Contains("Combat", StringComparison.OrdinalIgnoreCase)
+                       || typeName.Contains("NPlayerHand", StringComparison.OrdinalIgnoreCase)
+                       || typeName.Contains("NTargetManager", StringComparison.OrdinalIgnoreCase);
+            }))
+        {
+            return;
+        }
+
+        var handRoot = roots
+            .Where(root =>
+            {
+                var typeName = root.GetType().FullName ?? root.GetType().Name;
+                return typeName.Contains("NPlayerHand", StringComparison.OrdinalIgnoreCase);
+            })
+            .Concat(FindRoots(roots, "Hand"))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .FirstOrDefault(root =>
+                TryReadBool(root, "InCardPlay") is not null
+                || TryReadString(root, "CurrentMode") is not null
+                || TryGetMemberValue(root, "_currentCardPlay") is not null
+                || TryGetMemberValue(root, "_holdersAwaitingQueue") is not null);
+        var targetManagerRoot = roots
+            .Where(root =>
+            {
+                var typeName = root.GetType().FullName ?? root.GetType().Name;
+                return typeName.Contains("NTargetManager", StringComparison.OrdinalIgnoreCase);
+            })
+            .Concat(FindRoots(roots, "TargetManager"))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .FirstOrDefault(root =>
+                TryReadBool(root, "IsInSelection") is not null
+                || TryGetMemberValue(root, "HoveredNode") is not null
+                || TryGetMemberValue(root, "LastTargetingFinishedFrame") is not null);
+        var historyRoot = roots
+            .Where(root =>
+            {
+                var typeName = root.GetType().FullName ?? root.GetType().Name;
+                return typeName.Contains("CombatHistory", StringComparison.OrdinalIgnoreCase);
+            })
+            .Concat(FindRoots(roots, "History"))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .FirstOrDefault(root =>
+                TryGetMemberValue(root, "CardPlaysStarted") is not null
+                || TryGetMemberValue(root, "CardPlaysFinished") is not null
+                || TryGetMemberValue(root, "Entries") is not null);
+
+        var cardPlayPending = TryReadBool(handRoot, "InCardPlay");
+        var playMode = TryReadString(handRoot, "CurrentMode");
+        var currentCardPlay = TryGetMemberValue(handRoot!, "_currentCardPlay")
+                              ?? TryGetMemberValue(handRoot!, "CurrentCardPlay");
+        var selectedCard = TryExtractCombatCardFromPlay(currentCardPlay);
+        var selectedCardId = TryReadString(selectedCard, "Id", "CardId", "Name", "Title");
+        var selectedCardName = TryReadString(selectedCard, "Title", "DisplayName", "Name", "Id", "CardId");
+        var selectedCardType = TryReadString(selectedCard, "Type", "CardType");
+        var selectedCardTargetType = TryReadString(selectedCard, "TargetType", "Target");
+        var awaitingSlots = ExtractAwaitingPlaySlots(TryGetMemberValue(handRoot!, "_holdersAwaitingQueue"));
+        var selectedCardSlot = ResolveCurrentCardPlaySlot(handRoot, awaitingSlots);
+
+        var targetingInProgress = TryReadBool(targetManagerRoot, "IsInSelection");
+        var hoveredNode = TryGetMemberValue(targetManagerRoot!, "HoveredNode");
+        var hoveredTargetKind = InferCombatHoveredTargetKind(hoveredNode);
+        var hoveredTargetId = TryExtractCombatTargetId(hoveredNode);
+        var hoveredTargetLabel = TryExtractCombatTargetLabel(hoveredNode);
+        var targetingLastFinishedFrame = TryConvertToDisplayString(TryGetMemberValue(targetManagerRoot!, "LastTargetingFinishedFrame"));
+
+        var lastStartedEntry = TryGetLastCombatHistoryEntry(historyRoot, "CardPlaysStarted", "CardPlayStartedEntry");
+        var lastFinishedEntry = TryGetLastCombatHistoryEntry(historyRoot, "CardPlaysFinished", "CardPlayFinishedEntry");
+        var lastStartedPlay = TryGetMemberValue(lastStartedEntry!, "CardPlay");
+        var lastFinishedPlay = TryGetMemberValue(lastFinishedEntry!, "CardPlay");
+        var lastStartedCard = TryExtractCombatCardFromPlay(lastStartedPlay);
+        var lastFinishedCard = TryExtractCombatCardFromPlay(lastFinishedPlay);
+        var lastStartedCardId = TryReadString(lastStartedCard, "Id", "CardId", "Name", "Title");
+        var lastStartedCardName = TryReadString(lastStartedCard, "Title", "DisplayName", "Name", "Id", "CardId");
+        var lastStartedTargetId = TryExtractCombatTargetId(TryGetMemberValue(lastStartedPlay!, "Target"));
+        var lastFinishedCardId = TryReadString(lastFinishedCard, "Id", "CardId", "Name", "Title");
+        var lastFinishedCardName = TryReadString(lastFinishedCard, "Title", "DisplayName", "Name", "Id", "CardId");
+        var lastFinishedTargetId = TryExtractCombatTargetId(TryGetMemberValue(lastFinishedPlay!, "Target"));
+
+        meta["combatRuntimeStateAuthority"] = "runtime-reflection";
+        meta["combatCardPlayPending"] = cardPlayPending?.ToString().ToLowerInvariant();
+        meta["combatPlayMode"] = playMode;
+        meta["combatSelectedCardId"] = selectedCardId;
+        meta["combatSelectedCardName"] = selectedCardName;
+        meta["combatSelectedCardType"] = selectedCardType;
+        meta["combatSelectedCardTargetType"] = selectedCardTargetType;
+        meta["combatSelectedCardSlot"] = selectedCardSlot?.ToString(CultureInfo.InvariantCulture);
+        meta["combatAwaitingPlayCount"] = awaitingSlots.Count.ToString(CultureInfo.InvariantCulture);
+        meta["combatAwaitingPlaySlots"] = awaitingSlots.Count == 0
+            ? null
+            : string.Join(",", awaitingSlots.Select(slot => slot.ToString(CultureInfo.InvariantCulture)));
+        meta["combatTargetingInProgress"] = targetingInProgress?.ToString().ToLowerInvariant();
+        meta["combatHoveredTargetKind"] = hoveredTargetKind;
+        meta["combatHoveredTargetId"] = hoveredTargetId;
+        meta["combatHoveredTargetLabel"] = hoveredTargetLabel;
+        meta["combatTargetingLastFinishedFrame"] = targetingLastFinishedFrame;
+        meta["combatLastCardPlayStartedCardId"] = lastStartedCardId;
+        meta["combatLastCardPlayStartedCardName"] = lastStartedCardName;
+        meta["combatLastCardPlayStartedTargetId"] = lastStartedTargetId;
+        meta["combatLastCardPlayFinishedCardId"] = lastFinishedCardId;
+        meta["combatLastCardPlayFinishedCardName"] = lastFinishedCardName;
+        meta["combatLastCardPlayFinishedTargetId"] = lastFinishedTargetId;
+        meta["combatLastCardPlayFinishedSuccess"] = null;
+
+        if (cardPlayPending is not null)
+        {
+            payload["combatCardPlayPending"] = cardPlayPending.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(playMode))
+        {
+            payload["combatPlayMode"] = playMode;
+        }
+
+        if (selectedCardSlot is not null)
+        {
+            payload["combatSelectedCardSlot"] = selectedCardSlot.Value;
+        }
+
+        if (awaitingSlots.Count > 0)
+        {
+            payload["combatAwaitingPlaySlots"] = awaitingSlots.ToArray();
+        }
+
+        if (targetingInProgress is not null)
+        {
+            payload["combatTargetingInProgress"] = targetingInProgress.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(lastFinishedCardId))
+        {
+            payload["combatLastCardPlayFinishedCardId"] = lastFinishedCardId;
+        }
+    }
+
+    private static object? TryExtractCombatCardFromPlay(object? cardPlay)
+    {
+        if (cardPlay is null)
+        {
+            return null;
+        }
+
+        return TryGetMemberValue(cardPlay, "Card")
+               ?? TryGetMemberValue(TryGetMemberValue(cardPlay, "CardNode"), "Model")
+               ?? TryGetMemberValue(TryGetMemberValue(cardPlay, "Holder"), "CardModel")
+               ?? TryGetMemberValue(TryGetMemberValue(cardPlay, "Holder"), "Card")
+               ?? TryGetMemberValue(TryGetMemberValue(cardPlay, "Holder"), "CardNode");
+    }
+
+    private static int? ResolveCurrentCardPlaySlot(object? handRoot, IReadOnlyList<int> awaitingSlots)
+    {
+        var draggedHolderIndex = TryReadInt(handRoot, "_draggedHolderIndex");
+        if (draggedHolderIndex is >= 0)
+        {
+            return draggedHolderIndex.Value + 1;
+        }
+
+        return awaitingSlots.Count > 0
+            ? awaitingSlots[0]
+            : null;
+    }
+
+    private static IReadOnlyList<int> ExtractAwaitingPlaySlots(object? awaitingQueue)
+    {
+        if (awaitingQueue is null)
+        {
+            return Array.Empty<int>();
+        }
+
+        var slots = new List<int>();
+        void AddSlot(object? value)
+        {
+            var slotIndex = value switch
+            {
+                byte number => number + 1,
+                short number => number + 1,
+                int number => number + 1,
+                long number when number is >= 0 and <= int.MaxValue - 1 => (int)number + 1,
+                string text when int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) => parsed + 1,
+                _ => -1,
+            };
+            if (slotIndex is >= 1 and <= 10)
+            {
+                slots.Add(slotIndex);
+            }
+        }
+
+        if (awaitingQueue is System.Collections.IDictionary dictionary)
+        {
+            foreach (System.Collections.DictionaryEntry entry in dictionary)
+            {
+                AddSlot(entry.Value);
+            }
+        }
+        else if (awaitingQueue is System.Collections.IEnumerable enumerable and not string)
+        {
+            foreach (var entry in enumerable)
+            {
+                AddSlot(TryGetMemberValue(entry!, "Value"));
+            }
+        }
+
+        return slots
+            .Distinct()
+            .OrderBy(static slot => slot)
+            .ToArray();
+    }
+
+    private static string? InferCombatHoveredTargetKind(object? hoveredNode)
+    {
+        if (hoveredNode is null)
+        {
+            return null;
+        }
+
+        var entity = TryGetMemberValue(hoveredNode, "Entity")
+                     ?? TryGetMemberValue(hoveredNode, "Player")
+                     ?? TryGetMemberValue(hoveredNode, "Creature");
+        if (TryReadBool(entity, "IsPlayer") == true)
+        {
+            return "player";
+        }
+
+        if (TryReadBool(entity, "IsPet", "IsFriendly", "IsAlly") == true)
+        {
+            return "ally";
+        }
+
+        var typeName = hoveredNode.GetType().FullName ?? hoveredNode.GetType().Name;
+        if (typeName.Contains("Creature", StringComparison.OrdinalIgnoreCase)
+            || typeName.Contains("Monster", StringComparison.OrdinalIgnoreCase))
+        {
+            return "enemy";
+        }
+
+        return typeName;
+    }
+
+    private static string? TryExtractCombatTargetId(object? target)
+    {
+        if (target is null)
+        {
+            return null;
+        }
+
+        return TryReadString(target, "Id", "CardId", "Name", "DisplayName", "MonsterName")
+               ?? TryReadString(TryGetMemberValue(target, "Monster"), "Id", "Name", "DisplayName")
+               ?? TryReadString(TryGetMemberValue(target, "Entity"), "Id", "Name", "DisplayName")
+               ?? TryReadString(TryGetMemberValue(target, "Player"), "Id", "Name", "DisplayName");
+    }
+
+    private static string? TryExtractCombatTargetLabel(object? target)
+    {
+        if (target is null)
+        {
+            return null;
+        }
+
+        return TryReadString(target, "DisplayName", "Name", "Id", "MonsterName")
+               ?? TryReadString(TryGetMemberValue(target, "Monster"), "DisplayName", "Name", "Id")
+               ?? TryReadString(TryGetMemberValue(target, "Entity"), "DisplayName", "Name", "Id")
+               ?? TryReadString(TryGetMemberValue(target, "Player"), "DisplayName", "Name", "Id");
+    }
+
+    private static object? TryGetLastCombatHistoryEntry(object? historyRoot, string collectionMemberName, string entryTypeName)
+    {
+        if (historyRoot is null)
+        {
+            return null;
+        }
+
+        var explicitEntries = ExpandEnumerable(TryGetMemberValue(historyRoot, collectionMemberName)).ToArray();
+        if (explicitEntries.Length > 0)
+        {
+            return explicitEntries[^1];
+        }
+
+        return ExpandEnumerable(TryGetMemberValue(historyRoot, "Entries"))
+            .LastOrDefault(entry =>
+            {
+                var typeName = entry.GetType().FullName ?? entry.GetType().Name;
+                return typeName.Contains(entryTypeName, StringComparison.OrdinalIgnoreCase);
+            });
     }
 
     private static ChoiceExtractionResult EvaluateChoiceSet(
@@ -2941,8 +3236,31 @@ internal static class RuntimeSnapshotReflectionExtractor
         return screen is "rewards" or "event" or "shop" or "rest-site" or "card-choice" or "upgrade" or "transform";
     }
 
-    private static string InferChoiceKind(string? typeName)
+    private static string InferChoiceKind(string? typeName, string? rewardTypeName = null)
     {
+        if (!string.IsNullOrWhiteSpace(rewardTypeName))
+        {
+            if (rewardTypeName.Contains("CardReward", StringComparison.OrdinalIgnoreCase))
+            {
+                return "card";
+            }
+
+            if (rewardTypeName.Contains("RelicReward", StringComparison.OrdinalIgnoreCase))
+            {
+                return "relic";
+            }
+
+            if (rewardTypeName.Contains("PotionReward", StringComparison.OrdinalIgnoreCase))
+            {
+                return "potion";
+            }
+
+            if (rewardTypeName.Contains("GoldReward", StringComparison.OrdinalIgnoreCase))
+            {
+                return "gold";
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(typeName))
         {
             return "choice";
@@ -3477,6 +3795,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             return null;
         }
 
+        var rewardTypeName = TryResolveRewardTypeName(item);
         var label = TryResolveChoiceLabel(item);
         if (string.IsNullOrWhiteSpace(label))
         {
@@ -3484,12 +3803,15 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return new LiveExportChoiceSummary(
-            InferChoiceKind(item.GetType().FullName),
+            InferChoiceKind(item.GetType().FullName, rewardTypeName),
             label,
-            TryResolveChoiceValue(item),
+            TryResolveChoiceValue(item, rewardTypeName),
             TryResolveChoiceDescription(item))
         {
             ScreenBounds = TryResolveScreenBounds(item),
+            BindingKind = rewardTypeName is null ? null : "reward-type",
+            BindingId = rewardTypeName is null ? null : GetRewardTypeId(rewardTypeName),
+            SemanticHints = BuildChoiceSemanticHints(rewardTypeName),
         };
     }
 
@@ -3903,7 +4225,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         var label = TryResolveChoiceLabel(item);
         return !string.IsNullOrWhiteSpace(label)
-               && !IsPlaceholderChoiceLabel(label)
+               && !IsPlaceholderChoiceLabel(label, item)
                && (typeName.Contains("Choice", StringComparison.OrdinalIgnoreCase)
                    || typeName.Contains("Button", StringComparison.OrdinalIgnoreCase)
                    || typeName.Contains("Option", StringComparison.OrdinalIgnoreCase));
@@ -3926,10 +4248,10 @@ internal static class RuntimeSnapshotReflectionExtractor
             TryReadString(TryGetMemberValue(item, "Label"), "Text", "Value"),
             TryResolveNestedChoiceText(item, maxDepth: 2),
             TryReadString(item, "Id", "CardId"));
-        return IsPlaceholderChoiceLabel(label) ? null : label;
+        return IsPlaceholderChoiceLabel(label, item) ? null : label;
     }
 
-    private static string? TryResolveChoiceValue(object item)
+    private static string? TryResolveChoiceValue(object item, string? rewardTypeName = null)
     {
         return FirstNonEmpty(
             TryReadString(item, "Value", "Id", "CardId", "Hotkey"),
@@ -3937,7 +4259,8 @@ internal static class RuntimeSnapshotReflectionExtractor
             TryReadString(TryGetMemberValue(item, "Reward"), "Id", "Name", "Description"),
             TryReadString(TryGetMemberValue(item, "Entry"), "Id", "Name"),
             TryReadString(TryGetMemberValue(item, "Card"), "Id", "CardId", "Name"),
-            TryReadString(TryGetMemberValue(item, "Model"), "Id", "CardId", "Name"));
+            TryReadString(TryGetMemberValue(item, "Model"), "Id", "CardId", "Name"),
+            rewardTypeName is null ? null : GetRewardTypeId(rewardTypeName));
     }
 
     private static string? TryResolveChoiceDescription(object item)
@@ -4040,6 +4363,11 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static bool LooksLikePlaceholderChoice(LiveExportChoiceSummary summary, int score)
     {
         if (score >= 6)
+        {
+            return false;
+        }
+
+        if (IsRewardCardChoiceSummary(summary))
         {
             return false;
         }
@@ -4237,9 +4565,14 @@ internal static class RuntimeSnapshotReflectionExtractor
                || typeName.Contains("PlayQueue", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsPlaceholderChoiceLabel(string? label)
+    private static bool IsPlaceholderChoiceLabel(string? label, object? item = null)
     {
         if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        if (ShouldPreserveRewardPlaceholderLabel(item, label))
         {
             return false;
         }
@@ -4283,6 +4616,109 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return false;
+    }
+
+    private static string? TryResolveRewardTypeName(object? item)
+    {
+        if (item is null)
+        {
+            return null;
+        }
+
+        var reward = TryGetMemberValue(item, "Reward");
+        if (reward is not null)
+        {
+            return reward.GetType().FullName ?? reward.GetType().Name;
+        }
+
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        return typeName.Contains("Reward", StringComparison.OrdinalIgnoreCase)
+               && !typeName.Contains("RewardButton", StringComparison.OrdinalIgnoreCase)
+               ? typeName
+               : null;
+    }
+
+    private static bool ShouldPreserveRewardPlaceholderLabel(object? item, string label)
+    {
+        if (item is null
+            || (!label.EndsWith("선택하세요.", StringComparison.Ordinal)
+                && !label.EndsWith("선택해 주세요.", StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        var rewardTypeName = TryResolveRewardTypeName(item);
+        return rewardTypeName?.Contains("CardReward", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool IsRewardCardChoiceSummary(LiveExportChoiceSummary summary)
+    {
+        return string.Equals(summary.Kind, "card", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(summary.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(summary.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyList<string> BuildChoiceSemanticHints(string? rewardTypeName)
+    {
+        if (string.IsNullOrWhiteSpace(rewardTypeName))
+        {
+            return Array.Empty<string>();
+        }
+
+        var rewardTypeId = GetRewardTypeId(rewardTypeName);
+        var hints = new List<string> { "reward" };
+        if (rewardTypeName.Contains("CardReward", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add("reward-card");
+        }
+        else if (rewardTypeName.Contains("PotionReward", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add("reward-potion");
+        }
+        else if (rewardTypeName.Contains("GoldReward", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add("reward-gold");
+        }
+        else if (rewardTypeName.Contains("RelicReward", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add("reward-relic");
+        }
+
+        hints.Add($"reward-type:{rewardTypeId}");
+        return hints;
+    }
+
+    private static string GetRewardTypeId(string typeName)
+    {
+        if (typeName.Contains("CardReward", StringComparison.OrdinalIgnoreCase))
+        {
+            return "CardReward";
+        }
+
+        if (typeName.Contains("PotionReward", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PotionReward";
+        }
+
+        if (typeName.Contains("GoldReward", StringComparison.OrdinalIgnoreCase))
+        {
+            return "GoldReward";
+        }
+
+        if (typeName.Contains("RelicReward", StringComparison.OrdinalIgnoreCase))
+        {
+            return "RelicReward";
+        }
+
+        return GetShortTypeName(typeName);
+    }
+
+    private static string GetShortTypeName(string typeName)
+    {
+        var separatorIndex = typeName.LastIndexOf('.');
+        return separatorIndex >= 0 && separatorIndex < typeName.Length - 1
+            ? typeName[(separatorIndex + 1)..]
+            : typeName;
     }
 
     private static bool IsAuthoritativePlayerRoot(object root)
