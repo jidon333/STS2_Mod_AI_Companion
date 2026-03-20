@@ -1,3 +1,4 @@
+using FoundationCompanionState = Sts2AiCompanion.Foundation.Contracts.CompanionState;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
 
@@ -23,7 +24,10 @@ public sealed record CompanionRunState(
     LiveExportSession? Session,
     string SummaryText,
     IReadOnlyList<LiveExportEventEnvelope> RecentEvents,
-    bool IsStale);
+    bool IsStale)
+{
+    public FoundationCompanionState NormalizedState { get; init; } = FoundationCompanionState.CreateUnknown(runId: Snapshot.RunId);
+}
 
 public sealed record AdviceTrigger(
     string Kind,

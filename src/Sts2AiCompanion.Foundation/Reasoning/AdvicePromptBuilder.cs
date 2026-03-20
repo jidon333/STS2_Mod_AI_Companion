@@ -27,17 +27,21 @@ public sealed class AdvicePromptBuilder
             runState.RecentEvents.TakeLast(_configuration.Assistant.RecentEventsCount).ToArray(),
             slice.Entries,
             slice.Reasons,
-            "You are a Slay the Spire 2 advisor. Do not play for the user. Use only the supplied state, recent events, and knowledge slice. If information is missing, say exactly what is missing instead of guessing.");
+            "당신은 Slay the Spire 2 전략 조언 어시스턴트입니다. "
+            + "게임을 대신 플레이하지 말고, 입력에 없는 정보는 추정하지 말고, "
+            + "현재 상태와 최근 이벤트, 관련 지식 조각만 근거로 판단하세요.");
     }
 
     public string FormatPrompt(AdviceInputPack inputPack)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("You are a Slay the Spire 2 external advisor.");
-        builder.AppendLine("- Do not play on behalf of the user.");
-        builder.AppendLine("- Use only the supplied state, choices, recent events, and knowledge slice.");
-        builder.AppendLine("- If information is missing, do not guess. Report missing information and decision blockers.");
-        builder.AppendLine("- Return JSON only.");
+        builder.AppendLine("당신은 Slay the Spire 2 조언 어시스턴트입니다.");
+        builder.AppendLine("- 게임을 대신 플레이하지 마세요.");
+        builder.AppendLine("- 현재 상태, 현재 선택지, 최근 이벤트, 관련 지식 조각만 근거로 사용하세요.");
+        builder.AppendLine("- 정보가 부족하면 추정하지 말고 무엇이 부족한지 명시하세요.");
+        builder.AppendLine("- 카드/유물/이벤트 설명이 부족하면 그 사실을 그대로 적으세요.");
+        builder.AppendLine("- 반드시 한국어로 답하세요.");
+        builder.AppendLine("- 반드시 JSON 스키마만 반환하세요.");
         builder.AppendLine();
         builder.AppendLine($"trigger: {inputPack.TriggerKind}");
         builder.AppendLine($"manual: {inputPack.Manual}");
@@ -75,7 +79,7 @@ public sealed class AdvicePromptBuilder
 
             foreach (var option in entry.Options.Take(5))
             {
-                builder.AppendLine($"  option: {option.Label} :: {option.Description ?? "no-extra-description"}");
+                builder.AppendLine($"  option: {option.Label} :: {option.Description ?? "추가 정보 없음"}");
             }
         }
 
@@ -86,16 +90,17 @@ public sealed class AdvicePromptBuilder
 
         builder.AppendLine();
         builder.AppendLine("response_instructions:");
-        builder.AppendLine("- headline: short current assessment");
-        builder.AppendLine("- summary: 2-4 sentences");
-        builder.AppendLine("- recommendedAction: next best action");
-        builder.AppendLine("- recommendedChoiceLabel: exact current choice label if available, else null");
-        builder.AppendLine("- reasoningBullets: 2-5 bullets");
-        builder.AppendLine("- riskNotes: 0-5 bullets");
-        builder.AppendLine("- missingInformation: list of missing state/details");
-        builder.AppendLine("- decisionBlockers: list of direct blockers preventing a firm recommendation");
-        builder.AppendLine("- confidence: number from 0.0 to 1.0 or null");
-        builder.AppendLine("- knowledgeRefs: ids or names of knowledge entries used");
+        builder.AppendLine("- headline: 현재 상황의 핵심 판단을 한 줄로 요약");
+        builder.AppendLine("- summary: 2~4문장으로 현재 판단과 다음 확인 사항 설명");
+        builder.AppendLine("- recommendedAction: 지금 가장 합리적인 다음 행동");
+        builder.AppendLine("- recommendedChoiceLabel: 현재 선택지 중 추천이 있으면 정확한 이름, 없으면 null");
+        builder.AppendLine("- reasoningBullets: 2~5개의 근거");
+        builder.AppendLine("- riskNotes: 0~5개의 리스크 또는 경고");
+        builder.AppendLine("- missingInformation: 판단에 필요하지만 비어 있는 정보 목록");
+        builder.AppendLine("- decisionBlockers: 현재 확정 추천을 막는 직접 차단 요인 목록");
+        builder.AppendLine("- confidence: 0.0에서 1.0 사이 숫자");
+        builder.AppendLine("- knowledgeRefs: 근거로 사용한 지식 항목 id 또는 이름");
+        builder.AppendLine("- 정보가 부족해도 summary만 얼버무리지 말고 missingInformation과 decisionBlockers를 반드시 채우세요.");
         return builder.ToString().TrimEnd();
     }
 
@@ -109,39 +114,39 @@ public sealed class AdvicePromptBuilder
         builder.AppendLine($"- trigger: {response.TriggerKind}");
         builder.AppendLine($"- run_id: {response.RunId}");
         builder.AppendLine($"- recommended_action: {response.RecommendedAction}");
-        builder.AppendLine($"- recommended_choice: {response.RecommendedChoiceLabel ?? "none"}");
-        builder.AppendLine($"- confidence: {(response.Confidence?.ToString("0.00") ?? "unknown")}");
+        builder.AppendLine($"- recommended_choice: {response.RecommendedChoiceLabel ?? "없음"}");
+        builder.AppendLine($"- confidence: {(response.Confidence?.ToString("0.00") ?? "미상")}");
         builder.AppendLine();
-        builder.AppendLine("## Reasoning");
-        foreach (var bullet in response.ReasoningBullets.DefaultIfEmpty("none"))
+        builder.AppendLine("## 근거");
+        foreach (var bullet in response.ReasoningBullets.DefaultIfEmpty("없음"))
         {
             builder.AppendLine($"- {bullet}");
         }
 
         builder.AppendLine();
-        builder.AppendLine("## Risks");
-        foreach (var note in response.RiskNotes.DefaultIfEmpty("none"))
+        builder.AppendLine("## 리스크");
+        foreach (var note in response.RiskNotes.DefaultIfEmpty("없음"))
         {
             builder.AppendLine($"- {note}");
         }
 
         builder.AppendLine();
-        builder.AppendLine("## Missing information");
-        foreach (var item in response.MissingInformation.DefaultIfEmpty("none"))
+        builder.AppendLine("## 부족한 정보");
+        foreach (var item in response.MissingInformation.DefaultIfEmpty("없음"))
         {
             builder.AppendLine($"- {item}");
         }
 
         builder.AppendLine();
-        builder.AppendLine("## Decision blockers");
-        foreach (var item in response.DecisionBlockers.DefaultIfEmpty("none"))
+        builder.AppendLine("## 판단 차단 요인");
+        foreach (var item in response.DecisionBlockers.DefaultIfEmpty("없음"))
         {
             builder.AppendLine($"- {item}");
         }
 
         builder.AppendLine();
-        builder.AppendLine("## Knowledge references");
-        foreach (var reference in response.KnowledgeRefs.DefaultIfEmpty("none"))
+        builder.AppendLine("## 참고 지식");
+        foreach (var reference in response.KnowledgeRefs.DefaultIfEmpty("없음"))
         {
             builder.AppendLine($"- {reference}");
         }

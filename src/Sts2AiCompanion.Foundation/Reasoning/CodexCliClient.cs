@@ -83,7 +83,7 @@ public sealed class CodexCliClient : ICodexSessionClient
 
             if (string.IsNullOrWhiteSpace(rawOutput))
             {
-                var emptyMessage = "Codex returned an empty response.";
+                var emptyMessage = "Codex가 빈 응답을 반환했습니다.";
                 if (!string.IsNullOrWhiteSpace(standardError))
                 {
                     emptyMessage += $" stderr: {TrimDiagnosticText(standardError)}";
@@ -101,14 +101,14 @@ public sealed class CodexCliClient : ICodexSessionClient
 
                 if (parsed is null)
                 {
-                    return (CreateDegradedResponse(inputPack, resolvedSessionId, "Codex returned an empty response.", rawOutput), resolvedSessionId);
+                    return (CreateDegradedResponse(inputPack, resolvedSessionId, "Codex가 빈 응답을 반환했습니다.", rawOutput), resolvedSessionId);
                 }
 
                 return (new AdviceResponse(
                     "ok",
-                    parsed.Headline ?? "AI advice",
-                    parsed.Summary ?? "No summary was returned.",
-                    parsed.RecommendedAction ?? "Review the current state again before acting.",
+                    parsed.Headline ?? "AI 조언",
+                    parsed.Summary ?? "응답 요약이 비어 있습니다.",
+                    parsed.RecommendedAction ?? "현재 상태를 다시 확인하세요.",
                     parsed.RecommendedChoiceLabel,
                     parsed.ReasoningBullets ?? Array.Empty<string>(),
                     parsed.RiskNotes ?? Array.Empty<string>(),
@@ -315,11 +315,11 @@ public sealed class CodexCliClient : ICodexSessionClient
     {
         return new AdviceResponse(
             "degraded",
-            "Codex advice unavailable",
+            "Codex 조언 사용 불가",
             message,
-            "Review the current state again before acting.",
+            "현재 상태를 다시 확인하세요.",
             null,
-            new[] { "Codex CLI failed or returned an unreadable response." },
+            new[] { "Codex CLI 실행이 실패했거나 응답을 읽을 수 없었습니다." },
             new[] { message },
             Array.Empty<string>(),
             new[] { message },

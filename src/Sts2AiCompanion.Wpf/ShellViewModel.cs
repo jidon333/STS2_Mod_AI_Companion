@@ -182,7 +182,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         StatusLine = LocalizeStatusMessage(snapshot.Status.Message);
         RunLine = $"런: {snapshot.Status.RunId ?? "없음"}";
-        ScreenLine = $"화면: {TranslateScreen(snapshot.RunState?.Snapshot.CurrentScreen)}";
+        var normalizedScreen = snapshot.RunState?.NormalizedState.Scene.SemanticSceneType;
+        ScreenLine = $"화면: {TranslateScreen(string.IsNullOrWhiteSpace(normalizedScreen) ? snapshot.RunState?.Snapshot.CurrentScreen : normalizedScreen)}";
         UpdatedLine = $"업데이트: {snapshot.Status.UpdatedAt:yyyy-MM-dd HH:mm:ss}";
         AutoAdviceEnabled = snapshot.Status.AutoAdviceEnabled;
         AutoAdviceButtonText = AutoAdviceEnabled ? "자동 조언 일시중지" : "자동 조언 다시 켜기";

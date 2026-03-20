@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text;
 using Sts2AiCompanion.Foundation.State;
 using Sts2AiCompanion.Harness.Actions;
@@ -10,6 +11,9 @@ using Sts2ModKit.Core.LiveExport;
 using Sts2ModKit.Core.Planning;
 using Sts2ModAiCompanion.Mod;
 using Sts2ModAiCompanion.Mod.Runtime;
+using FoundationKnowledgeCatalogService = Sts2AiCompanion.Foundation.Knowledge.KnowledgeCatalogService;
+using FoundationAdvicePromptBuilder = Sts2AiCompanion.Foundation.Reasoning.AdvicePromptBuilder;
+using FoundationCodexCliClient = Sts2AiCompanion.Foundation.Reasoning.CodexCliClient;
 
 var failures = new List<string>();
 
@@ -53,6 +57,8 @@ Run("bridge action executor round-trips action results through the queue", TestB
 Run("companion path resolver keeps per-run artifacts under companion root", TestCompanionPathResolver, failures);
 Run("knowledge catalog service builds a bounded relevant slice", TestKnowledgeCatalogService, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
+Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
+Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
 
 if (failures.Count == 0)
@@ -1768,12 +1774,120 @@ static void TestAdvicePromptBuilder()
     Assert(prompt.Contains("response_instructions:", StringComparison.Ordinal), "Expected prompt to include the response instructions section.");
 }
 
+static void TestHostFoundationConvergence()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = ScaffoldConfiguration.CreateLocalDefault() with
+        {
+            GamePaths = ScaffoldConfiguration.CreateLocalDefault().GamePaths with
+            {
+                ArtifactsRoot = Path.Combine(root, "artifacts"),
+            },
+        };
+        var knowledgeRoot = Path.Combine(root, "artifacts", "knowledge");
+        Directory.CreateDirectory(knowledgeRoot);
+
+        var catalog = new StaticKnowledgeCatalog(
+            DateTimeOffset.UtcNow,
+            new StaticKnowledgeMetadata(null, null, null, new Dictionary<string, string?>()),
+            new[]
+            {
+                new StaticKnowledgeEntry(
+                    "pommel-strike",
+                    "Pommel Strike",
+                    "observed-merge",
+                    true,
+                    "Deal damage and draw a card.",
+                    new[] { "card" },
+                    new Dictionary<string, string?>(),
+                    Array.Empty<StaticKnowledgeOption>()),
+            },
+            new[]
+            {
+                new StaticKnowledgeEntry(
+                    "anchor",
+                    "Anchor",
+                    "observed-merge",
+                    true,
+                    "Gain block on the first turn.",
+                    new[] { "relic" },
+                    new Dictionary<string, string?>(),
+                    Array.Empty<StaticKnowledgeOption>()),
+            },
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            new[]
+            {
+                new StaticKnowledgeEntry(
+                    "merchant-shop",
+                    "Merchant Shop",
+                    "strict-domain-scan",
+                    true,
+                    "Shop screen context.",
+                    new[] { "shop" },
+                    new Dictionary<string, string?>(),
+                    Array.Empty<StaticKnowledgeOption>()),
+            },
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>());
+        File.WriteAllText(
+            Path.Combine(knowledgeRoot, "catalog.latest.json"),
+            JsonSerializer.Serialize(catalog, ConfigurationLoader.JsonOptions));
+
+        var observation = CreateObservation(
+            "choice-list-presented",
+            "shop",
+            1,
+            4,
+            60,
+            120,
+            new[] { "Pommel Strike" },
+            new[] { "Anchor" },
+            Array.Empty<string>()) with
+        {
+            Choices = new[]
+            {
+                new LiveExportChoiceSummary("card", "Pommel Strike", "pommel-strike", "Card for sale."),
+            },
+        };
+        var batch = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), Path.Combine(root, "live")).Apply(observation);
+        var hostRunState = new CompanionRunState(batch.Snapshot, null, "summary", batch.Events, false)
+        {
+            NormalizedState = CompanionStateMapper.FromLiveExport(batch.Snapshot, null, batch.Events),
+        };
+        var hostKnowledgeService = new KnowledgeCatalogService(configuration, root);
+        var foundationKnowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var hostSlice = hostKnowledgeService.BuildSlice(hostRunState, 8, 4096);
+        var foundationSlice = foundationKnowledgeService.BuildSlice(ToFoundationRunState(hostRunState), 8, 4096);
+
+        Assert(hostSlice.Entries.Select(entry => entry.Id).SequenceEqual(foundationSlice.Entries.Select(entry => entry.Id), StringComparer.OrdinalIgnoreCase), "Expected host knowledge wrapper to match foundation slice selection.");
+        Assert(hostSlice.Reasons.SequenceEqual(foundationSlice.Reasons, StringComparer.OrdinalIgnoreCase), "Expected host knowledge wrapper to preserve foundation reasons.");
+
+        var hostBuilder = new AdvicePromptBuilder(configuration);
+        var foundationBuilder = new FoundationAdvicePromptBuilder(configuration);
+        var trigger = new AdviceTrigger("choice-list-presented", DateTimeOffset.UtcNow, false, true, "new-choice", batch.Events.Last());
+        var hostPack = hostBuilder.BuildInputPack(hostRunState, trigger, hostSlice);
+        var foundationPack = foundationBuilder.BuildInputPack(ToFoundationRunState(hostRunState), ToFoundationTrigger(trigger), foundationSlice);
+
+        Assert(hostPack.KnowledgeEntries.Select(entry => entry.Id).SequenceEqual(foundationPack.KnowledgeEntries.Select(entry => entry.Id), StringComparer.OrdinalIgnoreCase), "Expected host prompt builder wrapper to preserve foundation knowledge entries.");
+        Assert(string.Equals(hostBuilder.FormatPrompt(hostPack), foundationBuilder.FormatPrompt(foundationPack), StringComparison.Ordinal), "Expected host prompt builder wrapper to format the same prompt as the foundation builder.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestCompanionHostAdviceFlow()
+{
+    ExecuteCompanionHostAdviceFlowTest(collectorModeEnabled: false);
+    ExecuteCompanionHostAdviceFlowTest(collectorModeEnabled: true);
+}
+
 static void TestCodexCliTraceParser()
 {
-    var clientType = typeof(CodexCliClient);
-    var method = clientType.GetMethod("ParseExecTrace", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-    Assert(method is not null, "Expected private ParseExecTrace helper.");
-
     const string trace = """
     {"type":"thread.started","thread_id":"019cdcfc-aefb-76c1-92e7-d36d9d89d3cb"}
     {"type":"turn.started"}
@@ -1781,12 +1895,240 @@ static void TestCodexCliTraceParser()
     {"type":"turn.completed"}
     """;
 
-    var parsed = method!.Invoke(null, new object?[] { trace });
-    var threadId = parsed?.GetType().GetProperty("ThreadId")?.GetValue(parsed) as string;
-    var lastAgentMessageJson = parsed?.GetType().GetProperty("LastAgentMessageJson")?.GetValue(parsed) as string;
+    var (threadId, lastAgentMessageJson) = FoundationCodexCliClient.ParseExecTrace(trace);
 
     Assert(threadId == "019cdcfc-aefb-76c1-92e7-d36d9d89d3cb", "Expected thread id to be extracted from JSONL events.");
     Assert(!string.IsNullOrWhiteSpace(lastAgentMessageJson) && lastAgentMessageJson.Contains("\"headline\":\"h\"", StringComparison.Ordinal), "Expected final agent message JSON to be captured from item.completed events.");
+}
+
+static void ExecuteCompanionHostAdviceFlowTest(bool collectorModeEnabled)
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled);
+        var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+        Directory.CreateDirectory(layout.LiveRoot);
+        var runId = collectorModeEnabled ? "collector-on-run" : "collector-off-run";
+        var snapshot = CreateHostSnapshot(runId, "shop");
+        var session = new LiveExportSession("session-001", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, layout.LiveRoot, "choice-list-presented", "shop");
+        var eventPayload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["screenEpisode"] = "shop",
+        };
+        var events = new[]
+        {
+            new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, runId, "choice-list-presented", "shop", 1, 3, eventPayload),
+        };
+
+        WriteJson(layout.SnapshotPath, snapshot);
+        WriteJson(layout.SessionPath, session);
+        File.WriteAllText(layout.SummaryPath, "shop summary", Encoding.UTF8);
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+        File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+        File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+        Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+        SeedKnowledgeCatalog(root);
+        var fakeClient = new FakeCodexSessionClient();
+        var host = new CompanionHost(configuration, root, fakeClient);
+        try
+        {
+            host.RefreshAsync().GetAwaiter().GetResult();
+            Assert(
+                fakeClient.RequestCount == 1,
+                $"Expected refresh to trigger automatic advice when a semantic event is present. state={host.CurrentSnapshot.Status.State} message={host.CurrentSnapshot.Status.Message}");
+            Assert(host.CurrentSnapshot.LatestAdvice is not null && host.CurrentSnapshot.LatestAdvice.TriggerKind == "choice-list-presented", "Expected automatic advice to be published after refresh.");
+            Assert(host.CurrentSnapshot.RunState?.NormalizedState.Scene.SceneType == "shop", "Expected host run state to carry normalized foundation scene state.");
+
+            var manualRequested = host.RequestManualAdviceAsync().GetAwaiter().GetResult();
+            Assert(manualRequested, "Expected manual advice request to succeed after refresh.");
+            Assert(fakeClient.RequestCount == 2, "Expected manual advice to invoke the codex client.");
+
+            var retryRequested = host.RequestRetryLastAdviceAsync().GetAwaiter().GetResult();
+            Assert(retryRequested, "Expected retry-last advice request to succeed after a prior advice run.");
+            Assert(fakeClient.RequestCount == 3, "Expected retry-last advice to invoke the codex client.");
+
+            var runRoot = host.CurrentSnapshot.Paths.RunRoot;
+            Assert(!string.IsNullOrWhiteSpace(runRoot) && Directory.Exists(runRoot!), "Expected companion host to materialize a per-run artifact root.");
+            Assert(File.Exists(host.CurrentSnapshot.Paths.AdviceLatestJsonPath!), "Expected advice.latest.json to be written.");
+            Assert(File.Exists(host.CurrentSnapshot.Paths.AdviceLatestMarkdownPath!), "Expected advice.latest.md to be written.");
+            Assert(File.Exists(host.CurrentSnapshot.Paths.AdviceLogPath!), "Expected advice.ndjson to be written.");
+
+            if (collectorModeEnabled)
+            {
+                Assert(host.CurrentSnapshot.CollectorStatus is { Enabled: true }, "Expected collector mode on to keep collector status enabled.");
+                Assert(File.Exists(host.CurrentSnapshot.Paths.CollectorSummaryPath!), "Expected collector summary to be written when collector mode is enabled.");
+            }
+            else
+            {
+                Assert(host.CurrentSnapshot.CollectorStatus is { Enabled: false }, "Expected collector mode off to keep collector diagnostics disabled.");
+                Assert(host.CurrentSnapshot.Paths.CollectorSummaryPath is not null && !File.Exists(host.CurrentSnapshot.Paths.CollectorSummaryPath), "Expected collector summary not to be written when collector mode is disabled.");
+            }
+        }
+        finally
+        {
+            host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static ScaffoldConfiguration CreateCompanionHostTestConfiguration(string root, bool collectorModeEnabled)
+{
+    var baseConfiguration = ScaffoldConfiguration.CreateLocalDefault();
+    return baseConfiguration with
+    {
+        GamePaths = baseConfiguration.GamePaths with
+        {
+            GameDirectory = Path.Combine(root, "game"),
+            UserDataRoot = Path.Combine(root, "userdata"),
+            ArtifactsRoot = Path.Combine(root, "artifacts"),
+            SteamAccountId = "test-account",
+        },
+        LiveExport = baseConfiguration.LiveExport with
+        {
+            CollectorModeEnabled = collectorModeEnabled,
+            RelativeLiveRoot = "ai_companion/live",
+        },
+        Assistant = baseConfiguration.Assistant with
+        {
+            AutoAdviceEnabled = true,
+        },
+    };
+}
+
+static LiveExportSnapshot CreateHostSnapshot(string runId, string screen)
+{
+    return new LiveExportSnapshot(
+        runId,
+        "active",
+        1,
+        DateTimeOffset.UtcNow,
+        screen,
+        1,
+        3,
+        new LiveExportPlayerSummary("Ironclad", 70, 80, 120, 3, new Dictionary<string, string?>()),
+        new[]
+        {
+            new LiveExportCardSummary("Pommel Strike", "pommel-strike", 1, "Attack", false),
+        },
+        new[] { "Anchor" },
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("card", "Pommel Strike", "pommel-strike", "Card for sale."),
+        },
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        null,
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choice-extractor"] = "shop._items",
+            ["currentSceneType"] = "NMerchantRoom",
+            ["rootTypeSummary"] = "NMerchantRoom",
+            ["flowScreen"] = screen,
+            ["visibleScreen"] = screen,
+        });
+}
+
+static void SeedKnowledgeCatalog(string root)
+{
+    var knowledgeRoot = Path.Combine(root, "artifacts", "knowledge");
+    Directory.CreateDirectory(knowledgeRoot);
+    var catalog = new StaticKnowledgeCatalog(
+        DateTimeOffset.UtcNow,
+        new StaticKnowledgeMetadata(null, null, null, new Dictionary<string, string?>()),
+        new[]
+        {
+            new StaticKnowledgeEntry(
+                "pommel-strike",
+                "Pommel Strike",
+                "observed-merge",
+                true,
+                "Deal damage and draw a card.",
+                new[] { "card" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+        },
+        new[]
+        {
+            new StaticKnowledgeEntry(
+                "anchor",
+                "Anchor",
+                "observed-merge",
+                true,
+                "Gain block on the first turn.",
+                new[] { "relic" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+        },
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        new[]
+        {
+            new StaticKnowledgeEntry(
+                "merchant-shop",
+                "Merchant Shop",
+                "strict-domain-scan",
+                true,
+                "Shop screen context.",
+                new[] { "shop" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+        },
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>());
+    File.WriteAllText(Path.Combine(knowledgeRoot, "catalog.latest.json"), JsonSerializer.Serialize(catalog, ConfigurationLoader.JsonOptions), Encoding.UTF8);
+}
+
+static Sts2AiCompanion.Foundation.Contracts.CompanionRunState ToFoundationRunState(CompanionRunState runState)
+{
+    return new Sts2AiCompanion.Foundation.Contracts.CompanionRunState(
+        runState.Snapshot,
+        runState.Session,
+        runState.SummaryText,
+        runState.RecentEvents.ToArray(),
+        runState.IsStale)
+    {
+        NormalizedState = runState.NormalizedState,
+    };
+}
+
+static Sts2AiCompanion.Foundation.Contracts.AdviceTrigger ToFoundationTrigger(AdviceTrigger trigger)
+{
+    return new Sts2AiCompanion.Foundation.Contracts.AdviceTrigger(
+        trigger.Kind,
+        trigger.RequestedAt,
+        trigger.Manual,
+        trigger.BypassMinInterval,
+        trigger.Reason,
+        trigger.SourceEvent,
+        trigger.RetrySourcePromptPackPath);
+}
+
+static void WriteJson<T>(string path, T value)
+{
+    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+    File.WriteAllText(path, JsonSerializer.Serialize(value, ConfigurationLoader.JsonOptions), Encoding.UTF8);
+}
+
+static string SerializeNdjson<T>(T value)
+{
+    return JsonSerializer.Serialize(
+        value,
+        new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = false,
+        });
 }
 
 static void Assert(bool condition, string message)

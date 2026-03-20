@@ -1,5 +1,4 @@
 using Sts2AiCompanion.Foundation.Contracts;
-using Sts2AiCompanion.Foundation.State;
 using Sts2ModKit.Core.Configuration;
 using LiveEventEnvelope = Sts2ModKit.Core.LiveExport.LiveExportEventEnvelope;
 using LiveChoiceSummary = Sts2ModKit.Core.LiveExport.LiveExportChoiceSummary;
@@ -114,7 +113,7 @@ public sealed class AdvisorCoordinator : IAsyncDisposable
             runState.RecentEvents.Select(MapEvent).ToArray(),
             runState.IsStale)
         {
-            NormalizedState = CompanionStateMapper.FromLiveExport(runState.Snapshot, runState.Session, runState.RecentEvents)
+            NormalizedState = runState.NormalizedState
         };
     }
 

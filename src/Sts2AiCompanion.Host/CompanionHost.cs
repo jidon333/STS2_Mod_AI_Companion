@@ -1,7 +1,11 @@
 using System.Text;
 using System.Text.Json;
+using Sts2AiCompanion.Foundation.State;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.LiveExport;
+using FoundationCodexCliClient = Sts2AiCompanion.Foundation.Reasoning.CodexCliClient;
+using FoundationKnowledgeCatalogService = Sts2AiCompanion.Foundation.Knowledge.KnowledgeCatalogService;
+using FoundationAdvicePromptBuilder = Sts2AiCompanion.Foundation.Reasoning.AdvicePromptBuilder;
 
 namespace Sts2AiCompanion.Host;
 
@@ -13,6 +17,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
     private readonly KnowledgeCatalogService _knowledgeCatalogService;
     private readonly AdvicePromptBuilder _promptBuilder;
     private readonly ICodexSessionClient _codexSessionClient;
+    private readonly CompanionHostDiagnosticsService _diagnosticsService;
     private readonly SemaphoreSlim _adviceLock = new(1, 1);
     private readonly object _automaticAdviceSync = new();
     private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
@@ -43,9 +48,12 @@ public sealed partial class CompanionHost : IAsyncDisposable
         _configuration = configuration;
         _workspaceRoot = workspaceRoot;
         _layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
-        _knowledgeCatalogService = new KnowledgeCatalogService(configuration, workspaceRoot);
-        _promptBuilder = new AdvicePromptBuilder(configuration);
-        _codexSessionClient = codexSessionClient ?? new CodexCliClient(configuration, workspaceRoot);
+        var foundationKnowledgeCatalogService = new FoundationKnowledgeCatalogService(configuration, workspaceRoot);
+        var foundationPromptBuilder = new FoundationAdvicePromptBuilder(configuration);
+        _knowledgeCatalogService = new KnowledgeCatalogService(foundationKnowledgeCatalogService);
+        _promptBuilder = new AdvicePromptBuilder(foundationPromptBuilder);
+        _codexSessionClient = codexSessionClient ?? new CodexCliClient(new FoundationCodexCliClient(configuration, workspaceRoot));
+        _diagnosticsService = new CompanionHostDiagnosticsService(configuration, workspaceRoot, _layout, _jsonOptions, _ndjsonOptions);
         _autoAdviceEnabled = configuration.Assistant.AutoAdviceEnabled;
         _selectedModel = configuration.Assistant.CodexModel;
         _selectedReasoningEffort = configuration.Assistant.CodexReasoningEffort;
@@ -89,7 +97,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
         if (promptPack is null) return false;
         var runState = _currentRunState is not null && string.Equals(_currentRunState.Snapshot.RunId, promptPack.RunId, StringComparison.Ordinal)
             ? _currentRunState
-            : new CompanionRunState(promptPack.Snapshot, null, promptPack.SummaryText, promptPack.RecentEvents, false);
+            : CreateRunState(promptPack.Snapshot, null, promptPack.SummaryText, promptPack.RecentEvents, false);
         var trigger = new AdviceTrigger("retry-last", DateTimeOffset.UtcNow, true, true, "retry-last-prompt-pack", null);
         await ExecuteRequestedAdviceAsync(runState, trigger, promptPack, promptPackPath, cancellationToken).ConfigureAwait(false);
         return true;
@@ -117,7 +125,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
             var events = ReadNewEvents(_layout.EventsPath, ref _lastObservedSeq, _configuration.Assistant.RecentEventsCount);
             if (snapshot is null) { PublishSnapshot(CreateSnapshot("waiting-live-export", "state.latest.json is not available yet.")); return; }
             var recentEvents = (_currentRunState?.RecentEvents ?? Array.Empty<LiveExportEventEnvelope>()).Concat(events).TakeLast(_configuration.Assistant.RecentEventsCount).ToArray();
-            var runState = new CompanionRunState(snapshot, session, summary ?? string.Empty, recentEvents, DateTimeOffset.UtcNow - snapshot.CapturedAt > TimeSpan.FromSeconds(10));
+            var runState = CreateRunState(snapshot, session, summary ?? string.Empty, recentEvents, DateTimeOffset.UtcNow - snapshot.CapturedAt > TimeSpan.FromSeconds(10));
             if (!string.Equals(_currentRunId, snapshot.RunId, StringComparison.Ordinal))
             {
                 _currentRunId = snapshot.RunId;
@@ -133,7 +141,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
                 var autoTrigger = DetermineAutomaticTrigger(events);
                 if (autoTrigger is not null) await EnqueueAutomaticAdviceAsync(runState, autoTrigger, cancellationToken).ConfigureAwait(false);
             }
-            UpdateCollectorArtifacts(runState);
+            _latestCollectorStatus = _diagnosticsService.UpdateArtifacts(runState, _latestKnowledgeSlice, _latestAdvice, _sessionState);
             PublishSnapshot(CreateSnapshot("running", "Monitoring live export updates."));
         }
         catch (Exception exception) { PublishSnapshot(CreateSnapshot("error", exception.Message)); }
@@ -204,7 +212,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
             AppendNdjson(paths.AdviceLogPath!, response);
             if (_sessionState is not null) WriteJson(paths.CodexSessionPath!, _sessionState);
             WriteCodexTrace(paths, new { kind = "request-finished", requestId, trigger = trigger.Kind, manual = trigger.Manual, status = response.Status, generatedAt = response.GeneratedAt, durationMs = (int)Math.Max(0, (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds), sessionId = _sessionState?.SessionId ?? sessionId, retrySourcePromptPack, missingInformation = response.MissingInformation, decisionBlockers = response.DecisionBlockers, knowledgeEntriesUsedCount = inputPack.KnowledgeEntries.Count, knowledgeReasons = inputPack.KnowledgeReasons, knowledgeRefs = response.KnowledgeRefs });
-            UpdateCollectorArtifacts(runState);
+            _latestCollectorStatus = _diagnosticsService.UpdateArtifacts(runState, _latestKnowledgeSlice, _latestAdvice, _sessionState);
             EndAnalysis();
             PublishSnapshot(CreateSnapshot(MapAdviceCompletionState(response), BuildAdviceCompletionMessage(trigger, response)));
         }
@@ -283,33 +291,6 @@ public sealed partial class CompanionHost : IAsyncDisposable
             : $"AI advice degraded: {trigger.Kind} - {response.Summary}";
     }
 
-    private void UpdateCollectorArtifacts(CompanionRunState runState)
-    {
-        var paths = EnsureRunArtifacts(runState.Snapshot.RunId);
-        MirrorLiveArtifacts(runState, paths);
-        _latestCollectorStatus = BuildCollectorStatus(runState, paths);
-        if (_configuration.LiveExport.CollectorModeEnabled && paths.CollectorSummaryPath is not null)
-        {
-            WriteJson(paths.CollectorSummaryPath, BuildCollectorSummary(runState, paths, _latestCollectorStatus));
-        }
-    }
-
-    private void MirrorLiveArtifacts(CompanionRunState runState, CompanionArtifactPaths paths)
-    {
-        if (paths.LiveMirrorRoot is null) return;
-        Directory.CreateDirectory(paths.LiveMirrorRoot);
-        CopyIfExists(_layout.SnapshotPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SnapshotPath)));
-        CopyIfExists(_layout.SummaryPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SummaryPath)));
-        CopyIfExists(_layout.SessionPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SessionPath)));
-        CopyIfExists(_layout.EventsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.EventsPath)));
-        CopyIfExists(_layout.RawObservationsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.RawObservationsPath)));
-        CopyIfExists(_layout.ScreenTransitionsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ScreenTransitionsPath)));
-        CopyIfExists(_layout.ChoiceCandidatesPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceCandidatesPath)));
-        CopyIfExists(_layout.ChoiceDecisionsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceDecisionsPath)));
-        CopyDirectoryIfExists(_layout.SemanticSnapshotsRoot, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SemanticSnapshotsRoot)));
-        WriteJson(paths.CurrentRunStatePath, new { runId = runState.Snapshot.RunId, screen = runState.Snapshot.CurrentScreen, capturedAt = runState.Snapshot.CapturedAt, liveRoot = _layout.LiveRoot, sessionId = _sessionState?.SessionId, collectorModeEnabled = _configuration.LiveExport.CollectorModeEnabled });
-    }
-
     private CompanionArtifactPaths EnsureRunArtifacts(string runId)
     {
         var paths = CompanionPathResolver.Resolve(_configuration, _workspaceRoot, runId);
@@ -382,188 +363,21 @@ public sealed partial class CompanionHost : IAsyncDisposable
         return results.TakeLast(tailCount).ToArray();
     }
 
-    private CompanionCollectorStatus BuildCollectorStatus(CompanionRunState runState, CompanionArtifactPaths paths)
-    {
-        if (!_configuration.LiveExport.CollectorModeEnabled)
-            return new CompanionCollectorStatus(false, null, null, null, null, null, 0, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), _sessionState?.SessionId, "collector mode disabled");
-        var latestDecision = ReadLastJsonObject(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceDecisionsPath));
-        var lastSemanticScreen = runState.RecentEvents.LastOrDefault(IsSemanticEvent)?.Screen;
-        var activeEpisode = IsHighValueScreen(runState.Snapshot.CurrentScreen) ? runState.Snapshot.CurrentScreen : lastSemanticScreen;
-        var acceptedExtractorPath = TryReadNestedString(latestDecision, "decision", "extractorPath");
-        var acceptedCount = TryReadNestedInt(latestDecision, "decision", "acceptedCount");
-        var failureReason = TryReadNestedString(latestDecision, "decision", "failureReason");
-        var choiceStatus = acceptedCount > 0 ? $"resolved ({acceptedCount})" : runState.Snapshot.CurrentChoices.Count > 0 ? $"resolved ({runState.Snapshot.CurrentChoices.Count})" : latestDecision is not null ? "missing" : "not-seen";
-        var degradedReason = failureReason ?? _latestAdvice?.DecisionBlockers.FirstOrDefault() ?? _latestAdvice?.MissingInformation.FirstOrDefault() ?? (_latestAdvice is { Status: not "ok" } ? _latestAdvice.Summary : null);
-        var notes = string.Join(Environment.NewLine, new[]
-        {
-            $"collector mode: on",
-            $"latest semantic screen: {lastSemanticScreen ?? "none"}",
-            $"active screen episode: {activeEpisode ?? "none"}",
-            $"choice extraction: {choiceStatus}",
-            $"extractor path: {acceptedExtractorPath ?? "none"}",
-            $"last degraded reason: {degradedReason ?? "none"}",
-            $"knowledge entries used: {_latestKnowledgeSlice?.Entries.Count ?? 0}",
-            $"knowledge reasons: {(_latestKnowledgeSlice?.Reasons.Count > 0 ? string.Join(", ", _latestKnowledgeSlice.Reasons.Take(4)) : "none")}",
-            $"knowledge refs: {(_latestAdvice?.KnowledgeRefs.Count > 0 ? string.Join(", ", _latestAdvice.KnowledgeRefs.Take(4)) : "none")}",
-            $"missing information: {(_latestAdvice?.MissingInformation.Count > 0 ? string.Join(", ", _latestAdvice.MissingInformation.Take(4)) : "none")}",
-            $"decision blockers: {(_latestAdvice?.DecisionBlockers.Count > 0 ? string.Join(", ", _latestAdvice.DecisionBlockers.Take(4)) : "none")}",
-            $"session id: {_sessionState?.SessionId ?? "none"}",
-        });
-        return new CompanionCollectorStatus(true, activeEpisode, lastSemanticScreen, choiceStatus, acceptedExtractorPath, degradedReason, _latestKnowledgeSlice?.Entries.Count ?? 0, _latestKnowledgeSlice?.Reasons ?? Array.Empty<string>(), _latestAdvice?.KnowledgeRefs ?? Array.Empty<string>(), _latestAdvice?.MissingInformation ?? Array.Empty<string>(), _latestAdvice?.DecisionBlockers ?? Array.Empty<string>(), _sessionState?.SessionId, notes);
-    }
-
-    private CompanionCollectorSummary BuildCollectorSummary(CompanionRunState runState, CompanionArtifactPaths paths, CompanionCollectorStatus? collectorStatus)
-    {
-        var transitions = ReadJsonLines(paths.LiveMirrorRoot, Path.GetFileName(_layout.ScreenTransitionsPath));
-        var decisions = ReadJsonLines(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceDecisionsPath));
-        var candidates = ReadJsonLines(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceCandidatesPath));
-        var adviceLog = paths.AdviceLogPath is not null && File.Exists(paths.AdviceLogPath) ? ReadJsonLines(paths.AdviceLogPath) : Array.Empty<JsonDocument>();
-        var traceLog = paths.CodexTracePath is not null && File.Exists(paths.CodexTracePath) ? ReadJsonLines(paths.CodexTracePath) : Array.Empty<JsonDocument>();
-        var runtimeFatalErrors = ReadRuntimeFatalErrors();
-        var timeline = transitions.Select(d => { var r = d.RootElement; return $"{TryReadString(r, "triggerKind") ?? "unknown"}: {TryReadString(r, "before") ?? "unknown"} -> {TryReadString(r, "after") ?? "unknown"} (incoming={TryReadString(r, "incoming") ?? "unknown"}, reason={TryReadString(r, "reason") ?? "none"})"; }).TakeLast(24).ToArray();
-        var semanticCounts = runState.RecentEvents.Where(IsSemanticEvent).GroupBy(e => e.Kind, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
-        var missingChoices = decisions.Where(d => (TryReadNestedInt(d, "decision", "acceptedCount") ?? 0) == 0).Select(d => $"{TryReadString(d.RootElement, "screen") ?? "unknown"} via {TryReadNestedString(d, "decision", "extractorPath") ?? "unknown"} ({TryReadNestedString(d, "decision", "failureReason") ?? "unknown"})").Distinct(StringComparer.Ordinal).ToArray();
-        var placeholderLabels = candidates.Where(d => string.Equals(TryReadNestedString(d, "candidate", "rejectReason"), "placeholder-label", StringComparison.Ordinal)).Select(d => TryReadNestedString(d, "candidate", "label")).Where(v => !string.IsNullOrWhiteSpace(v)).Cast<string>().Distinct(StringComparer.Ordinal).OrderBy(v => v, StringComparer.Ordinal).Take(64).ToArray();
-        var autoAdviceFailures = adviceLog.Where(d => { var r = d.RootElement; var s = TryReadString(r, "status"); var t = TryReadString(r, "triggerKind"); return !string.Equals(s, "ok", StringComparison.OrdinalIgnoreCase) && !string.Equals(t, "manual", StringComparison.OrdinalIgnoreCase) && !string.Equals(t, "retry-last", StringComparison.OrdinalIgnoreCase); }).Select(d => { var r = d.RootElement; return $"{TryReadString(r, "triggerKind") ?? "unknown"}: {TryReadString(r, "summary") ?? "degraded"}"; }).TakeLast(12).ToArray();
-        var missingInformationObserved = SummarizeFrequency(adviceLog.SelectMany(d => ReadStringArray(d.RootElement, "missingInformation")), 64);
-        var decisionBlockersObserved = SummarizeFrequency(adviceLog.SelectMany(d => ReadStringArray(d.RootElement, "decisionBlockers")), 64);
-        return new CompanionCollectorSummary(runState.Snapshot.RunId, DateTimeOffset.UtcNow, timeline, semanticCounts, missingChoices, placeholderLabels, autoAdviceFailures, missingInformationObserved, decisionBlockersObserved, collectorStatus?.SessionId is null ? "missing-session-id" : "session-tracked", ReadObservedMergeCounts(), BuildRequestLatencySummary(traceLog), BuildDuplicateTriggerSummary(traceLog), BuildScreenOverwriteSummary(transitions), BuildStateRegressionSummary(runState), BuildKnowledgeUsageSummary(adviceLog, traceLog), runtimeFatalErrors, BuildAppHangSuspicionIndicators(paths, runtimeFatalErrors, traceLog), BuildRecommendedFixes(missingChoices, placeholderLabels, autoAdviceFailures, missingInformationObserved, decisionBlockersObserved, collectorStatus));
-    }
-
-    private static void CopyIfExists(string sourcePath, string destinationPath) { if (File.Exists(sourcePath)) File.Copy(sourcePath, destinationPath, overwrite: true); }
-    private static void CopyDirectoryIfExists(string sourcePath, string destinationPath) { if (!Directory.Exists(sourcePath)) return; Directory.CreateDirectory(destinationPath); foreach (var file in Directory.GetFiles(sourcePath)) File.Copy(file, Path.Combine(destinationPath, Path.GetFileName(file)), overwrite: true); }
     private static IReadOnlyList<string> ReadAllLinesShared(string path) { using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete); using var reader = new StreamReader(stream, Encoding.UTF8); return reader.ReadToEnd().Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n', StringSplitOptions.RemoveEmptyEntries).ToArray(); }
     private void WriteJson<T>(string path, T value) { Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllText(path, JsonSerializer.Serialize(value, _jsonOptions)); }
     private void AppendNdjson<T>(string path, T value) { Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.AppendAllText(path, JsonSerializer.Serialize(value, _ndjsonOptions) + Environment.NewLine); }
     private void WriteCodexTrace(CompanionArtifactPaths paths, object trace) { if (!_configuration.LiveExport.CollectorModeEnabled || paths.CodexTracePath is null) return; AppendNdjson(paths.CodexTracePath, trace); }
-    private IReadOnlyDictionary<string, int> ReadObservedMergeCounts() { var path = Path.Combine(CompanionPathResolver.ResolveKnowledgeRoot(_configuration, _workspaceRoot), "observed-merge.json"); if (!File.Exists(path)) return new Dictionary<string, int>(StringComparer.Ordinal); using var document = JsonDocument.Parse(File.ReadAllText(path)); return document.RootElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.ValueKind switch { JsonValueKind.Array => p.Value.GetArrayLength(), JsonValueKind.Object => p.Value.EnumerateObject().Count(), _ => 0 }, StringComparer.OrdinalIgnoreCase); }
-    private static IReadOnlyList<string> BuildRequestLatencySummary(IReadOnlyList<JsonDocument> traceLog)
+
+    private static CompanionRunState CreateRunState(
+        LiveExportSnapshot snapshot,
+        LiveExportSession? session,
+        string summaryText,
+        IReadOnlyList<LiveExportEventEnvelope> recentEvents,
+        bool isStale)
     {
-        var durations = traceLog
-            .Where(d => string.Equals(TryReadString(d.RootElement, "kind"), "request-finished", StringComparison.Ordinal))
-            .Select(d => TryReadInt(d.RootElement, "durationMs"))
-            .Where(v => v is not null)
-            .Select(v => v!.Value)
-            .OrderBy(v => v)
-            .ToArray();
-        if (durations.Length == 0)
+        return new CompanionRunState(snapshot, session, summaryText, recentEvents, isStale)
         {
-            return Array.Empty<string>();
-        }
-
-        static int Percentile(int[] sorted, double percentile)
-        {
-            var index = (int)Math.Ceiling(sorted.Length * percentile) - 1;
-            return sorted[Math.Clamp(index, 0, sorted.Length - 1)];
-        }
-
-        return new[]
-        {
-            $"count={durations.Length}",
-            $"min_ms={durations[0]}",
-            $"p50_ms={Percentile(durations, 0.50)}",
-            $"p90_ms={Percentile(durations, 0.90)}",
-            $"avg_ms={(int)durations.Average()}",
-            $"max_ms={durations[^1]}",
+            NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, recentEvents),
         };
     }
-    private static IReadOnlyList<string> BuildDuplicateTriggerSummary(IReadOnlyList<JsonDocument> traceLog) => traceLog.Select(d => TryReadString(d.RootElement, "kind")).Where(k => k is "request-coalesced" or "request-superseded" or "request-canceled" or "request-retried").GroupBy(k => k!, StringComparer.Ordinal).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g => $"{g.Key}={g.Count()}").ToArray();
-    private static IReadOnlyList<string> BuildScreenOverwriteSummary(IReadOnlyList<JsonDocument> transitions) => transitions.Where(d => d.RootElement.TryGetProperty("keptPreviousScreen", out var kept) && kept.ValueKind == JsonValueKind.True).Select(d => { var r = d.RootElement; return $"{TryReadString(r, "triggerKind") ?? "unknown"} kept {TryReadString(r, "before") ?? "unknown"} over {TryReadString(r, "incoming") ?? "unknown"}"; }).TakeLast(24).ToArray();
-    private static IReadOnlyList<string> BuildStateRegressionSummary(CompanionRunState runState) => runState.Snapshot.Warnings.Where(w => w.StartsWith("state-regression:", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.Ordinal).Take(64).ToArray();
-    private static IReadOnlyList<string> BuildKnowledgeUsageSummary(IReadOnlyList<JsonDocument> adviceLog, IReadOnlyList<JsonDocument> traceLog)
-    {
-        var knowledgeRefCounts = adviceLog.Select(d => ReadStringArray(d.RootElement, "knowledgeRefs").Count).ToArray();
-        var latestTrace = traceLog.LastOrDefault(d => string.Equals(TryReadString(d.RootElement, "kind"), "request-finished", StringComparison.Ordinal));
-        var latestTraceKnowledgeCount = latestTrace is null ? null : TryReadInt(latestTrace.RootElement, "knowledgeEntriesUsedCount");
-        var latestReasons = latestTrace is null ? Array.Empty<string>() : ReadStringArray(latestTrace.RootElement, "knowledgeReasons");
-        var blockedByState = adviceLog.Count(d => ReadStringArray(d.RootElement, "missingInformation").Count > 0 && ReadStringArray(d.RootElement, "knowledgeRefs").Count > 0);
-        var knowledgeEmpty = adviceLog.Count(d => ReadStringArray(d.RootElement, "knowledgeRefs").Count == 0 && ReadStringArray(d.RootElement, "missingInformation").Count > 0);
-        var topRefs = SummarizeFrequency(adviceLog.SelectMany(d => ReadStringArray(d.RootElement, "knowledgeRefs")), 6);
-        return new[]
-        {
-            $"responses_with_knowledge_refs={knowledgeRefCounts.Count(c => c > 0)}",
-            $"max_knowledge_refs={knowledgeRefCounts.DefaultIfEmpty(0).Max()}",
-            $"latest_prompt_knowledge_entries={latestTraceKnowledgeCount?.ToString() ?? "0"}",
-            $"latest_prompt_knowledge_reasons={(latestReasons.Count > 0 ? string.Join(", ", latestReasons.Take(4)) : "none")}",
-            $"knowledge_present_but_blocked_by_runtime={blockedByState}",
-            $"knowledge_slice_empty={knowledgeEmpty}",
-        }.Concat(topRefs.Select(item => $"top_ref={item}")).ToArray();
-    }
-    private IReadOnlyList<string> ReadRuntimeFatalErrors()
-    {
-        var path = Path.Combine(_configuration.GamePaths.GameDirectory, "mods", _configuration.AiCompanionMod.RuntimeLogFileName);
-        if (!File.Exists(path))
-        {
-            return Array.Empty<string>();
-        }
-
-        return ReadAllLinesShared(path)
-            .Where(line => line.Contains("Method not found", StringComparison.OrdinalIgnoreCase)
-                           || line.Contains("runtime exporter worker failure", StringComparison.OrdinalIgnoreCase)
-                           || line.Contains("runtime exporter poll failure", StringComparison.OrdinalIgnoreCase)
-                           || line.Contains("hook failure", StringComparison.OrdinalIgnoreCase)
-                           || line.Contains("disposed", StringComparison.OrdinalIgnoreCase)
-                           || line.Contains("format", StringComparison.OrdinalIgnoreCase) && line.Contains("LocString", StringComparison.OrdinalIgnoreCase))
-            .TakeLast(48)
-            .ToArray();
-    }
-    private static IReadOnlyList<string> BuildAppHangSuspicionIndicators(CompanionArtifactPaths paths, IReadOnlyList<string> runtimeFatalErrors, IReadOnlyList<JsonDocument> traceLog)
-    {
-        var failedRequests = traceLog.Count(d => { var kind = TryReadString(d.RootElement, "kind"); return kind is "request-failed" or "request-canceled"; });
-        var disposedFailures = runtimeFatalErrors.Count(line => line.Contains("disposed", StringComparison.OrdinalIgnoreCase));
-        var exporterFailures = runtimeFatalErrors.Count(line => line.Contains("runtime exporter worker failure", StringComparison.OrdinalIgnoreCase));
-        var lastFinishedAt = traceLog.Where(d => string.Equals(TryReadString(d.RootElement, "kind"), "request-finished", StringComparison.Ordinal)).Select(d => TryReadString(d.RootElement, "generatedAt")).LastOrDefault();
-        var semanticRoot = paths.LiveMirrorRoot is null ? null : Path.Combine(paths.LiveMirrorRoot, "semantic-snapshots");
-        var semanticFiles = semanticRoot is not null && Directory.Exists(semanticRoot)
-            ? Directory.GetFiles(semanticRoot, "*.json", SearchOption.TopDirectoryOnly)
-            : Array.Empty<string>();
-        var lastSemanticSnapshotAt = semanticFiles
-            .Select(File.GetLastWriteTimeUtc)
-            .DefaultIfEmpty()
-            .Max();
-        return new[]
-        {
-            $"runtime_fatal_error_count={runtimeFatalErrors.Count}",
-            $"exporter_worker_failure_count={exporterFailures}",
-            $"disposed_object_failure_count={disposedFailures}",
-            $"failed_or_canceled_requests={failedRequests}",
-            $"semantic_snapshot_count={semanticFiles.Length}",
-            $"last_semantic_snapshot_at={(lastSemanticSnapshotAt == default ? "none" : new DateTimeOffset(lastSemanticSnapshotAt, TimeSpan.Zero).ToString("O"))}",
-            $"last_successful_advice_at={lastFinishedAt ?? "none"}",
-        };
-    }
-    private static IReadOnlyList<string> BuildRecommendedFixes(IReadOnlyList<string> missingChoices, IReadOnlyList<string> placeholderLabels, IReadOnlyList<string> autoAdviceFailures, IReadOnlyList<string> missingInformationObserved, IReadOnlyList<string> decisionBlockersObserved, CompanionCollectorStatus? collectorStatus)
-    {
-        var fixes = new List<string>();
-        if (missingChoices.Count > 0) fixes.Add("Strengthen strict choice extractors for the affected screens before trusting generic fallback.");
-        if (placeholderLabels.Count > 0) fixes.Add("Expand placeholder filtering for UI/internal node names in generic choice extraction.");
-        if (autoAdviceFailures.Count > 0) fixes.Add("Inspect prompt packs and Codex trace for degraded auto advice failures.");
-        if (missingInformationObserved.Any(i => i.Contains("price", StringComparison.OrdinalIgnoreCase))) fixes.Add("Shop extraction still misses concrete price or item identity fields.");
-        if (missingInformationObserved.Any(i => i.Contains("item identity", StringComparison.OrdinalIgnoreCase) || i.Contains("상품", StringComparison.OrdinalIgnoreCase))) fixes.Add("Shop and reward extraction still miss concrete item identity fields.");
-        if (collectorStatus?.SessionId is null) fixes.Add("Gameplay triggers are not reusing or persisting a Codex session yet.");
-        if (decisionBlockersObserved.Any(i => i.Contains("deck", StringComparison.OrdinalIgnoreCase))) fixes.Add("Deck/state merge is still dropping authoritative deck information on overlay screens.");
-        if (decisionBlockersObserved.Any(i => i.Contains("price", StringComparison.OrdinalIgnoreCase) || i.Contains("context", StringComparison.OrdinalIgnoreCase))) fixes.Add("Advice is blocked by missing shop price or deck context; treat those as first-class collector blockers.");
-        if (fixes.Count == 0) fixes.Add("No high-priority collector blocker detected. Expand gameplay screen coverage.");
-        return fixes;
-    }
-    private static IReadOnlyList<string> SummarizeFrequency(IEnumerable<string> values, int maxItems)
-    {
-        return values
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .GroupBy(value => value.Trim(), StringComparer.Ordinal)
-            .OrderByDescending(group => group.Count())
-            .ThenBy(group => group.Key, StringComparer.Ordinal)
-            .Take(maxItems)
-            .Select(group => $"{group.Count()}x {group.Key}")
-            .ToArray();
-    }
-    private static bool IsSemanticEvent(LiveExportEventEnvelope envelope) => envelope.Kind is "choice-list-presented" or "reward-opened" or "reward-screen-opened" or "event-opened" or "event-screen-opened" or "shop-opened" or "rest-opened";
-    private static bool IsHighValueScreen(string? screen) => screen is "rewards" or "event" or "shop" or "rest-site" or "card-choice" or "upgrade" or "transform";
-    private static IReadOnlyList<JsonDocument> ReadJsonLines(string? directory, string fileName) => string.IsNullOrWhiteSpace(directory) ? Array.Empty<JsonDocument>() : ReadJsonLines(Path.Combine(directory, fileName));
-    private static IReadOnlyList<JsonDocument> ReadJsonLines(string path) { if (!File.Exists(path)) return Array.Empty<JsonDocument>(); var content = TryReadAllText(path); if (string.IsNullOrWhiteSpace(content)) return Array.Empty<JsonDocument>(); var docs = new List<JsonDocument>(); foreach (var line in SplitJsonObjects(content)) { try { docs.Add(JsonDocument.Parse(line)); } catch (JsonException) { } } return docs; }
-    private static JsonDocument? ReadLastJsonObject(string? directory, string fileName) { var lines = ReadJsonLines(directory, fileName); return lines.Count == 0 ? null : lines[^1]; }
-    private static string? TryReadString(JsonElement element, string propertyName) => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String ? property.GetString() : null;
-    private static int? TryReadInt(JsonElement element, string propertyName) => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var value) ? value : null;
-    private static string? TryReadNestedString(JsonDocument? document, string parentProperty, string propertyName) => document is not null && document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty(parentProperty, out var parent) && parent.ValueKind == JsonValueKind.Object && parent.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String ? property.GetString() : null;
-    private static int? TryReadNestedInt(JsonDocument? document, string parentProperty, string propertyName) => document is not null && document.RootElement.ValueKind == JsonValueKind.Object && document.RootElement.TryGetProperty(parentProperty, out var parent) && parent.ValueKind == JsonValueKind.Object && parent.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var value) ? value : null;
 }
