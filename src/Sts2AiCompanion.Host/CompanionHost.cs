@@ -205,7 +205,6 @@ public sealed partial class CompanionHost : IAsyncDisposable
         try
         {
             var (response, sessionId) = await _codexSessionClient.ExecuteAsync(inputPack, prompt, _sessionState?.SessionId, _selectedModel, _selectedReasoningEffort, cancellationToken).ConfigureAwait(false);
-            response = _promptBuilder.FinalizeResponse(inputPack, response);
             _latestAdvice = response; _lastAdviceAt = response.GeneratedAt;
             if (!string.IsNullOrWhiteSpace(sessionId)) _sessionState = new CodexSessionState(runState.Snapshot.RunId, sessionId!, _sessionState?.CreatedAt ?? DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
             WriteJson(paths.AdviceLatestJsonPath!, response);

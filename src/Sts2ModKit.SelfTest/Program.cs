@@ -63,8 +63,10 @@ Run("advice prompt builder emits the required prompt sections", TestAdvicePrompt
 Run("reward deterministic builders are reproducible", TestRewardDeterministicBuilders, failures);
 Run("reward deterministic layer stays off for non-card rewards", TestRewardNonCardFallback, failures);
 Run("reward deterministic layer falls back outside reward scenes", TestRewardDeterministicFallback, failures);
-Run("reward live and replay paths share deterministic context", TestRewardLiveReplayParity, failures);
-Run("curated card reward advice artifacts stay reviewer-friendly", TestCuratedCardRewardAdviceArtifacts, failures);
+Run("reward live and replay paths share deterministic context", TestRewardLiveReplayDeterministicContext, failures);
+Run("reward finalizer only normalizes labels and attaches trace", TestRewardFinalizerMinimalNormalization, failures);
+Run("reward model rationale survives without heavy backfill", TestRewardModelRationaleArtifacts, failures);
+Run("reward fixtures include a non-first winning choice", TestRewardNonFirstChoiceScenario, failures);
 Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
 Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
@@ -1884,20 +1886,131 @@ static void TestRewardNonCardFallback()
     }
 }
 
-static void TestRewardLiveReplayParity()
+static void TestRewardLiveReplayDeterministicContext()
 {
-    ValidateRewardScenarioArtifacts(CreateDefaultRewardScenario());
+    var result = ExecuteRewardScenario(CreateDefaultRewardScenario(), FakeCodexRewardResponseMode.MinimalModelOutput);
+
+    Assert(result.LivePromptPack.RewardOptionSet is not null, "Expected live reward option set.");
+    Assert(result.LivePromptPack.RewardAssessmentFacts is not null, "Expected live reward assessment facts.");
+    Assert(result.LivePromptPack.RewardRecommendationTraceSeed is not null, "Expected live reward trace seed.");
+    Assert(result.ReplayPromptPack.RewardOptionSet is not null, "Expected replay reward option set.");
+    Assert(result.ReplayPromptPack.RewardAssessmentFacts is not null, "Expected replay reward assessment facts.");
+    Assert(result.ReplayPromptPack.RewardRecommendationTraceSeed is not null, "Expected replay reward trace seed.");
+    Assert(
+        result.LivePromptPack.RewardOptionSet.Options.Select(option => option.Label)
+            .SequenceEqual(result.ReplayPromptPack.RewardOptionSet.Options.Select(option => option.Label), StringComparer.Ordinal),
+        "Expected live and replay option labels to match.");
+    Assert(
+        result.LivePromptPack.RewardAssessmentFacts.FactLines.SequenceEqual(result.ReplayPromptPack.RewardAssessmentFacts.FactLines, StringComparer.Ordinal),
+        "Expected live and replay deterministic fact lines to match.");
+    Assert(
+        result.LivePromptPack.RewardRecommendationTraceSeed.CandidateLabels.SequenceEqual(result.ReplayPromptPack.RewardRecommendationTraceSeed.CandidateLabels, StringComparer.Ordinal),
+        "Expected live and replay trace seed candidate labels to match.");
 }
 
-static void TestCuratedCardRewardAdviceArtifacts()
+static void TestRewardFinalizerMinimalNormalization()
+{
+    var scenario = CreateCuratedRewardScenarios().Single(candidate => candidate.Name == "draw-gap-with-unknown-alternative");
+    var result = ExecuteRewardScenario(scenario, FakeCodexRewardResponseMode.MinimalModelOutput);
+
+    Assert(result.LiveAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, "Expected minimal live response to keep the deterministic recommendation.");
+    Assert(result.ReplayAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, "Expected minimal replay response to keep the deterministic recommendation.");
+    Assert(result.LiveAdvice.ReasoningBullets.Count == 0, "Expected minimal live response to keep empty reasoning bullets.");
+    Assert(result.ReplayAdvice.ReasoningBullets.Count == 0, "Expected minimal replay response to keep empty reasoning bullets.");
+    Assert(result.LiveAdvice.KnowledgeRefs.Count == 0, "Expected minimal live response to keep empty knowledge refs.");
+    Assert(result.ReplayAdvice.KnowledgeRefs.Count == 0, "Expected minimal replay response to keep empty knowledge refs.");
+    Assert(result.LiveAdvice.MissingInformation.Count == 0, "Expected minimal live response to keep empty missing-information output.");
+    Assert(result.ReplayAdvice.MissingInformation.Count == 0, "Expected minimal replay response to keep empty missing-information output.");
+    Assert(result.LiveAdvice.DecisionBlockers.Count == 0, "Expected valid minimal live response to avoid synthetic blockers.");
+    Assert(result.ReplayAdvice.DecisionBlockers.Count == 0, "Expected valid minimal replay response to avoid synthetic blockers.");
+    Assert(result.LiveAdvice.RewardRecommendationTrace is not null, "Expected minimal live response to attach deterministic trace.");
+    Assert(result.ReplayAdvice.RewardRecommendationTrace is not null, "Expected minimal replay response to attach deterministic trace.");
+    Assert(
+        result.LiveAdvice.RewardRecommendationTrace!.MissingInformation.Contains(scenario.ExpectedMissingInformation!, StringComparer.Ordinal),
+        "Expected deterministic trace to preserve missing-information inputs without copying them into model output.");
+    Assert(
+        result.ReplayAdvice.RewardRecommendationTrace!.MissingInformation.Contains(scenario.ExpectedMissingInformation!, StringComparer.Ordinal),
+        "Expected replay deterministic trace to preserve missing-information inputs without copying them into model output.");
+
+    var invalidRawResponse = new Sts2AiCompanion.Foundation.Contracts.AdviceResponse(
+        "ok",
+        "invalid-label",
+        "invalid-label",
+        "invalid-label",
+        "존재하지 않는 카드",
+        new[] { "model-owned-reason" },
+        Array.Empty<string>(),
+        new[] { "model-owned-missing" },
+        Array.Empty<string>(),
+        0.5,
+        new[] { "model-owned-ref" },
+        DateTimeOffset.UtcNow,
+        result.LivePromptPack.RunId,
+        result.LivePromptPack.TriggerKind,
+        null,
+        "{}");
+    var invalidFinalized = Sts2AiCompanion.Foundation.Reasoning.RewardAdviceResponseFinalizer.Apply(
+        ToFoundationAdviceInputPack(result.LivePromptPack),
+        invalidRawResponse);
+
+    Assert(invalidFinalized.RecommendedChoiceLabel is null, "Expected invalid recommendation labels to be cleared.");
+    Assert(invalidFinalized.DecisionBlockers.Contains("recommended-choice-not-in-option-set", StringComparer.Ordinal), "Expected invalid recommendation labels to add a blocker.");
+    Assert(invalidFinalized.ReasoningBullets.SequenceEqual(invalidRawResponse.ReasoningBullets, StringComparer.Ordinal), "Expected finalizer not to rewrite model reasoning bullets.");
+    Assert(invalidFinalized.MissingInformation.SequenceEqual(invalidRawResponse.MissingInformation, StringComparer.Ordinal), "Expected finalizer not to backfill missing-information output.");
+    Assert(invalidFinalized.KnowledgeRefs.SequenceEqual(invalidRawResponse.KnowledgeRefs, StringComparer.Ordinal), "Expected finalizer not to backfill knowledge refs.");
+    Assert(invalidFinalized.RewardRecommendationTrace is not null, "Expected invalid recommendation labels to still carry deterministic trace.");
+}
+
+static void TestRewardModelRationaleArtifacts()
 {
     foreach (var scenario in CreateCuratedRewardScenarios())
     {
-        ValidateRewardScenarioArtifacts(scenario);
+        var result = ExecuteRewardScenario(scenario, FakeCodexRewardResponseMode.ModelRationaleOutput);
+
+        Assert(result.LiveAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, $"Expected live recommendation '{scenario.ExpectedChoiceLabel}' for scenario {scenario.Name}.");
+        Assert(result.ReplayAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, $"Expected replay recommendation '{scenario.ExpectedChoiceLabel}' for scenario {scenario.Name}.");
+        Assert(result.LivePromptPack.RewardOptionSet!.Options.Select(option => option.Label).Contains(result.LiveAdvice.RecommendedChoiceLabel, StringComparer.Ordinal), $"Expected live recommendation to stay inside visible option set for scenario {scenario.Name}.");
+        Assert(result.ReplayPromptPack.RewardOptionSet!.Options.Select(option => option.Label).Contains(result.ReplayAdvice.RecommendedChoiceLabel, StringComparer.Ordinal), $"Expected replay recommendation to stay inside visible option set for scenario {scenario.Name}.");
+        Assert(result.LiveAdvice.ReasoningBullets.Count > 0, $"Expected live model rationale to survive for scenario {scenario.Name}.");
+        Assert(result.ReplayAdvice.ReasoningBullets.Count > 0, $"Expected replay model rationale to survive for scenario {scenario.Name}.");
+        Assert(result.LiveAdvice.KnowledgeRefs.Count > 0, $"Expected live model rationale to carry knowledge refs for scenario {scenario.Name}.");
+        Assert(result.ReplayAdvice.KnowledgeRefs.Count > 0, $"Expected replay model rationale to carry knowledge refs for scenario {scenario.Name}.");
+        Assert(result.LiveAdvice.RewardRecommendationTrace is not null, $"Expected live deterministic trace for scenario {scenario.Name}.");
+        Assert(result.ReplayAdvice.RewardRecommendationTrace is not null, $"Expected replay deterministic trace for scenario {scenario.Name}.");
+        Assert(result.LiveMarkdown.Contains("## Reward Deterministic Trace", StringComparison.Ordinal), $"Expected live markdown trace section for scenario {scenario.Name}.");
+        Assert(result.ReplayMarkdown.Contains("## Reward Deterministic Trace", StringComparison.Ordinal), $"Expected replay markdown trace section for scenario {scenario.Name}.");
+        Assert(result.LiveMarkdown.Contains(scenario.ExpectedChoiceLabel, StringComparison.Ordinal), $"Expected live markdown to mention the recommended reward for scenario {scenario.Name}.");
+        Assert(result.ReplayMarkdown.Contains(scenario.ExpectedChoiceLabel, StringComparison.Ordinal), $"Expected replay markdown to mention the recommended reward for scenario {scenario.Name}.");
+        Assert(result.LiveAdvice.ReasoningBullets.SequenceEqual(result.ReplayAdvice.ReasoningBullets, StringComparer.Ordinal), $"Expected live and replay reasoning parity for scenario {scenario.Name}.");
+        Assert(result.LiveAdvice.MissingInformation.SequenceEqual(result.ReplayAdvice.MissingInformation, StringComparer.Ordinal), $"Expected live and replay missing-information parity for scenario {scenario.Name}.");
+        Assert(result.LiveAdvice.DecisionBlockers.SequenceEqual(result.ReplayAdvice.DecisionBlockers, StringComparer.Ordinal), $"Expected live and replay decision-blocker parity for scenario {scenario.Name}.");
+        Assert(result.LiveAdvice.KnowledgeRefs.SequenceEqual(result.ReplayAdvice.KnowledgeRefs, StringComparer.Ordinal), $"Expected live and replay knowledge-ref parity for scenario {scenario.Name}.");
+
+        if (!string.IsNullOrWhiteSpace(scenario.ExpectedRationaleContains))
+        {
+            Assert(result.LiveAdvice.ReasoningBullets.Any(bullet => bullet.Contains(scenario.ExpectedRationaleContains, StringComparison.Ordinal)), $"Expected live reasoning to contain '{scenario.ExpectedRationaleContains}' for scenario {scenario.Name}.");
+            Assert(result.ReplayAdvice.ReasoningBullets.Any(bullet => bullet.Contains(scenario.ExpectedRationaleContains, StringComparison.Ordinal)), $"Expected replay reasoning to contain '{scenario.ExpectedRationaleContains}' for scenario {scenario.Name}.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(scenario.ExpectedMissingInformation))
+        {
+            Assert(result.LiveAdvice.MissingInformation.Contains(scenario.ExpectedMissingInformation, StringComparer.Ordinal), $"Expected live missing info '{scenario.ExpectedMissingInformation}' for scenario {scenario.Name}.");
+            Assert(result.ReplayAdvice.MissingInformation.Contains(scenario.ExpectedMissingInformation, StringComparer.Ordinal), $"Expected replay missing info '{scenario.ExpectedMissingInformation}' for scenario {scenario.Name}.");
+        }
     }
 }
 
-static void ValidateRewardScenarioArtifacts(RewardScenarioDefinition scenario)
+static void TestRewardNonFirstChoiceScenario()
+{
+    var scenario = CreateCuratedRewardScenarios().Single(candidate => candidate.ExpectNonFirstChoice);
+    var result = ExecuteRewardScenario(scenario, FakeCodexRewardResponseMode.ModelRationaleOutput);
+
+    Assert(!string.Equals(scenario.Choices[0].Label, scenario.ExpectedChoiceLabel, StringComparison.Ordinal), $"Expected scenario {scenario.Name} to require a non-first recommendation.");
+    Assert(result.LiveAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, $"Expected live recommendation '{scenario.ExpectedChoiceLabel}' for scenario {scenario.Name}.");
+    Assert(result.ReplayAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, $"Expected replay recommendation '{scenario.ExpectedChoiceLabel}' for scenario {scenario.Name}.");
+}
+
+static RewardScenarioExecutionResult ExecuteRewardScenario(RewardScenarioDefinition scenario, FakeCodexRewardResponseMode rewardResponseMode)
 {
     var root = CreateTempDirectory();
     try
@@ -1923,7 +2036,7 @@ static void ValidateRewardScenarioArtifacts(RewardScenarioDefinition scenario)
         File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
         Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
 
-        var fakeClient = new FakeCodexSessionClient();
+        var fakeClient = new FakeCodexSessionClient(rewardResponseMode);
         var host = new CompanionHost(configuration, root, fakeClient);
         try
         {
@@ -1944,18 +2057,6 @@ static void ValidateRewardScenarioArtifacts(RewardScenarioDefinition scenario)
                 ?? throw new InvalidOperationException("Expected live reward prompt pack.");
             var liveMarkdown = File.ReadAllText(liveMarkdownPath, Encoding.UTF8);
 
-            Assert(livePromptPack.RewardOptionSet is not null, $"Expected live reward option set for scenario {scenario.Name}.");
-            Assert(livePromptPack.RewardAssessmentFacts is not null, $"Expected live reward assessment facts for scenario {scenario.Name}.");
-            Assert(livePromptPack.RewardRecommendationTraceSeed is not null, $"Expected live reward trace seed for scenario {scenario.Name}.");
-            Assert(liveAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, $"Expected live recommendation '{scenario.ExpectedChoiceLabel}' for scenario {scenario.Name}.");
-            Assert(livePromptPack.RewardOptionSet.Options.Select(option => option.Label).Contains(liveAdvice.RecommendedChoiceLabel, StringComparer.Ordinal), $"Expected live recommendation to stay inside visible option set for scenario {scenario.Name}.");
-            Assert(liveAdvice.ReasoningBullets.Count >= 2, $"Expected reviewer-friendly live reasoning bullets for scenario {scenario.Name}.");
-            Assert(liveAdvice.RewardRecommendationTrace is not null, $"Expected live deterministic trace for scenario {scenario.Name}.");
-            Assert(liveAdvice.RewardRecommendationTrace.CandidateLabels.SequenceEqual(livePromptPack.RewardOptionSet.Options.Select(option => option.Label), StringComparer.Ordinal), $"Expected live trace candidate labels to mirror option set for scenario {scenario.Name}.");
-            Assert(liveAdvice.KnowledgeRefs.Count > 0, $"Expected live knowledge refs for scenario {scenario.Name}.");
-            Assert(liveMarkdown.Contains("## Reward Deterministic Trace", StringComparison.Ordinal), $"Expected live markdown trace section for scenario {scenario.Name}.");
-            Assert(liveMarkdown.Contains(scenario.ExpectedChoiceLabel, StringComparison.Ordinal), $"Expected live markdown to mention the recommended reward for scenario {scenario.Name}.");
-
             var fixtureRoot = Path.Combine(root, $"reward-fixture-{scenario.Name}");
             var liveMirrorRoot = Path.Combine(fixtureRoot, "live-mirror");
             Directory.CreateDirectory(liveMirrorRoot);
@@ -1965,25 +2066,7 @@ static void ValidateRewardScenarioArtifacts(RewardScenarioDefinition scenario)
             File.WriteAllText(Path.Combine(liveMirrorRoot, configuration.LiveExport.EventsFileName), string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
 
             var mockResponsePath = Path.Combine(root, $"{scenario.Name}-reward-mock-response.json");
-            WriteJson(
-                mockResponsePath,
-                new Sts2AiCompanion.Foundation.Contracts.AdviceResponse(
-                    "ok",
-                    $"reward headline :: {scenario.Name}",
-                    $"reward summary :: {scenario.Name}",
-                    "reward action",
-                    scenario.ExpectedChoiceLabel,
-                    Array.Empty<string>(),
-                    Array.Empty<string>(),
-                    Array.Empty<string>(),
-                    Array.Empty<string>(),
-                    0.8,
-                    Array.Empty<string>(),
-                    DateTimeOffset.UtcNow,
-                    snapshot.RunId,
-                    "replay-validation",
-                    null,
-                    "{}"));
+            WriteJson(mockResponsePath, ToFoundationAdviceResponse(fakeClient.BuildRawResponseForTesting(livePromptPack)));
 
             var replayValidator = new FoundationReplayAdvisorValidator(configuration, root);
             var replayResult = replayValidator.ValidateAsync(fixtureRoot, mockResponsePath, CancellationToken.None).GetAwaiter().GetResult();
@@ -1993,28 +2076,13 @@ static void ValidateRewardScenarioArtifacts(RewardScenarioDefinition scenario)
                 ?? throw new InvalidOperationException("Expected replay reward advice response.");
             var replayMarkdown = File.ReadAllText(replayResult.AdviceMarkdownPath, Encoding.UTF8);
 
-            Assert(replayPromptPack.RewardOptionSet is not null, $"Expected replay reward option set for scenario {scenario.Name}.");
-            Assert(replayPromptPack.RewardAssessmentFacts is not null, $"Expected replay reward assessment facts for scenario {scenario.Name}.");
-            Assert(replayAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, $"Expected replay recommendation '{scenario.ExpectedChoiceLabel}' for scenario {scenario.Name}.");
-            Assert(replayPromptPack.RewardOptionSet.Options.Select(option => option.Label).Contains(replayAdvice.RecommendedChoiceLabel, StringComparer.Ordinal), $"Expected replay recommendation to stay inside visible option set for scenario {scenario.Name}.");
-            Assert(replayAdvice.ReasoningBullets.Count >= 2, $"Expected reviewer-friendly replay reasoning bullets for scenario {scenario.Name}.");
-            Assert(replayAdvice.RewardRecommendationTrace is not null, $"Expected replay deterministic trace for scenario {scenario.Name}.");
-            Assert(replayAdvice.KnowledgeRefs.Count > 0, $"Expected replay knowledge refs for scenario {scenario.Name}.");
-            Assert(replayMarkdown.Contains("## Reward Deterministic Trace", StringComparison.Ordinal), $"Expected replay markdown trace section for scenario {scenario.Name}.");
-            Assert(replayMarkdown.Contains(scenario.ExpectedChoiceLabel, StringComparison.Ordinal), $"Expected replay markdown to mention the recommended reward for scenario {scenario.Name}.");
-
-            Assert(livePromptPack.RewardOptionSet.Options.Select(option => option.Label).SequenceEqual(replayPromptPack.RewardOptionSet.Options.Select(option => option.Label), StringComparer.Ordinal), $"Expected live and replay option labels to match for scenario {scenario.Name}.");
-            Assert(livePromptPack.RewardAssessmentFacts.FactLines.SequenceEqual(replayPromptPack.RewardAssessmentFacts.FactLines, StringComparer.Ordinal), $"Expected live and replay fact lines to match for scenario {scenario.Name}.");
-            Assert(liveAdvice.RecommendedChoiceLabel == replayAdvice.RecommendedChoiceLabel, $"Expected live and replay recommendation parity for scenario {scenario.Name}.");
-            Assert(liveAdvice.ReasoningBullets.SequenceEqual(replayAdvice.ReasoningBullets, StringComparer.Ordinal), $"Expected live and replay reasoning parity for scenario {scenario.Name}.");
-            Assert(liveAdvice.MissingInformation.SequenceEqual(replayAdvice.MissingInformation, StringComparer.Ordinal), $"Expected live and replay missing-information parity for scenario {scenario.Name}.");
-            Assert(liveAdvice.DecisionBlockers.SequenceEqual(replayAdvice.DecisionBlockers, StringComparer.Ordinal), $"Expected live and replay decision-blocker parity for scenario {scenario.Name}.");
-
-            if (!string.IsNullOrWhiteSpace(scenario.ExpectedMissingInformation))
-            {
-                Assert(liveAdvice.MissingInformation.Contains(scenario.ExpectedMissingInformation, StringComparer.Ordinal), $"Expected live missing info '{scenario.ExpectedMissingInformation}' for scenario {scenario.Name}.");
-                Assert(replayAdvice.MissingInformation.Contains(scenario.ExpectedMissingInformation, StringComparer.Ordinal), $"Expected replay missing info '{scenario.ExpectedMissingInformation}' for scenario {scenario.Name}.");
-            }
+            return new RewardScenarioExecutionResult(
+                livePromptPack,
+                liveAdvice,
+                liveMarkdown,
+                ToHostAdviceInputPack(replayPromptPack),
+                ToHostAdviceResponse(replayAdvice),
+                replayMarkdown);
         }
         finally
         {
@@ -2333,11 +2401,14 @@ static IReadOnlyList<RewardScenarioDefinition> CreateCuratedRewardScenarios()
             },
             new[]
             {
-                new LiveExportChoiceSummary("card", "수비 강화", "shrug-it-off", "방어도를 얻고 카드를 뽑습니다."),
                 new LiveExportChoiceSummary("card", "몸통 박치기", "bash", "적에게 피해를 주고 취약을 겁니다."),
+                new LiveExportChoiceSummary("card", "수비 강화", "shrug-it-off", "방어도를 얻고 카드를 뽑습니다."),
                 new LiveExportChoiceSummary("skip", "넘기기", "skip", "보상을 건너뜁니다."),
             },
-            "수비 강화"),
+            "수비 강화",
+            null,
+            "수비 강화: adds draw support",
+            true),
         new RewardScenarioDefinition(
             "draw-gap-with-unknown-alternative",
             "reward-draw-gap-run",
@@ -2682,6 +2753,90 @@ static Sts2AiCompanion.Foundation.Contracts.AdviceTrigger ToFoundationTrigger(Ad
         trigger.RetrySourcePromptPackPath);
 }
 
+static Sts2AiCompanion.Foundation.Contracts.AdviceInputPack ToFoundationAdviceInputPack(AdviceInputPack inputPack)
+{
+    return new Sts2AiCompanion.Foundation.Contracts.AdviceInputPack(
+        inputPack.RunId,
+        inputPack.TriggerKind,
+        inputPack.CreatedAt,
+        inputPack.Manual,
+        inputPack.CurrentScreen,
+        inputPack.SummaryText,
+        inputPack.Snapshot,
+        inputPack.RecentEvents.ToArray(),
+        inputPack.KnowledgeEntries.ToArray(),
+        inputPack.KnowledgeReasons.ToArray(),
+        inputPack.ConstraintsText,
+        inputPack.NormalizedState,
+        inputPack.RewardOptionSet,
+        inputPack.RewardAssessmentFacts,
+        inputPack.RewardRecommendationTraceSeed);
+}
+
+static AdviceInputPack ToHostAdviceInputPack(Sts2AiCompanion.Foundation.Contracts.AdviceInputPack inputPack)
+{
+    return new AdviceInputPack(
+        inputPack.RunId,
+        inputPack.TriggerKind,
+        inputPack.CreatedAt,
+        inputPack.Manual,
+        inputPack.CurrentScreen,
+        inputPack.SummaryText,
+        inputPack.Snapshot,
+        inputPack.RecentEvents.ToArray(),
+        inputPack.KnowledgeEntries.ToArray(),
+        inputPack.KnowledgeReasons.ToArray(),
+        inputPack.ConstraintsText,
+        inputPack.NormalizedState,
+        inputPack.RewardOptionSet,
+        inputPack.RewardAssessmentFacts,
+        inputPack.RewardRecommendationTraceSeed);
+}
+
+static Sts2AiCompanion.Foundation.Contracts.AdviceResponse ToFoundationAdviceResponse(AdviceResponse response)
+{
+    return new Sts2AiCompanion.Foundation.Contracts.AdviceResponse(
+        response.Status,
+        response.Headline,
+        response.Summary,
+        response.RecommendedAction,
+        response.RecommendedChoiceLabel,
+        response.ReasoningBullets.ToArray(),
+        response.RiskNotes.ToArray(),
+        response.MissingInformation.ToArray(),
+        response.DecisionBlockers.ToArray(),
+        response.Confidence,
+        response.KnowledgeRefs.ToArray(),
+        response.GeneratedAt,
+        response.RunId,
+        response.TriggerKind,
+        response.SessionId,
+        response.RawResponse,
+        response.RewardRecommendationTrace);
+}
+
+static AdviceResponse ToHostAdviceResponse(Sts2AiCompanion.Foundation.Contracts.AdviceResponse response)
+{
+    return new AdviceResponse(
+        response.Status,
+        response.Headline,
+        response.Summary,
+        response.RecommendedAction,
+        response.RecommendedChoiceLabel,
+        response.ReasoningBullets.ToArray(),
+        response.RiskNotes.ToArray(),
+        response.MissingInformation.ToArray(),
+        response.DecisionBlockers.ToArray(),
+        response.Confidence,
+        response.KnowledgeRefs.ToArray(),
+        response.GeneratedAt,
+        response.RunId,
+        response.TriggerKind,
+        response.SessionId,
+        response.RawResponse,
+        response.RewardRecommendationTrace);
+}
+
 static void WriteJson<T>(string path, T value)
 {
     Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -2894,7 +3049,17 @@ file sealed record RewardScenarioDefinition(
     IReadOnlyList<LiveExportCardSummary> Deck,
     IReadOnlyList<LiveExportChoiceSummary> Choices,
     string ExpectedChoiceLabel,
-    string? ExpectedMissingInformation = null);
+    string? ExpectedMissingInformation = null,
+    string? ExpectedRationaleContains = null,
+    bool ExpectNonFirstChoice = false);
+
+file sealed record RewardScenarioExecutionResult(
+    AdviceInputPack LivePromptPack,
+    AdviceResponse LiveAdvice,
+    string LiveMarkdown,
+    AdviceInputPack ReplayPromptPack,
+    AdviceResponse ReplayAdvice,
+    string ReplayMarkdown);
 
 sealed class FakeProbe : IFileStateProbe
 {
