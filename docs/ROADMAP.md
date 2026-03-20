@@ -1,5 +1,9 @@
 # 로드맵
 
+> Status: Live Charter
+> Source of truth: Yes
+> Update when: long-term milestone structure or acceptance bands change.
+
 ## Phase 1
 
 외부 프로세스 기반 `AI 조언 어시스턴트`를 실제 플레이 중 참고 가능한 수준까지 완성한다.

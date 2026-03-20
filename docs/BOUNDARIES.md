@@ -1,5 +1,9 @@
 ﻿# 범위와 경계
 
+> Status: Live Charter
+> Source of truth: Yes
+> Update when: included scope, excluded scope, or hard product boundaries change.
+
 현재 Phase 1에서 포함하는 것:
 
 - read-only native runtime exporter
