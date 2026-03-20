@@ -53,7 +53,7 @@
 - 공식 next milestone은 `M6. Replay/Parity 회귀 게이트 고정`이다.
 - 지금 구현 workstream은 `M5` 위에서 첫 advisor value slice를 닫는 것이다.
 
-### 3. 지금 가장 중요한 표현은 "Phase 1~3과 honesty pass는 닫혔고, 이제 valid-trust live reward bundle closure로 넘어간다"이다
+### 3. 지금 가장 중요한 표현은 "Phase 1~3과 honesty pass는 닫혔고, 이제 reward bundle 전에 first combat clearability를 막는 runtime-state blindspot을 줄여야 한다"이다
 
 - latest roots는 current-execution runtime exporter / harness bridge / fresh snapshot / manual clean boot positive를 보여 준다.
 - bootstrap launch는 이제 attempt가 아니라 session-level pre-attempt phase다.
@@ -61,7 +61,7 @@
 - quartet semantics는 `restart-events` chronology와 projection들이 같은 이야기를 하도록 정렬됐다.
 - Host hot path는 advice와 diagnostics가 이전보다 분리됐고, reward scene에는 deterministic middle layer가 들어갔다.
 - reward scaffold는 honesty pass와 curated parity acceptance 강화까지 끝났다.
-- 따라서 지금 필요한 것은 더 많은 startup diagnostic layer나 scaffold polishing이 아니라 `card reward` 조언의 실제 live reviewer bundle을 닫는 일이다.
+- 따라서 지금 필요한 것은 더 많은 startup diagnostic layer나 scaffold polishing이 아니라, first combat clearability를 막는 `selected / targeting / play finished` blindspot을 decompiled-backed runtime state로 줄이는 일이다.
 
 ### 4. Harness와 제품 경계를 계속 지킨다
 
@@ -80,6 +80,7 @@
   - `targeting in progress`
   - `selection mode vs play mode`
 - 현재 combat 쪽에서는 `NPlayerHand.InCardPlay`, `_currentCardPlay`, `IsAwaitingPlay(...)`, `HoveredModelTracker` 같은 decompiled-backed 후보가 먼저 검토 대상이다.
+- 현재 combat 쪽에서 추가로 중요한 후보는 `NTargetManager.IsInSelection`, `NTargetManager.HoveredNode`, `NCardPlay.Finished(success)`, `CombatHistory.CardPlayStarted/CardPlayFinished`다.
 - 원칙:
   - `decompiled state criteria first`
   - `runtime export/hook second`
@@ -188,7 +189,7 @@
 - reward scaffold는 이전보다 훨씬 정직해졌다.
 - 하지만 이건 `usefulness 완료`가 아니라 `usefulness를 평가할 scaffold 준비 완료`다.
 
-### G. gameplay safety 쪽 최근 전진은 유지되지만 current blocker는 아니다
+### G. gameplay safety 쪽 최근 전진은 유지되지만, current blocker는 first combat clearability다
 
 - stale curse/status non-enemy promotion 차단
 - enemy-turn closure
@@ -196,36 +197,39 @@
 - slot-4 combat no-op loop 대응
 - replay-step / replay-test / self-test 유지
 
-이 성과들은 계속 중요하지만, 현재 top blocker를 대체하지는 않는다.
+이 성과들은 계속 중요하지만, 현재 top blocker는 reward bundle formatting이 아니라 first combat clearability와 first card reward capture다.
 
 ## 현재 가장 중요한 문제
 
-현재 주 병목은 `고정된 curated reward 3개 scenario의 valid-trust live bundle 부재`다.
+현재 주 병목은 `첫 전투 이후 non-enemy/self card selection-confirm-use cycle을 runtime truth 없이 screenshot heuristic으로만 추정한다`는 점이다.
 
 핵심 의미는 아래와 같다.
 
-- deterministic layer와 honesty scaffold는 이미 있다.
-- 하지만 실제 valid-trust live evidence에서 curated 3개 scenario를 모두 모아 reviewer bundle로 닫은 적은 아직 없다.
-- reward 외 scene으로 확장하기 전에, 이 3개 scenario를 live/replay parity와 usefulness review까지 포함해 실제 bundle로 닫아야 한다.
+- deterministic reward layer와 honesty scaffold는 이미 있다.
+- 하지만 실제 live run은 첫 공격 뒤 `defend` 같은 non-enemy/self 카드의 선택/확정/소비 사이클을 안정적으로 닫지 못한다.
+- reward reviewer bundle은 여전히 다음 중요한 목표지만, 지금은 그 장면 자체에 도달하는 것이 먼저다.
 
 ### 이 문제가 왜 중요한가
 
 - validation-only trap에서 빠져나오려면 좁은 scene 하나에서 실제 조언 가치를 live evidence로 증명해야 한다.
-- `card reward`는 deterministic option/facts/trace와 honesty scaffold가 이미 있으므로, 지금 가장 싸게 제품 가치를 확인할 수 있는 장면이다.
-- 이 3개 scenario bundle을 닫아야 reward 다음 scene 확장도 heuristic 덧칠이 아니라 구조 확장으로 갈 수 있다.
+- 그런데 지금은 그 scene까지 가는 live combat lane이 먼저 막혀 있다.
+- 따라서 screenshot rule을 더 덧칠하기보다, decompiled-backed runtime state를 export하고 하네스가 그 state를 primary로 소비하게 만드는 것이 가장 큰 레버리지다.
 
 ## 다음 구현 계획
 
 ### Work Unit
 
-`Valid-Trust Card Reward Reviewer Bundle`
+`Combat Card-Play Runtime State Export + Harness Consumption`
 
 ### 목표
 
-- 이번 work unit의 acceptance set은 현재 `CreateCuratedRewardScenarios()`에 있는 3개 scenario로 고정한다.
-- valid-trust live evidence에서 이 3개 scenario를 모두 수집하고, 각 scenario에 대해 reviewer-facing bundle을 만든다.
-- 각 scenario bundle은 usefulness와 deterministic prompt-pack parity를 함께 보여야 한다.
-- reward 외 scene은 건드리지 않고, reward slice 하나만 닫는다.
+- combat card-play의 핵심 runtime state 3개를 decompiled-backed 기준으로 export한다.
+  - `selected / play pending`
+  - `targeting in progress`
+  - `play finished`
+- 하네스는 이 runtime state를 screenshot heuristic보다 우선 소비하게 만든다.
+- 이번 세션의 직접 성공 정의는 fresh valid-trust run에서 첫 `card reward` screen을 최소 1건 확보하는 것이다.
+- reward reviewer bundle closure는 이 work unit 다음으로 미룬다.
 
 ### source of truth
 
@@ -234,78 +238,68 @@
 - [verify-loader-direct-20260320-000700](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-loader-direct-20260320-000700)
 - [verify-bootstrap-first-attempt-20260320-0044](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044)
 - [verify-phase1-quartet-20260320-123409](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-phase1-quartet-20260320-123409)
+- [verify-card-reward-reviewer-bundle-20260320-1545](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-card-reward-reviewer-bundle-20260320-1545)
+- [verify-first-card-reward-capture-20260320-232002-run1](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-first-card-reward-capture-20260320-232002-run1)
 - [RewardDeterministicBuilders.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Reasoning/RewardDeterministicBuilders.cs)
 - [AdvicePromptBuilder.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Reasoning/AdvicePromptBuilder.cs)
 - [ReplayAdvisorValidator.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Foundation/Replay/ReplayAdvisorValidator.cs)
 - [CompanionHost.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Host/CompanionHost.cs)
-- [Program.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2ModKit.SelfTest/Program.cs)
+- [Program.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.cs)
+- [RuntimeSnapshotReflectionExtractor.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2ModAiCompanion.Mod/Runtime/RuntimeSnapshotReflectionExtractor.cs)
+- decompiled reference:
+  - `MegaCrit.Sts2.Core.Nodes.Combat.NPlayerHand`
+  - `MegaCrit.Sts2.Core.Nodes.Combat.NCardPlay`
+  - `MegaCrit.Sts2.Core.Nodes.Combat.NMouseCardPlay`
+  - `MegaCrit.Sts2.Core.Nodes.Combat.NTargetManager`
+  - `MegaCrit.Sts2.Core.Combat.History.CombatHistory`
 
 ### bounded 작업
 
-1. 이번 work unit의 curated acceptance set을 현재 3개 scenario로 고정한다.
-   - attack-gap-duplicate-block
-   - defense-gap
-   - draw-gap-with-unknown-alternative
-2. valid-trust live evidence에서 이 3개 scenario를 모두 수집한다.
-   - 한 root에 다 있지 않아도 된다
-   - 여러 valid-trust attempts/roots를 묶어도 된다
-3. 각 scenario마다 아래 4개 artifact를 reviewer bundle에 포함한다.
-   - live prompt pack
-   - replay prompt pack
-   - live advice artifact
-   - replay advice artifact
-4. deterministic reward payload 기준으로 live/replay prompt-pack parity를 비교한다.
-   - RewardOptionSet
-   - RewardAssessmentFacts
-   - RewardRecommendationTraceSeed
-   - run-local timestamp / session id / 비결정적 metadata는 제외
-5. usefulness review는 advice artifact 기준으로 별도로 판정한다.
-   - `recommendedChoiceLabel`
-   - `reasoningBullets`
-   - `missingInformation`
-   - `decisionBlockers`
-   - `RewardRecommendationTrace`
-6. bounded run/time budget 안에서만 수집한다.
-   - 3개를 다 못 모으면 새 infra 없이 partial closure로 보고하고 종료한다
-7. reward 외 scene은 기존 path 그대로 유지한다.
+1. decompiled-backed runtime 기준을 먼저 확정한다.
+   - selection/pending: `NPlayerHand.InCardPlay`, `_currentCardPlay`, `IsAwaitingPlay(...)`
+   - targeting: `NTargetManager.IsInSelection`, `HoveredNode`, `TargetingBegan/Ended`
+   - finished: `NCardPlay.Finished(success)`, `CombatHistory.CardPlayStarted/CardPlayFinished`
+2. snapshot export 또는 필요한 최소 hook로 위 state를 live observation에 노출한다.
+3. 하네스는 `selected card / targeting / play finished` 판단에서 이 runtime state를 primary로 소비한다.
+4. screenshot heuristic (`HasSelectedNonEnemyConfirmEvidence(...)` 등)은 fallback으로만 남긴다.
+5. fresh valid-trust run에서 첫 공격 이후 non-enemy/self lane이 더 이상 old attack no-op carryover 때문에 immediately end-turn fallback으로 무너지지 않는지 본다.
+6. bounded budget 안에서 첫 `card reward` screen 최소 1건 확보를 목표로 한다.
+7. reward reviewer bundle closure는 이 work unit 종료 후 다음 세션으로 넘긴다.
 
 ### 금지
 
 - startup/trust/accounting 재작업
 - 새 startup diagnostic layer 추가
-- observer heuristic 변경
-- Host diagnostics 재분리 재논쟁
+- broad combat policy refactor
+- reward reviewer bundle schema 작업 재개
 - event/shop/rest/combat deterministic layer 확장
-- broad recommendation engine refactor
-- reward 다음 scene을 이번 세션에 같이 열기
-- acceptance set을 구현 도중 늘리는 것
+- observer blindspot을 screenshot heuristic 덧칠만으로 해결하는 것
 
 ### validation loop
 
 1. `dotnet build`
 2. `dotnet run --project src/Sts2ModKit.SelfTest`
 3. `dotnet run --project src/Sts2GuiSmokeHarness -- self-test`
-4. valid-trust live reward bundle 수집
-5. curated 3개 scenario별 live/replay prompt-pack parity 확인
-6. curated 3개 scenario별 reviewer usefulness review
-5. replay spot-check 유지:
+4. fresh valid-trust combat run(s)
+5. first `card reward` capture 여부 확인
+6. replay spot-check 유지:
    - `0015 --full-request-rebuild => combat select attack slot 4`
    - `0021 --full-request-rebuild => wait`
 
 ### acceptance
 
-- 현재 고정된 curated 3개 scenario가 모두 valid-trust live bundle에 포함된다.
-- 각 scenario에서 `recommendedChoiceLabel`은 visible option set 안에 있다.
-- 각 scenario에서 advice artifact만 보고 reviewer가 usefulness를 판정할 수 있다.
-- 각 scenario에서 deterministic reward payload 기준의 live/replay prompt-pack parity가 맞는다.
-- reward 외 scene behavior는 변하지 않는다.
+- `selected / targeting / play finished` runtime state가 live observation으로 드러난다.
+- 하네스가 이 state를 primary로 소비해 non-enemy/self card cycle에서 false no-op / too-early end-turn를 줄인다.
+- fresh valid-trust run에서 첫 `card reward` screen을 최소 1건 확보한다.
+- reward 외 scene behavior를 불필요하게 넓게 바꾸지 않는다.
 
 ## 구현 백로그 우선순위
 
-1. `Valid-Trust Card Reward Reviewer Bundle`
-2. `Observer authority consumption contract 문서화`
-3. `Reward 다음 scene class 선택(event / shop / rest)`
-4. `State / Knowledge / Recommendation architecture 확장`
+1. `Combat Card-Play Runtime State Export + Harness Consumption`
+2. `First Card Reward Capture Reliability`
+3. `Valid-Trust Card Reward Reviewer Bundle`
+4. `Observer authority consumption contract 문서화`
+5. `Reward 다음 scene class 선택(event / shop / rest)`
 
 ### 지금 backlog에 넣지 않을 것
 
