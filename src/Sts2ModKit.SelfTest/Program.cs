@@ -61,6 +61,7 @@ Run("companion path resolver keeps per-run artifacts under companion root", Test
 Run("knowledge catalog service builds a bounded relevant slice", TestKnowledgeCatalogService, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
 Run("reward deterministic builders are reproducible", TestRewardDeterministicBuilders, failures);
+Run("reward deterministic layer stays off for non-card rewards", TestRewardNonCardFallback, failures);
 Run("reward deterministic layer falls back outside reward scenes", TestRewardDeterministicFallback, failures);
 Run("reward live and replay paths share deterministic context", TestRewardLiveReplayParity, failures);
 Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
@@ -1853,6 +1854,35 @@ static void TestRewardDeterministicFallback()
     }
 }
 
+static void TestRewardNonCardFallback()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var runState = CreateNonCardRewardRunState("reward-non-card-run");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var optionBuilder = new RewardOptionSetBuilder();
+        var factsBuilder = new RewardAssessmentFactsBuilder();
+
+        var optionSet = optionBuilder.Build(ToFoundationRunState(runState));
+        var facts = factsBuilder.Build(ToFoundationRunState(runState), slice, optionSet);
+        var inputPack = new FoundationAdvicePromptBuilder(configuration).BuildInputPack(ToFoundationRunState(runState), ToFoundationTrigger(new AdviceTrigger("reward-screen-opened", DateTimeOffset.UtcNow, false, true, "reward-non-card-test", runState.RecentEvents.LastOrDefault())), slice);
+
+        Assert(optionSet is null, "Expected deterministic reward option set to stay off for non-card rewards.");
+        Assert(facts is null, "Expected deterministic reward assessment facts to stay off for non-card rewards.");
+        Assert(inputPack.RewardOptionSet is null, "Expected reward input pack option set to stay off for non-card rewards.");
+        Assert(inputPack.RewardAssessmentFacts is null, "Expected reward input pack facts to stay off for non-card rewards.");
+        Assert(inputPack.RewardRecommendationTraceSeed is null, "Expected reward input pack trace seed to stay off for non-card rewards.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestRewardLiveReplayParity()
 {
     var root = CreateTempDirectory();
@@ -2299,6 +2329,56 @@ static IReadOnlyList<LiveExportEventEnvelope> CreateRewardEvents(string runId)
 static CompanionRunState CreateRewardRunState(string runId)
 {
     var snapshot = CreateRewardSnapshot(runId);
+    var session = new LiveExportSession("reward-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "reward-live"), "choice-list-presented", "rewards");
+    var events = CreateRewardEvents(runId);
+    return new CompanionRunState(snapshot, session, "reward summary", events, false)
+    {
+        NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
+    };
+}
+
+static LiveExportSnapshot CreateNonCardRewardSnapshot(string runId)
+{
+    return new LiveExportSnapshot(
+        runId,
+        "active",
+        1,
+        DateTimeOffset.UtcNow,
+        "rewards",
+        1,
+        7,
+        new LiveExportPlayerSummary("Ironclad", 65, 80, 120, 3, new Dictionary<string, string?>()),
+        new[]
+        {
+            new LiveExportCardSummary("Strike", "strike", 1, "Attack", false),
+            new LiveExportCardSummary("Defend", "defend", 1, "Skill", false),
+        },
+        new[] { "Anchor" },
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("relic", "고대 찻잔", "ancient-tea-set", "휴식 후 에너지를 얻습니다."),
+            new LiveExportChoiceSummary("relic", "등불", "lantern", "전투 시작 시 에너지를 얻습니다."),
+            new LiveExportChoiceSummary("skip", "넘기기", "skip", "보상을 건너뜁니다."),
+        },
+        new[] { "trigger: reward-screen-opened" },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("Relic Reward", "Reward", false, null),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choice-extractor"] = "reward._options",
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+            ["flowScreen"] = "rewards",
+            ["visibleScreen"] = "rewards",
+            ["reward-type"] = "relic",
+        });
+}
+
+static CompanionRunState CreateNonCardRewardRunState(string runId)
+{
+    var snapshot = CreateNonCardRewardSnapshot(runId);
     var session = new LiveExportSession("reward-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "reward-live"), "choice-list-presented", "rewards");
     var events = CreateRewardEvents(runId);
     return new CompanionRunState(snapshot, session, "reward summary", events, false)

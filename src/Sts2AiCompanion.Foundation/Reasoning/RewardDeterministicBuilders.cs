@@ -7,7 +7,7 @@ public sealed class RewardOptionSetBuilder
 {
     public RewardOptionSet? Build(CompanionRunState runState)
     {
-        if (!IsRewardScene(runState.NormalizedState.Scene.SceneType))
+        if (!IsCardRewardScene(runState))
         {
             return null;
         }
@@ -43,6 +43,24 @@ public sealed class RewardOptionSetBuilder
         return new RewardOptionSet(runState.NormalizedState.Scene.SceneType, skipAllowed, summaryText, options);
     }
 
+    internal static bool IsCardRewardScene(CompanionRunState runState)
+    {
+        if (!IsRewardScene(runState.NormalizedState.Scene.SceneType))
+        {
+            return false;
+        }
+
+        if (string.Equals(runState.NormalizedState.Reward.RewardType, "card", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var visibleEntries = runState.NormalizedState.Reward.Entries.Count > 0
+            ? runState.NormalizedState.Reward.Entries
+            : runState.NormalizedState.Choices.List;
+        return visibleEntries.Any(entry => string.Equals(entry.Kind, "card", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static bool IsRewardScene(string? sceneType)
     {
         return string.Equals(sceneType, "reward", StringComparison.OrdinalIgnoreCase)
@@ -74,7 +92,7 @@ public sealed class RewardAssessmentFactsBuilder
         KnowledgeSlice slice,
         RewardOptionSet? optionSet)
     {
-        if (optionSet is null || !string.Equals(optionSet.SceneType, "rewards", StringComparison.OrdinalIgnoreCase) && !string.Equals(optionSet.SceneType, "reward", StringComparison.OrdinalIgnoreCase))
+        if (optionSet is null || !RewardOptionSetBuilder.IsCardRewardScene(runState))
         {
             return null;
         }
