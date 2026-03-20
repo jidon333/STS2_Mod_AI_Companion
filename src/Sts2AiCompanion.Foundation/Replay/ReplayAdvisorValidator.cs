@@ -134,7 +134,7 @@ public sealed class ReplayAdvisorValidator
             var mock = await ReadJsonAsync<AdviceResponse>(mockAdviceResponsePath, cancellationToken).ConfigureAwait(false);
             if (mock is not null)
             {
-                return RewardRecommendationTraceBuilder.AlignToOptionSet(
+                return RewardAdviceResponseFinalizer.Apply(
                     inputPack,
                     mock with
                 {
@@ -180,7 +180,7 @@ public sealed class ReplayAdvisorValidator
             "replay-validation",
             null,
             null);
-        return RewardRecommendationTraceBuilder.AlignToOptionSet(inputPack, response);
+        return RewardAdviceResponseFinalizer.Apply(inputPack, response);
     }
 
     private string ResolveFixtureRoot(string fixtureRoot)

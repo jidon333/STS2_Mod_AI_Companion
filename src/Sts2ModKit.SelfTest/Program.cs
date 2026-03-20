@@ -64,6 +64,7 @@ Run("reward deterministic builders are reproducible", TestRewardDeterministicBui
 Run("reward deterministic layer stays off for non-card rewards", TestRewardNonCardFallback, failures);
 Run("reward deterministic layer falls back outside reward scenes", TestRewardDeterministicFallback, failures);
 Run("reward live and replay paths share deterministic context", TestRewardLiveReplayParity, failures);
+Run("curated card reward advice artifacts stay reviewer-friendly", TestCuratedCardRewardAdviceArtifacts, failures);
 Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
 Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
@@ -1885,6 +1886,19 @@ static void TestRewardNonCardFallback()
 
 static void TestRewardLiveReplayParity()
 {
+    ValidateRewardScenarioArtifacts(CreateDefaultRewardScenario());
+}
+
+static void TestCuratedCardRewardAdviceArtifacts()
+{
+    foreach (var scenario in CreateCuratedRewardScenarios())
+    {
+        ValidateRewardScenarioArtifacts(scenario);
+    }
+}
+
+static void ValidateRewardScenarioArtifacts(RewardScenarioDefinition scenario)
+{
     var root = CreateTempDirectory();
     try
     {
@@ -1894,13 +1908,13 @@ static void TestRewardLiveReplayParity()
         var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
         Directory.CreateDirectory(layout.LiveRoot);
 
-        var snapshot = CreateRewardSnapshot("reward-live-run");
-        var session = new LiveExportSession("reward-session-001", "reward-live-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, layout.LiveRoot, "choice-list-presented", "rewards");
-        var events = CreateRewardEvents("reward-live-run");
+        var snapshot = CreateRewardSnapshotForScenario(scenario, scenario.RunId);
+        var session = new LiveExportSession($"reward-session-{scenario.RunId}", scenario.RunId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, layout.LiveRoot, "choice-list-presented", "rewards");
+        var events = CreateRewardEventsForScenario(scenario.RunId, scenario);
 
         WriteJson(layout.SnapshotPath, snapshot);
         WriteJson(layout.SessionPath, session);
-        File.WriteAllText(layout.SummaryPath, "reward summary", Encoding.UTF8);
+        File.WriteAllText(layout.SummaryPath, $"reward summary :: {scenario.Name}", Encoding.UTF8);
         Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
         File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
         File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
@@ -1914,39 +1928,57 @@ static void TestRewardLiveReplayParity()
         try
         {
             host.RefreshAsync().GetAwaiter().GetResult();
-            Assert(fakeClient.RequestCount == 1, "Expected reward refresh to trigger automatic advice.");
-            Assert(host.CurrentSnapshot.LatestAdvice?.RecommendedChoiceLabel == "몸통 박치기", "Expected reward recommendation label to resolve to a visible option.");
-            Assert(host.CurrentSnapshot.LatestAdvice?.RewardRecommendationTrace is not null, "Expected reward advice response to carry deterministic trace.");
+            Assert(fakeClient.RequestCount == 1, $"Expected reward refresh to trigger automatic advice for scenario {scenario.Name}.");
+            Assert(host.CurrentSnapshot.LatestAdvice is not null, $"Expected live advice artifact for scenario {scenario.Name}.");
 
-            var hostPromptPackPath = Directory.GetFiles(host.CurrentSnapshot.Paths.PromptPacksRoot!, "*.json", SearchOption.TopDirectoryOnly)
+            var liveAdvicePath = host.CurrentSnapshot.Paths.AdviceLatestJsonPath
+                ?? throw new InvalidOperationException("Expected live advice json path.");
+            var liveMarkdownPath = host.CurrentSnapshot.Paths.AdviceLatestMarkdownPath
+                ?? throw new InvalidOperationException("Expected live advice markdown path.");
+            var liveAdvice = JsonSerializer.Deserialize<AdviceResponse>(File.ReadAllText(liveAdvicePath), ConfigurationLoader.JsonOptions)
+                ?? throw new InvalidOperationException("Expected live reward advice response.");
+            var livePromptPackPath = Directory.GetFiles(host.CurrentSnapshot.Paths.PromptPacksRoot!, "*.json", SearchOption.TopDirectoryOnly)
                 .OrderByDescending(File.GetLastWriteTimeUtc)
                 .First();
-            var hostPromptPack = JsonSerializer.Deserialize<AdviceInputPack>(File.ReadAllText(hostPromptPackPath), ConfigurationLoader.JsonOptions)
+            var livePromptPack = JsonSerializer.Deserialize<AdviceInputPack>(File.ReadAllText(livePromptPackPath), ConfigurationLoader.JsonOptions)
                 ?? throw new InvalidOperationException("Expected live reward prompt pack.");
+            var liveMarkdown = File.ReadAllText(liveMarkdownPath, Encoding.UTF8);
 
-            var fixtureRoot = Path.Combine(root, "reward-fixture");
+            Assert(livePromptPack.RewardOptionSet is not null, $"Expected live reward option set for scenario {scenario.Name}.");
+            Assert(livePromptPack.RewardAssessmentFacts is not null, $"Expected live reward assessment facts for scenario {scenario.Name}.");
+            Assert(livePromptPack.RewardRecommendationTraceSeed is not null, $"Expected live reward trace seed for scenario {scenario.Name}.");
+            Assert(liveAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, $"Expected live recommendation '{scenario.ExpectedChoiceLabel}' for scenario {scenario.Name}.");
+            Assert(livePromptPack.RewardOptionSet.Options.Select(option => option.Label).Contains(liveAdvice.RecommendedChoiceLabel, StringComparer.Ordinal), $"Expected live recommendation to stay inside visible option set for scenario {scenario.Name}.");
+            Assert(liveAdvice.ReasoningBullets.Count >= 2, $"Expected reviewer-friendly live reasoning bullets for scenario {scenario.Name}.");
+            Assert(liveAdvice.RewardRecommendationTrace is not null, $"Expected live deterministic trace for scenario {scenario.Name}.");
+            Assert(liveAdvice.RewardRecommendationTrace.CandidateLabels.SequenceEqual(livePromptPack.RewardOptionSet.Options.Select(option => option.Label), StringComparer.Ordinal), $"Expected live trace candidate labels to mirror option set for scenario {scenario.Name}.");
+            Assert(liveAdvice.KnowledgeRefs.Count > 0, $"Expected live knowledge refs for scenario {scenario.Name}.");
+            Assert(liveMarkdown.Contains("## Reward Deterministic Trace", StringComparison.Ordinal), $"Expected live markdown trace section for scenario {scenario.Name}.");
+            Assert(liveMarkdown.Contains(scenario.ExpectedChoiceLabel, StringComparison.Ordinal), $"Expected live markdown to mention the recommended reward for scenario {scenario.Name}.");
+
+            var fixtureRoot = Path.Combine(root, $"reward-fixture-{scenario.Name}");
             var liveMirrorRoot = Path.Combine(fixtureRoot, "live-mirror");
             Directory.CreateDirectory(liveMirrorRoot);
             WriteJson(Path.Combine(liveMirrorRoot, configuration.LiveExport.SnapshotFileName), snapshot);
             WriteJson(Path.Combine(liveMirrorRoot, configuration.LiveExport.SessionFileName), session);
-            File.WriteAllText(Path.Combine(liveMirrorRoot, configuration.LiveExport.SummaryFileName), "reward summary", Encoding.UTF8);
+            File.WriteAllText(Path.Combine(liveMirrorRoot, configuration.LiveExport.SummaryFileName), $"reward summary :: {scenario.Name}", Encoding.UTF8);
             File.WriteAllText(Path.Combine(liveMirrorRoot, configuration.LiveExport.EventsFileName), string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
 
-            var mockResponsePath = Path.Combine(root, "reward-mock-response.json");
+            var mockResponsePath = Path.Combine(root, $"{scenario.Name}-reward-mock-response.json");
             WriteJson(
                 mockResponsePath,
                 new Sts2AiCompanion.Foundation.Contracts.AdviceResponse(
                     "ok",
-                    "reward headline",
-                    "reward summary",
-                    "Take the stronger reward card.",
-                    "몸통 박치기",
-                    new[] { "reward reason" },
+                    $"reward headline :: {scenario.Name}",
+                    $"reward summary :: {scenario.Name}",
+                    "reward action",
+                    scenario.ExpectedChoiceLabel,
+                    Array.Empty<string>(),
                     Array.Empty<string>(),
                     Array.Empty<string>(),
                     Array.Empty<string>(),
                     0.8,
-                    new[] { "bash" },
+                    Array.Empty<string>(),
                     DateTimeOffset.UtcNow,
                     snapshot.RunId,
                     "replay-validation",
@@ -1954,25 +1986,35 @@ static void TestRewardLiveReplayParity()
                     "{}"));
 
             var replayValidator = new FoundationReplayAdvisorValidator(configuration, root);
-            Sts2AiCompanion.Foundation.Replay.ReplayValidationResult replayResult;
-            try
-            {
-                replayResult = replayValidator.ValidateAsync(fixtureRoot, mockResponsePath, CancellationToken.None).GetAwaiter().GetResult();
-            }
-            catch (Exception exception)
-            {
-                throw new InvalidOperationException($"Replay reward parity validation failed: {exception}", exception);
-            }
+            var replayResult = replayValidator.ValidateAsync(fixtureRoot, mockResponsePath, CancellationToken.None).GetAwaiter().GetResult();
             var replayPromptPack = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceInputPack>(File.ReadAllText(replayResult.PromptPackPath), ConfigurationLoader.JsonOptions)
                 ?? throw new InvalidOperationException("Expected replay reward prompt pack.");
             var replayAdvice = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceResponse>(File.ReadAllText(replayResult.AdviceJsonPath), ConfigurationLoader.JsonOptions)
                 ?? throw new InvalidOperationException("Expected replay reward advice response.");
+            var replayMarkdown = File.ReadAllText(replayResult.AdviceMarkdownPath, Encoding.UTF8);
 
-            Assert(hostPromptPack.RewardOptionSet is not null && replayPromptPack.RewardOptionSet is not null, "Expected live and replay reward prompt packs to include deterministic option sets.");
-            Assert(hostPromptPack.RewardAssessmentFacts is not null && replayPromptPack.RewardAssessmentFacts is not null, "Expected live and replay reward prompt packs to include deterministic assessment facts.");
-            Assert(hostPromptPack.RewardOptionSet.Options.Select(option => option.Label).SequenceEqual(replayPromptPack.RewardOptionSet.Options.Select(option => option.Label), StringComparer.Ordinal), "Expected live and replay reward option labels to match.");
-            Assert(hostPromptPack.RewardAssessmentFacts.FactLines.SequenceEqual(replayPromptPack.RewardAssessmentFacts.FactLines, StringComparer.Ordinal), "Expected live and replay reward assessment facts to match.");
-            Assert(replayAdvice.RecommendedChoiceLabel == "몸통 박치기", "Expected replay reward advice label to stay inside the deterministic option set.");
+            Assert(replayPromptPack.RewardOptionSet is not null, $"Expected replay reward option set for scenario {scenario.Name}.");
+            Assert(replayPromptPack.RewardAssessmentFacts is not null, $"Expected replay reward assessment facts for scenario {scenario.Name}.");
+            Assert(replayAdvice.RecommendedChoiceLabel == scenario.ExpectedChoiceLabel, $"Expected replay recommendation '{scenario.ExpectedChoiceLabel}' for scenario {scenario.Name}.");
+            Assert(replayPromptPack.RewardOptionSet.Options.Select(option => option.Label).Contains(replayAdvice.RecommendedChoiceLabel, StringComparer.Ordinal), $"Expected replay recommendation to stay inside visible option set for scenario {scenario.Name}.");
+            Assert(replayAdvice.ReasoningBullets.Count >= 2, $"Expected reviewer-friendly replay reasoning bullets for scenario {scenario.Name}.");
+            Assert(replayAdvice.RewardRecommendationTrace is not null, $"Expected replay deterministic trace for scenario {scenario.Name}.");
+            Assert(replayAdvice.KnowledgeRefs.Count > 0, $"Expected replay knowledge refs for scenario {scenario.Name}.");
+            Assert(replayMarkdown.Contains("## Reward Deterministic Trace", StringComparison.Ordinal), $"Expected replay markdown trace section for scenario {scenario.Name}.");
+            Assert(replayMarkdown.Contains(scenario.ExpectedChoiceLabel, StringComparison.Ordinal), $"Expected replay markdown to mention the recommended reward for scenario {scenario.Name}.");
+
+            Assert(livePromptPack.RewardOptionSet.Options.Select(option => option.Label).SequenceEqual(replayPromptPack.RewardOptionSet.Options.Select(option => option.Label), StringComparer.Ordinal), $"Expected live and replay option labels to match for scenario {scenario.Name}.");
+            Assert(livePromptPack.RewardAssessmentFacts.FactLines.SequenceEqual(replayPromptPack.RewardAssessmentFacts.FactLines, StringComparer.Ordinal), $"Expected live and replay fact lines to match for scenario {scenario.Name}.");
+            Assert(liveAdvice.RecommendedChoiceLabel == replayAdvice.RecommendedChoiceLabel, $"Expected live and replay recommendation parity for scenario {scenario.Name}.");
+            Assert(liveAdvice.ReasoningBullets.SequenceEqual(replayAdvice.ReasoningBullets, StringComparer.Ordinal), $"Expected live and replay reasoning parity for scenario {scenario.Name}.");
+            Assert(liveAdvice.MissingInformation.SequenceEqual(replayAdvice.MissingInformation, StringComparer.Ordinal), $"Expected live and replay missing-information parity for scenario {scenario.Name}.");
+            Assert(liveAdvice.DecisionBlockers.SequenceEqual(replayAdvice.DecisionBlockers, StringComparer.Ordinal), $"Expected live and replay decision-blocker parity for scenario {scenario.Name}.");
+
+            if (!string.IsNullOrWhiteSpace(scenario.ExpectedMissingInformation))
+            {
+                Assert(liveAdvice.MissingInformation.Contains(scenario.ExpectedMissingInformation, StringComparer.Ordinal), $"Expected live missing info '{scenario.ExpectedMissingInformation}' for scenario {scenario.Name}.");
+                Assert(replayAdvice.MissingInformation.Contains(scenario.ExpectedMissingInformation, StringComparer.Ordinal), $"Expected replay missing info '{scenario.ExpectedMissingInformation}' for scenario {scenario.Name}.");
+            }
         }
         finally
         {
@@ -2255,7 +2297,73 @@ static LiveExportSnapshot CreateHostSnapshot(string runId, string screen)
         });
 }
 
+static RewardScenarioDefinition CreateDefaultRewardScenario()
+{
+    return new RewardScenarioDefinition(
+        "attack-gap-duplicate-block",
+        "reward-live-run",
+        new[]
+        {
+            new LiveExportCardSummary("Strike", "strike", 1, "Attack", false),
+            new LiveExportCardSummary("Defend", "defend", 1, "Skill", false),
+            new LiveExportCardSummary("수비 강화", "shrug-it-off", 1, "Skill", false),
+        },
+        new[]
+        {
+            new LiveExportChoiceSummary("card", "몸통 박치기", "bash", "적에게 피해를 주고 취약을 겁니다."),
+            new LiveExportChoiceSummary("card", "수비 강화", "shrug-it-off", "방어도를 얻고 카드를 뽑습니다."),
+            new LiveExportChoiceSummary("skip", "넘기기", "skip", "보상을 건너뜁니다."),
+        },
+        "몸통 박치기");
+}
+
+static IReadOnlyList<RewardScenarioDefinition> CreateCuratedRewardScenarios()
+{
+    return new[]
+    {
+        CreateDefaultRewardScenario(),
+        new RewardScenarioDefinition(
+            "defense-gap",
+            "reward-defense-gap-run",
+            new[]
+            {
+                new LiveExportCardSummary("Strike", "strike", 1, "Attack", false),
+                new LiveExportCardSummary("Strike+", "strike-plus", 1, "Attack", false),
+                new LiveExportCardSummary("Defend", "defend", 1, "Skill", false),
+            },
+            new[]
+            {
+                new LiveExportChoiceSummary("card", "수비 강화", "shrug-it-off", "방어도를 얻고 카드를 뽑습니다."),
+                new LiveExportChoiceSummary("card", "몸통 박치기", "bash", "적에게 피해를 주고 취약을 겁니다."),
+                new LiveExportChoiceSummary("skip", "넘기기", "skip", "보상을 건너뜁니다."),
+            },
+            "수비 강화"),
+        new RewardScenarioDefinition(
+            "draw-gap-with-unknown-alternative",
+            "reward-draw-gap-run",
+            new[]
+            {
+                new LiveExportCardSummary("Strike", "strike", 1, "Attack", false),
+                new LiveExportCardSummary("Defend", "defend", 1, "Skill", false),
+                new LiveExportCardSummary("몸통 박치기", "bash", 2, "Attack", false),
+            },
+            new[]
+            {
+                new LiveExportChoiceSummary("card", "전투의 함성", "battle-trance", "카드를 여러 장 뽑습니다."),
+                new LiveExportChoiceSummary("card", "미확인 카드", "mystery-reward", "설명이 비어 있습니다."),
+                new LiveExportChoiceSummary("skip", "넘기기", "skip", "보상을 건너뜁니다."),
+            },
+            "전투의 함성",
+            "reward-option-knowledge-missing:미확인 카드"),
+    };
+}
+
 static LiveExportSnapshot CreateRewardSnapshot(string runId)
+{
+    return CreateRewardSnapshotForScenario(CreateDefaultRewardScenario(), runId);
+}
+
+static LiveExportSnapshot CreateRewardSnapshotForScenario(RewardScenarioDefinition scenario, string runId)
 {
     return new LiveExportSnapshot(
         runId,
@@ -2266,20 +2374,10 @@ static LiveExportSnapshot CreateRewardSnapshot(string runId)
         1,
         7,
         new LiveExportPlayerSummary("Ironclad", 65, 80, 120, 3, new Dictionary<string, string?>()),
-        new[]
-        {
-            new LiveExportCardSummary("Strike", "strike", 1, "Attack", false),
-            new LiveExportCardSummary("Defend", "defend", 1, "Skill", false),
-            new LiveExportCardSummary("수비 강화", "shrug-it-off", 1, "Skill", false),
-        },
+        scenario.Deck,
         new[] { "Anchor" },
         Array.Empty<string>(),
-        new[]
-        {
-            new LiveExportChoiceSummary("card", "몸통 박치기", "bash", "적에게 피해를 주고 취약을 겁니다."),
-            new LiveExportChoiceSummary("card", "수비 강화", "shrug-it-off", "방어도를 얻고 카드를 뽑습니다."),
-            new LiveExportChoiceSummary("skip", "넘기기", "skip", "보상을 건너뜁니다."),
-        },
+        scenario.Choices,
         new[] { "trigger: reward-screen-opened" },
         Array.Empty<string>(),
         new LiveExportEncounterSummary("Card Reward", "Reward", false, null),
@@ -2297,6 +2395,11 @@ static LiveExportSnapshot CreateRewardSnapshot(string runId)
 
 static IReadOnlyList<LiveExportEventEnvelope> CreateRewardEvents(string runId)
 {
+    return CreateRewardEventsForScenario(runId, CreateDefaultRewardScenario());
+}
+
+static IReadOnlyList<LiveExportEventEnvelope> CreateRewardEventsForScenario(string runId, RewardScenarioDefinition scenario)
+{
     return new[]
     {
         new LiveExportEventEnvelope(
@@ -2309,7 +2412,7 @@ static IReadOnlyList<LiveExportEventEnvelope> CreateRewardEvents(string runId)
             7,
             new Dictionary<string, object?>
             {
-                ["choiceCount"] = 3,
+                ["choiceCount"] = scenario.Choices.Count,
             }),
         new LiveExportEventEnvelope(
             DateTimeOffset.UtcNow,
@@ -2321,16 +2424,21 @@ static IReadOnlyList<LiveExportEventEnvelope> CreateRewardEvents(string runId)
             7,
             new Dictionary<string, object?>
             {
-                ["choices"] = new[] { "몸통 박치기", "수비 강화", "넘기기" },
+                ["choices"] = scenario.Choices.Select(choice => choice.Label).ToArray(),
             }),
     };
 }
 
 static CompanionRunState CreateRewardRunState(string runId)
 {
-    var snapshot = CreateRewardSnapshot(runId);
+    return CreateRewardRunStateForScenario(CreateDefaultRewardScenario(), runId);
+}
+
+static CompanionRunState CreateRewardRunStateForScenario(RewardScenarioDefinition scenario, string runId)
+{
+    var snapshot = CreateRewardSnapshotForScenario(scenario, runId);
     var session = new LiveExportSession("reward-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "reward-live"), "choice-list-presented", "rewards");
-    var events = CreateRewardEvents(runId);
+    var events = CreateRewardEventsForScenario(runId, scenario);
     return new CompanionRunState(snapshot, session, "reward summary", events, false)
     {
         NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
@@ -2380,7 +2488,33 @@ static CompanionRunState CreateNonCardRewardRunState(string runId)
 {
     var snapshot = CreateNonCardRewardSnapshot(runId);
     var session = new LiveExportSession("reward-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "reward-live"), "choice-list-presented", "rewards");
-    var events = CreateRewardEvents(runId);
+    var events = new[]
+    {
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            1,
+            runId,
+            "reward-screen-opened",
+            "rewards",
+            1,
+            7,
+            new Dictionary<string, object?>
+            {
+                ["choiceCount"] = snapshot.CurrentChoices.Count,
+            }),
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow,
+            2,
+            runId,
+            "choice-list-presented",
+            "rewards",
+            1,
+            7,
+            new Dictionary<string, object?>
+            {
+                ["choices"] = snapshot.CurrentChoices.Select(choice => choice.Label).ToArray(),
+            }),
+    };
     return new CompanionRunState(snapshot, session, "reward summary", events, false)
     {
         NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
@@ -2461,6 +2595,15 @@ static void SeedRewardKnowledgeCatalog(string root)
                 "observed-merge",
                 true,
                 "방어도를 얻고 카드를 뽑습니다.",
+                new[] { "card", "skill" },
+                new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "battle-trance",
+                "전투의 함성",
+                "observed-merge",
+                true,
+                "카드 3장을 뽑습니다.",
                 new[] { "card", "skill" },
                 new Dictionary<string, string?>(),
                 Array.Empty<StaticKnowledgeOption>()),
@@ -2744,6 +2887,14 @@ file sealed class FakeEncounterState
 file sealed class FakeCombatUiNode
 {
 }
+
+file sealed record RewardScenarioDefinition(
+    string Name,
+    string RunId,
+    IReadOnlyList<LiveExportCardSummary> Deck,
+    IReadOnlyList<LiveExportChoiceSummary> Choices,
+    string ExpectedChoiceLabel,
+    string? ExpectedMissingInformation = null);
 
 sealed class FakeProbe : IFileStateProbe
 {

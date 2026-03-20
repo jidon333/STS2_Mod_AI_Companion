@@ -153,6 +153,12 @@ public sealed class AdvicePromptBuilder
 
         builder.AppendLine();
         builder.AppendLine("response_instructions:");
+        if (inputPack.RewardOptionSet is not null)
+        {
+            builder.AppendLine("- reward scene에서는 recommendedChoiceLabel을 reward_option_set에 보이는 label과 정확히 일치시키세요.");
+            builder.AppendLine("- reward scene reasoningBullets에는 reward_assessment_facts 또는 knowledge_slice에서 직접 확인 가능한 사실을 2개 이상 포함하세요.");
+            builder.AppendLine("- reward scene에서 추천 근거가 부족하면 missingInformation과 decisionBlockers를 비우지 말고 직접 채우세요.");
+        }
         builder.AppendLine("- headline: 현재 상황의 핵심 판단을 한 줄로 요약");
         builder.AppendLine("- summary: 2~4문장으로 현재 판단과 다음 확인 사항 설명");
         builder.AppendLine("- recommendedAction: 지금 가장 합리적인 다음 행동");

@@ -339,7 +339,11 @@ internal static class RewardRecommendationTraceBuilder
             assessmentFacts.MissingInformation.ToArray());
     }
 
-    public static AdviceResponse AlignToOptionSet(AdviceInputPack inputPack, AdviceResponse response)
+}
+
+public static class RewardAdviceResponseFinalizer
+{
+    public static AdviceResponse Apply(AdviceInputPack inputPack, AdviceResponse response)
     {
         if (inputPack.RewardOptionSet is null)
         {
@@ -349,9 +353,19 @@ internal static class RewardRecommendationTraceBuilder
         var matchedLabel = inputPack.RewardOptionSet.Options
             .Select(option => option.Label)
             .FirstOrDefault(label => string.Equals(label, response.RecommendedChoiceLabel, StringComparison.OrdinalIgnoreCase));
+        var trace = inputPack.RewardRecommendationTraceSeed;
+        var blockers = new List<string>(response.DecisionBlockers);
         if (string.IsNullOrWhiteSpace(response.RecommendedChoiceLabel))
         {
-            return response with { RewardRecommendationTrace = inputPack.RewardRecommendationTraceSeed };
+            blockers.Add("reward-recommendation-missing");
+            return response with
+            {
+                DecisionBlockers = blockers.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                ReasoningBullets = BuildReasoningBullets(inputPack, null, response.ReasoningBullets),
+                MissingInformation = MergeResponseList(response.MissingInformation, trace?.MissingInformation),
+                KnowledgeRefs = MergeResponseList(response.KnowledgeRefs, trace?.InputKnowledgeRefs),
+                RewardRecommendationTrace = trace,
+            };
         }
 
         if (matchedLabel is not null)
@@ -359,18 +373,91 @@ internal static class RewardRecommendationTraceBuilder
             return response with
             {
                 RecommendedChoiceLabel = matchedLabel,
-                RewardRecommendationTrace = inputPack.RewardRecommendationTraceSeed,
+                ReasoningBullets = BuildReasoningBullets(inputPack, matchedLabel, response.ReasoningBullets),
+                MissingInformation = MergeResponseList(response.MissingInformation, trace?.MissingInformation),
+                KnowledgeRefs = MergeResponseList(response.KnowledgeRefs, trace?.InputKnowledgeRefs),
+                RewardRecommendationTrace = trace,
             };
         }
 
+        blockers.Add("recommended-choice-not-in-option-set");
+        blockers.Add("reward-recommendation-missing");
         return response with
         {
             RecommendedChoiceLabel = null,
-            DecisionBlockers = response.DecisionBlockers
-                .Append("recommended-choice-not-in-option-set")
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray(),
-            RewardRecommendationTrace = inputPack.RewardRecommendationTraceSeed,
+            DecisionBlockers = blockers.Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+            ReasoningBullets = BuildReasoningBullets(inputPack, null, response.ReasoningBullets),
+            MissingInformation = MergeResponseList(response.MissingInformation, trace?.MissingInformation),
+            KnowledgeRefs = MergeResponseList(response.KnowledgeRefs, trace?.InputKnowledgeRefs),
+            RewardRecommendationTrace = trace,
         };
+    }
+
+    private static IReadOnlyList<string> BuildReasoningBullets(
+        AdviceInputPack inputPack,
+        string? recommendedLabel,
+        IReadOnlyList<string> existingBullets)
+    {
+        var bullets = existingBullets
+            .Where(bullet => !string.IsNullOrWhiteSpace(bullet))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var optionSet = inputPack.RewardOptionSet;
+        var facts = inputPack.RewardAssessmentFacts;
+        if (optionSet is null)
+        {
+            return bullets;
+        }
+
+        if (bullets.Count < 2)
+        {
+            bullets.Add($"현재 보이는 card reward 옵션: {string.Join(", ", optionSet.Options.Select(option => option.Label))}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(recommendedLabel) && bullets.Count < 3)
+        {
+            bullets.Add($"추천 라벨 '{recommendedLabel}'은 현재 visible option set 안에 있습니다.");
+        }
+
+        if (facts is not null)
+        {
+            foreach (var hint in facts.SynergyHints.Where(hint => MatchesLabel(hint, recommendedLabel)))
+            {
+                if (bullets.Count >= 5) break;
+                bullets.Add($"deterministic 사실: {hint}");
+            }
+
+            foreach (var hint in facts.AntiSynergyHints.Where(hint => MatchesLabel(hint, recommendedLabel)))
+            {
+                if (bullets.Count >= 5) break;
+                bullets.Add($"deterministic 사실: {hint}");
+            }
+
+            if (bullets.Count < 5)
+            {
+                bullets.Add($"현재 덱 facts: attack_pressure={facts.AttackPressure}, defense_pressure={facts.DefensePressure}, draw_support={facts.DrawSupportLevel}, energy_support={facts.EnergySupportLevel}");
+            }
+        }
+
+        return bullets
+            .Where(bullet => !string.IsNullOrWhiteSpace(bullet))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(5)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> MergeResponseList(IReadOnlyList<string> primary, IReadOnlyList<string>? secondary)
+    {
+        return primary
+            .Concat(secondary ?? Array.Empty<string>())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static bool MatchesLabel(string hint, string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && hint.StartsWith(label + ":", StringComparison.OrdinalIgnoreCase);
     }
 }

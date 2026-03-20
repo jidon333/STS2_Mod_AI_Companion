@@ -1,5 +1,6 @@
 using Sts2ModKit.Core.Configuration;
 using FoundationAdvicePromptBuilder = Sts2AiCompanion.Foundation.Reasoning.AdvicePromptBuilder;
+using FoundationRewardAdviceResponseFinalizer = Sts2AiCompanion.Foundation.Reasoning.RewardAdviceResponseFinalizer;
 
 namespace Sts2AiCompanion.Host;
 
@@ -30,5 +31,10 @@ public sealed class AdvicePromptBuilder
     public string FormatAdviceMarkdown(AdviceResponse response)
     {
         return _inner.FormatAdviceMarkdown(response.ToFoundation());
+    }
+
+    public AdviceResponse FinalizeResponse(AdviceInputPack inputPack, AdviceResponse response)
+    {
+        return FoundationRewardAdviceResponseFinalizer.Apply(inputPack.ToFoundation(), response.ToFoundation()).ToHost();
     }
 }

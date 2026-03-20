@@ -121,7 +121,7 @@ public sealed class CodexCliClient : ICodexSessionClient
                     inputPack.TriggerKind,
                     resolvedSessionId,
                     rawOutput);
-                return (RewardRecommendationTraceBuilder.AlignToOptionSet(inputPack, response), resolvedSessionId);
+                return (RewardAdviceResponseFinalizer.Apply(inputPack, response), resolvedSessionId);
             }
             catch (JsonException exception)
             {
@@ -331,7 +331,7 @@ public sealed class CodexCliClient : ICodexSessionClient
             inputPack.TriggerKind,
             sessionId,
             rawOutput);
-        return RewardRecommendationTraceBuilder.AlignToOptionSet(inputPack, response);
+        return RewardAdviceResponseFinalizer.Apply(inputPack, response);
     }
 
     private static string? ExtractJsonObject(string? text)
