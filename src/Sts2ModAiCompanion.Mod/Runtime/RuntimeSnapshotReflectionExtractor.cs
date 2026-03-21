@@ -179,6 +179,29 @@ internal static class RuntimeSnapshotReflectionExtractor
         IReadOnlyList<string> SelectedCardIds,
         IReadOnlyList<CardSelectionCardCandidate> VisibleCards);
 
+    private sealed record TreasureRoomRelicHolderCandidate(
+        object Holder,
+        string Label,
+        string? RelicId,
+        string ScreenBounds,
+        bool Enabled,
+        string BoundsSource);
+
+    private sealed record TreasureRoomObservation(
+        bool RoomDetected,
+        bool RoomVisible,
+        string? RootType,
+        bool ChestClickable,
+        bool ChestOpened,
+        string? ChestBounds,
+        int RelicHolderCount,
+        int VisibleRelicHolderCount,
+        int EnabledRelicHolderCount,
+        bool ProceedEnabled,
+        string? ProceedBounds,
+        IReadOnlyList<string> RelicHolderIds,
+        IReadOnlyList<TreasureRoomRelicHolderCandidate> VisibleRelicHolders);
+
     public static LiveExportObservation Capture(
         RuntimeHookBinding binding,
         AiCompanionRuntimeConfig config,
@@ -340,6 +363,20 @@ internal static class RuntimeSnapshotReflectionExtractor
             meta["choiceExtractorPath"] = extractorPath;
             payload["choiceExtractorPath"] = extractorPath;
         }
+
+        var treasureRoomObservation = ObserveTreasureRoom(roots, screen);
+        if (treasureRoomObservation.RoomVisible)
+        {
+            RemoveTreasureInventoryChoiceContamination(choices);
+            foreach (var choice in CreateTreasureRoomChoices(treasureRoomObservation))
+            {
+                AddChoiceSummary(choices, choice, config.LiveExport.MaxChoiceEntries);
+            }
+
+            meta["choiceExtractorPath"] = "treasure";
+            payload["choiceExtractorPath"] = "treasure";
+        }
+        AppendTreasureRoomRuntimeMetadata(treasureRoomObservation, choices, meta, payload);
 
         var warnings = BuildWarnings(player, deck, relics, potions, choices);
 
@@ -2436,6 +2473,224 @@ internal static class RuntimeSnapshotReflectionExtractor
                ?? true;
     }
 
+    private static TreasureRoomObservation ObserveTreasureRoom(IEnumerable<object> roots, string? screenHint)
+    {
+        var rooms = roots
+            .Where(static root => IsTreasureRoomType(root.GetType().FullName ?? root.GetType().Name))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        if (rooms.Length == 0)
+        {
+            return new TreasureRoomObservation(
+                RoomDetected: false,
+                RoomVisible: false,
+                RootType: null,
+                ChestClickable: false,
+                ChestOpened: false,
+                ChestBounds: null,
+                RelicHolderCount: 0,
+                VisibleRelicHolderCount: 0,
+                EnabledRelicHolderCount: 0,
+                ProceedEnabled: false,
+                ProceedBounds: null,
+                RelicHolderIds: Array.Empty<string>(),
+                VisibleRelicHolders: Array.Empty<TreasureRoomRelicHolderCandidate>());
+        }
+
+        var room = rooms
+            .OrderByDescending(static candidate => IsVisibleNode(candidate) ? 1 : 0)
+            .ThenByDescending(candidate => string.Equals(screenHint, "map", StringComparison.OrdinalIgnoreCase)
+                                           || string.Equals(screenHint, "event", StringComparison.OrdinalIgnoreCase)
+                ? 1
+                : 0)
+            .First();
+        var roomType = room.GetType().FullName ?? room.GetType().Name;
+
+        var chest = FindTreasureChest(room, roots);
+        var chestBounds = TryResolveInteractiveScreenBounds(chest, out _);
+        var chestClickable = !string.IsNullOrWhiteSpace(chestBounds)
+                             && (TryResolveInteractiveEnabled(chest) ?? TryResolveControlEnabled(chest) ?? true);
+
+        var proceedButton = FindTreasureProceedButton(room, roots);
+        var proceedBounds = TryResolveInteractiveScreenBounds(proceedButton, out _);
+        var proceedEnabled = !string.IsNullOrWhiteSpace(proceedBounds)
+                             && (TryResolveInteractiveEnabled(proceedButton) ?? TryResolveControlEnabled(proceedButton) ?? true);
+
+        var holders = EnumerateTreasureRelicHolders(room, roots)
+            .Select(TryCreateTreasureRelicHolderCandidate)
+            .Where(static candidate => candidate is not null)
+            .Cast<TreasureRoomRelicHolderCandidate>()
+            .ToArray();
+        var relicHolderIds = holders
+            .Select(static holder => holder.RelicId ?? holder.Label)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray()!;
+        var visibleRelicHolderCount = holders.Length;
+        var enabledRelicHolderCount = holders.Count(static holder => holder.Enabled);
+        var chestOpenedSignal = TryReadBool(room, "ChestOpened", "IsChestOpened", "_chestOpened")
+                                ?? TryReadBool(chest, "Opened", "IsOpened", "_opened");
+        var chestOpened = chestOpenedSignal == true
+                          || visibleRelicHolderCount > 0
+                          || proceedEnabled;
+
+        var roomVisible = IsVisibleNode(room)
+                          || chestClickable
+                          || visibleRelicHolderCount > 0
+                          || proceedEnabled
+                          || string.Equals(screenHint, "map", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(screenHint, "event", StringComparison.OrdinalIgnoreCase);
+        return new TreasureRoomObservation(
+            RoomDetected: true,
+            RoomVisible: roomVisible,
+            RootType: roomType,
+            ChestClickable: chestClickable,
+            ChestOpened: chestOpened,
+            ChestBounds: chestBounds,
+            RelicHolderCount: holders.Length,
+            VisibleRelicHolderCount: visibleRelicHolderCount,
+            EnabledRelicHolderCount: enabledRelicHolderCount,
+            ProceedEnabled: proceedEnabled,
+            ProceedBounds: proceedBounds,
+            RelicHolderIds: relicHolderIds,
+            VisibleRelicHolders: holders);
+    }
+
+    private static bool IsTreasureRoomType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && (typeName.Contains("NTreasureRoom", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains(".TreasureRoom", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static object? FindTreasureChest(object room, IEnumerable<object> roots)
+    {
+        var direct = TryGetMemberValue(room, "Chest")
+                     ?? TryGetMemberValue(room, "_chest")
+                     ?? TryGetMemberValue(room, "TreasureButton")
+                     ?? TryGetMemberValue(room, "_treasureButton");
+        if (direct is not null)
+        {
+            return direct;
+        }
+
+        return roots.FirstOrDefault(static root =>
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            return typeName.Contains("NTreasureButton", StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    private static object? FindTreasureProceedButton(object room, IEnumerable<object> roots)
+    {
+        var direct = TryGetMemberValue(room, "ProceedButton")
+                     ?? TryGetMemberValue(room, "_proceedButton");
+        if (direct is not null)
+        {
+            return direct;
+        }
+
+        return roots.FirstOrDefault(static root =>
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            return typeName.Contains("NProceedButton", StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    private static IEnumerable<object> EnumerateTreasureRelicHolders(object room, IEnumerable<object> roots)
+    {
+        var seen = new HashSet<int>();
+        foreach (var candidate in EnumerateTreasureHolderContainers(room, roots))
+        {
+            if (candidate is null)
+            {
+                continue;
+            }
+
+            foreach (var holder in ExpandEnumerable(candidate))
+            {
+                if (holder is not null
+                    && IsTreasureRelicHolderType(holder.GetType().FullName ?? holder.GetType().Name)
+                    && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+                {
+                    yield return holder;
+                }
+            }
+
+            foreach (var child in TryEnumerateChildren(candidate))
+            {
+                if (child is not null
+                    && IsTreasureRelicHolderType(child.GetType().FullName ?? child.GetType().Name)
+                    && seen.Add(RuntimeHelpers.GetHashCode(child)))
+                {
+                    yield return child;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<object?> EnumerateTreasureHolderContainers(object room, IEnumerable<object> roots)
+    {
+        yield return TryGetMemberValue(room, "_relicCollection");
+        yield return TryGetMemberValue(room, "RelicCollection");
+        yield return TryGetMemberValue(room, "_treasureRoomRelicCollection");
+
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (typeName.Contains("NTreasureRoomRelicCollection", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return root;
+                yield return TryGetMemberValue(root, "SingleplayerRelicHolder");
+                yield return TryGetMemberValue(root, "_singleplayerRelicHolder");
+                yield return TryGetMemberValue(root, "_holdersInUse");
+                yield return TryGetMemberValue(root, "HoldersInUse");
+                yield return TryGetMemberValue(root, "_holders");
+            }
+        }
+    }
+
+    private static bool IsTreasureRelicHolderType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && (typeName.Contains("TreasureRoomRelicHolder", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("TreasureRelicHolder", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("SingleplayerRelicHolder", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static TreasureRoomRelicHolderCandidate? TryCreateTreasureRelicHolderCandidate(object holder)
+    {
+        var screenBounds = TryResolveInteractiveScreenBounds(holder, out var boundsSource);
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return null;
+        }
+
+        var relic = TryGetMemberValue(holder, "Relic")
+                    ?? TryGetMemberValue(holder, "Model")
+                    ?? TryGetMemberValue(holder, "_relic")
+                    ?? TryGetMemberValue(holder, "_model");
+        var label = FirstNonEmpty(
+            TryResolveChoiceLabel(relic ?? holder),
+            TryReadString(relic, "Title", "DisplayName", "Name", "Id"),
+            TryReadString(holder, "Title", "DisplayName", "Name", "Id"));
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        var relicId = FirstNonEmpty(
+            TryReadString(relic, "Id", "Name", "Title"),
+            TryReadString(holder, "Id", "Name", "Title"));
+        return new TreasureRoomRelicHolderCandidate(
+            holder,
+            label,
+            relicId,
+            screenBounds,
+            TryResolveInteractiveEnabled(holder) ?? TryResolveControlEnabled(holder) ?? true,
+            boundsSource);
+    }
+
     private static bool? TryResolveControlEnabled(object? control)
     {
         if (control is null)
@@ -3317,6 +3572,59 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
     }
 
+    private static void AppendTreasureRoomRuntimeMetadata(
+        TreasureRoomObservation observation,
+        IReadOnlyList<LiveExportChoiceSummary> choices,
+        IDictionary<string, string?> meta,
+        IDictionary<string, object?> payload)
+    {
+        var inspectOverlayVisible = observation.RoomDetected && choices.Any(static choice =>
+            string.Equals(choice.Kind, "treasure-overlay-back", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.Kind, "overlay-back", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.Label, "Backstop", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.Label, "LeftArrow", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.Label, "RightArrow", StringComparison.OrdinalIgnoreCase));
+        var holderBounds = observation.VisibleRelicHolders.Count == 0
+            ? null
+            : string.Join(";", observation.VisibleRelicHolders.Select(static holder => holder.ScreenBounds));
+        var holderIds = observation.RelicHolderIds.Count == 0
+            ? null
+            : string.Join(",", observation.RelicHolderIds);
+
+        meta["treasureRoomDetected"] = observation.RoomDetected ? "true" : "false";
+        meta["treasureChestClickable"] = observation.ChestClickable ? "true" : "false";
+        meta["treasureChestOpened"] = observation.ChestOpened ? "true" : "false";
+        meta["treasureRelicHolderCount"] = observation.RelicHolderCount.ToString(CultureInfo.InvariantCulture);
+        meta["treasureVisibleRelicHolderCount"] = observation.VisibleRelicHolderCount.ToString(CultureInfo.InvariantCulture);
+        meta["treasureEnabledRelicHolderCount"] = observation.EnabledRelicHolderCount.ToString(CultureInfo.InvariantCulture);
+        meta["treasureProceedEnabled"] = observation.ProceedEnabled ? "true" : "false";
+        meta["treasureInspectOverlayVisible"] = inspectOverlayVisible ? "true" : "false";
+        meta["treasureRelicHolderBounds"] = holderBounds;
+        meta["treasureRelicHolderIds"] = holderIds;
+        meta["treasureRoomRootType"] = observation.RootType;
+
+        payload["treasureRoomDetected"] = observation.RoomDetected;
+        payload["treasureChestClickable"] = observation.ChestClickable;
+        payload["treasureChestOpened"] = observation.ChestOpened;
+        payload["treasureRelicHolderCount"] = observation.RelicHolderCount;
+        payload["treasureVisibleRelicHolderCount"] = observation.VisibleRelicHolderCount;
+        payload["treasureEnabledRelicHolderCount"] = observation.EnabledRelicHolderCount;
+        payload["treasureProceedEnabled"] = observation.ProceedEnabled;
+        payload["treasureInspectOverlayVisible"] = inspectOverlayVisible;
+        payload["treasureRoomRootType"] = observation.RootType;
+        if (!string.IsNullOrWhiteSpace(holderBounds))
+        {
+            payload["treasureRelicHolderBounds"] = observation.VisibleRelicHolders
+                .Select(static holder => holder.ScreenBounds)
+                .ToArray();
+        }
+
+        if (observation.RelicHolderIds.Count > 0)
+        {
+            payload["treasureRelicHolderIds"] = observation.RelicHolderIds.ToArray();
+        }
+    }
+
     private static IReadOnlyList<LiveExportChoiceSummary> CreateCardSelectionChoices(CardSelectionObservation observation)
     {
         if (!observation.ScreenVisible)
@@ -3392,6 +3700,70 @@ internal static class RuntimeSnapshotReflectionExtractor
         return choices;
     }
 
+    private static IReadOnlyList<LiveExportChoiceSummary> CreateTreasureRoomChoices(TreasureRoomObservation observation)
+    {
+        if (!observation.RoomVisible)
+        {
+            return Array.Empty<LiveExportChoiceSummary>();
+        }
+
+        var choices = new List<LiveExportChoiceSummary>();
+        if (observation.ChestClickable && !string.IsNullOrWhiteSpace(observation.ChestBounds))
+        {
+            choices.Add(new LiveExportChoiceSummary(
+                "treasure-chest",
+                "Chest",
+                "treasure:chest",
+                "Treasure room chest")
+            {
+                NodeId = "treasure:chest",
+                ScreenBounds = observation.ChestBounds,
+                BindingKind = "treasure-room",
+                BindingId = "chest",
+                Enabled = true,
+                SemanticHints = new[] { "treasure-room", "treasure-chest" },
+            });
+        }
+
+        var holderOrdinal = 0;
+        foreach (var holder in observation.VisibleRelicHolders)
+        {
+            choices.Add(new LiveExportChoiceSummary(
+                "treasure-relic-holder",
+                holder.Label,
+                holder.RelicId,
+                "Treasure room relic holder")
+            {
+                NodeId = $"treasure:holder:{holderOrdinal}",
+                ScreenBounds = holder.ScreenBounds,
+                BindingKind = "treasure-room",
+                BindingId = holder.RelicId ?? $"holder:{holderOrdinal}",
+                Enabled = holder.Enabled,
+                SemanticHints = new[] { "treasure-room", "treasure-relic-holder" },
+            });
+            holderOrdinal += 1;
+        }
+
+        if (observation.ProceedEnabled && !string.IsNullOrWhiteSpace(observation.ProceedBounds))
+        {
+            choices.Add(new LiveExportChoiceSummary(
+                "treasure-proceed",
+                "Proceed",
+                "treasure:proceed",
+                "Treasure room proceed")
+            {
+                NodeId = "treasure:proceed",
+                ScreenBounds = observation.ProceedBounds,
+                BindingKind = "treasure-room",
+                BindingId = "proceed",
+                Enabled = true,
+                SemanticHints = new[] { "treasure-room", "treasure-proceed" },
+            });
+        }
+
+        return choices;
+    }
+
     private static IReadOnlyList<string> BuildCardSelectionSemanticHints(string screenType, bool selected)
     {
         var hints = new List<string> { $"card-selection:{screenType}" };
@@ -3446,6 +3818,17 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         choices.Add(choice);
+    }
+
+    private static void RemoveTreasureInventoryChoiceContamination(List<LiveExportChoiceSummary> choices)
+    {
+        for (var index = choices.Count - 1; index >= 0; index -= 1)
+        {
+            if (string.Equals(choices[index].Kind, "relic", StringComparison.OrdinalIgnoreCase))
+            {
+                choices.RemoveAt(index);
+            }
+        }
     }
 
     private static string BuildChoiceSignature(IReadOnlyList<LiveExportChoiceSummary> choices)

@@ -3198,26 +3198,129 @@ static void RunSelfTest()
             "stable",
             "episode-2",
             "Treasure",
-            "generic",
+            "treasure",
             57,
             80,
             null,
             new[] { "Chest", "Proceed" },
             Array.Empty<string>(),
-            Array.Empty<ObserverActionNode>(),
-            Array.Empty<ObserverChoice>(),
-            Array.Empty<ObservedCombatHandCard>()),
-        AllowedActions = new[] { "click treasure chest", "click treasure reward icon", "click proceed", "wait" },
+            new[]
+            {
+                new ObserverActionNode("treasure:chest", "treasure-chest", "Chest", "602,367,800,500", true),
+            },
+            new[]
+            {
+                new ObserverChoice("treasure-chest", "Chest", "602,367,800,500", null, "Chest")
+                {
+                    BindingKind = "treasure-room",
+                    BindingId = "chest",
+                    Enabled = true,
+                    SemanticHints = new[] { "treasure-room", "treasure-chest" },
+                },
+            },
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>
+            {
+                ["treasureRoomDetected"] = "true",
+                ["treasureChestClickable"] = "true",
+                ["treasureChestOpened"] = "false",
+                ["treasureRelicHolderCount"] = "0",
+                ["treasureVisibleRelicHolderCount"] = "0",
+                ["treasureEnabledRelicHolderCount"] = "0",
+                ["treasureProceedEnabled"] = "false",
+                ["treasureInspectOverlayVisible"] = "false",
+                ["treasureRoomRootType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NTreasureRoom",
+            },
+        },
+        AllowedActions = new[] { "click treasure chest", "wait" },
     };
+    Assert(
+        GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(treasureRequest.Observer, null, null, null)).Contains("click treasure chest", StringComparer.OrdinalIgnoreCase),
+        "Treasure room with a closed chest should expose the explicit treasure chest lane.");
+    Assert(
+        !GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(treasureRequest.Observer, null, null, null)).Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
+        "Treasure room authority should suppress generic exported reachable-node routing.");
     var treasureDecision = AutoDecisionProvider.Decide(treasureRequest);
     Assert(treasureDecision.ActionKind == "click", "Treasure handling should click.");
-    Assert(treasureDecision.TargetLabel == "treasure chest center", "Treasure handling should center-click the chest first.");
+    Assert(treasureDecision.TargetLabel == "treasure chest", "Treasure handling should use the explicit treasure chest lane first.");
     Assert(
-        IsRoomProgressTarget("treasure reward icon")
+        IsRoomProgressTarget("treasure proceed")
         && GetSameActionStallLimit(
             GuiSmokePhase.ChooseFirstNode,
-            new GuiSmokeStepDecision("act", "click", null, 0.5, 0.4, "treasure reward icon", "reward icon", 0.9, "map", 1200, true, null)) == 4,
-        "Treasure reward icon should be treated as room progress with the same stall budget as the chest.");
+            new GuiSmokeStepDecision("act", "click", null, 0.5, 0.4, "treasure proceed", "proceed", 0.9, "map", 1200, true, null)) == 4,
+        "Treasure proceed should be treated as room progress with the same stall budget as the chest.");
+
+    var treasureRelicRequest = treasureRequest with
+    {
+        Observer = treasureRequest.Observer with
+        {
+            Meta = new Dictionary<string, string?>(treasureRequest.Observer.Meta)
+            {
+                ["treasureChestClickable"] = "false",
+                ["treasureChestOpened"] = "true",
+                ["treasureRelicHolderCount"] = "2",
+                ["treasureVisibleRelicHolderCount"] = "2",
+                ["treasureEnabledRelicHolderCount"] = "1",
+                ["treasureRelicHolderIds"] = "RELIC.ANCHOR,RELIC.BAG_OF_PREPARATION",
+            },
+            CurrentChoices = new[] { "닻", "가방", "진행", "불타는 혈액" },
+            Choices = new[]
+            {
+                new ObserverChoice("treasure-relic-holder", "닻", "680,280,180,180", "RELIC.ANCHOR", "Treasure holder")
+                {
+                    BindingKind = "treasure-room",
+                    BindingId = "RELIC.ANCHOR",
+                    Enabled = true,
+                    SemanticHints = new[] { "treasure-room", "treasure-relic-holder" },
+                },
+                new ObserverChoice("relic", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD", "Inventory relic")
+                {
+                    Enabled = true,
+                },
+            },
+            ActionNodes = Array.Empty<ObserverActionNode>(),
+        },
+        AllowedActions = new[] { "click treasure relic holder", "wait" },
+    };
+    Assert(
+        GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(treasureRelicRequest.Observer, null, null, null)).Contains("click treasure relic holder", StringComparer.OrdinalIgnoreCase),
+        "Open treasure rooms with visible holders should expose the explicit relic-holder lane.");
+    var treasureRelicDecision = AutoDecisionProvider.Decide(treasureRelicRequest);
+    Assert(treasureRelicDecision.TargetLabel == "treasure relic holder", "Treasure relic-holder lane should outrank top-left inventory relic icons.");
+
+    var treasureProceedRequest = treasureRequest with
+    {
+        Observer = treasureRequest.Observer with
+        {
+            Meta = new Dictionary<string, string?>(treasureRequest.Observer.Meta)
+            {
+                ["treasureChestClickable"] = "false",
+                ["treasureChestOpened"] = "true",
+                ["treasureRelicHolderCount"] = "1",
+                ["treasureVisibleRelicHolderCount"] = "0",
+                ["treasureEnabledRelicHolderCount"] = "0",
+                ["treasureProceedEnabled"] = "true",
+            },
+            Choices = new[]
+            {
+                new ObserverChoice("treasure-proceed", "진행", "980,540,220,90", null, "Treasure proceed")
+                {
+                    BindingKind = "treasure-room",
+                    BindingId = "proceed",
+                    Enabled = true,
+                    SemanticHints = new[] { "treasure-room", "treasure-proceed" },
+                },
+            },
+            ActionNodes = Array.Empty<ObserverActionNode>(),
+        },
+        AllowedActions = new[] { "click treasure proceed", "wait" },
+    };
+    Assert(
+        GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(treasureProceedRequest.Observer, null, null, null)).Contains("click treasure proceed", StringComparer.OrdinalIgnoreCase),
+        "Treasure room should expose explicit proceed once relic picking is finished.");
+    var treasureProceedDecision = AutoDecisionProvider.Decide(treasureProceedRequest);
+    Assert(treasureProceedDecision.TargetLabel == "treasure proceed", "Treasure proceed lane should open once no enabled relic holder remains.");
 
     var combatScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-self-test-{Guid.NewGuid():N}.png");
     try
@@ -9000,6 +9103,7 @@ static string[] BuildAllowedActions(
     IReadOnlyList<GuiSmokeHistoryEntry> history)
 {
     var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
+    var treasureState = TreasureRoomObserverSignals.TryGetState(observer.Summary);
     var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelectionForAllowlist(observer, history);
     var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
     var explicitRewardProgressionPresent = observer.Summary.Choices.Any(choice => IsCurrentRewardProgressionChoiceForObserver(choice, null))
@@ -9045,12 +9149,12 @@ static string[] BuildAllowedActions(
             => BuildExplicitRestSiteAllowedActions(observer.Summary),
         GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
             => new[] { "click smith card", "click smith confirm", "wait" },
+        GuiSmokePhase.ChooseFirstNode when treasureState is { RoomDetected: true }
+            => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
         GuiSmokePhase.ChooseFirstNode when mapOverlayState.ForegroundVisible
             => mapOverlayState.MapBackNavigationAvailable
                 ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
                 : new[] { "click exported reachable node", "click first reachable node", "wait" },
-        GuiSmokePhase.ChooseFirstNode when LooksLikeTreasureState(observer.Summary)
-            => new[] { "click treasure chest", "click treasure reward icon", "click proceed", "wait" },
         GuiSmokePhase.ChooseFirstNode => new[] { "click first reachable node", "click visible map advance", "wait" },
         GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
             => new[] { "press escape", "click inspect overlay close", "wait" },
@@ -9064,6 +9168,8 @@ static string[] BuildAllowedActions(
             => new[] { "click reward", "click reward skip", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent when forceEventProgressionAfterCardSelection
             => new[] { "click event choice", "click proceed", "wait" },
+        GuiSmokePhase.HandleEvent when treasureState is { RoomDetected: true }
+            => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
         GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible
             => mapOverlayState.MapBackNavigationAvailable
                 ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
@@ -9072,8 +9178,6 @@ static string[] BuildAllowedActions(
                                         && !forceEventProgressionAfterCardSelection
                                         && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
             => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
-        GuiSmokePhase.HandleEvent when LooksLikeTreasureState(observer.Summary)
-            => new[] { "click treasure chest", "click treasure reward icon", "click proceed", "click first event option", "wait" },
         GuiSmokePhase.HandleEvent => new[] { "click event choice", "click proceed", "wait" },
         GuiSmokePhase.HandleCombat => GetCombatAllowedActions(observer, combatCardKnowledge, screenshotPath, history),
         _ => new[] { "wait" },
@@ -10091,7 +10195,9 @@ static bool LooksLikeShopState(ObserverSummary observer)
 
 static bool LooksLikeTreasureState(ObserverSummary observer)
 {
-    if (string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase))
+    if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer)
+        || string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(observer.ChoiceExtractorPath, "treasure", StringComparison.OrdinalIgnoreCase))
     {
         return true;
     }
@@ -10257,7 +10363,7 @@ static string BuildFailureModeHintCore(
         GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
             => "Rest site is screenshot-first. If the explicit rest options are visible, choose one of them before any map candidate. If the smith card grid is visible, click one card first and then click the right-side confirm button.",
         GuiSmokePhase.ChooseFirstNode when LooksLikeTreasureState(observer.Summary)
-            => "Treasure rooms are not map-node routing. Closed chest: click the center chest. Open chest: click the floating reward icon, then proceed or return to map.",
+            => "Treasure room authority is explicit. Use chest -> treasure relic holder -> treasure proceed, and ignore top-left inventory relic icons or map-node contamination.",
         GuiSmokePhase.ChooseFirstNode => "Do not click non-reachable map nodes.",
         GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
             => "Inspect overlay is open inside the room flow. Dismiss it before retrying event, reward, or proceed choices.",
@@ -10270,7 +10376,7 @@ static string BuildFailureModeHintCore(
         GuiSmokePhase.HandleEvent when HasStrongMapTransitionEvidence(observer)
             => "Map evidence is stronger than the stale event label. Prefer reachable map-node or visible-map-advance actions over repeating event progression.",
         GuiSmokePhase.HandleEvent when LooksLikeTreasureState(observer.Summary)
-            => "Treasure state can linger as event. Use the screenshot, not stale observer state: closed chest -> center click, open chest -> floating reward icon, then proceed/map.",
+            => "Treasure authority can linger on the event phase. Prefer explicit treasure chest, treasure relic holder, or treasure proceed over generic event or map routing.",
         GuiSmokePhase.HandleEvent => "If the event text is ambiguous, choose a large visible progression option, not inspect affordances or detail overlays.",
         GuiSmokePhase.WaitCombat => "Observer must end with combat screen and inCombat=true.",
         GuiSmokePhase.HandleCombat when !CanResolveEnemyTargetFromCurrentState(observer, combatCardKnowledge, screenshotPath, history)
@@ -10324,13 +10430,16 @@ static bool IsRoomProgressTarget(string? targetLabel)
 {
     return IsReachableNodeTarget(targetLabel)
            || string.Equals(targetLabel, "treasure chest center", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(targetLabel, "treasure reward icon", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "treasure chest", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "treasure relic holder", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "treasure proceed", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "hidden overlay close", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "overlay back", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "overlay close", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "overlay backdrop close", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "treasure overlay back", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "rest site: rest", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "rest site: hatch", StringComparison.OrdinalIgnoreCase)
@@ -10468,7 +10577,9 @@ static int GetSameActionStallLimit(GuiSmokePhase phase, GuiSmokeStepDecision dec
         "exported reachable map node" => 4,
         "map back" => 4,
         "treasure chest center" => 4,
-        "treasure reward icon" => 4,
+        "treasure chest" => 4,
+        "treasure relic holder" => 4,
+        "treasure proceed" => 4,
         "claim reward item" => 3,
         "rest site: smith card" => 4,
         "rest site: smith confirm" => 4,
@@ -10476,6 +10587,7 @@ static int GetSameActionStallLimit(GuiSmokePhase phase, GuiSmokeStepDecision dec
         "overlay back" => 4,
         "overlay close" => 4,
         "overlay backdrop close" => 4,
+        "treasure overlay back" => 4,
         "inspect overlay escape" => 3,
         _ => 2,
     };
@@ -13059,6 +13171,18 @@ sealed record RestSiteObservedChoice(
     ObserverChoice? Choice,
     ObserverActionNode? ActionNode);
 
+sealed record TreasureRoomSubtypeState(
+    bool RoomDetected,
+    bool ChestClickable,
+    bool ChestOpened,
+    int RelicHolderCount,
+    int VisibleRelicHolderCount,
+    int EnabledRelicHolderCount,
+    bool ProceedEnabled,
+    bool InspectOverlayVisible,
+    IReadOnlyList<string> RelicHolderIds,
+    string? RootType);
+
 sealed record RestSiteDecisionCandidate(
     string Label,
     string Source,
@@ -13568,6 +13692,206 @@ static class CardSelectionObserverSignals
 
         bounds = new RectangleF(x, y, width, height);
         return width > 0f && height > 0f;
+    }
+}
+
+static class TreasureRoomObserverSignals
+{
+    public static TreasureRoomSubtypeState? TryGetState(ObserverSummary observer)
+    {
+        var genericChestVisible = observer.Choices.Any(static choice =>
+            string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+            && choice.Enabled != false
+            && HasUsableBounds(choice.ScreenBounds)
+            && (choice.Label.Contains("Chest", StringComparison.OrdinalIgnoreCase)
+                || choice.Label.Contains("상자", StringComparison.OrdinalIgnoreCase)));
+        var genericProceedVisible = observer.Choices.Any(static choice =>
+            string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+            && choice.Enabled != false
+            && HasUsableBounds(choice.ScreenBounds)
+            && (choice.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
+                || choice.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
+                || choice.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)));
+        var explicitChestClickable = TryGetMetaBool(observer, "treasureChestClickable");
+        var explicitProceedEnabled = TryGetMetaBool(observer, "treasureProceedEnabled");
+        var detected = TryGetMetaBool(observer, "treasureRoomDetected")
+                       ?? string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(observer.ChoiceExtractorPath, "treasure", StringComparison.OrdinalIgnoreCase)
+                       || (observer.Meta.TryGetValue("rootTypeSummary", out var rootTypeSummary)
+                           && rootTypeSummary?.Contains("NTreasureRoom", StringComparison.OrdinalIgnoreCase) == true);
+        if (!detected)
+        {
+            return null;
+        }
+
+        return new TreasureRoomSubtypeState(
+            RoomDetected: true,
+            ChestClickable: explicitChestClickable ?? genericChestVisible,
+            ChestOpened: TryGetMetaBool(observer, "treasureChestOpened") == true,
+            RelicHolderCount: TryGetMetaInt(observer, "treasureRelicHolderCount") ?? 0,
+            VisibleRelicHolderCount: TryGetMetaInt(observer, "treasureVisibleRelicHolderCount") ?? 0,
+            EnabledRelicHolderCount: TryGetMetaInt(observer, "treasureEnabledRelicHolderCount") ?? 0,
+            ProceedEnabled: explicitProceedEnabled ?? genericProceedVisible,
+            InspectOverlayVisible: TryGetMetaBool(observer, "treasureInspectOverlayVisible") == true
+                                   || observer.CurrentChoices.Any(static label => IsOverlayLabel(label)),
+            RelicHolderIds: ParseStringList(TryGetMetaValue(observer, "treasureRelicHolderIds")),
+            RootType: TryGetMetaValue(observer, "treasureRoomRootType"));
+    }
+
+    public static bool IsTreasureAuthorityActive(ObserverSummary observer)
+        => TryGetState(observer) is { RoomDetected: true };
+
+    public static string[] BuildAllowedActions(TreasureRoomSubtypeState state)
+    {
+        if (state.InspectOverlayVisible)
+        {
+            return new[] { "click treasure overlay back", "wait" };
+        }
+
+        if (!state.ChestOpened && state.ChestClickable)
+        {
+            return new[] { "click treasure chest", "wait" };
+        }
+
+        if (state.EnabledRelicHolderCount > 0)
+        {
+            return new[] { "click treasure relic holder", "wait" };
+        }
+
+        if (state.ProceedEnabled)
+        {
+            return new[] { "click treasure proceed", "wait" };
+        }
+
+        return new[] { "wait" };
+    }
+
+    public static ObserverChoice? TryGetChestChoice(ObserverSummary observer)
+    {
+        return observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.Kind, "treasure-chest", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds))
+               ?? observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.BindingKind, "treasure-room", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(choice.BindingId, "chest", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds))
+               ?? observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds)
+                   && (choice.Label.Contains("Chest", StringComparison.OrdinalIgnoreCase)
+                       || choice.Label.Contains("상자", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static IReadOnlyList<ObserverChoice> GetRelicHolderChoices(ObserverSummary observer)
+    {
+        return observer.Choices
+            .Where(static choice =>
+                string.Equals(choice.Kind, "treasure-relic-holder", StringComparison.OrdinalIgnoreCase)
+                || (string.Equals(choice.BindingKind, "treasure-room", StringComparison.OrdinalIgnoreCase)
+                    && choice.SemanticHints.Any(static hint => string.Equals(hint, "treasure-relic-holder", StringComparison.OrdinalIgnoreCase))))
+            .Where(static choice => choice.Enabled != false && HasUsableBounds(choice.ScreenBounds))
+            .OrderBy(static choice => GetSortY(choice.ScreenBounds))
+            .ThenBy(static choice => GetSortX(choice.ScreenBounds))
+            .ToArray();
+    }
+
+    public static ObserverChoice? TryGetProceedChoice(ObserverSummary observer)
+    {
+        return observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.Kind, "treasure-proceed", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds))
+               ?? observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.BindingKind, "treasure-room", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(choice.BindingId, "proceed", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds))
+               ?? observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds)
+                   && (choice.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
+                       || choice.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
+                       || choice.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static ObserverChoice? TryGetOverlayBackChoice(ObserverSummary observer)
+    {
+        return observer.Choices.FirstOrDefault(static choice =>
+            IsOverlayLabel(choice.Label) && HasUsableBounds(choice.ScreenBounds));
+    }
+
+    private static string? TryGetMetaValue(ObserverSummary observer, string key)
+        => observer.Meta.TryGetValue(key, out var value) ? value : null;
+
+    private static bool? TryGetMetaBool(ObserverSummary observer, string key)
+        => observer.Meta.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed)
+            ? parsed
+            : null;
+
+    private static int? TryGetMetaInt(ObserverSummary observer, string key)
+        => observer.Meta.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+
+    private static IReadOnlyList<string> ParseStringList(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        return value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private static bool IsOverlayLabel(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasUsableBounds(string? rawBounds)
+    {
+        return TryParseBounds(rawBounds, out _);
+    }
+
+    private static float GetSortX(string? rawBounds)
+    {
+        return TryParseBounds(rawBounds, out var bounds) ? bounds.X : float.MaxValue;
+    }
+
+    private static float GetSortY(string? rawBounds)
+    {
+        return TryParseBounds(rawBounds, out var bounds) ? bounds.Y : float.MaxValue;
+    }
+
+    private static bool TryParseBounds(string? rawBounds, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(rawBounds))
+        {
+            return false;
+        }
+
+        var parts = rawBounds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 4
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height)
+            || width <= 0f
+            || height <= 0f)
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return true;
     }
 }
 
@@ -14838,6 +15162,18 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                    ?? CreateWaitDecision("waiting for an explicit rest-site choice", request.Observer.CurrentScreen);
         }
 
+        var treasureDecision = TryCreateTreasureRoomDecision(request);
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("treasure-room", "room-context");
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(TreasureRoomObserverSignals.BuildAllowedActions(TreasureRoomObserverSignals.TryGetState(request.Observer)!).Append("wait").Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "treasure-room explicit affordances outrank map routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room explicit affordances outrank screenshot map routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room explicit affordances suppress map-arrow fallback");
+            GuiSmokeDecisionDebug.Suppress("click map back", "treasure-room progression is chest-holder-proceed, not map back");
+            return treasureDecision ?? CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen);
+        }
+
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (mapOverlayState.ForegroundVisible)
         {
@@ -14974,6 +15310,22 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (cardSelectionDecision is not null)
         {
             return cardSelectionDecision;
+        }
+
+        var treasureDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "treasure room",
+            "treasure-room-runtime",
+            0.95,
+            TryCreateTreasureRoomDecision(request),
+            "no explicit treasure room affordance is currently actionable");
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("treasure-room", "room-context");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "treasure-room explicit affordances outrank map routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room explicit affordances outrank screenshot map routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room explicit affordances suppress map-arrow fallback");
+            GuiSmokeDecisionDebug.Suppress("click event choice", "treasure-room explicit affordances outrank generic event choices");
+            return treasureDecision ?? CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen);
         }
 
         var explicitRewardDecision = GuiSmokeDecisionDebug.TraceCandidate(
@@ -16308,6 +16660,22 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return builder.Build(observerMissDecision, actualDecision);
         }
 
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
+        {
+            builder.AddSuppressed("click exported reachable node", "treasure-room-explicit-affordances-outrank-map-routing");
+            builder.AddSuppressed("click first reachable node", "treasure-room-explicit-affordances-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "treasure-room-explicit-affordances-suppress-current-node-arrow");
+            builder.AddSuppressed("click map back", "treasure-room-progression-is-chest-holder-proceed");
+            var treasureDecision = TryCreateTreasureRoomDecision(request);
+            builder.Consider(
+                ToCandidateLabel(treasureDecision, "click treasure room action"),
+                "treasure-room-runtime",
+                0.98d,
+                () => treasureDecision,
+                "no-treasure-room-actionable-affordance");
+            return builder.Build(CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen), actualDecision);
+        }
+
         if (mapOverlayState.ForegroundVisible)
         {
             if (mapOverlayState.StaleEventChoicePresent)
@@ -16409,6 +16777,23 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             builder.AddSuppressed("click first reachable node", "card-selection-subtype-foreground-suppresses-map-fallback");
             builder.AddSuppressed("click room fallback", "card-selection-subtype-foreground-suppresses-room-fallback");
             return builder.Build(CreateWaitDecision("waiting for card-selection subtype progression", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        var treasureDecision = TryCreateTreasureRoomDecision(request);
+        builder.Consider(
+            ToCandidateLabel(treasureDecision, "click treasure room action"),
+            "treasure-room-runtime",
+            0.97d,
+            () => treasureDecision,
+            "no-treasure-room-actionable-affordance");
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
+        {
+            builder.AddSuppressed("click exported reachable node", "treasure-room-explicit-affordances-outrank-map-routing");
+            builder.AddSuppressed("click first reachable node", "treasure-room-explicit-affordances-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "treasure-room-explicit-affordances-suppress-current-node-arrow");
+            builder.AddSuppressed("click event choice", "treasure-room-explicit-affordances-outrank-generic-event-choice");
+            builder.AddSuppressed("click proceed", "treasure-room-explicit-proceed-is-handled-by-treasure-state-machine");
+            return builder.Build(CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen), actualDecision);
         }
 
         var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
@@ -17381,7 +17766,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryFindFirstReachableMapNodeDecision(GuiSmokeStepRequest request)
     {
-        if (HasExplicitRestSiteChoiceAuthority(request))
+        if (HasExplicitRestSiteChoiceAuthority(request)
+            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
         {
             return null;
         }
@@ -17409,7 +17795,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateExportedReachableMapPointDecision(GuiSmokeStepRequest request)
     {
-        if (HasExplicitRestSiteChoiceAuthority(request))
+        if (HasExplicitRestSiteChoiceAuthority(request)
+            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
         {
             return null;
         }
@@ -17446,7 +17833,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateMapBackNavigationDecision(GuiSmokeStepRequest request)
     {
-        if (HasExplicitRestSiteChoiceAuthority(request))
+        if (HasExplicitRestSiteChoiceAuthority(request)
+            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
         {
             return null;
         }
@@ -17865,7 +18253,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             "treasure room",
             "treasure-room",
             0.90,
-            TryCreateTreasureChestDecision(request),
+            TryCreateTreasureRoomDecision(request),
             "treasure room affordance is not visible");
         if (treasureDecision is not null)
         {
@@ -17906,52 +18294,90 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                    "no visible proceed button is available");
     }
 
-    private static GuiSmokeStepDecision? TryCreateTreasureChestDecision(GuiSmokeStepRequest request)
+    private static GuiSmokeStepDecision? TryCreateTreasureRoomDecision(GuiSmokeStepRequest request)
     {
-        if (!LooksLikeTreasureState(request.Observer) || HasOverlayChoiceState(request.Observer))
+        var treasureState = TreasureRoomObserverSignals.TryGetState(request.Observer);
+        if (treasureState is null || !treasureState.RoomDetected)
         {
             return null;
         }
 
-        var treasureAnalysis = AutoTreasureAnalyzer.Analyze(request.ScreenshotPath);
-        if (treasureAnalysis.HasClosedChestHighlight)
+        if (treasureState.InspectOverlayVisible)
         {
-            return CreateTreasureChestCenterDecision(request);
-        }
+            var overlayBackChoice = TreasureRoomObserverSignals.TryGetOverlayBackChoice(request.Observer);
+            if (overlayBackChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    overlayBackChoice,
+                    "treasure overlay back",
+                    "Treasure inspect overlay is foreground-visible. Close it before retrying any chest, relic-holder, or proceed action.",
+                    0.98,
+                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                    1200);
+            }
 
-        if (treasureAnalysis.HasRewardIcon)
-        {
-            return new GuiSmokeStepDecision(
-                "act",
-                "click",
-                null,
-                treasureAnalysis.RewardIconNormalizedX,
-                treasureAnalysis.RewardIconNormalizedY,
-                "treasure reward icon",
-                "Treasure chest is already open in the screenshot. Click the floating reward icon instead of the chest body.",
-                0.98,
-                "map",
-                1500,
-                true,
-                null);
-        }
-
-        var visibleProceedDecision = TryCreateVisibleProceedDecision(request);
-        if (visibleProceedDecision is not null)
-        {
-            return visibleProceedDecision;
-        }
-
-        var hasTreasureInteractionHistory = request.History.Any(entry =>
-            string.Equals(entry.TargetLabel, "treasure chest center", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(entry.TargetLabel, "treasure reward icon", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(entry.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase));
-        if (hasTreasureInteractionHistory)
-        {
             return null;
         }
 
-        return CreateTreasureChestCenterDecision(request);
+        if (!treasureState.ChestOpened && treasureState.ChestClickable)
+        {
+            var chestChoice = TreasureRoomObserverSignals.TryGetChestChoice(request.Observer);
+            if (chestChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    chestChoice,
+                    "treasure chest",
+                    "Treasure room authority is active. Open the chest before any relic holder or proceed action.",
+                    0.98,
+                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                    1500);
+            }
+
+            var treasureAnalysis = AutoTreasureAnalyzer.Analyze(request.ScreenshotPath);
+            if (treasureAnalysis.HasClosedChestHighlight)
+            {
+                return CreateTreasureChestCenterDecision(request);
+            }
+        }
+
+        var relicHolderChoice = TreasureRoomObserverSignals.GetRelicHolderChoices(request.Observer).FirstOrDefault();
+        if (relicHolderChoice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                relicHolderChoice,
+                "treasure relic holder",
+                "Treasure chest is open. Click the explicit treasure relic holder, not a top-bar inventory relic icon or map node.",
+                0.97,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                1500);
+        }
+
+        if (treasureState.ProceedEnabled)
+        {
+            var proceedChoice = TreasureRoomObserverSignals.TryGetProceedChoice(request.Observer);
+            if (proceedChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    proceedChoice,
+                    "treasure proceed",
+                    "Treasure relic picking is finished. Use the explicit treasure proceed affordance before any map routing fallback.",
+                    0.96,
+                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                    1400);
+            }
+
+            var visibleProceedDecision = TryCreateVisibleProceedDecision(request);
+            if (visibleProceedDecision is not null)
+            {
+                return visibleProceedDecision with { TargetLabel = "treasure proceed" };
+            }
+        }
+
+        return null;
     }
 
     private static GuiSmokeStepDecision CreateTreasureChestCenterDecision(GuiSmokeStepRequest request)

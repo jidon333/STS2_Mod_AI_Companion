@@ -45,6 +45,7 @@ Run("runtime reflection keeps reward-backed card rows and reward type metadata",
 Run("runtime reflection exports transform card-selection subtype metadata", TestRuntimeReflectionTransformCardSelectionExport, failures);
 Run("runtime reflection keeps reward-pick separate from confirm-driven card selection", TestRuntimeReflectionRewardPickCardSelectionExport, failures);
 Run("runtime reflection exports deck-remove card-selection preview semantics", TestRuntimeReflectionDeckRemoveCardSelectionExport, failures);
+Run("runtime reflection exports treasure room chest holder and proceed semantics", TestRuntimeReflectionTreasureRoomExport, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
@@ -1316,6 +1317,40 @@ static void TestRuntimeReflectionDeckRemoveCardSelectionExport()
     Assert((bool)(ReadProperty(observation!, "MainConfirmEnabled") ?? false), "Expected deck-remove main confirm to export.");
     Assert((bool)(ReadProperty(observation!, "PreviewVisible") ?? true) == false, "Expected preview to stay closed.");
     Assert((int)(ReadProperty(observation!, "SelectedCount") ?? -1) == 1, "Expected selected-count to export for deck-remove.");
+}
+
+static void TestRuntimeReflectionTreasureRoomExport()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var observeMethod = extractorType!.GetMethod("ObserveTreasureRoom", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(observeMethod is not null, "Expected private ObserveTreasureRoom helper.");
+
+    var treasureRoom = new FakeNTreasureRoom
+    {
+        Visible = true,
+        Chest = new FakeTreasureButton { Visible = true, Enabled = true, Position = new FakeVector2(602, 367), Size = new FakeVector2(800, 500) },
+        ProceedButton = new FakeClickableControl { Visible = true, Enabled = false, Position = new FakeVector2(1700, 760), Size = new FakeVector2(220, 110) },
+        _relicCollection = new FakeNTreasureRoomRelicCollection
+        {
+            _holdersInUse = new object[]
+            {
+                new FakeTreasureRelicHolder(new FakeRelicModel { Id = "RELIC.ANCHOR", Name = "닻" }, 620, 300, enabled: true),
+                new FakeTreasureRelicHolder(new FakeRelicModel { Id = "RELIC.BAG_OF_PREPARATION", Name = "가방" }, 900, 300, enabled: false),
+            },
+        },
+    };
+
+    var observation = observeMethod!.Invoke(null, new object?[] { new object[] { treasureRoom, treasureRoom.Chest!, treasureRoom.ProceedButton!, treasureRoom._relicCollection! }, "map" });
+    Assert(observation is not null, "Expected treasure room observation.");
+    Assert((bool)(ReadProperty(observation!, "RoomDetected") ?? false), "Expected treasure room detection.");
+    Assert((bool)(ReadProperty(observation!, "ChestClickable") ?? false), "Expected chest clickable export.");
+    Assert((bool)(ReadProperty(observation!, "ChestOpened") ?? false), "Visible treasure relic holders should imply that the chest-opened state is already active.");
+    Assert((int)(ReadProperty(observation!, "RelicHolderCount") ?? -1) == 2, "Expected relic-holder count to export.");
+    Assert((int)(ReadProperty(observation!, "VisibleRelicHolderCount") ?? -1) == 2, "Expected visible relic-holder count to export.");
+    Assert((int)(ReadProperty(observation!, "EnabledRelicHolderCount") ?? -1) == 1, "Expected enabled relic-holder count to export.");
+    Assert((bool)(ReadProperty(observation!, "ProceedEnabled") ?? true) == false, "Expected proceed to remain disabled before relic pick.");
 }
 
 static void TestRuntimeReflectionRejectsOverlayLikePlayerRoots()
@@ -3450,6 +3485,59 @@ file sealed class FakeNCardRewardSelectionScreen
     public object? _cardRow { get; init; }
 }
 
+file sealed class FakeNTreasureRoom
+{
+    public bool Visible { get; init; }
+
+    public object? Chest { get; init; }
+
+    public object? ProceedButton { get; init; }
+
+    public object? _relicCollection { get; init; }
+}
+
+file sealed class FakeNTreasureRoomRelicCollection
+{
+    public object? _holdersInUse { get; init; }
+
+    public object? SingleplayerRelicHolder { get; init; }
+}
+
+file sealed class FakeTreasureButton
+{
+    public bool Opened { get; init; }
+
+    public bool Visible { get; init; }
+
+    public bool Enabled { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+}
+
+file sealed class FakeTreasureRelicHolder
+{
+    public FakeTreasureRelicHolder(FakeRelicModel relic, double x, double y, bool enabled)
+    {
+        Relic = relic;
+        Visible = true;
+        Enabled = enabled;
+        Position = new FakeVector2(x, y);
+        Size = new FakeVector2(180, 180);
+    }
+
+    public object? Relic { get; init; }
+
+    public bool Visible { get; init; }
+
+    public bool Enabled { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+}
+
 file sealed class FakeGrid
 {
     public object[]? CurrentlyDisplayedCardHolders { get; init; }
@@ -3475,6 +3563,13 @@ file sealed class FakeGridCardHolder
 }
 
 file sealed class FakeCardModel
+{
+    public string? Id { get; init; }
+
+    public string? Name { get; init; }
+}
+
+file sealed class FakeRelicModel
 {
     public string? Id { get; init; }
 
