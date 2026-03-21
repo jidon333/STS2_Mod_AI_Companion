@@ -1119,7 +1119,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             continue;
         }
 
-        if (evaluator.IsPhaseSatisfied(phase, observer))
+        if (evaluator.IsPhaseSatisfied(phase, observer, history))
         {
             ResetDecisionWaitTracking();
             LogHarness($"step={stepIndex} observer accepted phase={phase}");
@@ -3462,6 +3462,155 @@ static void RunSelfTest()
             GuiSmokePhase.WaitCombat,
             new ObserverState(new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, true, "hook", "stable", null, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>(), Array.Empty<ObserverChoice>(), Array.Empty<ObservedCombatHandCard>()), null, null, null)),
         "Combat acceptance should require combat screen and inCombat=true.");
+
+    var treasureMapVisibleObserver = new ObserverState(
+        new ObserverSummary(
+            "map",
+            "map",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            true,
+            "mixed",
+            "stable",
+            null,
+            "Treasure",
+            "generic",
+            76,
+            80,
+            null,
+            new[] { "Chest", "진행", "타격용 인형" },
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            new[]
+            {
+                new ObserverChoice("treasure-relic-holder", "타격용 인형", "857.792,357.208,204,204", "Relic", "Treasure room relic holder")
+                {
+                    BindingKind = "treasure-room",
+                    BindingId = "Relic",
+                    Enabled = true,
+                    SemanticHints = new[] { "treasure-room", "treasure-relic-holder" },
+                },
+            },
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>
+            {
+                ["treasureRoomDetected"] = "true",
+                ["treasureChestOpened"] = "true",
+                ["treasureEnabledRelicHolderCount"] = "1",
+                ["treasureProceedEnabled"] = "false",
+            },
+        },
+        null,
+        null,
+        null);
+    Assert(
+        !evaluator.IsPhaseSatisfied(
+            GuiSmokePhase.WaitMap,
+            treasureMapVisibleObserver,
+            new[] { new GuiSmokeHistoryEntry(GuiSmokePhase.ChooseFirstNode.ToString(), "click", "treasure proceed", DateTimeOffset.UtcNow) }),
+        "WaitMap should not accept map-visible treasure aftermath while stronger treasure authority remains.");
+
+    var mapOnlyAfterTreasureObserver = treasureMapVisibleObserver with
+    {
+        Summary = treasureMapVisibleObserver.Summary with
+        {
+            EncounterKind = null,
+            CurrentChoices = Array.Empty<string>(),
+            Choices = Array.Empty<ObserverChoice>(),
+            Meta = new Dictionary<string, string?>
+            {
+                ["treasureRoomDetected"] = "false",
+                ["treasureChestOpened"] = "false",
+                ["treasureEnabledRelicHolderCount"] = "0",
+                ["treasureProceedEnabled"] = "false",
+            },
+        },
+    };
+    Assert(
+        evaluator.IsPhaseSatisfied(
+            GuiSmokePhase.WaitMap,
+            mapOnlyAfterTreasureObserver,
+            new[] { new GuiSmokeHistoryEntry(GuiSmokePhase.ChooseFirstNode.ToString(), "click", "treasure proceed", DateTimeOffset.UtcNow) }),
+        "WaitMap should accept map-visible aftermath once treasure authority has actually cleared.");
+
+    var rewardMixedStateObserver = new ObserverState(
+        new ObserverSummary(
+            "map",
+            "map",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            true,
+            "mixed",
+            "stable",
+            null,
+            null,
+            "reward",
+            76,
+            80,
+            null,
+            new[] { "넘기기" },
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            new[]
+            {
+                new ObserverChoice("reward-card", "Reward Card", "460,250,240,340", "CARD.TEST", "Reward card"),
+            },
+            Array.Empty<ObservedCombatHandCard>()),
+        null,
+        null,
+        null);
+    Assert(
+        !evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMap, rewardMixedStateObserver),
+        "Reward mixed-state should keep modal foreground authority over map-visible fallback.");
+
+    var cardSelectionMixedStateObserver = new ObserverState(
+        new ObserverSummary(
+            "map",
+            "map",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            true,
+            "mixed",
+            "stable",
+            null,
+            null,
+            "card-selection-transform",
+            76,
+            80,
+            null,
+            new[] { "Choose cards" },
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            new[]
+            {
+                new ObserverChoice("transform-card", "Card A", "400,250,180,260", "CARD.A", "Transform card")
+                {
+                    BindingKind = "card-selection-card",
+                    BindingId = "CARD.A",
+                    Enabled = true,
+                    SemanticHints = new[] { "card-selection:transform" },
+                },
+            },
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>
+            {
+                ["cardSelectionScreenDetected"] = "true",
+                ["cardSelectionScreenType"] = "transform",
+                ["cardSelectionMaxSelect"] = "2",
+                ["cardSelectionSelectedCount"] = "1",
+            },
+        },
+        null,
+        null,
+        null);
+    Assert(
+        !evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMap, cardSelectionMixedStateObserver),
+        "Card-selection mixed-state should beat map-visible WaitMap acceptance.");
 
     Assert(
         WindowLocator.HasMeaningfulDrift(
@@ -11070,7 +11219,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer))
+        if (MapForegroundReconciliation.HasMapForegroundOwnership(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-map", observer.CurrentScreen, observer.InCombat, null));
@@ -11161,7 +11310,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer))
+        if (MapForegroundReconciliation.HasMapForegroundOwnership(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-map", observer.CurrentScreen, observer.InCombat, null));
@@ -11226,7 +11375,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer))
+        if (MapForegroundReconciliation.HasMapForegroundOwnership(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-map", observer.CurrentScreen, observer.InCombat, null));
@@ -23404,20 +23553,182 @@ sealed class ObserverSnapshotReader
 
 sealed class ObserverAcceptanceEvaluator
 {
-    public bool IsPhaseSatisfied(GuiSmokePhase phase, ObserverState observer)
+    public bool IsPhaseSatisfied(GuiSmokePhase phase, ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
     {
         var sceneReady = observer.SceneReady != false;
         return phase switch
         {
             GuiSmokePhase.WaitMainMenu => sceneReady && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase),
             GuiSmokePhase.WaitCharacterSelect => sceneReady && string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase),
-            GuiSmokePhase.WaitMap => sceneReady && string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase),
+            GuiSmokePhase.WaitMap => sceneReady && MapForegroundReconciliation.HasMapForegroundOwnership(observer, history ?? Array.Empty<GuiSmokeHistoryEntry>()),
             GuiSmokePhase.WaitCombat => string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
                 && sceneReady
                 && observer.InCombat == true,
             GuiSmokePhase.HandleCombat => false,
             _ => false,
         };
+    }
+}
+
+static class MapForegroundReconciliation
+{
+    public static bool HasMapForegroundOwnership(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        var mapVisible = GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
+                         || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase);
+        return mapVisible
+               && !HasStrongerForegroundModalAuthority(observer, history);
+    }
+
+    private static bool HasStrongerForegroundModalAuthority(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        if (CardSelectionObserverSignals.TryGetState(observer.Summary) is not null)
+        {
+            return true;
+        }
+
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary))
+        {
+            return true;
+        }
+
+        if (LooksLikeInspectOverlayForeground(observer))
+        {
+            return true;
+        }
+
+        if (LooksLikeRewardForeground(observer))
+        {
+            return true;
+        }
+
+        if (HasExplicitEventProgressionForeground(observer)
+            || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
+        {
+            return true;
+        }
+
+        return HasRecentMapOpenAftermath(history) && !IsMapOnlyForegroundState(observer);
+    }
+
+    private static bool IsMapOnlyForegroundState(ObserverState observer)
+    {
+        return CardSelectionObserverSignals.TryGetState(observer.Summary) is null
+               && !TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
+               && !LooksLikeInspectOverlayForeground(observer)
+               && !LooksLikeRewardForeground(observer)
+               && !HasExplicitEventProgressionForeground(observer)
+               && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer);
+    }
+
+    private static bool LooksLikeInspectOverlayForeground(ObserverState observer)
+    {
+        return observer.Choices.Any(static choice =>
+                   IsOverlayLikeLabel(choice.Label)
+                   || string.Equals(choice.Kind, "inspect", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(choice.BindingKind, "overlay", StringComparison.OrdinalIgnoreCase))
+               || observer.ActionNodes.Any(static node =>
+                   IsOverlayLikeLabel(node.Label)
+                   || node.Kind.Contains("overlay", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool LooksLikeRewardForeground(ObserverState observer)
+    {
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer.Summary))
+        {
+            return true;
+        }
+
+        if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return observer.Choices.Any(static choice =>
+                   choice.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+                   || choice.SemanticHints.Any(static hint => hint.Contains("reward", StringComparison.OrdinalIgnoreCase)))
+               || observer.ActionNodes.Any(static node =>
+                   node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
+                   || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasExplicitEventProgressionForeground(ObserverState observer)
+    {
+        var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+        if (!eventAuthority)
+        {
+            return false;
+        }
+
+        return observer.ActionNodes.Any(static node =>
+                   node.Actionable
+                   && (IsProceedLikeText(node.Label)
+                       || node.Kind.Contains("proceed", StringComparison.OrdinalIgnoreCase)
+                       || node.Kind.Contains("continue", StringComparison.OrdinalIgnoreCase)))
+               || observer.Choices.Any(static choice =>
+                   IsProceedLikeText(choice.Label)
+                   && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                   && !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsOverlayLikeLabel(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("Back", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Close", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("닫기", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("취소", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Cancel", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsProceedLikeText(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("진행", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("계속", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasRecentMapOpenAftermath(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        static bool IsMapOpenAftermathTarget(string? targetLabel)
+        {
+            return string.Equals(targetLabel, "treasure proceed", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(targetLabel, "reward proceed", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(targetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(targetLabel, "transform confirm", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(targetLabel, "deck remove confirm", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(targetLabel, "upgrade confirm", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(targetLabel, "rest site: smith confirm", StringComparison.OrdinalIgnoreCase);
+        }
+
+        for (var index = history.Count - 1; index >= 0 && index >= history.Count - 4; index -= 1)
+        {
+            var entry = history[index];
+            if (IsMapOpenAftermathTarget(entry.TargetLabel))
+            {
+                return true;
+            }
+
+            if (!string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(entry.Action, "observer-accepted", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(entry.Action, "recapture-required", StringComparison.OrdinalIgnoreCase)
+                && !entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 }
 
