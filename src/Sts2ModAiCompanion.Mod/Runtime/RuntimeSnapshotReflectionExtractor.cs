@@ -77,6 +77,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         "SendButton",
         "PlayQueue",
         "Card",
+        "CardGrid",
         "RewardsScreen",
         "NCardRewardSelectionScreen",
         "CardTrailIronclad",
@@ -148,6 +149,35 @@ internal static class RuntimeSnapshotReflectionExtractor
         string? SelectedCardsSummary,
         string? PreviewMode,
         bool ObserverMiss);
+
+    private sealed record CardSelectionCardCandidate(
+        object Holder,
+        string Label,
+        string? CardId,
+        string ScreenBounds,
+        bool Enabled,
+        bool Selected,
+        string BoundsSource);
+
+    private sealed record CardSelectionObservation(
+        string ScreenType,
+        bool ScreenDetected,
+        bool ScreenVisible,
+        string? RootType,
+        string? Prompt,
+        int? MinSelect,
+        int? MaxSelect,
+        int SelectedCount,
+        bool? RequireManualConfirmation,
+        bool? Cancelable,
+        bool PreviewVisible,
+        bool MainConfirmEnabled,
+        bool PreviewConfirmEnabled,
+        string? MainConfirmBounds,
+        string? PreviewConfirmBounds,
+        string? PreviewMode,
+        IReadOnlyList<string> SelectedCardIds,
+        IReadOnlyList<CardSelectionCardCandidate> VisibleCards);
 
     public static LiveExportObservation Capture(
         RuntimeHookBinding binding,
@@ -280,7 +310,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             args,
             roots,
             config.LiveExport.MaxChoiceEntries);
-        var choices = choiceResult.Choices;
+        var choices = choiceResult.Choices.ToList();
         var encounter = ExtractEncounter(roots, meta);
         var combatHand = encounter?.InCombat == true
             ? ExtractCombatHand(roots, config.LiveExport.MaxChoiceEntries)
@@ -297,11 +327,26 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             screen = "combat";
         }
+        var cardSelectionObservation = ObserveCardSelection(roots, screen);
+        AppendCardSelectionRuntimeMetadata(cardSelectionObservation, meta, payload);
+        if (cardSelectionObservation.ScreenVisible)
+        {
+            foreach (var choice in CreateCardSelectionChoices(cardSelectionObservation))
+            {
+                AddChoiceSummary(choices, choice, config.LiveExport.MaxChoiceEntries);
+            }
+
+            var extractorPath = GetCardSelectionExtractorPath(cardSelectionObservation.ScreenType);
+            meta["choiceExtractorPath"] = extractorPath;
+            payload["choiceExtractorPath"] = extractorPath;
+        }
+
         var warnings = BuildWarnings(player, deck, relics, potions, choices);
 
         meta["screen"] = screen;
         meta["rootTypeSummary"] = rootTypeSummary;
-        if (!string.IsNullOrWhiteSpace(choiceResult.Decision.ExtractorPath))
+        if (!string.IsNullOrWhiteSpace(choiceResult.Decision.ExtractorPath)
+            && !cardSelectionObservation.ScreenVisible)
         {
             meta["choiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
             payload["choiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
@@ -2103,6 +2148,281 @@ internal static class RuntimeSnapshotReflectionExtractor
             boundsSource);
     }
 
+    private static CardSelectionObservation ObserveCardSelection(IEnumerable<object> roots, string? screenHint)
+    {
+        var screens = roots
+            .Where(static root => TryResolveCardSelectionScreenType(root) is not null)
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .Select(root => new
+            {
+                Screen = root,
+                ScreenType = TryResolveCardSelectionScreenType(root)!,
+            })
+            .ToArray();
+        if (screens.Length == 0)
+        {
+            return new CardSelectionObservation(
+                "unknown-card-select",
+                ScreenDetected: false,
+                ScreenVisible: false,
+                RootType: null,
+                Prompt: null,
+                MinSelect: null,
+                MaxSelect: null,
+                SelectedCount: 0,
+                RequireManualConfirmation: null,
+                Cancelable: null,
+                PreviewVisible: false,
+                MainConfirmEnabled: false,
+                PreviewConfirmEnabled: false,
+                MainConfirmBounds: null,
+                PreviewConfirmBounds: null,
+                PreviewMode: null,
+                SelectedCardIds: Array.Empty<string>(),
+                VisibleCards: Array.Empty<CardSelectionCardCandidate>());
+        }
+
+        var preferredScreen = screens
+            .OrderByDescending(entry => string.Equals(entry.ScreenType, screenHint, StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ThenByDescending(entry => IsVisibleNode(entry.Screen) ? 1 : 0)
+            .First();
+        var screen = preferredScreen.Screen;
+        var screenType = preferredScreen.ScreenType;
+        var rootType = screen.GetType().FullName ?? screen.GetType().Name;
+        var prefs = TryGetMemberValue(screen, "_prefs") ?? TryGetMemberValue(screen, "Prefs");
+        var prompt = ResolveCardSelectionPrompt(screen, prefs);
+        var minSelect = screenType == "reward-pick" ? 1 : TryReadInt(prefs, "MinSelect");
+        var maxSelect = screenType == "reward-pick" ? 1 : TryReadInt(prefs, "MaxSelect");
+        var requireManualConfirmation = screenType == "reward-pick"
+            ? false
+            : TryReadBool(prefs, "RequireManualConfirmation");
+        var cancelable = screenType == "reward-pick"
+            ? false
+            : TryReadBool(prefs, "Cancelable");
+        var selectedCards = screenType == "reward-pick"
+            ? Array.Empty<object>()
+            : ExpandEnumerable(TryGetMemberValue(screen, "_selectedCards")).ToArray();
+        var selectedCardIds = ResolveCardSelectionSelectedCardIds(selectedCards);
+        var visibleCards = EnumerateCardSelectionCandidates(screen, screenType, selectedCardIds)
+            .OrderBy(static card => TryGetBoundsSortX(card.ScreenBounds))
+            .ThenBy(static card => TryGetBoundsSortY(card.ScreenBounds))
+            .ToArray();
+        var selectedCount = screenType == "reward-pick" ? 0 : selectedCards.Length;
+        var mainConfirmButton = screenType switch
+        {
+            "transform" or "deck-remove" => TryGetMemberValue(screen, "_confirmButton"),
+            _ => null,
+        };
+        var mainConfirmBounds = TryResolveInteractiveScreenBounds(mainConfirmButton, out _);
+        var mainConfirmVisible = !string.IsNullOrWhiteSpace(mainConfirmBounds);
+        var mainConfirmEnabled = mainConfirmVisible && (TryResolveInteractiveEnabled(mainConfirmButton) ?? TryResolveControlEnabled(mainConfirmButton) ?? true);
+        var previewVisible = false;
+        var previewConfirmEnabled = false;
+        string? previewConfirmBounds = null;
+        string? previewMode = null;
+
+        switch (screenType)
+        {
+            case "transform":
+            {
+                var previewContainer = TryGetMemberValue(screen, "_previewContainer");
+                previewVisible = IsVisibleNode(previewContainer);
+                previewMode = previewVisible ? "transform-preview" : null;
+                var previewConfirmButton = TryGetMemberValue(screen, "_previewConfirmButton");
+                previewConfirmBounds = TryResolveInteractiveScreenBounds(previewConfirmButton, out _);
+                previewConfirmEnabled = !string.IsNullOrWhiteSpace(previewConfirmBounds)
+                                        && (TryResolveInteractiveEnabled(previewConfirmButton) ?? TryResolveControlEnabled(previewConfirmButton) ?? true);
+                break;
+            }
+            case "deck-remove":
+            {
+                var previewContainer = TryGetMemberValue(screen, "_previewContainer");
+                previewVisible = IsVisibleNode(previewContainer);
+                previewMode = previewVisible ? "deck-preview" : null;
+                var previewConfirmButton = TryGetMemberValue(screen, "_previewConfirmButton");
+                previewConfirmBounds = TryResolveInteractiveScreenBounds(previewConfirmButton, out _);
+                previewConfirmEnabled = !string.IsNullOrWhiteSpace(previewConfirmBounds)
+                                        && (TryResolveInteractiveEnabled(previewConfirmButton) ?? TryResolveControlEnabled(previewConfirmButton) ?? true);
+                break;
+            }
+            case "upgrade":
+            {
+                var previewConfirmButton = TryResolveVisibleUpgradeConfirmButton(screen, out var upgradePreviewMode);
+                previewVisible = previewConfirmButton is not null;
+                previewMode = upgradePreviewMode switch
+                {
+                    "single" => "upgrade-single-preview",
+                    "multi" => "upgrade-multi-preview",
+                    _ => null,
+                };
+                previewConfirmBounds = TryResolveInteractiveScreenBounds(previewConfirmButton, out _);
+                previewConfirmEnabled = !string.IsNullOrWhiteSpace(previewConfirmBounds)
+                                        && (TryResolveInteractiveEnabled(previewConfirmButton) ?? TryResolveControlEnabled(previewConfirmButton) ?? true);
+                break;
+            }
+        }
+
+        var screenVisible = IsVisibleNode(screen)
+                            || visibleCards.Length > 0
+                            || mainConfirmVisible
+                            || previewVisible
+                            || string.Equals(screenType, screenHint, StringComparison.OrdinalIgnoreCase);
+        return new CardSelectionObservation(
+            screenType,
+            ScreenDetected: true,
+            ScreenVisible: screenVisible,
+            RootType: rootType,
+            Prompt: prompt,
+            MinSelect: minSelect,
+            MaxSelect: maxSelect,
+            SelectedCount: selectedCount,
+            RequireManualConfirmation: requireManualConfirmation,
+            Cancelable: cancelable,
+            PreviewVisible: previewVisible,
+            MainConfirmEnabled: mainConfirmEnabled,
+            PreviewConfirmEnabled: previewConfirmEnabled,
+            MainConfirmBounds: mainConfirmBounds,
+            PreviewConfirmBounds: previewConfirmBounds,
+            PreviewMode: previewMode,
+            SelectedCardIds: selectedCardIds,
+            VisibleCards: visibleCards);
+    }
+
+    private static string? TryResolveCardSelectionScreenType(object candidate)
+    {
+        var typeName = candidate.GetType().FullName ?? candidate.GetType().Name;
+        if (typeName.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase))
+        {
+            return "reward-pick";
+        }
+
+        if (typeName.Contains("NDeckTransformSelectScreen", StringComparison.OrdinalIgnoreCase))
+        {
+            return "transform";
+        }
+
+        if (typeName.Contains("NDeckUpgradeSelectScreen", StringComparison.OrdinalIgnoreCase))
+        {
+            return "upgrade";
+        }
+
+        if (typeName.Contains("NDeckCardSelectScreen", StringComparison.OrdinalIgnoreCase))
+        {
+            return "deck-remove";
+        }
+
+        return null;
+    }
+
+    private static string? ResolveCardSelectionPrompt(object screen, object? prefs)
+    {
+        var prompt = TryReadString(prefs, "Prompt");
+        if (!string.IsNullOrWhiteSpace(prompt))
+        {
+            return prompt;
+        }
+
+        prompt = TryReadString(TryGetMemberValue(screen, "_infoLabel"), "Text");
+        if (!string.IsNullOrWhiteSpace(prompt))
+        {
+            return prompt;
+        }
+
+        var banner = TryGetMemberValue(screen, "_banner");
+        prompt = FirstNonEmpty(
+            TryResolveChoiceLabel(banner),
+            TryReadString(TryGetMemberValue(banner, "label"), "Text"),
+            TryReadString(TryGetMemberValue(banner, "Label"), "Text"),
+            TryReadString(banner, "label", "Label"));
+        return string.IsNullOrWhiteSpace(prompt) ? null : prompt;
+    }
+
+    private static IReadOnlyList<string> ResolveCardSelectionSelectedCardIds(IEnumerable<object> selectedCards)
+    {
+        return selectedCards
+            .Select(static card => FirstNonEmpty(
+                TryReadString(card, "Id", "CardId", "Name", "Title"),
+                TryResolveChoiceLabel(card)))
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray()!;
+    }
+
+    private static IReadOnlyList<CardSelectionCardCandidate> EnumerateCardSelectionCandidates(
+        object screen,
+        string screenType,
+        IReadOnlyList<string> selectedCardIds)
+    {
+        IEnumerable<object> holders = screenType switch
+        {
+            "reward-pick" => EnumerateRewardPickCardHolders(screen),
+            _ => EnumerateUpgradeCardHolders(screen),
+        };
+
+        return holders
+            .Select(holder => TryCreateCardSelectionCandidate(holder, selectedCardIds))
+            .Where(static candidate => candidate is not null)
+            .Cast<CardSelectionCardCandidate>()
+            .ToArray();
+    }
+
+    private static IEnumerable<object> EnumerateRewardPickCardHolders(object screen)
+    {
+        var seen = new HashSet<int>();
+        var cardRow = TryGetMemberValue(screen, "_cardRow") ?? TryGetMemberValue(screen, "CardRow");
+        foreach (var holder in ExpandEnumerable(TryEnumerateChildren(cardRow)))
+        {
+            if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+            {
+                yield return holder;
+            }
+        }
+
+        foreach (var holder in ExpandEnumerable(cardRow))
+        {
+            if (holder is not null && seen.Add(RuntimeHelpers.GetHashCode(holder)))
+            {
+                yield return holder;
+            }
+        }
+    }
+
+    private static CardSelectionCardCandidate? TryCreateCardSelectionCandidate(object holder, IReadOnlyList<string> selectedCardIds)
+    {
+        var screenBounds = TryResolveInteractiveScreenBounds(holder, out var boundsSource);
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return null;
+        }
+
+        var cardModel = TryGetMemberValue(holder, "CardModel")
+                        ?? TryGetMemberValue(holder, "Card")
+                        ?? TryGetMemberValue(holder, "CardNode")
+                        ?? TryGetMemberValue(holder, "Model");
+        var label = FirstNonEmpty(
+            TryResolveChoiceLabel(cardModel ?? holder),
+            TryReadString(cardModel, "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
+            TryReadString(holder, "Title", "CardName", "DisplayName", "Name", "Id", "CardId"));
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        var cardId = FirstNonEmpty(
+            TryReadString(cardModel, "Id", "CardId", "Name", "Title"),
+            TryReadString(holder, "Id", "CardId", "Name", "Title"));
+        var selected = !string.IsNullOrWhiteSpace(cardId) && selectedCardIds.Contains(cardId, StringComparer.OrdinalIgnoreCase)
+                       || selectedCardIds.Contains(label, StringComparer.OrdinalIgnoreCase);
+        return new CardSelectionCardCandidate(
+            holder,
+            label,
+            cardId,
+            screenBounds,
+            TryResolveInteractiveEnabled(holder) ?? true,
+            selected,
+            boundsSource);
+    }
+
     private static bool TryResolveRestSiteButtonEnabled(object button, object? option)
     {
         var isUnclickable = TryReadBool(button, "_isUnclickable");
@@ -2953,6 +3273,179 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             payload["restSiteViewKind"] = viewKind;
         }
+    }
+
+    private static void AppendCardSelectionRuntimeMetadata(
+        CardSelectionObservation observation,
+        IDictionary<string, string?> meta,
+        IDictionary<string, object?> payload)
+    {
+        meta["cardSelectionScreenDetected"] = observation.ScreenDetected ? "true" : "false";
+        meta["cardSelectionScreenType"] = observation.ScreenDetected ? observation.ScreenType : null;
+        meta["cardSelectionPrompt"] = observation.Prompt;
+        meta["cardSelectionMinSelect"] = observation.MinSelect?.ToString(CultureInfo.InvariantCulture);
+        meta["cardSelectionMaxSelect"] = observation.MaxSelect?.ToString(CultureInfo.InvariantCulture);
+        meta["cardSelectionSelectedCount"] = observation.SelectedCount.ToString(CultureInfo.InvariantCulture);
+        meta["cardSelectionRequireManualConfirmation"] = observation.RequireManualConfirmation?.ToString().ToLowerInvariant();
+        meta["cardSelectionCancelable"] = observation.Cancelable?.ToString().ToLowerInvariant();
+        meta["cardSelectionPreviewVisible"] = observation.PreviewVisible ? "true" : "false";
+        meta["cardSelectionMainConfirmEnabled"] = observation.MainConfirmEnabled ? "true" : "false";
+        meta["cardSelectionPreviewConfirmEnabled"] = observation.PreviewConfirmEnabled ? "true" : "false";
+        meta["cardSelectionPreviewMode"] = observation.PreviewMode;
+        meta["cardSelectionSelectedCardIds"] = observation.SelectedCardIds.Count == 0
+            ? null
+            : string.Join(",", observation.SelectedCardIds);
+        meta["cardSelectionRootType"] = observation.RootType;
+        meta["cardSelectionVisibleCardCount"] = observation.VisibleCards.Count.ToString(CultureInfo.InvariantCulture);
+
+        payload["cardSelectionScreenDetected"] = observation.ScreenDetected;
+        payload["cardSelectionScreenType"] = observation.ScreenDetected ? observation.ScreenType : null;
+        payload["cardSelectionPrompt"] = observation.Prompt;
+        payload["cardSelectionMinSelect"] = observation.MinSelect;
+        payload["cardSelectionMaxSelect"] = observation.MaxSelect;
+        payload["cardSelectionSelectedCount"] = observation.SelectedCount;
+        payload["cardSelectionRequireManualConfirmation"] = observation.RequireManualConfirmation;
+        payload["cardSelectionCancelable"] = observation.Cancelable;
+        payload["cardSelectionPreviewVisible"] = observation.PreviewVisible;
+        payload["cardSelectionMainConfirmEnabled"] = observation.MainConfirmEnabled;
+        payload["cardSelectionPreviewConfirmEnabled"] = observation.PreviewConfirmEnabled;
+        payload["cardSelectionPreviewMode"] = observation.PreviewMode;
+        payload["cardSelectionRootType"] = observation.RootType;
+        if (observation.SelectedCardIds.Count > 0)
+        {
+            payload["cardSelectionSelectedCardIds"] = observation.SelectedCardIds.ToArray();
+        }
+    }
+
+    private static IReadOnlyList<LiveExportChoiceSummary> CreateCardSelectionChoices(CardSelectionObservation observation)
+    {
+        if (!observation.ScreenVisible)
+        {
+            return Array.Empty<LiveExportChoiceSummary>();
+        }
+
+        var choices = new List<LiveExportChoiceSummary>();
+        var cardKind = observation.ScreenType switch
+        {
+            "transform" => "transform-card",
+            "deck-remove" => "deck-remove-card",
+            "upgrade" => "upgrade-card",
+            "reward-pick" => "reward-pick-card",
+            _ => "card-selection-card",
+        };
+        var confirmKind = observation.ScreenType switch
+        {
+            "transform" => "transform-confirm",
+            "deck-remove" => "deck-remove-confirm",
+            "upgrade" => "upgrade-confirm",
+            _ => null,
+        };
+
+        var cardIndex = 0;
+        foreach (var card in observation.VisibleCards)
+        {
+            cardIndex += 1;
+            choices.Add(new LiveExportChoiceSummary(
+                cardKind,
+                card.Label,
+                card.CardId ?? SanitizeNodeKey(card.Label),
+                observation.Prompt)
+            {
+                ScreenBounds = card.ScreenBounds,
+                NodeId = $"card-selection:{observation.ScreenType}:card:{cardIndex}",
+                BindingKind = "card-selection-card",
+                BindingId = observation.ScreenType,
+                SemanticHints = BuildCardSelectionSemanticHints(observation.ScreenType, card.Selected),
+                Enabled = card.Enabled,
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(confirmKind))
+        {
+            if (!string.IsNullOrWhiteSpace(observation.PreviewConfirmBounds))
+            {
+                choices.Add(new LiveExportChoiceSummary(confirmKind, "Confirm", "preview-confirm", observation.Prompt)
+                {
+                    ScreenBounds = observation.PreviewConfirmBounds,
+                    NodeId = $"card-selection:{observation.ScreenType}:preview-confirm",
+                    BindingKind = "card-selection-confirm",
+                    BindingId = "preview",
+                    SemanticHints = BuildCardSelectionConfirmSemanticHints(observation.ScreenType, "preview"),
+                    Enabled = observation.PreviewConfirmEnabled,
+                });
+            }
+
+            if (!string.IsNullOrWhiteSpace(observation.MainConfirmBounds))
+            {
+                choices.Add(new LiveExportChoiceSummary(confirmKind, "Confirm", "main-confirm", observation.Prompt)
+                {
+                    ScreenBounds = observation.MainConfirmBounds,
+                    NodeId = $"card-selection:{observation.ScreenType}:main-confirm",
+                    BindingKind = "card-selection-confirm",
+                    BindingId = "main",
+                    SemanticHints = BuildCardSelectionConfirmSemanticHints(observation.ScreenType, "main"),
+                    Enabled = observation.MainConfirmEnabled,
+                });
+            }
+        }
+
+        return choices;
+    }
+
+    private static IReadOnlyList<string> BuildCardSelectionSemanticHints(string screenType, bool selected)
+    {
+        var hints = new List<string> { $"card-selection:{screenType}" };
+        if (selected)
+        {
+            hints.Add("selected-card");
+        }
+
+        if (string.Equals(screenType, "reward-pick", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add("reward-pick");
+        }
+
+        return hints;
+    }
+
+    private static IReadOnlyList<string> BuildCardSelectionConfirmSemanticHints(string screenType, string mode)
+    {
+        return new[]
+        {
+            $"card-selection:{screenType}",
+            $"confirm-mode:{mode}",
+        };
+    }
+
+    private static string GetCardSelectionExtractorPath(string screenType)
+    {
+        return screenType switch
+        {
+            "transform" => "card-selection-transform",
+            "deck-remove" => "card-selection-deck-remove",
+            "upgrade" => "card-selection-upgrade",
+            "reward-pick" => "card-selection-reward-pick",
+            _ => "card-selection-unknown",
+        };
+    }
+
+    private static void AddChoiceSummary(List<LiveExportChoiceSummary> choices, LiveExportChoiceSummary choice, int maxEntries)
+    {
+        if (choices.Any(existing =>
+                string.Equals(existing.Kind, choice.Kind, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(existing.Label, choice.Label, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(existing.ScreenBounds, choice.ScreenBounds, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(existing.NodeId, choice.NodeId, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        if (choices.Count >= maxEntries)
+        {
+            return;
+        }
+
+        choices.Add(choice);
     }
 
     private static string BuildChoiceSignature(IReadOnlyList<LiveExportChoiceSummary> choices)

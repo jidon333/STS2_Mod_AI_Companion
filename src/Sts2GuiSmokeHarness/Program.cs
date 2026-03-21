@@ -4299,6 +4299,197 @@ static void RunSelfTest()
                && !string.Equals(rewardPolicyDecision.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase),
             "Reward policy should prefer a visible card or claimable reward over default gold/skip choices.");
 
+        var transformSubtypeObserver = new ObserverState(
+            new ObserverSummary(
+                "transform",
+                "transform",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-transform-subtype",
+                true,
+                "mixed",
+                "stable",
+                "episode-transform-subtype",
+                "Event",
+                "card-selection-transform",
+                80,
+                80,
+                null,
+                new[] { "타격", "수비" },
+                Array.Empty<string>(),
+                Array.Empty<ObserverActionNode>(),
+                new[]
+                {
+                    new ObserverChoice("transform-card", "타격", "520,280,180,254", "CARD.STRIKE_IRONCLAD")
+                    {
+                        SemanticHints = new[] { "card-selection:transform", "selected-card" },
+                    },
+                    new ObserverChoice("transform-card", "수비", "860,280,180,254", "CARD.DEFEND_IRONCLAD")
+                    {
+                        SemanticHints = new[] { "card-selection:transform" },
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cardSelectionScreenType"] = "transform",
+                    ["cardSelectionMinSelect"] = "2",
+                    ["cardSelectionMaxSelect"] = "2",
+                    ["cardSelectionSelectedCount"] = "1",
+                    ["cardSelectionPreviewVisible"] = "false",
+                    ["cardSelectionMainConfirmEnabled"] = "false",
+                    ["cardSelectionPreviewConfirmEnabled"] = "false",
+                    ["cardSelectionSelectedCardIds"] = "CARD.STRIKE_IRONCLAD",
+                },
+            },
+            null,
+            null,
+            null);
+        var transformSubtypeActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, transformSubtypeObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(transformSubtypeActions.Contains("transform select card", StringComparer.OrdinalIgnoreCase), "Transform subtype should open an explicit transform select lane.");
+        Assert(!transformSubtypeActions.Contains("click reward card choice", StringComparer.OrdinalIgnoreCase), "Transform subtype should suppress generic reward card actions.");
+        var transformConfirmObserver = new ObserverState(
+            transformSubtypeObserver.Summary with
+            {
+                InventoryId = "inv-transform-confirm",
+                SceneEpisodeId = "episode-transform-confirm",
+                Choices = new[]
+                {
+                    new ObserverChoice("transform-confirm", "Confirm", "1700,720,180,110", "preview-confirm")
+                    {
+                        BindingKind = "card-selection-confirm",
+                        BindingId = "preview",
+                        SemanticHints = new[] { "card-selection:transform", "confirm-mode:preview" },
+                        Enabled = true,
+                    },
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cardSelectionScreenType"] = "transform",
+                    ["cardSelectionMinSelect"] = "2",
+                    ["cardSelectionMaxSelect"] = "2",
+                    ["cardSelectionSelectedCount"] = "2",
+                    ["cardSelectionPreviewVisible"] = "true",
+                    ["cardSelectionPreviewConfirmEnabled"] = "true",
+                    ["cardSelectionPreviewMode"] = "transform-preview",
+                },
+            },
+            null,
+            null,
+            null);
+        var transformConfirmActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, transformConfirmObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(transformConfirmActions.Contains("transform confirm", StringComparer.OrdinalIgnoreCase), "Transform preview state should open an explicit confirm lane.");
+        Assert(transformConfirmActions.Contains("transform confirm", StringComparer.OrdinalIgnoreCase), "Transform preview-visible state should drive transform confirm.");
+
+        var rewardPickObserver = new ObserverState(
+            new ObserverSummary(
+                "card-choice",
+                "card-choice",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-reward-pick",
+                true,
+                "mixed",
+                "stable",
+                "episode-reward-pick",
+                "Reward",
+                "card-selection-reward-pick",
+                80,
+                80,
+                null,
+                new[] { "전투 최면" },
+                Array.Empty<string>(),
+                Array.Empty<ObserverActionNode>(),
+                new[]
+                {
+                    new ObserverChoice("reward-pick-card", "전투 최면", "780,260,180,254", "CARD.BATTLE_TRANCE")
+                    {
+                        SemanticHints = new[] { "card-selection:reward-pick", "reward-pick" },
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cardSelectionScreenType"] = "reward-pick",
+                    ["cardSelectionSelectedCount"] = "0",
+                    ["cardSelectionPreviewVisible"] = "false",
+                },
+            },
+            null,
+            null,
+            null);
+        var rewardPickActions = BuildAllowedActions(GuiSmokePhase.HandleRewards, rewardPickObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(rewardPickActions.Contains("reward pick card", StringComparer.OrdinalIgnoreCase), "Reward-pick subtype should expose a direct reward pick lane.");
+        Assert(!rewardPickActions.Contains("click reward card choice", StringComparer.OrdinalIgnoreCase), "Reward-pick subtype should not reuse the generic reward row label.");
+        Assert(!rewardPickActions.Contains("transform confirm", StringComparer.OrdinalIgnoreCase)
+               && !rewardPickActions.Contains("deck remove confirm", StringComparer.OrdinalIgnoreCase)
+               && !rewardPickActions.Contains("upgrade confirm", StringComparer.OrdinalIgnoreCase),
+            "Reward-pick subtype should stay outside count/confirm card-selection flows.");
+
+        var deckRemoveObserver = new ObserverState(
+            rewardPickObserver.Summary with
+            {
+                CurrentScreen = "event",
+                VisibleScreen = "event",
+                InventoryId = "inv-deck-remove",
+                SceneEpisodeId = "episode-deck-remove",
+                ChoiceExtractorPath = "card-selection-deck-remove",
+                Choices = new[]
+                {
+                    new ObserverChoice("deck-remove-confirm", "Confirm", "1700,720,180,110", "main-confirm")
+                    {
+                        BindingKind = "card-selection-confirm",
+                        BindingId = "main",
+                        SemanticHints = new[] { "card-selection:deck-remove", "confirm-mode:main" },
+                        Enabled = true,
+                    },
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cardSelectionScreenType"] = "deck-remove",
+                    ["cardSelectionMinSelect"] = "1",
+                    ["cardSelectionMaxSelect"] = "2",
+                    ["cardSelectionSelectedCount"] = "1",
+                    ["cardSelectionMainConfirmEnabled"] = "true",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(BuildAllowedActions(GuiSmokePhase.HandleEvent, deckRemoveObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>()).Contains("deck remove confirm", StringComparer.OrdinalIgnoreCase), "Deck-remove subtype should expose explicit confirm semantics.");
+
+        var upgradeObserver = new ObserverState(
+            deckRemoveObserver.Summary with
+            {
+                InventoryId = "inv-upgrade-subtype",
+                SceneEpisodeId = "episode-upgrade-subtype",
+                ChoiceExtractorPath = "card-selection-upgrade",
+                Choices = new[]
+                {
+                    new ObserverChoice("upgrade-confirm", "Confirm", "1700,720,180,110", "preview-confirm")
+                    {
+                        BindingKind = "card-selection-confirm",
+                        BindingId = "preview",
+                        SemanticHints = new[] { "card-selection:upgrade", "confirm-mode:preview" },
+                        Enabled = true,
+                    },
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cardSelectionScreenType"] = "upgrade",
+                    ["cardSelectionSelectedCount"] = "1",
+                    ["cardSelectionPreviewVisible"] = "true",
+                    ["cardSelectionPreviewConfirmEnabled"] = "true",
+                    ["cardSelectionPreviewMode"] = "upgrade-single-preview",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(BuildAllowedActions(GuiSmokePhase.HandleEvent, upgradeObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>()).Contains("upgrade confirm", StringComparer.OrdinalIgnoreCase), "Upgrade subtype should expose explicit confirm semantics.");
+
         var mixedRewardAfterClaimObserver = new ObserverState(
             new ObserverSummary(
                 "map",
@@ -8221,6 +8412,7 @@ static GuiSmokeStepRequest CreateStepRequest(
 
 static string ComputeSceneSignature(string screenshotPath, ObserverState observer, GuiSmokePhase phase)
 {
+    var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
     var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
     var rewardBackNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
     var claimableRewardPresent = HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath);
@@ -8234,6 +8426,16 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
         $"ready:{(observer.SceneReady?.ToString() ?? "unknown").ToLowerInvariant()}",
         $"stability:{(observer.SceneStability ?? "unknown").Trim().ToLowerInvariant()}",
     };
+
+    if (cardSelectionState is not null)
+    {
+        tags.Add($"card-selection:{cardSelectionState.ScreenType}");
+        tags.Add($"card-selection-selected:{cardSelectionState.SelectedCount.ToString(CultureInfo.InvariantCulture)}");
+        if (cardSelectionState.PreviewVisible)
+        {
+            tags.Add($"card-selection-preview:{cardSelectionState.PreviewMode ?? "visible"}");
+        }
+    }
 
     if (LooksLikeTreasureState(observer.Summary))
     {
@@ -8709,6 +8911,7 @@ static string[] BuildAllowedActions(
     string? screenshotPath,
     IReadOnlyList<GuiSmokeHistoryEntry> history)
 {
+    var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
     var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
     var explicitRewardProgressionPresent = observer.Summary.Choices.Any(choice => IsCurrentRewardProgressionChoiceForObserver(choice, null))
                                           || observer.Summary.ActionNodes.Any(node => IsCurrentRewardProgressionNodeForObserver(node, null));
@@ -8734,6 +8937,8 @@ static string[] BuildAllowedActions(
         GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
         GuiSmokePhase.HandleRewards when LooksLikeInspectOverlayState(observer)
             => new[] { "press escape", "click inspect overlay close", "wait" },
+        GuiSmokePhase.HandleRewards when cardSelectionState is not null
+            => BuildCardSelectionAllowedActions(cardSelectionState),
         GuiSmokePhase.HandleRewards when rewardForegroundVisible && (claimableRewardPresent || LooksLikeColorlessCardChoiceState(observer))
             => new[] { "click colorless card choice", "click reward skip", "click proceed", "press escape", "wait" },
         GuiSmokePhase.HandleRewards when rewardForegroundVisible && (claimableRewardPresent || LooksLikeRewardChoiceState(observer))
@@ -8760,6 +8965,8 @@ static string[] BuildAllowedActions(
         GuiSmokePhase.ChooseFirstNode => new[] { "click first reachable node", "click visible map advance", "wait" },
         GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
             => new[] { "press escape", "click inspect overlay close", "wait" },
+        GuiSmokePhase.HandleEvent when cardSelectionState is not null
+            => BuildCardSelectionAllowedActions(cardSelectionState),
         GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && (claimableRewardPresent || LooksLikeColorlessCardChoiceState(observer))
             => new[] { "click colorless card choice", "click reward skip", "click proceed", "press escape", "wait" },
         GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && (claimableRewardPresent || LooksLikeRewardChoiceState(observer))
@@ -8793,8 +9000,31 @@ static bool LooksLikeInspectOverlayState(ObserverState observer)
                || node.Label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase));
 }
 
+static string[] BuildCardSelectionAllowedActions(CardSelectionSubtypeState state)
+{
+    return state.ScreenType switch
+    {
+        "reward-pick" => new[] { "reward pick card", "wait" },
+        "transform" when CardSelectionObserverSignals.IsConfirmReady(state)
+            => new[] { "transform confirm", "wait" },
+        "transform" => new[] { "transform select card", "wait" },
+        "deck-remove" when CardSelectionObserverSignals.IsConfirmReady(state)
+            => new[] { "deck remove confirm", "wait" },
+        "deck-remove" => new[] { "deck remove select card", "wait" },
+        "upgrade" when CardSelectionObserverSignals.IsConfirmReady(state)
+            => new[] { "upgrade confirm", "wait" },
+        "upgrade" => new[] { "upgrade select card", "wait" },
+        _ => new[] { "wait" },
+    };
+}
+
 static bool LooksLikeRewardChoiceState(ObserverState observer)
 {
+    if (CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer.Summary))
+    {
+        return false;
+    }
+
     if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
     {
         return false;
@@ -8811,7 +9041,8 @@ static bool LooksLikeRewardChoiceState(ObserverState observer)
 
 static bool LooksLikeColorlessCardChoiceState(ObserverState observer)
 {
-    return !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)
+    return !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer.Summary)
+           && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)
            && HasRewardChoiceAuthority(observer)
            && observer.Choices.Any(IsRewardCardChoice)
            && observer.Choices.Any(static choice =>
@@ -12744,6 +12975,21 @@ sealed record RestSitePostClickEvidence(
     bool SmithConfirmVisible,
     bool UpgradeChoiceObserverMiss);
 
+sealed record CardSelectionSubtypeState(
+    string ScreenType,
+    string? Prompt,
+    int? MinSelect,
+    int? MaxSelect,
+    int SelectedCount,
+    bool? RequireManualConfirmation,
+    bool? Cancelable,
+    bool PreviewVisible,
+    bool MainConfirmEnabled,
+    bool PreviewConfirmEnabled,
+    string? PreviewMode,
+    IReadOnlyList<string> SelectedCardIds,
+    string? RootType);
+
 static class RestSiteObserverSignals
 {
     public static string? TryGetMetaValue(ObserverSummary observer, string key)
@@ -12921,6 +13167,258 @@ static class RestSiteObserverSignals
 
         bounds = new RectangleF(x, y, width, height);
         return true;
+    }
+}
+
+static class CardSelectionObserverSignals
+{
+    public static string? TryGetMetaValue(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value) ? value : null;
+    }
+
+    public static CardSelectionSubtypeState? TryGetState(ObserverSummary observer)
+    {
+        var screenType = NormalizeScreenType(
+            TryGetMetaValue(observer, "cardSelectionScreenType")
+            ?? InferScreenTypeFromObserver(observer));
+        if (screenType is null)
+        {
+            return null;
+        }
+
+        return new CardSelectionSubtypeState(
+            screenType,
+            TryGetMetaValue(observer, "cardSelectionPrompt"),
+            TryGetMetaInt(observer, "cardSelectionMinSelect"),
+            TryGetMetaInt(observer, "cardSelectionMaxSelect"),
+            TryGetMetaInt(observer, "cardSelectionSelectedCount") ?? 0,
+            TryGetMetaBool(observer, "cardSelectionRequireManualConfirmation"),
+            TryGetMetaBool(observer, "cardSelectionCancelable"),
+            TryGetMetaBool(observer, "cardSelectionPreviewVisible") == true,
+            TryGetMetaBool(observer, "cardSelectionMainConfirmEnabled") == true,
+            TryGetMetaBool(observer, "cardSelectionPreviewConfirmEnabled") == true,
+            TryGetMetaValue(observer, "cardSelectionPreviewMode"),
+            ParseStringList(TryGetMetaValue(observer, "cardSelectionSelectedCardIds")),
+            TryGetMetaValue(observer, "cardSelectionRootType") ?? TryGetMetaValue(observer, "rootTypeSummary"));
+    }
+
+    public static bool IsCardSelectionState(ObserverSummary observer)
+        => TryGetState(observer) is not null;
+
+    public static bool IsTransformState(ObserverSummary observer)
+        => string.Equals(TryGetState(observer)?.ScreenType, "transform", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsDeckRemoveState(ObserverSummary observer)
+        => string.Equals(TryGetState(observer)?.ScreenType, "deck-remove", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsUpgradeState(ObserverSummary observer)
+        => string.Equals(TryGetState(observer)?.ScreenType, "upgrade", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsRewardPickState(ObserverSummary observer)
+        => string.Equals(TryGetState(observer)?.ScreenType, "reward-pick", StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsNonRewardCountConfirmFamily(ObserverSummary observer)
+    {
+        var screenType = TryGetState(observer)?.ScreenType;
+        return string.Equals(screenType, "transform", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(screenType, "deck-remove", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(screenType, "upgrade", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static IReadOnlyList<ObserverChoice> GetCardChoices(ObserverSummary observer, CardSelectionSubtypeState state)
+    {
+        return observer.Choices
+            .Where(choice => IsSubtypeCardChoice(choice, state.ScreenType))
+            .OrderBy(static choice => choice.Enabled == false ? 1 : 0)
+            .ThenBy(static choice => GetSortX(choice.ScreenBounds))
+            .ThenBy(static choice => GetSortY(choice.ScreenBounds))
+            .ToArray();
+    }
+
+    public static ObserverChoice? TryGetConfirmChoice(ObserverSummary observer, CardSelectionSubtypeState state)
+    {
+        var confirmKind = state.ScreenType switch
+        {
+            "transform" => "transform-confirm",
+            "deck-remove" => "deck-remove-confirm",
+            "upgrade" => "upgrade-confirm",
+            _ => null,
+        };
+        if (confirmKind is null)
+        {
+            return null;
+        }
+
+        var explicitConfirm = observer.Choices
+            .Where(choice => string.Equals(choice.Kind, confirmKind, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(static choice => choice.BindingId == "preview" ? 0 : 1)
+            .ThenBy(static choice => choice.Enabled == false ? 1 : 0)
+            .FirstOrDefault();
+        if (explicitConfirm is not null)
+        {
+            return explicitConfirm;
+        }
+
+        return observer.Choices
+            .Where(static choice => IsConfirmLabel(choice.Label))
+            .OrderBy(static choice => choice.Enabled == false ? 1 : 0)
+            .ThenByDescending(static choice => choice.BindingId == "preview" ? 1 : 0)
+            .ThenBy(static choice => GetSortY(choice.ScreenBounds))
+            .ThenBy(static choice => GetSortX(choice.ScreenBounds))
+            .FirstOrDefault();
+    }
+
+    public static bool IsSubtypeCardChoice(ObserverChoice choice, string screenType)
+    {
+        var expectedKind = screenType switch
+        {
+            "transform" => "transform-card",
+            "deck-remove" => "deck-remove-card",
+            "upgrade" => "upgrade-card",
+            "reward-pick" => "reward-pick-card",
+            _ => null,
+        };
+        if (expectedKind is not null && string.Equals(choice.Kind, expectedKind, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return choice.SemanticHints.Any(hint => string.Equals(hint, $"card-selection:{screenType}", StringComparison.OrdinalIgnoreCase))
+               && !choice.SemanticHints.Any(static hint => string.Equals(hint, "confirm-mode:main", StringComparison.OrdinalIgnoreCase)
+                                                           || string.Equals(hint, "confirm-mode:preview", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsSelectedCardChoice(ObserverChoice choice)
+    {
+        return choice.SemanticHints.Any(static hint => string.Equals(hint, "selected-card", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsConfirmReady(CardSelectionSubtypeState state)
+    {
+        if (state.PreviewVisible && state.PreviewConfirmEnabled)
+        {
+            return true;
+        }
+
+        return state.ScreenType is "transform" or "deck-remove"
+               && !state.PreviewVisible
+               && state.MinSelect != state.MaxSelect
+               && state.MinSelect is not null
+               && state.SelectedCount >= state.MinSelect
+               && state.MainConfirmEnabled;
+    }
+
+    private static string? InferScreenTypeFromObserver(ObserverSummary observer)
+    {
+        var rootTypeSummary = observer.Meta.TryGetValue("rootTypeSummary", out var rawRootTypeSummary)
+            ? rawRootTypeSummary
+            : null;
+
+        if (string.Equals(observer.ChoiceExtractorPath, "card-selection-transform", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.CurrentScreen, "transform", StringComparison.OrdinalIgnoreCase)
+            || rootTypeSummary?.Contains("NDeckTransformSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "transform";
+        }
+
+        if (string.Equals(observer.ChoiceExtractorPath, "card-selection-deck-remove", StringComparison.OrdinalIgnoreCase)
+            || rootTypeSummary?.Contains("NDeckCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "deck-remove";
+        }
+
+        if (string.Equals(observer.ChoiceExtractorPath, "card-selection-upgrade", StringComparison.OrdinalIgnoreCase)
+            || rootTypeSummary?.Contains("NDeckUpgradeSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "upgrade";
+        }
+
+        if (string.Equals(observer.ChoiceExtractorPath, "card-selection-reward-pick", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.CurrentScreen, "card-choice", StringComparison.OrdinalIgnoreCase)
+            || rootTypeSummary?.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "reward-pick";
+        }
+
+        return null;
+    }
+
+    private static string? NormalizeScreenType(string? value)
+    {
+        return value switch
+        {
+            "transform" => "transform",
+            "deck-remove" => "deck-remove",
+            "upgrade" => "upgrade",
+            "reward-pick" => "reward-pick",
+            "unknown-card-select" => "unknown-card-select",
+            _ => null,
+        };
+    }
+
+    private static bool? TryGetMetaBool(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static int? TryGetMetaInt(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static IReadOnlyList<string> ParseStringList(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        return value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private static bool IsConfirmLabel(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("Confirm", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("확인", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("선택", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static float GetSortX(string? rawBounds)
+    {
+        return TryParseBounds(rawBounds, out var bounds) ? bounds.X : float.MaxValue;
+    }
+
+    private static float GetSortY(string? rawBounds)
+    {
+        return TryParseBounds(rawBounds, out var bounds) ? bounds.Y : float.MaxValue;
+    }
+
+    private static bool TryParseBounds(string? rawBounds, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(rawBounds))
+        {
+            return false;
+        }
+
+        var parts = rawBounds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 4
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return width > 0f && height > 0f;
     }
 }
 
@@ -14138,6 +14636,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return overlayDecision;
         }
 
+        var cardSelectionDecision = TryCreateCardSelectionDecision(request);
+        if (cardSelectionDecision is not null)
+        {
+            return cardSelectionDecision;
+        }
+
         var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
         if (explicitRewardDecision is not null)
         {
@@ -14310,6 +14814,17 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return overlayDecision;
         }
 
+        var cardSelectionDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "card-selection subtype",
+            "card-selection-runtime",
+            0.96,
+            TryCreateCardSelectionDecision(request),
+            "no subtype-specific card-selection affordance is currently actionable");
+        if (cardSelectionDecision is not null)
+        {
+            return cardSelectionDecision;
+        }
+
         var explicitRewardDecision = GuiSmokeDecisionDebug.TraceCandidate(
             "explicit reward resolution",
             "reward-foreground",
@@ -14399,6 +14914,207 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         }
 
         return CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision? TryCreateCardSelectionDecision(GuiSmokeStepRequest request)
+    {
+        var state = CardSelectionObserverSignals.TryGetState(request.Observer);
+        if (state is null)
+        {
+            return null;
+        }
+
+        return state.ScreenType switch
+        {
+            "reward-pick" => TryCreateRewardPickDecision(request, state),
+            "transform" => TryCreateSubtypeCardSelectionDecision(request, state, "transform select card", "transform confirm"),
+            "deck-remove" => TryCreateSubtypeCardSelectionDecision(request, state, "deck remove select card", "deck remove confirm"),
+            "upgrade" => TryCreateSubtypeCardSelectionDecision(request, state, "upgrade select card", "upgrade confirm"),
+            _ => null,
+        };
+    }
+
+    private static GuiSmokeStepDecision? TryCreateRewardPickDecision(GuiSmokeStepRequest request, CardSelectionSubtypeState state)
+    {
+        var explicitChoice = CardSelectionObserverSignals.GetCardChoices(request.Observer, state)
+            .Where(choice => choice.Enabled != false && HasActiveRewardBounds(choice.ScreenBounds, request.WindowBounds))
+            .OrderBy(GetChoiceSortX)
+            .ThenBy(GetChoiceSortY)
+            .FirstOrDefault();
+        if (explicitChoice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                explicitChoice,
+                BuildCardSelectionCardTargetLabel(state.ScreenType, explicitChoice, 0),
+                "Reward-pick subtype is runtime-visible. Pick a reward card directly instead of entering any count/confirm flow.",
+                0.96,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "card-choice",
+                1400);
+        }
+
+        return TryCreateScreenshotSubtypeCardSelectionDecision(request, state, "reward pick card");
+    }
+
+    private static GuiSmokeStepDecision? TryCreateSubtypeCardSelectionDecision(
+        GuiSmokeStepRequest request,
+        CardSelectionSubtypeState state,
+        string selectTargetLabel,
+        string confirmTargetLabel)
+    {
+        if (CardSelectionObserverSignals.IsConfirmReady(state))
+        {
+            var confirmChoice = CardSelectionObserverSignals.TryGetConfirmChoice(request.Observer, state);
+            if (confirmChoice is not null
+                && confirmChoice.Enabled != false
+                && HasActiveRewardBounds(confirmChoice.ScreenBounds, request.WindowBounds))
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    confirmChoice,
+                    confirmTargetLabel,
+                    $"Card-selection subtype '{state.ScreenType}' is confirm-ready. Use the exported confirm affordance instead of repeating a card click.",
+                    0.95,
+                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? state.ScreenType,
+                    1400);
+            }
+        }
+
+        var cardChoices = CardSelectionObserverSignals.GetCardChoices(request.Observer, state)
+            .Where(choice => choice.Enabled != false && HasActiveRewardBounds(choice.ScreenBounds, request.WindowBounds))
+            .ToArray();
+        if (cardChoices.Length > 0)
+        {
+            var preferredChoice = SelectSubtypeCardChoice(request, state, cardChoices);
+            if (preferredChoice is not null)
+            {
+                var choiceIndex = Array.IndexOf(cardChoices, preferredChoice);
+                return CreateClickDecisionFromChoice(
+                    request,
+                    preferredChoice,
+                    BuildCardSelectionCardTargetLabel(state.ScreenType, preferredChoice, choiceIndex),
+                    $"Card-selection subtype '{state.ScreenType}' is active. Advance it with an explicit exported card hitbox before any generic reward fallback.",
+                    0.95,
+                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? state.ScreenType,
+                    1400);
+            }
+        }
+
+        return TryCreateScreenshotSubtypeCardSelectionDecision(request, state, selectTargetLabel);
+    }
+
+    private static ObserverChoice? SelectSubtypeCardChoice(
+        GuiSmokeStepRequest request,
+        CardSelectionSubtypeState state,
+        IReadOnlyList<ObserverChoice> cardChoices)
+    {
+        var preferred = cardChoices
+            .Where(choice => !CardSelectionObserverSignals.IsSelectedCardChoice(choice))
+            .ToArray();
+        if (preferred.Length == 0)
+        {
+            preferred = cardChoices.ToArray();
+        }
+
+        var lastTarget = request.History.LastOrDefault(entry =>
+            string.Equals(entry.Phase, request.Phase, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase)
+            && entry.TargetLabel?.StartsWith(state.ScreenType.Replace('-', ' '), StringComparison.OrdinalIgnoreCase) == true)?.TargetLabel;
+
+        foreach (var candidate in preferred)
+        {
+            var targetLabel = BuildCardSelectionCardTargetLabel(state.ScreenType, candidate, Array.IndexOf(cardChoices.ToArray(), candidate));
+            if (!string.Equals(lastTarget, targetLabel, StringComparison.OrdinalIgnoreCase))
+            {
+                return candidate;
+            }
+        }
+
+        return preferred.FirstOrDefault();
+    }
+
+    private static GuiSmokeStepDecision? TryCreateScreenshotSubtypeCardSelectionDecision(
+        GuiSmokeStepRequest request,
+        CardSelectionSubtypeState state,
+        string targetLabel)
+    {
+        var analysis = AutoEventCardGridAnalyzer.Analyze(request.ScreenshotPath);
+        if (!analysis.HasSelectableCard)
+        {
+            return null;
+        }
+
+        var variantIndex = CountRecentCardSelectionRepeats(request.History, targetLabel) % 3;
+        var adjustedX = variantIndex switch
+        {
+            1 => Math.Clamp(analysis.CardNormalizedX - 0.12d, 0.12d, 0.88d),
+            2 => Math.Clamp(analysis.CardNormalizedX + 0.12d, 0.12d, 0.88d),
+            _ => analysis.CardNormalizedX,
+        };
+        var variantSuffix = variantIndex switch
+        {
+            1 => " left",
+            2 => " right",
+            _ => string.Empty,
+        };
+
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            adjustedX,
+            analysis.CardNormalizedY,
+            targetLabel + variantSuffix,
+            $"Card-selection subtype '{state.ScreenType}' is active, but no exported card bounds are available. Use bounded card-grid fallback for this subtype only.",
+            0.88,
+            request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? state.ScreenType,
+            1400,
+            true,
+            null);
+    }
+
+    private static int CountRecentCardSelectionRepeats(IReadOnlyList<GuiSmokeHistoryEntry> history, string targetLabel)
+    {
+        var count = 0;
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (!string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                    || entry.Action.StartsWith("observer-", StringComparison.OrdinalIgnoreCase)
+                    || entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                break;
+            }
+
+            if (!string.Equals(entry.TargetLabel, targetLabel, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(entry.TargetLabel, targetLabel + " left", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(entry.TargetLabel, targetLabel + " right", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            count += 1;
+        }
+
+        return count;
+    }
+
+    private static string BuildCardSelectionCardTargetLabel(string screenType, ObserverChoice choice, int index)
+    {
+        var prefix = screenType switch
+        {
+            "reward-pick" => "reward pick card",
+            "deck-remove" => "deck remove select card",
+            "upgrade" => "upgrade select card",
+            _ => "transform select card",
+        };
+        var suffix = string.IsNullOrWhiteSpace(choice.Label) ? $" #{index + 1}" : $" {choice.Label}";
+        return prefix + suffix;
     }
 
     private static GuiSmokeStepDecision? TryCreateExplicitRewardResolutionDecision(GuiSmokeStepRequest request)
@@ -15315,6 +16031,22 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
         builder.Consider("click inspect overlay close", "overlay-cleanup", 1.00d, () => overlayDecision, "no-room-overlay-cleanup", boundsSource: "overlay-cleanup");
 
+        var cardSelectionDecision = TryCreateCardSelectionDecision(request);
+        builder.Consider(
+            ToCandidateLabel(cardSelectionDecision, "click card-selection subtype"),
+            "card-selection-runtime",
+            0.98d,
+            () => cardSelectionDecision,
+            "no-card-selection-subtype-decision");
+        if (CardSelectionObserverSignals.IsCardSelectionState(request.Observer))
+        {
+            builder.AddSuppressed("click reward choice", "card-selection-subtype-foreground-suppresses-reward-row-reuse");
+            builder.AddSuppressed("click reward back", "card-selection-subtype-foreground-suppresses-reward-back-nav");
+            builder.AddSuppressed("click first reachable node", "card-selection-subtype-foreground-suppresses-map-fallback");
+            builder.AddSuppressed("click visible map advance", "card-selection-subtype-foreground-suppresses-map-fallback");
+            return builder.Build(CreateWaitDecision("waiting for card-selection subtype progression", request.Observer.CurrentScreen), actualDecision);
+        }
+
         var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
         builder.Consider(
             ToCandidateLabel(explicitRewardDecision, "click reward choice"),
@@ -15509,6 +16241,23 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
         builder.Consider("click inspect overlay close", "overlay-cleanup", 1.00d, () => overlayDecision, "no-room-overlay-cleanup", boundsSource: "overlay-cleanup");
 
+        var cardSelectionDecision = TryCreateCardSelectionDecision(request);
+        builder.Consider(
+            ToCandidateLabel(cardSelectionDecision, "click card-selection subtype"),
+            "card-selection-runtime",
+            0.99d,
+            () => cardSelectionDecision,
+            "no-card-selection-subtype-decision");
+        if (CardSelectionObserverSignals.IsCardSelectionState(request.Observer))
+        {
+            builder.AddSuppressed("click reward choice", "card-selection-subtype-foreground-suppresses-reward-row-reuse");
+            builder.AddSuppressed("click reward back", "card-selection-subtype-foreground-suppresses-reward-back-nav");
+            builder.AddSuppressed("click event choice", "card-selection-subtype-foreground-suppresses-generic-event-choice");
+            builder.AddSuppressed("click first reachable node", "card-selection-subtype-foreground-suppresses-map-fallback");
+            builder.AddSuppressed("click room fallback", "card-selection-subtype-foreground-suppresses-room-fallback");
+            return builder.Build(CreateWaitDecision("waiting for card-selection subtype progression", request.Observer.CurrentScreen), actualDecision);
+        }
+
         var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
         builder.Consider(
             ToCandidateLabel(explicitRewardDecision, "click reward choice"),
@@ -15579,6 +16328,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(request.Observer))
         {
             return (RestSiteObserverSignals.HasSmithConfirmVisible(request.Observer) ? "rest-site-smith-confirm" : "rest-site-smith-grid", "rest-site");
+        }
+
+        if (CardSelectionObserverSignals.TryGetState(request.Observer) is { } cardSelectionState)
+        {
+            return ($"card-selection:{cardSelectionState.ScreenType}", request.Observer.CurrentScreen);
         }
 
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
@@ -17653,6 +18407,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool LooksLikeRewardChoiceState(ObserverSummary observer)
     {
+        if (CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer))
+        {
+            return false;
+        }
+
         if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
         {
             return false;
@@ -17666,7 +18425,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool LooksLikeColorlessCardChoiceState(ObserverSummary observer)
     {
-        return !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
+        return !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
+               && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
                && HasRewardChoiceAuthority(observer)
                && observer.Choices.Any(IsRewardCardChoice)
                && observer.Choices.Any(IsInspectPreviewChoice);
@@ -17674,11 +18434,24 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool IsRewardCardChoice(ObserverChoice choice)
     {
+        if (choice.Kind.StartsWith("transform-", StringComparison.OrdinalIgnoreCase)
+            || choice.Kind.StartsWith("deck-remove-", StringComparison.OrdinalIgnoreCase)
+            || choice.Kind.StartsWith("upgrade-", StringComparison.OrdinalIgnoreCase)
+            || choice.SemanticHints.Any(static hint =>
+                string.Equals(hint, "card-selection:transform", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "card-selection:deck-remove", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "card-selection:upgrade", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
         return (string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(choice.Kind, "reward-card", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(choice.Kind, "reward-pick-card", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
                    && string.Equals(choice.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase)
                 || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
+                                                           || string.Equals(hint, "reward-pick", StringComparison.OrdinalIgnoreCase)
                                                            || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase)))
                && !IsSkipOrProceedLabel(choice.Label)
                && !IsConfirmLikeLabel(choice.Label)

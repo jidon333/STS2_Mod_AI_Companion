@@ -42,6 +42,9 @@ Run("smoke diagnostics surface startup patch failures", TestSmokeDiagnostics, fa
 Run("runtime reflection invoker supports optional parameters", TestRuntimeReflectionOptionalParameters, failures);
 Run("runtime reflection string extraction resolves nested label text", TestRuntimeReflectionStringExtraction, failures);
 Run("runtime reflection keeps reward-backed card rows and reward type metadata", TestRuntimeReflectionRewardBackedCardChoiceExtraction, failures);
+Run("runtime reflection exports transform card-selection subtype metadata", TestRuntimeReflectionTransformCardSelectionExport, failures);
+Run("runtime reflection keeps reward-pick separate from confirm-driven card selection", TestRuntimeReflectionRewardPickCardSelectionExport, failures);
+Run("runtime reflection exports deck-remove card-selection preview semantics", TestRuntimeReflectionDeckRemoveCardSelectionExport, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
@@ -1208,6 +1211,111 @@ static void TestRuntimeReflectionRewardBackedCardChoiceExtraction()
 
     var placeholder = placeholderMethod!.Invoke(null, new object?[] { summary, 5 });
     Assert(placeholder is bool keep && !keep, "Expected reward-backed CardReward rows not to be discarded as placeholders.");
+}
+
+static void TestRuntimeReflectionTransformCardSelectionExport()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("ObserveCardSelection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private ObserveCardSelection helper.");
+
+    var transformScreen = new FakeNDeckTransformSelectScreen
+    {
+        Visible = true,
+        _prefs = new FakeCardSelectorPrefs(new FakeLocString("변화시킬 카드를 2장 선택하세요."), 2, 2, false, true),
+        _selectedCards = new object[]
+        {
+            new FakeCardModel { Id = "CARD.DEFEND_IRONCLAD", Name = "수비" },
+        },
+        _confirmButton = new FakeClickableControl { Visible = true, Enabled = false, Position = new FakeVector2(1700, 720), Size = new FakeVector2(180, 110) },
+        _previewContainer = new FakeContainer { Visible = false },
+        _previewConfirmButton = new FakeClickableControl { Visible = false, Enabled = false, Position = new FakeVector2(1700, 720), Size = new FakeVector2(180, 110) },
+        _grid = new FakeGrid
+        {
+            CurrentlyDisplayedCardHolders = new object[]
+            {
+                new FakeGridCardHolder(new FakeCardModel { Id = "CARD.STRIKE_IRONCLAD", Name = "타격" }, 460, 300),
+                new FakeGridCardHolder(new FakeCardModel { Id = "CARD.DEFEND_IRONCLAD", Name = "수비" }, 760, 300),
+            },
+        },
+    };
+
+    var observation = method!.Invoke(null, new object?[] { new object[] { transformScreen }, "transform" });
+    Assert(observation is not null, "Expected transform screen observation.");
+    Assert(ReadProperty(observation!, "ScreenType") as string == "transform", "Expected transform subtype.");
+    Assert((bool)(ReadProperty(observation!, "ScreenVisible") ?? false), "Expected transform screen to be visible.");
+    Assert((int)(ReadProperty(observation!, "SelectedCount") ?? -1) == 1, "Expected selected count to export.");
+    Assert((int?)(ReadProperty(observation!, "MinSelect") ?? -1) == 2, "Expected transform min-select to export.");
+    Assert((int?)(ReadProperty(observation!, "MaxSelect") ?? -1) == 2, "Expected transform max-select to export.");
+    Assert((bool)(ReadProperty(observation!, "PreviewVisible") ?? true) == false, "Expected transform preview to stay closed.");
+    Assert(ReadProperty(observation!, "Prompt") as string == "변화시킬 카드를 2장 선택하세요.", "Expected transform prompt to export.");
+}
+
+static void TestRuntimeReflectionRewardPickCardSelectionExport()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("ObserveCardSelection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private ObserveCardSelection helper.");
+
+    var rewardScreen = new FakeNCardRewardSelectionScreen
+    {
+        Visible = true,
+        _banner = new FakeBanner { label = new FakeLabel { Text = "카드를 고르세요." } },
+        _cardRow = new object[]
+        {
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.SHRUG_IT_OFF", Name = "몸통 박치기" }, 520, 280),
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.BATTLE_TRANCE", Name = "전투 최면" }, 860, 280),
+        },
+    };
+
+    var observation = method!.Invoke(null, new object?[] { new object[] { rewardScreen }, "card-choice" });
+    Assert(observation is not null, "Expected reward-pick observation.");
+    Assert(ReadProperty(observation!, "ScreenType") as string == "reward-pick", "Expected reward-pick subtype.");
+    Assert((int)(ReadProperty(observation!, "SelectedCount") ?? -1) == 0, "Reward-pick should not export selected-count progress.");
+    Assert((bool)(ReadProperty(observation!, "PreviewVisible") ?? true) == false, "Reward-pick should not export preview-visible state.");
+    Assert((bool)(ReadProperty(observation!, "MainConfirmEnabled") ?? true) == false, "Reward-pick should not expose main confirm.");
+    Assert((bool)(ReadProperty(observation!, "PreviewConfirmEnabled") ?? true) == false, "Reward-pick should not expose preview confirm.");
+}
+
+static void TestRuntimeReflectionDeckRemoveCardSelectionExport()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("ObserveCardSelection", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private ObserveCardSelection helper.");
+
+    var removeScreen = new FakeNDeckCardSelectScreen
+    {
+        Visible = true,
+        _prefs = new FakeCardSelectorPrefs(new FakeLocString("제거할 카드를 고르세요."), 1, 2, true, true),
+        _selectedCards = new object[]
+        {
+            new FakeCardModel { Id = "CARD.STRIKE_IRONCLAD", Name = "타격" },
+        },
+        _confirmButton = new FakeClickableControl { Visible = true, Enabled = true, Position = new FakeVector2(1700, 720), Size = new FakeVector2(180, 110) },
+        _previewContainer = new FakeContainer { Visible = false },
+        _previewConfirmButton = new FakeClickableControl { Visible = false, Enabled = false, Position = new FakeVector2(1700, 720), Size = new FakeVector2(180, 110) },
+        _grid = new FakeGrid
+        {
+            CurrentlyDisplayedCardHolders = new object[]
+            {
+                new FakeGridCardHolder(new FakeCardModel { Id = "CARD.STRIKE_IRONCLAD", Name = "타격" }, 520, 280),
+                new FakeGridCardHolder(new FakeCardModel { Id = "CARD.DEFEND_IRONCLAD", Name = "수비" }, 860, 280),
+            },
+        },
+    };
+
+    var observation = method!.Invoke(null, new object?[] { new object[] { removeScreen }, "event" });
+    Assert(observation is not null, "Expected deck-remove observation.");
+    Assert(ReadProperty(observation!, "ScreenType") as string == "deck-remove", "Expected deck-remove subtype.");
+    Assert((bool)(ReadProperty(observation!, "MainConfirmEnabled") ?? false), "Expected deck-remove main confirm to export.");
+    Assert((bool)(ReadProperty(observation!, "PreviewVisible") ?? true) == false, "Expected preview to stay closed.");
+    Assert((int)(ReadProperty(observation!, "SelectedCount") ?? -1) == 1, "Expected selected-count to export for deck-remove.");
 }
 
 static void TestRuntimeReflectionRejectsOverlayLikePlayerRoots()
@@ -3239,6 +3347,11 @@ static object CreateRuntimeHookBinding(System.Reflection.MethodInfo method, stri
     return binding!;
 }
 
+static object? ReadProperty(object target, string propertyName)
+{
+    return target.GetType().GetProperty(propertyName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(target);
+}
+
 file sealed class OptionalParameterProbe
 {
     public int GetChildCount(bool includeInternal = false)
@@ -3270,6 +3383,123 @@ file sealed class FakeRewardButton
     public object? Position { get; init; }
 
     public object? Size { get; init; }
+}
+
+file sealed class FakeCardSelectorPrefs
+{
+    public FakeCardSelectorPrefs(FakeLocString prompt, int minSelect, int maxSelect, bool requireManualConfirmation, bool cancelable)
+    {
+        Prompt = prompt;
+        MinSelect = minSelect;
+        MaxSelect = maxSelect;
+        RequireManualConfirmation = requireManualConfirmation;
+        Cancelable = cancelable;
+    }
+
+    public object Prompt { get; }
+
+    public int MinSelect { get; }
+
+    public int MaxSelect { get; }
+
+    public bool RequireManualConfirmation { get; }
+
+    public bool Cancelable { get; }
+}
+
+file sealed class FakeNDeckTransformSelectScreen
+{
+    public bool Visible { get; init; }
+
+    public object? _prefs { get; init; }
+
+    public object[]? _selectedCards { get; init; }
+
+    public object? _confirmButton { get; init; }
+
+    public object? _previewContainer { get; init; }
+
+    public object? _previewConfirmButton { get; init; }
+
+    public object? _grid { get; init; }
+}
+
+file sealed class FakeNDeckCardSelectScreen
+{
+    public bool Visible { get; init; }
+
+    public object? _prefs { get; init; }
+
+    public object[]? _selectedCards { get; init; }
+
+    public object? _confirmButton { get; init; }
+
+    public object? _previewContainer { get; init; }
+
+    public object? _previewConfirmButton { get; init; }
+
+    public object? _grid { get; init; }
+}
+
+file sealed class FakeNCardRewardSelectionScreen
+{
+    public bool Visible { get; init; }
+
+    public object? _banner { get; init; }
+
+    public object? _cardRow { get; init; }
+}
+
+file sealed class FakeGrid
+{
+    public object[]? CurrentlyDisplayedCardHolders { get; init; }
+}
+
+file sealed class FakeGridCardHolder
+{
+    public FakeGridCardHolder(FakeCardModel cardModel, double x, double y)
+    {
+        Visible = true;
+        CardModel = cardModel;
+        Position = new FakeVector2(x, y);
+        Size = new FakeVector2(180, 254);
+    }
+
+    public bool Visible { get; init; }
+
+    public object CardModel { get; }
+
+    public object Position { get; }
+
+    public object Size { get; }
+}
+
+file sealed class FakeCardModel
+{
+    public string? Id { get; init; }
+
+    public string? Name { get; init; }
+}
+
+file sealed class FakeClickableControl
+{
+    public bool Visible { get; init; }
+
+    public bool Enabled { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+}
+
+file sealed class FakeContainer
+{
+    public bool Visible { get; init; }
+}
+
+file sealed class FakeBanner
+{
+    public object? label { get; init; }
 }
 
 file class FakeReward
