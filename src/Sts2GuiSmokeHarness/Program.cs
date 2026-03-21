@@ -1891,6 +1891,13 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             _ => phase,
         };
 
+        if (phase == GuiSmokePhase.WaitCharacterSelect
+            && GuiSmokeObserverPhaseHeuristics.TryGetPostEnterRunPhase(postActionObserver, out var postEnterRunPhase))
+        {
+            LogHarness($"step={stepIndex} post-action phase reconciliation WaitCharacterSelect -> {postEnterRunPhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
+            phase = postEnterRunPhase;
+        }
+
         if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(postActionObserver, out var postEmbarkPhase))
         {
             LogHarness($"step={stepIndex} post-action phase reconciliation Embark -> {postEmbarkPhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
@@ -3811,6 +3818,249 @@ static void RunSelfTest()
         try
         {
             Directory.Delete(waitMapMixedStateBranchRoot, true);
+        }
+        catch
+        {
+        }
+    }
+
+    var postEnterRunCharacterSelectObserver = new ObserverState(
+        new ObserverSummary(
+            "character-select",
+            "character-select",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            true,
+            "stable",
+            "stable",
+            null,
+            null,
+            null,
+            80,
+            80,
+            null,
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            Array.Empty<ObserverChoice>(),
+            Array.Empty<ObservedCombatHandCard>()),
+        null,
+        null,
+        null);
+    Assert(
+        GuiSmokeObserverPhaseHeuristics.TryGetPostEnterRunPhase(postEnterRunCharacterSelectObserver, out var postEnterRunCharacterSelectPhase)
+        && postEnterRunCharacterSelectPhase == GuiSmokePhase.ChooseCharacter,
+        "EnterRun should still reconcile to ChooseCharacter for fresh new-run character-select flows.");
+
+    var continuePreferredDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+        "run",
+        "boot-to-long-run",
+        2,
+        GuiSmokePhase.EnterRun.ToString(),
+        "Enter a run using Continue first, otherwise Singleplayer.",
+        DateTimeOffset.UtcNow,
+        "screen.png",
+        new WindowBounds(0, 0, 1280, 720),
+        "phase:enter-run|screen:main-menu|visible:main-menu|ready:true",
+        "0001",
+        1,
+        3,
+        true,
+        "tactical",
+        null,
+        new ObserverSummary(
+            "main-menu",
+            "main-menu",
+            false,
+            DateTimeOffset.UtcNow,
+            "inv-main-menu",
+            true,
+            "main-menu",
+            "stable",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            new[] { "Continue", "Singleplayer" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("continue", "action", "Continue", "620,560,420,96", true),
+                new ObserverActionNode("singleplayer", "action", "Singleplayer", "620,680,420,96", true),
+            },
+            new[]
+            {
+                new ObserverChoice("choice", "Continue", "620,560,420,96"),
+                new ObserverChoice("choice", "Singleplayer", "620,680,420,96"),
+            },
+            Array.Empty<ObservedCombatHandCard>()),
+        Array.Empty<KnownRecipeHint>(),
+        Array.Empty<EventKnowledgeCandidate>(),
+        Array.Empty<CombatCardKnowledgeHint>(),
+        Array.Empty<string>(),
+        Array.Empty<GuiSmokeHistoryEntry>(),
+        string.Empty,
+        null));
+    Assert(
+        string.Equals(continuePreferredDecision.TargetLabel, "continue", StringComparison.OrdinalIgnoreCase),
+        "EnterRun should still prefer Continue when it is visible on the main menu.");
+
+    var postEnterRunTreasureObserver = new ObserverState(
+        new ObserverSummary(
+            "map",
+            "map",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            true,
+            "mixed",
+            "stable",
+            null,
+            "Treasure",
+            "generic",
+            76,
+            80,
+            null,
+            new[] { "Chest", "진행", "Chest" },
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            new[]
+            {
+                new ObserverChoice("treasure-chest", "Chest", "820,360,280,240", "Chest", "Treasure chest")
+                {
+                    BindingKind = "treasure-room",
+                    BindingId = "chest",
+                    Enabled = true,
+                    SemanticHints = new[] { "treasure-room", "treasure-chest" },
+                },
+            },
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>
+            {
+                ["treasureRoomDetected"] = "true",
+                ["treasureChestClickable"] = "true",
+                ["treasureChestOpened"] = "false",
+                ["treasureEnabledRelicHolderCount"] = "0",
+                ["treasureProceedEnabled"] = "false",
+                ["mapScreenOpen"] = "false",
+            },
+        },
+        null,
+        null,
+        null);
+    Assert(
+        GuiSmokeObserverPhaseHeuristics.TryGetPostEnterRunPhase(postEnterRunTreasureObserver, out var postEnterRunTreasurePhase)
+        && postEnterRunTreasurePhase == GuiSmokePhase.ChooseFirstNode,
+        "EnterRun should reconcile to ChooseFirstNode when Continue resumes directly into a treasure room.");
+
+    var waitCharacterSelectBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-wait-character-select-branch-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(waitCharacterSelectBranchRoot);
+    try
+    {
+        var waitCharacterSelectLogger = new ArtifactRecorder(waitCharacterSelectBranchRoot);
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitCharacterSelect,
+                postEnterRunTreasureObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitCharacterSelectLogger,
+                4,
+                true,
+                out var waitCharacterSelectTreasurePhase)
+            && waitCharacterSelectTreasurePhase == GuiSmokePhase.ChooseFirstNode,
+            "WaitCharacterSelect should reopen treasure handling when Continue resumes directly into a treasure room.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitCharacterSelect,
+                rewardMixedStateObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitCharacterSelectLogger,
+                5,
+                true,
+                out var waitCharacterSelectRewardPhase)
+            && waitCharacterSelectRewardPhase == GuiSmokePhase.HandleRewards,
+            "WaitCharacterSelect should branch to rewards when Continue resumes into a reward foreground.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitCharacterSelect,
+                new ObserverState(
+                    new ObserverSummary(
+                        "event",
+                        "event",
+                        false,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
+                        null,
+                        "None",
+                        "event",
+                        80,
+                        80,
+                        null,
+                        new[] { "Option A" },
+                        Array.Empty<string>(),
+                        new[] { new ObserverActionNode("event-option:0", "event-option", "Option A", "460,750,1000,100", true) },
+                        new[] { new ObserverChoice("choice", "Option A", "460,750,1000,100") },
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                new List<GuiSmokeHistoryEntry>(),
+                waitCharacterSelectLogger,
+                6,
+                true,
+                out var waitCharacterSelectEventPhase)
+            && waitCharacterSelectEventPhase == GuiSmokePhase.HandleEvent,
+            "WaitCharacterSelect should branch to event handling when Continue resumes into an event room.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitCharacterSelect,
+                new ObserverState(
+                    new ObserverSummary(
+                        "combat",
+                        "combat",
+                        true,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "hook",
+                        "stable",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Array.Empty<string>(),
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                new List<GuiSmokeHistoryEntry>(),
+                waitCharacterSelectLogger,
+                7,
+                true,
+                out var waitCharacterSelectCombatPhase)
+            && waitCharacterSelectCombatPhase == GuiSmokePhase.HandleCombat,
+            "WaitCharacterSelect should branch to combat handling when Continue resumes into combat.");
+    }
+    finally
+    {
+        try
+        {
+            Directory.Delete(waitCharacterSelectBranchRoot, true);
         }
         catch
         {
@@ -10756,7 +11006,7 @@ static string BuildGoal(GuiSmokePhase phase)
     {
         GuiSmokePhase.WaitMainMenu => "Reach main menu and verify observer currentScreen=main-menu.",
         GuiSmokePhase.EnterRun => "Enter a run using Continue first, otherwise Singleplayer.",
-        GuiSmokePhase.WaitCharacterSelect => "Wait until observer currentScreen=character-select.",
+        GuiSmokePhase.WaitCharacterSelect => "Reconcile the post-enter-run state: character-select for new runs, or the resumed room/screen for Continue flows.",
         GuiSmokePhase.ChooseCharacter => "Select Ironclad.",
         GuiSmokePhase.Embark => "Click Embark to begin the run.",
         GuiSmokePhase.WaitMap => "Wait until observer logical currentScreen=map. visibleScreen may reach map earlier while reward flow is still active.",
@@ -11407,47 +11657,23 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (LooksLikeShopState(observer.Summary) || LooksLikeRestSiteState(observer.Summary))
+        if (GuiSmokeObserverPhaseHeuristics.TryGetPostEnterRunPhase(observer, out var postEnterRunPhase))
         {
-            var branchKind = LooksLikeRestSiteState(observer.Summary) ? "branch-rest-site" : "branch-shop";
+            var branchKind = postEnterRunPhase switch
+            {
+                GuiSmokePhase.ChooseCharacter => "branch-character-select",
+                GuiSmokePhase.HandleRewards => "branch-rewards",
+                GuiSmokePhase.HandleCombat => "branch-combat",
+                GuiSmokePhase.HandleEvent => "branch-event",
+                GuiSmokePhase.ChooseFirstNode when TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary) => "branch-treasure",
+                GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
+                GuiSmokePhase.ChooseFirstNode when LooksLikeShopState(observer.Summary) => "branch-shop",
+                GuiSmokePhase.ChooseFirstNode => "branch-map",
+                _ => "branch-room",
+            };
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.ChooseFirstNode;
-            return true;
-        }
-
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer.Summary))
-        {
-            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
-            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.HandleRewards;
-            return true;
-        }
-
-        if (MapForegroundReconciliation.HasMapForegroundOwnership(observer, history))
-        {
-            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
-            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-map", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.ChooseFirstNode;
-            return true;
-        }
-
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
-        {
-            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
-            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.HandleCombat;
-            return true;
-        }
-
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeEventState(
-                observer.Summary,
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"),
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
-        {
-            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
-            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.HandleEvent;
+            nextPhase = postEnterRunPhase;
             return true;
         }
     }
@@ -15146,6 +15372,60 @@ static class GuiSmokeMapOverlayHeuristics
 
 static class GuiSmokeObserverPhaseHeuristics
 {
+    public static bool TryGetPostEnterRunPhase(ObserverState observer, out GuiSmokePhase nextPhase)
+    {
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer.Summary)
+            || string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
+            || observer.Choices.Any(static choice =>
+                choice.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+                || choice.SemanticHints.Any(static hint => hint.Contains("reward", StringComparison.OrdinalIgnoreCase)))
+            || observer.ActionNodes.Any(static node =>
+                node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
+                || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase)))
+        {
+            nextPhase = GuiSmokePhase.HandleRewards;
+            return true;
+        }
+
+        return TryGetPostEnterRunPhase(
+            observer.Summary,
+            TryReadObserverMetaString(observer.StateDocument, "declaringType"),
+            TryReadObserverMetaString(observer.StateDocument, "instanceType"),
+            out nextPhase);
+    }
+
+    public static bool TryGetPostEnterRunPhase(ObserverSummary observer, out GuiSmokePhase nextPhase)
+    {
+        return TryGetPostEnterRunPhase(observer, null, null, out nextPhase);
+    }
+
+    public static bool TryGetPostEnterRunPhase(ObserverSummary observer, string? declaringType, out GuiSmokePhase nextPhase)
+    {
+        return TryGetPostEnterRunPhase(observer, declaringType, null, out nextPhase);
+    }
+
+    public static bool TryGetPostEnterRunPhase(ObserverSummary observer, string? declaringType, string? instanceType, out GuiSmokePhase nextPhase)
+    {
+        if (string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        {
+            nextPhase = GuiSmokePhase.ChooseCharacter;
+            return true;
+        }
+
+        if (TryGetPostEmbarkPhase(observer, declaringType, instanceType, out nextPhase))
+        {
+            return true;
+        }
+
+        nextPhase = default;
+        return false;
+    }
+
     public static bool TryGetPostEmbarkPhase(ObserverState observer, out GuiSmokePhase nextPhase)
     {
         return TryGetPostEmbarkPhase(
@@ -15167,6 +15447,12 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool TryGetPostEmbarkPhase(ObserverSummary observer, string? declaringType, string? instanceType, out GuiSmokePhase nextPhase)
     {
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer))
+        {
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
         if (LooksLikeRewardsState(observer))
         {
             nextPhase = GuiSmokePhase.HandleRewards;
