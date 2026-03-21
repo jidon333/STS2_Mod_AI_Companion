@@ -6312,6 +6312,129 @@ static void RunSelfTest()
                || runtimeTargetingDecision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) == true,
             "Runtime targeting metadata should drive an enemy-target decision, not reopen card selection.");
 
+        var runtimeHittableEnemyObserver = runtimeTargetingObserver with
+        {
+            InventoryId = "inv-runtime-hittable-enemy",
+            SceneEpisodeId = "episode-runtime-hittable-enemy",
+            ActionNodes = new[]
+            {
+                new ObserverActionNode("enemy-target:jaw-worm:1", "enemy-target", "Jaw Worm", "720,180,180,260", true)
+                {
+                    TypeName = "enemy-target",
+                    SemanticHints = new[] { "combat-targetable", "target-id:MONSTER.JAW_WORM", "is-hittable:false", "hook-hitting:false" },
+                },
+                new ObserverActionNode("enemy-target:cultist:2", "enemy-target", "Cultist", "930,210,180,250", true)
+                {
+                    TypeName = "enemy-target",
+                    SemanticHints = new[] { "combat-targetable", "combat-hittable", "target-id:MONSTER.CULTIST", "is-hittable:true", "hook-hitting:true" },
+                },
+            },
+            Meta = new Dictionary<string, string?>(runtimeTargetingObserver.Meta, StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatTargetingInProgress"] = "true",
+                ["combatValidTargetsType"] = "AnyEnemy",
+                ["combatTargetableEnemyCount"] = "2",
+                ["combatTargetableEnemyIds"] = "MONSTER.JAW_WORM,MONSTER.CULTIST",
+                ["combatHittableEnemyCount"] = "1",
+                ["combatHittableEnemyIds"] = "MONSTER.CULTIST",
+                ["combatHoveredTargetId"] = "MONSTER.JAW_WORM",
+                ["combatHoveredTargetLabel"] = "Jaw Worm",
+                ["combatHoveredTargetIsHittable"] = "false",
+            },
+        };
+        var runtimeHittableEnemyActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(runtimeHittableEnemyObserver, null, null, null),
+            runtimeTargetingKnowledge,
+            runtimeStateOnlyScreenshotPath,
+            runtimeAttackSelectionHistory);
+        Assert(runtimeHittableEnemyActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Explicit runtime hittability with one allowed enemy should keep the click-enemy lane open.");
+        var runtimeHittableEnemyDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            28,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Choose only the enemy that runtime still marks as hittable.",
+            DateTimeOffset.UtcNow,
+            runtimeStateOnlyScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            runtimeHittableEnemyObserver,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            runtimeTargetingKnowledge,
+            runtimeHittableEnemyActions,
+            runtimeAttackSelectionHistory,
+            "Runtime hittability should exclude enemies that remain targetable but are not actually hover-valid or hittable.",
+            null));
+        Assert(runtimeHittableEnemyDecision.TargetLabel?.Contains("Cultist", StringComparison.OrdinalIgnoreCase) == true, "Runtime hittable-enemy metadata should select the only actionable enemy.");
+
+        var runtimeUnhittableEnemyObserver = runtimeTargetingObserver with
+        {
+            InventoryId = "inv-runtime-unhittable-enemies",
+            SceneEpisodeId = "episode-runtime-unhittable-enemies",
+            ActionNodes = new[]
+            {
+                new ObserverActionNode("enemy-target:jaw-worm:1", "enemy-target", "Jaw Worm", "720,180,180,260", true)
+                {
+                    TypeName = "enemy-target",
+                    SemanticHints = new[] { "combat-targetable", "target-id:MONSTER.JAW_WORM", "is-hittable:false", "hook-hitting:false" },
+                },
+            },
+            Meta = new Dictionary<string, string?>(runtimeTargetingObserver.Meta, StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatTargetingInProgress"] = "true",
+                ["combatValidTargetsType"] = "AnyEnemy",
+                ["combatTargetableEnemyCount"] = "1",
+                ["combatTargetableEnemyIds"] = "MONSTER.JAW_WORM",
+                ["combatHittableEnemyCount"] = "0",
+                ["combatHittableEnemyIds"] = null,
+                ["combatHoveredTargetId"] = "MONSTER.JAW_WORM",
+                ["combatHoveredTargetLabel"] = "Jaw Worm",
+                ["combatHoveredTargetIsHittable"] = "false",
+            },
+        };
+        var runtimeUnhittableEnemyActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(runtimeUnhittableEnemyObserver, null, null, null),
+            runtimeTargetingKnowledge,
+            combatNoOpScreenshotPath,
+            runtimeAttackSelectionHistory);
+        Assert(!runtimeUnhittableEnemyActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Explicit runtime hittability count=0 should keep click-enemy closed even if a stale target node or target arrow remains visible.");
+        var runtimeUnhittableEnemyDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            29,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Do not attack when runtime explicitly reports that no enemy is hittable.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            runtimeUnhittableEnemyObserver,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            runtimeTargetingKnowledge,
+            runtimeUnhittableEnemyActions,
+            runtimeAttackSelectionHistory,
+            "Explicit runtime hittability=0 should block screenshot-only enemy clicks.",
+            null));
+        Assert(runtimeUnhittableEnemyDecision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) != true
+               && runtimeUnhittableEnemyDecision.TargetLabel?.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase) != true,
+            "Explicit runtime hittability=0 should prevent combat enemy clicks.");
+
         var stalePendingAttackHistory = new[]
         {
             new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-2)),
@@ -10290,12 +10413,18 @@ static bool CanResolveEnemyTargetFromStateAnalysis(
     AutoCombatAnalysis analysis,
     PendingCombatSelection? pendingSelection)
 {
+    var runtime = CombatRuntimeStateSupport.Read(observer.Summary, combatCardKnowledge);
     if (CombatRuntimeStateSupport.CanResolveEnemyTarget(observer.Summary, combatCardKnowledge, pendingSelection, analysis))
     {
         return true;
     }
 
-    if (GetCombatEnemyTargetNodes(observer.Summary).Count > 0)
+    if (runtime.HasExplicitHittableEnemyAuthority)
+    {
+        return false;
+    }
+
+    if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer.Summary).Count > 0)
     {
         return true;
     }
@@ -10335,8 +10464,7 @@ static bool CanResolveEnemyTargetFromStateAnalysis(
 
 static IReadOnlyList<ObserverActionNode> GetCombatEnemyTargetNodes(ObserverSummary observer, WindowBounds? windowBounds = null)
 {
-    return observer.ActionNodes
-        .Where(static node => node.Actionable && IsCombatEnemyTargetNode(node))
+    return CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer, windowBounds)
         .Where(node => windowBounds is null
             ? TryParseNodeBounds(node.ScreenBounds, out _)
             : HasTopLevelActiveNodeBounds(node.ScreenBounds, windowBounds))
@@ -10349,8 +10477,10 @@ static bool IsCombatEnemyTargetNode(ObserverActionNode node)
 {
     return string.Equals(node.Kind, "enemy-target", StringComparison.OrdinalIgnoreCase)
            || node.NodeId.StartsWith("enemy-target:", StringComparison.OrdinalIgnoreCase)
-           || node.Label.Contains("enemy", StringComparison.OrdinalIgnoreCase)
-           || node.Label.Contains("적", StringComparison.OrdinalIgnoreCase);
+           || string.Equals(node.TypeName, "enemy-target", StringComparison.OrdinalIgnoreCase)
+           || node.SemanticHints.Any(static hint =>
+               string.Equals(hint, "combat-targetable", StringComparison.OrdinalIgnoreCase)
+               || hint.StartsWith("target-id:", StringComparison.OrdinalIgnoreCase));
 }
 
 static bool HasTopLevelActiveNodeBounds(string? screenBounds, WindowBounds? windowBounds)
@@ -18500,12 +18630,18 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         AutoCombatAnalysis analysis,
         PendingCombatSelection? pendingSelection)
     {
+        var runtime = CombatRuntimeStateSupport.Read(observer, combatCardKnowledge);
         if (CombatRuntimeStateSupport.CanResolveEnemyTarget(observer, combatCardKnowledge, pendingSelection, analysis))
         {
             return true;
         }
 
-        if (GetCombatEnemyTargetNodes(observer).Count > 0)
+        if (runtime.HasExplicitHittableEnemyAuthority)
+        {
+            return false;
+        }
+
+        if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer).Count > 0)
         {
             return true;
         }
@@ -18783,8 +18919,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static IReadOnlyList<ObserverActionNode> GetCombatEnemyTargetNodes(ObserverSummary observer, WindowBounds? windowBounds = null)
     {
-        return observer.ActionNodes
-            .Where(static node => node.Actionable && IsCombatEnemyTargetNode(node))
+        return CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer, windowBounds)
             .Where(node => windowBounds is null
                 ? TryParseNodeBounds(node.ScreenBounds, out _)
                 : HasActiveNodeBounds(node.ScreenBounds, windowBounds))
@@ -18797,8 +18932,10 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     {
         return string.Equals(node.Kind, "enemy-target", StringComparison.OrdinalIgnoreCase)
                || node.NodeId.StartsWith("enemy-target:", StringComparison.OrdinalIgnoreCase)
-               || node.Label.Contains("enemy", StringComparison.OrdinalIgnoreCase)
-               || node.Label.Contains("적", StringComparison.OrdinalIgnoreCase);
+               || string.Equals(node.TypeName, "enemy-target", StringComparison.OrdinalIgnoreCase)
+               || node.SemanticHints.Any(static hint =>
+                   string.Equals(hint, "combat-targetable", StringComparison.OrdinalIgnoreCase)
+                   || hint.StartsWith("target-id:", StringComparison.OrdinalIgnoreCase));
     }
 
     private static GuiSmokeStepDecision? TryCreateSemanticEventDecision(GuiSmokeStepRequest request)
@@ -22142,9 +22279,15 @@ sealed record CombatRuntimeState(
     string? PlayMode,
     PendingCombatSelection? PendingSelection,
     bool? TargetingInProgress,
+    string? ValidTargetsType,
+    int? TargetableEnemyCount,
+    IReadOnlyList<string> TargetableEnemyIds,
+    int? HittableEnemyCount,
+    IReadOnlyList<string> HittableEnemyIds,
     string? HoveredTargetKind,
     string? HoveredTargetId,
     string? HoveredTargetLabel,
+    bool? HoveredTargetIsHittable,
     string? LastCardPlayStartedCardId,
     string? LastCardPlayFinishedCardId,
     string? LastCardPlayFinishedCardName)
@@ -22156,6 +22299,14 @@ sealed record CombatRuntimeState(
     public bool HasExplicitEnemyTargetingEvidence =>
         TargetingInProgress == true
         || string.Equals(HoveredTargetKind, "enemy", StringComparison.OrdinalIgnoreCase);
+
+    public bool HasExplicitTargetableEnemyAuthority => TargetableEnemyCount is not null;
+
+    public bool HasExplicitTargetableEnemy => TargetableEnemyCount > 0 || TargetableEnemyIds.Count > 0;
+
+    public bool HasExplicitHittableEnemyAuthority => HittableEnemyCount is not null;
+
+    public bool HasExplicitHittableEnemy => HittableEnemyCount > 0 || HittableEnemyIds.Count > 0;
 
     public bool HasAttackSelectionWithoutExplicitTargeting =>
         PendingSelection?.Kind == AutoCombatCardKind.AttackLike
@@ -22182,9 +22333,15 @@ static class CombatRuntimeStateSupport
             TryGetMetaValue(observer, "combatPlayMode"),
             pendingSelection,
             TryGetMetaBool(observer, "combatTargetingInProgress"),
+            TryGetMetaValue(observer, "combatValidTargetsType"),
+            TryGetMetaInt(observer, "combatTargetableEnemyCount"),
+            ParseIdList(TryGetMetaValue(observer, "combatTargetableEnemyIds")),
+            TryGetMetaInt(observer, "combatHittableEnemyCount"),
+            ParseIdList(TryGetMetaValue(observer, "combatHittableEnemyIds")),
             TryGetMetaValue(observer, "combatHoveredTargetKind"),
             TryGetMetaValue(observer, "combatHoveredTargetId"),
             TryGetMetaValue(observer, "combatHoveredTargetLabel"),
+            TryGetMetaBool(observer, "combatHoveredTargetIsHittable"),
             TryGetMetaValue(observer, "combatLastCardPlayStartedCardId"),
             TryGetMetaValue(observer, "combatLastCardPlayFinishedCardId"),
             TryGetMetaValue(observer, "combatLastCardPlayFinishedCardName"));
@@ -22237,7 +22394,8 @@ static class CombatRuntimeStateSupport
     {
         var runtime = Read(observer, combatCardKnowledge);
         return runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-               && runtime.HasExplicitEnemyTargetingEvidence;
+               && runtime.HasExplicitEnemyTargetingEvidence
+               && (!runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitHittableEnemy);
     }
 
     public static bool RequiresExplicitTargetingBeforeEnemyClick(
@@ -22357,6 +22515,20 @@ static class CombatRuntimeStateSupport
             .ToArray();
     }
 
+    private static IReadOnlyList<string> ParseIdList(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        return value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static segment => !string.IsNullOrWhiteSpace(segment))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     private static string? TryGetMetaValue(ObserverSummary observer, string key)
     {
         return observer.Meta.TryGetValue(key, out var value) ? value : null;
@@ -22374,6 +22546,124 @@ static class CombatRuntimeStateSupport
         return observer.Meta.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+    }
+}
+
+static class CombatTargetabilitySupport
+{
+    public static bool HasExplicitTargetableEnemyAuthority(ObserverSummary observer)
+    {
+        return observer.Meta.ContainsKey("combatTargetableEnemyCount")
+               || observer.Meta.ContainsKey("combatTargetableEnemyIds")
+               || observer.Meta.ContainsKey("combatHittableEnemyCount")
+               || observer.Meta.ContainsKey("combatHittableEnemyIds");
+    }
+
+    public static IReadOnlyList<ObserverActionNode> GetCombatEnemyTargetNodes(ObserverSummary observer, WindowBounds? windowBounds = null)
+    {
+        var runtime = CombatRuntimeStateSupport.Read(observer, Array.Empty<CombatCardKnowledgeHint>());
+        if (runtime.HasExplicitHittableEnemyAuthority && !runtime.HasExplicitHittableEnemy)
+        {
+            return Array.Empty<ObserverActionNode>();
+        }
+
+        var targetableIds = (runtime.HasExplicitHittableEnemyAuthority ? runtime.HittableEnemyIds : runtime.TargetableEnemyIds)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return observer.ActionNodes
+            .Where(static node => node.Actionable)
+            .Where(node => windowBounds is null
+                ? TryParseBounds(node.ScreenBounds, out _)
+                : HasActiveBounds(node.ScreenBounds, windowBounds))
+            .Where(node => IsExplicitCombatEnemyTargetNode(node, targetableIds, runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitTargetableEnemyAuthority))
+            .OrderBy(static node => GetSortX(node))
+            .ThenBy(static node => GetSortY(node))
+            .ToArray();
+    }
+
+    private static bool IsExplicitCombatEnemyTargetNode(
+        ObserverActionNode node,
+        HashSet<string> targetableIds,
+        bool requireExplicitRuntimeEvidence)
+    {
+        if (string.Equals(node.TypeName, "relic", StringComparison.OrdinalIgnoreCase)
+            || node.SemanticHints.Any(static hint => string.Equals(hint, "raw-kind:relic", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var explicitEnemyTargetNode = string.Equals(node.Kind, "enemy-target", StringComparison.OrdinalIgnoreCase)
+                                      || node.NodeId.StartsWith("enemy-target:", StringComparison.OrdinalIgnoreCase)
+                                      || string.Equals(node.TypeName, "enemy-target", StringComparison.OrdinalIgnoreCase)
+                                      || node.SemanticHints.Any(static hint =>
+                                          string.Equals(hint, "combat-targetable", StringComparison.OrdinalIgnoreCase)
+                                          || string.Equals(hint, "combat-hittable", StringComparison.OrdinalIgnoreCase)
+                                          || hint.StartsWith("target-id:", StringComparison.OrdinalIgnoreCase));
+        if (!explicitEnemyTargetNode)
+        {
+            return false;
+        }
+
+        if (targetableIds.Count == 0)
+        {
+            return !requireExplicitRuntimeEvidence;
+        }
+
+        var hintedIds = node.SemanticHints
+            .Where(static hint => hint.StartsWith("target-id:", StringComparison.OrdinalIgnoreCase))
+            .Select(static hint => hint["target-id:".Length..])
+            .Where(static hint => !string.IsNullOrWhiteSpace(hint));
+        return hintedIds.Any(targetableIds.Contains)
+               || targetableIds.Contains(node.NodeId)
+               || targetableIds.Contains(node.Label);
+    }
+
+    private static bool HasActiveBounds(string? rawBounds, WindowBounds windowBounds)
+    {
+        if (!TryParseBounds(rawBounds, out var bounds))
+        {
+            return false;
+        }
+
+        return bounds.Width > 0f
+               && bounds.Height > 0f
+               && bounds.Left + bounds.Width >= windowBounds.X
+               && bounds.Top + bounds.Height >= windowBounds.Y
+               && bounds.Left <= windowBounds.X + windowBounds.Width
+               && bounds.Top <= windowBounds.Y + windowBounds.Height;
+    }
+
+    private static bool TryParseBounds(string? rawBounds, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(rawBounds))
+        {
+            return false;
+        }
+
+        var parts = rawBounds.Split(',', StringSplitOptions.TrimEntries);
+        if (parts.Length != 4
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return bounds.Width > 0f && bounds.Height > 0f;
+    }
+
+    private static float GetSortX(ObserverActionNode node)
+    {
+        return TryParseBounds(node.ScreenBounds, out var bounds) ? bounds.Left : float.MaxValue;
+    }
+
+    private static float GetSortY(ObserverActionNode node)
+    {
+        return TryParseBounds(node.ScreenBounds, out var bounds) ? bounds.Top : float.MaxValue;
     }
 }
 

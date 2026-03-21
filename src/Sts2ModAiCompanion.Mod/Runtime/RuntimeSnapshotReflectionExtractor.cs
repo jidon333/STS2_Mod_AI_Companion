@@ -1282,11 +1282,41 @@ internal static class RuntimeSnapshotReflectionExtractor
         var selectedCardSlot = ResolveCurrentCardPlaySlot(handRoot, awaitingSlots);
 
         var targetingInProgress = TryReadBool(targetManagerRoot, "IsInSelection");
+        var validTargetsType = TryConvertToDisplayString(
+            TryGetMemberValue(targetManagerRoot!, "_validTargetsType")
+            ?? TryGetMemberValue(targetManagerRoot!, "ValidTargetsType"));
         var hoveredNode = TryGetMemberValue(targetManagerRoot!, "HoveredNode");
         var hoveredTargetKind = InferCombatHoveredTargetKind(hoveredNode);
         var hoveredTargetId = TryExtractCombatTargetId(hoveredNode);
         var hoveredTargetLabel = TryExtractCombatTargetLabel(hoveredNode);
         var targetingLastFinishedFrame = TryConvertToDisplayString(TryGetMemberValue(targetManagerRoot!, "LastTargetingFinishedFrame"));
+        var combatEnemyTargetEvaluations = targetManagerRoot is null
+            ? Array.Empty<CombatEnemyTargetEvaluation>()
+            : CollectCombatEnemyTargetEvaluations(roots).ToArray();
+        var targetableEnemyChoices = combatEnemyTargetEvaluations
+            .Where(static evaluation => evaluation.TargetableForDiagnostics)
+            .Select(static evaluation => evaluation.Choice)
+            .Where(static choice => choice is not null)
+            .Cast<LiveExportChoiceSummary>()
+            .ToArray();
+        var targetableEnemyIds = targetableEnemyChoices
+            .Select(choice => choice.BindingId ?? choice.Value ?? choice.NodeId)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var hittableEnemyChoices = combatEnemyTargetEvaluations
+            .Where(static evaluation => evaluation.HittableForExport)
+            .Select(static evaluation => evaluation.Choice)
+            .Where(static choice => choice is not null)
+            .Cast<LiveExportChoiceSummary>()
+            .ToArray();
+        var hittableEnemyIds = hittableEnemyChoices
+            .Select(choice => choice.BindingId ?? choice.Value ?? choice.NodeId)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var hoveredTargetEntity = hoveredNode is null ? null : TryGetMemberValue(hoveredNode, "Entity");
+        var hoveredTargetIsHittable = TryReadBool(hoveredTargetEntity, "IsHittable");
 
         var lastStartedEntry = TryGetLastCombatHistoryEntry(historyRoot, "CardPlaysStarted", "CardPlayStartedEntry");
         var lastFinishedEntry = TryGetLastCombatHistoryEntry(historyRoot, "CardPlaysFinished", "CardPlayFinishedEntry");
@@ -1314,9 +1344,23 @@ internal static class RuntimeSnapshotReflectionExtractor
             ? null
             : string.Join(",", awaitingSlots.Select(slot => slot.ToString(CultureInfo.InvariantCulture)));
         meta["combatTargetingInProgress"] = targetingInProgress?.ToString().ToLowerInvariant();
+        meta["combatValidTargetsType"] = validTargetsType;
+        meta["combatTargetableEnemyCount"] = targetManagerRoot is null
+            ? null
+            : targetableEnemyChoices.Length.ToString(CultureInfo.InvariantCulture);
+        meta["combatTargetableEnemyIds"] = targetableEnemyIds.Length == 0
+            ? null
+            : string.Join(",", targetableEnemyIds);
+        meta["combatHittableEnemyCount"] = targetManagerRoot is null
+            ? null
+            : hittableEnemyChoices.Length.ToString(CultureInfo.InvariantCulture);
+        meta["combatHittableEnemyIds"] = hittableEnemyIds.Length == 0
+            ? null
+            : string.Join(",", hittableEnemyIds);
         meta["combatHoveredTargetKind"] = hoveredTargetKind;
         meta["combatHoveredTargetId"] = hoveredTargetId;
         meta["combatHoveredTargetLabel"] = hoveredTargetLabel;
+        meta["combatHoveredTargetIsHittable"] = hoveredTargetIsHittable?.ToString().ToLowerInvariant();
         meta["combatTargetingLastFinishedFrame"] = targetingLastFinishedFrame;
         meta["combatLastCardPlayStartedCardId"] = lastStartedCardId;
         meta["combatLastCardPlayStartedCardName"] = lastStartedCardName;
@@ -1349,6 +1393,24 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (targetingInProgress is not null)
         {
             payload["combatTargetingInProgress"] = targetingInProgress.Value;
+        }
+
+        if (!string.IsNullOrWhiteSpace(validTargetsType))
+        {
+            payload["combatValidTargetsType"] = validTargetsType;
+        }
+
+        if (targetManagerRoot is not null)
+        {
+            payload["combatTargetableEnemyCount"] = targetableEnemyChoices.Length;
+            payload["combatTargetableEnemyIds"] = targetableEnemyIds;
+            payload["combatHittableEnemyCount"] = hittableEnemyChoices.Length;
+            payload["combatHittableEnemyIds"] = hittableEnemyIds;
+        }
+
+        if (hoveredTargetIsHittable is not null)
+        {
+            payload["combatHoveredTargetIsHittable"] = hoveredTargetIsHittable.Value;
         }
 
         if (!string.IsNullOrWhiteSpace(lastFinishedCardId))
@@ -2923,8 +2985,40 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static IReadOnlyList<LiveExportChoiceSummary> CollectCombatEnemyTargetChoices(IEnumerable<object> roots)
     {
+        return CollectCombatEnemyTargetEvaluations(roots)
+            .Where(static evaluation => evaluation.HittableForExport)
+            .Select(static evaluation => evaluation.Choice)
+            .Where(static choice => choice is not null)
+            .Cast<LiveExportChoiceSummary>()
+            .ToArray();
+    }
+
+    private static IReadOnlyList<CombatEnemyTargetEvaluation> CollectCombatEnemyTargetEvaluations(IEnumerable<object> roots)
+    {
+        var rootArray = roots
+            .Where(static root => root is not null)
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        var targetManagerRoot = rootArray.FirstOrDefault(root =>
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            return typeName.Contains("NTargetManager", StringComparison.OrdinalIgnoreCase)
+                   || TryReadBool(root, "IsInSelection") is not null
+                   || TryGetMemberValue(root, "HoveredNode") is not null
+                   || TryGetMemberValue(root, "_validTargetsType") is not null;
+        });
+        var targetingInProgress = TryReadBool(targetManagerRoot, "IsInSelection");
+        var validTargetsType = TryConvertToDisplayString(
+            TryGetMemberValue(targetManagerRoot!, "_validTargetsType")
+            ?? TryGetMemberValue(targetManagerRoot!, "ValidTargetsType"));
+
+        if (targetManagerRoot is not null && targetingInProgress != true)
+        {
+            return Array.Empty<CombatEnemyTargetEvaluation>();
+        }
+
         var creatures = new List<object>();
-        foreach (var root in roots)
+        foreach (var root in rootArray)
         {
             var typeName = root.GetType().FullName ?? root.GetType().Name;
             if (typeName.Contains("NCreature", StringComparison.OrdinalIgnoreCase))
@@ -2948,15 +3042,19 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         return creatures
             .DistinctBy(RuntimeHelpers.GetHashCode)
-            .Select((creature, index) => TryCreateCombatEnemyTargetChoiceSummary(creature, index + 1))
-            .Where(static choice => choice is not null)
-            .Cast<LiveExportChoiceSummary>()
-            .OrderBy(static choice => TryGetBoundsSortX(choice.ScreenBounds))
-            .ThenBy(static choice => TryGetBoundsSortY(choice.ScreenBounds))
+            .Select((creature, index) => EvaluateCombatEnemyTarget(creature, index + 1, targetManagerRoot, validTargetsType))
+            .Where(static evaluation => evaluation is not null)
+            .Cast<CombatEnemyTargetEvaluation>()
+            .OrderBy(static evaluation => TryGetBoundsSortX(evaluation.Choice?.ScreenBounds))
+            .ThenBy(static evaluation => TryGetBoundsSortY(evaluation.Choice?.ScreenBounds))
             .ToArray();
     }
 
-    private static LiveExportChoiceSummary? TryCreateCombatEnemyTargetChoiceSummary(object creature, int ordinal)
+    private static CombatEnemyTargetEvaluation? EvaluateCombatEnemyTarget(
+        object creature,
+        int ordinal,
+        object? targetManagerRoot,
+        string? validTargetsType)
     {
         var typeName = creature.GetType().FullName ?? creature.GetType().Name;
         if (!typeName.Contains("NCreature", StringComparison.OrdinalIgnoreCase))
@@ -2964,8 +3062,9 @@ internal static class RuntimeSnapshotReflectionExtractor
             return null;
         }
 
-        if (TryReadBool(creature, "Visible", "IsVisible", "VisibleInTree") == false
-            || TryReadBool(creature, "IsInteractable") == false)
+        var visible = TryReadBool(creature, "Visible", "IsVisible", "VisibleInTree");
+        var interactable = TryReadBool(creature, "IsInteractable");
+        if (visible == false || interactable == false)
         {
             return null;
         }
@@ -2978,28 +3077,215 @@ internal static class RuntimeSnapshotReflectionExtractor
             return null;
         }
 
+        var allowedByTargetManager = TryConvertToBool(TryInvokeMethod(targetManagerRoot!, "AllowedToTargetNode", creature))
+                                     ?? TryConvertToBool(TryInvokeMethod(targetManagerRoot!, "AllowedToTargetCreature", entity));
+        var allowedByTargetingHook = TryEvaluateHookTargetability(targetManagerRoot, entity, out var targetingPreventerType);
+        var isHittable = TryReadBool(entity, "IsHittable");
+        var allowedByHittingHook = TryEvaluateHookHittability(targetManagerRoot, entity);
+        var hitboxInputEnabled = TryIsCombatEnemyHitboxInputEnabled(creature);
+
+        if (targetManagerRoot is not null && allowedByTargetManager != true)
+        {
+            return null;
+        }
+
+        if (allowedByTargetingHook == false)
+        {
+            return null;
+        }
+
         var label = ResolveCombatEnemyTargetLabel(creature, entity, ordinal);
         if (string.IsNullOrWhiteSpace(label))
         {
             return null;
         }
 
+        var targetId = TryExtractCombatTargetId(entity) ?? TryExtractCombatTargetId(creature);
+
         if (!TryResolveCombatEnemyTargetBounds(creature, out var screenBounds, out var targetSource)
             || string.IsNullOrWhiteSpace(screenBounds))
         {
             return null;
         }
-
-        return new LiveExportChoiceSummary(
+        var targetableForDiagnostics = allowedByTargetManager == true && allowedByTargetingHook != false;
+        var hittableForExport = targetableForDiagnostics
+                                && isHittable != false
+                                && allowedByHittingHook != false
+                                && hitboxInputEnabled != false;
+        var choice = new LiveExportChoiceSummary(
             "enemy-target",
             label,
-            TryReadString(entity, "Id", "Name", "DisplayName"),
+            targetId,
             $"target-source:{targetSource}|coord-space:logical-render|click-space:current-window-normalized|normalized:{FormatNormalizedBounds(screenBounds)}")
         {
-            NodeId = $"enemy-target:{ordinal}",
+            NodeId = string.IsNullOrWhiteSpace(targetId)
+                ? $"enemy-target:{ordinal}"
+                : $"enemy-target:{SanitizeNodeKey(targetId)}:{ordinal}",
             ScreenBounds = screenBounds,
+            BindingKind = "combat-target",
+            BindingId = targetId,
+            Enabled = hittableForExport,
+            SemanticHints = BuildCombatEnemyTargetSemanticHints(
+                targetId,
+                validTargetsType,
+                targetingPreventerType,
+                isHittable,
+                allowedByHittingHook,
+                hitboxInputEnabled,
+                hittableForExport),
         };
+
+        return new CombatEnemyTargetEvaluation(choice, targetableForDiagnostics, hittableForExport);
     }
+
+    private static IReadOnlyList<string> BuildCombatEnemyTargetSemanticHints(
+        string? targetId,
+        string? validTargetsType,
+        string? preventerType,
+        bool? isHittable,
+        bool? allowedByHittingHook,
+        bool? hitboxInputEnabled,
+        bool hittableForExport)
+    {
+        var hints = new List<string>
+        {
+            "combat-targetable",
+            "source:target-manager",
+        };
+        if (hittableForExport)
+        {
+            hints.Add("combat-hittable");
+        }
+        if (!string.IsNullOrWhiteSpace(validTargetsType))
+        {
+            hints.Add($"valid-target-type:{validTargetsType}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetId))
+        {
+            hints.Add($"target-id:{targetId}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(preventerType))
+        {
+            hints.Add($"targeting-preventer:{preventerType}");
+        }
+
+        if (isHittable is not null)
+        {
+            hints.Add($"is-hittable:{isHittable.Value.ToString().ToLowerInvariant()}");
+        }
+
+        if (allowedByHittingHook is not null)
+        {
+            hints.Add($"hook-hitting:{allowedByHittingHook.Value.ToString().ToLowerInvariant()}");
+        }
+
+        if (hitboxInputEnabled is not null)
+        {
+            hints.Add($"hitbox-input-enabled:{hitboxInputEnabled.Value.ToString().ToLowerInvariant()}");
+        }
+
+        return hints;
+    }
+
+    private static bool? TryEvaluateHookTargetability(object? targetManagerRoot, object? entity, out string? preventerType)
+    {
+        preventerType = null;
+        if (targetManagerRoot is null || entity is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var combatState = TryGetMemberValue(entity, "CombatState");
+            if (combatState is null)
+            {
+                return null;
+            }
+
+            var hookType = targetManagerRoot.GetType().Assembly.GetType("MegaCrit.Sts2.Core.Hooks.Hook");
+            var method = hookType?.GetMethod(
+                "ShouldAllowTargeting",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (method is null)
+            {
+                return null;
+            }
+
+            var args = new object?[] { combatState, entity, null };
+            var result = method.Invoke(null, args);
+            preventerType = args[2]?.GetType().FullName ?? args[2]?.GetType().Name;
+            return TryConvertToBool(result);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool? TryEvaluateHookHittability(object? targetManagerRoot, object? entity)
+    {
+        if (targetManagerRoot is null || entity is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var combatState = TryGetMemberValue(entity, "CombatState");
+            if (combatState is null)
+            {
+                return null;
+            }
+
+            var hookType = targetManagerRoot.GetType().Assembly.GetType("MegaCrit.Sts2.Core.Hooks.Hook");
+            var method = hookType?.GetMethod(
+                "ShouldAllowHitting",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            if (method is null)
+            {
+                return null;
+            }
+
+            var result = method.Invoke(null, new[] { combatState, entity });
+            return TryConvertToBool(result);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool? TryIsCombatEnemyHitboxInputEnabled(object creature)
+    {
+        var hitbox = TryGetMemberValue(creature, "Hitbox");
+        if (hitbox is null)
+        {
+            return null;
+        }
+
+        var mouseFilter = TryGetMemberValue(hitbox, "MouseFilter");
+        var mouseFilterName = TryConvertToDisplayString(mouseFilter);
+        if (string.Equals(mouseFilterName, "Ignore", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var mouseFilterValue = TryConvertToInt(mouseFilter);
+        if (mouseFilterValue == 2)
+        {
+            return false;
+        }
+
+        return mouseFilter is null ? null : true;
+    }
+
+    private sealed record CombatEnemyTargetEvaluation(
+        LiveExportChoiceSummary Choice,
+        bool TargetableForDiagnostics,
+        bool HittableForExport);
 
     private static string ResolveCombatEnemyTargetLabel(object creature, object? entity, int ordinal)
     {
