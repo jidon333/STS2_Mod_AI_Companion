@@ -3612,6 +3612,101 @@ static void RunSelfTest()
         !evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMap, cardSelectionMixedStateObserver),
         "Card-selection mixed-state should beat map-visible WaitMap acceptance.");
 
+    var waitMapMixedStateBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-waitmap-mixed-branch-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(waitMapMixedStateBranchRoot);
+    try
+    {
+        var waitMapMixedStateLogger = new ArtifactRecorder(waitMapMixedStateBranchRoot);
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitMap,
+                treasureMapVisibleObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                6,
+                true,
+                out var treasureReopenPhase)
+            && treasureReopenPhase == GuiSmokePhase.ChooseFirstNode,
+            "WaitMap should reopen the treasure branch when treasure authority remains after map becomes visible.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitMap,
+                rewardMixedStateObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                7,
+                true,
+                out var rewardReopenPhase)
+            && rewardReopenPhase == GuiSmokePhase.HandleRewards,
+            "WaitMap should reopen reward handling instead of idling when reward authority remains over a visible map.");
+
+        var eventMixedStateObserver = new ObserverState(
+            new ObserverSummary(
+                "map",
+                "map",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                true,
+                "mixed",
+                "stable",
+                null,
+                null,
+                "event",
+                76,
+                80,
+                null,
+                new[] { "계속" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("event-option:continue", "event-option", "계속", "860,560,260,88", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("choice", "계속", "860,560,260,88", null, "Event continue"),
+                },
+                Array.Empty<ObservedCombatHandCard>()),
+            null,
+            null,
+            null);
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitMap,
+                eventMixedStateObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                8,
+                true,
+                out var eventReopenPhase)
+            && eventReopenPhase == GuiSmokePhase.HandleEvent,
+            "WaitMap should reopen explicit event progression when map becomes visible before the event foreground fully tears down.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitMap,
+                cardSelectionMixedStateObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                9,
+                true,
+                out var cardSelectionReopenPhase)
+            && cardSelectionReopenPhase == GuiSmokePhase.ChooseFirstNode,
+            "WaitMap should reopen card-selection handling while subtype authority remains visible over the map.");
+    }
+    finally
+    {
+        try
+        {
+            Directory.Delete(waitMapMixedStateBranchRoot, true);
+        }
+        catch
+        {
+        }
+    }
+
     Assert(
         WindowLocator.HasMeaningfulDrift(
             new WindowCaptureTarget(IntPtr.Zero, "before", new Rectangle(100, 200, 1000, 800), false, false),
@@ -11340,6 +11435,11 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase == GuiSmokePhase.WaitMap)
     {
+        if (TryReopenMixedStateModalBranchFromWaitMap(observer, history, logger, stepIndex, out nextPhase))
+        {
+            return true;
+        }
+
         if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
@@ -11500,6 +11600,69 @@ static bool TryAdvanceAlternateBranch(
     }
 
     return false;
+}
+
+static bool TryReopenMixedStateModalBranchFromWaitMap(
+    ObserverState observer,
+    List<GuiSmokeHistoryEntry> history,
+    ArtifactRecorder logger,
+    int stepIndex,
+    out GuiSmokePhase nextPhase)
+{
+    nextPhase = GuiSmokePhase.WaitMap;
+    string? branchKind = null;
+
+    if (CardSelectionObserverSignals.IsCardSelectionState(observer.Summary))
+    {
+        branchKind = "branch-card-selection";
+        nextPhase = GuiSmokePhase.ChooseFirstNode;
+    }
+    else if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary))
+    {
+        branchKind = "branch-treasure";
+        nextPhase = GuiSmokePhase.ChooseFirstNode;
+    }
+    else if (LooksLikeRewardChoiceState(observer)
+             || ShouldPreferRewardProgressionOverMapFallback(observer))
+    {
+        branchKind = "branch-rewards";
+        nextPhase = GuiSmokePhase.HandleRewards;
+    }
+    else if (HasExplicitEventProgressionChoiceVisibleForWaitMap(observer)
+             || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
+    {
+        branchKind = "branch-event";
+        nextPhase = GuiSmokePhase.HandleEvent;
+    }
+
+    if (branchKind is null)
+    {
+        return false;
+    }
+
+    history.Add(new GuiSmokeHistoryEntry(GuiSmokePhase.WaitMap.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+    logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, GuiSmokePhase.WaitMap.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+    return true;
+}
+
+static bool HasExplicitEventProgressionChoiceVisibleForWaitMap(ObserverState observer)
+{
+    var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+    if (!eventAuthority)
+    {
+        return false;
+    }
+
+    return observer.ActionNodes.Any(static node =>
+               node.Actionable
+               && TryParseNodeBounds(node.ScreenBounds, out _)
+               && IsProceedNode(node))
+           || observer.Choices.Any(static choice =>
+               TryParseNodeBounds(choice.ScreenBounds, out _)
+               && IsProceedChoice(choice));
 }
 
 static int IncrementAttempt(Dictionary<GuiSmokePhase, int> attemptsByPhase, GuiSmokePhase phase)
