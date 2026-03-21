@@ -9,6 +9,7 @@ using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
 using Sts2ModKit.Core.Planning;
+using Sts2ModAiCompanion.HarnessBridge;
 using Sts2ModAiCompanion.Mod;
 using Sts2ModAiCompanion.Mod.Runtime;
 using FoundationKnowledgeCatalogService = Sts2AiCompanion.Foundation.Knowledge.KnowledgeCatalogService;
@@ -46,6 +47,7 @@ Run("runtime reflection exports transform card-selection subtype metadata", Test
 Run("runtime reflection keeps reward-pick separate from confirm-driven card selection", TestRuntimeReflectionRewardPickCardSelectionExport, failures);
 Run("runtime reflection exports deck-remove card-selection preview semantics", TestRuntimeReflectionDeckRemoveCardSelectionExport, failures);
 Run("runtime reflection exports treasure room chest holder and proceed semantics", TestRuntimeReflectionTreasureRoomExport, failures);
+Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
@@ -1351,6 +1353,88 @@ static void TestRuntimeReflectionTreasureRoomExport()
     Assert((int)(ReadProperty(observation!, "VisibleRelicHolderCount") ?? -1) == 2, "Expected visible relic-holder count to export.");
     Assert((int)(ReadProperty(observation!, "EnabledRelicHolderCount") ?? -1) == 1, "Expected enabled relic-holder count to export.");
     Assert((bool)(ReadProperty(observation!, "ProceedEnabled") ?? true) == false, "Expected proceed to remain disabled before relic pick.");
+
+    var staleAfterProceedRoom = new FakeNTreasureRoom
+    {
+        Visible = true,
+        _isRelicCollectionOpen = false,
+        Chest = new FakeTreasureButton { Opened = true, Visible = true, Enabled = false, Position = new FakeVector2(602, 367), Size = new FakeVector2(800, 500) },
+        ProceedButton = new FakeClickableControl { Visible = true, Enabled = false, Position = new FakeVector2(1700, 760), Size = new FakeVector2(220, 110) },
+        _relicCollection = new FakeNTreasureRoomRelicCollection
+        {
+            _holdersInUse = new object[]
+            {
+                new FakeTreasureRelicHolder(new FakeRelicModel { Id = "RELIC.STRIKE_DUMMY", Name = "타격용 인형" }, 620, 300, enabled: true),
+            },
+        },
+    };
+    var staleAfterProceedObservation = observeMethod.Invoke(
+        null,
+        new object?[]
+        {
+            new object[]
+            {
+                staleAfterProceedRoom,
+                staleAfterProceedRoom.Chest!,
+                staleAfterProceedRoom.ProceedButton!,
+                staleAfterProceedRoom._relicCollection!,
+                new FakeNMapScreen { IsOpen = true, Visible = true },
+                new FakeScreenStateTracker { IsInSharedRelicPickingScreen = false },
+                new FakeNRun { ScreenStateTracker = new FakeScreenStateTracker { IsInSharedRelicPickingScreen = false } },
+            },
+            "map",
+        });
+    Assert(staleAfterProceedObservation is not null, "Expected stale-after-proceed treasure observation.");
+    Assert((bool)(ReadProperty(staleAfterProceedObservation!, "RoomDetected") ?? true) == false, "Map-open aftermath with no shared relic picking and no open relic collection should not keep treasure authority foreground-active.");
+    Assert((int)(ReadProperty(staleAfterProceedObservation!, "EnabledRelicHolderCount") ?? -1) == 0, "Stale post-proceed holder residue should not remain enabled treasure authority.");
+}
+
+static void TestInventoryPublisherMapNodeSourceCorrection()
+{
+    var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
+        ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(buildInventoryMethod is not null, "Expected private InventoryPublisher.BuildInventory helper.");
+
+    var normalizedMapScene = new CompanionNormalizedScene("map", "map", 1.0, "test");
+    var snapshot = CreateInventoryPublisherSnapshot(
+        new[]
+        {
+            new LiveExportChoiceSummary("relic", "불타는 혈액", "RELIC.BURNING_BLOOD", "Inventory relic")
+            {
+                ScreenBounds = "12,82,68,68",
+            },
+            new LiveExportChoiceSummary("choice", "Chest", null, "Chest")
+            {
+                ScreenBounds = "602,367,800,500",
+            },
+            new LiveExportChoiceSummary("choice", "진행", null, "진행")
+            {
+                ScreenBounds = "1983,764,269,108",
+            },
+            new LiveExportChoiceSummary("map-node", "휴식 (1,2)", "1,2", "type:Rest;coord:1,2")
+            {
+                NodeId = "map:1:2",
+                ScreenBounds = "897,581,124,124",
+            },
+        });
+
+    var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedMapScene }) as HarnessNodeInventory;
+    Assert(inventory is not null, "Expected inventory publisher to build a node inventory.");
+    Assert(inventory!.Nodes.Count == 4, "Expected inventory publisher to keep all source choices.");
+
+    var burningBlood = inventory.Nodes.First(node => string.Equals(node.Label, "불타는 혈액", StringComparison.OrdinalIgnoreCase));
+    Assert(!string.Equals(burningBlood.Kind, "map-node", StringComparison.OrdinalIgnoreCase), "Owned relics must not be promoted to fake map-node inventory entries.");
+
+    var chest = inventory.Nodes.First(node => string.Equals(node.Label, "Chest", StringComparison.OrdinalIgnoreCase));
+    Assert(!string.Equals(chest.Kind, "map-node", StringComparison.OrdinalIgnoreCase), "Generic chest affordances must not be promoted to fake map-node inventory entries.");
+
+    var proceed = inventory.Nodes.First(node => string.Equals(node.Label, "진행", StringComparison.OrdinalIgnoreCase));
+    Assert(!string.Equals(proceed.Kind, "map-node", StringComparison.OrdinalIgnoreCase), "Generic proceed affordances must not be promoted to fake map-node inventory entries.");
+
+    var restNode = inventory.Nodes.First(node => string.Equals(node.NodeId, "map:1:2", StringComparison.OrdinalIgnoreCase));
+    Assert(string.Equals(restNode.Kind, "map-node", StringComparison.OrdinalIgnoreCase), "Real map points must remain map-node inventory entries.");
+    Assert(restNode.SemanticHints.Contains("coord:1,2", StringComparer.OrdinalIgnoreCase), "Real map points should preserve coordinate evidence in inventory semantic hints.");
+    Assert(restNode.SemanticHints.Contains("source:map-choice", StringComparer.OrdinalIgnoreCase), "Real map points should retain explicit map-choice source hints.");
 }
 
 static void TestRuntimeReflectionRejectsOverlayLikePlayerRoots()
@@ -3387,6 +3471,27 @@ static object? ReadProperty(object target, string propertyName)
     return target.GetType().GetProperty(propertyName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(target);
 }
 
+static LiveExportSnapshot CreateInventoryPublisherSnapshot(IReadOnlyList<LiveExportChoiceSummary> choices)
+{
+    return new LiveExportSnapshot(
+        "run-inventory-self-test",
+        "active",
+        1,
+        DateTimeOffset.UtcNow,
+        "map",
+        null,
+        null,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        choices,
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        null,
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase));
+}
+
 file sealed class OptionalParameterProbe
 {
     public int GetChildCount(bool includeInternal = false)
@@ -3489,6 +3594,8 @@ file sealed class FakeNTreasureRoom
 {
     public bool Visible { get; init; }
 
+    public bool _isRelicCollectionOpen { get; init; }
+
     public object? Chest { get; init; }
 
     public object? ProceedButton { get; init; }
@@ -3501,6 +3608,23 @@ file sealed class FakeNTreasureRoomRelicCollection
     public object? _holdersInUse { get; init; }
 
     public object? SingleplayerRelicHolder { get; init; }
+}
+
+file sealed class FakeNMapScreen
+{
+    public bool IsOpen { get; init; }
+
+    public bool Visible { get; init; }
+}
+
+file sealed class FakeScreenStateTracker
+{
+    public bool IsInSharedRelicPickingScreen { get; init; }
+}
+
+file sealed class FakeNRun
+{
+    public object? ScreenStateTracker { get; init; }
 }
 
 file sealed class FakeTreasureButton

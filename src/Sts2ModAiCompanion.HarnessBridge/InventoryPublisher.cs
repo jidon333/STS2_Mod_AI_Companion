@@ -122,7 +122,7 @@ internal sealed class InventoryPublisher
         var label = choice.Label?.Trim() ?? string.Empty;
         var kind = ResolveKind(sceneType, choice);
         var actionable = !string.IsNullOrWhiteSpace(label) && !CompanionSceneNormalizer.IsOverlayChoice(label);
-        var hints = BuildHints(sceneType, choice);
+        var hints = BuildHints(sceneType, choice, kind);
 
         return new HarnessNodeInventoryItem(
             NodeId: string.IsNullOrWhiteSpace(choice.NodeId) ? $"{kind}:{index}" : choice.NodeId,
@@ -151,21 +151,21 @@ internal sealed class InventoryPublisher
             "main-menu" => ResolveMainMenuKind(label),
             "singleplayer-submenu" => "mode-option",
             "character-select" => IsEmbarkLabel(label) ? "embark" : "character",
-            "map" => "map-node",
+            "map" => IsExplicitMapPointChoice(choice) ? "map-node" : NormalizeChoiceKind(choice.Kind),
             "rewards" => IsProceedLabel(label) ? "proceed" : "reward-item",
             "event" => "event-option",
             "shop" => "shop-option",
             "rest-site" => "rest-option",
-            _ => string.IsNullOrWhiteSpace(choice.Kind) ? "choice" : choice.Kind.Trim().ToLowerInvariant(),
+            _ => NormalizeChoiceKind(choice.Kind),
         };
     }
 
-    private static IReadOnlyList<string> BuildHints(string sceneType, LiveExportChoiceSummary choice)
+    private static IReadOnlyList<string> BuildHints(string sceneType, LiveExportChoiceSummary choice, string resolvedKind)
     {
-        var hints = new List<string>(capacity: 5)
+        var hints = new List<string>(capacity: 8)
         {
             $"scene:{sceneType}",
-            $"kind:{ResolveKind(sceneType, choice)}",
+            $"kind:{resolvedKind}",
         };
 
         if (!string.IsNullOrWhiteSpace(choice.Value))
@@ -178,12 +178,83 @@ internal sealed class InventoryPublisher
             hints.Add($"raw-kind:{choice.Kind.Trim().ToLowerInvariant()}");
         }
 
+        if (!string.IsNullOrWhiteSpace(choice.NodeId))
+        {
+            hints.Add($"node-id:{choice.NodeId.Trim()}");
+        }
+
+        foreach (var hint in choice.SemanticHints)
+        {
+            if (!string.IsNullOrWhiteSpace(hint))
+            {
+                hints.Add(hint.Trim());
+            }
+        }
+
+        if (TryExtractCoordHint(choice.Description) is { } coordHint)
+        {
+            hints.Add(coordHint);
+        }
+
+        if (string.Equals(resolvedKind, "map-node", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add("source:map-choice");
+        }
+
         if (CompanionSceneNormalizer.IsOverlayChoice(choice.Label))
         {
             hints.Add("overlay");
         }
 
-        return hints;
+        return hints.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static string NormalizeChoiceKind(string? kind)
+    {
+        return string.IsNullOrWhiteSpace(kind) ? "choice" : kind.Trim().ToLowerInvariant();
+    }
+
+    private static bool IsExplicitMapPointChoice(LiveExportChoiceSummary choice)
+    {
+        if (string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(choice.NodeId)
+            && choice.NodeId.StartsWith("map:", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (TryExtractCoordHint(choice.Description) is not null)
+        {
+            return true;
+        }
+
+        return choice.SemanticHints.Any(hint =>
+            !string.IsNullOrWhiteSpace(hint)
+            && (hint.StartsWith("coord:", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "raw-kind:map-node", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "source:map-choice", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static string? TryExtractCoordHint(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return null;
+        }
+
+        foreach (var segment in description.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment.StartsWith("coord:", StringComparison.OrdinalIgnoreCase))
+            {
+                return segment;
+            }
+        }
+
+        return null;
     }
 
     private static string ResolveMainMenuKind(string label)

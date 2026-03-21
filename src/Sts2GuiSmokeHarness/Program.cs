@@ -3378,12 +3378,16 @@ static void RunSelfTest()
         History = new[]
         {
             new GuiSmokeHistoryEntry(GuiSmokePhase.ChooseFirstNode.ToString(), "click", "treasure proceed", DateTimeOffset.UtcNow),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.WaitMap.ToString(), "branch-treasure", null, DateTimeOffset.UtcNow.AddMilliseconds(100)),
         },
         Observer = treasureProceedRequest.Observer with
         {
             Meta = new Dictionary<string, string?>(treasureProceedRequest.Observer.Meta)
             {
                 ["treasureProceedEnabled"] = "false",
+                ["mapScreenOpen"] = "true",
+                ["sharedRelicPickingActive"] = "false",
+                ["treasureRelicCollectionOpen"] = "false",
             },
             Choices = new[]
             {
@@ -3401,7 +3405,113 @@ static void RunSelfTest()
     var treasureAfterProceedStaleHolderDecision = AutoDecisionProvider.Decide(treasureAfterProceedStaleHolderRequest);
     Assert(
         string.Equals(treasureAfterProceedStaleHolderDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
-        "Treasure aftermath should not fall back to a stale relic-holder click immediately after treasure proceed.");
+        "Treasure aftermath should not fall back to a stale relic-holder click immediately after treasure proceed, even if branch-treasure reconciliation entries appear in between.");
+
+    var fakeMapNodeRelicObserver = new ObserverState(
+        new ObserverSummary(
+            "map",
+            "map",
+            false,
+            DateTimeOffset.UtcNow,
+            "inv-fake-map-node",
+            true,
+            "mixed",
+            "stable",
+            "episode-fake-map-node",
+            "Treasure",
+            "generic",
+            76,
+            80,
+            null,
+            new[] { "불타는 혈액" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("map-node:2", "map-node", "불타는 혈액", "12,82,68,68", true)
+                {
+                    TypeName = "relic",
+                    SemanticHints = new[] { "scene:map", "kind:map-node", "raw-kind:relic", "value:RELIC.BURNING_BLOOD" },
+                },
+            },
+            new[]
+            {
+                new ObserverChoice("relic", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD", "Inventory relic"),
+            },
+            Array.Empty<ObservedCombatHandCard>()),
+        null,
+        null,
+        null);
+    var fakeMapNodeRelicRequest = request with
+    {
+        Phase = GuiSmokePhase.ChooseFirstNode.ToString(),
+        Observer = fakeMapNodeRelicObserver.Summary,
+        AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, fakeMapNodeRelicObserver),
+    };
+    var exportedMapPointMethod = typeof(AutoDecisionProvider).GetMethod("TryCreateExportedReachableMapPointDecision", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(exportedMapPointMethod is not null, "Expected private exported map-point decision helper.");
+    var fakeExportedMapPointDecision = exportedMapPointMethod!.Invoke(null, new object?[] { fakeMapNodeRelicRequest }) as GuiSmokeStepDecision;
+    Assert(fakeExportedMapPointDecision is null, "Fake map-node action nodes carrying raw-kind relic metadata should be rejected before exported map routing is even considered.");
+    Assert(
+        !fakeMapNodeRelicRequest.AllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
+        "Top-left relic inventory affordances must not open the exported reachable-map-node lane.");
+    var fakeMapNodeRelicDecision = AutoDecisionProvider.Decide(fakeMapNodeRelicRequest);
+    Assert(
+        !string.Equals(fakeMapNodeRelicDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase),
+        "Fake map-node action nodes carrying raw-kind relic metadata must not be clicked as reachable map nodes.");
+
+    var explicitMapPointObserver = new ObserverState(
+        new ObserverSummary(
+            "map",
+            "map",
+            false,
+            DateTimeOffset.UtcNow,
+            "inv-real-map-node",
+            true,
+            "map",
+            "stable",
+            "episode-real-map-node",
+            "None",
+            "map",
+            76,
+            80,
+            null,
+            new[] { "휴식 (1,2)" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("map:1:2", "map-node", "휴식 (1,2)", "897,581,124,124", true)
+                {
+                    TypeName = "map-node",
+                    SemanticHints = new[] { "scene:map", "kind:map-node", "raw-kind:map-node", "coord:1,2", "source:map-choice" },
+                },
+            },
+            new[]
+            {
+                new ObserverChoice("map-node", "휴식 (1,2)", "897,581,124,124", "1,2", "type:Rest;coord:1,2")
+                {
+                    NodeId = "map:1:2",
+                    SemanticHints = new[] { "coord:1,2" },
+                },
+            },
+            Array.Empty<ObservedCombatHandCard>()),
+        null,
+        null,
+        null);
+    var explicitMapPointRequest = request with
+    {
+        Phase = GuiSmokePhase.ChooseFirstNode.ToString(),
+        Observer = explicitMapPointObserver.Summary,
+        AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, explicitMapPointObserver),
+    };
+    var explicitExportedMapPointDecision = exportedMapPointMethod.Invoke(null, new object?[] { explicitMapPointRequest }) as GuiSmokeStepDecision;
+    Assert(
+        explicitExportedMapPointDecision is not null
+        && string.Equals(explicitExportedMapPointDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase),
+        "Explicit map point metadata should still produce an exported reachable-map-node decision.");
+    var explicitMapPointDecision = AutoDecisionProvider.Decide(explicitMapPointRequest);
+    Assert(
+        explicitMapPointDecision is not null,
+        "Explicit map point fixture should remain decisionable after source correction.");
 
     var combatScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-self-test-{Guid.NewGuid():N}.png");
     try
@@ -13519,12 +13629,100 @@ sealed record ObserverSummary(
     public IReadOnlyDictionary<string, string?> Meta { get; init; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 }
 
+static class MapNodeSourceSupport
+{
+    public static bool IsExplicitMapPointChoice(ObserverChoice choice)
+    {
+        if (!string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(choice.NodeId)
+            && choice.NodeId.StartsWith("map:", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if ((choice.Description?.Contains("coord:", StringComparison.OrdinalIgnoreCase) ?? false))
+        {
+            return true;
+        }
+
+        return choice.SemanticHints.Any(static hint =>
+            !string.IsNullOrWhiteSpace(hint)
+            && (hint.StartsWith("coord:", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "raw-kind:map-node", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "source:map-choice", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static bool IsExplicitMapPointNode(ObserverActionNode node)
+    {
+        if (!string.Equals(node.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+            || IsTopBarInventoryBounds(node.ScreenBounds))
+        {
+            return false;
+        }
+
+        if (string.Equals(node.TypeName, "relic", StringComparison.OrdinalIgnoreCase)
+            || node.SemanticHints.Any(static hint => string.Equals(hint, "raw-kind:relic", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(node.NodeId)
+            && node.NodeId.StartsWith("map:", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(node.TypeName, "map-node", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return node.SemanticHints.Any(static hint =>
+            !string.IsNullOrWhiteSpace(hint)
+            && (hint.StartsWith("coord:", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "raw-kind:map-node", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "source:map-choice", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool IsTopBarInventoryBounds(string? screenBounds)
+    {
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return false;
+        }
+
+        var parts = screenBounds.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+        {
+            return false;
+        }
+
+        return width <= 120f
+               && height <= 120f
+               && y <= 170f
+               && x <= 200f;
+    }
+}
+
 sealed record ObserverActionNode(
     string NodeId,
     string Kind,
     string Label,
     string? ScreenBounds,
-    bool Actionable);
+    bool Actionable)
+{
+    public string? TypeName { get; init; }
+
+    public IReadOnlyList<string> SemanticHints { get; init; } = Array.Empty<string>();
+}
 
 sealed record ObserverChoice(
     string Kind,
@@ -14092,6 +14290,9 @@ static class TreasureRoomObserverSignals
 {
     public static TreasureRoomSubtypeState? TryGetState(ObserverSummary observer)
     {
+        var sharedRelicPickingActive = TryGetMetaBool(observer, "sharedRelicPickingActive");
+        var relicCollectionOpen = TryGetMetaBool(observer, "treasureRelicCollectionOpen");
+        var mapScreenOpen = TryGetMetaBool(observer, "mapScreenOpen");
         var genericChestVisible = observer.Choices.Any(static choice =>
             string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
             && choice.Enabled != false
@@ -14107,12 +14308,18 @@ static class TreasureRoomObserverSignals
                 || choice.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)));
         var explicitChestClickable = TryGetMetaBool(observer, "treasureChestClickable");
         var explicitProceedEnabled = TryGetMetaBool(observer, "treasureProceedEnabled");
+        var chestOpened = TryGetMetaBool(observer, "treasureChestOpened") == true;
+        var staleAfterProceedResidue = mapScreenOpen == true
+                                       && sharedRelicPickingActive == false
+                                       && relicCollectionOpen == false
+                                       && explicitProceedEnabled != true
+                                       && chestOpened;
         var detected = TryGetMetaBool(observer, "treasureRoomDetected")
-                       ?? string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(observer.ChoiceExtractorPath, "treasure", StringComparison.OrdinalIgnoreCase)
-                       || (observer.Meta.TryGetValue("rootTypeSummary", out var rootTypeSummary)
-                           && rootTypeSummary?.Contains("NTreasureRoom", StringComparison.OrdinalIgnoreCase) == true);
-        if (!detected)
+                       ?? (string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(observer.ChoiceExtractorPath, "treasure", StringComparison.OrdinalIgnoreCase)
+                           || (observer.Meta.TryGetValue("rootTypeSummary", out var rootTypeSummary)
+                               && rootTypeSummary?.Contains("NTreasureRoom", StringComparison.OrdinalIgnoreCase) == true));
+        if (!detected || staleAfterProceedResidue)
         {
             return null;
         }
@@ -14120,7 +14327,7 @@ static class TreasureRoomObserverSignals
         return new TreasureRoomSubtypeState(
             RoomDetected: true,
             ChestClickable: explicitChestClickable ?? genericChestVisible,
-            ChestOpened: TryGetMetaBool(observer, "treasureChestOpened") == true,
+            ChestOpened: chestOpened,
             RelicHolderCount: TryGetMetaInt(observer, "treasureRelicHolderCount") ?? 0,
             VisibleRelicHolderCount: TryGetMetaInt(observer, "treasureVisibleRelicHolderCount") ?? 0,
             EnabledRelicHolderCount: TryGetMetaInt(observer, "treasureEnabledRelicHolderCount") ?? 0,
@@ -14807,11 +15014,11 @@ static class GuiSmokeMapOverlayHeuristics
                               || ContainsMapAuthority(rootTypeSummary)
                               || string.Equals(TryReadMetaString(stateDocument, "mapOverlayVisible"), "true", StringComparison.OrdinalIgnoreCase);
         var exportedReachableNodeCandidatePresent = observer.Choices.Any(choice =>
-                                                      string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                                                      MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
                                                       && HasActiveBounds(choice.ScreenBounds, windowBounds))
                                                   || observer.ActionNodes.Any(node =>
                                                       node.Actionable
-                                                      && string.Equals(node.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                                                      && MapNodeSourceSupport.IsExplicitMapPointNode(node)
                                                       && HasActiveBounds(node.ScreenBounds, windowBounds));
         var staleEventChoicePresent = HasEventChoiceEvidence(observer, windowBounds);
         var eventBackgroundPresent = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
@@ -14909,8 +15116,7 @@ static class GuiSmokeMapOverlayHeuristics
 
     private static bool IsMapChoice(ObserverChoice choice)
     {
-        return string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
-               || (choice.Value?.Contains(",", StringComparison.OrdinalIgnoreCase) ?? false) && (choice.Description?.Contains("coord:", StringComparison.OrdinalIgnoreCase) ?? false);
+        return MapNodeSourceSupport.IsExplicitMapPointChoice(choice);
     }
 
     private static bool ContainsMapAuthority(string? typeName)
@@ -17846,11 +18052,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
     private static string? TryFindMapNodeBounds(GuiSmokeStepRequest request)
     {
         return request.Observer.Choices.FirstOrDefault(choice =>
-                   string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                   MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
                    && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds
                ?? request.Observer.ActionNodes.FirstOrDefault(node =>
                    node.Actionable
-                   && string.Equals(node.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                   && MapNodeSourceSupport.IsExplicitMapPointNode(node)
                    && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))?.ScreenBounds;
     }
 
@@ -18189,7 +18395,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
         var choice = request.Observer.Choices
             .Where(choice =>
-                string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
                 && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))
             .OrderBy(GetChoiceSortY)
             .ThenBy(GetChoiceSortX)
@@ -18209,7 +18415,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var node = request.Observer.ActionNodes
             .Where(node =>
                 node.Actionable
-                && string.Equals(node.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                && MapNodeSourceSupport.IsExplicitMapPointNode(node)
                 && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))
             .OrderBy(GetNodeSortY)
             .ThenBy(GetNodeSortX)
@@ -18767,7 +18973,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool WasRecentTreasureProceedAction(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
-        for (var index = history.Count - 1; index >= 0 && index >= history.Count - 3; index -= 1)
+        for (var index = history.Count - 1; index >= 0 && index >= history.Count - 5; index -= 1)
         {
             var entry = history[index];
             if (string.Equals(entry.TargetLabel, "treasure proceed", StringComparison.OrdinalIgnoreCase))
@@ -18777,7 +18983,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
             if (!string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(entry.Action, "observer-accepted", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(entry.Action, "recapture-required", StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(entry.Action, "recapture-required", StringComparison.OrdinalIgnoreCase)
+                && !entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -23463,6 +23670,8 @@ sealed class ObserverSnapshotReader
             var kind = TryReadString(node, "kind");
             var label = TryReadString(node, "label");
             var screenBounds = TryReadString(node, "screenBounds");
+            var typeName = TryReadString(node, "typeName");
+            var semanticHints = TryReadStringArray(node, "semanticHints");
             var actionable = node.TryGetProperty("actionable", out var actionableElement)
                              && actionableElement.ValueKind == JsonValueKind.True;
             if (string.IsNullOrWhiteSpace(nodeId)
@@ -23472,7 +23681,11 @@ sealed class ObserverSnapshotReader
                 continue;
             }
 
-            nodes.Add(new ObserverActionNode(nodeId, kind, label, screenBounds, actionable));
+            nodes.Add(new ObserverActionNode(nodeId, kind, label, screenBounds, actionable)
+            {
+                TypeName = typeName,
+                SemanticHints = semanticHints,
+            });
         }
 
         return nodes;
