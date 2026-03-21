@@ -685,7 +685,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     int? maxSteps)
 {
     const int PassiveWaitMs = 1000;
-    const int ActionSettleMinimumMs = 900;
+    const int ActionSettleMinimumMs = 650;
     const int CombatActionSettleMinimumMs = 300;
     const int CombatNoOpProbeGraceMs = 350;
     const int TransitionSettleMs = 2000;
@@ -1953,7 +1953,7 @@ static int GetDecisionWaitMinimumMs(GuiSmokePhase phase)
 {
     return phase == GuiSmokePhase.HandleCombat
         ? 250
-        : 750;
+        : 350;
 }
 
 static int GetActionSettleDelayMs(
@@ -3321,6 +3321,87 @@ static void RunSelfTest()
         "Treasure room should expose explicit proceed once relic picking is finished.");
     var treasureProceedDecision = AutoDecisionProvider.Decide(treasureProceedRequest);
     Assert(treasureProceedDecision.TargetLabel == "treasure proceed", "Treasure proceed lane should open once no enabled relic holder remains.");
+
+    var treasureProceedWithStaleGenericRequest = treasureProceedRequest with
+    {
+        Observer = treasureProceedRequest.Observer with
+        {
+            Choices = new[]
+            {
+                new ObserverChoice("treasure-proceed", "진행", "980,540,220,90", null, "Treasure proceed")
+                {
+                    BindingKind = "treasure-room",
+                    BindingId = "proceed",
+                    Enabled = true,
+                    SemanticHints = new[] { "treasure-room", "treasure-proceed" },
+                },
+                new ObserverChoice("choice", "진행", "1983,764,269,108", null, "Stale generic proceed")
+                {
+                    Enabled = true,
+                },
+            },
+        },
+    };
+    var treasureProceedWithStaleGenericDecision = AutoDecisionProvider.Decide(treasureProceedWithStaleGenericRequest);
+    Assert(
+        treasureProceedWithStaleGenericDecision.TargetLabel == "treasure proceed",
+        "Treasure proceed should prefer the explicit treasure affordance over stale generic proceed bounds.");
+
+    var treasureAfterProceedStaleGenericRequest = treasureProceedRequest with
+    {
+        Observer = treasureProceedRequest.Observer with
+        {
+            Meta = new Dictionary<string, string?>(treasureProceedRequest.Observer.Meta)
+            {
+                ["treasureProceedEnabled"] = "false",
+            },
+            Choices = new[]
+            {
+                new ObserverChoice("choice", "진행", "1983,764,269,108", null, "Stale generic proceed")
+                {
+                    Enabled = true,
+                },
+            },
+        },
+        AllowedActions = new[] { "wait" },
+    };
+    Assert(
+        !GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(treasureAfterProceedStaleGenericRequest.Observer, null, null, null)).Contains("click treasure proceed", StringComparer.OrdinalIgnoreCase),
+        "Treasure aftermath should not reopen proceed from stale generic bounds once explicit treasure proceed is gone.");
+    var treasureAfterProceedStaleGenericDecision = AutoDecisionProvider.Decide(treasureAfterProceedStaleGenericRequest);
+    Assert(
+        string.Equals(treasureAfterProceedStaleGenericDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+        "Treasure aftermath should wait for the next authoritative state instead of reusing stale generic proceed bounds.");
+
+    var treasureAfterProceedStaleHolderRequest = treasureProceedRequest with
+    {
+        History = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.ChooseFirstNode.ToString(), "click", "treasure proceed", DateTimeOffset.UtcNow),
+        },
+        Observer = treasureProceedRequest.Observer with
+        {
+            Meta = new Dictionary<string, string?>(treasureProceedRequest.Observer.Meta)
+            {
+                ["treasureProceedEnabled"] = "false",
+            },
+            Choices = new[]
+            {
+                new ObserverChoice("treasure-relic-holder", "타격용 인형", "857.792,357.208,204,204", "Relic", "Treasure room relic holder")
+                {
+                    BindingKind = "treasure-room",
+                    BindingId = "Relic",
+                    Enabled = true,
+                    SemanticHints = new[] { "treasure-room", "treasure-relic-holder" },
+                },
+            },
+        },
+        AllowedActions = new[] { "wait" },
+    };
+    var treasureAfterProceedStaleHolderDecision = AutoDecisionProvider.Decide(treasureAfterProceedStaleHolderRequest);
+    Assert(
+        string.Equals(treasureAfterProceedStaleHolderDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+        "Treasure aftermath should not fall back to a stale relic-holder click immediately after treasure proceed.");
 
     var combatScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-self-test-{Guid.NewGuid():N}.png");
     try
@@ -13753,14 +13834,14 @@ static class TreasureRoomObserverSignals
             return new[] { "click treasure chest", "wait" };
         }
 
-        if (state.EnabledRelicHolderCount > 0)
-        {
-            return new[] { "click treasure relic holder", "wait" };
-        }
-
         if (state.ProceedEnabled)
         {
             return new[] { "click treasure proceed", "wait" };
+        }
+
+        if (state.EnabledRelicHolderCount > 0)
+        {
+            return new[] { "click treasure relic holder", "wait" };
         }
 
         return new[] { "wait" };
@@ -13808,14 +13889,7 @@ static class TreasureRoomObserverSignals
                    string.Equals(choice.BindingKind, "treasure-room", StringComparison.OrdinalIgnoreCase)
                    && string.Equals(choice.BindingId, "proceed", StringComparison.OrdinalIgnoreCase)
                    && choice.Enabled != false
-                   && HasUsableBounds(choice.ScreenBounds))
-               ?? observer.Choices.FirstOrDefault(static choice =>
-                   string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
-                   && choice.Enabled != false
-                   && HasUsableBounds(choice.ScreenBounds)
-                   && (choice.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
-                       || choice.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
-                       || choice.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)));
+                   && HasUsableBounds(choice.ScreenBounds));
     }
 
     public static ObserverChoice? TryGetOverlayBackChoice(ObserverSummary observer)
@@ -18342,19 +18416,6 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             }
         }
 
-        var relicHolderChoice = TreasureRoomObserverSignals.GetRelicHolderChoices(request.Observer).FirstOrDefault();
-        if (relicHolderChoice is not null)
-        {
-            return CreateClickDecisionFromChoice(
-                request,
-                relicHolderChoice,
-                "treasure relic holder",
-                "Treasure chest is open. Click the explicit treasure relic holder, not a top-bar inventory relic icon or map node.",
-                0.97,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
-                1500);
-        }
-
         if (treasureState.ProceedEnabled)
         {
             var proceedChoice = TreasureRoomObserverSignals.TryGetProceedChoice(request.Observer);
@@ -18369,15 +18430,48 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                     request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
                     1400);
             }
+        }
 
-            var visibleProceedDecision = TryCreateVisibleProceedDecision(request);
-            if (visibleProceedDecision is not null)
-            {
-                return visibleProceedDecision with { TargetLabel = "treasure proceed" };
-            }
+        if (WasRecentTreasureProceedAction(request.History))
+        {
+            return null;
+        }
+
+        var relicHolderChoice = TreasureRoomObserverSignals.GetRelicHolderChoices(request.Observer).FirstOrDefault();
+        if (relicHolderChoice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                relicHolderChoice,
+                "treasure relic holder",
+                "Treasure chest is open and proceed is not yet authoritative. Click the explicit treasure relic holder, not a top-bar inventory relic icon or map node.",
+                0.97,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                1500);
         }
 
         return null;
+    }
+
+    private static bool WasRecentTreasureProceedAction(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        for (var index = history.Count - 1; index >= 0 && index >= history.Count - 3; index -= 1)
+        {
+            var entry = history[index];
+            if (string.Equals(entry.TargetLabel, "treasure proceed", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(entry.Action, "observer-accepted", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(entry.Action, "recapture-required", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     private static GuiSmokeStepDecision CreateTreasureChestCenterDecision(GuiSmokeStepRequest request)
@@ -23659,10 +23753,15 @@ static class WindowLocator
         }
 
         target = EnsureRestored(target);
+        if (NativeMethods.GetForegroundWindow() == target.Handle)
+        {
+            return Refresh(target);
+        }
+
         NativeMethods.ShowWindow(target.Handle, NativeMethods.SW_RESTORE);
         NativeMethods.BringWindowToTop(target.Handle);
         NativeMethods.SetForegroundWindow(target.Handle);
-        Thread.Sleep(500);
+        Thread.Sleep(150);
         return Refresh(target);
     }
 
@@ -23701,6 +23800,9 @@ static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
     public static extern bool SetCursorPos(int x, int y);
