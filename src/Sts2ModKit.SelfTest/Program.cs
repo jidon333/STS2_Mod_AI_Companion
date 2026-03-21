@@ -47,6 +47,7 @@ Run("runtime reflection exports transform card-selection subtype metadata", Test
 Run("runtime reflection keeps reward-pick separate from confirm-driven card selection", TestRuntimeReflectionRewardPickCardSelectionExport, failures);
 Run("runtime reflection exports deck-remove card-selection preview semantics", TestRuntimeReflectionDeckRemoveCardSelectionExport, failures);
 Run("runtime reflection exports treasure room chest holder and proceed semantics", TestRuntimeReflectionTreasureRoomExport, failures);
+Run("runtime reflection exports explicit shop room semantics and typed shop choices", TestRuntimeReflectionShopExport, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
@@ -1387,6 +1388,160 @@ static void TestRuntimeReflectionTreasureRoomExport()
     Assert(staleAfterProceedObservation is not null, "Expected stale-after-proceed treasure observation.");
     Assert((bool)(ReadProperty(staleAfterProceedObservation!, "RoomDetected") ?? true) == false, "Map-open aftermath with no shared relic picking and no open relic collection should not keep treasure authority foreground-active.");
     Assert((int)(ReadProperty(staleAfterProceedObservation!, "EnabledRelicHolderCount") ?? -1) == 0, "Stale post-proceed holder residue should not remain enabled treasure authority.");
+}
+
+static void TestRuntimeReflectionShopExport()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var observeMethod = extractorType!.GetMethod("ObserveShopRoom", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    var createChoicesMethod = extractorType.GetMethod("CreateShopChoices", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(observeMethod is not null, "Expected private ObserveShopRoom helper.");
+    Assert(createChoicesMethod is not null, "Expected private CreateShopChoices helper.");
+
+    var merchantButton = new FakeClickableControl { Visible = true, Enabled = false, Position = new FakeVector2(180, 640), Size = new FakeVector2(240, 160) };
+    var proceedButton = new FakeClickableControl { Visible = true, Enabled = false, Position = new FakeVector2(1680, 760), Size = new FakeVector2(220, 110) };
+    var backButton = new FakeClickableControl { Visible = true, Enabled = true, Position = new FakeVector2(140, 120), Size = new FakeVector2(160, 110) };
+    var relicSlot = new FakeNMerchantRelic("게임용 말", "RELIC.GAME_PIECE", x: 420, y: 260, enabled: true, stocked: true, enoughGold: true);
+    var cardSlot = new FakeNMerchantCard("몸풀기", "CARD.WARM_UP", x: 700, y: 260, enabled: true, stocked: true, enoughGold: false);
+    var potionSlot = new FakeNMerchantPotion("힘 포션", "POTION.STRENGTH_POTION", x: 980, y: 260, enabled: true, stocked: true, enoughGold: true);
+    var cardRemovalSlot = new FakeNMerchantCardRemoval("카드 제거 서비스", x: 1260, y: 260, enabled: true, enoughGold: true, used: false);
+    var inventory = new FakeNMerchantInventory
+    {
+        Visible = true,
+        IsOpen = true,
+        _backButton = backButton,
+        Slots = new object[] { relicSlot, cardSlot, potionSlot, cardRemovalSlot },
+    };
+    var shopRoom = new FakeNMerchantRoom
+    {
+        Visible = true,
+        Inventory = inventory,
+        MerchantButton = merchantButton,
+        ProceedButton = proceedButton,
+    };
+
+    var observation = observeMethod!.Invoke(null, new object?[] { new object[] { shopRoom, inventory, merchantButton, proceedButton, backButton }, "shop" });
+    Assert(observation is not null, "Expected shop observation.");
+    Assert((bool)(ReadProperty(observation!, "RoomDetected") ?? false), "Expected shop room detection.");
+    Assert((bool)(ReadProperty(observation!, "InventoryOpen") ?? false), "Expected shop inventory-open export.");
+    Assert((bool)(ReadProperty(observation!, "BackVisible") ?? false), "Expected shop back visibility export.");
+    Assert((int)(ReadProperty(observation!, "OptionCount") ?? -1) == 4, "Expected shop option count to include visible slots and card removal.");
+    Assert((int)(ReadProperty(observation!, "AffordableOptionCount") ?? -1) == 3, "Expected affordable option count to include relic, potion, and card removal.");
+    var affordableRelicIds = ((System.Collections.IEnumerable?)ReadProperty(observation!, "AffordableRelicIds"))?.Cast<string>().ToArray() ?? Array.Empty<string>();
+    var affordablePotionIds = ((System.Collections.IEnumerable?)ReadProperty(observation!, "AffordablePotionIds"))?.Cast<string>().ToArray() ?? Array.Empty<string>();
+    Assert(affordableRelicIds.Length == 1 && string.Equals(affordableRelicIds[0], "RELIC.GAME_PIECE", StringComparison.OrdinalIgnoreCase), "Expected affordable relic ids to use the actual relic model id.");
+    Assert(affordablePotionIds.Length == 1 && string.Equals(affordablePotionIds[0], "POTION.STRENGTH_POTION", StringComparison.OrdinalIgnoreCase), "Expected affordable potion ids to use the actual potion model id.");
+    Assert((bool)(ReadProperty(observation!, "CardRemovalVisible") ?? false), "Expected card removal visibility export.");
+    Assert((bool)(ReadProperty(observation!, "CardRemovalEnabled") ?? false), "Expected card removal enabled export.");
+    Assert((bool)(ReadProperty(observation!, "CardRemovalEnoughGold") ?? false), "Expected card removal enough-gold export.");
+    Assert((bool)(ReadProperty(observation!, "CardRemovalUsed") ?? true) == false, "Expected unused card-removal service export.");
+
+    var choices = createChoicesMethod!.Invoke(null, new[] { observation }) as System.Collections.IEnumerable;
+    Assert(choices is not null, "Expected explicit shop choices.");
+    var shopChoices = choices!.Cast<object>().ToArray();
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-option:relic", StringComparison.OrdinalIgnoreCase)), "Expected typed relic shop choice.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-option:potion", StringComparison.OrdinalIgnoreCase)), "Expected typed potion shop choice.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-card-removal", StringComparison.OrdinalIgnoreCase)), "Expected explicit card-removal shop service choice.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-back", StringComparison.OrdinalIgnoreCase)), "Expected explicit shop back choice.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-option:relic", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Value"), "RELIC.GAME_PIECE", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Label"), "게임용 말", StringComparison.OrdinalIgnoreCase)), "Expected relic shop choice to use actual relic identity, not a holder placeholder.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-option:card", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Value"), "CARD.WARM_UP", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Label"), "몸풀기", StringComparison.OrdinalIgnoreCase)), "Expected card shop choice to use actual card identity, not a holder placeholder.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-option:potion", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Value"), "POTION.STRENGTH_POTION", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Label"), "힘 포션", StringComparison.OrdinalIgnoreCase)), "Expected potion shop choice to use actual potion identity.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-card-removal", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Value"), "service:card-removal", StringComparison.OrdinalIgnoreCase)), "Expected card-removal service to use explicit service identity.");
+
+    var removeContaminationMethod = extractorType.GetMethod("RemoveShopChoiceContamination", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    var addChoiceSummaryMethod = extractorType.GetMethod("AddChoiceSummary", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(removeContaminationMethod is not null, "Expected private RemoveShopChoiceContamination helper.");
+    Assert(addChoiceSummaryMethod is not null, "Expected private AddChoiceSummary helper.");
+    var crowdedChoices = new List<LiveExportChoiceSummary>
+    {
+        new("relic", "게임용 말", "RELIC.GAME_PIECE", "Generic merchant display"),
+        new("relic", "소뿔모양 걸이", "RELIC.HORN_CLEAT", "Generic merchant display"),
+        new("relic", "유황", "RELIC.BRIMSTONE", "Generic merchant display"),
+        new("potion", "강장제", "POTION.FORTIFIER", "Generic merchant display"),
+        new("potion", "힘 포션", "POTION.STRENGTH_POTION", "Generic merchant display"),
+        new("potion", "신속 포션", "POTION.SWIFT_POTION", "Generic merchant display"),
+    };
+    removeContaminationMethod!.Invoke(null, new object?[] { crowdedChoices, observation });
+    var mergedChoices = new List<LiveExportChoiceSummary>();
+    foreach (var choice in shopChoices.Cast<LiveExportChoiceSummary>())
+    {
+        addChoiceSummaryMethod!.Invoke(null, new object?[] { mergedChoices, choice, 10 });
+    }
+
+    foreach (var choice in crowdedChoices)
+    {
+        addChoiceSummaryMethod.Invoke(null, new object?[] { mergedChoices, choice, 10 });
+    }
+
+    Assert(mergedChoices.Any(choice => string.Equals(choice.Kind, "shop-back", StringComparison.OrdinalIgnoreCase)), "Explicit shop back should survive the capped emitted choice set.");
+
+    var enabledProceedButton = new FakeClickableControl { Visible = true, Enabled = true, Position = new FakeVector2(1680, 760), Size = new FakeVector2(220, 110) };
+    var closedInventory = new FakeNMerchantInventory
+    {
+        Visible = true,
+        IsOpen = false,
+        _backButton = backButton,
+        Slots = new object[] { relicSlot, cardSlot, potionSlot, cardRemovalSlot },
+    };
+    var closedShopRoom = new FakeNMerchantRoom
+    {
+        Visible = true,
+        Inventory = closedInventory,
+        MerchantButton = merchantButton,
+        ProceedButton = enabledProceedButton,
+    };
+    var proceedObservation = observeMethod.Invoke(null, new object?[] { new object[] { closedShopRoom, closedInventory, merchantButton, enabledProceedButton, backButton }, "shop" });
+    Assert(proceedObservation is not null, "Expected proceed shop observation.");
+    var proceedChoices = createChoicesMethod.Invoke(null, new[] { proceedObservation }) as System.Collections.IEnumerable;
+    Assert(proceedChoices is not null && proceedChoices.Cast<object>().Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-proceed", StringComparison.OrdinalIgnoreCase)), "Expected explicit shop proceed choice when inventory is closed and proceed is enabled.");
+
+    var teardownMerchantButton = new FakeClickableControl { Visible = true, Enabled = false, Position = new FakeVector2(180, 640), Size = new FakeVector2(240, 160) };
+    var teardownProceedButton = new FakeClickableControl { Visible = true, Enabled = false, Position = new FakeVector2(1680, 760), Size = new FakeVector2(220, 110) };
+    var teardownInventory = new FakeNMerchantInventory
+    {
+        Visible = true,
+        IsOpen = false,
+        _backButton = backButton,
+        Slots = new object[] { relicSlot, cardSlot, potionSlot, cardRemovalSlot },
+    };
+    var teardownShopRoom = new FakeNMerchantRoom
+    {
+        Visible = true,
+        Inventory = teardownInventory,
+        MerchantButton = teardownMerchantButton,
+        ProceedButton = teardownProceedButton,
+    };
+    var activeScreenContext = new FakeActiveScreenContext
+    {
+        CurrentScreen = new FakeNMapScreen { IsOpen = true, Visible = true },
+    };
+    var teardownObservation = observeMethod.Invoke(null, new object?[] { new object[] { teardownShopRoom, teardownInventory, teardownMerchantButton, teardownProceedButton, backButton, activeScreenContext }, "shop" });
+    Assert(teardownObservation is not null, "Expected shop teardown observation.");
+    Assert((bool)(ReadProperty(teardownObservation!, "RoomVisible") ?? false), "Expected stale merchant room visibility to remain exported for diagnostics.");
+    Assert((bool)(ReadProperty(teardownObservation!, "ForegroundOwned") ?? true) == false, "Expected shop foreground ownership to drop once inventory is closed, controls are disabled, and map is current.");
+    Assert((bool)(ReadProperty(teardownObservation!, "TeardownInProgress") ?? false), "Expected explicit shop teardown export once proceed aftermath starts.");
+    Assert((bool)(ReadProperty(teardownObservation!, "MapIsCurrentActiveScreen") ?? false), "Expected map current active screen export during shop proceed aftermath.");
+    var teardownChoices = createChoicesMethod.Invoke(null, new[] { teardownObservation }) as System.Collections.IEnumerable;
+    Assert(teardownChoices is not null && !teardownChoices.Cast<object>().Any(), "Expected no actionable shop choices once shop foreground ownership is gone.");
+
+    var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
+        ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(buildInventoryMethod is not null, "Expected private InventoryPublisher.BuildInventory helper.");
+    var normalizedShopScene = new CompanionNormalizedScene("shop", "shop", 1.0, "test");
+    var snapshot = CreateInventoryPublisherSnapshot(shopChoices.Cast<LiveExportChoiceSummary>().ToArray());
+    var inventoryNodes = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedShopScene }) as HarnessNodeInventory;
+    Assert(inventoryNodes is not null, "Expected inventory publisher to build a shop node inventory.");
+    Assert(inventoryNodes!.Nodes.Any(node => string.Equals(node.Kind, "shop-option:relic", StringComparison.OrdinalIgnoreCase)), "Inventory publisher should preserve typed shop relic kinds.");
+    Assert(inventoryNodes.Nodes.Any(node => string.Equals(node.Kind, "shop-card-removal", StringComparison.OrdinalIgnoreCase)), "Inventory publisher should preserve explicit shop card-removal kinds.");
 }
 
 static void TestInventoryPublisherMapNodeSourceCorrection()
@@ -3603,6 +3758,170 @@ file sealed class FakeNTreasureRoom
     public object? _relicCollection { get; init; }
 }
 
+file sealed class FakeNMerchantRoom
+{
+    public bool Visible { get; init; }
+
+    public object? Inventory { get; init; }
+
+    public object? MerchantButton { get; init; }
+
+    public object? ProceedButton { get; init; }
+}
+
+file sealed class FakeNMerchantInventory
+{
+    public bool Visible { get; init; }
+
+    public bool IsOpen { get; init; }
+
+    public object? _backButton { get; init; }
+
+    public object[] Slots { get; init; } = Array.Empty<object>();
+
+    public IEnumerable<object> GetAllSlots()
+    {
+        return Slots;
+    }
+}
+
+file class FakeMerchantEntry
+{
+    public string? Id { get; init; }
+
+    public string? Name { get; init; }
+
+    public bool IsStocked { get; init; }
+
+    public bool EnoughGold { get; init; }
+}
+
+file sealed class FakeMerchantCardEntry : FakeMerchantEntry
+{
+    public FakeCardCreationResult? CreationResult { get; init; }
+}
+
+file sealed class FakeMerchantRelicEntry : FakeMerchantEntry
+{
+    public FakeRelicModel? Model { get; init; }
+}
+
+file sealed class FakeMerchantPotionEntry : FakeMerchantEntry
+{
+    public FakePotionModel? Model { get; init; }
+}
+
+file sealed class FakeMerchantCardRemovalEntry : FakeMerchantEntry
+{
+    public bool Used { get; init; }
+}
+
+file abstract class FakeMerchantSlotBase
+{
+    protected FakeMerchantSlotBase(string label, string id, double x, double y, bool enabled)
+    {
+        Name = label;
+        Hitbox = new FakeClickableControl
+        {
+            Visible = true,
+            Enabled = enabled,
+            Position = new FakeVector2(x, y),
+            Size = new FakeVector2(180, 180),
+        };
+    }
+
+    public string Name { get; }
+
+    public object Hitbox { get; }
+}
+
+file sealed class FakeNMerchantRelic : FakeMerchantSlotBase
+{
+    public FakeNMerchantRelic(string label, string id, double x, double y, bool enabled, bool stocked, bool enoughGold)
+        : base(label, id, x, y, enabled)
+    {
+        Entry = new FakeMerchantRelicEntry
+        {
+            Id = id,
+            Name = label,
+            IsStocked = stocked,
+            EnoughGold = enoughGold,
+            Model = new FakeRelicModel
+            {
+                Id = id,
+                Name = label,
+            },
+        };
+    }
+
+    public FakeMerchantRelicEntry Entry { get; }
+}
+
+file sealed class FakeNMerchantCard : FakeMerchantSlotBase
+{
+    public FakeNMerchantCard(string label, string id, double x, double y, bool enabled, bool stocked, bool enoughGold)
+        : base(label, id, x, y, enabled)
+    {
+        Entry = new FakeMerchantCardEntry
+        {
+            Id = id,
+            Name = label,
+            IsStocked = stocked,
+            EnoughGold = enoughGold,
+            CreationResult = new FakeCardCreationResult
+            {
+                Card = new FakeCardModel
+                {
+                    Id = id,
+                    Name = label,
+                },
+            },
+        };
+    }
+
+    public FakeMerchantCardEntry Entry { get; }
+}
+
+file sealed class FakeNMerchantPotion : FakeMerchantSlotBase
+{
+    public FakeNMerchantPotion(string label, string id, double x, double y, bool enabled, bool stocked, bool enoughGold)
+        : base(label, id, x, y, enabled)
+    {
+        Entry = new FakeMerchantPotionEntry
+        {
+            Id = id,
+            Name = label,
+            IsStocked = stocked,
+            EnoughGold = enoughGold,
+            Model = new FakePotionModel
+            {
+                Id = id,
+                Name = label,
+            },
+        };
+    }
+
+    public FakeMerchantPotionEntry Entry { get; }
+}
+
+file sealed class FakeNMerchantCardRemoval : FakeMerchantSlotBase
+{
+    public FakeNMerchantCardRemoval(string label, double x, double y, bool enabled, bool enoughGold, bool used)
+        : base(label, "card-removal", x, y, enabled)
+    {
+        Entry = new FakeMerchantCardRemovalEntry
+        {
+            Id = "card-removal",
+            Name = label,
+            IsStocked = !used,
+            EnoughGold = enoughGold,
+            Used = used,
+        };
+    }
+
+    public FakeMerchantCardRemovalEntry Entry { get; }
+}
+
 file sealed class FakeNTreasureRoomRelicCollection
 {
     public object? _holdersInUse { get; init; }
@@ -3615,6 +3934,16 @@ file sealed class FakeNMapScreen
     public bool IsOpen { get; init; }
 
     public bool Visible { get; init; }
+}
+
+file sealed class FakeActiveScreenContext
+{
+    public object? CurrentScreen { get; init; }
+
+    public object? GetCurrentScreen()
+    {
+        return CurrentScreen;
+    }
 }
 
 file sealed class FakeScreenStateTracker
@@ -3693,7 +4022,19 @@ file sealed class FakeCardModel
     public string? Name { get; init; }
 }
 
+file sealed class FakeCardCreationResult
+{
+    public FakeCardModel? Card { get; init; }
+}
+
 file sealed class FakeRelicModel
+{
+    public string? Id { get; init; }
+
+    public string? Name { get; init; }
+}
+
+file sealed class FakePotionModel
 {
     public string? Id { get; init; }
 

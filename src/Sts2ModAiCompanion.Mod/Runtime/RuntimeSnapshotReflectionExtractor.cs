@@ -193,6 +193,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         string? RootType,
         bool ChestClickable,
         bool ChestOpened,
+        bool RelicCollectionOpen,
+        bool SharedRelicPickingActive,
+        bool MapScreenOpen,
         string? ChestBounds,
         int RelicHolderCount,
         int VisibleRelicHolderCount,
@@ -201,6 +204,48 @@ internal static class RuntimeSnapshotReflectionExtractor
         string? ProceedBounds,
         IReadOnlyList<string> RelicHolderIds,
         IReadOnlyList<TreasureRoomRelicHolderCandidate> VisibleRelicHolders);
+
+    private sealed record ShopOptionCandidate(
+        object Slot,
+        string OptionType,
+        string Label,
+        string? EntryId,
+        string ScreenBounds,
+        bool Enabled,
+        bool IsStocked,
+        bool EnoughGold,
+        bool Used,
+        string BoundsSource);
+
+    private sealed record ShopObservation(
+        bool RoomDetected,
+        bool RoomVisible,
+        bool ForegroundOwned,
+        bool TeardownInProgress,
+        bool ShopIsCurrentActiveScreen,
+        bool MapIsCurrentActiveScreen,
+        string? ActiveScreenType,
+        string? RootType,
+        bool InventoryOpen,
+        bool MerchantButtonVisible,
+        bool MerchantButtonEnabled,
+        string? MerchantButtonBounds,
+        bool ProceedEnabled,
+        string? ProceedBounds,
+        bool BackVisible,
+        bool BackEnabled,
+        string? BackBounds,
+        int OptionCount,
+        int AffordableOptionCount,
+        IReadOnlyList<string> AffordableOptionIds,
+        IReadOnlyList<string> AffordableRelicIds,
+        IReadOnlyList<string> AffordableCardIds,
+        IReadOnlyList<string> AffordablePotionIds,
+        bool CardRemovalVisible,
+        bool CardRemovalEnabled,
+        bool CardRemovalEnoughGold,
+        bool CardRemovalUsed,
+        IReadOnlyList<ShopOptionCandidate> VisibleOptions);
 
     public static LiveExportObservation Capture(
         RuntimeHookBinding binding,
@@ -377,6 +422,29 @@ internal static class RuntimeSnapshotReflectionExtractor
             payload["choiceExtractorPath"] = "treasure";
         }
         AppendTreasureRoomRuntimeMetadata(treasureRoomObservation, choices, meta, payload);
+
+        var shopObservation = ObserveShopRoom(roots, screen);
+        if (shopObservation.ForegroundOwned)
+        {
+            RemoveShopChoiceContamination(choices, shopObservation);
+            var mergedChoices = new List<LiveExportChoiceSummary>();
+            foreach (var choice in CreateShopChoices(shopObservation))
+            {
+                AddChoiceSummary(mergedChoices, choice, config.LiveExport.MaxChoiceEntries);
+            }
+
+            foreach (var choice in choices)
+            {
+                AddChoiceSummary(mergedChoices, choice, config.LiveExport.MaxChoiceEntries);
+            }
+
+            choices.Clear();
+            choices.AddRange(mergedChoices);
+
+            meta["choiceExtractorPath"] = "shop";
+            payload["choiceExtractorPath"] = "shop";
+        }
+        AppendShopRuntimeMetadata(shopObservation, meta, payload);
 
         var warnings = BuildWarnings(player, deck, relics, potions, choices);
 
@@ -2549,6 +2617,9 @@ internal static class RuntimeSnapshotReflectionExtractor
                 RootType: null,
                 ChestClickable: false,
                 ChestOpened: false,
+                RelicCollectionOpen: false,
+                SharedRelicPickingActive: false,
+                MapScreenOpen: false,
                 ChestBounds: null,
                 RelicHolderCount: 0,
                 VisibleRelicHolderCount: 0,
@@ -2590,24 +2661,48 @@ internal static class RuntimeSnapshotReflectionExtractor
             .ToArray()!;
         var visibleRelicHolderCount = holders.Length;
         var enabledRelicHolderCount = holders.Count(static holder => holder.Enabled);
+        var relicCollectionOpen = TryReadBool(room, "_isRelicCollectionOpen", "IsRelicCollectionOpen", "RelicCollectionOpen") == true;
+        var sharedRelicPickingActive = TryResolveSharedRelicPickingActive(roots) == true;
+        var mapScreenOpen = TryResolveMapScreenOpen(roots) == true;
         var chestOpenedSignal = TryReadBool(room, "ChestOpened", "IsChestOpened", "_chestOpened")
                                 ?? TryReadBool(chest, "Opened", "IsOpened", "_opened");
         var chestOpened = chestOpenedSignal == true
                           || visibleRelicHolderCount > 0
                           || proceedEnabled;
+        var staleAfterProceedResidue = mapScreenOpen
+                                       && !sharedRelicPickingActive
+                                       && !relicCollectionOpen
+                                       && !proceedEnabled;
+        if (staleAfterProceedResidue)
+        {
+            holders = Array.Empty<TreasureRoomRelicHolderCandidate>();
+            relicHolderIds = Array.Empty<string>();
+            visibleRelicHolderCount = 0;
+            enabledRelicHolderCount = 0;
+        }
 
-        var roomVisible = IsVisibleNode(room)
-                          || chestClickable
-                          || visibleRelicHolderCount > 0
-                          || proceedEnabled
-                          || string.Equals(screenHint, "map", StringComparison.OrdinalIgnoreCase)
-                          || string.Equals(screenHint, "event", StringComparison.OrdinalIgnoreCase);
+        var roomVisible = !staleAfterProceedResidue
+                          && (IsVisibleNode(room)
+                              || chestClickable
+                              || relicCollectionOpen
+                              || sharedRelicPickingActive
+                              || visibleRelicHolderCount > 0
+                              || proceedEnabled);
+        var roomDetected = !staleAfterProceedResidue
+                           && (roomVisible
+                               || relicCollectionOpen
+                               || sharedRelicPickingActive
+                               || chestClickable
+                               || proceedEnabled);
         return new TreasureRoomObservation(
-            RoomDetected: true,
+            RoomDetected: roomDetected,
             RoomVisible: roomVisible,
             RootType: roomType,
             ChestClickable: chestClickable,
             ChestOpened: chestOpened,
+            RelicCollectionOpen: relicCollectionOpen,
+            SharedRelicPickingActive: sharedRelicPickingActive,
+            MapScreenOpen: mapScreenOpen,
             ChestBounds: chestBounds,
             RelicHolderCount: holders.Length,
             VisibleRelicHolderCount: visibleRelicHolderCount,
@@ -2616,6 +2711,63 @@ internal static class RuntimeSnapshotReflectionExtractor
             ProceedBounds: proceedBounds,
             RelicHolderIds: relicHolderIds,
             VisibleRelicHolders: holders);
+    }
+
+    private static bool? TryResolveSharedRelicPickingActive(IEnumerable<object> roots)
+    {
+        foreach (var root in roots)
+        {
+            var tracker = TryGetScreenStateTracker(root);
+            var active = TryReadBool(tracker, "IsInSharedRelicPickingScreen", "_isInSharedRelicPicking", "SharedRelicPickingActive", "_sharedRelicPickingActive");
+            if (active is not null)
+            {
+                return active;
+            }
+        }
+
+        return null;
+    }
+
+    private static object? TryGetScreenStateTracker(object? root)
+    {
+        if (root is null)
+        {
+            return null;
+        }
+
+        var typeName = root.GetType().FullName ?? root.GetType().Name;
+        if (typeName.Contains("ScreenStateTracker", StringComparison.OrdinalIgnoreCase))
+        {
+            return root;
+        }
+
+        return TryGetMemberValue(root, "ScreenStateTracker")
+               ?? TryGetMemberValue(root, "_screenStateTracker");
+    }
+
+    private static bool? TryResolveMapScreenOpen(IEnumerable<object> roots)
+    {
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (!typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var isOpen = TryReadBool(root, "IsOpen", "_isOpen", "Open");
+            if (isOpen is not null)
+            {
+                return isOpen;
+            }
+
+            if (IsVisibleNode(root))
+            {
+                return true;
+            }
+        }
+
+        return null;
     }
 
     private static bool IsTreasureRoomType(string? typeName)
@@ -2751,6 +2903,463 @@ internal static class RuntimeSnapshotReflectionExtractor
             screenBounds,
             TryResolveInteractiveEnabled(holder) ?? TryResolveControlEnabled(holder) ?? true,
             boundsSource);
+    }
+
+    private static ShopObservation ObserveShopRoom(IEnumerable<object> roots, string? screenHint)
+    {
+        var rooms = roots
+            .Where(static root => IsShopRoomType(root.GetType().FullName ?? root.GetType().Name))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        if (rooms.Length == 0)
+        {
+            return new ShopObservation(
+                RoomDetected: false,
+                RoomVisible: false,
+                ForegroundOwned: false,
+                TeardownInProgress: false,
+                ShopIsCurrentActiveScreen: false,
+                MapIsCurrentActiveScreen: false,
+                ActiveScreenType: null,
+                RootType: null,
+                InventoryOpen: false,
+                MerchantButtonVisible: false,
+                MerchantButtonEnabled: false,
+                MerchantButtonBounds: null,
+                ProceedEnabled: false,
+                ProceedBounds: null,
+                BackVisible: false,
+                BackEnabled: false,
+                BackBounds: null,
+                OptionCount: 0,
+                AffordableOptionCount: 0,
+                AffordableOptionIds: Array.Empty<string>(),
+                AffordableRelicIds: Array.Empty<string>(),
+                AffordableCardIds: Array.Empty<string>(),
+                AffordablePotionIds: Array.Empty<string>(),
+                CardRemovalVisible: false,
+                CardRemovalEnabled: false,
+                CardRemovalEnoughGold: false,
+                CardRemovalUsed: false,
+                VisibleOptions: Array.Empty<ShopOptionCandidate>());
+        }
+
+        var room = rooms
+            .OrderByDescending(static candidate => IsVisibleNode(candidate) ? 1 : 0)
+            .ThenByDescending(candidate => string.Equals(screenHint, "shop", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .First();
+        var rootType = room.GetType().FullName ?? room.GetType().Name;
+        var activeScreen = TryResolveCurrentActiveScreen(roots);
+        var activeScreenType = activeScreen?.GetType().FullName ?? activeScreen?.GetType().Name;
+        var shopIsCurrentActiveScreen = IsShopActiveScreenType(activeScreenType);
+        var mapIsCurrentActiveScreen = IsMapScreenType(activeScreenType);
+        var inventory = TryGetMemberValue(room, "Inventory")
+                        ?? roots.FirstOrDefault(static root => IsMerchantInventoryType(root.GetType().FullName ?? root.GetType().Name));
+        var inventoryOpen = TryReadBool(inventory, "IsOpen") == true;
+        var merchantButton = TryGetMemberValue(room, "MerchantButton")
+                             ?? roots.FirstOrDefault(static root => IsMerchantButtonType(root.GetType().FullName ?? root.GetType().Name));
+        var merchantButtonBounds = TryResolveInteractiveScreenBounds(merchantButton, out _);
+        var merchantButtonVisible = !inventoryOpen
+                                    && !string.IsNullOrWhiteSpace(merchantButtonBounds)
+                                    && IsVisibleNode(merchantButton);
+        var merchantButtonEnabled = merchantButtonVisible
+                                    && (TryResolveInteractiveEnabled(merchantButton) ?? TryResolveControlEnabled(merchantButton) ?? true);
+
+        var proceedButton = TryGetMemberValue(room, "ProceedButton")
+                            ?? TryGetMemberValue(room, "_proceedButton")
+                            ?? roots.FirstOrDefault(static root => IsProceedButtonType(root.GetType().FullName ?? root.GetType().Name));
+        var proceedBounds = TryResolveInteractiveScreenBounds(proceedButton, out _);
+        var proceedEnabled = !string.IsNullOrWhiteSpace(proceedBounds)
+                             && (TryResolveInteractiveEnabled(proceedButton) ?? TryResolveControlEnabled(proceedButton) ?? true);
+
+        var backButton = TryGetMemberValue(inventory, "_backButton")
+                         ?? TryGetMemberValue(inventory, "BackButton");
+        var backBounds = TryResolveInteractiveScreenBounds(backButton, out _);
+        var backVisible = inventoryOpen
+                          && !string.IsNullOrWhiteSpace(backBounds)
+                          && IsVisibleNode(backButton);
+        var backEnabled = backVisible
+                          && (TryResolveInteractiveEnabled(backButton) ?? TryResolveControlEnabled(backButton) ?? true);
+
+        var visibleOptions = EnumerateMerchantSlots(inventory)
+            .Select(TryCreateShopOptionCandidate)
+            .Where(static candidate => candidate is not null)
+            .Cast<ShopOptionCandidate>()
+            .OrderBy(static candidate => TryGetBoundsSortX(candidate.ScreenBounds))
+            .ThenBy(static candidate => TryGetBoundsSortY(candidate.ScreenBounds))
+            .ToArray();
+        var affordableOptions = visibleOptions
+            .Where(static option => option.Enabled && option.IsStocked && option.EnoughGold && !option.Used)
+            .ToArray();
+        var affordableOptionIds = affordableOptions
+            .Select(static option => option.EntryId ?? option.Label)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray()!;
+        var affordableRelicIds = affordableOptions
+            .Where(static option => string.Equals(option.OptionType, "relic", StringComparison.OrdinalIgnoreCase))
+            .Select(static option => option.EntryId ?? option.Label)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray()!;
+        var affordableCardIds = affordableOptions
+            .Where(static option => string.Equals(option.OptionType, "card", StringComparison.OrdinalIgnoreCase))
+            .Select(static option => option.EntryId ?? option.Label)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray()!;
+        var affordablePotionIds = affordableOptions
+            .Where(static option => string.Equals(option.OptionType, "potion", StringComparison.OrdinalIgnoreCase))
+            .Select(static option => option.EntryId ?? option.Label)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray()!;
+        var cardRemoval = visibleOptions.FirstOrDefault(static option => string.Equals(option.OptionType, "card-removal", StringComparison.OrdinalIgnoreCase));
+        var roomVisible = string.Equals(screenHint, "shop", StringComparison.OrdinalIgnoreCase)
+                          || IsVisibleNode(room)
+                          || inventoryOpen
+                          || merchantButtonVisible
+                          || backVisible
+                          || proceedEnabled
+                          || visibleOptions.Length > 0;
+        var foregroundOwned = shopIsCurrentActiveScreen
+                              || inventoryOpen
+                              || merchantButtonEnabled
+                              || proceedEnabled
+                              || (backVisible && backEnabled);
+        var teardownInProgress = roomVisible
+                                 && !foregroundOwned
+                                 && !inventoryOpen
+                                 && !backVisible
+                                 && !proceedEnabled
+                                 && (mapIsCurrentActiveScreen
+                                     || (!merchantButtonEnabled && merchantButtonVisible));
+        return new ShopObservation(
+            RoomDetected: true,
+            RoomVisible: roomVisible,
+            ForegroundOwned: foregroundOwned,
+            TeardownInProgress: teardownInProgress,
+            ShopIsCurrentActiveScreen: shopIsCurrentActiveScreen,
+            MapIsCurrentActiveScreen: mapIsCurrentActiveScreen,
+            ActiveScreenType: activeScreenType,
+            RootType: rootType,
+            InventoryOpen: inventoryOpen,
+            MerchantButtonVisible: merchantButtonVisible,
+            MerchantButtonEnabled: merchantButtonEnabled,
+            MerchantButtonBounds: merchantButtonBounds,
+            ProceedEnabled: proceedEnabled,
+            ProceedBounds: proceedBounds,
+            BackVisible: backVisible,
+            BackEnabled: backEnabled,
+            BackBounds: backBounds,
+            OptionCount: visibleOptions.Length,
+            AffordableOptionCount: affordableOptions.Length,
+            AffordableOptionIds: affordableOptionIds,
+            AffordableRelicIds: affordableRelicIds,
+            AffordableCardIds: affordableCardIds,
+            AffordablePotionIds: affordablePotionIds,
+            CardRemovalVisible: cardRemoval is not null,
+            CardRemovalEnabled: cardRemoval?.Enabled == true && cardRemoval.IsStocked && !cardRemoval.Used,
+            CardRemovalEnoughGold: cardRemoval?.EnoughGold == true,
+            CardRemovalUsed: cardRemoval?.Used == true,
+            VisibleOptions: visibleOptions);
+    }
+
+    private static bool IsShopRoomType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMerchantRoom", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMerchantInventoryType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMerchantInventory", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMerchantButtonType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMerchantButton", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsShopActiveScreenType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && (typeName.Contains("NMerchantRoom", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("NMerchantInventory", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsMapScreenType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static object? TryResolveCurrentActiveScreen(IEnumerable<object> roots)
+    {
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (typeName.Contains("ActiveScreenContext", StringComparison.OrdinalIgnoreCase))
+            {
+                return TryInvokeMethod(root, "GetCurrentScreen");
+            }
+        }
+
+        var activeScreenContextType = FindLoadedType("MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext.ActiveScreenContext");
+        if (activeScreenContextType is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var instance = activeScreenContextType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            return instance is null
+                ? null
+                : TryInvokeMethod(instance, "GetCurrentScreen");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Type? FindLoadedType(string fullName)
+    {
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            try
+            {
+                var type = assembly.GetType(fullName, throwOnError: false, ignoreCase: false);
+                if (type is not null)
+                {
+                    return type;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsProceedButtonType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NProceedButton", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IEnumerable<object> EnumerateMerchantSlots(object? inventory)
+    {
+        if (inventory is null)
+        {
+            yield break;
+        }
+
+        var seen = new HashSet<int>();
+        foreach (var slot in ExpandEnumerable(TryInvokeMethod(inventory, "GetAllSlots")))
+        {
+            if (slot is not null && seen.Add(RuntimeHelpers.GetHashCode(slot)))
+            {
+                yield return slot;
+            }
+        }
+
+        var cardRemoval = TryGetMemberValue(inventory, "_cardRemovalNode");
+        if (cardRemoval is not null && seen.Add(RuntimeHelpers.GetHashCode(cardRemoval)))
+        {
+            yield return cardRemoval;
+        }
+    }
+
+    private static ShopOptionCandidate? TryCreateShopOptionCandidate(object slot)
+    {
+        var typeName = slot.GetType().FullName ?? slot.GetType().Name;
+        if (!typeName.Contains("NMerchant", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var screenBounds = TryResolveInteractiveScreenBounds(slot, out var boundsSource);
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return null;
+        }
+
+        var entry = TryGetMemberValue(slot, "Entry");
+        var entryTypeName = entry?.GetType().FullName ?? entry?.GetType().Name;
+        var optionType = ResolveShopOptionType(typeName, entryTypeName);
+        if (optionType is null)
+        {
+            return null;
+        }
+
+        var typedSource = TryResolveTypedShopOptionSource(slot, entry, optionType);
+        var label = FirstNonEmpty(
+            typedSource.Label,
+            TryResolveChoiceLabel(slot),
+            TryResolveChoiceLabel(entry),
+            TryReadString(entry, "Title", "DisplayName", "Name", "Id"),
+            TryReadString(slot, "Title", "DisplayName", "Name", "Id"));
+        if (string.IsNullOrWhiteSpace(label)
+            || IsPlaceholderChoiceLabel(label, slot))
+        {
+            return null;
+        }
+
+        var entryId = typedSource.EntryId ?? ResolveShopOptionId(slot, entry, optionType, label);
+        var enabled = TryResolveInteractiveEnabled(slot) ?? TryResolveControlEnabled(slot) ?? true;
+        var isStocked = TryReadBool(entry, "IsStocked") ?? true;
+        var enoughGold = TryReadBool(entry, "EnoughGold") ?? false;
+        var used = TryReadBool(entry, "Used") ?? false;
+        return new ShopOptionCandidate(
+            slot,
+            optionType,
+            label,
+            entryId,
+            screenBounds,
+            enabled,
+            isStocked,
+            enoughGold,
+            used,
+            boundsSource);
+    }
+
+    private static string? ResolveShopOptionType(string? slotTypeName, string? entryTypeName)
+    {
+        if ((!string.IsNullOrWhiteSpace(slotTypeName) && slotTypeName.Contains("CardRemoval", StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(entryTypeName) && entryTypeName.Contains("CardRemoval", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "card-removal";
+        }
+
+        if ((!string.IsNullOrWhiteSpace(slotTypeName) && slotTypeName.Contains("Relic", StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(entryTypeName) && entryTypeName.Contains("Relic", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "relic";
+        }
+
+        if ((!string.IsNullOrWhiteSpace(slotTypeName) && slotTypeName.Contains("Potion", StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(entryTypeName) && entryTypeName.Contains("Potion", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "potion";
+        }
+
+        if ((!string.IsNullOrWhiteSpace(slotTypeName) && slotTypeName.Contains("Card", StringComparison.OrdinalIgnoreCase))
+            || (!string.IsNullOrWhiteSpace(entryTypeName) && entryTypeName.Contains("Card", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "card";
+        }
+
+        return null;
+    }
+
+    private static (string? Label, string? EntryId) TryResolveTypedShopOptionSource(object slot, object? entry, string optionType)
+    {
+        switch (optionType)
+        {
+            case "card":
+            {
+                var creationResult = TryGetMemberValue(entry, "CreationResult");
+                var card = TryGetMemberValue(creationResult, "Card")
+                           ?? TryGetMemberValue(slot, "Card")
+                           ?? TryGetMemberValue(slot, "CardModel")
+                           ?? TryGetMemberValue(TryGetMemberValue(slot, "_cardNode"), "Model")
+                           ?? TryGetMemberValue(TryGetMemberValue(slot, "CardNode"), "Model")
+                           ?? TryGetMemberValue(entry, "Card")
+                           ?? TryGetMemberValue(entry, "CardModel");
+                return (
+                    SanitizeShopOptionLabel(FirstNonEmpty(
+                        TryReadString(card, "Title", "CardName", "DisplayName", "Name", "Id", "CardId"),
+                        TryReadString(creationResult, "Title", "DisplayName", "Name", "Id"))),
+                    SanitizeShopOptionIdentity(FirstNonEmpty(
+                        TryReadString(card, "Id", "CardId", "Name", "Title"),
+                        TryReadString(creationResult, "Id", "CardId", "Name", "Title"))));
+            }
+            case "relic":
+            {
+                var relic = TryGetMemberValue(entry, "Model")
+                            ?? TryGetMemberValue(slot, "Relic")
+                            ?? TryGetMemberValue(slot, "Model")
+                            ?? TryGetMemberValue(TryGetMemberValue(slot, "_relicNode"), "Model")
+                            ?? TryGetMemberValue(TryGetMemberValue(slot, "RelicNode"), "Model");
+                return (
+                    SanitizeShopOptionLabel(FirstNonEmpty(
+                        TryReadString(relic, "Title", "DisplayName", "Name", "Id"),
+                        TryReadString(entry, "Title", "DisplayName", "Name", "Id"))),
+                    SanitizeShopOptionIdentity(FirstNonEmpty(
+                        TryReadString(relic, "Id", "Name", "Title"),
+                        TryReadString(entry, "Id", "Name", "Title"))));
+            }
+            case "potion":
+            {
+                var potion = TryGetMemberValue(entry, "Model")
+                             ?? TryGetMemberValue(slot, "Potion")
+                             ?? TryGetMemberValue(slot, "Model")
+                             ?? TryGetMemberValue(TryGetMemberValue(slot, "_potionNode"), "Model")
+                             ?? TryGetMemberValue(TryGetMemberValue(slot, "PotionNode"), "Model");
+                return (
+                    SanitizeShopOptionLabel(FirstNonEmpty(
+                        TryReadString(potion, "Title", "DisplayName", "Name", "Id"),
+                        TryReadString(entry, "Title", "DisplayName", "Name", "Id"))),
+                    SanitizeShopOptionIdentity(FirstNonEmpty(
+                        TryReadString(potion, "Id", "Name", "Title"),
+                        TryReadString(entry, "Id", "Name", "Title"))));
+            }
+            case "card-removal":
+            {
+                var label = SanitizeShopOptionLabel(FirstNonEmpty(
+                    TryReadString(entry, "Title", "DisplayName", "Name", "Id"),
+                    TryReadString(slot, "Title", "DisplayName", "Name", "Id")))
+                    ?? "카드 제거 서비스";
+                return (label, "service:card-removal");
+            }
+            default:
+                return (null, null);
+        }
+    }
+
+    private static string? SanitizeShopOptionLabel(string? label)
+    {
+        return string.IsNullOrWhiteSpace(label) || IsPlaceholderChoiceLabel(label)
+            ? null
+            : label;
+    }
+
+    private static string? SanitizeShopOptionIdentity(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) || IsPlaceholderChoiceLabel(value)
+            ? null
+            : value;
+    }
+
+    private static string ResolveShopOptionId(object slot, object? entry, string optionType, string label)
+    {
+        var creationResult = TryGetMemberValue(entry, "CreationResult");
+        var cardLike = TryGetMemberValue(creationResult, "Card")
+                       ?? TryGetMemberValue(slot, "Card")
+                       ?? TryGetMemberValue(slot, "CardModel")
+                       ?? TryGetMemberValue(slot, "Model")
+                       ?? TryGetMemberValue(TryGetMemberValue(slot, "_cardNode"), "Model")
+                       ?? TryGetMemberValue(TryGetMemberValue(slot, "CardNode"), "Model")
+                       ?? TryGetMemberValue(entry, "Card")
+                       ?? TryGetMemberValue(entry, "CardModel");
+        var relicLike = TryGetMemberValue(entry, "Model")
+                        ?? TryGetMemberValue(slot, "Relic")
+                        ?? TryGetMemberValue(slot, "Model");
+        var potionLike = TryGetMemberValue(entry, "Model")
+                         ?? TryGetMemberValue(slot, "Potion")
+                         ?? TryGetMemberValue(slot, "Model");
+        return SanitizeShopOptionIdentity(FirstNonEmpty(
+                   TryReadString(cardLike, "Id", "CardId", "Name", "Title"),
+                   TryReadString(relicLike, "Id", "Name", "Title"),
+                   TryReadString(potionLike, "Id", "Name", "Title"),
+                   TryReadString(entry, "Id", "Name", "Title"),
+                   TryReadString(slot, "Id", "Name", "Title")))
+               ?? $"{optionType}:{SanitizeNodeKey(label)}";
     }
 
     private static bool? TryResolveControlEnabled(object? control)
@@ -3880,6 +4489,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         meta["treasureRoomDetected"] = observation.RoomDetected ? "true" : "false";
         meta["treasureChestClickable"] = observation.ChestClickable ? "true" : "false";
         meta["treasureChestOpened"] = observation.ChestOpened ? "true" : "false";
+        meta["treasureRelicCollectionOpen"] = observation.RelicCollectionOpen ? "true" : "false";
+        meta["sharedRelicPickingActive"] = observation.SharedRelicPickingActive ? "true" : "false";
+        meta["mapScreenOpen"] = observation.MapScreenOpen ? "true" : "false";
         meta["treasureRelicHolderCount"] = observation.RelicHolderCount.ToString(CultureInfo.InvariantCulture);
         meta["treasureVisibleRelicHolderCount"] = observation.VisibleRelicHolderCount.ToString(CultureInfo.InvariantCulture);
         meta["treasureEnabledRelicHolderCount"] = observation.EnabledRelicHolderCount.ToString(CultureInfo.InvariantCulture);
@@ -3892,6 +4504,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         payload["treasureRoomDetected"] = observation.RoomDetected;
         payload["treasureChestClickable"] = observation.ChestClickable;
         payload["treasureChestOpened"] = observation.ChestOpened;
+        payload["treasureRelicCollectionOpen"] = observation.RelicCollectionOpen;
+        payload["sharedRelicPickingActive"] = observation.SharedRelicPickingActive;
+        payload["mapScreenOpen"] = observation.MapScreenOpen;
         payload["treasureRelicHolderCount"] = observation.RelicHolderCount;
         payload["treasureVisibleRelicHolderCount"] = observation.VisibleRelicHolderCount;
         payload["treasureEnabledRelicHolderCount"] = observation.EnabledRelicHolderCount;
@@ -3908,6 +4523,77 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (observation.RelicHolderIds.Count > 0)
         {
             payload["treasureRelicHolderIds"] = observation.RelicHolderIds.ToArray();
+        }
+    }
+
+    private static void AppendShopRuntimeMetadata(
+        ShopObservation observation,
+        IDictionary<string, string?> meta,
+        IDictionary<string, object?> payload)
+    {
+        meta["shopRoomDetected"] = observation.RoomDetected ? "true" : "false";
+        meta["shopRoomVisible"] = observation.RoomVisible ? "true" : "false";
+        meta["shopForegroundOwned"] = observation.ForegroundOwned ? "true" : "false";
+        meta["shopTeardownInProgress"] = observation.TeardownInProgress ? "true" : "false";
+        meta["shopIsCurrentActiveScreen"] = observation.ShopIsCurrentActiveScreen ? "true" : "false";
+        meta["mapCurrentActiveScreen"] = observation.MapIsCurrentActiveScreen ? "true" : "false";
+        meta["activeScreenType"] = observation.ActiveScreenType;
+        meta["shopRootType"] = observation.RootType;
+        meta["shopInventoryOpen"] = observation.InventoryOpen ? "true" : "false";
+        meta["shopMerchantButtonVisible"] = observation.MerchantButtonVisible ? "true" : "false";
+        meta["shopMerchantButtonEnabled"] = observation.MerchantButtonEnabled ? "true" : "false";
+        meta["shopProceedEnabled"] = observation.ProceedEnabled ? "true" : "false";
+        meta["shopBackVisible"] = observation.BackVisible ? "true" : "false";
+        meta["shopBackEnabled"] = observation.BackEnabled ? "true" : "false";
+        meta["shopOptionCount"] = observation.OptionCount.ToString(CultureInfo.InvariantCulture);
+        meta["shopAffordableOptionCount"] = observation.AffordableOptionCount.ToString(CultureInfo.InvariantCulture);
+        meta["shopAffordableOptionIds"] = observation.AffordableOptionIds.Count == 0 ? null : string.Join(",", observation.AffordableOptionIds);
+        meta["shopAffordableRelicIds"] = observation.AffordableRelicIds.Count == 0 ? null : string.Join(",", observation.AffordableRelicIds);
+        meta["shopAffordableCardIds"] = observation.AffordableCardIds.Count == 0 ? null : string.Join(",", observation.AffordableCardIds);
+        meta["shopAffordablePotionIds"] = observation.AffordablePotionIds.Count == 0 ? null : string.Join(",", observation.AffordablePotionIds);
+        meta["shopCardRemovalVisible"] = observation.CardRemovalVisible ? "true" : "false";
+        meta["shopCardRemovalEnabled"] = observation.CardRemovalEnabled ? "true" : "false";
+        meta["shopCardRemovalEnoughGold"] = observation.CardRemovalEnoughGold ? "true" : "false";
+        meta["shopCardRemovalUsed"] = observation.CardRemovalUsed ? "true" : "false";
+
+        payload["shopRoomDetected"] = observation.RoomDetected;
+        payload["shopRoomVisible"] = observation.RoomVisible;
+        payload["shopForegroundOwned"] = observation.ForegroundOwned;
+        payload["shopTeardownInProgress"] = observation.TeardownInProgress;
+        payload["shopIsCurrentActiveScreen"] = observation.ShopIsCurrentActiveScreen;
+        payload["mapCurrentActiveScreen"] = observation.MapIsCurrentActiveScreen;
+        payload["activeScreenType"] = observation.ActiveScreenType;
+        payload["shopRootType"] = observation.RootType;
+        payload["shopInventoryOpen"] = observation.InventoryOpen;
+        payload["shopMerchantButtonVisible"] = observation.MerchantButtonVisible;
+        payload["shopMerchantButtonEnabled"] = observation.MerchantButtonEnabled;
+        payload["shopProceedEnabled"] = observation.ProceedEnabled;
+        payload["shopBackVisible"] = observation.BackVisible;
+        payload["shopBackEnabled"] = observation.BackEnabled;
+        payload["shopOptionCount"] = observation.OptionCount;
+        payload["shopAffordableOptionCount"] = observation.AffordableOptionCount;
+        payload["shopCardRemovalVisible"] = observation.CardRemovalVisible;
+        payload["shopCardRemovalEnabled"] = observation.CardRemovalEnabled;
+        payload["shopCardRemovalEnoughGold"] = observation.CardRemovalEnoughGold;
+        payload["shopCardRemovalUsed"] = observation.CardRemovalUsed;
+        if (observation.AffordableOptionIds.Count > 0)
+        {
+            payload["shopAffordableOptionIds"] = observation.AffordableOptionIds.ToArray();
+        }
+
+        if (observation.AffordableRelicIds.Count > 0)
+        {
+            payload["shopAffordableRelicIds"] = observation.AffordableRelicIds.ToArray();
+        }
+
+        if (observation.AffordableCardIds.Count > 0)
+        {
+            payload["shopAffordableCardIds"] = observation.AffordableCardIds.ToArray();
+        }
+
+        if (observation.AffordablePotionIds.Count > 0)
+        {
+            payload["shopAffordablePotionIds"] = observation.AffordablePotionIds.ToArray();
         }
     }
 
@@ -4048,6 +4734,156 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return choices;
+    }
+
+    private static IReadOnlyList<LiveExportChoiceSummary> CreateShopChoices(ShopObservation observation)
+    {
+        if (!observation.ForegroundOwned)
+        {
+            return Array.Empty<LiveExportChoiceSummary>();
+        }
+
+        var choices = new List<LiveExportChoiceSummary>();
+        if (observation.MerchantButtonVisible && !string.IsNullOrWhiteSpace(observation.MerchantButtonBounds))
+        {
+            choices.Add(new LiveExportChoiceSummary(
+                "shop-open-inventory",
+                "Merchant",
+                "shop:merchant",
+                "Open merchant inventory")
+            {
+                NodeId = "shop:merchant",
+                ScreenBounds = observation.MerchantButtonBounds,
+                BindingKind = "shop-room",
+                BindingId = "merchant-button",
+                Enabled = observation.MerchantButtonEnabled,
+                SemanticHints = new[] { "scene:shop", "shop-action:open-inventory", "source:merchant-button" },
+            });
+        }
+
+        if (observation.BackVisible && !string.IsNullOrWhiteSpace(observation.BackBounds))
+        {
+            choices.Add(new LiveExportChoiceSummary(
+                "shop-back",
+                "Back",
+                "shop:back",
+                "Close merchant inventory")
+            {
+                NodeId = "shop:back",
+                ScreenBounds = observation.BackBounds,
+                BindingKind = "shop-room",
+                BindingId = "back",
+                Enabled = observation.BackEnabled,
+                SemanticHints = new[] { "scene:shop", "shop-action:back", "source:back-button" },
+            });
+        }
+
+        if (observation.ProceedEnabled && !string.IsNullOrWhiteSpace(observation.ProceedBounds))
+        {
+            choices.Add(new LiveExportChoiceSummary(
+                "shop-proceed",
+                "Proceed",
+                "shop:proceed",
+                "Leave the shop")
+            {
+                NodeId = "shop:proceed",
+                ScreenBounds = observation.ProceedBounds,
+                BindingKind = "shop-room",
+                BindingId = "proceed",
+                Enabled = true,
+                SemanticHints = new[] { "scene:shop", "shop-action:proceed", "source:proceed-button" },
+            });
+        }
+
+        var visibleOptions = observation.VisibleOptions
+            .OrderByDescending(static candidate => candidate.Enabled && candidate.IsStocked && candidate.EnoughGold && !candidate.Used ? 1 : 0)
+            .ThenBy(static candidate => GetShopOptionPriority(candidate.OptionType))
+            .ThenBy(static candidate => TryGetBoundsSortX(candidate.ScreenBounds))
+            .ThenBy(static candidate => TryGetBoundsSortY(candidate.ScreenBounds))
+            .ToArray();
+        var optionOrdinal = 0;
+        foreach (var option in visibleOptions)
+        {
+            optionOrdinal += 1;
+            var optionKind = option.OptionType switch
+            {
+                "relic" => "shop-option:relic",
+                "card" => "shop-option:card",
+                "potion" => "shop-option:potion",
+                "card-removal" => "shop-card-removal",
+                _ => "shop-option",
+            };
+            var bindingKind = option.OptionType == "card-removal" ? "shop-card-removal" : "shop-option";
+            var bindingId = option.EntryId ?? $"{option.OptionType}:{optionOrdinal}";
+            var semanticHints = new List<string>
+            {
+                "scene:shop",
+                $"shop-type:{option.OptionType}",
+                $"stocked:{option.IsStocked.ToString().ToLowerInvariant()}",
+                $"enough-gold:{option.EnoughGold.ToString().ToLowerInvariant()}",
+                $"used:{option.Used.ToString().ToLowerInvariant()}",
+                $"source:{option.BoundsSource}",
+            };
+            choices.Add(new LiveExportChoiceSummary(
+                optionKind,
+                option.Label,
+                option.EntryId,
+                option.OptionType == "card-removal" ? "Merchant card removal service" : "Merchant inventory slot")
+            {
+                NodeId = option.OptionType == "card-removal"
+                    ? "shop:card-removal"
+                    : $"shop:{option.OptionType}:{SanitizeNodeKey(bindingId)}",
+                ScreenBounds = option.ScreenBounds,
+                BindingKind = bindingKind,
+                BindingId = bindingId,
+                Enabled = option.Enabled && option.IsStocked && option.EnoughGold && !option.Used,
+                SemanticHints = semanticHints,
+            });
+        }
+
+        return choices;
+    }
+
+    private static void RemoveShopChoiceContamination(List<LiveExportChoiceSummary> choices, ShopObservation observation)
+    {
+        if (!observation.RoomVisible)
+        {
+            return;
+        }
+
+        var explicitOptionLabels = observation.VisibleOptions
+            .Select(static option => option.Label)
+            .Where(static label => !string.IsNullOrWhiteSpace(label))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        for (var index = choices.Count - 1; index >= 0; index -= 1)
+        {
+            var choice = choices[index];
+            if (!choice.Kind.StartsWith("shop-", StringComparison.OrdinalIgnoreCase)
+                && choice.Kind is "relic" or "potion" or "card" or "choice" or "proceed" or "overlay-dismiss" or "overlay-back")
+            {
+                choices.RemoveAt(index);
+                continue;
+            }
+
+            if (explicitOptionLabels.Contains(choice.Label)
+                && choice.Kind is "relic" or "potion" or "card" or "choice")
+            {
+                choices.RemoveAt(index);
+            }
+        }
+    }
+
+    private static int GetShopOptionPriority(string optionType)
+    {
+        return optionType switch
+        {
+            "card-removal" => 0,
+            "relic" => 1,
+            "card" => 2,
+            "potion" => 3,
+            _ => 9,
+        };
     }
 
     private static IReadOnlyList<string> BuildCardSelectionSemanticHints(string screenType, bool selected)

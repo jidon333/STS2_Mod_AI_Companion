@@ -4067,8 +4067,358 @@ static void RunSelfTest()
                 12,
                 true,
                 out var waitPostMapNodeShopPhase)
-            && waitPostMapNodeShopPhase == GuiSmokePhase.ChooseFirstNode,
+            && waitPostMapNodeShopPhase == GuiSmokePhase.HandleShop,
             "WaitPostMapNodeRoom should reopen shop handling when the destination room is shop.");
+
+        ObserverState CreateShopObserver(
+            bool inventoryOpen,
+            bool merchantButtonVisible = false,
+            bool merchantButtonEnabled = false,
+            bool proceedEnabled = false,
+            bool backVisible = false,
+            bool backEnabled = false,
+            bool roomVisible = true,
+            bool foregroundOwned = true,
+            bool teardownInProgress = false,
+            bool shopIsCurrentActiveScreen = true,
+            bool mapCurrentActiveScreen = false,
+            string? activeScreenType = "MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom",
+            int affordableOptionCount = 0,
+            bool cardRemovalVisible = false,
+            bool cardRemovalEnabled = false,
+            bool cardRemovalEnoughGold = false,
+            bool cardRemovalUsed = false,
+            ObserverChoice[]? choices = null)
+        {
+            var summary = new ObserverSummary(
+                "shop",
+                "shop",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                true,
+                "shop",
+                "stable",
+                null,
+                "Shop",
+                "shop",
+                80,
+                80,
+                null,
+                choices?.Select(static choice => choice.Label).ToArray() ?? Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<ObserverActionNode>(),
+                choices ?? Array.Empty<ObserverChoice>(),
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["shopRoomDetected"] = "true",
+                    ["shopRoomVisible"] = roomVisible.ToString().ToLowerInvariant(),
+                    ["shopForegroundOwned"] = foregroundOwned.ToString().ToLowerInvariant(),
+                    ["shopTeardownInProgress"] = teardownInProgress.ToString().ToLowerInvariant(),
+                    ["shopIsCurrentActiveScreen"] = shopIsCurrentActiveScreen.ToString().ToLowerInvariant(),
+                    ["mapCurrentActiveScreen"] = mapCurrentActiveScreen.ToString().ToLowerInvariant(),
+                    ["activeScreenType"] = activeScreenType,
+                    ["shopRootType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom",
+                    ["shopInventoryOpen"] = inventoryOpen.ToString().ToLowerInvariant(),
+                    ["shopMerchantButtonVisible"] = merchantButtonVisible.ToString().ToLowerInvariant(),
+                    ["shopMerchantButtonEnabled"] = merchantButtonEnabled.ToString().ToLowerInvariant(),
+                    ["shopProceedEnabled"] = proceedEnabled.ToString().ToLowerInvariant(),
+                    ["shopBackVisible"] = backVisible.ToString().ToLowerInvariant(),
+                    ["shopBackEnabled"] = backEnabled.ToString().ToLowerInvariant(),
+                    ["shopOptionCount"] = (choices?.Count(static choice => choice.Kind.StartsWith("shop-option", StringComparison.OrdinalIgnoreCase) || string.Equals(choice.Kind, "shop-card-removal", StringComparison.OrdinalIgnoreCase)) ?? 0).ToString(CultureInfo.InvariantCulture),
+                    ["shopAffordableOptionCount"] = affordableOptionCount.ToString(CultureInfo.InvariantCulture),
+                    ["shopCardRemovalVisible"] = cardRemovalVisible.ToString().ToLowerInvariant(),
+                    ["shopCardRemovalEnabled"] = cardRemovalEnabled.ToString().ToLowerInvariant(),
+                    ["shopCardRemovalEnoughGold"] = cardRemovalEnoughGold.ToString().ToLowerInvariant(),
+                    ["shopCardRemovalUsed"] = cardRemovalUsed.ToString().ToLowerInvariant(),
+                },
+            };
+            return new ObserverState(summary, null, null, null);
+        }
+
+        GuiSmokeStepDecision DecideShop(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
+        {
+            history ??= Array.Empty<GuiSmokeHistoryEntry>();
+            return AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "shop-self-test",
+                12,
+                GuiSmokePhase.HandleShop.ToString(),
+                "Resolve explicit shop room semantics.",
+                DateTimeOffset.UtcNow,
+                "screen.png",
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:shop|screen:shop|visible:shop|encounter:shop|ready:true|stability:stable|room:shop",
+                "shop-self-test",
+                1,
+                1,
+                true,
+                "tactical",
+                null,
+                observer.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                BuildAllowedActions(GuiSmokePhase.HandleShop, observer, Array.Empty<CombatCardKnowledgeHint>(), null, history),
+                history,
+                "shop self-test",
+                null));
+        }
+
+        var embarkShopObserver = CreateShopObserver(inventoryOpen: true);
+        Assert(GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(embarkShopObserver, out var postEmbarkShopPhase) && postEmbarkShopPhase == GuiSmokePhase.HandleShop, "Embark should reconcile to HandleShop when observer already reports a shop room.");
+
+        var shopOpenInventoryObserver = CreateShopObserver(
+            inventoryOpen: false,
+            merchantButtonVisible: true,
+            merchantButtonEnabled: true,
+            choices: new[]
+            {
+                new ObserverChoice("shop-open-inventory", "Merchant", "420,320,240,180")
+                {
+                    BindingKind = "shop-room",
+                    BindingId = "merchant-button",
+                    Enabled = true,
+                },
+            });
+        Assert(BuildAllowedActions(GuiSmokePhase.HandleShop, shopOpenInventoryObserver, Array.Empty<CombatCardKnowledgeHint>(), null, Array.Empty<GuiSmokeHistoryEntry>()).Contains("click shop open inventory", StringComparer.OrdinalIgnoreCase), "HandleShop allowlist should open merchant inventory when it is closed and the merchant button is enabled.");
+        Assert(string.Equals(DecideShop(shopOpenInventoryObserver).TargetLabel, "shop open inventory", StringComparison.OrdinalIgnoreCase), "HandleShop should click the explicit merchant button when inventory is closed.");
+
+        var shopRelicObserver = CreateShopObserver(
+            inventoryOpen: true,
+            backVisible: true,
+            backEnabled: true,
+            affordableOptionCount: 1,
+            choices: new[]
+            {
+                new ObserverChoice("shop-option:relic", "게임용 말", "420,320,180,180")
+                {
+                    BindingKind = "shop-option",
+                    BindingId = "RELIC.GAME_PIECE",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:shop", "shop-type:relic" },
+                },
+                new ObserverChoice("shop-back", "Back", "220,160,140,100")
+                {
+                    BindingKind = "shop-room",
+                    BindingId = "back",
+                    Enabled = true,
+                },
+            });
+        Assert(string.Equals(DecideShop(shopRelicObserver).TargetLabel, "shop buy relic", StringComparison.OrdinalIgnoreCase), "HandleShop should buy an affordable relic before backing out.");
+
+        var shopCardObserver = CreateShopObserver(
+            inventoryOpen: true,
+            backVisible: true,
+            backEnabled: true,
+            affordableOptionCount: 1,
+            choices: new[]
+            {
+                new ObserverChoice("shop-option:card", "몸풀기", "420,320,180,180")
+                {
+                    BindingKind = "shop-option",
+                    BindingId = "CARD.WARM_UP",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:shop", "shop-type:card" },
+                },
+            });
+        Assert(string.Equals(DecideShop(shopCardObserver).TargetLabel, "shop buy card", StringComparison.OrdinalIgnoreCase), "HandleShop should buy an affordable card when no relic is chosen.");
+
+        var shopPotionObserver = CreateShopObserver(
+            inventoryOpen: true,
+            backVisible: true,
+            backEnabled: true,
+            affordableOptionCount: 1,
+            choices: new[]
+            {
+                new ObserverChoice("shop-option:potion", "힘 포션", "420,320,180,180")
+                {
+                    BindingKind = "shop-option",
+                    BindingId = "POTION.STRENGTH_POTION",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:shop", "shop-type:potion" },
+                },
+            });
+        Assert(string.Equals(DecideShop(shopPotionObserver).TargetLabel, "shop buy potion", StringComparison.OrdinalIgnoreCase), "HandleShop should buy an affordable potion when no relic or card is chosen.");
+
+        var shopCardRemovalObserver = CreateShopObserver(
+            inventoryOpen: true,
+            backVisible: true,
+            backEnabled: true,
+            affordableOptionCount: 0,
+            cardRemovalVisible: true,
+            cardRemovalEnabled: true,
+            cardRemovalEnoughGold: true,
+            choices: new[]
+            {
+                new ObserverChoice("shop-card-removal", "카드 제거 서비스", "420,320,180,180")
+                {
+                    BindingKind = "shop-card-removal",
+                    BindingId = "card-removal",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:shop", "shop-type:card-removal", "enough-gold:true" },
+                },
+            });
+        Assert(string.Equals(DecideShop(shopCardRemovalObserver).TargetLabel, "shop card removal", StringComparison.OrdinalIgnoreCase), "HandleShop should treat card removal as a distinct shop service, not a normal card purchase.");
+
+        var shopBackObserver = CreateShopObserver(
+            inventoryOpen: true,
+            backVisible: true,
+            backEnabled: true,
+            choices: new[]
+            {
+                new ObserverChoice("shop-back", "Back", "220,160,140,100")
+                {
+                    BindingKind = "shop-room",
+                    BindingId = "back",
+                    Enabled = true,
+                },
+            });
+        Assert(string.Equals(DecideShop(shopBackObserver).TargetLabel, "shop back", StringComparison.OrdinalIgnoreCase), "HandleShop should close inventory explicitly when no bounded purchase remains.");
+
+        var shopProceedObserver = CreateShopObserver(
+            inventoryOpen: false,
+            proceedEnabled: true,
+            choices: new[]
+            {
+                new ObserverChoice("shop-proceed", "Proceed", "980,820,240,120")
+                {
+                    BindingKind = "shop-room",
+                    BindingId = "proceed",
+                    Enabled = true,
+                },
+            });
+        Assert(string.Equals(DecideShop(shopProceedObserver).TargetLabel, "shop proceed", StringComparison.OrdinalIgnoreCase), "HandleShop should click explicit shop proceed when inventory is closed and proceed is enabled.");
+
+        var staleVisibleShopObserver = CreateShopObserver(
+            inventoryOpen: false,
+            merchantButtonVisible: true,
+            merchantButtonEnabled: false,
+            proceedEnabled: false,
+            backVisible: false,
+            backEnabled: false,
+            roomVisible: true,
+            foregroundOwned: false,
+            teardownInProgress: true,
+            shopIsCurrentActiveScreen: false,
+            mapCurrentActiveScreen: true,
+            activeScreenType: "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+            choices: new[]
+            {
+                new ObserverChoice("shop-open-inventory", "Merchant", "420,320,240,180")
+                {
+                    BindingKind = "shop-room",
+                    BindingId = "merchant-button",
+                    Enabled = false,
+                },
+            });
+        Assert(!ShopObserverSignals.IsShopAuthorityActive(staleVisibleShopObserver.Summary), "Visible-but-disabled merchant remnants should not keep shop foreground authority after proceed teardown starts.");
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.HandleShop,
+                staleVisibleShopObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                new ArtifactRecorder(Path.Combine(Path.GetTempPath(), $"gui-smoke-handle-shop-release-{Guid.NewGuid():N}")),
+                12,
+                true,
+                out var postShopPhase)
+            && postShopPhase == GuiSmokePhase.WaitMap,
+            "HandleShop should release ownership to map aftermath reconciliation when shop teardown is active.");
+
+        var shopProceedAfterPurchaseActions = BuildAllowedActions(
+            GuiSmokePhase.HandleShop,
+            CreateShopObserver(
+                inventoryOpen: false,
+                merchantButtonVisible: true,
+                merchantButtonEnabled: true,
+                proceedEnabled: true,
+                choices: new[]
+                {
+                    new ObserverChoice("shop-open-inventory", "Merchant", "420,320,240,180")
+                    {
+                        BindingKind = "shop-room",
+                        BindingId = "merchant-button",
+                        Enabled = true,
+                    },
+                    new ObserverChoice("shop-proceed", "Proceed", "980,820,240,120")
+                    {
+                        BindingKind = "shop-room",
+                        BindingId = "proceed",
+                        Enabled = true,
+                    },
+                }),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            null,
+            new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleShop.ToString(), "click", "shop buy card", DateTimeOffset.UtcNow.AddSeconds(-2))
+                {
+                    Metadata = "bought one card",
+                },
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleShop.ToString(), "click", "shop back", DateTimeOffset.UtcNow.AddSeconds(-1))
+                {
+                    Metadata = "closed inventory",
+                },
+            });
+        Assert(shopProceedAfterPurchaseActions.Contains("click shop proceed", StringComparer.OrdinalIgnoreCase), "HandleShop allowlist should prioritize explicit proceed after a bounded purchase closes the inventory.");
+        Assert(string.Equals(
+                AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                    "run",
+                    "boot-to-long-run",
+                    12,
+                    GuiSmokePhase.HandleShop.ToString(),
+                    "Prefer shop proceed after a bounded purchase.",
+                    DateTimeOffset.UtcNow,
+                    null,
+                    new WindowBounds(0, 0, 1280, 720),
+                    "phase:handleshop|screen:shop",
+                    "0001",
+                    1,
+                    3,
+                    true,
+                    "tactical",
+                    null,
+                    CreateShopObserver(
+                        inventoryOpen: false,
+                        merchantButtonVisible: true,
+                        merchantButtonEnabled: true,
+                        proceedEnabled: true,
+                        choices: new[]
+                        {
+                            new ObserverChoice("shop-open-inventory", "Merchant", "420,320,240,180")
+                            {
+                                BindingKind = "shop-room",
+                                BindingId = "merchant-button",
+                                Enabled = true,
+                            },
+                            new ObserverChoice("shop-proceed", "Proceed", "980,820,240,120")
+                            {
+                                BindingKind = "shop-room",
+                                BindingId = "proceed",
+                                Enabled = true,
+                            },
+                        }).Summary,
+                    Array.Empty<KnownRecipeHint>(),
+                    Array.Empty<EventKnowledgeCandidate>(),
+                    Array.Empty<CombatCardKnowledgeHint>(),
+                    shopProceedAfterPurchaseActions,
+                    new[]
+                    {
+                        new GuiSmokeHistoryEntry(GuiSmokePhase.HandleShop.ToString(), "click", "shop buy card", DateTimeOffset.UtcNow.AddSeconds(-2))
+                        {
+                            Metadata = "bought one card",
+                        },
+                        new GuiSmokeHistoryEntry(GuiSmokePhase.HandleShop.ToString(), "click", "shop back", DateTimeOffset.UtcNow.AddSeconds(-1))
+                        {
+                            Metadata = "closed inventory",
+                        },
+                    },
+                    "Prefer explicit proceed after a bounded shop purchase.",
+                    null)).TargetLabel,
+                "shop proceed",
+                StringComparison.OrdinalIgnoreCase), "HandleShop should click proceed before reopening inventory once a bounded purchase already happened.");
 
         Assert(
             TryAdvanceAlternateBranch(
@@ -9654,12 +10004,14 @@ static string ComputeSceneSignature(string screenshotPath, ObserverState observe
         tags.Add("room:rest-site");
     }
 
-    if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase))
+    var shopState = ShopObserverSignals.TryGetState(observer.Summary);
+    if (shopState is { ForegroundOwned: true })
     {
         tags.Add("room:shop");
+    }
+    else if (shopState is { RoomVisible: true })
+    {
+        tags.Add("room-visible:shop");
     }
 
     if (!ShouldSuppressRoomSubstateHeuristics(phase, observer))
@@ -10195,9 +10547,31 @@ static string[] BuildAllowedActions(
                                         && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
             => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent => new[] { "click event choice", "click proceed", "wait" },
+        GuiSmokePhase.HandleShop => BuildShopAllowedActions(observer.Summary, history),
         GuiSmokePhase.HandleCombat => GetCombatAllowedActions(observer, combatCardKnowledge, screenshotPath, history),
         _ => new[] { "wait" },
     };
+}
+
+static string[] BuildShopAllowedActions(ObserverSummary observer, IReadOnlyList<GuiSmokeHistoryEntry> history)
+{
+    var state = ShopObserverSignals.TryGetState(observer);
+    if (state is null)
+    {
+        return new[] { "wait" };
+    }
+
+    if (LooksLikeInspectOverlayState(new ObserverState(observer, null, null, null)))
+    {
+        return new[] { "press escape", "click inspect overlay close", "wait" };
+    }
+
+    if (CardSelectionObserverSignals.TryGetState(observer) is not null)
+    {
+        return BuildCardSelectionAllowedActions(CardSelectionObserverSignals.TryGetState(observer)!);
+    }
+
+    return ShopObserverSignals.BuildAllowedActions(observer, state, alreadyPurchased: ShopObserverSignals.HasRecentPurchase(history));
 }
 
 static bool LooksLikeInspectOverlayState(ObserverState observer)
@@ -11210,10 +11584,7 @@ static bool IsSkipOrProceedLabel(string? label)
 
 static bool LooksLikeShopState(ObserverSummary observer)
 {
-    return string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase);
+    return ShopObserverSignals.IsShopAuthorityActive(observer);
 }
 
 static bool LooksLikeTreasureState(ObserverSummary observer)
@@ -11352,6 +11723,7 @@ static string BuildGoal(GuiSmokePhase phase)
         GuiSmokePhase.ChooseFirstNode => "Click the first reachable map node.",
         GuiSmokePhase.WaitPostMapNodeRoom => "Reconcile the destination room after clicking a reachable map node.",
         GuiSmokePhase.HandleEvent => "Resolve the event screen. If nothing else is obvious, pick the first visible option.",
+        GuiSmokePhase.HandleShop => "Resolve explicit shop room semantics: open inventory, perform one bounded shop action, then back/proceed.",
         GuiSmokePhase.WaitCombat => "Wait until observer currentScreen=combat and encounter.inCombat=true.",
         GuiSmokePhase.HandleCombat => "Play the combat from the screenshot: choose cards, targets, or end turn until combat resolves.",
         _ => "Complete the scenario.",
@@ -11389,6 +11761,7 @@ static string BuildFailureModeHintCore(
         GuiSmokePhase.ChooseFirstNode when LooksLikeTreasureState(observer.Summary)
             => "Treasure room authority is explicit. Use chest -> treasure relic holder -> treasure proceed, and ignore top-left inventory relic icons or map-node contamination.",
         GuiSmokePhase.ChooseFirstNode => "Do not click non-reachable map nodes.",
+        GuiSmokePhase.HandleShop => "Shop authority is explicit. Open inventory if needed, buy only typed affordable shop entries, keep card removal separate from normal purchases, then back/proceed.",
         GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
             => "Inspect overlay is open inside the room flow. Dismiss it before retrying event, reward, or proceed choices.",
         GuiSmokePhase.HandleEvent when LooksLikeColorlessCardChoiceState(observer)
@@ -12006,9 +12379,9 @@ static bool TryAdvanceAlternateBranch(
                 GuiSmokePhase.HandleRewards => "branch-rewards",
                 GuiSmokePhase.HandleCombat => "branch-combat",
                 GuiSmokePhase.HandleEvent => "branch-event",
+                GuiSmokePhase.HandleShop => "branch-shop",
                 GuiSmokePhase.ChooseFirstNode when TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary) => "branch-treasure",
                 GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
-                GuiSmokePhase.ChooseFirstNode when LooksLikeShopState(observer.Summary) => "branch-shop",
                 GuiSmokePhase.ChooseFirstNode => "branch-map",
                 _ => "branch-room",
             };
@@ -12026,8 +12399,8 @@ static bool TryAdvanceAlternateBranch(
             GuiSmokePhase.HandleRewards => "branch-rewards",
             GuiSmokePhase.HandleCombat => "branch-combat",
             GuiSmokePhase.HandleEvent => "branch-event",
+            GuiSmokePhase.HandleShop => "branch-shop",
             GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
-            GuiSmokePhase.ChooseFirstNode when LooksLikeShopState(observer.Summary) => "branch-shop",
             GuiSmokePhase.ChooseFirstNode => "branch-map",
             _ => "branch-room",
         };
@@ -12039,14 +12412,11 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase == GuiSmokePhase.WaitMainMenu)
     {
-        if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase))
+        if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            nextPhase = GuiSmokePhase.HandleShop;
             return true;
         }
 
@@ -12117,14 +12487,11 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase))
+        if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            nextPhase = GuiSmokePhase.HandleShop;
             return true;
         }
 
@@ -12190,9 +12557,9 @@ static bool TryAdvanceAlternateBranch(
                 GuiSmokePhase.HandleRewards => "branch-rewards",
                 GuiSmokePhase.HandleCombat => "branch-combat",
                 GuiSmokePhase.HandleEvent => "branch-event",
+                GuiSmokePhase.HandleShop => "branch-shop",
                 GuiSmokePhase.ChooseFirstNode when TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary) => "branch-treasure",
                 GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
-                GuiSmokePhase.ChooseFirstNode when LooksLikeShopState(observer.Summary) => "branch-shop",
                 GuiSmokePhase.ChooseFirstNode => "branch-map",
                 _ => "branch-room",
             };
@@ -12202,19 +12569,11 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase))
+        if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
         {
-            if (phase == GuiSmokePhase.ChooseFirstNode)
-            {
-                return false;
-            }
-
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            nextPhase = GuiSmokePhase.HandleShop;
             return true;
         }
 
@@ -12281,6 +12640,77 @@ static bool TryAdvanceAlternateBranch(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
             nextPhase = GuiSmokePhase.HandleEvent;
+            return true;
+        }
+    }
+
+    if (phase == GuiSmokePhase.HandleShop)
+    {
+        var shopState = ShopObserverSignals.TryGetState(observer.Summary);
+        if (shopState is { ForegroundOwned: true })
+        {
+            return false;
+        }
+
+        if (CardSelectionObserverSignals.IsCardSelectionState(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-released-card-selection", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-released-card-selection", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-released-treasure", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-released-treasure", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (LooksLikeRewardChoiceState(observer)
+            || ShouldPreferRewardProgressionOverMapFallback(observer))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-resolved-rewards", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleRewards;
+            return true;
+        }
+
+        if (LooksLikeRestSiteState(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-resolved-rest-site", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-resolved-rest-site", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeEventState(
+                observer.Summary,
+                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"),
+                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-resolved-event", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-resolved-event", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleEvent;
+            return true;
+        }
+
+        if (string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase) && observer.InCombat == true)
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-resolved-combat", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-resolved-combat", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleCombat;
+            return true;
+        }
+
+        if (shopState is { TeardownInProgress: true }
+            || shopState is { MapIsCurrentActiveScreen: true }
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-released-map", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-released-map", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.WaitMap;
             return true;
         }
     }
@@ -12363,6 +12793,11 @@ static bool TryReopenMixedStateModalBranchFromWaitMap(
     {
         branchKind = "branch-rewards";
         nextPhase = GuiSmokePhase.HandleRewards;
+    }
+    else if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
+    {
+        branchKind = "branch-shop";
+        nextPhase = GuiSmokePhase.HandleShop;
     }
     else if (HasExplicitEventProgressionChoiceVisibleForWaitMap(observer)
              || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
@@ -13712,6 +14147,7 @@ enum GuiSmokePhase
     WaitPostMapNodeRoom,
     WaitCombat,
     HandleEvent,
+    HandleShop,
     HandleCombat,
     Completed,
 }
@@ -14399,6 +14835,32 @@ sealed record TreasureRoomSubtypeState(
     bool ProceedEnabled,
     bool InspectOverlayVisible,
     IReadOnlyList<string> RelicHolderIds,
+    string? RootType);
+
+sealed record ShopRoomState(
+    bool RoomDetected,
+    bool RoomVisible,
+    bool ForegroundOwned,
+    bool TeardownInProgress,
+    bool ShopIsCurrentActiveScreen,
+    bool MapIsCurrentActiveScreen,
+    string? ActiveScreenType,
+    bool InventoryOpen,
+    bool MerchantButtonVisible,
+    bool MerchantButtonEnabled,
+    bool ProceedEnabled,
+    bool BackVisible,
+    bool BackEnabled,
+    int OptionCount,
+    int AffordableOptionCount,
+    IReadOnlyList<string> AffordableOptionIds,
+    IReadOnlyList<string> AffordableRelicIds,
+    IReadOnlyList<string> AffordableCardIds,
+    IReadOnlyList<string> AffordablePotionIds,
+    bool CardRemovalVisible,
+    bool CardRemovalEnabled,
+    bool CardRemovalEnoughGold,
+    bool CardRemovalUsed,
     string? RootType);
 
 sealed record RestSiteDecisionCandidate(
@@ -15089,6 +15551,280 @@ static class TreasureRoomObserverSignals
     {
         return TryParseBounds(rawBounds, out var bounds) ? bounds.Y : float.MaxValue;
     }
+
+    private static bool TryParseBounds(string? rawBounds, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(rawBounds))
+        {
+            return false;
+        }
+
+        var parts = rawBounds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 4
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height)
+            || width <= 0f
+            || height <= 0f)
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return true;
+    }
+}
+
+static class ShopObserverSignals
+{
+    public static ShopRoomState? TryGetState(ObserverSummary observer)
+    {
+        var roomDetected = TryGetMetaBool(observer, "shopRoomDetected")
+                           ?? (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
+                               || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
+                               || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
+                               || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase));
+        if (!roomDetected)
+        {
+            return null;
+        }
+
+        var inventoryOpen = TryGetMetaBool(observer, "shopInventoryOpen") == true;
+        var merchantButtonVisible = TryGetMetaBool(observer, "shopMerchantButtonVisible") == true;
+        var merchantButtonEnabled = TryGetMetaBool(observer, "shopMerchantButtonEnabled") == true;
+        var proceedEnabled = TryGetMetaBool(observer, "shopProceedEnabled") == true;
+        var backVisible = TryGetMetaBool(observer, "shopBackVisible") == true;
+        var backEnabled = TryGetMetaBool(observer, "shopBackEnabled") == true;
+        var roomVisible = TryGetMetaBool(observer, "shopRoomVisible")
+                          ?? (inventoryOpen
+                              || merchantButtonVisible
+                              || backVisible
+                              || proceedEnabled
+                              || string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase));
+        var foregroundOwned = TryGetMetaBool(observer, "shopForegroundOwned")
+                              ?? (inventoryOpen
+                                  || merchantButtonEnabled
+                                  || proceedEnabled
+                                  || (backVisible && backEnabled)
+                                  || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase));
+        var teardownInProgress = TryGetMetaBool(observer, "shopTeardownInProgress") == true;
+        var shopIsCurrentActiveScreen = TryGetMetaBool(observer, "shopIsCurrentActiveScreen") == true;
+        var mapIsCurrentActiveScreen = TryGetMetaBool(observer, "mapCurrentActiveScreen") == true;
+
+        return new ShopRoomState(
+            RoomDetected: true,
+            RoomVisible: roomVisible == true,
+            ForegroundOwned: foregroundOwned == true,
+            TeardownInProgress: teardownInProgress,
+            ShopIsCurrentActiveScreen: shopIsCurrentActiveScreen,
+            MapIsCurrentActiveScreen: mapIsCurrentActiveScreen,
+            ActiveScreenType: TryGetMetaValue(observer, "activeScreenType"),
+            InventoryOpen: inventoryOpen,
+            MerchantButtonVisible: merchantButtonVisible,
+            MerchantButtonEnabled: merchantButtonEnabled,
+            ProceedEnabled: proceedEnabled,
+            BackVisible: backVisible,
+            BackEnabled: backEnabled,
+            OptionCount: TryGetMetaInt(observer, "shopOptionCount") ?? 0,
+            AffordableOptionCount: TryGetMetaInt(observer, "shopAffordableOptionCount") ?? 0,
+            AffordableOptionIds: ParseStringList(TryGetMetaValue(observer, "shopAffordableOptionIds")),
+            AffordableRelicIds: ParseStringList(TryGetMetaValue(observer, "shopAffordableRelicIds")),
+            AffordableCardIds: ParseStringList(TryGetMetaValue(observer, "shopAffordableCardIds")),
+            AffordablePotionIds: ParseStringList(TryGetMetaValue(observer, "shopAffordablePotionIds")),
+            CardRemovalVisible: TryGetMetaBool(observer, "shopCardRemovalVisible") == true,
+            CardRemovalEnabled: TryGetMetaBool(observer, "shopCardRemovalEnabled") == true,
+            CardRemovalEnoughGold: TryGetMetaBool(observer, "shopCardRemovalEnoughGold") == true,
+            CardRemovalUsed: TryGetMetaBool(observer, "shopCardRemovalUsed") == true,
+            RootType: TryGetMetaValue(observer, "shopRootType"));
+    }
+
+    public static bool IsShopAuthorityActive(ObserverSummary observer)
+        => TryGetState(observer) is { RoomDetected: true, ForegroundOwned: true };
+
+    public static bool HasRecentPurchase(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        for (var index = history.Count - 1; index >= 0 && index >= history.Count - 8; index -= 1)
+        {
+            var entry = history[index];
+            if (string.Equals(entry.TargetLabel, "shop buy relic", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.TargetLabel, "shop buy card", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.TargetLabel, "shop buy potion", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.TargetLabel, "shop card removal", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "observer-accepted", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "recapture-required", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.TargetLabel, "shop back", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return false;
+    }
+
+    public static string[] BuildAllowedActions(ObserverSummary observer, ShopRoomState state, bool alreadyPurchased)
+    {
+        if (!state.InventoryOpen && alreadyPurchased && state.ProceedEnabled)
+        {
+            return new[] { "click shop proceed", state.MerchantButtonEnabled ? "click shop open inventory" : "wait" };
+        }
+
+        if (!state.InventoryOpen && state.MerchantButtonEnabled)
+        {
+            return new[] { "click shop open inventory", state.ProceedEnabled ? "click shop proceed" : "wait" };
+        }
+
+        if (state.InventoryOpen && !alreadyPurchased)
+        {
+            if (GetAffordableRelicChoices(observer).Count > 0)
+            {
+                return new[] { "click shop buy relic", "click shop back", "wait" };
+            }
+
+            if (GetAffordableCardChoices(observer).Count > 0)
+            {
+                return new[] { "click shop buy card", "click shop back", "wait" };
+            }
+
+            if (GetAffordablePotionChoices(observer).Count > 0)
+            {
+                return new[] { "click shop buy potion", "click shop back", "wait" };
+            }
+
+            if (state.CardRemovalEnabled)
+            {
+                return new[] { "click shop card removal", "click shop back", "wait" };
+            }
+        }
+
+        if (state.InventoryOpen && state.BackVisible && state.BackEnabled)
+        {
+            return new[] { "click shop back", "wait" };
+        }
+
+        if (!state.InventoryOpen && state.ProceedEnabled)
+        {
+            return new[] { "click shop proceed", "wait" };
+        }
+
+        return new[] { "wait" };
+    }
+
+    public static IReadOnlyList<ObserverChoice> GetAffordableRelicChoices(ObserverSummary observer)
+        => GetTypedShopChoices(observer, "relic", requireEnabled: true);
+
+    public static IReadOnlyList<ObserverChoice> GetAffordableCardChoices(ObserverSummary observer)
+        => GetTypedShopChoices(observer, "card", requireEnabled: true);
+
+    public static IReadOnlyList<ObserverChoice> GetAffordablePotionChoices(ObserverSummary observer)
+        => GetTypedShopChoices(observer, "potion", requireEnabled: true);
+
+    public static ObserverChoice? TryGetCardRemovalChoice(ObserverSummary observer)
+    {
+        return observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.Kind, "shop-card-removal", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds))
+               ?? observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.BindingKind, "shop-card-removal", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds));
+    }
+
+    public static ObserverChoice? TryGetMerchantButtonChoice(ObserverSummary observer)
+    {
+        return observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.Kind, "shop-open-inventory", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds))
+               ?? observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.BindingKind, "shop-room", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(choice.BindingId, "merchant-button", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds));
+    }
+
+    public static ObserverChoice? TryGetBackChoice(ObserverSummary observer)
+    {
+        return observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.Kind, "shop-back", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds))
+               ?? observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.BindingKind, "shop-room", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(choice.BindingId, "back", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds));
+    }
+
+    public static ObserverChoice? TryGetProceedChoice(ObserverSummary observer)
+    {
+        return observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.Kind, "shop-proceed", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds))
+               ?? observer.Choices.FirstOrDefault(static choice =>
+                   string.Equals(choice.BindingKind, "shop-room", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(choice.BindingId, "proceed", StringComparison.OrdinalIgnoreCase)
+                   && choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds));
+    }
+
+    private static IReadOnlyList<ObserverChoice> GetTypedShopChoices(ObserverSummary observer, string optionType, bool requireEnabled)
+    {
+        return observer.Choices
+            .Where(choice =>
+                (string.Equals(choice.Kind, $"shop-option:{optionType}", StringComparison.OrdinalIgnoreCase)
+                 || (string.Equals(choice.BindingKind, "shop-option", StringComparison.OrdinalIgnoreCase)
+                     && choice.SemanticHints.Any(hint => string.Equals(hint, $"shop-type:{optionType}", StringComparison.OrdinalIgnoreCase))))
+                && (!requireEnabled || choice.Enabled != false)
+                && HasUsableBounds(choice.ScreenBounds))
+            .OrderBy(static choice => GetSortY(choice.ScreenBounds))
+            .ThenBy(static choice => GetSortX(choice.ScreenBounds))
+            .ToArray();
+    }
+
+    private static string? TryGetMetaValue(ObserverSummary observer, string key)
+        => observer.Meta.TryGetValue(key, out var value) ? value : null;
+
+    private static bool? TryGetMetaBool(ObserverSummary observer, string key)
+        => observer.Meta.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed)
+            ? parsed
+            : null;
+
+    private static int? TryGetMetaInt(ObserverSummary observer, string key)
+        => observer.Meta.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+
+    private static IReadOnlyList<string> ParseStringList(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return Array.Empty<string>();
+        }
+
+        return value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private static bool HasUsableBounds(string? rawBounds)
+        => TryParseBounds(rawBounds, out _);
+
+    private static float GetSortX(string? rawBounds)
+        => TryParseBounds(rawBounds, out var bounds) ? bounds.X : float.MaxValue;
+
+    private static float GetSortY(string? rawBounds)
+        => TryParseBounds(rawBounds, out var bounds) ? bounds.Y : float.MaxValue;
 
     private static bool TryParseBounds(string? rawBounds, out RectangleF bounds)
     {
@@ -15866,8 +16602,13 @@ static class GuiSmokeObserverPhaseHeuristics
             return true;
         }
 
+        if (LooksLikeShopState(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleShop;
+            return true;
+        }
+
         if (LooksLikeMapState(observer, declaringType, instanceType)
-            || LooksLikeShopState(observer)
             || LooksLikeRestSiteState(observer))
         {
             nextPhase = GuiSmokePhase.ChooseFirstNode;
@@ -15925,8 +16666,12 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool LooksLikeMapState(ObserverSummary observer, string? declaringType, string? instanceType)
     {
+        var mapCurrentActiveScreen = observer.Meta.TryGetValue("mapCurrentActiveScreen", out var mapCurrentActiveScreenValue)
+                                     ? mapCurrentActiveScreenValue
+                                     : null;
         return string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
                || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(mapCurrentActiveScreen, "true", StringComparison.OrdinalIgnoreCase)
                || IsMapScreenType(declaringType)
                || IsMapScreenType(instanceType)
                || observer.LastEventsTail.Any(IsMapTransitionEventTail);
@@ -15982,6 +16727,8 @@ static class GuiSmokeObserverPhaseHeuristics
     {
         return !string.IsNullOrWhiteSpace(eventTail)
                && (eventTail.Contains("screen-changed: map", StringComparison.OrdinalIgnoreCase)
+                   || eventTail.Contains("-> map", StringComparison.OrdinalIgnoreCase)
+                   || eventTail.Contains("NMapScreen.Open", StringComparison.OrdinalIgnoreCase)
                    || eventTail.Contains("map-point-selected", StringComparison.OrdinalIgnoreCase)
                    || eventTail.Contains("\"screen\":\"map\"", StringComparison.OrdinalIgnoreCase)
                    || eventTail.Contains("\"currentScreen\":\"map\"", StringComparison.OrdinalIgnoreCase));
@@ -16003,10 +16750,7 @@ static class GuiSmokeObserverPhaseHeuristics
 
     private static bool LooksLikeShopState(ObserverSummary observer)
     {
-        return string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase);
+        return ShopObserverSignals.IsShopAuthorityActive(observer);
     }
 
     private static bool LooksLikeRestSiteState(ObserverSummary observer)
@@ -16289,6 +17033,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokePhase.HandleEvent => AnalyzeHandleEvent(request, actualDecision),
             GuiSmokePhase.HandleRewards => AnalyzeHandleRewards(request, actualDecision),
             GuiSmokePhase.ChooseFirstNode => AnalyzeChooseFirstNode(request, actualDecision),
+            GuiSmokePhase.HandleShop => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleShop(request), "shop", null),
             GuiSmokePhase.HandleCombat => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request), "combat", null),
             GuiSmokePhase.EnterRun => AnalyzeGenericPhase(request, actualDecision, () => DecideEnterRun(request), "main-menu", null),
             GuiSmokePhase.ChooseCharacter => AnalyzeGenericPhase(request, actualDecision, () => DecideChooseCharacter(request), "character-select", null),
@@ -16379,6 +17124,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             {
                 GuiSmokePhase.HandleRewards => DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }),
                 GuiSmokePhase.HandleEvent => DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }),
+                GuiSmokePhase.HandleShop => DecideHandleShop(request with { Phase = GuiSmokePhase.HandleShop.ToString() }),
                 GuiSmokePhase.HandleCombat => DecideHandleCombat(request with { Phase = GuiSmokePhase.HandleCombat.ToString() }),
                 GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }),
                 _ => CreateWaitDecision("waiting for post-embark room state", request.Observer.CurrentScreen),
@@ -16463,6 +17209,21 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return treasureDecision ?? CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen);
         }
 
+        if (ShopObserverSignals.IsShopAuthorityActive(request.Observer))
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("shop", "room-context");
+            var shopState = ShopObserverSignals.TryGetState(request.Observer)!;
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(ShopObserverSignals.BuildAllowedActions(request.Observer, shopState, ShopObserverSignals.HasRecentPurchase(request.History)));
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "shop foreground outranks map routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "shop foreground outranks screenshot map routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "shop foreground suppresses current-node-arrow fallback");
+            GuiSmokeDecisionDebug.Suppress("click map back", "shop foreground uses merchant/back/proceed affordances instead of map overlay cleanup");
+            var shopDecision = DecideHandleShop(request);
+            return string.Equals(shopDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                ? CreateWaitDecision("waiting for explicit shop room progression", request.Observer.CurrentScreen)
+                : shopDecision;
+        }
+
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (mapOverlayState.ForegroundVisible)
         {
@@ -16530,9 +17291,149 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideHandleShop(GuiSmokeStepRequest request)
     {
-        return TryCreateHiddenOverlayCleanupDecision(request)
-               ?? TryCreateVisibleProceedDecision(request)
-               ?? CreateWaitDecision("waiting for shop exit or stable shop UI", request.Observer.CurrentScreen);
+        var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
+        if (overlayDecision is not null)
+        {
+            return overlayDecision;
+        }
+
+        var cardSelectionDecision = TryCreateCardSelectionDecision(request);
+        if (cardSelectionDecision is not null)
+        {
+            return cardSelectionDecision;
+        }
+
+        var shopState = ShopObserverSignals.TryGetState(request.Observer);
+        if (shopState is null)
+        {
+            return CreateWaitDecision("waiting for explicit shop room authority", request.Observer.CurrentScreen);
+        }
+
+        var screen = request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "shop";
+        var alreadyPurchased = ShopObserverSignals.HasRecentPurchase(request.History);
+        if (!shopState.InventoryOpen && alreadyPurchased && shopState.ProceedEnabled)
+        {
+            var proceedChoice = ShopObserverSignals.TryGetProceedChoice(request.Observer);
+            if (proceedChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    proceedChoice,
+                    "shop proceed",
+                    "A bounded shop purchase already happened and proceed is re-enabled. Leave the shop before reopening inventory.",
+                    0.93,
+                    screen,
+                    1300);
+            }
+        }
+
+        if (!shopState.InventoryOpen && shopState.MerchantButtonEnabled)
+        {
+            var merchantChoice = ShopObserverSignals.TryGetMerchantButtonChoice(request.Observer);
+            if (merchantChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    merchantChoice,
+                    "shop open inventory",
+                    "Shop room is foreground-active and inventory is closed. Open the merchant inventory before any purchase or proceed action.",
+                    0.97,
+                    screen,
+                    1300);
+            }
+        }
+
+        if (shopState.InventoryOpen && !alreadyPurchased)
+        {
+            var relicChoice = ShopObserverSignals.GetAffordableRelicChoices(request.Observer).FirstOrDefault();
+            if (relicChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    relicChoice,
+                    "shop buy relic",
+                    "Merchant inventory is open. Buy one affordable relic before cards, potions, back, or proceed.",
+                    0.96,
+                    screen,
+                    1400);
+            }
+
+            var cardChoice = ShopObserverSignals.GetAffordableCardChoices(request.Observer).FirstOrDefault();
+            if (cardChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    cardChoice,
+                    "shop buy card",
+                    "Merchant inventory is open. No affordable relic was chosen, so buy one affordable card before backing out.",
+                    0.95,
+                    screen,
+                    1400);
+            }
+
+            var potionChoice = ShopObserverSignals.GetAffordablePotionChoices(request.Observer).FirstOrDefault();
+            if (potionChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    potionChoice,
+                    "shop buy potion",
+                    "Merchant inventory is open. No relic or card purchase is selected, so buy one affordable potion before backing out.",
+                    0.94,
+                    screen,
+                    1400);
+            }
+
+            if (shopState.CardRemovalEnabled)
+            {
+                var cardRemovalChoice = ShopObserverSignals.TryGetCardRemovalChoice(request.Observer);
+                if (cardRemovalChoice is not null)
+                {
+                    return CreateClickDecisionFromChoice(
+                        request,
+                        cardRemovalChoice,
+                        "shop card removal",
+                        "Card removal is a distinct merchant service. Use its explicit shop service affordance instead of treating it like a normal card purchase.",
+                        0.93,
+                        screen,
+                        1400);
+                }
+            }
+        }
+
+        if (shopState.InventoryOpen && shopState.BackVisible && shopState.BackEnabled)
+        {
+            var backChoice = ShopObserverSignals.TryGetBackChoice(request.Observer);
+            if (backChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    backChoice,
+                    "shop back",
+                    "Shop inventory is open and there is no further bounded purchase to make. Close the inventory before proceeding.",
+                    0.92,
+                    screen,
+                    1200);
+            }
+        }
+
+        if (!shopState.InventoryOpen && shopState.ProceedEnabled)
+        {
+            var proceedChoice = ShopObserverSignals.TryGetProceedChoice(request.Observer);
+            if (proceedChoice is not null)
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    proceedChoice,
+                    "shop proceed",
+                    "Merchant inventory is closed and proceed is re-enabled. Leave the shop explicitly instead of waiting for map routing.",
+                    0.91,
+                    screen,
+                    1300);
+            }
+        }
+
+        return CreateWaitDecision("waiting for explicit shop inventory/proceed affordances", request.Observer.CurrentScreen);
     }
 
     private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request)
@@ -20798,10 +21699,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool LooksLikeShopState(ObserverSummary observer)
     {
-        return string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase);
+        return ShopObserverSignals.IsShopAuthorityActive(observer);
     }
 
     private static GuiSmokeStepDecision CreateClickDecisionFromNode(GuiSmokeStepRequest request, ObserverActionNode node, string targetLabel)
