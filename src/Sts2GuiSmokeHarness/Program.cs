@@ -456,6 +456,7 @@ static async Task<bool> RunBootstrapPhaseAsync(
     var bootstrapRunId = $"{sessionId}-bootstrap";
     var startupStage = "bootstrap-started";
     var bootstrapRoot = Path.Combine(sessionRoot, "bootstrap");
+    var keepVideoOnSuccess = options.ContainsKey("--keep-video-on-success");
     Directory.CreateDirectory(bootstrapRoot);
     using var bootstrapVideo = GuiSmokeVideoRecorder.Create(
         workspaceRoot,
@@ -640,7 +641,7 @@ static async Task<bool> RunBootstrapPhaseAsync(
             var detail = $"verified={manualCleanBootVerified};trustState={trustState};runtimeExporter={startupRuntimeEvidence.RuntimeExporterInitializedLogged};freshSnapshot={startupRuntimeEvidence.FreshSnapshotPresent}";
             RecordBootstrapStage("bootstrap-manual-clean-boot-evaluation-finished", "finished", detail);
             bootstrapVideo.Complete(
-                keepRecording: false,
+                keepRecording: keepVideoOnSuccess,
                 completionReason: "bootstrap-succeeded");
             await StopGameProcessesAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
             EnsureGameNotRunning();
@@ -694,6 +695,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     var runId = isLongRun
         ? $"{sessionId}-attempt-{attemptId}"
         : sessionId;
+    var keepVideoOnSuccess = options.ContainsKey("--keep-video-on-success");
     var runRoot = isLongRun
         ? Path.Combine(sessionRoot, "attempts", attemptId)
         : sessionRoot;
@@ -708,6 +710,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     Directory.CreateDirectory(stepsRoot);
 
     var logger = new ArtifactRecorder(runRoot);
+    SetHarnessLogSink(logger.AppendHumanLog);
     using var attemptVideo = GuiSmokeVideoRecorder.Create(
         workspaceRoot,
         options,
@@ -717,7 +720,6 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         sessionRoot,
         attemptId,
         "attempt");
-    SetHarnessLogSink(logger.AppendHumanLog);
     logger.WriteRunManifest(new GuiSmokeRunManifest(
         runId,
         scenarioId,
@@ -775,7 +777,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         logger.WriteValidationSummary(runId);
         var keepVideo = status switch
         {
-            "completed" => false,
+            "completed" => keepVideoOnSuccess,
             _ => true,
         };
         attemptVideo.Complete(
@@ -3097,6 +3099,16 @@ static void RunSelfTest()
                                       ?? throw new InvalidOperationException("Expected Windows ffmpeg-style path binding.");
         Assert(File.Exists(cmdBindingFromWindowsPath.HostPath), "Windows binding should resolve to an executable path visible to the current runtime.");
         Assert(string.Equals(cmdBindingFromWindowsPath.ProcessPath, cmdWindowsPath, StringComparison.OrdinalIgnoreCase), "Windows binding should preserve Windows process path.");
+
+        var fallbackBinding = GuiSmokeVideoRecorder.ResolveFfmpegPathForSelfTest(
+                                  new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                                  workspaceRoot,
+                                  envPathOverride: null,
+                                  pathOverride: string.Empty,
+                                  fallbackProbePaths: new[] { cmdWindowsPath })
+                              ?? throw new InvalidOperationException("Expected ffmpeg fallback probe binding.");
+        Assert(File.Exists(fallbackBinding.HostPath), "Fallback ffmpeg probe should resolve to a host-visible executable.");
+        Assert(string.Equals(fallbackBinding.ProcessPath, cmdWindowsPath, StringComparison.OrdinalIgnoreCase), "Fallback ffmpeg probe should preserve Windows child process path.");
 
         using var recorder = GuiSmokeVideoRecorder.Create(
             workspaceRoot,
@@ -11800,7 +11812,7 @@ static ScaffoldConfiguration ApplyPathOverrides(ScaffoldConfiguration configurat
 static void WriteUsage()
 {
     Console.WriteLine("Usage:");
-    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--deploy-mode in-process|subprocess] [--runtime-assembly-root path] [--ffmpeg-path path] [--disable-video-capture] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop]");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--deploy-mode in-process|subprocess] [--runtime-assembly-root path] [--ffmpeg-path path] [--keep-video-on-success] [--disable-video-capture] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-run --run-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>] [--trace] [--full-request-rebuild]");
@@ -22481,10 +22493,13 @@ sealed class GuiSmokeVideoRecorder : IDisposable
     private const int StopTimeoutMs = 5000;
     private const int MinimumCaptureDimension = 2;
     private const int CaptureFramerate = 15;
+    private const int MaxDiagnosticLines = 8;
 
     private readonly string _workspaceRoot;
     private readonly string _metadataPath;
     private readonly GuiSmokeVideoRecordingMetadata _metadata;
+    private readonly List<string> _diagnosticLines = new();
+    private readonly object _diagnosticLock = new();
     private string? _ffmpegProcessPath;
     private Process? _process;
     private bool _completed;
@@ -22539,6 +22554,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             || string.Equals(_metadata.Status, "start-failed", StringComparison.OrdinalIgnoreCase))
         {
             PersistMetadata();
+            LogVideo($"video scope={_metadata.ScopeKind} start skipped status={_metadata.Status} reason={_metadata.SkipReason ?? "none"}");
             return false;
         }
 
@@ -22575,14 +22591,21 @@ sealed class GuiSmokeVideoRecorder : IDisposable
                     Arguments = arguments,
                     WorkingDirectory = workingDirectory,
                     UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
                     RedirectStandardInput = true,
                     CreateNoWindow = true,
                 },
             };
+            _process.OutputDataReceived += (_, eventArgs) => RecordDiagnosticLine(eventArgs.Data);
+            _process.ErrorDataReceived += (_, eventArgs) => RecordDiagnosticLine(eventArgs.Data);
             _process.Start();
+            _process.BeginOutputReadLine();
+            _process.BeginErrorReadLine();
             _metadata.Status = "recording";
             _metadata.RecordingStartedAt = DateTimeOffset.UtcNow;
             PersistMetadata();
+            LogVideo($"video scope={_metadata.ScopeKind} recording started ffmpeg={_metadata.FfmpegPath ?? "null"} output={_metadata.OutputPath}");
             return true;
         }
         catch (Exception exception)
@@ -22590,6 +22613,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             _metadata.Status = "start-failed";
             _metadata.SkipReason = $"ffmpeg-start-failed:{exception.GetType().Name}:{SanitizeText(exception.Message)}";
             PersistMetadata();
+            LogVideo($"video scope={_metadata.ScopeKind} start failed reason={_metadata.SkipReason}");
             _process?.Dispose();
             _process = null;
             return false;
@@ -22653,7 +22677,9 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             _metadata.Kept ??= false;
         }
 
+        AppendDiagnosticSummary();
         PersistMetadata();
+        LogVideo($"video scope={_metadata.ScopeKind} completed status={_metadata.Status} kept={_metadata.Kept?.ToString() ?? "null"} reason={_metadata.CompletionReason ?? "none"} skipReason={_metadata.SkipReason ?? "none"} exitCode={_metadata.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "null"}");
     }
 
     public void Dispose()
@@ -22677,6 +22703,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             _metadata.Status = "skipped";
             _metadata.SkipReason = "video-capture-disabled";
             PersistMetadata();
+            LogVideo($"video scope={_metadata.ScopeKind} availability skipped reason={_metadata.SkipReason}");
             return;
         }
 
@@ -22687,6 +22714,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             _metadata.FfmpegAvailable = false;
             _metadata.SkipReason = "ffmpeg-not-found";
             PersistMetadata();
+            LogVideo($"video scope={_metadata.ScopeKind} availability skipped reason={_metadata.SkipReason}");
             return;
         }
 
@@ -22694,25 +22722,36 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         _ffmpegProcessPath = ffmpegPath.ProcessPath;
         _metadata.FfmpegAvailable = true;
         PersistMetadata();
+        LogVideo($"video scope={_metadata.ScopeKind} availability ready ffmpeg={_metadata.FfmpegPath}");
     }
 
     private static VideoPathBinding? ResolveFfmpegPath(IReadOnlyDictionary<string, string> options, string workspaceRoot)
+    {
+        return ResolveFfmpegPath(options, workspaceRoot, envPathOverride: null, pathOverride: null, fallbackProbePaths: null);
+    }
+
+    private static VideoPathBinding? ResolveFfmpegPath(
+        IReadOnlyDictionary<string, string> options,
+        string workspaceRoot,
+        string? envPathOverride,
+        string? pathOverride,
+        IReadOnlyList<string>? fallbackProbePaths)
     {
         if (options.TryGetValue("--ffmpeg-path", out var explicitPath))
         {
             return ResolveExecutablePath(explicitPath, workspaceRoot);
         }
 
-        var envPath = Environment.GetEnvironmentVariable("STS2_GUI_SMOKE_FFMPEG_PATH");
+        var envPath = envPathOverride ?? Environment.GetEnvironmentVariable("STS2_GUI_SMOKE_FFMPEG_PATH");
         if (!string.IsNullOrWhiteSpace(envPath))
         {
             return ResolveExecutablePath(envPath, workspaceRoot);
         }
 
-        var pathValue = Environment.GetEnvironmentVariable("PATH");
+        var pathValue = pathOverride ?? Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrWhiteSpace(pathValue))
         {
-            return null;
+            pathValue = string.Empty;
         }
 
         foreach (var pathEntry in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -22734,12 +22773,31 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             }
         }
 
+        foreach (var fallbackProbePath in fallbackProbePaths ?? GetDefaultFfmpegFallbackProbePaths())
+        {
+            var binding = ResolveExecutablePath(fallbackProbePath, workspaceRoot);
+            if (binding is not null)
+            {
+                return binding;
+            }
+        }
+
         return null;
     }
 
     internal static VideoPathBinding? ResolveExecutablePathForSelfTest(string explicitPath, string workspaceRoot)
     {
         return ResolveExecutablePath(explicitPath, workspaceRoot);
+    }
+
+    internal static VideoPathBinding? ResolveFfmpegPathForSelfTest(
+        IReadOnlyDictionary<string, string> options,
+        string workspaceRoot,
+        string? envPathOverride,
+        string? pathOverride,
+        IReadOnlyList<string>? fallbackProbePaths)
+    {
+        return ResolveFfmpegPath(options, workspaceRoot, envPathOverride, pathOverride, fallbackProbePaths);
     }
 
     private static Rectangle NormalizeCaptureBounds(Rectangle bounds)
@@ -22792,12 +22850,20 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         return $"{QuoteArgument(fileName)} {arguments}";
     }
 
+    private static IEnumerable<string> GetDefaultFfmpegFallbackProbePaths()
+    {
+        yield return @"C:\Program Files\SteelSeries\GG\apps\moments\ffmpeg.exe";
+        yield return @"C:\Program Files\ffmpeg\bin\ffmpeg.exe";
+        yield return @"C:\ffmpeg\bin\ffmpeg.exe";
+    }
+
     private void MarkSkipped(string reason)
     {
         _metadata.Status = "skipped";
         _metadata.SkipReason = reason;
         _metadata.Kept = false;
         PersistMetadata();
+        LogVideo($"video scope={_metadata.ScopeKind} skipped reason={reason}");
     }
 
     private void StopProcess()
@@ -22860,6 +22926,70 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             _metadata.CompletionReason = $"{_metadata.CompletionReason};delete-failed:{exception.GetType().Name}:{SanitizeText(exception.Message)}";
             return false;
         }
+    }
+
+    private void RecordDiagnosticLine(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return;
+        }
+
+        var sanitized = SanitizeText(line);
+        lock (_diagnosticLock)
+        {
+            if (_diagnosticLines.Count >= MaxDiagnosticLines)
+            {
+                return;
+            }
+
+            _diagnosticLines.Add(sanitized);
+        }
+    }
+
+    private void AppendDiagnosticSummary()
+    {
+        string[] lines;
+        lock (_diagnosticLock)
+        {
+            if (_diagnosticLines.Count == 0)
+            {
+                var exitCode = _metadata.ExitCode;
+                if ((exitCode ?? 0) != 0
+                    && !string.IsNullOrWhiteSpace(_metadata.CompletionReason)
+                    && !_metadata.CompletionReason.Contains("ffmpeg-exit-code:", StringComparison.OrdinalIgnoreCase))
+                {
+                    _metadata.CompletionReason = $"{_metadata.CompletionReason};ffmpeg-exit-code:{exitCode!.Value.ToString(CultureInfo.InvariantCulture)}";
+                }
+
+                return;
+            }
+
+            lines = _diagnosticLines.ToArray();
+        }
+
+        var diagnosticSummary = string.Join(" | ", lines);
+        var nonZeroExitCode = _metadata.ExitCode;
+        if ((nonZeroExitCode ?? 0) != 0)
+        {
+            diagnosticSummary = $"exit={nonZeroExitCode!.Value.ToString(CultureInfo.InvariantCulture)} {diagnosticSummary}";
+        }
+
+        if (string.IsNullOrWhiteSpace(_metadata.CompletionReason))
+        {
+            _metadata.CompletionReason = $"ffmpeg:{diagnosticSummary}";
+        }
+        else if (!_metadata.CompletionReason.Contains(diagnosticSummary, StringComparison.Ordinal))
+        {
+            _metadata.CompletionReason = $"{_metadata.CompletionReason};ffmpeg:{diagnosticSummary}";
+        }
+    }
+
+    private static void LogVideo(string message)
+    {
+        var line = $"[gui-smoke {DateTimeOffset.Now:HH:mm:ss}] {message}";
+        Console.WriteLine(line);
+        GuiSmokeShared.HarnessLogSink?.Invoke(line);
     }
 
     private void PersistMetadata()
