@@ -247,6 +247,26 @@ internal static class RuntimeSnapshotReflectionExtractor
         bool CardRemovalUsed,
         IReadOnlyList<ShopOptionCandidate> VisibleOptions);
 
+    private sealed record RewardObservation(
+        bool ScreenDetected,
+        bool ScreenVisible,
+        bool ForegroundOwned,
+        bool TeardownInProgress,
+        bool RewardIsCurrentActiveScreen,
+        bool RewardIsTopOverlay,
+        bool MapIsCurrentActiveScreen,
+        string? ActiveScreenType,
+        string? RootType,
+        bool ProceedVisible,
+        bool ProceedEnabled,
+        int VisibleButtonCount,
+        int EnabledButtonCount,
+        bool TerminalRunBoundary,
+        bool GameOverScreenDetected,
+        bool UnlockScreenDetected,
+        bool TimelineUnlockDetected,
+        bool MainMenuReturnDetected);
+
     public static LiveExportObservation Capture(
         RuntimeHookBinding binding,
         AiCompanionRuntimeConfig config,
@@ -445,6 +465,14 @@ internal static class RuntimeSnapshotReflectionExtractor
             payload["choiceExtractorPath"] = "shop";
         }
         AppendShopRuntimeMetadata(shopObservation, meta, payload);
+
+        var rewardObservation = ObserveRewardScreen(roots, screen);
+        AppendRewardRuntimeMetadata(rewardObservation, meta, payload);
+        if (rewardObservation.ForegroundOwned)
+        {
+            meta["choiceExtractorPath"] = "reward";
+            payload["choiceExtractorPath"] = "reward";
+        }
 
         var warnings = BuildWarnings(player, deck, relics, potions, choices);
 
@@ -3065,10 +3093,146 @@ internal static class RuntimeSnapshotReflectionExtractor
             VisibleOptions: visibleOptions);
     }
 
+    private static RewardObservation ObserveRewardScreen(IEnumerable<object> roots, string? screenHint)
+    {
+        var rewardScreens = roots
+            .Where(static root => IsRewardScreenType(root.GetType().FullName ?? root.GetType().Name))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        var activeScreen = TryResolveCurrentActiveScreen(roots);
+        var activeScreenType = activeScreen?.GetType().FullName ?? activeScreen?.GetType().Name;
+        var overlayTop = TryResolveOverlayStackTop(roots);
+        var overlayTopType = overlayTop?.GetType().FullName ?? overlayTop?.GetType().Name;
+        var rewardIsCurrentActiveScreen = IsRewardScreenType(activeScreenType);
+        var rewardIsTopOverlay = IsRewardScreenType(overlayTopType);
+        var mapIsCurrentActiveScreen = IsMapScreenType(activeScreenType);
+        var gameOverScreenDetected = rewardScreens.Any(static screen => IsGameOverScreenType(screen.GetType().FullName ?? screen.GetType().Name))
+                                     || IsGameOverScreenType(activeScreenType);
+        var timelineUnlockDetected = rewardScreens.Any(static screen => IsTimelineUnlockScreenType(screen.GetType().FullName ?? screen.GetType().Name))
+                                     || IsTimelineUnlockScreenType(activeScreenType);
+        var unlockScreenDetected = rewardScreens.Any(static screen => IsUnlockScreenType(screen.GetType().FullName ?? screen.GetType().Name))
+                                   || IsUnlockScreenType(activeScreenType);
+        var mainMenuReturnDetected = IsMainMenuActiveScreenType(activeScreenType)
+                                     || string.Equals(screenHint, "main-menu", StringComparison.OrdinalIgnoreCase);
+        var terminalRunBoundary = gameOverScreenDetected || timelineUnlockDetected || unlockScreenDetected || mainMenuReturnDetected;
+        if (rewardScreens.Length == 0 && !rewardIsCurrentActiveScreen && !rewardIsTopOverlay)
+        {
+            return new RewardObservation(
+                ScreenDetected: false,
+                ScreenVisible: false,
+                ForegroundOwned: false,
+                TeardownInProgress: false,
+                RewardIsCurrentActiveScreen: false,
+                RewardIsTopOverlay: false,
+                MapIsCurrentActiveScreen: mapIsCurrentActiveScreen,
+                ActiveScreenType: activeScreenType,
+                RootType: null,
+                ProceedVisible: false,
+                ProceedEnabled: false,
+                VisibleButtonCount: 0,
+                EnabledButtonCount: 0,
+                TerminalRunBoundary: terminalRunBoundary,
+                GameOverScreenDetected: gameOverScreenDetected,
+                UnlockScreenDetected: unlockScreenDetected,
+                TimelineUnlockDetected: timelineUnlockDetected,
+                MainMenuReturnDetected: mainMenuReturnDetected);
+        }
+
+        var rewardScreen = rewardScreens
+            .OrderByDescending(static candidate => IsVisibleNode(candidate) ? 1 : 0)
+            .FirstOrDefault()
+            ?? activeScreen
+            ?? overlayTop;
+        var rootType = rewardScreen?.GetType().FullName ?? rewardScreen?.GetType().Name;
+        var proceedButton = rewardScreen is null
+            ? null
+            : TryGetMemberValue(rewardScreen, "ProceedButton")
+              ?? TryGetMemberValue(rewardScreen, "_proceedButton");
+        var proceedBounds = TryResolveInteractiveScreenBounds(proceedButton, out _);
+        var proceedVisible = !string.IsNullOrWhiteSpace(proceedBounds) && IsVisibleNode(proceedButton);
+        var proceedEnabled = proceedVisible
+                             && (TryResolveInteractiveEnabled(proceedButton) ?? TryResolveControlEnabled(proceedButton) ?? true);
+        var rewardButtons = EnumerateRewardButtons(rewardScreen).ToArray();
+        var visibleButtonCount = rewardButtons.Count(static button =>
+            !string.IsNullOrWhiteSpace(TryResolveInteractiveScreenBounds(button, out _)) && IsVisibleNode(button));
+        var enabledButtonCount = rewardButtons.Count(button =>
+            !string.IsNullOrWhiteSpace(TryResolveInteractiveScreenBounds(button, out _))
+            && IsVisibleNode(button)
+            && (TryResolveInteractiveEnabled(button) ?? TryResolveControlEnabled(button) ?? true));
+        var screenDetected = rewardScreen is not null;
+        var screenVisible = rewardIsCurrentActiveScreen
+                            || rewardIsTopOverlay
+                            || string.Equals(screenHint, "rewards", StringComparison.OrdinalIgnoreCase)
+                            || (rewardScreen is not null && IsVisibleNode(rewardScreen))
+                            || proceedVisible
+                            || visibleButtonCount > 0;
+        var foregroundOwned = !terminalRunBoundary
+                              && (rewardIsCurrentActiveScreen
+                                  || rewardIsTopOverlay
+                                  || proceedEnabled
+                                  || enabledButtonCount > 0);
+        var teardownInProgress = screenVisible
+                                 && !foregroundOwned
+                                 && !terminalRunBoundary
+                                 && (mapIsCurrentActiveScreen
+                                     || string.Equals(screenHint, "map", StringComparison.OrdinalIgnoreCase));
+        return new RewardObservation(
+            ScreenDetected: screenDetected,
+            ScreenVisible: screenVisible,
+            ForegroundOwned: foregroundOwned,
+            TeardownInProgress: teardownInProgress,
+            RewardIsCurrentActiveScreen: rewardIsCurrentActiveScreen,
+            RewardIsTopOverlay: rewardIsTopOverlay,
+            MapIsCurrentActiveScreen: mapIsCurrentActiveScreen,
+            ActiveScreenType: activeScreenType,
+            RootType: rootType,
+            ProceedVisible: proceedVisible,
+            ProceedEnabled: proceedEnabled,
+            VisibleButtonCount: visibleButtonCount,
+            EnabledButtonCount: enabledButtonCount,
+            TerminalRunBoundary: terminalRunBoundary,
+            GameOverScreenDetected: gameOverScreenDetected,
+            UnlockScreenDetected: unlockScreenDetected,
+            TimelineUnlockDetected: timelineUnlockDetected,
+            MainMenuReturnDetected: mainMenuReturnDetected);
+    }
+
     private static bool IsShopRoomType(string? typeName)
     {
         return !string.IsNullOrWhiteSpace(typeName)
                && typeName.Contains("NMerchantRoom", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRewardScreenType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("RewardsScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsGameOverScreenType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("GameOverScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTimelineUnlockScreenType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("UnlockTimelineScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsUnlockScreenType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("UnlockScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMainMenuActiveScreenType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && (typeName.Contains("MainMenu", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("Title", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("FrontEnd", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsMerchantInventoryType(string? typeName)
@@ -3094,6 +3258,63 @@ internal static class RuntimeSnapshotReflectionExtractor
     {
         return !string.IsNullOrWhiteSpace(typeName)
                && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static object? TryResolveOverlayStackTop(IEnumerable<object> roots)
+    {
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (typeName.Contains("NOverlayStack", StringComparison.OrdinalIgnoreCase))
+            {
+                return TryInvokeMethod(root, "Peek")
+                       ?? TryGetMemberValue(root, "_stack")
+                       ?? TryGetMemberValue(root, "Current");
+            }
+        }
+
+        var overlayStackType = FindLoadedType("MegaCrit.Sts2.Core.Nodes.Screens.Overlays.NOverlayStack");
+        if (overlayStackType is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var instance = overlayStackType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            return instance is null
+                ? null
+                : TryInvokeMethod(instance, "Peek");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static IEnumerable<object> EnumerateRewardButtons(object? rewardScreen)
+    {
+        if (rewardScreen is null)
+        {
+            yield break;
+        }
+
+        var seen = new HashSet<int>();
+        foreach (var button in ExpandEnumerable(TryGetMemberValue(rewardScreen, "_rewardButtons")))
+        {
+            if (button is not null && seen.Add(RuntimeHelpers.GetHashCode(button)))
+            {
+                yield return button;
+            }
+        }
+
+        foreach (var child in TryEnumerateChildren(TryGetMemberValue(rewardScreen, "_rewardAlternativesContainer")))
+        {
+            if (child is not null && seen.Add(RuntimeHelpers.GetHashCode(child)))
+            {
+                yield return child;
+            }
+        }
     }
 
     private static object? TryResolveCurrentActiveScreen(IEnumerable<object> roots)
@@ -4595,6 +4816,50 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             payload["shopAffordablePotionIds"] = observation.AffordablePotionIds.ToArray();
         }
+    }
+
+    private static void AppendRewardRuntimeMetadata(
+        RewardObservation observation,
+        IDictionary<string, string?> meta,
+        IDictionary<string, object?> payload)
+    {
+        meta["rewardScreenDetected"] = observation.ScreenDetected ? "true" : "false";
+        meta["rewardScreenVisible"] = observation.ScreenVisible ? "true" : "false";
+        meta["rewardForegroundOwned"] = observation.ForegroundOwned ? "true" : "false";
+        meta["rewardTeardownInProgress"] = observation.TeardownInProgress ? "true" : "false";
+        meta["rewardIsCurrentActiveScreen"] = observation.RewardIsCurrentActiveScreen ? "true" : "false";
+        meta["rewardIsTopOverlay"] = observation.RewardIsTopOverlay ? "true" : "false";
+        meta["mapCurrentActiveScreen"] = observation.MapIsCurrentActiveScreen ? "true" : "false";
+        meta["activeScreenType"] = observation.ActiveScreenType;
+        meta["rewardScreenRootType"] = observation.RootType;
+        meta["rewardProceedVisible"] = observation.ProceedVisible ? "true" : "false";
+        meta["rewardProceedEnabled"] = observation.ProceedEnabled ? "true" : "false";
+        meta["rewardVisibleButtonCount"] = observation.VisibleButtonCount.ToString(CultureInfo.InvariantCulture);
+        meta["rewardEnabledButtonCount"] = observation.EnabledButtonCount.ToString(CultureInfo.InvariantCulture);
+        meta["terminalRunBoundary"] = observation.TerminalRunBoundary ? "true" : "false";
+        meta["gameOverScreenDetected"] = observation.GameOverScreenDetected ? "true" : "false";
+        meta["unlockScreenDetected"] = observation.UnlockScreenDetected ? "true" : "false";
+        meta["timelineUnlockDetected"] = observation.TimelineUnlockDetected ? "true" : "false";
+        meta["mainMenuReturnDetected"] = observation.MainMenuReturnDetected ? "true" : "false";
+
+        payload["rewardScreenDetected"] = observation.ScreenDetected;
+        payload["rewardScreenVisible"] = observation.ScreenVisible;
+        payload["rewardForegroundOwned"] = observation.ForegroundOwned;
+        payload["rewardTeardownInProgress"] = observation.TeardownInProgress;
+        payload["rewardIsCurrentActiveScreen"] = observation.RewardIsCurrentActiveScreen;
+        payload["rewardIsTopOverlay"] = observation.RewardIsTopOverlay;
+        payload["mapCurrentActiveScreen"] = observation.MapIsCurrentActiveScreen;
+        payload["activeScreenType"] = observation.ActiveScreenType;
+        payload["rewardScreenRootType"] = observation.RootType;
+        payload["rewardProceedVisible"] = observation.ProceedVisible;
+        payload["rewardProceedEnabled"] = observation.ProceedEnabled;
+        payload["rewardVisibleButtonCount"] = observation.VisibleButtonCount;
+        payload["rewardEnabledButtonCount"] = observation.EnabledButtonCount;
+        payload["terminalRunBoundary"] = observation.TerminalRunBoundary;
+        payload["gameOverScreenDetected"] = observation.GameOverScreenDetected;
+        payload["unlockScreenDetected"] = observation.UnlockScreenDetected;
+        payload["timelineUnlockDetected"] = observation.TimelineUnlockDetected;
+        payload["mainMenuReturnDetected"] = observation.MainMenuReturnDetected;
     }
 
     private static IReadOnlyList<LiveExportChoiceSummary> CreateCardSelectionChoices(CardSelectionObservation observation)

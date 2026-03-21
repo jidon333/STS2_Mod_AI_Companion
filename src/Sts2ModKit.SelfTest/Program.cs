@@ -48,6 +48,7 @@ Run("runtime reflection keeps reward-pick separate from confirm-driven card sele
 Run("runtime reflection exports deck-remove card-selection preview semantics", TestRuntimeReflectionDeckRemoveCardSelectionExport, failures);
 Run("runtime reflection exports treasure room chest holder and proceed semantics", TestRuntimeReflectionTreasureRoomExport, failures);
 Run("runtime reflection exports explicit shop room semantics and typed shop choices", TestRuntimeReflectionShopExport, failures);
+Run("runtime reflection exports reward foreground ownership and teardown semantics", TestRuntimeReflectionRewardOwnershipExport, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
@@ -1542,6 +1543,85 @@ static void TestRuntimeReflectionShopExport()
     Assert(inventoryNodes is not null, "Expected inventory publisher to build a shop node inventory.");
     Assert(inventoryNodes!.Nodes.Any(node => string.Equals(node.Kind, "shop-option:relic", StringComparison.OrdinalIgnoreCase)), "Inventory publisher should preserve typed shop relic kinds.");
     Assert(inventoryNodes.Nodes.Any(node => string.Equals(node.Kind, "shop-card-removal", StringComparison.OrdinalIgnoreCase)), "Inventory publisher should preserve explicit shop card-removal kinds.");
+}
+
+static void TestRuntimeReflectionRewardOwnershipExport()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var observeMethod = extractorType!.GetMethod("ObserveRewardScreen", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(observeMethod is not null, "Expected private ObserveRewardScreen helper.");
+
+    var rewardButton = new FakeClickableControl
+    {
+        Visible = true,
+        Enabled = true,
+        Position = new FakeVector2(760, 360),
+        Size = new FakeVector2(380, 120),
+    };
+    var proceedButton = new FakeClickableControl
+    {
+        Visible = true,
+        Enabled = true,
+        Position = new FakeVector2(1680, 760),
+        Size = new FakeVector2(220, 110),
+    };
+    var rewardScreen = new FakeNRewardsScreen
+    {
+        Visible = true,
+        _proceedButton = proceedButton,
+        _rewardButtons = new object[] { rewardButton },
+    };
+    var activeRewardContext = new FakeActiveScreenContext
+    {
+        CurrentScreen = rewardScreen,
+    };
+    var activeRewardObservation = observeMethod!.Invoke(null, new object?[] { new object[] { rewardScreen, rewardButton, proceedButton, activeRewardContext }, "rewards" });
+    Assert(activeRewardObservation is not null, "Expected reward observation.");
+    Assert((bool)(ReadProperty(activeRewardObservation!, "ScreenDetected") ?? false), "Expected reward screen detection.");
+    Assert((bool)(ReadProperty(activeRewardObservation!, "ForegroundOwned") ?? false), "Expected reward foreground ownership while reward screen is current.");
+    Assert((bool)(ReadProperty(activeRewardObservation!, "RewardIsCurrentActiveScreen") ?? false), "Expected reward current-active-screen export.");
+
+    var disabledRewardButton = new FakeClickableControl
+    {
+        Visible = true,
+        Enabled = false,
+        Position = new FakeVector2(760, 360),
+        Size = new FakeVector2(380, 120),
+    };
+    var disabledProceedButton = new FakeClickableControl
+    {
+        Visible = true,
+        Enabled = false,
+        Position = new FakeVector2(1680, 760),
+        Size = new FakeVector2(220, 110),
+    };
+    var staleRewardScreen = new FakeNRewardsScreen
+    {
+        Visible = true,
+        _proceedButton = disabledProceedButton,
+        _rewardButtons = new object[] { disabledRewardButton },
+    };
+    var activeMapContext = new FakeActiveScreenContext
+    {
+        CurrentScreen = new FakeNMapScreen { IsOpen = true, Visible = true },
+    };
+    var rewardAftermathObservation = observeMethod.Invoke(null, new object?[] { new object[] { staleRewardScreen, disabledRewardButton, disabledProceedButton, activeMapContext }, "rewards" });
+    Assert(rewardAftermathObservation is not null, "Expected reward aftermath observation.");
+    Assert((bool)(ReadProperty(rewardAftermathObservation!, "ScreenVisible") ?? false), "Expected stale reward visibility to remain exported for diagnostics.");
+    Assert((bool)(ReadProperty(rewardAftermathObservation!, "ForegroundOwned") ?? true) == false, "Expected reward foreground ownership to drop once map becomes current and reward controls are disabled.");
+    Assert((bool)(ReadProperty(rewardAftermathObservation!, "TeardownInProgress") ?? false), "Expected reward teardown export once map is current and reward visuals merely linger.");
+    Assert((bool)(ReadProperty(rewardAftermathObservation!, "MapIsCurrentActiveScreen") ?? false), "Expected map current active screen export during reward proceed aftermath.");
+
+    var terminalBoundaryContext = new FakeActiveScreenContext
+    {
+        CurrentScreen = new FakeNGameOverScreen(),
+    };
+    var terminalObservation = observeMethod.Invoke(null, new object?[] { new object[] { terminalBoundaryContext }, "unknown" });
+    Assert(terminalObservation is not null, "Expected terminal boundary observation.");
+    Assert((bool)(ReadProperty(terminalObservation!, "TerminalRunBoundary") ?? false), "Expected terminal run boundary export when game-over screen becomes current.");
+    Assert((bool)(ReadProperty(terminalObservation!, "GameOverScreenDetected") ?? false), "Expected explicit game-over screen detection.");
 }
 
 static void TestInventoryPublisherMapNodeSourceCorrection()
@@ -3934,6 +4014,20 @@ file sealed class FakeNMapScreen
     public bool IsOpen { get; init; }
 
     public bool Visible { get; init; }
+}
+
+file sealed class FakeNRewardsScreen
+{
+    public bool Visible { get; init; }
+
+    public object? _proceedButton { get; init; }
+
+    public object[] _rewardButtons { get; init; } = Array.Empty<object>();
+}
+
+file sealed class FakeNGameOverScreen
+{
+    public bool Visible { get; init; } = true;
 }
 
 file sealed class FakeActiveScreenContext
