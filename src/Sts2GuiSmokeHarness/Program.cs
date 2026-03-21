@@ -4382,6 +4382,94 @@ static void RunSelfTest()
         Assert(transformConfirmActions.Contains("transform confirm", StringComparer.OrdinalIgnoreCase), "Transform preview state should open an explicit confirm lane.");
         Assert(transformConfirmActions.Contains("transform confirm", StringComparer.OrdinalIgnoreCase), "Transform preview-visible state should drive transform confirm.");
 
+        using var postTransformEventMetaDocument = JsonDocument.Parse("""{"meta":{"rootTypeSummary":"MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen"}}""");
+        var postTransformEventObserver = new ObserverState(
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-post-transform-event",
+                true,
+                "mixed",
+                "stable",
+                "episode-post-transform-event",
+                "None",
+                "event",
+                76,
+                80,
+                null,
+                new[] { "계속", "휴식 (1,2)" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("event-option:0", "event-option", "계속", "922,596,800,100", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("choice", "계속", "922,596,800,100", "계속", "계속"),
+                    new ObserverChoice("map-node", "휴식 (1,2)", "897,581,124,124", "1,2", "type:Rest;coord:1,2"),
+                },
+                Array.Empty<ObservedCombatHandCard>()),
+            postTransformEventMetaDocument,
+            null,
+            null);
+        var postTransformHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "transform select card", DateTimeOffset.UtcNow.AddSeconds(-8)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "transform select card left", DateTimeOffset.UtcNow.AddSeconds(-6)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "transform confirm", DateTimeOffset.UtcNow.AddSeconds(-4)),
+        };
+        var postTransformAllowedActions = BuildAllowedActions(
+            GuiSmokePhase.HandleEvent,
+            postTransformEventObserver,
+            Array.Empty<CombatCardKnowledgeHint>(),
+            string.Empty,
+            postTransformHistory);
+        Assert(postTransformAllowedActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase),
+            "Post-transform explicit event continue should stay in the HandleEvent allowlist.");
+        var postTransformEventDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            11,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "Resolve the event aftermath.",
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:handleevent|screen:event|visible:event|encounter:none|ready:true|stability:stable|layer:map-overlay-foreground|layer:event-background|stale:event-choice|current-node-arrow-visible|layer:event-foreground|shot:POSTTRANSFORM",
+            "0001",
+            1,
+            3,
+            true,
+            "semantic",
+            null,
+            postTransformEventObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            new[]
+            {
+                new EventKnowledgeCandidate(
+                    "post-transform-continue",
+                    "변성체의 숲",
+                    "self-test post-transform continue",
+                    new[]
+                    {
+                        new EventOptionKnowledgeCandidate("계속", "이벤트를 마무리한다.", "continue"),
+                    }),
+            },
+            Array.Empty<CombatCardKnowledgeHint>(),
+            postTransformAllowedActions,
+            postTransformHistory,
+            "Post-transform explicit event continue should outrank map fallback.",
+            null));
+        Assert(postTransformEventDecision.TargetLabel is not null
+               && (postTransformEventDecision.TargetLabel.Contains("event", StringComparison.OrdinalIgnoreCase)
+                   || postTransformEventDecision.TargetLabel.Contains("계속", StringComparison.OrdinalIgnoreCase)
+                   || postTransformEventDecision.TargetLabel.Contains("continue", StringComparison.OrdinalIgnoreCase))
+               && !postTransformEventDecision.TargetLabel.Contains("reachable node", StringComparison.OrdinalIgnoreCase)
+               && !postTransformEventDecision.TargetLabel.Contains("map", StringComparison.OrdinalIgnoreCase),
+            "Post-transform explicit event continue should outrank mixed-state map contamination.");
+
         var rewardPickObserver = new ObserverState(
             new ObserverSummary(
                 "card-choice",
@@ -8912,6 +9000,7 @@ static string[] BuildAllowedActions(
     IReadOnlyList<GuiSmokeHistoryEntry> history)
 {
     var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
+    var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelectionForAllowlist(observer, history);
     var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
     var explicitRewardProgressionPresent = observer.Summary.Choices.Any(choice => IsCurrentRewardProgressionChoiceForObserver(choice, null))
                                           || observer.Summary.ActionNodes.Any(node => IsCurrentRewardProgressionNodeForObserver(node, null));
@@ -8973,11 +9062,14 @@ static string[] BuildAllowedActions(
             => new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", rewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" },
         GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && ShouldPreferRewardProgressionOverMapFallback(observer)
             => new[] { "click reward", "click reward skip", "click proceed", "wait" },
+        GuiSmokePhase.HandleEvent when forceEventProgressionAfterCardSelection
+            => new[] { "click event choice", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible
             => mapOverlayState.MapBackNavigationAvailable
                 ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
                 : new[] { "click exported reachable node", "click first reachable node", "wait" },
         GuiSmokePhase.HandleEvent when HasStrongMapTransitionEvidence(observer)
+                                        && !forceEventProgressionAfterCardSelection
                                         && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
             => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent when LooksLikeTreasureState(observer.Summary)
@@ -9016,6 +9108,63 @@ static string[] BuildCardSelectionAllowedActions(CardSelectionSubtypeState state
         "upgrade" => new[] { "upgrade select card", "wait" },
         _ => new[] { "wait" },
     };
+}
+
+static bool ShouldPrioritizeExplicitEventProgressionAfterCardSelectionForAllowlist(
+    ObserverState observer,
+    IReadOnlyList<GuiSmokeHistoryEntry> history)
+{
+    static bool IsProgressionLabel(string? label)
+    {
+        return !string.IsNullOrWhiteSpace(label)
+               && (label.Contains("계속", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("진행", StringComparison.OrdinalIgnoreCase)
+                   || label.Contains("확인", StringComparison.OrdinalIgnoreCase));
+    }
+
+    static bool IsSubtypeTarget(string? targetLabel)
+    {
+        return !string.IsNullOrWhiteSpace(targetLabel)
+               && (targetLabel.StartsWith("transform ", StringComparison.OrdinalIgnoreCase)
+                   || targetLabel.StartsWith("deck remove ", StringComparison.OrdinalIgnoreCase)
+                   || targetLabel.StartsWith("upgrade ", StringComparison.OrdinalIgnoreCase));
+    }
+
+    var recentSubtypeAftermath = false;
+    for (var index = history.Count - 1; index >= 0 && index >= history.Count - 6; index -= 1)
+    {
+        var entry = history[index];
+        if (string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase)
+            && IsSubtypeTarget(entry.TargetLabel))
+        {
+            recentSubtypeAftermath = true;
+            break;
+        }
+    }
+
+    if (!recentSubtypeAftermath)
+    {
+        return false;
+    }
+
+    var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+    if (!eventAuthority)
+    {
+        return false;
+    }
+
+    return observer.ActionNodes.Any(node =>
+               node.Actionable
+               && TryParseScreenBounds(node.ScreenBounds, out _)
+               && IsProgressionLabel(node.Label))
+           || observer.Choices.Any(choice =>
+               TryParseScreenBounds(choice.ScreenBounds, out _)
+               && IsProgressionLabel(choice.Label));
 }
 
 static bool LooksLikeRewardChoiceState(ObserverState observer)
@@ -14763,9 +14912,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request)
     {
-        var preferEventForeground = GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer);
+        var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelection(request);
+        var preferEventForeground = GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer)
+                                    || forceEventProgressionAfterCardSelection;
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        var strongEventForegroundChoice = HasStrongForegroundEventChoice(request);
+        var strongEventForegroundChoice = HasStrongForegroundEventChoice(request) || forceEventProgressionAfterCardSelection;
         if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
         {
             GuiSmokeDecisionDebug.SetSceneModel("map-overlay", mapOverlayState.EventBackgroundPresent ? "event-context" : "map-context");
@@ -16232,9 +16383,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeDecisionAnalysis AnalyzeHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
     {
-        var preferEventForeground = GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer);
+        var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelection(request);
+        var preferEventForeground = GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer)
+                                    || forceEventProgressionAfterCardSelection;
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        var strongEventForegroundChoice = HasStrongForegroundEventChoice(request);
+        var strongEventForegroundChoice = HasStrongForegroundEventChoice(request) || forceEventProgressionAfterCardSelection;
         var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
         var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
 
@@ -16287,6 +16440,13 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             builder.Consider("click map back", "overlay-back-navigation", 0.84d, () => TryCreateMapBackNavigationDecision(request), "map-back-navigation-unavailable", rawBounds: TryFindBackBounds(request), boundsSource: "overlay-back");
             builder.Consider("click first reachable node", "screenshot-reachable-node", 0.78d, () => TryFindFirstReachableMapNodeDecision(request), "no-screenshot-reachable-node", boundsSource: "screenshot-map-node");
             return builder.Build(CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (forceEventProgressionAfterCardSelection)
+        {
+            builder.AddSuppressed("click exported reachable node", "post-card-selection-event-explicit-progression-outranks-map-routing");
+            builder.AddSuppressed("click first reachable node", "post-card-selection-event-explicit-progression-outranks-map-routing");
+            builder.AddSuppressed("click visible map advance", "post-card-selection-event-explicit-progression-outranks-map-routing");
         }
 
         if (preferEventForeground
@@ -16465,6 +16625,81 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             && !IsGenericContinueLabel(node.Label)
             && !IsBackChoiceLabel(node.Label)
             && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ShouldPrioritizeExplicitEventProgressionAfterCardSelection(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        return HasRecentCardSelectionSubtypeAftermath(history)
+               && HasExplicitEventProgressionChoiceVisible(observer, null);
+    }
+
+    private static bool ShouldPrioritizeExplicitEventProgressionAfterCardSelection(GuiSmokeStepRequest request)
+    {
+        return HasRecentCardSelectionSubtypeAftermath(request.History)
+               && HasExplicitEventProgressionChoiceVisible(request.Observer, request.WindowBounds);
+    }
+
+    private static bool HasRecentCardSelectionSubtypeAftermath(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        static bool IsSubtypeTarget(string? targetLabel)
+        {
+            return !string.IsNullOrWhiteSpace(targetLabel)
+                   && (targetLabel.StartsWith("transform ", StringComparison.OrdinalIgnoreCase)
+                       || targetLabel.StartsWith("deck remove ", StringComparison.OrdinalIgnoreCase)
+                       || targetLabel.StartsWith("upgrade ", StringComparison.OrdinalIgnoreCase));
+        }
+
+        for (var index = history.Count - 1; index >= 0 && index >= history.Count - 6; index -= 1)
+        {
+            var entry = history[index];
+            if (string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase)
+                && IsSubtypeTarget(entry.TargetLabel))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasExplicitEventProgressionChoiceVisible(ObserverState observer, WindowBounds? windowBounds)
+    {
+        var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+        if (!eventAuthority)
+        {
+            return false;
+        }
+
+        return observer.ActionNodes.Any(node =>
+                   node.Actionable
+                   && HasActiveNodeBounds(node.ScreenBounds, windowBounds)
+                   && ScoreProgressionNode(node) > 0)
+               || observer.Choices.Any(choice =>
+                   HasActiveNodeBounds(choice.ScreenBounds, windowBounds)
+                   && ScoreProgressionChoice(choice) > 0);
+    }
+
+    private static bool HasExplicitEventProgressionChoiceVisible(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+                             || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+        if (!eventAuthority)
+        {
+            return false;
+        }
+
+        return observer.ActionNodes.Any(node =>
+                   node.Actionable
+                   && HasActiveNodeBounds(node.ScreenBounds, windowBounds)
+                   && ScoreProgressionNode(node) > 0)
+               || observer.Choices.Any(choice =>
+                   HasActiveNodeBounds(choice.ScreenBounds, windowBounds)
+                   && ScoreProgressionChoice(choice) > 0);
     }
 
     private static bool MatchesRestSiteTarget(string? label, string targetLabel)
