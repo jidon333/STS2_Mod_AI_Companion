@@ -1146,6 +1146,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                 GuiSmokePhase.WaitMainMenu => GuiSmokePhase.EnterRun,
                 GuiSmokePhase.WaitCharacterSelect => GuiSmokePhase.ChooseCharacter,
                 GuiSmokePhase.WaitMap => GuiSmokePhase.ChooseFirstNode,
+                GuiSmokePhase.WaitPostMapNodeRoom => GuiSmokePhase.ChooseFirstNode,
                 GuiSmokePhase.WaitCombat => GuiSmokePhase.HandleCombat,
                 _ => phase,
             };
@@ -1902,6 +1903,13 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         {
             LogHarness($"step={stepIndex} post-action phase reconciliation Embark -> {postEmbarkPhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
             phase = postEmbarkPhase;
+        }
+
+        if (phase == GuiSmokePhase.WaitPostMapNodeRoom
+            && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(postActionObserver, out var postMapNodePhase))
+        {
+            LogHarness($"step={stepIndex} post-action phase reconciliation WaitPostMapNodeRoom -> {postMapNodePhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
+            phase = postMapNodePhase;
         }
 
         attemptsByPhase.Clear();
@@ -3907,6 +3915,206 @@ static void RunSelfTest()
     Assert(
         string.Equals(continuePreferredDecision.TargetLabel, "continue", StringComparison.OrdinalIgnoreCase),
         "EnterRun should still prefer Continue when it is visible on the main menu.");
+
+    var reachableNodeDecision = new GuiSmokeStepDecision("act", "click", null, null, null, "visible reachable node", "Map node selected.", 0.9, null, null, null, null);
+    Assert(
+        GetPostChooseFirstNodePhase(reachableNodeDecision) == GuiSmokePhase.WaitPostMapNodeRoom,
+        "Reachable map-node clicks should enter neutral post-node room reconciliation instead of combat-only waiting.");
+
+    var waitPostMapNodeBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-wait-post-map-node-branch-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(waitPostMapNodeBranchRoot);
+    try
+    {
+        var waitPostMapNodeLogger = new ArtifactRecorder(waitPostMapNodeBranchRoot);
+        Assert(
+            GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(
+                new ObserverState(
+                    new ObserverSummary(
+                        "combat",
+                        "combat",
+                        true,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "hook",
+                        "stable",
+                        null,
+                        "Monster",
+                        "combat",
+                        80,
+                        80,
+                        null,
+                        Array.Empty<string>(),
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                out var postMapNodeCombatPhase)
+            && postMapNodeCombatPhase == GuiSmokePhase.HandleCombat,
+            "Post-node reconciliation should still recognize combat destinations.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitPostMapNodeRoom,
+                new ObserverState(
+                    new ObserverSummary(
+                        "combat",
+                        "combat",
+                        true,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "hook",
+                        "stable",
+                        null,
+                        "Monster",
+                        "combat",
+                        80,
+                        80,
+                        null,
+                        Array.Empty<string>(),
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                new List<GuiSmokeHistoryEntry>(),
+                waitPostMapNodeLogger,
+                10,
+                true,
+                out var waitPostMapNodeCombatBranchPhase)
+            && waitPostMapNodeCombatBranchPhase == GuiSmokePhase.HandleCombat,
+            "WaitPostMapNodeRoom should reopen combat handling when the destination room is combat.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitPostMapNodeRoom,
+                new ObserverState(
+                    new ObserverSummary(
+                        "rest-site",
+                        "rest-site",
+                        false,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "rest",
+                        "stable",
+                        null,
+                        "RestSite",
+                        "rest",
+                        64,
+                        80,
+                        null,
+                        new[] { "휴식", "재련", "부화" },
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        new[]
+                        {
+                            new ObserverChoice("rest-option", "휴식", "520,360,220,160", null, "Rest")
+                            {
+                                NodeId = "rest-site:HEAL",
+                                BindingKind = "rest-site-option",
+                                Enabled = true,
+                                SemanticHints = new[] { "scene:rest-site", "option-id:HEAL", "source:button" },
+                            },
+                        },
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                new List<GuiSmokeHistoryEntry>(),
+                waitPostMapNodeLogger,
+                11,
+                true,
+                out var waitPostMapNodeRestSitePhase)
+            && waitPostMapNodeRestSitePhase == GuiSmokePhase.ChooseFirstNode,
+            "WaitPostMapNodeRoom should reopen rest-site handling instead of stalling in combat wait.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitPostMapNodeRoom,
+                new ObserverState(
+                    new ObserverSummary(
+                        "shop",
+                        "shop",
+                        false,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "shop",
+                        "stable",
+                        null,
+                        "Shop",
+                        "shop",
+                        80,
+                        80,
+                        null,
+                        Array.Empty<string>(),
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                new List<GuiSmokeHistoryEntry>(),
+                waitPostMapNodeLogger,
+                12,
+                true,
+                out var waitPostMapNodeShopPhase)
+            && waitPostMapNodeShopPhase == GuiSmokePhase.ChooseFirstNode,
+            "WaitPostMapNodeRoom should reopen shop handling when the destination room is shop.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitPostMapNodeRoom,
+                new ObserverState(
+                    new ObserverSummary(
+                        "event",
+                        "event",
+                        false,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "event",
+                        "stable",
+                        null,
+                        "None",
+                        "event",
+                        80,
+                        80,
+                        null,
+                        new[] { "선택지" },
+                        Array.Empty<string>(),
+                        new[] { new ObserverActionNode("event-option:0", "event-option", "선택지", "500,700,800,100", true) },
+                        new[] { new ObserverChoice("choice", "선택지", "500,700,800,100") },
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                new List<GuiSmokeHistoryEntry>(),
+                waitPostMapNodeLogger,
+                13,
+                true,
+                out var waitPostMapNodeEventPhase)
+            && waitPostMapNodeEventPhase == GuiSmokePhase.HandleEvent,
+            "WaitPostMapNodeRoom should reopen event handling when the destination room is an event.");
+    }
+    finally
+    {
+        try
+        {
+            Directory.Delete(waitPostMapNodeBranchRoot, true);
+        }
+        catch
+        {
+        }
+    }
 
     var postEnterRunTreasureObserver = new ObserverState(
         new ObserverSummary(
@@ -11142,6 +11350,7 @@ static string BuildGoal(GuiSmokePhase phase)
         GuiSmokePhase.WaitMap => "Wait until observer logical currentScreen=map. visibleScreen may reach map earlier while reward flow is still active.",
         GuiSmokePhase.HandleRewards => "Resolve the visible reward screen so the run can return to map.",
         GuiSmokePhase.ChooseFirstNode => "Click the first reachable map node.",
+        GuiSmokePhase.WaitPostMapNodeRoom => "Reconcile the destination room after clicking a reachable map node.",
         GuiSmokePhase.HandleEvent => "Resolve the event screen. If nothing else is obvious, pick the first visible option.",
         GuiSmokePhase.WaitCombat => "Wait until observer currentScreen=combat and encounter.inCombat=true.",
         GuiSmokePhase.HandleCombat => "Play the combat from the screenshot: choose cards, targets, or end turn until combat resolves.",
@@ -11193,6 +11402,7 @@ static string BuildFailureModeHintCore(
         GuiSmokePhase.HandleEvent when LooksLikeTreasureState(observer.Summary)
             => "Treasure authority can linger on the event phase. Prefer explicit treasure chest, treasure relic holder, or treasure proceed over generic event or map routing.",
         GuiSmokePhase.HandleEvent => "If the event text is ambiguous, choose a large visible progression option, not inspect affordances or detail overlays.",
+        GuiSmokePhase.WaitPostMapNodeRoom => "A reachable node starts room entry, not combat-only flow. Reconcile the destination room from observer truth before waiting or routing again.",
         GuiSmokePhase.WaitCombat => "Observer must end with combat screen and inCombat=true.",
         GuiSmokePhase.HandleCombat when !CanResolveEnemyTargetFromCurrentState(observer, combatCardKnowledge, screenshotPath, history)
             => BuildCombatFailureModeHint(observer, combatCardKnowledge),
@@ -11210,7 +11420,7 @@ static GuiSmokePhase GetPostRewardPhase(GuiSmokeStepDecision decision)
 
     if (IsReachableNodeTarget(decision.TargetLabel))
     {
-        return GuiSmokePhase.WaitCombat;
+        return GuiSmokePhase.WaitPostMapNodeRoom;
     }
 
     return GuiSmokePhase.WaitMap;
@@ -11219,7 +11429,7 @@ static GuiSmokePhase GetPostRewardPhase(GuiSmokeStepDecision decision)
 static GuiSmokePhase GetPostChooseFirstNodePhase(GuiSmokeStepDecision decision)
 {
     return IsReachableNodeTarget(decision.TargetLabel)
-        ? GuiSmokePhase.WaitCombat
+        ? GuiSmokePhase.WaitPostMapNodeRoom
         : GuiSmokePhase.WaitMap;
 }
 
@@ -11277,6 +11487,7 @@ static bool IsPassiveWaitPhase(GuiSmokePhase phase)
     return phase is GuiSmokePhase.WaitMainMenu
         or GuiSmokePhase.WaitCharacterSelect
         or GuiSmokePhase.WaitMap
+        or GuiSmokePhase.WaitPostMapNodeRoom
         or GuiSmokePhase.WaitCombat;
 }
 
@@ -11969,8 +12180,28 @@ static bool TryAdvanceAlternateBranch(
         }
     }
 
-    if (phase == GuiSmokePhase.ChooseFirstNode || phase == GuiSmokePhase.WaitCombat)
+    if (phase is GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitPostMapNodeRoom or GuiSmokePhase.WaitCombat)
     {
+        if (phase == GuiSmokePhase.WaitPostMapNodeRoom
+            && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(observer, out var postMapNodePhase))
+        {
+            var branchKind = postMapNodePhase switch
+            {
+                GuiSmokePhase.HandleRewards => "branch-rewards",
+                GuiSmokePhase.HandleCombat => "branch-combat",
+                GuiSmokePhase.HandleEvent => "branch-event",
+                GuiSmokePhase.ChooseFirstNode when TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary) => "branch-treasure",
+                GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
+                GuiSmokePhase.ChooseFirstNode when LooksLikeShopState(observer.Summary) => "branch-shop",
+                GuiSmokePhase.ChooseFirstNode => "branch-map",
+                _ => "branch-room",
+            };
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = postMapNodePhase;
+            return true;
+        }
+
         if (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
             || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
@@ -11992,6 +12223,45 @@ static bool TryAdvanceAlternateBranch(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
             nextPhase = GuiSmokePhase.HandleRewards;
+            return true;
+        }
+
+        if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary))
+        {
+            if (phase == GuiSmokePhase.ChooseFirstNode)
+            {
+                return false;
+            }
+
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site-upgrade", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site-upgrade", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (LooksLikeRestSiteState(observer.Summary))
+        {
+            if (phase == GuiSmokePhase.ChooseFirstNode)
+            {
+                return false;
+            }
+
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary))
+        {
+            if (phase == GuiSmokePhase.ChooseFirstNode)
+            {
+                return false;
+            }
+
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-treasure", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-treasure", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
             return true;
         }
 
@@ -13439,6 +13709,7 @@ enum GuiSmokePhase
     WaitMap,
     HandleRewards,
     ChooseFirstNode,
+    WaitPostMapNodeRoom,
     WaitCombat,
     HandleEvent,
     HandleCombat,
@@ -15611,6 +15882,16 @@ static class GuiSmokeObserverPhaseHeuristics
 
         nextPhase = default;
         return false;
+    }
+
+    public static bool TryGetPostMapNodePhase(ObserverState observer, out GuiSmokePhase nextPhase)
+    {
+        return TryGetPostEmbarkPhase(observer, out nextPhase);
+    }
+
+    public static bool TryGetPostMapNodePhase(ObserverSummary observer, out GuiSmokePhase nextPhase)
+    {
+        return TryGetPostEmbarkPhase(observer, out nextPhase);
     }
 
     public static bool LooksLikeRewardsState(ObserverSummary observer)
@@ -24513,6 +24794,7 @@ sealed class ObserverAcceptanceEvaluator
             GuiSmokePhase.WaitMainMenu => sceneReady && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase),
             GuiSmokePhase.WaitCharacterSelect => sceneReady && string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase),
             GuiSmokePhase.WaitMap => sceneReady && MapForegroundReconciliation.HasMapForegroundOwnership(observer, history ?? Array.Empty<GuiSmokeHistoryEntry>()),
+            GuiSmokePhase.WaitPostMapNodeRoom => false,
             GuiSmokePhase.WaitCombat => string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
                 && sceneReady
                 && observer.InCombat == true,
