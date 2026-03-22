@@ -3178,16 +3178,23 @@ internal static class RuntimeSnapshotReflectionExtractor
                             || (rewardScreen is not null && IsVisibleNode(rewardScreen))
                             || proceedVisible
                             || visibleButtonCount > 0;
+        var actionableRewardAffordance = proceedEnabled || enabledButtonCount > 0;
+        var staleTopOverlayTeardown = rewardIsTopOverlay
+                                      && !rewardIsCurrentActiveScreen
+                                      && mapIsCurrentActiveScreen
+                                      && !actionableRewardAffordance;
         var foregroundOwned = !terminalRunBoundary
+                              && !staleTopOverlayTeardown
                               && (rewardIsCurrentActiveScreen
-                                  || rewardIsTopOverlay
                                   || proceedEnabled
-                                  || enabledButtonCount > 0);
+                                  || enabledButtonCount > 0
+                                  || (rewardIsTopOverlay && actionableRewardAffordance && !mapIsCurrentActiveScreen));
         var teardownInProgress = screenVisible
-                                 && !foregroundOwned
                                  && !terminalRunBoundary
-                                 && (mapIsCurrentActiveScreen
-                                     || string.Equals(screenHint, "map", StringComparison.OrdinalIgnoreCase));
+                                 && (staleTopOverlayTeardown
+                                     || (!foregroundOwned
+                                         && (mapIsCurrentActiveScreen
+                                             || string.Equals(screenHint, "map", StringComparison.OrdinalIgnoreCase))));
         return new RewardObservation(
             ScreenDetected: screenDetected,
             ScreenVisible: screenVisible,

@@ -5740,6 +5740,66 @@ static void RunSelfTest()
         Assert(GetAllowedActions(GuiSmokePhase.HandleRewards, staleRewardObserver).SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase), "When reward authority disappears, HandleRewards should release ownership with wait instead of directly reopening map fallback.");
         Assert(!GetAllowedActions(GuiSmokePhase.HandleRewards, staleRewardObserver).Contains("click proceed", StringComparer.OrdinalIgnoreCase), "Stale reward bounds should be hard-rejected from the actionable set once only map context remains.");
 
+        var rewardAftermathContradictionObserver = new ObserverState(
+            new ObserverSummary(
+                "rewards",
+                "map",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-reward-aftermath-contradiction",
+                true,
+                "mixed",
+                "stabilizing",
+                "episode-reward-aftermath-contradiction",
+                "None",
+                "reward",
+                80,
+                80,
+                null,
+                new[] { "진행" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("proceed:0", "proceed", "진행", "1583,764,269,108", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("choice", "진행", "1583,764,269,108"),
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>
+                {
+                    ["rewardScreenDetected"] = "true",
+                    ["rewardScreenVisible"] = "true",
+                    ["rewardForegroundOwned"] = "true",
+                    ["rewardTeardownInProgress"] = "false",
+                    ["rewardIsCurrentActiveScreen"] = "false",
+                    ["rewardIsTopOverlay"] = "true",
+                    ["rewardProceedVisible"] = "true",
+                    ["rewardProceedEnabled"] = "false",
+                    ["rewardVisibleButtonCount"] = "1",
+                    ["rewardEnabledButtonCount"] = "0",
+                    ["mapCurrentActiveScreen"] = "true",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                },
+            },
+            null,
+            null,
+            null);
+        var rewardAftermathContradictionState = RewardObserverSignals.TryGetState(rewardAftermathContradictionObserver.Summary);
+        Assert(rewardAftermathContradictionState is not null, "Contradictory reward aftermath observer should still parse as a reward screen state.");
+        Assert(!rewardAftermathContradictionState.ForegroundOwned, "Map-current reward teardown should override stale top-overlay foreground ownership.");
+        Assert(rewardAftermathContradictionState.TeardownInProgress, "Map-current reward teardown should be recognized even when old metadata still claims foreground ownership.");
+        Assert(
+            !TryReopenMixedStateModalBranchFromWaitMap(
+                rewardAftermathContradictionObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                new ArtifactRecorder(Path.Combine(Path.GetTempPath(), $"gui-smoke-reward-aftermath-{Guid.NewGuid():N}")),
+                44,
+                out _),
+            "WaitMap mixed-state reopening should not resurrect HandleRewards when reward is only stale top-overlay residue under current map authority.");
+
         var rewardAftermathObserver = new ObserverState(
             new ObserverSummary(
                 "rewards",
@@ -17596,6 +17656,11 @@ static class RewardObserverSignals
                                              || observer.ActionNodes.Any(static node =>
                                                  node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
                                                  || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase));
+        var actionableRewardAffordance = proceedEnabled || enabledButtonCount > 0;
+        var staleTopOverlayTeardown = rewardIsTopOverlay
+                                      && !rewardIsCurrentActiveScreen
+                                      && mapIsCurrentActiveScreen
+                                      && !actionableRewardAffordance;
         var screenVisible = explicitVisible
                             ?? rewardIsCurrentActiveScreen
                             || rewardIsTopOverlay
@@ -17608,18 +17673,31 @@ static class RewardObserverSignals
                             || explicitRewardProgressionPresent;
         var foregroundOwned = explicitForegroundOwned
                               ?? (!terminalRunBoundary
+                                  && !staleTopOverlayTeardown
                                   && (rewardIsCurrentActiveScreen
-                                      || rewardIsTopOverlay
                                       || proceedEnabled
                                       || enabledButtonCount > 0
-                                      || (explicitRewardProgressionPresent && !mapIsCurrentActiveScreen)));
+                                      || (rewardIsTopOverlay && actionableRewardAffordance && !mapIsCurrentActiveScreen)
+                                      || (explicitRewardProgressionPresent
+                                          && !mapIsCurrentActiveScreen
+                                          && !staleTopOverlayTeardown)));
+        if (staleTopOverlayTeardown)
+        {
+            foregroundOwned = false;
+        }
+
         var teardownInProgress = explicitTeardown
                                  ?? (screenVisible
-                                     && !foregroundOwned
                                      && !terminalRunBoundary
-                                     && (mapIsCurrentActiveScreen
-                                         || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                                         || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)));
+                                     && (staleTopOverlayTeardown
+                                         || (!foregroundOwned
+                                             && (mapIsCurrentActiveScreen
+                                                 || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                                 || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)))));
+        if (staleTopOverlayTeardown)
+        {
+            teardownInProgress = true;
+        }
 
         return new RewardScreenState(
             ScreenDetected: screenDetected == true,
@@ -19024,10 +19102,15 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 || rewardMapLayer.MapCurrentActiveScreen
                 || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)))
         {
-            return CreateWaitDecision("waiting for reward ownership release to map/post-room reconciliation", request.Observer.CurrentScreen);
+            return CreateRewardOwnershipReleaseWaitDecision(request);
         }
 
         return CreateWaitDecision("waiting for reward actions", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision CreateRewardOwnershipReleaseWaitDecision(GuiSmokeStepRequest request)
+    {
+        return CreateWaitDecision("waiting for reward ownership release to map/post-room reconciliation", request.Observer.CurrentScreen);
     }
 
     private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request)
@@ -20576,6 +20659,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         {
             builder.AddSuppressed("click first reachable node", "reward-ownership-release-defers-map-routing-to-waitmap-reconciliation");
             builder.AddSuppressed("click visible map advance", "reward-ownership-release-defers-map-routing-to-waitmap-reconciliation");
+            return builder.Build(CreateRewardOwnershipReleaseWaitDecision(request), actualDecision);
         }
         else
         {
