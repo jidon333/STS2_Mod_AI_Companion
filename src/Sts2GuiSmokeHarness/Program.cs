@@ -729,6 +729,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         liveLayout.LiveRoot,
         harnessLayout.HarnessRoot,
         configuration.GamePaths.GameDirectory));
+    var sceneHistoryIndex = GuiSmokeSessionSceneHistoryIndex.Load(sessionRoot);
     var stepIndex = 0;
     var startupStage = "authoritative-attempt-started";
     var isAuthoritativeFirstAttempt = isLongRun && attemptOrdinal == 1;
@@ -1000,6 +1001,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             attemptStartedRecorded = true;
         }
         LogHarness($"step={stepIndex} captured={screenshotPath}");
+        var stepStopwatch = Stopwatch.StartNew();
 
         var observer = observerReader.Read();
         if (isLongRun
@@ -1027,8 +1029,16 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             serializedHistory,
             combatCardKnowledge);
         var iterationSceneSignature = ComputeSceneSignatureCore(screenshotPath, observer, phase, stepAnalysisContext);
-        var iterationFirstSeenScene = isLongRun && !HasSceneSignatureHistory(sessionRoot, iterationSceneSignature);
+        var iterationFirstSeenScene = isLongRun && !sceneHistoryIndex.HasSeen(iterationSceneSignature);
         var iterationReasoningMode = DetermineReasoningMode(phase, observer, iterationFirstSeenScene);
+        var iterationKnownRecipes = stepAnalysisContext.UseAuthorityFastPath
+            ? Array.Empty<KnownRecipeHint>()
+            : sceneHistoryIndex.GetKnownRecipes(iterationSceneSignature, phase.ToString());
+        var iterationSceneContext = new GuiSmokeSceneRequestContext(
+            iterationSceneSignature,
+            iterationFirstSeenScene,
+            iterationReasoningMode,
+            iterationKnownRecipes);
 
         if (observer.SceneReady == false)
         {
@@ -1274,11 +1284,13 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             sessionRoot,
             attemptId,
             attemptOrdinal,
-            stepAnalysisContext);
+            stepAnalysisContext,
+            iterationSceneContext);
         var requestPath = stepPrefix + ".request.json";
         var decisionPath = stepPrefix + ".decision.json";
         logger.WriteRequest(requestPath, request);
         LogHarness($"step={stepIndex} request={requestPath}");
+        var requestReadyElapsedMs = stepStopwatch.ElapsedMilliseconds;
         GuiSmokeReplayEvaluation replayEvaluation;
         GuiSmokeStepDecision decision;
         if (provider is AutoDecisionProvider)
@@ -1291,12 +1303,21 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             decision = await provider.GetDecisionAsync(requestPath, decisionPath, TimeSpan.FromMinutes(3), CancellationToken.None).ConfigureAwait(false);
             replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request, decision, stepAnalysisContext);
         }
-        WriteCandidateDumpArtifact(stepPrefix + ".candidates.json", replayEvaluation.CandidateDump);
+        var decisionReadyElapsedMs = stepStopwatch.ElapsedMilliseconds;
+        if (ShouldPersistCandidateDumpArtifact(request, decision))
+        {
+            WriteCandidateDumpArtifact(stepPrefix + ".candidates.json", replayEvaluation.CandidateDump);
+        }
         logger.WriteDecision(decisionPath, decision);
         LogHarness($"step={stepIndex} decision status={decision.Status} action={decision.ActionKind ?? "null"} target={decision.TargetLabel ?? "null"} confidence={decision.Confidence?.ToString("0.00") ?? "null"} reason={decision.Reason ?? "null"}");
+        LogHarness($"step={stepIndex} timing captured->request={requestReadyElapsedMs}ms request->decision={Math.Max(0, decisionReadyElapsedMs - requestReadyElapsedMs)}ms");
         if (isLongRun)
         {
             LongRunArtifacts.MaybeRecordUnknownScene(sessionRoot, request, decision);
+            if (ShouldRecordUnknownScene(request))
+            {
+                sceneHistoryIndex.NoteUnknownScene(request);
+            }
         }
 
         if (string.Equals(decision.Status, "abort", StringComparison.OrdinalIgnoreCase))
@@ -1436,6 +1457,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                     sameActionStallCount,
                     "decision-wait"));
             await Task.Delay(Math.Max(waitMinimumMs, decision.WaitMs ?? waitMinimumMs)).ConfigureAwait(false);
+            LogHarness($"step={stepIndex} timing decision->after={Math.Max(0, stepStopwatch.ElapsedMilliseconds - decisionReadyElapsedMs)}ms total={stepStopwatch.ElapsedMilliseconds}ms");
             continue;
         }
 
@@ -1687,10 +1709,9 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                 failureClass: ClassifyFailureForAttempt(phase, observer, "combat-noop-loop", launchFailed: false));
         }
 
-        var screenshotFingerprint = ComputeFileFingerprint(screenshotPath);
         var actionFingerprint = string.Join("|",
             phase.ToString(),
-            screenshotFingerprint,
+            request.SceneSignature,
             decision.ActionKind ?? "null",
             decision.TargetLabel ?? "null");
         if (string.Equals(lastActionFingerprint, actionFingerprint, StringComparison.Ordinal))
@@ -1829,6 +1850,10 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             recipeRecorded = !string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase)
                              && !string.Equals(decision.Status, "abort", StringComparison.OrdinalIgnoreCase)
                              && !string.IsNullOrWhiteSpace(decision.ActionKind);
+            if (recipeRecorded)
+            {
+                sceneHistoryIndex.NoteRecipe(request, decision);
+            }
         }
 
         var settleDelayMs = GetActionSettleDelayMs(completedPhase, decision, ActionSettleMinimumMs, CombatActionSettleMinimumMs);
@@ -1888,6 +1913,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
                 recipeRecorded,
                 sameActionStallCount,
                 extraProgressSignals.ToArray()));
+        LogHarness($"step={stepIndex} timing decision->after={Math.Max(0, stepStopwatch.ElapsedMilliseconds - decisionReadyElapsedMs)}ms total={stepStopwatch.ElapsedMilliseconds}ms");
 
         phase = phase switch
         {
@@ -2552,6 +2578,33 @@ static void WriteSerializedCandidateDumpArtifact(string path, string serializedA
     using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
     stream.Write(bytes, 0, bytes.Length);
     stream.Flush(true);
+}
+
+static bool ShouldPersistCandidateDumpArtifact(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
+{
+    if (string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(decision.Status, "abort", StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
+    if (request.FirstSeenScene
+        || !string.IsNullOrWhiteSpace(decision.DecisionRisk)
+        || string.Equals(request.ReasoningMode, "semantic", StringComparison.OrdinalIgnoreCase))
+    {
+        return true;
+    }
+
+    return string.Equals(decision.TargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(decision.TargetLabel, "map back", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(decision.TargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(decision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase);
+}
+
+static bool ShouldRecordUnknownScene(GuiSmokeStepRequest request)
+{
+    return string.Equals(request.Observer.CurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(request.Observer.VisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase);
 }
 
 static string BuildSuppressedCandidateSummary(GuiSmokeDecisionDebugSummary debugSummary)
@@ -5463,7 +5516,9 @@ static void RunSelfTest()
             null,
             null);
         var rewardSceneSignature = ComputeSceneSignature(rewardRankingScreenshotPath, rewardObserverState, GuiSmokePhase.HandleRewards);
-        Assert(rewardSceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase), "Reward scenes with an explicit reward panel should record background map arrows as contamination, not as primary map authority.");
+        Assert(rewardSceneSignature.Contains("reward:fast-path", StringComparison.OrdinalIgnoreCase), "Reward scenes with explicit reward ownership should use the reward fast path.");
+        Assert(!rewardSceneSignature.Contains("shot:", StringComparison.OrdinalIgnoreCase), "Reward fast path scene signatures should not pay screenshot fingerprint overhead.");
+        Assert(!rewardSceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase), "Reward fast path scene signatures should not compute screenshot map-arrow contamination while explicit reward authority is present.");
         Assert(!rewardSceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase), "Reward scenes should not advertise visible map advance while explicit reward affordances are still present.");
         Assert(!GetAllowedActions(GuiSmokePhase.HandleRewards, rewardObserverState).Contains("click visible map advance", StringComparer.OrdinalIgnoreCase), "Reward allowlist should not open visible map advance while explicit reward affordances are present.");
         var rewardDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
@@ -5502,7 +5557,7 @@ static void RunSelfTest()
                 DateTimeOffset.UtcNow,
                 rewardRankingScreenshotPath,
                 new WindowBounds(0, 0, 1280, 720),
-                rewardSceneSignature,
+                rewardSceneSignature + "|layer:map-background",
                 "0001",
                 1,
                 3,
@@ -6108,6 +6163,16 @@ static void RunSelfTest()
                && !rewardPickActions.Contains("deck remove confirm", StringComparer.OrdinalIgnoreCase)
                && !rewardPickActions.Contains("upgrade confirm", StringComparer.OrdinalIgnoreCase),
             "Reward-pick subtype should stay outside count/confirm card-selection flows.");
+        var rewardFastPathContext = CreateStepAnalysisContext(
+            GuiSmokePhase.HandleRewards,
+            rewardPickObserver,
+            rewardRankingScreenshotPath,
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            Array.Empty<CombatCardKnowledgeHint>());
+        Assert(rewardFastPathContext.UseRewardFastPath, "Explicit reward foreground/card-selection authority should enable the reward fast path.");
+        var rewardFastPathSignature = ComputeSceneSignatureCore(rewardRankingScreenshotPath, rewardPickObserver, GuiSmokePhase.HandleRewards, rewardFastPathContext);
+        Assert(rewardFastPathSignature.Contains("reward:fast-path", StringComparison.OrdinalIgnoreCase), "Reward fast path scene signatures should mark the fast-path contract explicitly.");
+        Assert(!rewardFastPathSignature.Contains("shot:", StringComparison.OrdinalIgnoreCase), "Reward fast path scene signatures should not pay screenshot fingerprint overhead.");
 
         var deckRemoveObserver = new ObserverState(
             rewardPickObserver.Summary with
@@ -10412,6 +10477,25 @@ static GuiSmokeStepAnalysisContext CreateStepAnalysisContext(
         return true;
     }
 
+    bool ComputeUseRewardFastPath()
+    {
+        if (phase != GuiSmokePhase.HandleRewards)
+        {
+            return false;
+        }
+
+        if (CardSelectionObserverSignals.TryGetState(observer.Summary) is not null)
+        {
+            return true;
+        }
+
+        var rewardState = RewardObserverSignals.TryGetState(observer.Summary);
+        return rewardState is { ForegroundOwned: true }
+               || rewardState is { TeardownInProgress: true }
+               || rewardState is { MapIsCurrentActiveScreen: true }
+               || HasExplicitRewardProgressionAffordance(observer.Summary);
+    }
+
     return new GuiSmokeStepAnalysisContext(
         phase,
         observer,
@@ -10419,6 +10503,7 @@ static GuiSmokeStepAnalysisContext CreateStepAnalysisContext(
         history,
         combatCardKnowledge,
         ComputeUseCombatFastPath,
+        ComputeUseRewardFastPath,
         () => BuildRewardMapLayerStateForObserver(observer.Summary, null),
         () =>
         {
@@ -10460,18 +10545,20 @@ static GuiSmokeStepRequest CreateStepRequest(
     string sessionRoot,
     string attemptId,
     int attemptOrdinal,
-    GuiSmokeStepAnalysisContext? analysisContext = null)
+    GuiSmokeStepAnalysisContext? analysisContext = null,
+    GuiSmokeSceneRequestContext? sceneContext = null)
 {
     var serializedHistory = analysisContext?.History ?? BuildSerializedStepHistory(phase, history);
     var combatCardKnowledge = analysisContext?.CombatCardKnowledge ?? LoadCombatCardKnowledge(workspaceRoot, observer);
-    var sceneSignature = ComputeSceneSignatureCore(screenshotPath, observer, phase, analysisContext);
-    var useCombatFastPath = analysisContext?.UseCombatFastPath == true;
-    var knownRecipes = useCombatFastPath
-        ? Array.Empty<KnownRecipeHint>()
-        : LoadKnownRecipes(sessionRoot, sceneSignature, phase.ToString());
-    var firstSeenScene = !HasSceneSignatureHistory(sessionRoot, sceneSignature);
-    var reasoningMode = DetermineReasoningMode(phase, observer, firstSeenScene);
-    var eventKnowledgeCandidates = useCombatFastPath
+    var sceneSignature = sceneContext?.SceneSignature ?? ComputeSceneSignatureCore(screenshotPath, observer, phase, analysisContext);
+    var useAuthorityFastPath = analysisContext?.UseAuthorityFastPath == true;
+    var firstSeenScene = sceneContext?.FirstSeenScene ?? !HasSceneSignatureHistory(sessionRoot, sceneSignature);
+    var reasoningMode = sceneContext?.ReasoningMode ?? DetermineReasoningMode(phase, observer, firstSeenScene);
+    var knownRecipes = sceneContext?.KnownRecipes
+        ?? (useAuthorityFastPath
+            ? Array.Empty<KnownRecipeHint>()
+            : LoadKnownRecipes(sessionRoot, sceneSignature, phase.ToString()));
+    var eventKnowledgeCandidates = useAuthorityFastPath
         ? Array.Empty<EventKnowledgeCandidate>()
         : LoadEventKnowledgeCandidates(workspaceRoot, observer, reasoningMode);
     return new GuiSmokeStepRequest(
@@ -10539,10 +10626,12 @@ static string ComputeSceneSignatureCore(string screenshotPath, ObserverState obs
         {
             combatTags.Add("combat-play-open");
         }
-
-        var combatScreenshotFingerprint = ComputeFileFingerprint(screenshotPath);
-        combatTags.Add($"shot:{combatScreenshotFingerprint[..Math.Min(12, combatScreenshotFingerprint.Length)]}");
         return string.Join("|", combatTags);
+    }
+
+    if (phase == GuiSmokePhase.HandleRewards && context.UseRewardFastPath)
+    {
+        return ComputeRewardFastPathSceneSignature(observer, context);
     }
 
     var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
@@ -10717,6 +10806,72 @@ static string ComputeSceneSignatureCore(string screenshotPath, ObserverState obs
     var screenshotFingerprint = ComputeFileFingerprint(screenshotPath);
     tags.Add($"shot:{screenshotFingerprint[..Math.Min(12, screenshotFingerprint.Length)]}");
     return string.Join("|", tags);
+}
+
+static string ComputeRewardFastPathSceneSignature(ObserverState observer, GuiSmokeStepAnalysisContext context)
+{
+    var rewardState = RewardObserverSignals.TryGetState(observer.Summary);
+    var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
+    var rewardTags = new List<string>(capacity: 12)
+    {
+        "phase:handlerewards",
+        $"screen:{(observer.CurrentScreen ?? "unknown").Trim().ToLowerInvariant()}",
+        $"visible:{(observer.VisibleScreen ?? "unknown").Trim().ToLowerInvariant()}",
+        $"encounter:{(observer.EncounterKind ?? "none").Trim().ToLowerInvariant()}",
+        $"ready:{(observer.SceneReady?.ToString() ?? "unknown").ToLowerInvariant()}",
+        $"stability:{(observer.SceneStability ?? "unknown").Trim().ToLowerInvariant()}",
+        "reward:fast-path",
+    };
+
+    if (cardSelectionState is not null)
+    {
+        rewardTags.Add($"card-selection:{cardSelectionState.ScreenType}");
+        rewardTags.Add($"card-selection-selected:{cardSelectionState.SelectedCount.ToString(CultureInfo.InvariantCulture)}");
+        if (cardSelectionState.PreviewVisible)
+        {
+            rewardTags.Add($"card-selection-preview:{cardSelectionState.PreviewMode ?? "visible"}");
+        }
+    }
+
+    if (rewardState is not null)
+    {
+        rewardTags.Add(rewardState.ForegroundOwned ? "reward-owner:foreground" : rewardState.TeardownInProgress ? "reward-owner:teardown" : "reward-owner:visible");
+        if (rewardState.RewardIsCurrentActiveScreen)
+        {
+            rewardTags.Add("reward-current-active");
+        }
+
+        if (rewardState.MapIsCurrentActiveScreen)
+        {
+            rewardTags.Add("map-current-active");
+        }
+
+        if (rewardState.TerminalRunBoundary)
+        {
+            rewardTags.Add("terminal-run-boundary");
+        }
+
+        if (rewardState.ProceedVisible)
+        {
+            rewardTags.Add(rewardState.ProceedEnabled ? "reward-proceed:enabled" : "reward-proceed:visible");
+        }
+    }
+
+    if (HasExplicitRewardProgressionAffordance(observer.Summary))
+    {
+        rewardTags.Add("reward-explicit-progression");
+    }
+
+    if (LooksLikeColorlessCardChoiceState(observer))
+    {
+        rewardTags.Add("substate:colorless-card-choice");
+    }
+    else if (LooksLikeRewardChoiceState(observer))
+    {
+        rewardTags.Add("substate:reward-choice");
+    }
+
+    return string.Join("|", rewardTags);
 }
 
 static IReadOnlyList<KnownRecipeHint> LoadKnownRecipes(string sessionRoot, string sceneSignature, string phase)
@@ -11072,6 +11227,11 @@ static string[] BuildAllowedActionsCore(
         return GetCombatAllowedActions(observer, combatCardKnowledge, screenshotPath, history, context);
     }
 
+    if (phase == GuiSmokePhase.HandleRewards && context.UseRewardFastPath)
+    {
+        return BuildRewardAllowedActionsFastPath(observer, context);
+    }
+
     var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
     var treasureState = TreasureRoomObserverSignals.TryGetState(observer.Summary);
     var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelectionForAllowlist(observer, history);
@@ -11173,6 +11333,62 @@ static string[] BuildShopAllowedActions(ObserverSummary observer, IReadOnlyList<
     }
 
     return ShopObserverSignals.BuildAllowedActions(observer, state, alreadyPurchased: ShopObserverSignals.HasRecentPurchase(history));
+}
+
+static string[] BuildRewardAllowedActionsFastPath(ObserverState observer, GuiSmokeStepAnalysisContext context)
+{
+    if (LooksLikeInspectOverlayState(observer))
+    {
+        return new[] { "press escape", "click inspect overlay close", "wait" };
+    }
+
+    var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
+    if (cardSelectionState is not null)
+    {
+        return BuildCardSelectionAllowedActions(cardSelectionState);
+    }
+
+    var rewardMapLayer = context.RewardMapLayerState;
+    var explicitRewardProgressionPresent = HasExplicitRewardProgressionAffordance(observer.Summary);
+    var rewardChoiceVisible = LooksLikeRewardChoiceState(observer);
+    var colorlessChoiceVisible = LooksLikeColorlessCardChoiceState(observer);
+    var rewardBackNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable;
+
+    if (rewardMapLayer.TerminalRunBoundary)
+    {
+        return new[] { "wait" };
+    }
+
+    if (rewardMapLayer.RewardForegroundOwned && colorlessChoiceVisible)
+    {
+        return new[] { "click colorless card choice", "click reward skip", "click proceed", "press escape", "wait" };
+    }
+
+    if (rewardMapLayer.RewardForegroundOwned && rewardChoiceVisible)
+    {
+        return new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", rewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" };
+    }
+
+    if (rewardMapLayer.RewardForegroundOwned && (ShouldPreferRewardProgressionOverMapFallback(observer) || explicitRewardProgressionPresent))
+    {
+        return rewardChoiceVisible
+            ? new[] { "click reward card choice", "click reward", "click reward skip", "click proceed", "wait" }
+            : new[] { "click reward", "click reward skip", "click proceed", "wait" };
+    }
+
+    if (rewardMapLayer.RewardTeardownInProgress || rewardMapLayer.MapCurrentActiveScreen)
+    {
+        return new[] { "wait" };
+    }
+
+    if (rewardMapLayer.MapContextVisible)
+    {
+        return rewardBackNavigationAvailable
+            ? new[] { "click first reachable node", "click visible map advance", "click reward back", "wait" }
+            : new[] { "click first reachable node", "click visible map advance", "wait" };
+    }
+
+    return new[] { "click proceed", "click reward", "wait" };
 }
 
 static bool LooksLikeInspectOverlayState(ObserverState observer)
@@ -12399,7 +12615,32 @@ static string BuildFailureModeHintCoreWithContext(
     {
         return !context.CanResolveCombatEnemyTarget
             ? BuildCombatFailureModeHint(observer, combatCardKnowledge)
-            : "AI first: read the full combat board from the screenshot. Cards, targets, energy, and end-turn are visual decisions. The harness only executes the click you choose.";
+            : "AI first: trust observer/runtime combat state. Use selected-card, targetability, hittability, energy, and player-action-window truth before any screenshot fallback; only inspect the screenshot when explicit combat authority is missing or contradictory.";
+    }
+
+    if (phase == GuiSmokePhase.HandleRewards && context.UseRewardFastPath)
+    {
+        var rewardMapLayer = context.RewardMapLayerState;
+        if (LooksLikeInspectOverlayState(observer))
+        {
+            return "Inspect overlay is not progression. Close it before resolving the explicit reward foreground.";
+        }
+
+        if (CardSelectionObserverSignals.TryGetState(observer.Summary) is { } cardSelectionState)
+        {
+            return cardSelectionState.ScreenType switch
+            {
+                "reward-pick" => "AI first: trust the explicit reward-pick card-selection subtype and choose a visible reward card before any screenshot fallback.",
+                _ => "AI first: trust the explicit reward card-selection subtype and use its select/confirm semantics before any screenshot fallback.",
+            };
+        }
+
+        if (rewardMapLayer.RewardTeardownInProgress || rewardMapLayer.MapCurrentActiveScreen)
+        {
+            return "Reward ownership has already dropped or map is current. Release to map/post-room reconciliation instead of forcing reward or map fallback from stale visuals.";
+        }
+
+        return "AI first: trust reward observer/runtime state. Use reward foreground ownership, explicit reward choices, and proceed availability before any screenshot fallback; only inspect the screenshot when explicit reward authority is missing or contradictory.";
     }
 
     return phase switch
@@ -14812,6 +15053,167 @@ enum GuiSmokePhase
     Completed,
 }
 
+sealed class GuiSmokeSessionSceneHistoryIndex
+{
+    private readonly HashSet<string> _seenSignatures = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<KnownRecipeHint>> _knownRecipesByKey = new(StringComparer.Ordinal);
+
+    public static GuiSmokeSessionSceneHistoryIndex Load(string sessionRoot)
+    {
+        var index = new GuiSmokeSessionSceneHistoryIndex();
+        index.LoadFromSessionArtifacts(sessionRoot);
+        return index;
+    }
+
+    public bool HasSeen(string sceneSignature)
+    {
+        return _seenSignatures.Contains(sceneSignature);
+    }
+
+    public IReadOnlyList<KnownRecipeHint> GetKnownRecipes(string sceneSignature, string phase)
+    {
+        return _knownRecipesByKey.TryGetValue(BuildRecipeKey(sceneSignature, phase), out var hints)
+            ? hints
+            : Array.Empty<KnownRecipeHint>();
+    }
+
+    public void NoteRecipe(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
+    {
+        if (string.IsNullOrWhiteSpace(request.SceneSignature)
+            || string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(decision.Status, "abort", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(decision.ActionKind))
+        {
+            return;
+        }
+
+        _seenSignatures.Add(request.SceneSignature);
+        var key = BuildRecipeKey(request.SceneSignature, request.Phase);
+        if (!_knownRecipesByKey.TryGetValue(key, out var hints))
+        {
+            hints = new List<KnownRecipeHint>(capacity: 3);
+            _knownRecipesByKey[key] = hints;
+        }
+
+        hints.Add(new KnownRecipeHint(
+            request.SceneSignature,
+            request.Phase,
+            decision.ActionKind!,
+            decision.TargetLabel,
+            decision.ExpectedScreen,
+            decision.Reason));
+
+        if (hints.Count > 3)
+        {
+            hints.RemoveRange(0, hints.Count - 3);
+        }
+    }
+
+    public void NoteUnknownScene(GuiSmokeStepRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.SceneSignature))
+        {
+            return;
+        }
+
+        _seenSignatures.Add(request.SceneSignature);
+    }
+
+    private void LoadFromSessionArtifacts(string sessionRoot)
+    {
+        LoadRecipes(Path.Combine(sessionRoot, "scene-recipes.ndjson"));
+        LoadUnknownScenes(Path.Combine(sessionRoot, "unknown-scenes.ndjson"));
+    }
+
+    private void LoadRecipes(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            SceneRecipeEntry? entry;
+            try
+            {
+                entry = JsonSerializer.Deserialize<SceneRecipeEntry>(line, GuiSmokeShared.JsonOptions);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (entry is null)
+            {
+                continue;
+            }
+
+            _seenSignatures.Add(entry.SceneSignature);
+            var key = BuildRecipeKey(entry.SceneSignature, entry.Phase);
+            if (!_knownRecipesByKey.TryGetValue(key, out var hints))
+            {
+                hints = new List<KnownRecipeHint>(capacity: 3);
+                _knownRecipesByKey[key] = hints;
+            }
+
+            hints.Add(new KnownRecipeHint(
+                entry.SceneSignature,
+                entry.Phase,
+                entry.ActionKind,
+                entry.TargetLabel,
+                entry.ExpectedScreen,
+                entry.Reason));
+
+            if (hints.Count > 3)
+            {
+                hints.RemoveRange(0, hints.Count - 3);
+            }
+        }
+    }
+
+    private void LoadUnknownScenes(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            UnknownSceneEntry? entry;
+            try
+            {
+                entry = JsonSerializer.Deserialize<UnknownSceneEntry>(line, GuiSmokeShared.JsonOptions);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (entry is not null && !string.IsNullOrWhiteSpace(entry.SceneSignature))
+            {
+                _seenSignatures.Add(entry.SceneSignature);
+            }
+        }
+    }
+
+    private static string BuildRecipeKey(string sceneSignature, string phase)
+    {
+        return string.Concat(sceneSignature, "::", phase);
+    }
+}
+
 sealed record GuiSmokeRunManifest(
     string RunId,
     string ScenarioId,
@@ -14974,6 +15376,12 @@ sealed record GuiSmokeStepRequest(
     IReadOnlyList<GuiSmokeHistoryEntry> History,
     string FailureModeHint,
     string? DecisionRiskHint);
+
+sealed record GuiSmokeSceneRequestContext(
+    string SceneSignature,
+    bool FirstSeenScene,
+    string ReasoningMode,
+    IReadOnlyList<KnownRecipeHint> KnownRecipes);
 
 sealed record KnownRecipeHint(
     string SceneSignature,
@@ -15232,6 +15640,7 @@ sealed class GuiSmokeStepAnalysisContext
     private readonly IReadOnlyList<GuiSmokeHistoryEntry> _history;
     private readonly IReadOnlyList<CombatCardKnowledgeHint> _combatCardKnowledge;
     private readonly Func<bool> _useCombatFastPathFactory;
+    private readonly Func<bool> _useRewardFastPathFactory;
     private readonly Func<RewardMapLayerState> _rewardMapLayerStateFactory;
     private readonly Func<bool> _rewardBackNavigationAvailableFactory;
     private readonly Func<bool> _claimableRewardPresentFactory;
@@ -15246,6 +15655,7 @@ sealed class GuiSmokeStepAnalysisContext
     private readonly Func<bool> _canResolveCombatEnemyTargetFactory;
 
     private bool? _useCombatFastPath;
+    private bool? _useRewardFastPath;
     private RewardMapLayerState? _rewardMapLayerState;
     private bool? _rewardBackNavigationAvailable;
     private bool? _claimableRewardPresent;
@@ -15267,6 +15677,7 @@ sealed class GuiSmokeStepAnalysisContext
         IReadOnlyList<GuiSmokeHistoryEntry> history,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
         Func<bool> useCombatFastPathFactory,
+        Func<bool> useRewardFastPathFactory,
         Func<RewardMapLayerState> rewardMapLayerStateFactory,
         Func<bool> rewardBackNavigationAvailableFactory,
         Func<bool> claimableRewardPresentFactory,
@@ -15286,6 +15697,7 @@ sealed class GuiSmokeStepAnalysisContext
         _history = history;
         _combatCardKnowledge = combatCardKnowledge;
         _useCombatFastPathFactory = useCombatFastPathFactory;
+        _useRewardFastPathFactory = useRewardFastPathFactory;
         _rewardMapLayerStateFactory = rewardMapLayerStateFactory;
         _rewardBackNavigationAvailableFactory = rewardBackNavigationAvailableFactory;
         _claimableRewardPresentFactory = claimableRewardPresentFactory;
@@ -15311,6 +15723,10 @@ sealed class GuiSmokeStepAnalysisContext
     public IReadOnlyList<CombatCardKnowledgeHint> CombatCardKnowledge => _combatCardKnowledge;
 
     public bool UseCombatFastPath => _useCombatFastPath ??= _useCombatFastPathFactory();
+
+    public bool UseRewardFastPath => _useRewardFastPath ??= _useRewardFastPathFactory();
+
+    public bool UseAuthorityFastPath => UseCombatFastPath || UseRewardFastPath;
 
     public RewardMapLayerState RewardMapLayerState => _rewardMapLayerState ??= _rewardMapLayerStateFactory();
 
@@ -15588,6 +16004,7 @@ sealed class GuiSmokeStepAnalysisContext
             history,
             combatCardKnowledge,
             ComputeUseCombatFastPath,
+            () => false,
             () => EmptyRewardMapLayerState with { TerminalRunBoundary = RewardObserverSignals.IsTerminalRunBoundary(observer.Summary) },
             () => false,
             () => false,
@@ -19007,12 +19424,6 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return null;
         }
 
-        var screenshotClaimableDecision = TryCreateScreenshotClaimableRewardDecision(request);
-        if (screenshotClaimableDecision is not null)
-        {
-            return screenshotClaimableDecision;
-        }
-
         var rewardNode = request.Observer.ActionNodes
             .Where(node => IsCurrentRewardProgressionNode(node, request.WindowBounds))
             .Where(node => !IsProceedNode(node))
@@ -19073,6 +19484,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (proceedNode is not null)
         {
             return CreateClickDecisionFromNode(request, proceedNode, "proceed after resolving rewards");
+        }
+
+        var screenshotClaimableDecision = TryCreateScreenshotClaimableRewardDecision(request);
+        if (screenshotClaimableDecision is not null)
+        {
+            return screenshotClaimableDecision;
         }
 
         return null;
@@ -19164,15 +19581,13 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return null;
         }
 
-        var backNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable
-                                      || LooksLikeRewardBackNavigationAffordanceInScreenshot(request.Observer, request.ScreenshotPath);
+        var backNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable;
         if (!backNavigationAvailable || !rewardMapLayer.MapContextVisible)
         {
             return null;
         }
 
-        if (!HasScreenshotClaimableRewardEvidenceInScreenshot(request.Observer, request.ScreenshotPath)
-            && !rewardMapLayer.StaleRewardChoicePresent)
+        if (!rewardMapLayer.StaleRewardChoicePresent)
         {
             return null;
         }
@@ -19181,23 +19596,6 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (backNode is not null)
         {
             return CreateClickDecisionFromNode(request, backNode, "reward back");
-        }
-
-        if (LooksLikeRewardBackNavigationAffordanceInScreenshot(request.Observer, request.ScreenshotPath))
-        {
-            return new GuiSmokeStepDecision(
-                "act",
-                "click",
-                null,
-                0.045,
-                0.905,
-                "reward back",
-                "Map context is visible, but the bottom-left back arrow indicates the reward panel can be reopened. Return to rewards before abandoning claimable loot.",
-                0.91,
-                "rewards",
-                1200,
-                true,
-                null);
         }
 
         return null;
@@ -25753,6 +26151,8 @@ sealed class ArtifactRecorder
     private readonly string _progressPath;
     private readonly string _manifestPath;
     private readonly string _humanLogPath;
+    private string? _lastObserverInventoryJson;
+    private string? _lastObserverEventsJson;
 
     public ArtifactRecorder(string runRoot)
     {
@@ -25801,12 +26201,22 @@ sealed class ArtifactRecorder
 
         if (observer.InventoryDocument is not null)
         {
-            File.WriteAllText(stepPrefix + ".observer.inventory.json", observer.InventoryDocument.RootElement.GetRawText());
+            var inventoryJson = observer.InventoryDocument.RootElement.GetRawText();
+            if (!string.Equals(_lastObserverInventoryJson, inventoryJson, StringComparison.Ordinal))
+            {
+                File.WriteAllText(stepPrefix + ".observer.inventory.json", inventoryJson);
+                _lastObserverInventoryJson = inventoryJson;
+            }
         }
 
         if (observer.EventLines is { Length: > 0 })
         {
-            File.WriteAllText(stepPrefix + ".observer.events.tail.json", JsonSerializer.Serialize(observer.EventLines, GuiSmokeShared.JsonOptions));
+            var eventsJson = JsonSerializer.Serialize(observer.EventLines, GuiSmokeShared.JsonOptions);
+            if (!string.Equals(_lastObserverEventsJson, eventsJson, StringComparison.Ordinal))
+            {
+                File.WriteAllText(stepPrefix + ".observer.events.tail.json", eventsJson);
+                _lastObserverEventsJson = eventsJson;
+            }
         }
     }
 
