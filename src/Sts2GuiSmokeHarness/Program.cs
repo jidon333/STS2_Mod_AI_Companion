@@ -4110,6 +4110,56 @@ static void RunSelfTest()
     Assert(
         GetPostChooseFirstNodePhase(reachableNodeDecision) == GuiSmokePhase.WaitPostMapNodeRoom,
         "Reachable map-node clicks should enter neutral post-node room reconciliation instead of combat-only waiting.");
+    var exportedReachableNodeDecision = new GuiSmokeStepDecision("act", "click", null, null, null, "exported reachable map node", "Map node selected from explicit export.", 0.95, null, null, null, null);
+    Assert(
+        GetPostChooseFirstNodePhase(exportedReachableNodeDecision) == GuiSmokePhase.WaitPostMapNodeRoom,
+        "Exported reachable map-node clicks should enter neutral post-node room reconciliation instead of falling back to WaitMap.");
+
+    var combatAfterMapTransitionObserver = new ObserverState(
+        new ObserverSummary(
+            "combat",
+            "combat",
+            true,
+            DateTimeOffset.UtcNow,
+            null,
+            true,
+            "mixed",
+            "stable",
+            null,
+            "Boss",
+            "combat",
+            38,
+            80,
+            3,
+            new[] { "1턴 종료" },
+            new[]
+            {
+                "{\"kind\":\"map-point-selected\",\"screen\":\"map\"}",
+                "{\"kind\":\"screen-changed\",\"screen\":\"map\"}",
+                "{\"kind\":\"combat-started\",\"screen\":\"combat\"}",
+            },
+            Array.Empty<ObserverActionNode>(),
+            Array.Empty<ObserverChoice>(),
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NCombatRoom",
+                ["combatPrimaryValue"] = "true",
+            },
+        },
+        null,
+        null,
+        null);
+    Assert(
+        GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(combatAfterMapTransitionObserver.Summary),
+        "Combat observer with NCombatRoom authority should still be recognized as combat after a map-node click.");
+    Assert(
+        !GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(combatAfterMapTransitionObserver),
+        "Stale map transition tails must not outvote stronger combat truth once the destination room is combat.");
+    Assert(
+        !evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMap, combatAfterMapTransitionObserver),
+        "WaitMap should not accept a combat observer just because stale map-transition tails are still present.");
 
     var waitPostMapNodeBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-wait-post-map-node-branch-{Guid.NewGuid():N}");
     Directory.CreateDirectory(waitPostMapNodeBranchRoot);
@@ -4180,6 +4230,17 @@ static void RunSelfTest()
                 out var waitPostMapNodeCombatBranchPhase)
             && waitPostMapNodeCombatBranchPhase == GuiSmokePhase.HandleCombat,
             "WaitPostMapNodeRoom should reopen combat handling when the destination room is combat.");
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.ChooseFirstNode,
+                combatAfterMapTransitionObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitPostMapNodeLogger,
+                11,
+                true,
+                out var chooseFirstNodeCombatBranchPhase)
+            && chooseFirstNodeCombatBranchPhase == GuiSmokePhase.HandleCombat,
+            "ChooseFirstNode should recover directly to combat handling if phase bookkeeping drifts after a real map-node click.");
 
         Assert(
             TryAdvanceAlternateBranch(
@@ -12973,7 +13034,8 @@ static GuiSmokePhase GetPostHandleEventPhase(GuiSmokeStepDecision decision)
 static bool IsReachableNodeTarget(string? targetLabel)
 {
     return string.Equals(targetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(targetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase);
+           || string.Equals(targetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase);
 }
 
 static bool IsRoomProgressTarget(string? targetLabel)
@@ -13713,6 +13775,14 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase is GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitPostMapNodeRoom or GuiSmokePhase.WaitCombat)
     {
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleCombat;
+            return true;
+        }
+
         if (phase == GuiSmokePhase.WaitPostMapNodeRoom
             && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(observer, out var postMapNodePhase))
         {
@@ -18918,6 +18988,11 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool LooksLikeMapState(ObserverSummary observer, string? declaringType, string? instanceType)
     {
+        if (LooksLikeCombatState(observer))
+        {
+            return false;
+        }
+
         var mapCurrentActiveScreen = observer.Meta.TryGetValue("mapCurrentActiveScreen", out var mapCurrentActiveScreenValue)
                                      ? mapCurrentActiveScreenValue
                                      : null;
@@ -18931,9 +19006,14 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool LooksLikeCombatState(ObserverSummary observer)
     {
-        return (string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase))
-               && observer.InCombat == true;
+        var combatScreen = string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase);
+        var combatRoomAuthority = IsCombatRoomType(TryGetMetaValue(observer, "activeScreenType"))
+                                  || IsCombatRoomType(TryGetMetaValue(observer, "currentRunRoomSceneType"))
+                                  || IsCombatRoomType(TryGetMetaValue(observer, "currentRunRoomType"));
+        var combatPrimaryActive = string.Equals(TryGetMetaValue(observer, "combatPrimaryValue"), "true", StringComparison.OrdinalIgnoreCase);
+        return (combatScreen && observer.InCombat == true)
+               || (combatRoomAuthority && (observer.InCombat == true || combatPrimaryActive));
     }
 
     public static bool LooksLikeEventState(ObserverSummary observer, string? declaringType)
@@ -18973,6 +19053,20 @@ static class GuiSmokeObserverPhaseHeuristics
     {
         return !string.IsNullOrWhiteSpace(typeName)
                && typeName.Contains("Map.NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCombatRoomType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && (typeName.Contains("NCombatRoom", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("CombatRoom", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? TryGetMetaValue(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value)
+            ? value
+            : null;
     }
 
     private static bool IsMapTransitionEventTail(string? eventTail)
@@ -28106,6 +28200,11 @@ static class MapForegroundReconciliation
     public static bool HasMapForegroundOwnership(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
         if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary))
+        {
+            return false;
+        }
+
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
         {
             return false;
         }
