@@ -685,9 +685,9 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     int? maxSteps)
 {
     const int PassiveWaitMs = 1000;
-    const int ActionSettleMinimumMs = 650;
-    const int CombatActionSettleMinimumMs = 300;
-    const int CombatNoOpProbeGraceMs = 350;
+    const int ActionSettleMinimumMs = 350;
+    const int CombatActionSettleMinimumMs = 120;
+    const int CombatNoOpProbeGraceMs = 100;
     const int TransitionSettleMs = 2000;
     const int ManualCleanBootObserverBootstrapPollMs = 500;
     const int ManualCleanBootObserverBootstrapPollCount = 12;
@@ -1832,7 +1832,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         }
 
         var settleDelayMs = GetActionSettleDelayMs(completedPhase, decision, ActionSettleMinimumMs, CombatActionSettleMinimumMs);
-        var progressProbeDelayMs = Math.Min(settleDelayMs, completedPhase == GuiSmokePhase.HandleCombat ? 250 : 500);
+        var progressProbeDelayMs = Math.Min(settleDelayMs, completedPhase == GuiSmokePhase.HandleCombat ? 100 : 300);
         if (progressProbeDelayMs > 0)
         {
             await Task.Delay(progressProbeDelayMs).ConfigureAwait(false);
@@ -19430,7 +19430,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var runtimeCombatState = context.RuntimeCombatState;
         if (context.CombatPlayerActionWindowClosed)
         {
-            return CreateWaitDecision("observer reports enemy turn or a closed combat play phase", request.Observer.CurrentScreen);
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "observer reports enemy turn or a closed combat play phase", request.Observer.CurrentScreen);
         }
 
         var hasSelectedNonEnemyConfirmEvidence = context.HasSelectedNonEnemyConfirmEvidence;
@@ -19506,25 +19506,18 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
         GuiSmokeStepDecision CloseWithLegalCombatFallback()
         {
-            var fallbackDecision = new GuiSmokeStepDecision(
-                "act",
-                "press-key",
+            var fallbackDecision = CreateCombatPressKeyDecision(
                 "E",
-                null,
-                null,
                 "auto-end turn",
                 "No clear playable card remains in the screenshot. End the turn.",
                 0.88,
-                "combat",
-                450,
-                true,
-                null);
+                200);
             if (TryUseCombatDecision(fallbackDecision, out var allowedFallback))
             {
                 return allowedFallback;
             }
 
-            return CreateWaitDecision("waiting for legal combat action", request.Observer.CurrentScreen);
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for legal combat action", request.Observer.CurrentScreen);
         }
 
         if (analysis.HasTargetArrow)
@@ -19538,19 +19531,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
         if (request.Observer.PlayerEnergy is <= 0)
         {
-            if (TryUseCombatDecision(new GuiSmokeStepDecision(
-                "act",
-                "press-key",
+            if (TryUseCombatDecision(CreateCombatPressKeyDecision(
                 "E",
-                null,
-                null,
                 "auto-end turn",
                 "Observer reports no remaining energy. End the turn instead of retrying non-playable cards.",
                 0.92,
-                "combat",
-                450,
-                true,
-                null), out var allowedNoEnergyDecision))
+                200), out var allowedNoEnergyDecision))
             {
                 return allowedNoEnergyDecision;
             }
@@ -19568,7 +19554,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "A self or non-enemy targeted card is selected. Move to the explicit confirm point, hold left mouse briefly, then release to finish the play.",
                 0.82,
                 "combat",
-                300,
+                150,
                 true,
                 null), out var allowedNonEnemyConfirmDecision))
             {
@@ -19632,7 +19618,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "A non-enemy card overlay is still selected. Use the explicit confirm point with a brief held mouse press instead of reissuing the slot hotkey.",
                 0.78,
                 "combat",
-                300,
+                150,
                 true,
                 null), out var allowedSelectedDefendDecision))
             {
@@ -19700,7 +19686,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                     : "The screenshot still shows a playable attack card in hand. Use the corresponding hotkey first, then target the enemy.",
                 hardBlockedAttackSlots.Count == 0 && pendingSelectionNoOpCount == 0 ? 0.80 : 0.88,
                 "combat",
-                250,
+                120,
                 true,
                 null), out var allowedAttackSlotDecision))
             {
@@ -19759,7 +19745,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 "Only non-enemy cards remain in hand. Use the corresponding hotkey, then resolve the self or non-enemy confirmation.",
                 0.74,
                 "combat",
-                250,
+                120,
                 true,
                 null), out var allowedNonEnemySlotDecision))
             {
@@ -19797,25 +19783,18 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             var endTurnNode = FindEndTurnActionNode(request);
             if (endTurnNode is not null
                 && TryUseCombatDecision(
-                    CreateClickDecisionFromNode(request, endTurnNode, "end turn after repeated non-enemy loop"),
+                    CreateCombatEndTurnDecisionFromNode(request, endTurnNode, "end turn after repeated non-enemy loop"),
                     out var allowedRepeatedNonEnemyDecision))
             {
                 return allowedRepeatedNonEnemyDecision;
             }
 
-            if (TryUseCombatDecision(new GuiSmokeStepDecision(
-                "act",
-                "press-key",
+            if (TryUseCombatDecision(CreateCombatPressKeyDecision(
                 "E",
-                null,
-                null,
                 "end turn after repeated non-enemy loop",
                 "Recent combat history shows a repeated non-enemy select/confirm loop. End the turn instead of repeating the same sequence.",
                 0.86,
-                "combat",
-                400,
-                true,
-                null), out var allowedRepeatedNonEnemyFallback))
+                200), out var allowedRepeatedNonEnemyFallback))
             {
                 return allowedRepeatedNonEnemyFallback;
             }
@@ -19826,25 +19805,18 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             var endTurnNode = FindEndTurnActionNode(request);
             if (endTurnNode is not null
                 && TryUseCombatDecision(
-                    CreateClickDecisionFromNode(request, endTurnNode, "end turn after repeated attack-select loop"),
+                    CreateCombatEndTurnDecisionFromNode(request, endTurnNode, "end turn after repeated attack-select loop"),
                     out var allowedRepeatedAttackDecision))
             {
                 return allowedRepeatedAttackDecision;
             }
 
-            if (TryUseCombatDecision(new GuiSmokeStepDecision(
-                "act",
-                "press-key",
+            if (TryUseCombatDecision(CreateCombatPressKeyDecision(
                 "E",
-                null,
-                null,
                 "end turn after repeated attack-select loop",
                 "Recent combat history shows repeated attack hotkeys without a matching observer attack card. End the turn instead of looping on screenshot drift.",
                 0.88,
-                "combat",
-                400,
-                true,
-                null), out var allowedRepeatedAttackFallback))
+                200), out var allowedRepeatedAttackFallback))
             {
                 return allowedRepeatedAttackFallback;
             }
@@ -19855,25 +19827,18 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             var endTurnNode = FindEndTurnActionNode(request);
             if (endTurnNode is not null
                 && TryUseCombatDecision(
-                    CreateClickDecisionFromNode(request, endTurnNode, "end turn after combat no-op loop"),
+                    CreateCombatEndTurnDecisionFromNode(request, endTurnNode, "end turn after combat no-op loop"),
                     out var allowedCombatNoOpDecision))
             {
                 return allowedCombatNoOpDecision;
             }
 
-            if (TryUseCombatDecision(new GuiSmokeStepDecision(
-                "act",
-                "press-key",
+            if (TryUseCombatDecision(CreateCombatPressKeyDecision(
                 "E",
-                null,
-                null,
                 "end turn after combat no-op loop",
                 "Combat has repeated the same card-select and enemy-target sequence without progress. End the turn instead of looping on an unproductive lane.",
                 0.90,
-                "combat",
-                450,
-                true,
-                null), out var allowedCombatNoOpFallback))
+                200), out var allowedCombatNoOpFallback))
             {
                 return allowedCombatNoOpFallback;
             }
@@ -20936,7 +20901,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                     $"Recent combat history shows no board delta after targeting from slot {pendingSelection.SlotIndex}. Switch to another playable attack lane before trying to target the enemy again.",
                     0.91,
                     "combat",
-                    250,
+                    120,
                     true,
                     null);
                 return true;
@@ -20954,7 +20919,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (CombatTargetabilitySupport.HasExplicitCombatEnemyTargetNodeSource(request.Observer)
             || CombatTargetabilitySupport.HasExplicitTargetableEnemyAuthority(request.Observer))
         {
-            decision = CreateWaitDecision(
+            decision = CreatePhaseWaitDecision(
+                GuiSmokePhase.HandleCombat,
                 CombatTargetabilitySupport.DescribeMissingCombatEnemyTargetDecisionSource(request.Observer, request.WindowBounds),
                 "combat");
             return true;
@@ -20975,7 +20941,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             reason,
             pendingSelectionNoOpCount == 0 ? 0.90 : 0.86,
             "combat",
-            350,
+            300,
             true,
             null);
         return true;
@@ -22990,7 +22956,42 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             $"Auto provider selected enemy target '{node.Label}' using {boundsSource} bounds at {anchor.Suffix}.",
             retryCount == 0 ? 0.94 : 0.90,
             "combat",
-            800,
+            300,
+            true,
+            null);
+    }
+
+    private static GuiSmokeStepDecision CreateCombatEndTurnDecisionFromNode(
+        GuiSmokeStepRequest request,
+        ObserverActionNode node,
+        string targetLabel)
+    {
+        var decision = CreateClickDecisionFromNode(request, node, targetLabel);
+        return decision with
+        {
+            ExpectedScreen = "combat",
+            WaitMs = 200,
+        };
+    }
+
+    private static GuiSmokeStepDecision CreateCombatPressKeyDecision(
+        string keyText,
+        string targetLabel,
+        string reason,
+        double confidence,
+        int waitMs)
+    {
+        return new GuiSmokeStepDecision(
+            "act",
+            "press-key",
+            keyText,
+            null,
+            null,
+            targetLabel,
+            reason,
+            confidence,
+            "combat",
+            waitMs,
             true,
             null);
     }
@@ -23116,6 +23117,24 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             0.60,
             expectedScreen,
             2000,
+            true,
+            null);
+    }
+
+    private static GuiSmokeStepDecision CreatePhaseWaitDecision(GuiSmokePhase phase, string reason, string? expectedScreen)
+    {
+        var waitMs = phase == GuiSmokePhase.HandleCombat ? 500 : 2000;
+        return new GuiSmokeStepDecision(
+            "wait",
+            null,
+            null,
+            null,
+            null,
+            null,
+            reason,
+            0.60,
+            expectedScreen,
+            waitMs,
             true,
             null);
     }
@@ -27217,11 +27236,18 @@ sealed class MouseInputDriver
 {
     private static void PrepareWindow(WindowCaptureTarget target, int delayMs)
     {
-        if (target.Handle != IntPtr.Zero)
+        if (target.Handle == IntPtr.Zero)
         {
-            NativeMethods.SetForegroundWindow(target.Handle);
-            Thread.Sleep(delayMs);
+            return;
         }
+
+        if (NativeMethods.GetForegroundWindow() == target.Handle)
+        {
+            return;
+        }
+
+        NativeMethods.SetForegroundWindow(target.Handle);
+        Thread.Sleep(Math.Min(delayMs, 80));
     }
 
     public void MoveCursor(WindowCaptureTarget target, double normalizedX, double normalizedY)
@@ -27473,7 +27499,7 @@ static class WindowLocator
         NativeMethods.ShowWindow(target.Handle, NativeMethods.SW_RESTORE);
         NativeMethods.BringWindowToTop(target.Handle);
         NativeMethods.SetForegroundWindow(target.Handle);
-        Thread.Sleep(150);
+        Thread.Sleep(80);
         return Refresh(target);
     }
 
