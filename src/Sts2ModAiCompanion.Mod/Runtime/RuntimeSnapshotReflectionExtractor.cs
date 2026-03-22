@@ -267,6 +267,15 @@ internal static class RuntimeSnapshotReflectionExtractor
         bool TimelineUnlockDetected,
         bool MainMenuReturnDetected);
 
+    private sealed record RootSceneTransitionObservation(
+        bool TransitionInProgress,
+        string? RootSceneCurrentType,
+        bool RootSceneIsMainMenu,
+        bool RootSceneIsRun,
+        bool CurrentRunNodePresent,
+        string? CurrentRunRoomType,
+        string? CurrentRunRoomSceneType);
+
     public static LiveExportObservation Capture(
         RuntimeHookBinding binding,
         AiCompanionRuntimeConfig config,
@@ -415,6 +424,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             screen = "combat";
         }
+
+        AppendRootSceneTransitionMetadata(roots, meta, payload);
+
         var cardSelectionObservation = ObserveCardSelection(roots, screen);
         AppendCardSelectionRuntimeMetadata(cardSelectionObservation, meta, payload);
         if (cardSelectionObservation.ScreenVisible)
@@ -3345,6 +3357,103 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             return null;
         }
+    }
+
+    private static object? TryResolveGameInstance(IEnumerable<object> roots)
+    {
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (string.Equals(typeName, "MegaCrit.Sts2.Core.Nodes.NGame", StringComparison.Ordinal))
+            {
+                return root;
+            }
+        }
+
+        var gameType = FindLoadedType("MegaCrit.Sts2.Core.Nodes.NGame");
+        if (gameType is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return gameType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+                   ?? gameType.GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+                   ?? gameType.GetProperty("Singleton", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static RootSceneTransitionObservation ObserveRootSceneTransition(IEnumerable<object> roots)
+    {
+        var game = TryResolveGameInstance(roots);
+        var transition = game is null ? null : TryGetMemberValue(game, "Transition");
+        var rootSceneContainer = game is null ? null : TryGetMemberValue(game, "RootSceneContainer");
+        var currentRunNode = game is null
+            ? null
+            : TryGetMemberValue(game, "CurrentRunNode")
+              ?? TryGetMemberValue(game, "_currentRunNode");
+        var mainLoop = TryResolveMainLoop();
+        var rootScene = rootSceneContainer is null
+            ? null
+            : TryGetMemberValue(rootSceneContainer, "CurrentScene");
+        rootScene ??= currentRunNode;
+        if (rootScene is null && mainLoop is not null)
+        {
+            rootScene = TryGetMemberValue(mainLoop, "CurrentScene");
+        }
+
+        var currentRunRoom = currentRunNode is null
+            ? null
+            : TryGetMemberValue(currentRunNode, "CurrentRoom")
+              ?? TryGetMemberValue(currentRunNode, "_currentRoom")
+              ?? TryGetMemberValue(currentRunNode, "Room");
+        var currentRunRoomScene = currentRunRoom is null
+            ? null
+            : TryGetMemberValue(currentRunRoom, "CurrentScene")
+              ?? TryGetMemberValue(currentRunRoom, "RoomScene")
+              ?? TryGetMemberValue(currentRunRoom, "Screen");
+
+        var rootSceneCurrentType = rootScene?.GetType().FullName ?? rootScene?.GetType().Name;
+        var currentRunRoomType = currentRunRoom?.GetType().FullName ?? currentRunRoom?.GetType().Name;
+        var currentRunRoomSceneType = currentRunRoomScene?.GetType().FullName ?? currentRunRoomScene?.GetType().Name;
+
+        return new RootSceneTransitionObservation(
+            TryReadBool(transition, "InTransition") == true,
+            rootSceneCurrentType,
+            rootSceneCurrentType?.Contains("MainMenu", StringComparison.OrdinalIgnoreCase) == true,
+            rootSceneCurrentType?.Contains(".NRun", StringComparison.OrdinalIgnoreCase) == true
+            || rootSceneCurrentType?.EndsWith(".NRun", StringComparison.OrdinalIgnoreCase) == true,
+            currentRunNode is not null,
+            currentRunRoomType,
+            currentRunRoomSceneType);
+    }
+
+    private static void AppendRootSceneTransitionMetadata(
+        IReadOnlyList<object> roots,
+        Dictionary<string, string?> meta,
+        Dictionary<string, object?> payload)
+    {
+        var observation = ObserveRootSceneTransition(roots);
+        meta["transitionInProgress"] = observation.TransitionInProgress ? "true" : "false";
+        meta["rootSceneCurrentType"] = observation.RootSceneCurrentType;
+        meta["rootSceneIsMainMenu"] = observation.RootSceneIsMainMenu ? "true" : "false";
+        meta["rootSceneIsRun"] = observation.RootSceneIsRun ? "true" : "false";
+        meta["currentRunNodePresent"] = observation.CurrentRunNodePresent ? "true" : "false";
+        meta["currentRunRoomType"] = observation.CurrentRunRoomType;
+        meta["currentRunRoomSceneType"] = observation.CurrentRunRoomSceneType;
+
+        payload["transitionInProgress"] = observation.TransitionInProgress;
+        payload["rootSceneCurrentType"] = observation.RootSceneCurrentType;
+        payload["rootSceneIsMainMenu"] = observation.RootSceneIsMainMenu;
+        payload["rootSceneIsRun"] = observation.RootSceneIsRun;
+        payload["currentRunNodePresent"] = observation.CurrentRunNodePresent;
+        payload["currentRunRoomType"] = observation.CurrentRunRoomType;
+        payload["currentRunRoomSceneType"] = observation.CurrentRunRoomSceneType;
     }
 
     private static Type? FindLoadedType(string fullName)

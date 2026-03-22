@@ -951,8 +951,20 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         {
             ResetDecisionWaitTracking();
             consecutiveBlackFrames += 1;
-            LogHarness($"step={stepIndex} capture unusable; waiting for a valid process frame");
-            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "capture-unusable", null, null, null));
+            var captureFailureObserver = observerReader.Read();
+            var transitionBlackFrame = RootSceneTransitionObserverSignals.ShouldTreatCaptureAsTransitionWait(phase, captureFailureObserver.Summary);
+            var captureFailureSignal = transitionBlackFrame ? "transition-black-frame" : "capture-unusable";
+            LogHarness(transitionBlackFrame
+                ? $"step={stepIndex} capture unusable during explicit transition/loading boundary; waiting for scene readiness"
+                : $"step={stepIndex} capture unusable; waiting for a valid process frame");
+            logger.AppendTrace(new GuiSmokeTraceEntry(
+                DateTimeOffset.UtcNow,
+                stepIndex,
+                phase.ToString(),
+                captureFailureSignal,
+                captureFailureObserver.CurrentScreen,
+                captureFailureObserver.InCombat,
+                null));
             if (window.IsFallback && !HasLiveGameProcess())
             {
                 consecutiveFallbackCapturesWithoutProcess += 1;
@@ -977,7 +989,9 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             {
                 consecutiveFallbackCapturesWithoutProcess = 0;
             }
-            if (!window.IsFallback && consecutiveBlackFrames >= 3)
+            if (!transitionBlackFrame
+                && !window.IsFallback
+                && consecutiveBlackFrames >= 3)
             {
                 var focusWindow = WindowLocator.EnsureInteractive(window);
                 LogHarness($"step={stepIndex} black-frame streak={consecutiveBlackFrames}; sending center nudge");
@@ -1047,7 +1061,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
         if (isLongRun
             && history.Count > 0
-            && phase is not GuiSmokePhase.WaitMainMenu and not GuiSmokePhase.EnterRun and not GuiSmokePhase.WaitCharacterSelect
+            && phase is not GuiSmokePhase.WaitMainMenu and not GuiSmokePhase.EnterRun and not GuiSmokePhase.WaitRunLoad and not GuiSmokePhase.WaitCharacterSelect
             && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase))
         {
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "terminal-detected", observer.CurrentScreen, observer.InCombat, "returned-main-menu"));
@@ -1081,7 +1095,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
         if (isLongRun
             && history.Count > 0
-            && phase is not GuiSmokePhase.WaitMainMenu and not GuiSmokePhase.EnterRun and not GuiSmokePhase.WaitCharacterSelect
+            && phase is not GuiSmokePhase.WaitMainMenu and not GuiSmokePhase.EnterRun and not GuiSmokePhase.WaitRunLoad and not GuiSmokePhase.WaitCharacterSelect
             && observer.Summary.PlayerCurrentHp is <= 0)
         {
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "terminal-detected", observer.CurrentScreen, observer.InCombat, "player-defeated"));
@@ -1162,6 +1176,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             phase = phase switch
             {
                 GuiSmokePhase.WaitMainMenu => GuiSmokePhase.EnterRun,
+                GuiSmokePhase.WaitRunLoad => GuiSmokePhase.WaitRunLoad,
                 GuiSmokePhase.WaitCharacterSelect => GuiSmokePhase.ChooseCharacter,
                 GuiSmokePhase.WaitMap => GuiSmokePhase.ChooseFirstNode,
                 GuiSmokePhase.WaitPostMapNodeRoom => GuiSmokePhase.ChooseFirstNode,
@@ -1917,9 +1932,9 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
         phase = phase switch
         {
-            GuiSmokePhase.EnterRun => GuiSmokePhase.WaitCharacterSelect,
+            GuiSmokePhase.EnterRun => GetPostEnterRunPhase(decision),
             GuiSmokePhase.ChooseCharacter => GuiSmokePhase.Embark,
-            GuiSmokePhase.Embark => GuiSmokePhase.WaitMap,
+            GuiSmokePhase.Embark => GuiSmokePhase.WaitRunLoad,
             GuiSmokePhase.HandleRewards => GetPostRewardPhase(decision),
             GuiSmokePhase.ChooseFirstNode => GetPostChooseFirstNodePhase(decision),
             GuiSmokePhase.HandleEvent => GetPostHandleEventPhase(decision),
@@ -1927,11 +1942,18 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             _ => phase,
         };
 
-        if (phase == GuiSmokePhase.WaitCharacterSelect
-            && GuiSmokeObserverPhaseHeuristics.TryGetPostEnterRunPhase(postActionObserver, out var postEnterRunPhase))
+        if (phase == GuiSmokePhase.WaitRunLoad
+            && GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(postActionObserver, out var postRunLoadPhase))
         {
-            LogHarness($"step={stepIndex} post-action phase reconciliation WaitCharacterSelect -> {postEnterRunPhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
-            phase = postEnterRunPhase;
+            LogHarness($"step={stepIndex} post-action phase reconciliation WaitRunLoad -> {postRunLoadPhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
+            phase = postRunLoadPhase;
+        }
+
+        if (phase == GuiSmokePhase.WaitCharacterSelect
+            && GuiSmokeObserverPhaseHeuristics.TryGetPostCharacterSelectPhase(postActionObserver, out var postCharacterSelectPhase))
+        {
+            LogHarness($"step={stepIndex} post-action phase reconciliation WaitCharacterSelect -> {postCharacterSelectPhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
+            phase = postCharacterSelectPhase;
         }
 
         if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(postActionObserver, out var postEmbarkPhase))
@@ -3306,6 +3328,11 @@ static void RunSelfTest()
         {
             Meta = new Dictionary<string, string?>
             {
+                ["transitionInProgress"] = "false",
+                ["rootSceneIsMainMenu"] = "false",
+                ["rootSceneIsRun"] = "true",
+                ["currentRunNodePresent"] = "true",
+                ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.NRun",
                 ["treasureRoomDetected"] = "true",
                 ["treasureChestClickable"] = "true",
                 ["treasureChestOpened"] = "false",
@@ -3926,9 +3953,9 @@ static void RunSelfTest()
         null,
         null);
     Assert(
-        GuiSmokeObserverPhaseHeuristics.TryGetPostEnterRunPhase(postEnterRunCharacterSelectObserver, out var postEnterRunCharacterSelectPhase)
+        GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(postEnterRunCharacterSelectObserver, out var postEnterRunCharacterSelectPhase)
         && postEnterRunCharacterSelectPhase == GuiSmokePhase.ChooseCharacter,
-        "EnterRun should still reconcile to ChooseCharacter for fresh new-run character-select flows.");
+        "Run-load reconciliation should still recognize fresh new-run character-select flows once they are actually visible.");
 
     var continuePreferredDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
         "run",
@@ -3984,6 +4011,9 @@ static void RunSelfTest()
     Assert(
         string.Equals(continuePreferredDecision.TargetLabel, "continue", StringComparison.OrdinalIgnoreCase),
         "EnterRun should still prefer Continue when it is visible on the main menu.");
+    Assert(
+        GetPostEnterRunPhase(continuePreferredDecision) == GuiSmokePhase.WaitRunLoad,
+        "Continue should hand off to neutral run-load waiting, not WaitCharacterSelect.");
 
     var reachableNodeDecision = new GuiSmokeStepDecision("act", "click", null, null, null, "visible reachable node", "Map node selected.", 0.9, null, null, null, null);
     Assert(
@@ -4580,9 +4610,50 @@ static void RunSelfTest()
         null,
         null);
     Assert(
-        GuiSmokeObserverPhaseHeuristics.TryGetPostEnterRunPhase(postEnterRunTreasureObserver, out var postEnterRunTreasurePhase)
+        GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(postEnterRunTreasureObserver, out var postEnterRunTreasurePhase)
         && postEnterRunTreasurePhase == GuiSmokePhase.ChooseFirstNode,
-        "EnterRun should reconcile to ChooseFirstNode when Continue resumes directly into a treasure room.");
+        "Run-load reconciliation should resolve to ChooseFirstNode when Continue resumes directly into a treasure room.");
+
+    var waitRunLoadTransitionObserver = new ObserverState(
+        new ObserverSummary(
+            "main-menu",
+            "main-menu",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            false,
+            "transition",
+            "transition",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            Array.Empty<ObserverChoice>(),
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["transitionInProgress"] = "true",
+                ["rootSceneIsMainMenu"] = "true",
+                ["rootSceneIsRun"] = "false",
+                ["currentRunNodePresent"] = "false",
+                ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+            },
+        },
+        null,
+        null,
+        null);
+    Assert(
+        !GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(waitRunLoadTransitionObserver, out _),
+        "Run-load reconciliation should not branch while explicit transition truth is still active.");
+    Assert(
+        RootSceneTransitionObserverSignals.ShouldTreatCaptureAsTransitionWait(GuiSmokePhase.WaitRunLoad, waitRunLoadTransitionObserver.Summary),
+        "Explicit run-load transition truth should suppress generic black-frame recovery nudges.");
 
     var waitCharacterSelectBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-wait-character-select-branch-{Guid.NewGuid():N}");
     Directory.CreateDirectory(waitCharacterSelectBranchRoot);
@@ -4591,31 +4662,31 @@ static void RunSelfTest()
         var waitCharacterSelectLogger = new ArtifactRecorder(waitCharacterSelectBranchRoot);
         Assert(
             TryAdvanceAlternateBranch(
-                GuiSmokePhase.WaitCharacterSelect,
+                GuiSmokePhase.WaitRunLoad,
                 postEnterRunTreasureObserver,
                 new List<GuiSmokeHistoryEntry>(),
                 waitCharacterSelectLogger,
                 4,
                 true,
-                out var waitCharacterSelectTreasurePhase)
-            && waitCharacterSelectTreasurePhase == GuiSmokePhase.ChooseFirstNode,
-            "WaitCharacterSelect should reopen treasure handling when Continue resumes directly into a treasure room.");
+                out var waitRunLoadTreasurePhase)
+            && waitRunLoadTreasurePhase == GuiSmokePhase.ChooseFirstNode,
+            "WaitRunLoad should reopen treasure handling when Continue resumes directly into a treasure room.");
 
         Assert(
             TryAdvanceAlternateBranch(
-                GuiSmokePhase.WaitCharacterSelect,
+                GuiSmokePhase.WaitRunLoad,
                 rewardMixedStateObserver,
                 new List<GuiSmokeHistoryEntry>(),
                 waitCharacterSelectLogger,
                 5,
                 true,
-                out var waitCharacterSelectRewardPhase)
-            && waitCharacterSelectRewardPhase == GuiSmokePhase.HandleRewards,
-            "WaitCharacterSelect should branch to rewards when Continue resumes into a reward foreground.");
+                out var waitRunLoadRewardPhase)
+            && waitRunLoadRewardPhase == GuiSmokePhase.HandleRewards,
+            "WaitRunLoad should branch to rewards when Continue resumes into a reward foreground.");
 
         Assert(
             TryAdvanceAlternateBranch(
-                GuiSmokePhase.WaitCharacterSelect,
+                GuiSmokePhase.WaitRunLoad,
                 new ObserverState(
                     new ObserverSummary(
                         "event",
@@ -4644,13 +4715,13 @@ static void RunSelfTest()
                 waitCharacterSelectLogger,
                 6,
                 true,
-                out var waitCharacterSelectEventPhase)
-            && waitCharacterSelectEventPhase == GuiSmokePhase.HandleEvent,
-            "WaitCharacterSelect should branch to event handling when Continue resumes into an event room.");
+                out var waitRunLoadEventPhase)
+            && waitRunLoadEventPhase == GuiSmokePhase.HandleEvent,
+            "WaitRunLoad should branch to event handling when Continue resumes into an event room.");
 
         Assert(
             TryAdvanceAlternateBranch(
-                GuiSmokePhase.WaitCharacterSelect,
+                GuiSmokePhase.WaitRunLoad,
                 new ObserverState(
                     new ObserverSummary(
                         "combat",
@@ -4679,9 +4750,21 @@ static void RunSelfTest()
                 waitCharacterSelectLogger,
                 7,
                 true,
-                out var waitCharacterSelectCombatPhase)
-            && waitCharacterSelectCombatPhase == GuiSmokePhase.HandleCombat,
-            "WaitCharacterSelect should branch to combat handling when Continue resumes into combat.");
+                out var waitRunLoadCombatPhase)
+            && waitRunLoadCombatPhase == GuiSmokePhase.HandleCombat,
+            "WaitRunLoad should branch to combat handling when Continue resumes into combat.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitCharacterSelect,
+                postEnterRunCharacterSelectObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitCharacterSelectLogger,
+                8,
+                true,
+                out var waitCharacterSelectPhase)
+            && waitCharacterSelectPhase == GuiSmokePhase.ChooseCharacter,
+            "WaitCharacterSelect should only reopen the actual character-select flow.");
     }
     finally
     {
@@ -11243,6 +11326,11 @@ static string[] BuildAllowedActionsCore(
     var claimableRewardPresent = context.ClaimableRewardPresent;
     var mapOverlayState = context.MapOverlayState;
     var explicitRestSiteChoiceAuthority = HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
+    if (phase == GuiSmokePhase.WaitRunLoad && GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(observer, out var postRunLoadPhase))
+    {
+        return BuildAllowedActions(postRunLoadPhase, observer, combatCardKnowledge, screenshotPath, history);
+    }
+
     if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out var observedPhase))
     {
         return BuildAllowedActions(observedPhase, observer, combatCardKnowledge, screenshotPath, history);
@@ -11251,6 +11339,7 @@ static string[] BuildAllowedActionsCore(
     return phase switch
     {
         GuiSmokePhase.EnterRun => new[] { "click continue", "click singleplayer", "click normal mode", "wait" },
+        GuiSmokePhase.WaitRunLoad => new[] { "wait" },
         GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "click character confirm", "wait" },
         GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
         GuiSmokePhase.HandleRewards when LooksLikeInspectOverlayState(observer)
@@ -12577,7 +12666,8 @@ static string BuildGoal(GuiSmokePhase phase)
     {
         GuiSmokePhase.WaitMainMenu => "Reach main menu and verify observer currentScreen=main-menu.",
         GuiSmokePhase.EnterRun => "Enter a run using Continue first, otherwise Singleplayer.",
-        GuiSmokePhase.WaitCharacterSelect => "Reconcile the post-enter-run state: character-select for new runs, or the resumed room/screen for Continue flows.",
+        GuiSmokePhase.WaitRunLoad => "Wait for the root-scene transition to finish and for the resumed/new run scene to become actionable.",
+        GuiSmokePhase.WaitCharacterSelect => "Wait for the actual singleplayer submenu or character-select flow for a fresh new run.",
         GuiSmokePhase.ChooseCharacter => "Select Ironclad.",
         GuiSmokePhase.Embark => "Click Embark to begin the run.",
         GuiSmokePhase.WaitMap => "Wait until observer logical currentScreen=map. visibleScreen may reach map earlier while reward flow is still active.",
@@ -12618,6 +12708,11 @@ static string BuildFailureModeHintCoreWithContext(
             : "AI first: trust observer/runtime combat state. Use selected-card, targetability, hittability, energy, and player-action-window truth before any screenshot fallback; only inspect the screenshot when explicit combat authority is missing or contradictory.";
     }
 
+    if (phase == GuiSmokePhase.WaitRunLoad)
+    {
+        return "AI first: trust transition/runtime root-scene state. While transitionInProgress is true, or rootSceneIsRun/currentRunNodePresent is not yet true, wait without acting; only branch once the resumed or newly created run scene becomes explicit.";
+    }
+
     if (phase == GuiSmokePhase.HandleRewards && context.UseRewardFastPath)
     {
         var rewardMapLayer = context.RewardMapLayerState;
@@ -12646,6 +12741,7 @@ static string BuildFailureModeHintCoreWithContext(
     return phase switch
     {
         GuiSmokePhase.EnterRun => "Continue may be absent. Use Singleplayer only if Continue is not visible.",
+        GuiSmokePhase.WaitCharacterSelect => "Only actual singleplayer submenu or character-select authority belongs here. Do not use this phase for Continue or root-scene loading.",
         GuiSmokePhase.ChooseCharacter => "Do not click Embark before Ironclad is selected.",
         GuiSmokePhase.HandleRewards when LooksLikeInspectOverlayState(observer)
             => "Inspect overlay is not progression. Close it with escape or the overlay dismiss affordance before choosing any reward.",
@@ -12685,6 +12781,13 @@ static string BuildFailureModeHintCoreWithContext(
         GuiSmokePhase.WaitCombat => "Observer must end with combat screen and inCombat=true.",
         _ => "Fail closed when screenshot and observer disagree.",
     };
+}
+
+static GuiSmokePhase GetPostEnterRunPhase(GuiSmokeStepDecision decision)
+{
+    return string.Equals(decision.TargetLabel, "continue", StringComparison.OrdinalIgnoreCase)
+        ? GuiSmokePhase.WaitRunLoad
+        : GuiSmokePhase.WaitCharacterSelect;
 }
 
 static GuiSmokePhase GetPostRewardPhase(GuiSmokeStepDecision decision)
@@ -12761,6 +12864,7 @@ static bool KeepsCurrentRoomPhase(string? targetLabel)
 static bool IsPassiveWaitPhase(GuiSmokePhase phase)
 {
     return phase is GuiSmokePhase.WaitMainMenu
+        or GuiSmokePhase.WaitRunLoad
         or GuiSmokePhase.WaitCharacterSelect
         or GuiSmokePhase.WaitMap
         or GuiSmokePhase.WaitPostMapNodeRoom
@@ -13264,19 +13368,11 @@ static bool TryAdvanceAlternateBranch(
 {
     nextPhase = phase;
 
-    if (phase == GuiSmokePhase.WaitCharacterSelect)
+    if (phase == GuiSmokePhase.WaitRunLoad)
     {
-        if (LooksLikeSingleplayerSubmenuState(observer.Summary))
+        if (GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(observer, out var postRunLoadPhase))
         {
-            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-singleplayer-submenu", null, DateTimeOffset.UtcNow));
-            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-singleplayer-submenu", observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = GuiSmokePhase.EnterRun;
-            return true;
-        }
-
-        if (GuiSmokeObserverPhaseHeuristics.TryGetPostEnterRunPhase(observer, out var postEnterRunPhase))
-        {
-            var branchKind = postEnterRunPhase switch
+            var branchKind = postRunLoadPhase switch
             {
                 GuiSmokePhase.ChooseCharacter => "branch-character-select",
                 GuiSmokePhase.HandleRewards => "branch-rewards",
@@ -13290,7 +13386,26 @@ static bool TryAdvanceAlternateBranch(
             };
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
-            nextPhase = postEnterRunPhase;
+            nextPhase = postRunLoadPhase;
+            return true;
+        }
+    }
+
+    if (phase == GuiSmokePhase.WaitCharacterSelect)
+    {
+        if (LooksLikeSingleplayerSubmenuState(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-singleplayer-submenu", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-singleplayer-submenu", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.EnterRun;
+            return true;
+        }
+
+        if (GuiSmokeObserverPhaseHeuristics.TryGetPostCharacterSelectPhase(observer, out var postCharacterSelectPhase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-character-select", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-character-select", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = postCharacterSelectPhase;
             return true;
         }
     }
@@ -15039,6 +15154,7 @@ enum GuiSmokePhase
 {
     WaitMainMenu,
     EnterRun,
+    WaitRunLoad,
     WaitCharacterSelect,
     ChooseCharacter,
     Embark,
@@ -16396,6 +16512,110 @@ sealed record ObserverState(
 
     public string? EncounterKind => Summary.EncounterKind;
     public string? ChoiceExtractorPath => Summary.ChoiceExtractorPath;
+}
+
+sealed record RootSceneTransitionState(
+    bool TransitionInProgress,
+    string? RootSceneCurrentType,
+    bool RootSceneIsMainMenu,
+    bool RootSceneIsRun,
+    bool CurrentRunNodePresent,
+    string? CurrentRunRoomType,
+    string? CurrentRunRoomSceneType);
+
+static class RootSceneTransitionObserverSignals
+{
+    public static RootSceneTransitionState? TryGetState(ObserverSummary observer)
+    {
+        var rootSceneCurrentType = TryGetMetaValue(observer, "rootSceneCurrentType")
+                                   ?? TryGetMetaValue(observer, "currentSceneType");
+        var transitionInProgress = TryGetMetaBool(observer, "transitionInProgress") == true;
+        var rootSceneIsMainMenuHint = TryGetMetaBool(observer, "rootSceneIsMainMenu");
+        var rootSceneIsRunHint = TryGetMetaBool(observer, "rootSceneIsRun");
+        var rootSceneIsMainMenu = rootSceneIsMainMenuHint
+                                  ?? (rootSceneCurrentType?.Contains("MainMenu", StringComparison.OrdinalIgnoreCase) == true);
+        var rootSceneIsRun = rootSceneIsRunHint
+                             ?? (rootSceneCurrentType?.Contains(".NRun", StringComparison.OrdinalIgnoreCase) == true
+                                 || rootSceneCurrentType?.EndsWith(".NRun", StringComparison.OrdinalIgnoreCase) == true);
+        var currentRunNodePresent = TryGetMetaBool(observer, "currentRunNodePresent") == true;
+        var currentRunRoomType = TryGetMetaValue(observer, "currentRunRoomType");
+        var currentRunRoomSceneType = TryGetMetaValue(observer, "currentRunRoomSceneType");
+
+        if (!transitionInProgress
+            && string.IsNullOrWhiteSpace(rootSceneCurrentType)
+            && rootSceneIsMainMenuHint is null
+            && rootSceneIsRunHint is null
+            && !currentRunNodePresent
+            && string.IsNullOrWhiteSpace(currentRunRoomType)
+            && string.IsNullOrWhiteSpace(currentRunRoomSceneType))
+        {
+            return null;
+        }
+
+        return new RootSceneTransitionState(
+            transitionInProgress,
+            rootSceneCurrentType,
+            rootSceneIsMainMenu == true,
+            rootSceneIsRun == true,
+            currentRunNodePresent,
+            currentRunRoomType,
+            currentRunRoomSceneType);
+    }
+
+    public static bool ShouldHoldRunLoadBoundary(ObserverSummary observer)
+    {
+        var state = TryGetState(observer);
+        if (state is null)
+        {
+            return false;
+        }
+
+        if (state.TransitionInProgress)
+        {
+            return true;
+        }
+
+        if (state.RootSceneIsRun || state.CurrentRunNodePresent)
+        {
+            return false;
+        }
+
+        if (state.RootSceneIsMainMenu)
+        {
+            return true;
+        }
+
+        return string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.VisibleScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.CurrentScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.VisibleScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool ShouldTreatCaptureAsTransitionWait(GuiSmokePhase phase, ObserverSummary observer)
+    {
+        var state = TryGetState(observer);
+        if (state?.TransitionInProgress == true)
+        {
+            return true;
+        }
+
+        return phase == GuiSmokePhase.WaitRunLoad && ShouldHoldRunLoadBoundary(observer);
+    }
+
+    private static string? TryGetMetaValue(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value) ? value : null;
+    }
+
+    private static bool? TryGetMetaBool(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value)
+               && bool.TryParse(value, out var parsed)
+            ? parsed
+            : null;
+    }
 }
 
 sealed record RestSitePostClickEvidence(
@@ -18100,33 +18320,41 @@ static class GuiSmokeMapOverlayHeuristics
 
 static class GuiSmokeObserverPhaseHeuristics
 {
-    public static bool TryGetPostEnterRunPhase(ObserverState observer, out GuiSmokePhase nextPhase)
+    public static bool TryGetPostRunLoadPhase(ObserverState observer, out GuiSmokePhase nextPhase)
     {
-        if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
-        {
-            nextPhase = GuiSmokePhase.HandleRewards;
-            return true;
-        }
-
-        return TryGetPostEnterRunPhase(
+        return TryGetPostRunLoadPhase(
             observer.Summary,
             TryReadObserverMetaString(observer.StateDocument, "declaringType"),
             TryReadObserverMetaString(observer.StateDocument, "instanceType"),
             out nextPhase);
     }
 
-    public static bool TryGetPostEnterRunPhase(ObserverSummary observer, out GuiSmokePhase nextPhase)
+    public static bool TryGetPostRunLoadPhase(ObserverSummary observer, out GuiSmokePhase nextPhase)
     {
-        return TryGetPostEnterRunPhase(observer, null, null, out nextPhase);
+        return TryGetPostRunLoadPhase(observer, null, null, out nextPhase);
     }
 
-    public static bool TryGetPostEnterRunPhase(ObserverSummary observer, string? declaringType, out GuiSmokePhase nextPhase)
+    public static bool TryGetPostRunLoadPhase(ObserverSummary observer, string? declaringType, out GuiSmokePhase nextPhase)
     {
-        return TryGetPostEnterRunPhase(observer, declaringType, null, out nextPhase);
+        return TryGetPostRunLoadPhase(observer, declaringType, null, out nextPhase);
     }
 
-    public static bool TryGetPostEnterRunPhase(ObserverSummary observer, string? declaringType, string? instanceType, out GuiSmokePhase nextPhase)
+    public static bool TryGetPostRunLoadPhase(ObserverSummary observer, string? declaringType, string? instanceType, out GuiSmokePhase nextPhase)
     {
+        if (RootSceneTransitionObserverSignals.ShouldHoldRunLoadBoundary(observer))
+        {
+            nextPhase = default;
+            return false;
+        }
+
+        if (observer.SceneReady == false
+            && !string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        {
+            nextPhase = default;
+            return false;
+        }
+
         if (string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
             || string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
         {
@@ -18136,6 +18364,19 @@ static class GuiSmokeObserverPhaseHeuristics
 
         if (TryGetPostEmbarkPhase(observer, declaringType, instanceType, out nextPhase))
         {
+            return true;
+        }
+
+        nextPhase = default;
+        return false;
+    }
+
+    public static bool TryGetPostCharacterSelectPhase(ObserverState observer, out GuiSmokePhase nextPhase)
+    {
+        if (string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        {
+            nextPhase = GuiSmokePhase.ChooseCharacter;
             return true;
         }
 
@@ -18626,6 +18867,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokePhase.HandleShop => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleShop(request), "shop", null),
             GuiSmokePhase.HandleCombat => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request, context), "combat", null),
             GuiSmokePhase.EnterRun => AnalyzeGenericPhase(request, actualDecision, () => DecideEnterRun(request), "main-menu", null),
+            GuiSmokePhase.WaitRunLoad => AnalyzeGenericPhase(request, actualDecision, () => DecideWaitRunLoad(request), request.Observer.CurrentScreen, null),
             GuiSmokePhase.ChooseCharacter => AnalyzeGenericPhase(request, actualDecision, () => DecideChooseCharacter(request), "character-select", null),
             GuiSmokePhase.Embark => AnalyzeGenericPhase(request, actualDecision, () => DecideEmbark(request), "embark", null),
             _ => AnalyzeGenericPhase(request, actualDecision, () => CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen), request.Observer.CurrentScreen, null),
@@ -18686,6 +18928,25 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
         return TryFindActionNodeDecision(request, "Ironclad", "ironclad")
                ?? CreateWaitDecision("waiting for ironclad node", request.Observer.CurrentScreen);
+    }
+
+    private static GuiSmokeStepDecision DecideWaitRunLoad(GuiSmokeStepRequest request)
+    {
+        if (GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(request.Observer, out var postRunLoadPhase))
+        {
+            return postRunLoadPhase switch
+            {
+                GuiSmokePhase.HandleRewards => DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }),
+                GuiSmokePhase.HandleEvent => DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }),
+                GuiSmokePhase.HandleShop => DecideHandleShop(request with { Phase = GuiSmokePhase.HandleShop.ToString() }),
+                GuiSmokePhase.HandleCombat => DecideHandleCombat(request with { Phase = GuiSmokePhase.HandleCombat.ToString() }),
+                GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }),
+                GuiSmokePhase.ChooseCharacter => DecideChooseCharacter(request with { Phase = GuiSmokePhase.ChooseCharacter.ToString() }),
+                _ => CreateWaitDecision("waiting for post-run-load room state", request.Observer.CurrentScreen),
+            };
+        }
+
+        return CreateWaitDecision("waiting for root-scene transition and run load readiness", request.Observer.CurrentScreen);
     }
 
     private static GuiSmokeStepDecision DecideEmbark(GuiSmokeStepRequest request)
@@ -27402,6 +27663,7 @@ sealed class ObserverAcceptanceEvaluator
         return phase switch
         {
             GuiSmokePhase.WaitMainMenu => sceneReady && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase),
+            GuiSmokePhase.WaitRunLoad => false,
             GuiSmokePhase.WaitCharacterSelect => sceneReady && string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase),
             GuiSmokePhase.WaitMap => sceneReady && MapForegroundReconciliation.HasMapForegroundOwnership(observer, history ?? Array.Empty<GuiSmokeHistoryEntry>()),
             GuiSmokePhase.WaitPostMapNodeRoom => false,
