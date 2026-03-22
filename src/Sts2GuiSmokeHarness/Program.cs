@@ -7571,6 +7571,141 @@ static void RunSelfTest()
             null));
         Assert(combatTargetRetryDecision.TargetLabel?.Contains("Cultist", StringComparison.OrdinalIgnoreCase) == true, "After one no-op enemy click, combat recovery should try another observed enemy target when one is available.");
 
+        var logicalBoundsTargetObserver = new ObserverState(
+            new ObserverSummary(
+                "combat",
+                "combat",
+                true,
+                DateTimeOffset.UtcNow,
+                "inv-combat-logical-target-bounds",
+                true,
+                "mixed",
+                "stable",
+                "episode-combat-logical-target-bounds",
+                "Combat",
+                "combat",
+                80,
+                80,
+                2,
+                new[] { "나뭇잎 슬라임 (중)" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("enemy-target:slime-medium:2", "enemy-target", "나뭇잎 슬라임 (중)", "1389.943,674.675,72,88", true)
+                    {
+                        TypeName = "enemy-target",
+                        SemanticHints = new[] { "combat-targetable", "combat-hittable", "source:target-manager", "target-id:나뭇잎 슬라임 (중)" },
+                    },
+                },
+                Array.Empty<ObserverChoice>(),
+                new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                })
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCardPlayPending"] = "true",
+                    ["combatSelectedCardSlot"] = "1",
+                    ["combatSelectedCardType"] = "Attack",
+                    ["combatSelectedCardTargetType"] = "AnyEnemy",
+                    ["combatTargetingInProgress"] = "true",
+                    ["combatTargetableEnemyCount"] = "1",
+                    ["combatTargetableEnemyIds"] = "나뭇잎 슬라임 (중)",
+                    ["combatHittableEnemyCount"] = "1",
+                    ["combatHittableEnemyIds"] = "나뭇잎 슬라임 (중)",
+                },
+            },
+            null,
+            null,
+            null);
+        var logicalBoundsTargetDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            10,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Use logical target-manager bounds even when the absolute target rect lies outside the window-relative overlap.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(8, 48, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            logicalBoundsTargetObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            },
+            new[] { "click enemy", "click end turn", "wait" },
+            new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            },
+            "Prefer explicit target-manager logical bounds over any fixed combat target fallback.",
+            null));
+        Assert(logicalBoundsTargetDecision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) == true, "Explicit target-manager nodes with usable logical bounds should produce combat enemy target decisions.");
+        Assert(logicalBoundsTargetDecision.TargetLabel?.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase) != true, "Explicit target-manager nodes should suppress the old fixed auto-target fallback.");
+        Assert(TryParseNodeBounds("1389.943,674.675,72,88", out var logicalBoundsRect), "Expected valid logical target bounds.");
+        var logicalClickX = logicalBoundsTargetDecision.NormalizedX.GetValueOrDefault() * 1920d;
+        var logicalClickY = logicalBoundsTargetDecision.NormalizedY.GetValueOrDefault() * 1080d;
+        Assert(logicalClickX >= logicalBoundsRect.Left && logicalClickX <= logicalBoundsRect.Right && logicalClickY >= logicalBoundsRect.Top && logicalClickY <= logicalBoundsRect.Bottom, "Explicit combat enemy target click should stay inside the chosen target-manager node bounds.");
+
+        var unusableExplicitTargetObserver = new ObserverState(
+            logicalBoundsTargetObserver.Summary with
+            {
+                InventoryId = "inv-combat-unusable-explicit-target",
+                SceneEpisodeId = "episode-combat-unusable-explicit-target",
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("enemy-target:slime-medium:2", "enemy-target", "나뭇잎 슬라임 (중)", "2600,680,72,88", true)
+                    {
+                        TypeName = "enemy-target",
+                        SemanticHints = new[] { "combat-targetable", "combat-hittable", "source:target-manager", "target-id:나뭇잎 슬라임 (중)" },
+                    },
+                },
+            },
+            null,
+            null,
+            null);
+        var unusableExplicitTargetDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            11,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "If explicit combat targeting authority exists but no usable node survives, do not fall back to a blind auto-target click.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(8, 48, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            unusableExplicitTargetObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            },
+            new[] { "click enemy", "click end turn", "wait" },
+            new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            },
+            "Wait for a usable explicit enemy node instead of emitting a blind auto-target click.",
+            null));
+        Assert(string.Equals(unusableExplicitTargetDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "Explicit combat targeting authority without usable node bounds should release to wait, not blind click.");
+        Assert(unusableExplicitTargetDecision.TargetLabel?.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase) != true, "Explicit runtime authority with unusable target nodes must not emit the fixed auto-target fallback.");
+
         var noOpFallbackOrderingObserver = new ObserverState(
             new ObserverSummary(
                 "combat",
@@ -20186,6 +20321,15 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return true;
         }
 
+        if (CombatTargetabilitySupport.HasExplicitCombatEnemyTargetNodeSource(request.Observer)
+            || CombatTargetabilitySupport.HasExplicitTargetableEnemyAuthority(request.Observer))
+        {
+            decision = CreateWaitDecision(
+                CombatTargetabilitySupport.DescribeMissingCombatEnemyTargetDecisionSource(request.Observer, request.WindowBounds),
+                "combat");
+            return true;
+        }
+
         var targetCandidateIndex = Math.Clamp(pendingSelectionNoOpCount, 0, GuiSmokeCombatConstants.EnemyTargetCandidates.Length - 1);
         var targetCandidate = GuiSmokeCombatConstants.EnemyTargetCandidates[targetCandidateIndex];
         var reason = pendingSelectionNoOpCount == 0
@@ -24193,6 +24337,46 @@ static class CombatTargetabilitySupport
                || observer.Meta.ContainsKey("combatHittableEnemyIds");
     }
 
+    public static bool HasExplicitCombatEnemyTargetNodeSource(ObserverSummary observer)
+    {
+        var runtime = CombatRuntimeStateSupport.Read(observer, Array.Empty<CombatCardKnowledgeHint>());
+        var targetableIds = (runtime.HasExplicitHittableEnemyAuthority ? runtime.HittableEnemyIds : runtime.TargetableEnemyIds)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return observer.ActionNodes
+            .Where(static node => node.Actionable)
+            .Any(node => IsExplicitCombatEnemyTargetNode(node, targetableIds, runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitTargetableEnemyAuthority));
+    }
+
+    public static string DescribeMissingCombatEnemyTargetDecisionSource(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        var runtime = CombatRuntimeStateSupport.Read(observer, Array.Empty<CombatCardKnowledgeHint>());
+        var targetableIds = (runtime.HasExplicitHittableEnemyAuthority ? runtime.HittableEnemyIds : runtime.TargetableEnemyIds)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var explicitNodes = observer.ActionNodes
+            .Where(static node => node.Actionable)
+            .Where(node => IsExplicitCombatEnemyTargetNode(node, targetableIds, runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitTargetableEnemyAuthority))
+            .ToArray();
+        if (explicitNodes.Length == 0)
+        {
+            return runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitTargetableEnemyAuthority
+                ? "explicit runtime enemy-target authority exists, but no usable target-manager enemy node is available yet"
+                : "waiting for explicit enemy target node source";
+        }
+
+        if (windowBounds is not null)
+        {
+            var unusableNode = explicitNodes.FirstOrDefault(node => !HasUsableCombatTargetBounds(node.ScreenBounds, windowBounds));
+            if (unusableNode is not null)
+            {
+                return $"explicit enemy target node '{unusableNode.Label}' exists but its bounds are unusable for body targeting";
+            }
+        }
+
+        return "explicit enemy target nodes exist, but none survived actionable body-target filtering";
+    }
+
     public static IReadOnlyList<ObserverActionNode> GetCombatEnemyTargetNodes(ObserverSummary observer, WindowBounds? windowBounds = null)
     {
         var runtime = CombatRuntimeStateSupport.Read(observer, Array.Empty<CombatCardKnowledgeHint>());
@@ -24209,10 +24393,10 @@ static class CombatTargetabilitySupport
             .Where(static node => node.Actionable)
             .Where(node => windowBounds is null
                 ? TryParseBounds(node.ScreenBounds, out _)
-                : HasActiveBounds(node.ScreenBounds, windowBounds))
+                : HasUsableCombatTargetBounds(node.ScreenBounds, windowBounds))
             .Where(node => IsExplicitCombatEnemyTargetNode(node, targetableIds, runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitTargetableEnemyAuthority))
-            .OrderBy(static node => GetSortX(node))
-            .ThenBy(static node => GetSortY(node))
+            .OrderBy(node => GetSortX(node))
+            .ThenBy(node => GetSortY(node))
             .ToArray();
     }
 
@@ -24266,6 +24450,20 @@ static class CombatTargetabilitySupport
                && bounds.Top + bounds.Height >= windowBounds.Y
                && bounds.Left <= windowBounds.X + windowBounds.Width
                && bounds.Top <= windowBounds.Y + windowBounds.Height;
+    }
+
+    private static bool HasUsableCombatTargetBounds(string? rawBounds, WindowBounds windowBounds)
+    {
+        return HasUsableLogicalBoundsForCombatTarget(rawBounds) || HasActiveBounds(rawBounds, windowBounds);
+    }
+
+    private static bool HasUsableLogicalBoundsForCombatTarget(string? rawBounds)
+    {
+        return TryParseBounds(rawBounds, out var bounds)
+               && bounds.Left >= 0f
+               && bounds.Top >= 0f
+               && bounds.Right <= 1920f
+               && bounds.Bottom <= 1080f;
     }
 
     private static bool TryParseBounds(string? rawBounds, out RectangleF bounds)
