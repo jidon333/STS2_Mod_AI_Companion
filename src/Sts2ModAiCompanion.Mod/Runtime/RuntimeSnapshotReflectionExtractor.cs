@@ -400,13 +400,19 @@ internal static class RuntimeSnapshotReflectionExtractor
         var deck = ExtractDeck(roots, config.LiveExport.MaxDeckEntries);
         var relics = ExtractStringList(roots, config.LiveExport.MaxDeckEntries, "Relics", "OwnedRelics", "InventoryRelics");
         var potions = ExtractStringList(roots, config.LiveExport.MaxChoiceEntries, "Potions", "OwnedPotions", "PotionSlots");
+        var rootSceneObservation = ObserveRootSceneTransition(roots);
+        var currentActiveScreen = TryResolveCurrentActiveScreen(roots);
+        var currentActiveScreenType = currentActiveScreen?.GetType().FullName ?? currentActiveScreen?.GetType().Name;
         var choiceResult = ExtractChoices(
             triggerKind,
             screenOverride,
             instance,
             args,
             roots,
-            config.LiveExport.MaxChoiceEntries);
+            config.LiveExport.MaxChoiceEntries,
+            currentActiveScreen,
+            currentActiveScreenType,
+            rootSceneObservation);
         var choices = choiceResult.Choices.ToList();
         var encounter = ExtractEncounter(roots, meta);
         var combatHand = encounter?.InCombat == true
@@ -425,7 +431,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             screen = "combat";
         }
 
-        AppendRootSceneTransitionMetadata(roots, meta, payload);
+        AppendRootSceneTransitionMetadata(rootSceneObservation, meta, payload);
 
         var cardSelectionObservation = ObserveCardSelection(roots, screen);
         AppendCardSelectionRuntimeMetadata(cardSelectionObservation, meta, payload);
@@ -519,6 +525,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         var mapPointChoices = choices
             .Where(choice => string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase))
             .ToArray();
+        var mapPointCandidates = choiceResult.Candidates
+            .Where(static candidate => string.Equals(candidate.ExtractorPath, "map", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
         if (mapPointChoices.Length > 0)
         {
             meta["mapPointCount"] = mapPointChoices.Length.ToString(CultureInfo.InvariantCulture);
@@ -528,6 +537,17 @@ internal static class RuntimeSnapshotReflectionExtractor
             if (string.Equals(screen, "event", StringComparison.OrdinalIgnoreCase))
             {
                 meta["mapOverlayVisible"] = "true";
+            }
+        }
+        else if (mapPointCandidates.Length > 0)
+        {
+            meta["mapPointCount"] = mapPointCandidates.Length.ToString(CultureInfo.InvariantCulture);
+            payload["mapPointCount"] = mapPointCandidates.Length;
+            var rejectSummary = BuildMapPointRejectSummary(mapPointCandidates) ?? choiceResult.Decision.FailureReason;
+            if (!string.IsNullOrWhiteSpace(rejectSummary))
+            {
+                meta["mapPointRejectSummary"] = rejectSummary;
+                payload["mapPointRejectSummary"] = rejectSummary;
             }
         }
 
@@ -990,7 +1010,10 @@ internal static class RuntimeSnapshotReflectionExtractor
         object? instance,
         object?[]? args,
         IEnumerable<object> roots,
-        int maxEntries)
+        int maxEntries,
+        object? currentActiveScreen,
+        string? currentActiveScreenType,
+        RootSceneTransitionObservation rootSceneObservation)
     {
         var choiceRoots = new List<object>();
         var candidateItems = new List<object>();
@@ -1052,6 +1075,14 @@ internal static class RuntimeSnapshotReflectionExtractor
                 }
             }
         }
+
+        AddMapAuthorityRoots(
+            choiceRoots,
+            candidateItems,
+            roots,
+            currentActiveScreen,
+            currentActiveScreenType,
+            rootSceneObservation);
 
         foreach (var item in FindEnumerableItems(
                      choiceRoots,
@@ -1139,7 +1170,7 @@ internal static class RuntimeSnapshotReflectionExtractor
                     strictExtractor: true));
         }
 
-        if (LooksLikeMapContext(triggerKind, screenHint, choiceRoots))
+        if (LooksLikeMapContext(triggerKind, screenHint, choiceRoots, currentActiveScreenType, rootSceneObservation))
         {
             strictAttempts.Add(ExtractMapChoices(choiceRoots, maxEntries));
         }
@@ -1154,6 +1185,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (mapStrict is not null && eventStrict is not null)
         {
             strictSuccess = MergeMixedContextChoices(eventStrict, mapStrict, maxEntries);
+        }
+        else if (mapStrict is not null
+                 && HasMapForegroundAuthority(currentActiveScreenType, rootSceneObservation))
+        {
+            strictSuccess = mapStrict;
         }
 
         if (restSiteUpgradeStrict is not null
@@ -3279,6 +3315,21 @@ internal static class RuntimeSnapshotReflectionExtractor
                && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsMapPointType(Type? type)
+    {
+        for (var current = type; current is not null && current != typeof(object); current = current.BaseType)
+        {
+            var typeName = current.FullName ?? current.Name;
+            if (typeName.Contains("NMapPoint", StringComparison.OrdinalIgnoreCase)
+                || typeName.Contains("MapPoint", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static object? TryResolveOverlayStackTop(IEnumerable<object> roots)
     {
         foreach (var root in roots)
@@ -3441,11 +3492,10 @@ internal static class RuntimeSnapshotReflectionExtractor
     }
 
     private static void AppendRootSceneTransitionMetadata(
-        IReadOnlyList<object> roots,
+        RootSceneTransitionObservation observation,
         Dictionary<string, string?> meta,
         Dictionary<string, object?> payload)
     {
-        var observation = ObserveRootSceneTransition(roots);
         meta["transitionInProgress"] = observation.TransitionInProgress ? "true" : "false";
         meta["rootSceneCurrentType"] = observation.RootSceneCurrentType;
         meta["rootSceneIsMainMenu"] = observation.RootSceneIsMainMenu ? "true" : "false";
@@ -6194,7 +6244,12 @@ internal static class RuntimeSnapshotReflectionExtractor
         };
     }
 
-    private static bool LooksLikeMapContext(string triggerKind, string? screenHint, IEnumerable<object> choiceRoots)
+    private static bool LooksLikeMapContext(
+        string triggerKind,
+        string? screenHint,
+        IEnumerable<object> choiceRoots,
+        string? currentActiveScreenType,
+        RootSceneTransitionObservation rootSceneObservation)
     {
         if (string.Equals(screenHint, "map", StringComparison.OrdinalIgnoreCase)
             || string.Equals(triggerKind, "map", StringComparison.OrdinalIgnoreCase)
@@ -6203,11 +6258,16 @@ internal static class RuntimeSnapshotReflectionExtractor
             return true;
         }
 
+        if (HasMapForegroundAuthority(currentActiveScreenType, rootSceneObservation))
+        {
+            return true;
+        }
+
         return choiceRoots.Any(root =>
         {
             var typeName = root.GetType().FullName ?? root.GetType().Name;
             return typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase)
-                   || typeName.Contains("NMapPoint", StringComparison.OrdinalIgnoreCase);
+                   || IsMapPointType(root.GetType());
         });
     }
 
@@ -6363,7 +6423,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         foreach (var root in roots)
         {
             var typeName = root.GetType().FullName ?? root.GetType().Name;
-            if (typeName.Contains("NMapPoint", StringComparison.OrdinalIgnoreCase))
+            if (IsMapPointType(root.GetType()))
             {
                 AddIfUseful(mapPoints, root);
             }
@@ -6381,25 +6441,20 @@ internal static class RuntimeSnapshotReflectionExtractor
             }
         }
 
-        var choices = mapPoints
-            .Select(TryCreateMapChoiceSummary)
+        var distinctMapPoints = mapPoints
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        var candidates = distinctMapPoints
+            .Select(CreateMapChoiceCandidate)
+            .ToArray();
+        var choices = distinctMapPoints
+            .Select(item => TryCreateMapChoiceSummary(item, out _))
             .Where(choice => choice is not null)
             .Cast<LiveExportChoiceSummary>()
             .OrderBy(choice => choice.NodeId, StringComparer.Ordinal)
             .Take(maxEntries)
             .ToArray();
-
-        var candidates = choices
-            .Select(choice => new LiveExportChoiceCandidate(
-                "map",
-                "NMapPoint",
-                choice.Label,
-                choice.Value,
-                choice.Description,
-                100,
-                Accepted: true,
-                RejectReason: null))
-            .ToArray();
+        var rejectSummary = BuildMapPointRejectSummary(candidates);
 
         return new ChoiceExtractionResult(
             choices,
@@ -6410,26 +6465,37 @@ internal static class RuntimeSnapshotReflectionExtractor
                 CandidateCount: candidates.Length,
                 AcceptedCount: choices.Length,
                 choices.Length == 0 ? "none" : "accepted",
-                choices.Length == 0 ? "no reachable map points with bounds resolved" : null,
+                choices.Length == 0
+                    ? rejectSummary ?? "no reachable map points with bounds resolved"
+                    : rejectSummary,
                 Array.Empty<string>()));
     }
 
     private static LiveExportChoiceSummary? TryCreateMapChoiceSummary(object item)
     {
+        return TryCreateMapChoiceSummary(item, out _);
+    }
+
+    private static LiveExportChoiceSummary? TryCreateMapChoiceSummary(object item, out string? rejectReason)
+    {
+        rejectReason = null;
         var typeName = item.GetType().FullName ?? item.GetType().Name;
-        if (!typeName.Contains("NMapPoint", StringComparison.OrdinalIgnoreCase))
+        if (!IsMapPointType(item.GetType()))
         {
+            rejectReason = "not-map-point";
             return null;
         }
 
         if (TryReadBool(item, "IsEnabled") != true)
         {
+            rejectReason = "disabled";
             return null;
         }
 
         var screenBounds = TryResolveScreenBounds(item);
         if (string.IsNullOrWhiteSpace(screenBounds))
         {
+            rejectReason = "missing-bounds";
             return null;
         }
 
@@ -6477,6 +6543,130 @@ internal static class RuntimeSnapshotReflectionExtractor
                 : $"map:{RuntimeHelpers.GetHashCode(item)}",
             ScreenBounds = screenBounds,
         };
+    }
+
+    private static void AddMapAuthorityRoots(
+        ICollection<object> choiceRoots,
+        ICollection<object> candidateItems,
+        IEnumerable<object> roots,
+        object? currentActiveScreen,
+        string? currentActiveScreenType,
+        RootSceneTransitionObservation rootSceneObservation)
+    {
+        if (!HasMapForegroundAuthority(currentActiveScreenType, rootSceneObservation))
+        {
+            return;
+        }
+
+        foreach (var mapRoot in ResolveMapRoots(roots, currentActiveScreen))
+        {
+            AddIfUseful(choiceRoots, mapRoot);
+            AddChoiceCandidate(candidateItems, mapRoot, maxDepth: 2);
+
+            var typeName = mapRoot.GetType().FullName ?? mapRoot.GetType().Name;
+            if (!IsMapScreenType(typeName))
+            {
+                continue;
+            }
+
+            var dictionary = TryGetMemberValue(mapRoot, "_mapPointDictionary");
+            AddIfUseful(choiceRoots, dictionary);
+            var values = dictionary is null ? null : TryGetMemberValue(dictionary, "Values");
+            AddIfUseful(choiceRoots, values);
+            foreach (var point in ExpandEnumerable(values))
+            {
+                AddIfUseful(choiceRoots, point);
+                AddChoiceCandidate(candidateItems, point, maxDepth: 1);
+            }
+        }
+    }
+
+    private static IEnumerable<object> ResolveMapRoots(IEnumerable<object> roots, object? currentActiveScreen)
+    {
+        var mapRoots = new List<object>();
+        AddIfUseful(mapRoots, currentActiveScreen);
+
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (IsMapScreenType(typeName))
+            {
+                AddIfUseful(mapRoots, root);
+            }
+
+            var mapScreen = TryGetMemberValue(root, "MapScreen")
+                            ?? TryGetMemberValue(TryGetMemberValue(root, "GlobalUi"), "MapScreen")
+                            ?? TryGetMemberValue(TryGetMemberValue(root, "GlobalUI"), "MapScreen")
+                            ?? TryGetMemberValue(root, "_mapScreen");
+            AddIfUseful(mapRoots, mapScreen);
+        }
+
+        var mapScreenType = FindLoadedType("MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen");
+        if (mapScreenType is not null)
+        {
+            foreach (var singletonName in SingletonPropertyNames)
+            {
+                AddIfUseful(mapRoots, TryGetMemberValue(mapScreenType, singletonName));
+            }
+        }
+
+        return mapRoots;
+    }
+
+    private static bool HasMapForegroundAuthority(string? currentActiveScreenType, RootSceneTransitionObservation rootSceneObservation)
+    {
+        return IsMapScreenType(currentActiveScreenType)
+               || IsMapScreenType(rootSceneObservation.CurrentRunRoomSceneType)
+               || IsMapScreenType(rootSceneObservation.RootSceneCurrentType);
+    }
+
+    private static LiveExportChoiceCandidate CreateMapChoiceCandidate(object item)
+    {
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        var summary = TryCreateMapChoiceSummary(item, out var rejectReason);
+        return new LiveExportChoiceCandidate(
+            "map",
+            typeName,
+            summary?.Label ?? TryResolveChoiceLabel(item) ?? typeName,
+            summary?.Value,
+            summary?.Description,
+            summary is null ? 70 : 100,
+            Accepted: summary is not null,
+            RejectReason: rejectReason);
+    }
+
+    private static string? BuildMapPointRejectSummary(IReadOnlyList<LiveExportChoiceCandidate> candidates)
+    {
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        if (candidates.Any(static candidate => candidate.Accepted))
+        {
+            return null;
+        }
+
+        var rejectCounts = candidates
+            .Where(static candidate => !candidate.Accepted && !string.IsNullOrWhiteSpace(candidate.RejectReason))
+            .GroupBy(candidate => candidate.RejectReason!, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(static group => group.Count())
+            .ThenBy(static group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .Take(4)
+            .Select(group => $"{group.Key}={group.Count()}")
+            .ToArray();
+        if (rejectCounts.Length == 0)
+        {
+            return $"map points seen={candidates.Count} but none were accepted";
+        }
+
+        return $"map points seen={candidates.Count} but filtered: {string.Join(",", rejectCounts)}";
+    }
+
+    private static bool IsMapAwareExtractorPath(string? extractorPath)
+    {
+        return !string.IsNullOrWhiteSpace(extractorPath)
+               && extractorPath.Contains("map", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SanitizeNodeKey(string value)

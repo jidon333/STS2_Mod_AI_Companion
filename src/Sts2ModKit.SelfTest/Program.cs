@@ -49,6 +49,8 @@ Run("runtime reflection exports deck-remove card-selection preview semantics", T
 Run("runtime reflection exports treasure room chest holder and proceed semantics", TestRuntimeReflectionTreasureRoomExport, failures);
 Run("runtime reflection exports explicit shop room semantics and typed shop choices", TestRuntimeReflectionShopExport, failures);
 Run("runtime reflection exports reward foreground ownership and teardown semantics", TestRuntimeReflectionRewardOwnershipExport, failures);
+Run("runtime reflection exports map-node from mixed rest-site aftermath authority", TestRuntimeReflectionMixedRestAftermathMapExport, failures);
+Run("runtime reflection reports filtered mixed-aftermath map-point diagnostics", TestRuntimeReflectionMixedRestAftermathMapDiagnostics, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
@@ -1622,6 +1624,87 @@ static void TestRuntimeReflectionRewardOwnershipExport()
     Assert(terminalObservation is not null, "Expected terminal boundary observation.");
     Assert((bool)(ReadProperty(terminalObservation!, "TerminalRunBoundary") ?? false), "Expected terminal run boundary export when game-over screen becomes current.");
     Assert((bool)(ReadProperty(terminalObservation!, "GameOverScreenDetected") ?? false), "Expected explicit game-over screen detection.");
+}
+
+static void TestRuntimeReflectionMixedRestAftermathMapExport()
+{
+    var bossPoint = new FakeNBossMapPoint("Boss", row: 15, col: 0, x: 1044, y: 186, enabled: true, width: 136, height: 136);
+    var mapScreen = new FakeNMapScreen
+    {
+        IsOpen = true,
+        Visible = true,
+        _mapPointDictionary = new Dictionary<object, object>
+        {
+            [bossPoint.Point.coord] = bossPoint,
+        },
+    };
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = mapScreen,
+            },
+            mapScreen,
+            new FakeRestSiteOption
+            {
+                OptionId = "SMITH",
+                Label = "Smith",
+            },
+        },
+        "rest-site");
+
+    Assert(observation.Meta.TryGetValue("choiceExtractorPath", out var extractorPath)
+           && string.Equals(extractorPath, "map", StringComparison.OrdinalIgnoreCase),
+        "Mixed rest-site aftermath should switch choice extraction onto explicit map authority.");
+    Assert(observation.Meta.TryGetValue("mapCurrentActiveScreen", out var mapCurrentActiveScreen)
+           && string.Equals(mapCurrentActiveScreen, "true", StringComparison.OrdinalIgnoreCase),
+        "Mixed rest-site aftermath should preserve current active-screen map authority.");
+    Assert(observation.Meta.TryGetValue("activeScreenType", out var activeScreenType)
+           && activeScreenType?.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase) == true,
+        "Mixed rest-site aftermath should export NMapScreen as the active screen type.");
+
+    var exportedMapNode = observation.Choices.SingleOrDefault(choice => string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase));
+    Assert(exportedMapNode is not null, "Mixed rest-site aftermath should still export an explicit reachable map-node.");
+    Assert(string.Equals(exportedMapNode!.Value, "15,0", StringComparison.OrdinalIgnoreCase)
+           && string.Equals(exportedMapNode.NodeId, "map:15:0", StringComparison.OrdinalIgnoreCase),
+        "Boss-adjacent next node should use the ordinary map coordinate export path.");
+    Assert(exportedMapNode.Description?.Contains("type:Boss", StringComparison.OrdinalIgnoreCase) == true
+           && exportedMapNode.Description.Contains("coord:15,0", StringComparison.OrdinalIgnoreCase),
+        "Boss-adjacent next node should preserve ordinary NMapPoint-style type and coord metadata.");
+}
+
+static void TestRuntimeReflectionMixedRestAftermathMapDiagnostics()
+{
+    var disabledBossPoint = new FakeNBossMapPoint("Boss", row: 15, col: 0, x: 1044, y: 186, enabled: false, width: 136, height: 136);
+    var mapScreen = new FakeNMapScreen
+    {
+        IsOpen = true,
+        Visible = true,
+        _mapPointDictionary = new Dictionary<object, object>
+        {
+            [disabledBossPoint.Point.coord] = disabledBossPoint,
+        },
+    };
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = mapScreen,
+            },
+            mapScreen,
+        },
+        "rest-site");
+
+    Assert(!observation.Choices.Any(choice => string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)),
+        "Disabled mixed-aftermath map points should not be exported as actionable map-node choices.");
+    Assert(observation.Meta.TryGetValue("mapPointCount", out var mapPointCount)
+           && string.Equals(mapPointCount, "1", StringComparison.OrdinalIgnoreCase),
+        "Mixed-aftermath map diagnostics should record how many map points were seen even when they were filtered.");
+    Assert(observation.Meta.TryGetValue("mapPointRejectSummary", out var mapPointRejectSummary)
+           && mapPointRejectSummary?.Contains("disabled=1", StringComparison.OrdinalIgnoreCase) == true,
+        "Mixed-aftermath map diagnostics should explain when all seen map points were filtered as disabled.");
 }
 
 static void TestInventoryPublisherMapNodeSourceCorrection()
@@ -3701,6 +3784,33 @@ static object CreateRuntimeHookBinding(System.Reflection.MethodInfo method, stri
     return binding!;
 }
 
+static LiveExportObservation BuildRuntimeObservationForSelfTest(IEnumerable<object> roots, string? screenOverride)
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("BuildObservation", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private BuildObservation helper.");
+
+    var observation = method!.Invoke(
+        null,
+        new object?[]
+        {
+            "runtime-poll",
+            DateTimeOffset.UtcNow,
+            roots.ToArray(),
+            AiCompanionRuntimeConfig.Defaults,
+            screenOverride,
+            null,
+            null,
+            new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase),
+            new string?[] { screenOverride },
+        }) as LiveExportObservation;
+    Assert(observation is not null, "Expected runtime BuildObservation self-test helper to return an observation.");
+    return observation!;
+}
+
 static object? ReadProperty(object target, string propertyName)
 {
     return target.GetType().GetProperty(propertyName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(target);
@@ -4014,6 +4124,68 @@ file sealed class FakeNMapScreen
     public bool IsOpen { get; init; }
 
     public bool Visible { get; init; }
+
+    public object? _mapPointDictionary { get; init; }
+}
+
+file sealed class FakeRestSiteOption
+{
+    public string? OptionId { get; init; }
+
+    public string? Label { get; init; }
+}
+
+file class FakeNMapPoint
+{
+    protected FakeNMapPoint(string pointType, int row, int col, double x, double y, bool enabled, double width, double height)
+    {
+        IsEnabled = enabled;
+        Position = new FakeVector2(x, y);
+        Size = new FakeVector2(width, height);
+        Point = new FakeMapPointModel(pointType, row, col);
+    }
+
+    public bool IsEnabled { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+
+    public FakeMapPointModel Point { get; init; }
+}
+
+file sealed class FakeNBossMapPoint : FakeNMapPoint
+{
+    public FakeNBossMapPoint(string pointType, int row, int col, double x, double y, bool enabled, double width, double height)
+        : base(pointType, row, col, x, y, enabled, width, height)
+    {
+    }
+}
+
+file sealed class FakeMapPointModel
+{
+    public FakeMapPointModel(string pointType, int row, int col)
+    {
+        PointType = pointType;
+        coord = new FakeMapCoord(row, col);
+    }
+
+    public string PointType { get; }
+
+    public FakeMapCoord coord { get; }
+}
+
+file sealed class FakeMapCoord
+{
+    public FakeMapCoord(int row, int col)
+    {
+        this.row = row;
+        this.col = col;
+    }
+
+    public int row { get; }
+
+    public int col { get; }
 }
 
 file sealed class FakeNRewardsScreen

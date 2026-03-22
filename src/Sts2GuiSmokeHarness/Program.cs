@@ -3338,10 +3338,14 @@ static void RunSelfTest()
         request,
         decision);
 
-    var specialKeyDecision = new GuiSmokeStepDecision("act", "press-key", "Escape", null, null, "cancel selection", "cancel with escape", 0.8, "combat", 500, false, null);
+    var specialKeyDecision = new GuiSmokeStepDecision("act", "right-click", null, null, null, "cancel selection", "cancel with right click", 0.8, "combat", 500, false, null);
     ValidateDecision(
         GuiSmokePhase.HandleCombat,
-        request with { AllowedActions = new[] { "click card", "click enemy", "click end turn", "wait" } },
+        request with
+        {
+            Phase = GuiSmokePhase.HandleCombat.ToString(),
+            AllowedActions = new[] { "click card", "click enemy", "click end turn", "right-click cancel selected card", "wait" },
+        },
         specialKeyDecision);
 
     var autoRewardRequest = request with
@@ -5464,6 +5468,9 @@ static void RunSelfTest()
             Observer = restSiteProceedSummary,
             AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteProceedObserver),
         };
+        Assert(restSiteProceedRequest.AllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
+               && !restSiteProceedRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase),
+            "ChooseFirstNode allowlist should reopen the rest-site proceed lane before stale smith/wait residue.");
         var restSiteProceedDecision = AutoDecisionProvider.Decide(restSiteProceedRequest);
         Assert(string.Equals(restSiteProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
             "Observer-visible rest-site proceed choice should create a visible proceed decision without waiting for screenshot arrows.");
@@ -5521,6 +5528,60 @@ static void RunSelfTest()
             var legacyReplayArtifact = EvaluateAutoDecisionWithDiagnostics(legacyRestSiteRequestPath, legacyReplayRequest).CandidateDump;
             Assert(string.Equals(legacyReplayArtifact.FinalDecision.TargetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase),
                 "Legacy replay artifact without binding metadata should still choose rest site: smith.");
+        }
+
+        var mixedRestAftermathSummary = restSiteMetadataSummary with
+        {
+            CurrentScreen = "rest-site",
+            VisibleScreen = "rest-site",
+            ChoiceExtractorPath = "generic",
+            CurrentChoices = Array.Empty<string>(),
+            ActionNodes = Array.Empty<ObserverActionNode>(),
+            Choices = Array.Empty<ObserverChoice>(),
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["mapCurrentActiveScreen"] = "true",
+                ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+            },
+        };
+        var mixedRestAftermathObserver = new ObserverState(mixedRestAftermathSummary, null, null, null);
+        var mixedRestAftermathAllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mixedRestAftermathObserver);
+        Assert(mixedRestAftermathAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+               && !mixedRestAftermathAllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase),
+            "Mixed rest-site aftermath should reopen ChooseFirstNode on the map lane instead of stale smith/wait allowlists once NMapScreen is current.");
+        Assert(GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(mixedRestAftermathSummary, out var mixedRestAftermathPhase)
+               && mixedRestAftermathPhase == GuiSmokePhase.ChooseFirstNode,
+            "Post-embark reconciliation should prefer map progression over stale rest-site residue when mapCurrentActiveScreen is true.");
+
+        var mixedRestAftermathReplayRoot = Path.Combine(
+            Directory.GetCurrentDirectory(),
+            "artifacts",
+            "gui-smoke",
+            "verify-reward-proceed-aftermath-v2-20260322-200024",
+            "attempts",
+            "0001",
+            "steps");
+        foreach (var replayStep in new[] { "0018", "0019" })
+        {
+            var replayRequestPath = Path.Combine(mixedRestAftermathReplayRoot, $"{replayStep}.request.json");
+            if (!File.Exists(replayRequestPath))
+            {
+                continue;
+            }
+
+            var replayRequest = LoadReplayRequest(replayRequestPath).Request;
+            Assert(!GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(replayRequest),
+                $"Mixed rest-site aftermath replay {replayStep} should preserve the original stale non-map allowlist before rebuild.");
+            var replayArtifact = EvaluateAutoDecisionWithDiagnostics(replayRequestPath, replayRequest).CandidateDump;
+            Assert(string.Equals(replayArtifact.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+                $"Mixed rest-site aftermath replay {replayStep} should wait instead of emitting illegal screenshot map routing against a non-map allowlist.");
+            Assert(!string.Equals(replayArtifact.FinalDecision.TargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase),
+                $"Mixed rest-site aftermath replay {replayStep} must not recreate the old request/decision mismatch.");
+
+            var rebuiltReplayRequest = LoadReplayRequest(replayRequestPath, fullRequestRebuild: true).Request;
+            Assert(rebuiltReplayRequest.AllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+                   && !rebuiltReplayRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase),
+                $"Mixed rest-site aftermath replay rebuild {replayStep} should reopen the legal map-routing lane instead of stale smith/wait actions.");
         }
     }
     finally
@@ -11472,6 +11533,7 @@ static string[] BuildAllowedActionsCore(
     var rewardBackNavigationAvailable = context.RewardBackNavigationAvailable;
     var claimableRewardPresent = context.ClaimableRewardPresent;
     var mapOverlayState = context.MapOverlayState;
+    var mapForegroundOwnership = MapForegroundReconciliation.HasMapForegroundOwnership(observer, history);
     var explicitRestSiteChoiceAuthority = HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
     if (phase == GuiSmokePhase.WaitRunLoad && GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(observer, out var postRunLoadPhase))
     {
@@ -11512,15 +11574,19 @@ static string[] BuildAllowedActionsCore(
         GuiSmokePhase.HandleRewards => new[] { "click proceed", "click reward", "wait" },
         GuiSmokePhase.ChooseFirstNode when explicitRestSiteChoiceAuthority
             => BuildExplicitRestSiteAllowedActions(observer.Summary),
-        GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
-            => new[] { "click smith card", "click smith confirm", "wait" },
+        GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteProceedState(observer.Summary)
+            => new[] { "click proceed", "wait" },
         GuiSmokePhase.ChooseFirstNode when treasureState is { RoomDetected: true }
             => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
         GuiSmokePhase.ChooseFirstNode when mapOverlayState.ForegroundVisible
             => mapOverlayState.MapBackNavigationAvailable
                 ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
                 : new[] { "click exported reachable node", "click first reachable node", "wait" },
-        GuiSmokePhase.ChooseFirstNode => new[] { "click first reachable node", "click visible map advance", "wait" },
+        GuiSmokePhase.ChooseFirstNode when mapForegroundOwnership
+            => new[] { "click exported reachable node", "click visible map advance", "wait" },
+        GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
+            => new[] { "click smith card", "click smith confirm", "wait" },
+        GuiSmokePhase.ChooseFirstNode => new[] { "click exported reachable node", "click visible map advance", "wait" },
         GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
             => new[] { "press escape", "click inspect overlay close", "wait" },
         GuiSmokePhase.HandleEvent when cardSelectionState is not null
@@ -12701,79 +12767,12 @@ static bool LooksLikeTreasureState(ObserverSummary observer)
 
 static bool LooksLikeRestSiteState(ObserverSummary observer)
 {
-    if (string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
-        || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer))
-    {
-        return true;
-    }
-
-    if (observer.Choices.Any(static choice =>
-            !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
-            && (choice.Label.Contains("\uD734\uC2DD", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("Smith", StringComparison.OrdinalIgnoreCase))))
-    {
-        return true;
-    }
-
-    return observer.Choices.Count == 0
-           && observer.CurrentChoices.Any(static label =>
-               label.Contains("\uD734\uC2DD", StringComparison.OrdinalIgnoreCase)
-               || label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
-               || label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
-               || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+    return GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer);
 }
 
 static bool LooksLikeRestSiteProceedState(ObserverSummary observer)
 {
-    if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer))
-    {
-        return false;
-    }
-
-    var onRestSiteScreen = string.Equals(observer.CurrentScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
-                           || string.Equals(observer.VisibleScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
-                           || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase);
-    if (!onRestSiteScreen)
-    {
-        return false;
-    }
-
-    var hasProceedActionNode = observer.ActionNodes.Any(static node =>
-        node.Actionable
-        && IsProceedNode(node)
-        && TryParseNodeBounds(node.ScreenBounds, out _));
-    var hasProceedChoice = observer.Choices.Any(static choice =>
-        IsProceedChoice(choice)
-        && HasLargeChoiceBounds(choice.ScreenBounds));
-    var hasProceedLabel = observer.CurrentChoices.Any(IsProceedLikeLabel);
-    if (!hasProceedActionNode && !hasProceedChoice && !hasProceedLabel)
-    {
-        return false;
-    }
-
-    var hasExplicitRestChoice = observer.Choices.Any(static choice =>
-        string.Equals(choice.Kind, "rest-option", StringComparison.OrdinalIgnoreCase)
-        || string.Equals(choice.BindingKind, "rest-site-option", StringComparison.OrdinalIgnoreCase)
-        || (HasLargeChoiceBounds(choice.ScreenBounds)
-            && (choice.Label.Contains("\uD734\uC2DD", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("Smith", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("\uBD80\uD654", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("Hatch", StringComparison.OrdinalIgnoreCase))));
-    if (!hasExplicitRestChoice)
-    {
-        return true;
-    }
-
-    return string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteSelectionLastSignal"), "after-select-success", StringComparison.OrdinalIgnoreCase)
-           || (hasProceedLabel
-               && !observer.CurrentChoices.Any(static label =>
-                   ContainsAny(label, "휴식", "Rest", "재련", "Smith", "부화", "Hatch")));
+    return GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer);
 }
 
 static bool HasExplicitRestSiteChoiceAuthority(ObserverState observer, string? screenshotPath)
@@ -14395,9 +14394,27 @@ static string DescribeBounds(Rectangle bounds)
 
 static void ValidateDecision(GuiSmokePhase phase, GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
 {
+    if (string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase))
+    {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "wait"))
+        {
+            throw new InvalidOperationException($"Phase {phase} does not allow wait decisions.");
+        }
+
+        if (decision.ActionKind is not null
+            || decision.KeyText is not null
+            || decision.NormalizedX is not null
+            || decision.NormalizedY is not null)
+        {
+            throw new InvalidOperationException("Wait decision must not provide an action kind, key, or coordinates.");
+        }
+
+        return;
+    }
+
     if (!string.Equals(decision.Status, "act", StringComparison.OrdinalIgnoreCase))
     {
-        throw new InvalidOperationException("Only act decisions are valid here.");
+        throw new InvalidOperationException("Only act or wait decisions are valid here.");
     }
 
     if (string.Equals(decision.ActionKind, "click", StringComparison.OrdinalIgnoreCase))
@@ -14448,6 +14465,22 @@ static void ValidateDecision(GuiSmokePhase phase, GuiSmokeStepRequest request, G
     if (request.AllowedActions.Length == 1 && string.Equals(request.AllowedActions[0], "wait", StringComparison.OrdinalIgnoreCase))
     {
         throw new InvalidOperationException($"Phase {phase} does not allow actions.");
+    }
+
+    if (phase == GuiSmokePhase.HandleCombat)
+    {
+        if (!CombatDecisionContract.IsAllowed(request, decision, out _))
+        {
+            throw new InvalidOperationException($"Combat decision '{decision.TargetLabel ?? decision.ActionKind ?? "unknown"}' is not allowed by request contract.");
+        }
+
+        return;
+    }
+
+    if (GuiSmokeNonCombatContractSupport.TryMapNonCombatAllowedAction(decision, out var allowedAction)
+        && !GuiSmokeNonCombatContractSupport.AllowsAction(request, allowedAction))
+    {
+        throw new InvalidOperationException($"Decision '{decision.TargetLabel ?? decision.ActionKind ?? "unknown"}' maps to disallowed action '{allowedAction}'.");
     }
 }
 
@@ -16417,6 +16450,233 @@ sealed record ObserverSummary(
     IReadOnlyList<ObservedCombatHandCard> CombatHand)
 {
     public IReadOnlyDictionary<string, string?> Meta { get; init; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+}
+
+static class GuiSmokeNonCombatContractSupport
+{
+    public static bool LooksLikeRestSiteState(ObserverSummary observer)
+    {
+        if (MapAuthorityOutranksStaleRestSiteResidue(observer))
+        {
+            return false;
+        }
+
+        if (string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
+            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer))
+        {
+            return true;
+        }
+
+        if (observer.Choices.Any(static choice =>
+                !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+                && ContainsAny(choice.Label, "휴식", "Rest", "재련", "Smith")))
+        {
+            return true;
+        }
+
+        return observer.Choices.Count == 0
+               && observer.CurrentChoices.Any(static label =>
+                   ContainsAny(label, "휴식", "Rest", "재련", "Smith"));
+    }
+
+    public static bool LooksLikeRestSiteProceedState(ObserverSummary observer)
+    {
+        if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
+            || MapAuthorityOutranksStaleRestSiteResidue(observer))
+        {
+            return false;
+        }
+
+        var onRestSiteScreen = string.Equals(observer.CurrentScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
+                               || string.Equals(observer.VisibleScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
+                               || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase);
+        if (!onRestSiteScreen)
+        {
+            return false;
+        }
+
+        var hasProceedActionNode = observer.ActionNodes.Any(static node =>
+            node.Actionable
+            && IsProceedNode(node)
+            && TryParseBounds(node.ScreenBounds, out _));
+        var hasProceedChoice = observer.Choices.Any(static choice =>
+            IsProceedChoice(choice)
+            && HasLargeChoiceBounds(choice.ScreenBounds));
+        var hasProceedLabel = observer.CurrentChoices.Any(IsProceedLikeLabel);
+        if (!hasProceedActionNode && !hasProceedChoice && !hasProceedLabel)
+        {
+            return false;
+        }
+
+        var hasExplicitRestChoice = observer.Choices.Any(static choice =>
+            string.Equals(choice.Kind, "rest-option", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.BindingKind, "rest-site-option", StringComparison.OrdinalIgnoreCase)
+            || (HasLargeChoiceBounds(choice.ScreenBounds)
+                && ContainsAny(choice.Label, "휴식", "Rest", "재련", "Smith", "부화", "Hatch")));
+        if (!hasExplicitRestChoice)
+        {
+            return true;
+        }
+
+        return string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteSelectionLastSignal"), "after-select-success", StringComparison.OrdinalIgnoreCase)
+               || (hasProceedLabel
+                   && !observer.CurrentChoices.Any(static label =>
+                       ContainsAny(label, "휴식", "Rest", "재련", "Smith", "부화", "Hatch")));
+    }
+
+    public static bool AllowsAction(GuiSmokeStepRequest request, string action)
+    {
+        return request.AllowedActions.Contains(action, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public static bool AllowsAnyMapRoutingAction(GuiSmokeStepRequest request)
+    {
+        return AllowsAction(request, "click exported reachable node")
+               || AllowsAction(request, "click first reachable node")
+               || AllowsAction(request, "click visible map advance")
+               || AllowsAction(request, "click map back");
+    }
+
+    public static GuiSmokeStepDecision CreateMapRoutingContractWaitDecision(GuiSmokeStepRequest request, string reason)
+    {
+        return new GuiSmokeStepDecision(
+            "wait",
+            null,
+            null,
+            null,
+            null,
+            null,
+            reason,
+            0.60,
+            request.Observer.CurrentScreen,
+            2000,
+            true,
+            null,
+            DecisionRisk: "map-routing-disallowed-by-allowlist");
+    }
+
+    public static bool TryMapNonCombatAllowedAction(GuiSmokeStepDecision decision, out string allowedAction)
+    {
+        allowedAction = string.Empty;
+        if (string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase))
+        {
+            allowedAction = "wait";
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(decision.TargetLabel))
+        {
+            return false;
+        }
+
+        allowedAction = decision.TargetLabel switch
+        {
+            { } label when label.Contains("exported reachable map node", StringComparison.OrdinalIgnoreCase) => "click exported reachable node",
+            { } label when label.Contains("visible reachable node", StringComparison.OrdinalIgnoreCase)
+                           || label.Contains("first reachable node", StringComparison.OrdinalIgnoreCase) => "click first reachable node",
+            { } label when label.Contains("visible map advance", StringComparison.OrdinalIgnoreCase) => "click visible map advance",
+            { } label when label.Contains("map back", StringComparison.OrdinalIgnoreCase) => "click map back",
+            { } label when label.Contains("rest site:", StringComparison.OrdinalIgnoreCase) => "click rest site choice",
+            { } label when label.Contains("smith card", StringComparison.OrdinalIgnoreCase) => "click smith card",
+            { } label when label.Contains("smith confirm", StringComparison.OrdinalIgnoreCase) => "click smith confirm",
+            { } label when label.Contains("treasure chest", StringComparison.OrdinalIgnoreCase) => "click treasure chest",
+            { } label when label.Contains("treasure relic holder", StringComparison.OrdinalIgnoreCase) => "click treasure relic holder",
+            { } label when label.Contains("treasure proceed", StringComparison.OrdinalIgnoreCase) => "click treasure proceed",
+            { } label when label.Contains("visible proceed", StringComparison.OrdinalIgnoreCase) => "click proceed",
+            _ => string.Empty,
+        };
+        return allowedAction.Length > 0;
+    }
+
+    private static bool HasMapCurrentActiveScreen(ObserverSummary observer)
+    {
+        return observer.Meta.TryGetValue("mapCurrentActiveScreen", out var value)
+               && string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasExplicitMapNodeAuthority(ObserverSummary observer)
+    {
+        return observer.Choices.Any(MapNodeSourceSupport.IsExplicitMapPointChoice)
+               || observer.ActionNodes.Any(static node =>
+                   node.Actionable
+                   && MapNodeSourceSupport.IsExplicitMapPointNode(node));
+    }
+
+    private static bool MapAuthorityOutranksStaleRestSiteResidue(ObserverSummary observer)
+    {
+        var mapAuthorityVisible = HasMapCurrentActiveScreen(observer)
+                                  || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                  || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                  || HasExplicitMapNodeAuthority(observer);
+        if (!mapAuthorityVisible)
+        {
+            return false;
+        }
+
+        return !RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
+               && !RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
+    }
+
+    private static bool ContainsAny(string? value, params string[] candidates)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return candidates.Any(candidate => value.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsProceedLikeLabel(string? label)
+    {
+        return ContainsAny(label, "Proceed", "Continue", "진행", "계속");
+    }
+
+    private static bool IsProceedNode(ObserverActionNode node)
+    {
+        return ContainsAny(node.Label, "Proceed", "Continue", "진행", "계속")
+               || node.Kind.Contains("proceed", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsProceedChoice(ObserverChoice choice)
+    {
+        return !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+               && IsProceedLikeLabel(choice.Label);
+    }
+
+    private static bool HasLargeChoiceBounds(string? screenBounds)
+    {
+        return TryParseBounds(screenBounds, out var bounds)
+               && bounds.Width >= 260f
+               && bounds.Height >= 60f;
+    }
+
+    private static bool TryParseBounds(string? raw, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height)
+            || width <= 0f
+            || height <= 0f)
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return true;
+    }
 }
 
 static class MapNodeSourceSupport
@@ -18747,29 +19007,7 @@ static class GuiSmokeObserverPhaseHeuristics
 
     private static bool LooksLikeRestSiteState(ObserverSummary observer)
     {
-        if (string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
-            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer))
-        {
-            return true;
-        }
-
-        if (observer.Choices.Any(static choice =>
-                !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
-                && (choice.Label.Contains("휴식", StringComparison.OrdinalIgnoreCase)
-                    || choice.Label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
-                    || choice.Label.Contains("재련", StringComparison.OrdinalIgnoreCase)
-                    || choice.Label.Contains("Smith", StringComparison.OrdinalIgnoreCase))))
-        {
-            return true;
-        }
-
-        return observer.Choices.Count == 0
-               && observer.CurrentChoices.Any(static label =>
-                   label.Contains("휴식", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("재련", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+        return GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer);
     }
 }
 
@@ -19267,6 +19505,13 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             }
 
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "map overlay foreground suppresses current-node-arrow fallback");
+            if (!GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request))
+            {
+                return GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
+                    request,
+                    "map overlay is visible but request allowlist does not permit map routing; waiting for exporter/phase reconciliation");
+            }
+
             return GuiSmokeDecisionDebug.TraceCandidate(
                        "exported reachable map node",
                        "observer-map-node",
@@ -19314,7 +19559,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                    0.78,
                    TryFindVisibleMapAdvanceDecision(request),
                    "no current-node-arrow fallback was permitted")
-               ?? CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen);
+               ?? (GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request)
+                   ? CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen)
+                   : GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
+                       request,
+                       "map progression evidence is present but request allowlist does not permit map routing; waiting for exporter/phase reconciliation"));
     }
 
     private static GuiSmokeStepDecision DecideHandleShop(GuiSmokeStepRequest request)
@@ -20860,6 +21109,19 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 builder.AddSuppressed("click visible map advance", "current-node-arrow-is-not-a-reachable-node");
             }
 
+            if (!GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request))
+            {
+                builder.AddSuppressed("click exported reachable node", "request-allowlist-excludes-map-routing");
+                builder.AddSuppressed("click first reachable node", "request-allowlist-excludes-map-routing");
+                builder.AddSuppressed("click map back", "request-allowlist-excludes-map-routing");
+                builder.AddSuppressed("click visible map advance", "request-allowlist-excludes-map-routing");
+                return builder.Build(
+                    GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
+                        request,
+                        "map overlay is visible but request allowlist does not permit map routing; waiting for exporter/phase reconciliation"),
+                    actualDecision);
+            }
+
             builder.Consider(
                 "click exported reachable node",
                 "observer-export:map-node",
@@ -21629,6 +21891,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         };
     }
 
+    private static bool AllowsAction(GuiSmokeStepRequest request, string action)
+    {
+        return request.AllowedActions.Contains(action, StringComparer.OrdinalIgnoreCase);
+    }
+
     private static string? TryFindMapNodeBounds(GuiSmokeStepRequest request)
     {
         return request.Observer.Choices.FirstOrDefault(choice =>
@@ -21954,7 +22221,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryFindFirstReachableMapNodeDecision(GuiSmokeStepRequest request)
     {
-        if (HasContradictoryForegroundOwnerAgainstMapFallback(request))
+        if (HasContradictoryForegroundOwnerAgainstMapFallback(request)
+            || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click first reachable node"))
         {
             return null;
         }
@@ -21982,7 +22250,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateExportedReachableMapPointDecision(GuiSmokeStepRequest request)
     {
-        if (HasContradictoryForegroundOwnerAgainstMapFallback(request))
+        if (HasContradictoryForegroundOwnerAgainstMapFallback(request)
+            || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click exported reachable node"))
         {
             return null;
         }
@@ -22019,7 +22288,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateMapBackNavigationDecision(GuiSmokeStepRequest request)
     {
-        if (HasContradictoryForegroundOwnerAgainstMapFallback(request))
+        if (HasContradictoryForegroundOwnerAgainstMapFallback(request)
+            || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click map back"))
         {
             return null;
         }
@@ -22745,7 +23015,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryFindVisibleMapAdvanceDecision(GuiSmokeStepRequest request)
     {
-        if (HasContradictoryForegroundOwnerAgainstMapFallback(request))
+        if (HasContradictoryForegroundOwnerAgainstMapFallback(request)
+            || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click visible map advance"))
         {
             return null;
         }
@@ -22805,6 +23076,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateVisibleProceedDecision(GuiSmokeStepRequest request)
     {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click proceed"))
+        {
+            return null;
+        }
+
         var proceedNode = request.Observer.ActionNodes.FirstOrDefault(node =>
             node.Actionable
             && IsProceedNode(node)
@@ -23024,29 +23300,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool LooksLikeRestSiteState(ObserverSummary observer)
     {
-        if (string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
-            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer))
-        {
-            return true;
-        }
-
-        if (observer.Choices.Any(static choice =>
-                !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
-                && (choice.Label.Contains("\uD734\uC2DD", StringComparison.OrdinalIgnoreCase)
-                    || choice.Label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
-                    || choice.Label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
-                    || choice.Label.Contains("Smith", StringComparison.OrdinalIgnoreCase))))
-        {
-            return true;
-        }
-
-        return observer.Choices.Count == 0
-               && observer.CurrentChoices.Any(static label =>
-                   label.Contains("\uD734\uC2DD", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("Rest", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("\uC7AC\uB828", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
+        return GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer);
     }
 
     private static bool LooksLikeScreenshotFirstRoomState(GuiSmokeStepRequest request)
