@@ -1018,7 +1018,15 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
         logger.WriteObserverCopies(stepPrefix, observer);
         LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
-        var iterationSceneSignature = ComputeSceneSignature(screenshotPath, observer, phase);
+        var serializedHistory = BuildSerializedStepHistory(phase, history);
+        var combatCardKnowledge = LoadCombatCardKnowledge(workspaceRoot, observer);
+        var stepAnalysisContext = CreateStepAnalysisContext(
+            phase,
+            observer,
+            screenshotPath,
+            serializedHistory,
+            combatCardKnowledge);
+        var iterationSceneSignature = ComputeSceneSignatureCore(screenshotPath, observer, phase, stepAnalysisContext);
         var iterationFirstSeenScene = isLongRun && !HasSceneSignatureHistory(sessionRoot, iterationSceneSignature);
         var iterationReasoningMode = DetermineReasoningMode(phase, observer, iterationFirstSeenScene);
 
@@ -1265,7 +1273,8 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
             workspaceRoot,
             sessionRoot,
             attemptId,
-            attemptOrdinal);
+            attemptOrdinal,
+            stepAnalysisContext);
         var requestPath = stepPrefix + ".request.json";
         var decisionPath = stepPrefix + ".decision.json";
         logger.WriteRequest(requestPath, request);
@@ -1274,13 +1283,13 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         GuiSmokeStepDecision decision;
         if (provider is AutoDecisionProvider)
         {
-            replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request);
+            replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request, null, stepAnalysisContext);
             decision = replayEvaluation.Decision;
         }
         else
         {
             decision = await provider.GetDecisionAsync(requestPath, decisionPath, TimeSpan.FromMinutes(3), CancellationToken.None).ConfigureAwait(false);
-            replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request, decision);
+            replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request, decision, stepAnalysisContext);
         }
         WriteCandidateDumpArtifact(stepPrefix + ".candidates.json", replayEvaluation.CandidateDump);
         logger.WriteDecision(decisionPath, decision);
@@ -2441,9 +2450,15 @@ static GuiSmokeReplayRequestLoadResult LoadReplayRequest(string requestPath, Gui
         null,
         request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>());
     var phase = Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true);
+    var analysisContext = CreateStepAnalysisContext(
+        phase,
+        observer,
+        request.ScreenshotPath,
+        request.History,
+        request.CombatCardKnowledge);
     var sceneSignature = tracer.Measure(
         "scene-signature",
-        () => ComputeSceneSignature(request.ScreenshotPath, observer, phase),
+        () => ComputeSceneSignatureCore(request.ScreenshotPath, observer, phase, analysisContext),
         Path.GetFileName(request.ScreenshotPath),
         alwaysLog: false);
     string[] allowedActions;
@@ -2453,12 +2468,12 @@ static GuiSmokeReplayRequestLoadResult LoadReplayRequest(string requestPath, Gui
     {
         allowedActions = tracer.Measure(
             "allowed-actions",
-            () => BuildAllowedActions(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History),
+            () => BuildAllowedActionsCore(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History, analysisContext),
             request.Phase,
             alwaysLog: false);
         failureModeHint = tracer.Measure(
             "failure-mode-hint",
-            () => BuildFailureModeHintCore(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History),
+            () => BuildFailureModeHintCoreWithContext(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History, analysisContext),
             request.Phase,
             alwaysLog: false);
         semanticGoal = tracer.Measure(
@@ -2509,9 +2524,10 @@ static JsonDocument? TryLoadJsonDocument(string path)
 static GuiSmokeReplayEvaluation EvaluateAutoDecisionWithDiagnostics(
     string requestPath,
     GuiSmokeStepRequest request,
-    GuiSmokeStepDecision? actualDecision = null)
+    GuiSmokeStepDecision? actualDecision = null,
+    GuiSmokeStepAnalysisContext? analysisContext = null)
 {
-    var analysis = AutoDecisionProvider.Analyze(request, actualDecision);
+    var analysis = AutoDecisionProvider.Analyze(request, actualDecision, analysisContext);
     return new GuiSmokeReplayEvaluation(
         requestPath,
         request,
@@ -7407,6 +7423,21 @@ static void RunSelfTest()
         Assert(string.Equals(parityNonRebuildSemantic, "click end turn", StringComparison.OrdinalIgnoreCase), "Step19-like synthetic parity regression should still close on end turn.");
         Assert(!string.Equals(parityRebuiltDecision.TargetLabel, "combat select attack slot 2", StringComparison.OrdinalIgnoreCase), "Step19-like synthetic parity regression should not rebuild to illegal attack slot 2.");
 
+        var combatFastPathContext = CreateStepAnalysisContext(
+            GuiSmokePhase.HandleCombat,
+            parityObserverState,
+            combatNoOpScreenshotPath,
+            paritySerializedHistory,
+            parityCombatKnowledge);
+        Assert(combatFastPathContext.UseCombatFastPath, "Explicit combat authority without contradictory room ownership should enable the combat fast path.");
+        var combatFastPathSignature = ComputeSceneSignatureCore(combatNoOpScreenshotPath, parityObserverState, GuiSmokePhase.HandleCombat, combatFastPathContext);
+        Assert(combatFastPathSignature.Contains("combat:fast-path", StringComparison.OrdinalIgnoreCase), "Combat fast path scene signatures should mark the fast-path contract explicitly.");
+        Assert(!combatFastPathSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase), "Combat fast path scene signatures should not add reward/map contamination layers.");
+        Assert(!combatFastPathSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase), "Combat fast path scene signatures should not add screenshot map-arrow contamination.");
+        var parityContextAnalysis = AutoDecisionProvider.Analyze(parityRequest, analysisContext: CreateRequestAnalysisContext(parityRequest));
+        Assert(CombatDecisionContract.TryMapSemanticAction(parityRequest, parityContextAnalysis.FinalDecision, out var parityContextSemantic), "Context-backed combat analysis should still map to a legal combat semantic action.");
+        Assert(string.Equals(parityContextSemantic, "click end turn", StringComparison.OrdinalIgnoreCase), "Context-backed combat analysis should preserve the same HandleCombat parity outcome.");
+
         var slotAlignmentObserver = new ObserverState(
             new ObserverSummary(
                 "combat",
@@ -10286,6 +10317,136 @@ static IReadOnlyList<GuiSmokeHistoryEntry> BuildSerializedStepHistory(
         : history.TakeLast(5).ToArray();
 }
 
+static GuiSmokeStepAnalysisContext CreateStepAnalysisContext(
+    GuiSmokePhase phase,
+    ObserverState observer,
+    string? screenshotPath,
+    IReadOnlyList<GuiSmokeHistoryEntry> history,
+    IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+{
+    static AutoCombatAnalysis EmptyCombatAnalysis() => new(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown);
+    static AutoCombatHandAnalysis EmptyCombatHandAnalysis() => new(Array.Empty<AutoCombatHandSlotAnalysis>());
+
+    ReconstructedHandleCombatContext? combatContext = null;
+    PendingCombatSelection? pendingSelection = null;
+    var pendingSelectionComputed = false;
+    CombatRuntimeState? runtimeCombatState = null;
+    AutoCombatAnalysis? combatAnalysis = null;
+    AutoCombatHandAnalysis? combatHandAnalysis = null;
+
+    ReconstructedHandleCombatContext GetCombatContext()
+        => combatContext ??= HandleCombatContextSupport.Reconstruct(history);
+
+    PendingCombatSelection? GetPendingSelection()
+    {
+        if (!pendingSelectionComputed)
+        {
+            pendingSelection = CombatRuntimeStateSupport.ResolvePendingSelection(observer.Summary, combatCardKnowledge, GetCombatContext().PendingSelection);
+            pendingSelectionComputed = true;
+        }
+
+        return pendingSelection;
+    }
+
+    CombatRuntimeState GetRuntimeCombatState()
+        => runtimeCombatState ??= CombatRuntimeStateSupport.Read(observer.Summary, combatCardKnowledge);
+
+    AutoCombatAnalysis GetCombatAnalysis()
+        => combatAnalysis ??= string.IsNullOrWhiteSpace(screenshotPath) ? EmptyCombatAnalysis() : AutoCombatAnalyzer.Analyze(screenshotPath);
+
+    AutoCombatHandAnalysis GetCombatHandAnalysis()
+        => combatHandAnalysis ??= string.IsNullOrWhiteSpace(screenshotPath) ? EmptyCombatHandAnalysis() : AutoCombatHandAnalyzer.Analyze(screenshotPath);
+
+    bool ComputeUseCombatFastPath()
+    {
+        bool HasExplicitEventForeground()
+        {
+            var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+            if (!eventAuthority)
+            {
+                return false;
+            }
+
+            return observer.ActionNodes.Any(static node =>
+                       node.Actionable
+                       && !string.IsNullOrWhiteSpace(node.ScreenBounds)
+                       && (node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                           || node.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
+                           || node.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
+                           || node.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)
+                           || node.Label.Contains("계속", StringComparison.OrdinalIgnoreCase)))
+                   || observer.Choices.Any(static choice =>
+                       !string.IsNullOrWhiteSpace(choice.ScreenBounds)
+                       && (string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (phase != GuiSmokePhase.HandleCombat || observer.InCombat != true)
+        {
+            return false;
+        }
+
+        var combatScreenVisible = string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
+                                  || string.Equals(observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase);
+        if (!combatScreenVisible)
+        {
+            return false;
+        }
+
+        if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
+            || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
+            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
+            || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
+            || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
+            || HasRestSiteAuthority(observer.Summary)
+            || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+            || HasExplicitEventForeground()
+            || LooksLikeInspectOverlayState(observer))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    return new GuiSmokeStepAnalysisContext(
+        phase,
+        observer,
+        screenshotPath,
+        history,
+        combatCardKnowledge,
+        ComputeUseCombatFastPath,
+        () => BuildRewardMapLayerStateForObserver(observer.Summary, null),
+        () =>
+        {
+            var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
+            return rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
+        },
+        () => HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath),
+        () => GuiSmokeMapOverlayHeuristics.BuildState(observer, null, screenshotPath),
+        GetCombatContext,
+        GetPendingSelection,
+        GetRuntimeCombatState,
+        GetCombatAnalysis,
+        GetCombatHandAnalysis,
+        () => CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary),
+        () => CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
+        () => CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()));
+}
+
+static GuiSmokeStepAnalysisContext CreateRequestAnalysisContext(GuiSmokeStepRequest request)
+{
+    return CreateStepAnalysisContext(
+        Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true),
+        new ObserverState(request.Observer, null, null, request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>()),
+        request.ScreenshotPath,
+        request.History,
+        request.CombatCardKnowledge);
+}
+
 static GuiSmokeStepRequest CreateStepRequest(
     string runId,
     string scenarioId,
@@ -10298,15 +10459,21 @@ static GuiSmokeStepRequest CreateStepRequest(
     string workspaceRoot,
     string sessionRoot,
     string attemptId,
-    int attemptOrdinal)
+    int attemptOrdinal,
+    GuiSmokeStepAnalysisContext? analysisContext = null)
 {
-    var serializedHistory = BuildSerializedStepHistory(phase, history);
-    var sceneSignature = ComputeSceneSignature(screenshotPath, observer, phase);
-    var knownRecipes = LoadKnownRecipes(sessionRoot, sceneSignature, phase.ToString());
+    var serializedHistory = analysisContext?.History ?? BuildSerializedStepHistory(phase, history);
+    var combatCardKnowledge = analysisContext?.CombatCardKnowledge ?? LoadCombatCardKnowledge(workspaceRoot, observer);
+    var sceneSignature = ComputeSceneSignatureCore(screenshotPath, observer, phase, analysisContext);
+    var useCombatFastPath = analysisContext?.UseCombatFastPath == true;
+    var knownRecipes = useCombatFastPath
+        ? Array.Empty<KnownRecipeHint>()
+        : LoadKnownRecipes(sessionRoot, sceneSignature, phase.ToString());
     var firstSeenScene = !HasSceneSignatureHistory(sessionRoot, sceneSignature);
     var reasoningMode = DetermineReasoningMode(phase, observer, firstSeenScene);
-    var eventKnowledgeCandidates = LoadEventKnowledgeCandidates(workspaceRoot, observer, reasoningMode);
-    var combatCardKnowledge = LoadCombatCardKnowledge(workspaceRoot, observer);
+    var eventKnowledgeCandidates = useCombatFastPath
+        ? Array.Empty<EventKnowledgeCandidate>()
+        : LoadEventKnowledgeCandidates(workspaceRoot, observer, reasoningMode);
     return new GuiSmokeStepRequest(
         runId,
         scenarioId,
@@ -10327,19 +10494,62 @@ static GuiSmokeStepRequest CreateStepRequest(
         knownRecipes,
         eventKnowledgeCandidates,
         combatCardKnowledge,
-        BuildAllowedActions(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory),
+        BuildAllowedActionsCore(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory, analysisContext),
         serializedHistory,
-        BuildFailureModeHintCore(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory),
+        BuildFailureModeHintCoreWithContext(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory, analysisContext),
         BuildDecisionRiskHint(phase, observer, firstSeenScene, reasoningMode));
 }
 
 static string ComputeSceneSignature(string screenshotPath, ObserverState observer, GuiSmokePhase phase)
 {
+    return ComputeSceneSignatureCore(screenshotPath, observer, phase, null);
+}
+
+static string ComputeSceneSignatureCore(string screenshotPath, ObserverState observer, GuiSmokePhase phase, GuiSmokeStepAnalysisContext? analysisContext)
+{
+    var context = analysisContext ?? CreateStepAnalysisContext(phase, observer, screenshotPath, Array.Empty<GuiSmokeHistoryEntry>(), Array.Empty<CombatCardKnowledgeHint>());
+    if (context.UseCombatFastPath)
+    {
+        var combatRuntimeState = context.RuntimeCombatState;
+        var combatAnalysis = context.CombatAnalysis;
+        var combatTags = new List<string>(capacity: 10)
+        {
+            $"phase:{phase.ToString().ToLowerInvariant()}",
+            $"screen:{(observer.CurrentScreen ?? "unknown").Trim().ToLowerInvariant()}",
+            $"visible:{(observer.VisibleScreen ?? "unknown").Trim().ToLowerInvariant()}",
+            $"encounter:{(observer.EncounterKind ?? "none").Trim().ToLowerInvariant()}",
+            $"ready:{(observer.SceneReady?.ToString() ?? "unknown").ToLowerInvariant()}",
+            $"stability:{(observer.SceneStability ?? "unknown").Trim().ToLowerInvariant()}",
+            "combat:fast-path",
+            $"combat-targeting:{((combatRuntimeState.TargetingInProgress == true || combatAnalysis.HasTargetArrow) ? "active" : "inactive")}",
+            $"combat-hittable:{(combatRuntimeState.HittableEnemyCount?.ToString(CultureInfo.InvariantCulture) ?? "unknown")}",
+        };
+
+        if (context.PendingCombatSelection is { } pendingSelection)
+        {
+            combatTags.Add($"combat-selection:{pendingSelection.Kind.ToString().ToLowerInvariant()}");
+            combatTags.Add($"combat-slot:{pendingSelection.SlotIndex.ToString(CultureInfo.InvariantCulture)}");
+        }
+        else if (combatAnalysis.HasSelectedCard)
+        {
+            combatTags.Add($"combat-selection:{combatAnalysis.SelectedCardKind.ToString().ToLowerInvariant()}");
+        }
+
+        if (combatRuntimeState.KeepsCardPlayOpen)
+        {
+            combatTags.Add("combat-play-open");
+        }
+
+        var combatScreenshotFingerprint = ComputeFileFingerprint(screenshotPath);
+        combatTags.Add($"shot:{combatScreenshotFingerprint[..Math.Min(12, combatScreenshotFingerprint.Length)]}");
+        return string.Join("|", combatTags);
+    }
+
     var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
-    var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
-    var rewardBackNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
-    var claimableRewardPresent = HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath);
-    var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, null, screenshotPath);
+    var rewardMapLayer = context.RewardMapLayerState;
+    var rewardBackNavigationAvailable = context.RewardBackNavigationAvailable;
+    var claimableRewardPresent = context.ClaimableRewardPresent;
+    var mapOverlayState = context.MapOverlayState;
     var tags = new List<string>(capacity: 10)
     {
         $"phase:{phase.ToString().ToLowerInvariant()}",
@@ -10845,16 +11055,33 @@ static string[] BuildAllowedActions(
     string? screenshotPath,
     IReadOnlyList<GuiSmokeHistoryEntry> history)
 {
+    return BuildAllowedActionsCore(phase, observer, combatCardKnowledge, screenshotPath, history, null);
+}
+
+static string[] BuildAllowedActionsCore(
+    GuiSmokePhase phase,
+    ObserverState observer,
+    IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+    string? screenshotPath,
+    IReadOnlyList<GuiSmokeHistoryEntry> history,
+    GuiSmokeStepAnalysisContext? analysisContext)
+{
+    var context = analysisContext ?? CreateStepAnalysisContext(phase, observer, screenshotPath, history, combatCardKnowledge);
+    if (context.UseCombatFastPath)
+    {
+        return GetCombatAllowedActions(observer, combatCardKnowledge, screenshotPath, history, context);
+    }
+
     var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
     var treasureState = TreasureRoomObserverSignals.TryGetState(observer.Summary);
     var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelectionForAllowlist(observer, history);
-    var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
+    var rewardMapLayer = context.RewardMapLayerState;
     var explicitRewardProgressionPresent = observer.Summary.Choices.Any(choice => IsCurrentRewardProgressionChoiceForObserver(choice, null))
                                           || observer.Summary.ActionNodes.Any(node => IsCurrentRewardProgressionNodeForObserver(node, null));
     var rewardForegroundVisible = rewardMapLayer.RewardForegroundOwned;
-    var rewardBackNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
-    var claimableRewardPresent = HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath);
-    var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, null, screenshotPath);
+    var rewardBackNavigationAvailable = context.RewardBackNavigationAvailable;
+    var claimableRewardPresent = context.ClaimableRewardPresent;
+    var mapOverlayState = context.MapOverlayState;
     var explicitRestSiteChoiceAuthority = HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
     if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out var observedPhase))
     {
@@ -11239,21 +11466,21 @@ static string[] GetCombatAllowedActions(
     ObserverState observer,
     IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
     string? screenshotPath,
-    IReadOnlyList<GuiSmokeHistoryEntry> history)
+    IReadOnlyList<GuiSmokeHistoryEntry> history,
+    GuiSmokeStepAnalysisContext? analysisContext = null)
 {
-    if (CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary))
+    var context = analysisContext ?? CreateStepAnalysisContext(GuiSmokePhase.HandleCombat, observer, screenshotPath, history, combatCardKnowledge);
+    if (context.CombatPlayerActionWindowClosed)
     {
         return new[] { "wait" };
     }
 
     var actions = new List<string>();
-    var combatContext = HandleCombatContextSupport.Reconstruct(history);
+    var combatContext = context.CombatContext;
     var blockedCombatNoOpCounts = combatContext.CombatNoOpCountsBySlot;
-    var pendingSelection = CombatRuntimeStateSupport.ResolvePendingSelection(observer.Summary, combatCardKnowledge, combatContext.PendingSelection);
-    var analysis = string.IsNullOrWhiteSpace(screenshotPath)
-        ? new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown)
-        : AutoCombatAnalyzer.Analyze(screenshotPath);
-    var hasSelectedNonEnemyConfirmEvidence = CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, analysis, pendingSelection);
+    var pendingSelection = context.PendingCombatSelection;
+    var analysis = context.CombatAnalysis;
+    var hasSelectedNonEnemyConfirmEvidence = context.HasSelectedNonEnemyConfirmEvidence;
     var keepNonEnemySelectionClosed = pendingSelection?.Kind == AutoCombatCardKind.DefendLike && hasSelectedNonEnemyConfirmEvidence;
     bool ShouldSuppressNonEnemyReselect(int slotIndex)
     {
@@ -11294,7 +11521,7 @@ static string[] GetCombatAllowedActions(
     var pendingAttackBlocked = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
                                && blockedCombatNoOpCounts.TryGetValue(pendingSelection.SlotIndex, out var pendingNoOpCount)
                                && pendingNoOpCount >= 2;
-    if (!pendingAttackBlocked && CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, analysis, pendingSelection))
+    if (!pendingAttackBlocked && context.CanResolveCombatEnemyTarget)
     {
         actions.Add("click enemy");
     }
@@ -11363,16 +11590,16 @@ static bool CanResolveEnemyTargetFromCurrentState(
     ObserverState observer,
     IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
     string? screenshotPath,
-    IReadOnlyList<GuiSmokeHistoryEntry> history)
+    IReadOnlyList<GuiSmokeHistoryEntry> history,
+    GuiSmokeStepAnalysisContext? analysisContext = null)
 {
-    var analysis = string.IsNullOrWhiteSpace(screenshotPath)
-        ? new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown)
-        : AutoCombatAnalyzer.Analyze(screenshotPath);
+    var context = analysisContext ?? CreateStepAnalysisContext(GuiSmokePhase.HandleCombat, observer, screenshotPath, history, combatCardKnowledge);
+    var analysis = context.CombatAnalysis;
     return CanResolveEnemyTargetFromStateAnalysis(
         observer,
         combatCardKnowledge,
         analysis,
-        CombatRuntimeStateSupport.ResolvePendingSelection(observer.Summary, combatCardKnowledge, HandleCombatContextSupport.Reconstruct(history).PendingSelection));
+        context.PendingCombatSelection);
 }
 
 static bool CanResolveEnemyTargetFromStateAnalysis(
@@ -12156,6 +12383,25 @@ static string BuildFailureModeHintCore(
     string? screenshotPath,
     IReadOnlyList<GuiSmokeHistoryEntry> history)
 {
+    return BuildFailureModeHintCoreWithContext(phase, observer, combatCardKnowledge, screenshotPath, history, null);
+}
+
+static string BuildFailureModeHintCoreWithContext(
+    GuiSmokePhase phase,
+    ObserverState observer,
+    IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+    string? screenshotPath,
+    IReadOnlyList<GuiSmokeHistoryEntry> history,
+    GuiSmokeStepAnalysisContext? analysisContext)
+{
+    var context = analysisContext ?? CreateStepAnalysisContext(phase, observer, screenshotPath, history, combatCardKnowledge);
+    if (phase == GuiSmokePhase.HandleCombat)
+    {
+        return !context.CanResolveCombatEnemyTarget
+            ? BuildCombatFailureModeHint(observer, combatCardKnowledge)
+            : "AI first: read the full combat board from the screenshot. Cards, targets, energy, and end-turn are visual decisions. The harness only executes the click you choose.";
+    }
+
     return phase switch
     {
         GuiSmokePhase.EnterRun => "Continue may be absent. Use Singleplayer only if Continue is not visible.",
@@ -12196,9 +12442,6 @@ static string BuildFailureModeHintCore(
         GuiSmokePhase.HandleEvent => "If the event text is ambiguous, choose a large visible progression option, not inspect affordances or detail overlays.",
         GuiSmokePhase.WaitPostMapNodeRoom => "A reachable node starts room entry, not combat-only flow. Reconcile the destination room from observer truth before waiting or routing again.",
         GuiSmokePhase.WaitCombat => "Observer must end with combat screen and inCombat=true.",
-        GuiSmokePhase.HandleCombat when !CanResolveEnemyTargetFromCurrentState(observer, combatCardKnowledge, screenshotPath, history)
-            => BuildCombatFailureModeHint(observer, combatCardKnowledge),
-        GuiSmokePhase.HandleCombat => "AI first: read the full combat board from the screenshot. Cards, targets, energy, and end-turn are visual decisions. The harness only executes the click you choose.",
         _ => "Fail closed when screenshot and observer disagree.",
     };
 }
@@ -14978,6 +15221,388 @@ sealed record MapOverlayState(
     bool ReachableNodeCandidatePresent,
     bool ExportedReachableNodeCandidatePresent);
 
+sealed class GuiSmokeStepAnalysisContext
+{
+    private static readonly RewardMapLayerState EmptyRewardMapLayerState = new(false, false, false, false, false, false, false, false, false, false, false);
+    private static readonly MapOverlayState EmptyMapOverlayState = new(false, false, false, false, false, false, false);
+
+    private readonly GuiSmokePhase _phase;
+    private readonly ObserverState _observer;
+    private readonly string? _screenshotPath;
+    private readonly IReadOnlyList<GuiSmokeHistoryEntry> _history;
+    private readonly IReadOnlyList<CombatCardKnowledgeHint> _combatCardKnowledge;
+    private readonly Func<bool> _useCombatFastPathFactory;
+    private readonly Func<RewardMapLayerState> _rewardMapLayerStateFactory;
+    private readonly Func<bool> _rewardBackNavigationAvailableFactory;
+    private readonly Func<bool> _claimableRewardPresentFactory;
+    private readonly Func<MapOverlayState> _mapOverlayStateFactory;
+    private readonly Func<ReconstructedHandleCombatContext> _combatContextFactory;
+    private readonly Func<PendingCombatSelection?> _pendingCombatSelectionFactory;
+    private readonly Func<CombatRuntimeState> _runtimeCombatStateFactory;
+    private readonly Func<AutoCombatAnalysis> _combatAnalysisFactory;
+    private readonly Func<AutoCombatHandAnalysis> _combatHandAnalysisFactory;
+    private readonly Func<bool> _combatPlayerActionWindowClosedFactory;
+    private readonly Func<bool> _hasSelectedNonEnemyConfirmEvidenceFactory;
+    private readonly Func<bool> _canResolveCombatEnemyTargetFactory;
+
+    private bool? _useCombatFastPath;
+    private RewardMapLayerState? _rewardMapLayerState;
+    private bool? _rewardBackNavigationAvailable;
+    private bool? _claimableRewardPresent;
+    private MapOverlayState? _mapOverlayState;
+    private ReconstructedHandleCombatContext? _combatContext;
+    private PendingCombatSelection? _pendingCombatSelection;
+    private bool _pendingCombatSelectionComputed;
+    private CombatRuntimeState? _runtimeCombatState;
+    private AutoCombatAnalysis? _combatAnalysis;
+    private AutoCombatHandAnalysis? _combatHandAnalysis;
+    private bool? _combatPlayerActionWindowClosed;
+    private bool? _hasSelectedNonEnemyConfirmEvidence;
+    private bool? _canResolveCombatEnemyTarget;
+
+    public GuiSmokeStepAnalysisContext(
+        GuiSmokePhase phase,
+        ObserverState observer,
+        string? screenshotPath,
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        Func<bool> useCombatFastPathFactory,
+        Func<RewardMapLayerState> rewardMapLayerStateFactory,
+        Func<bool> rewardBackNavigationAvailableFactory,
+        Func<bool> claimableRewardPresentFactory,
+        Func<MapOverlayState> mapOverlayStateFactory,
+        Func<ReconstructedHandleCombatContext> combatContextFactory,
+        Func<PendingCombatSelection?> pendingCombatSelectionFactory,
+        Func<CombatRuntimeState> runtimeCombatStateFactory,
+        Func<AutoCombatAnalysis> combatAnalysisFactory,
+        Func<AutoCombatHandAnalysis> combatHandAnalysisFactory,
+        Func<bool> combatPlayerActionWindowClosedFactory,
+        Func<bool> hasSelectedNonEnemyConfirmEvidenceFactory,
+        Func<bool> canResolveCombatEnemyTargetFactory)
+    {
+        _phase = phase;
+        _observer = observer;
+        _screenshotPath = screenshotPath;
+        _history = history;
+        _combatCardKnowledge = combatCardKnowledge;
+        _useCombatFastPathFactory = useCombatFastPathFactory;
+        _rewardMapLayerStateFactory = rewardMapLayerStateFactory;
+        _rewardBackNavigationAvailableFactory = rewardBackNavigationAvailableFactory;
+        _claimableRewardPresentFactory = claimableRewardPresentFactory;
+        _mapOverlayStateFactory = mapOverlayStateFactory;
+        _combatContextFactory = combatContextFactory;
+        _pendingCombatSelectionFactory = pendingCombatSelectionFactory;
+        _runtimeCombatStateFactory = runtimeCombatStateFactory;
+        _combatAnalysisFactory = combatAnalysisFactory;
+        _combatHandAnalysisFactory = combatHandAnalysisFactory;
+        _combatPlayerActionWindowClosedFactory = combatPlayerActionWindowClosedFactory;
+        _hasSelectedNonEnemyConfirmEvidenceFactory = hasSelectedNonEnemyConfirmEvidenceFactory;
+        _canResolveCombatEnemyTargetFactory = canResolveCombatEnemyTargetFactory;
+    }
+
+    public GuiSmokePhase Phase => _phase;
+
+    public ObserverState Observer => _observer;
+
+    public string? ScreenshotPath => _screenshotPath;
+
+    public IReadOnlyList<GuiSmokeHistoryEntry> History => _history;
+
+    public IReadOnlyList<CombatCardKnowledgeHint> CombatCardKnowledge => _combatCardKnowledge;
+
+    public bool UseCombatFastPath => _useCombatFastPath ??= _useCombatFastPathFactory();
+
+    public RewardMapLayerState RewardMapLayerState => _rewardMapLayerState ??= _rewardMapLayerStateFactory();
+
+    public bool RewardBackNavigationAvailable => _rewardBackNavigationAvailable ??= _rewardBackNavigationAvailableFactory();
+
+    public bool ClaimableRewardPresent => _claimableRewardPresent ??= _claimableRewardPresentFactory();
+
+    public MapOverlayState MapOverlayState => _mapOverlayState ??= _mapOverlayStateFactory();
+
+    public ReconstructedHandleCombatContext CombatContext => _combatContext ??= _combatContextFactory();
+
+    public PendingCombatSelection? PendingCombatSelection
+    {
+        get
+        {
+            if (!_pendingCombatSelectionComputed)
+            {
+                _pendingCombatSelection = _pendingCombatSelectionFactory();
+                _pendingCombatSelectionComputed = true;
+            }
+
+            return _pendingCombatSelection;
+        }
+    }
+
+    public CombatRuntimeState RuntimeCombatState => _runtimeCombatState ??= _runtimeCombatStateFactory();
+
+    public AutoCombatAnalysis CombatAnalysis => _combatAnalysis ??= _combatAnalysisFactory();
+
+    public AutoCombatHandAnalysis CombatHandAnalysis => _combatHandAnalysis ??= _combatHandAnalysisFactory();
+
+    public bool CombatPlayerActionWindowClosed => _combatPlayerActionWindowClosed ??= _combatPlayerActionWindowClosedFactory();
+
+    public bool HasSelectedNonEnemyConfirmEvidence => _hasSelectedNonEnemyConfirmEvidence ??= _hasSelectedNonEnemyConfirmEvidenceFactory();
+
+    public bool CanResolveCombatEnemyTarget => _canResolveCombatEnemyTarget ??= _canResolveCombatEnemyTargetFactory();
+
+    public static GuiSmokeStepAnalysisContext CreateForHandleCombatRequest(GuiSmokeStepRequest request)
+    {
+        var observer = new ObserverState(request.Observer, null, null, request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>());
+        var history = request.History;
+        var combatCardKnowledge = request.CombatCardKnowledge;
+        var screenshotPath = request.ScreenshotPath;
+        ReconstructedHandleCombatContext? combatContext = null;
+        PendingCombatSelection? pendingSelection = null;
+        var pendingSelectionComputed = false;
+        CombatRuntimeState? runtimeCombatState = null;
+        AutoCombatAnalysis? combatAnalysis = null;
+        AutoCombatHandAnalysis? combatHandAnalysis = null;
+
+        ReconstructedHandleCombatContext GetCombatContext()
+            => combatContext ??= HandleCombatContextSupport.Reconstruct(history);
+
+        PendingCombatSelection? GetPendingSelection()
+        {
+            if (!pendingSelectionComputed)
+            {
+                pendingSelection = CombatRuntimeStateSupport.ResolvePendingSelection(observer.Summary, combatCardKnowledge, GetCombatContext().PendingSelection);
+                pendingSelectionComputed = true;
+            }
+
+            return pendingSelection;
+        }
+
+        CombatRuntimeState GetRuntimeCombatState()
+            => runtimeCombatState ??= CombatRuntimeStateSupport.Read(observer.Summary, combatCardKnowledge);
+
+        AutoCombatAnalysis GetCombatAnalysis()
+            => combatAnalysis ??= string.IsNullOrWhiteSpace(screenshotPath)
+                ? new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown)
+                : AutoCombatAnalyzer.Analyze(screenshotPath);
+
+        AutoCombatHandAnalysis GetCombatHandAnalysis()
+            => combatHandAnalysis ??= string.IsNullOrWhiteSpace(screenshotPath)
+                ? new AutoCombatHandAnalysis(Array.Empty<AutoCombatHandSlotAnalysis>())
+                : AutoCombatHandAnalyzer.Analyze(screenshotPath);
+
+        bool CanResolveCombatEnemyTarget()
+        {
+            var analysis = GetCombatAnalysis();
+            var pending = GetPendingSelection();
+            var runtime = GetRuntimeCombatState();
+            static bool IsAttackHandCard(ObservedCombatHandCard card)
+            {
+                return string.Equals(card.Type, "Attack", StringComparison.OrdinalIgnoreCase)
+                       || card.Name.Contains("STRIKE", StringComparison.OrdinalIgnoreCase)
+                       || card.Name.Contains("BASH", StringComparison.OrdinalIgnoreCase);
+            }
+
+            static bool IsEnemyTargetKnowledgeCard(CombatCardKnowledgeHint card)
+            {
+                return string.Equals(card.Type, "Attack", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(card.Target, "AnyEnemy", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(card.Target, "RandomEnemy", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(card.Target, "AllEnemies", StringComparison.OrdinalIgnoreCase);
+            }
+
+            static bool IsKnowledgePlayableAtEnergy(CombatCardKnowledgeHint card, int? energy)
+            {
+                if (energy is null || card.Cost is null)
+                {
+                    return true;
+                }
+
+                if (card.Cost < 0)
+                {
+                    return energy > 0;
+                }
+
+                return card.Cost <= energy;
+            }
+
+            static bool IsObservedPlayableAtEnergy(
+                ObservedCombatHandCard card,
+                int? energy,
+                IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+            {
+                var resolvedCost = card.Cost
+                                   ?? combatCardKnowledge.FirstOrDefault(candidate => candidate.SlotIndex == card.SlotIndex)?.Cost;
+                if (energy is null || resolvedCost is null)
+                {
+                    return true;
+                }
+
+                if (resolvedCost < 0)
+                {
+                    return energy > 0;
+                }
+
+                return resolvedCost <= energy;
+            }
+
+            static IEnumerable<int> GetPlayableAttackSlots(
+                ObserverState observer,
+                IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+            {
+                var knowledgeSlots = combatCardKnowledge
+                    .Where(card => card.SlotIndex is >= 1 and <= 5)
+                    .Where(card => IsEnemyTargetKnowledgeCard(card) && IsKnowledgePlayableAtEnergy(card, observer.PlayerEnergy))
+                    .Select(static card => card.SlotIndex);
+                var observerSlots = observer.CombatHand
+                    .Where(card => card.SlotIndex is >= 1 and <= 5)
+                    .Where(card => IsAttackHandCard(card) && IsObservedPlayableAtEnergy(card, observer.PlayerEnergy, combatCardKnowledge))
+                    .Select(static card => card.SlotIndex);
+                return knowledgeSlots.Concat(observerSlots).Distinct().OrderBy(static slotIndex => slotIndex);
+            }
+
+            if (CombatRuntimeStateSupport.CanResolveEnemyTarget(observer.Summary, combatCardKnowledge, pending, analysis))
+            {
+                return true;
+            }
+
+            if (runtime.HasExplicitHittableEnemyAuthority)
+            {
+                return false;
+            }
+
+            if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer.Summary).Count > 0)
+            {
+                return true;
+            }
+
+            if (analysis.HasTargetArrow)
+            {
+                return true;
+            }
+
+            if (CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer.Summary, combatCardKnowledge))
+            {
+                return false;
+            }
+
+            if (pending?.Kind == AutoCombatCardKind.AttackLike)
+            {
+                var pendingCard = observer.CombatHand.FirstOrDefault(card => card.SlotIndex == pending.SlotIndex);
+                if (pendingCard is not null)
+                {
+                    return IsAttackHandCard(pendingCard)
+                           && IsObservedPlayableAtEnergy(pendingCard, observer.PlayerEnergy, combatCardKnowledge);
+                }
+
+                var pendingKnowledge = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == pending.SlotIndex);
+                if (pendingKnowledge is not null)
+                {
+                    return IsEnemyTargetKnowledgeCard(pendingKnowledge)
+                           && IsKnowledgePlayableAtEnergy(pendingKnowledge, observer.PlayerEnergy);
+                }
+            }
+
+            return analysis.HasSelectedCard
+                   && analysis.SelectedCardKind == AutoCombatCardKind.AttackLike
+                   && (GetPlayableAttackSlots(observer, combatCardKnowledge).Any()
+                       || (observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0));
+        }
+
+        static bool LooksLikeInspectOverlayForeground(ObserverSummary summary)
+        {
+            return summary.CurrentChoices.Any(static label =>
+                       label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
+                       || label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
+                       || label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase))
+                   || summary.ActionNodes.Any(static node =>
+                       node.Label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
+                       || node.Label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
+                       || node.Label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase));
+        }
+
+        static bool HasRestSiteAuthorityForCombat(ObserverSummary summary)
+        {
+            return string.Equals(summary.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(summary.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
+                   || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(summary);
+        }
+
+        static bool HasExplicitEventForegroundForCombat(ObserverSummary summary)
+        {
+            var eventAuthority = string.Equals(summary.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(summary.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(summary.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+                                 || string.Equals(summary.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+            if (!eventAuthority)
+            {
+                return false;
+            }
+
+            return summary.ActionNodes.Any(static node =>
+                       node.Actionable
+                       && !string.IsNullOrWhiteSpace(node.ScreenBounds)
+                       && (node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                           || node.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
+                           || node.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
+                           || node.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)
+                           || node.Label.Contains("계속", StringComparison.OrdinalIgnoreCase)))
+                   || summary.Choices.Any(static choice =>
+                       !string.IsNullOrWhiteSpace(choice.ScreenBounds)
+                       && (string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+                           || string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        bool ComputeUseCombatFastPath()
+        {
+            if (!string.Equals(request.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                || observer.InCombat != true)
+            {
+                return false;
+            }
+
+            var combatScreenVisible = string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
+                                      || string.Equals(observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase);
+            if (!combatScreenVisible)
+            {
+                return false;
+            }
+
+            if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
+                || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
+                || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
+                || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
+                || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
+                || HasRestSiteAuthorityForCombat(observer.Summary)
+                || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+                || HasExplicitEventForegroundForCombat(observer.Summary)
+                || LooksLikeInspectOverlayForeground(observer.Summary))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        return new GuiSmokeStepAnalysisContext(
+            GuiSmokePhase.HandleCombat,
+            observer,
+            screenshotPath,
+            history,
+            combatCardKnowledge,
+            ComputeUseCombatFastPath,
+            () => EmptyRewardMapLayerState with { TerminalRunBoundary = RewardObserverSignals.IsTerminalRunBoundary(observer.Summary) },
+            () => false,
+            () => false,
+            () => EmptyMapOverlayState,
+            GetCombatContext,
+            GetPendingSelection,
+            GetRuntimeCombatState,
+            GetCombatAnalysis,
+            GetCombatHandAnalysis,
+            () => CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary),
+            () => CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
+            CanResolveCombatEnemyTarget);
+    }
+}
+
 static class GuiSmokeDecisionDebug
 {
     public static void SetSceneModel(string? foregroundKind, string? backgroundKind)
@@ -17569,8 +18194,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         return Decide(request);
     }
 
-    public static GuiSmokeDecisionAnalysis Analyze(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision = null)
+    public static GuiSmokeDecisionAnalysis Analyze(
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision? actualDecision = null,
+        GuiSmokeStepAnalysisContext? analysisContext = null)
     {
+        var context = analysisContext ?? GuiSmokeStepAnalysisContext.CreateForHandleCombatRequest(request);
         var phase = Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true);
         return phase switch
         {
@@ -17578,7 +18207,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokePhase.HandleRewards => AnalyzeHandleRewards(request, actualDecision),
             GuiSmokePhase.ChooseFirstNode => AnalyzeChooseFirstNode(request, actualDecision),
             GuiSmokePhase.HandleShop => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleShop(request), "shop", null),
-            GuiSmokePhase.HandleCombat => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request), "combat", null),
+            GuiSmokePhase.HandleCombat => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request, context), "combat", null),
             GuiSmokePhase.EnterRun => AnalyzeGenericPhase(request, actualDecision, () => DecideEnterRun(request), "main-menu", null),
             GuiSmokePhase.ChooseCharacter => AnalyzeGenericPhase(request, actualDecision, () => DecideChooseCharacter(request), "character-select", null),
             GuiSmokePhase.Embark => AnalyzeGenericPhase(request, actualDecision, () => DecideEmbark(request), "embark", null),
@@ -18791,20 +19420,21 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         return null;
     }
 
-    private static GuiSmokeStepDecision DecideHandleCombat(GuiSmokeStepRequest request)
+    private static GuiSmokeStepDecision DecideHandleCombat(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        var analysis = AutoCombatAnalyzer.Analyze(request.ScreenshotPath);
-        var handAnalysis = AutoCombatHandAnalyzer.Analyze(request.ScreenshotPath);
-        var combatContext = HandleCombatContextSupport.Reconstruct(request.History);
-        var pendingSelection = CombatRuntimeStateSupport.ResolvePendingSelection(request.Observer, request.CombatCardKnowledge, combatContext.PendingSelection);
-        var runtimeCombatState = CombatRuntimeStateSupport.Read(request.Observer, request.CombatCardKnowledge);
-        if (CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(request.Observer))
+        var context = analysisContext ?? GuiSmokeStepAnalysisContext.CreateForHandleCombatRequest(request);
+        var analysis = context.CombatAnalysis;
+        var handAnalysis = context.CombatHandAnalysis;
+        var combatContext = context.CombatContext;
+        var pendingSelection = context.PendingCombatSelection;
+        var runtimeCombatState = context.RuntimeCombatState;
+        if (context.CombatPlayerActionWindowClosed)
         {
             return CreateWaitDecision("observer reports enemy turn or a closed combat play phase", request.Observer.CurrentScreen);
         }
 
-        var hasSelectedNonEnemyConfirmEvidence = CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(request.Observer, request.CombatCardKnowledge, analysis, pendingSelection);
-        var enemyTargetOpportunity = CanResolveEnemyTargetFromCurrentState(request.Observer, request.CombatCardKnowledge, analysis, pendingSelection);
+        var hasSelectedNonEnemyConfirmEvidence = context.HasSelectedNonEnemyConfirmEvidence;
+        var enemyTargetOpportunity = context.CanResolveCombatEnemyTarget;
         var combatNoOpLoop = combatContext.CombatNoOpLoop;
         var combatNoOpCountsBySlot = combatContext.CombatNoOpCountsBySlot;
         var repeatedNonEnemyLoop = combatContext.RepeatedNonEnemyLoop;
