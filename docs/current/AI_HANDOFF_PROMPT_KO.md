@@ -54,12 +54,13 @@
 - 최종적으로는 사람이 실제 플레이 중 참고 가능한 `읽기 전용 advisor`를 만든다.
 - 장기 milestone 정의는 [ROADMAP.md](../ROADMAP.md)의 `M1~M10`을 canonical source로 따른다.
 
-### 2. 현재 제품 workstream은 이제 `M6 -> M7 -> M8 평가`다
+### 2. 현재 제품 workstream은 이제 `M7 -> M8 평가 -> M9 준비`다
 
 - `M2. 모드 로드 진입 증명`, `M3. 런타임 부트스트랩 가동`, `M4. Trusted Attempt 확보`는 materially closed 상태다.
 - product sequencing 관점에서는 `M5`를 여기서 닫고 다음 평가 단계로 넘어간다.
-- 공식 현재 마일스톤 위치는 이제 `M6. Replay/Parity 회귀 게이트 고정`으로 읽는다.
-- 그 다음은 `M7. 비전투 진행 안정화`, `M8. 전투 안정화`를 차례로 평가하고, 그 결과 위에서 `M9` 준비를 시작한다.
+- `M6. Replay/Parity 회귀 게이트 고정`은 representative parity suite 기준으로 닫혔다.
+- 공식 현재 마일스톤 위치는 이제 `M7. 비전투 진행 안정화`로 읽는다.
+- 그 다음은 `M8. 전투 안정화`를 평가하고, 그 결과 위에서 `M9` 준비를 시작한다.
 
 중요한 구분:
 
@@ -69,7 +70,7 @@
   - `restart`
   - `next attempt first screen`
   체인을 요구한다.
-- 지금은 이 엄격한 gap을 `residual lifecycle automation gap`으로 분리 추적하고, 현재 제품 workstream은 `M6~M8` 평가로 이동한다.
+- 지금은 이 엄격한 gap을 `residual lifecycle automation gap`으로 분리 추적하고, 현재 제품 workstream은 `M7~M8` 평가와 `M9` 준비로 이동한다.
 
 ### 3. 지금 가장 중요한 표현은 "first combat clearability blocker는 더 이상 현재 최상위 blocker가 아니다"이다
 
@@ -86,7 +87,6 @@
   - `first card reward capture`
   는 더 이상 top blocker로 두면 안 된다.
 - 대신 지금 해야 할 일은:
-- `M6`에서 parity gate를 정식 audit하고
   - `M7`에서 남은 non-combat mixed-state risks를 정리하고
   - `M8`에서 현재 combat stability를 어디까지 닫을지 평가하고
   - `M9` 준비팩을 정의하는 것이다.
@@ -193,7 +193,23 @@
 
 는 여전히 `M9` 준비의 핵심 기반이다.
 
-다만 지금은 이 scaffold를 더 다듬는 것보다, `M6~M8`를 evidence 기준으로 평가하는 것이 먼저다.
+다만 지금은 이 scaffold를 더 다듬는 것보다, `M7~M8`를 evidence 기준으로 평가하고 `M9` 준비 기준을 고정하는 것이 먼저다.
+
+### H. M6 replay/parity closeout은 representative suite로 닫혔다
+
+대표 root:
+
+- [verify-m6-parity-closeout-20260324-0034](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/replay-audit/verify-m6-parity-closeout-20260324-0034)
+
+대표 suite:
+
+- [tests/replay-fixtures/gui-smoke-parity-scenes.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/tests/replay-fixtures/gui-smoke-parity-scenes.json)
+
+의미:
+
+- latest ownership/speed-up 이후에도 saved request와 rebuilt request가 같은 semantic target, 같은 allowed-action class를 유지한다.
+- `replay-test`와 `replay-parity-test`가 모두 green이다.
+- parity gate는 이제 현재 active blocker가 아니다.
 
 ## 현재 가장 중요한 문제
 
@@ -201,10 +217,9 @@
 
 현재 가장 중요한 문제는:
 
-1. `M6`를 정식으로 마감할 수 있는가
-2. `M7`을 이미 실질적으로 닫힌 것으로 볼 수 있는가, 아니면 generic event/modal/overlay/rest aftermath가 아직 활성 위험인가
-3. `M8`를 어디까지 닫았고, elite defeat evidence를 어떻게 해석할 것인가
-4. 그 위에서 `M9`를 어떤 scene set과 어떤 acceptance band로 시작할 것인가
+1. `M7`을 이미 실질적으로 닫힌 것으로 볼 수 있는가, 아니면 generic event/modal/overlay/rest aftermath가 아직 활성 위험인가
+2. `M8`를 어디까지 닫았고, elite defeat evidence를 어떻게 해석할 것인가
+3. 그 위에서 `M9`를 어떤 scene set과 어떤 acceptance band로 시작할 것인가
 
 즉 지금은 implementation-first보다 **평가와 순서 정리가 먼저**다.
 
@@ -225,7 +240,7 @@
 
 ## 다음 세션의 기본 규칙
 
-1. 현재 제품 workstream은 `M6 -> M7 -> M8 평가`다.
+1. 현재 제품 workstream은 `M7 -> M8 평가 -> M9 준비`다.
 2. `M5 strict lifecycle done`과 `M5 product closeout`을 혼동하지 않는다.
 3. 현재 문서에서 `first combat clearability`를 top blocker로 되살리지 않는다.
 4. ancient/map/speed-up closure는 regression evidence가 없으면 다시 열지 않는다.
@@ -235,21 +250,13 @@
 
 ### 작업 단위 A
 
-`M6 Replay/Parity Closeout Audit`
-
-목표:
-
-- 최신 ownership/speed-up work 이후 parity-sensitive request가 여전히 rebuild / non-rebuild semantic alignment를 유지하는지 정식 audit
-
-### 작업 단위 B
-
 `M7 Non-Combat Stability Evaluation`
 
 목표:
 
 - generic event / modal / overlay / rest aftermath가 실제 활성 blocker인지, 아니면 이미 수용 가능한 잔여 문제인지 평가
 
-### 작업 단위 C
+### 작업 단위 B
 
 `M8 Combat Stability Evaluation`
 
@@ -258,7 +265,7 @@
 - current combat safety와 combat quality를 분리해서 읽고
 - repeated clear roots와 elite defeat root를 바탕으로 `closed / partial / open` 판정을 내린다
 
-### 작업 단위 D
+### 작업 단위 C
 
 `M9 Readiness Pack Definition`
 
@@ -285,11 +292,12 @@
 - [verify-speedup-continue-20260323-2230](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion_wu_ancient_release/artifacts/gui-smoke/verify-speedup-continue-20260323-2230)
 - [verify-long-run-speedup-continue-20260323-2249](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion_wu_ancient_release/artifacts/gui-smoke/verify-long-run-speedup-continue-20260323-2249)
 - [verify-long-run-speedup-continue-20260323-2301](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion_wu_ancient_release/artifacts/gui-smoke/verify-long-run-speedup-continue-20260323-2301)
+- [verify-m6-parity-closeout-20260324-0034](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/replay-audit/verify-m6-parity-closeout-20260324-0034)
 
 ## 하지 말아야 할 것
 
 - `first combat clearability` stale diagnosis를 현재 최상위 blocker로 재사용
-- 엄격한 lifecycle gap 하나 때문에 `M6~M8` 평가 전체를 멈추는 것
+- 엄격한 lifecycle gap 하나 때문에 `M7~M8` 평가와 `M9` 준비 전체를 멈추는 것
 - regression evidence 없이 ancient/map/speed-up rail을 다시 뜯는 것
 - decompiled/runtime state보다 timer-based suppression을 먼저 늘리는 것
 - `M9` readiness criteria 없이 advice usefulness 논의를 먼저 확장하는 것

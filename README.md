@@ -38,18 +38,18 @@ Slay the Spire 2의 현재 게임 상태를 게임 밖으로 안전하게 추출
 - trusted attempt / bootstrap-first / quartet semantics 기반의 신뢰 가능한 실행 검증
 - ancient event 이후 map ownership 정규화
 - sped-up GUI smoke harness
+- representative replay/parity closeout suite
 - repeated combat / reward / map / shop continuity가 보이는 long-run validation
 - natural terminal boundary(`player-defeated`)까지 이어지는 장기 실행 evidence
 
 ## 아직 남은 것
 
-- `M6. Replay/Parity 회귀 게이트 고정`
 - `M7. 비전투 진행 안정화`
 - `M8. 전투 안정화`
 - `M9. 실질적 조언 품질 확보`에 들어가기 위한 representative scene set / acceptance band 정리
 - strict `terminal -> restart -> next attempt first screen` lifecycle automation evidence
 
-즉 지금은 `정적 지식 + exporter + manual advice + session capture + UI + 장기 실행 기반`까지는 돌아가고, 다음 중심 작업은 단일 blocker 하나를 급하게 막는 것보다 `M6~M8`을 순서대로 평가하고 `M9` 준비를 닫는 일입니다.
+즉 지금은 `정적 지식 + exporter + manual advice + session capture + UI + 장기 실행 기반 + replay parity gate`까지는 돌아가고, 다음 중심 작업은 단일 blocker 하나를 급하게 막는 것보다 `M7~M8`을 순서대로 평가하고 `M9` 준비를 닫는 일입니다.
 
 ## 빠른 시작
 
