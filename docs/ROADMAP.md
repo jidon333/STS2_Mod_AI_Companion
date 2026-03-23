@@ -1,10 +1,10 @@
 # 로드맵
 
-> Status: Live Charter
-> Source of truth: Yes
-> Update when: long-term milestone structure or acceptance bands change.
+> 상태: 현재 사용 중인 헌장
+> 기준 문서: 예
+> 갱신 시점: 장기 마일스톤 구조나 acceptance 구간이 바뀔 때
 
-## Phase 1
+## 1단계
 
 외부 프로세스 기반 `AI 조언 어시스턴트`를 실제 플레이 중 참고 가능한 수준까지 완성한다.
 
@@ -14,10 +14,10 @@
 - runtime exporter와 high-value 화면 coverage
 - 정적 지식 카탈로그
 - host / Codex backend
-- read-only advisor UI
+- 읽기 전용 advisor UI
 - replay 기반 acceptance + 실제 live smoke
 
-### Phase 1 10단계 마일스톤
+### 1단계 10개 마일스톤
 
 #### M1. 깨끗한 실행 증명
 
@@ -27,9 +27,9 @@
 
 #### M2. 모드 로드 진입 증명
 
-- 목표: `sts2-mod-ai-companion`이 game mod loader chain에 실제로 진입했는지 current execution 기준으로 증명한다.
+- 목표: `sts2-mod-ai-companion`이 game mod loader chain에 실제로 진입했는지 현재 실행 기준으로 증명한다.
 - 사용자 가치: "모드가 아예 안 켜진 판"과 "켜졌는데 다음 단계에서 죽은 판"을 구분할 수 있다.
-- acceptance: loader entry 또는 그 이후 edge가 current execution artifact로 직접 관측된다.
+- acceptance: loader entry 또는 그 이후 edge가 현재 실행 artifact로 직접 관측된다.
 
 #### M3. 런타임 부트스트랩 가동
 
@@ -45,9 +45,10 @@
 
 #### M5. 하네스 장기 실행 증거 닫기
 
-- 목표: terminal -> restart -> next attempt first screen까지 long-run evidence chain을 안정화한다.
-- 사용자 가치: 한 장면 성공이 아니라 실제 세션 단위 진행 안정성을 증명할 수 있다.
-- acceptance: `restart-events.ndjson`, `attempt-index.ndjson`, `supervisor-state.json` 기준 증거 체인이 닫힌다.
+- 목표: valid-trust long-run이 mixed-state stall 없이 자연 terminal boundary까지 안정적으로 진행되는지 증명한다.
+- 사용자 가치: 한 장면 성공이 아니라 실제 run 단위 진행 안정성을 증명하고, 이후 M6~M8 평가를 흔들리지 않는 세션 위에서 진행할 수 있다.
+- acceptance: authoritative long-run artifact가 repeated combat / reward / map / shop continuity를 통과하고, 종료가 harness stall이 아니라 natural terminal / runtime boundary로 분류된다.
+- 참고: `terminal -> restart -> next attempt first screen` lifecycle automation은 여전히 중요하지만, 현재 제품 방향에서는 잔여 lifecycle 후속 작업으로 별도 추적한다.
 
 #### M6. Replay/Parity 회귀 게이트 고정
 
@@ -57,9 +58,9 @@
 
 #### M7. 비전투 진행 안정화
 
-- 목표: main menu, map, reward, event, shop, rest 같은 고가치 비전투 화면의 흐름을 안정화한다.
+- 목표: main menu, terminal/menu/restart aftermath, map, reward, event, shop, rest 같은 고가치 비전투 화면의 흐름을 안정화한다.
 - 사용자 가치: 플레이어가 run을 진행할 때 AI가 방의 흐름을 잃지 않는다.
-- acceptance: valid-trust long-run artifact에서 mixed-state contamination과 foreground/background drift가 보수적으로 차단된다.
+- acceptance: valid-trust long-run artifact와 lifecycle roots에서 mixed-state contamination, foreground/background drift, terminal/menu/restart aftermath ambiguity가 보수적으로 차단된다.
 
 #### M8. 전투 안정화
 
@@ -75,11 +76,11 @@
 
 #### M10. Advisor 제품 표면 완성
 
-- 목표: read-only advisor UI에서 live state, rationale, next-action advice를 안정적으로 보여준다.
+- 목표: 읽기 전용 advisor UI에서 live state, rationale, next-action advice를 안정적으로 보여준다.
 - 사용자 가치: 사람이 실제 플레이 중 바로 참고 가능한 AI 어시스턴트를 쓸 수 있다.
 - acceptance: 실제 플레이 중 end-to-end advice 표시가 안정적으로 동작하고 harness 없이도 advisor mode를 사용할 수 있다.
 
-## Phase 1.5
+## 1.5단계
 
 정확도와 사용성 보강
 
@@ -88,14 +89,14 @@
 - 더 넓은 화면 coverage
 - run summary 품질 개선
 
-## Phase 2
+## 2단계
 
 overlay 또는 더 나은 사용자 표면 검토
 
 - 외부 WPF 앱이 충분히 안정화된 뒤에만 검토
 - intrusive patching 없이 가능한 범위를 우선 탐색
 
-## Phase 3
+## 3단계
 
 장기 확장 검토
 
@@ -103,4 +104,4 @@ overlay 또는 더 나은 사용자 표면 검토
 - 추가 bridge 설계
 - 더 깊은 game-data extraction
 
-현재 저장소의 주력은 계속 `Phase 1`이다.
+현재 저장소의 주력은 계속 `1단계`다.

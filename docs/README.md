@@ -6,17 +6,19 @@
 
 ## Start Here
 
-사람과 AI가 기본적으로 먼저 읽어야 하는 최소 문서는 아래 5개입니다.
+사람과 AI가 기본적으로 먼저 읽어야 하는 최소 문서는 아래 6개입니다.
 
-1. [PROJECT_STATUS.md](./current/PROJECT_STATUS.md)
-   - 현재 active milestone, blocker, authoritative root
-2. [AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md)
+1. [PROJECT_STATUS_READER_KO.md](./current/PROJECT_STATUS_READER_KO.md)
+   - 사람이 빨리 읽는 현재 상태 설명
+2. [PROJECT_STATUS.md](./current/PROJECT_STATUS.md)
+   - 현재 마일스톤, blocker, authoritative root
+3. [AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md)
    - 다음 구현 세션의 bounded work unit
-3. [ROADMAP.md](./ROADMAP.md)
+4. [ROADMAP.md](./ROADMAP.md)
    - 장기 `M1~M10` milestone canonical source
-4. [ARCHITECTURE.md](./ARCHITECTURE.md)
+5. [ARCHITECTURE.md](./ARCHITECTURE.md)
    - shared foundation / advisor mode / harness mode 큰 그림
-5. [BOUNDARIES.md](./BOUNDARIES.md)
+6. [BOUNDARIES.md](./BOUNDARIES.md)
    - 현재 범위와 제외 범위
 
 ## Source Of Truth Rules
@@ -42,6 +44,7 @@
 
 | Role | Document | Purpose | Update when |
 |---|---|---|---|
+| live-current-reader | [current/PROJECT_STATUS_READER_KO.md](./current/PROJECT_STATUS_READER_KO.md) | 사람이 읽는 쉬운 현재 상태 설명 | 현재 상태 설명을 더 쉽게 풀어써야 할 때 |
 | live-current | [current/PROJECT_STATUS.md](./current/PROJECT_STATUS.md) | 현재 milestone, blocker, authoritative roots | 현재 상태나 blocker가 바뀔 때 |
 | live-current | [current/AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md) | 다음 구현 세션 handoff | bounded work unit이 바뀔 때 |
 | live-charter | [ROADMAP.md](./ROADMAP.md) | 장기 milestone canonical source | 장기 milestone 구조가 바뀔 때 |
@@ -93,8 +96,9 @@
 
 ### 상태 파악만 빠르게 할 때
 
-1. [current/PROJECT_STATUS.md](./current/PROJECT_STATUS.md)
-2. [current/AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md)
+1. [current/PROJECT_STATUS_READER_KO.md](./current/PROJECT_STATUS_READER_KO.md)
+2. [current/PROJECT_STATUS.md](./current/PROJECT_STATUS.md)
+3. [current/AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md)
 
 ### 새로 합류했을 때
 

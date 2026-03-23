@@ -35,16 +35,21 @@ Slay the Spire 2의 현재 게임 상태를 게임 밖으로 안전하게 추출
 - run-scoped Codex `sessionId` 저장과 `codex-session.json` 기반 세션 복구 경로 구현
 - collector mode 기반 수집 런 진단 구조
   - raw observation / choice candidate / choice decision / semantic snapshot / collector summary
+- trusted attempt / bootstrap-first / quartet semantics 기반의 신뢰 가능한 실행 검증
+- ancient event 이후 map ownership 정규화
+- sped-up GUI smoke harness
+- repeated combat / reward / map / shop continuity가 보이는 long-run validation
+- natural terminal boundary(`player-defeated`)까지 이어지는 장기 실행 evidence
 
 ## 아직 남은 것
 
-- 실제 gameplay에서 `reward / event / shop / rest` 화면 유지 안정화
-- 실제 선택지 텍스트 추출 완성
-- automatic advice를 gameplay trigger 기준으로 다시 실증
-- gameplay 중 run-scoped Codex session 재사용 실증
-- AppHang 재현 조건 수집과 원인 축소
+- `M6. Replay/Parity 회귀 게이트 고정`
+- `M7. 비전투 진행 안정화`
+- `M8. 전투 안정화`
+- `M9. 실질적 조언 품질 확보`에 들어가기 위한 representative scene set / acceptance band 정리
+- strict `terminal -> restart -> next attempt first screen` lifecycle automation evidence
 
-즉 지금은 `정적 지식 + exporter + manual advice + session capture + UI`까지는 돌아가고, 다음 병목은 실제 플레이 중 고가치 화면에서 입력 파이프라인과 자동 조언을 닫는 일입니다.
+즉 지금은 `정적 지식 + exporter + manual advice + session capture + UI + 장기 실행 기반`까지는 돌아가고, 다음 중심 작업은 단일 blocker 하나를 급하게 막는 것보다 `M6~M8`을 순서대로 평가하고 `M9` 준비를 닫는 일입니다.
 
 ## 빠른 시작
 
@@ -188,27 +193,25 @@ AI가 읽는 파일:
 
 처음 문서를 읽을 때는 아래 순서를 권장합니다.
 
-1. `docs/development/DOCUMENT_MAP.md`
-2. `docs/development/01-overview/PROJECT_STATUS.md`
-3. `docs/development/01-overview/AI_HANDOFF_PROMPT_KO.md`
-4. `docs/development/01-overview/DUAL_MODE_ARCHITECTURE.md`
-5. `docs/ARCHITECTURE.md`
-6. `docs/development/02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
-7. `docs/development/04-advisor/AI_ASSISTANT_ARCHITECTURE.md`
+1. `docs/current/PROJECT_STATUS_READER_KO.md`
+2. `docs/current/PROJECT_STATUS.md`
+3. `docs/current/AI_HANDOFF_PROMPT_KO.md`
+4. `docs/ROADMAP.md`
+5. `docs/README.md`
+6. `docs/ARCHITECTURE.md`
+7. `docs/BOUNDARIES.md`
 
 - `docs/ARCHITECTURE.md`
 - `docs/BOUNDARIES.md`
 - `docs/ROADMAP.md`
-- `docs/REALTIME_EXTRACTION.md`
-- `docs/SMOKE_TEST_CHECKLIST.md`
-- `docs/BACKUP_AND_ROLLBACK.md`
-- `docs/development/README.md`
-- `docs/development/DOCUMENT_MAP.md`
-- `docs/development/01-overview/PROJECT_STATUS.md`
-- `docs/development/01-overview/DUAL_MODE_ARCHITECTURE.md`
-- `docs/development/01-overview/REPO_STRUCTURE.md`
-- `docs/development/02-runtime/GAMEPLAY_RUNTIME_FLOW.md`
-- `docs/development/03-knowledge/KNOWLEDGE_EXTRACTION.md`
-- `docs/development/03-knowledge/SPIRE_CODEX_REFERENCE.md`
-- `docs/development/04-advisor/AI_ASSISTANT_ARCHITECTURE.md`
-- `docs/development/05-harness/HARNESS_MODE.md`
+- `docs/README.md`
+- `docs/current/PROJECT_STATUS_READER_KO.md`
+- `docs/current/PROJECT_STATUS.md`
+- `docs/current/AI_HANDOFF_PROMPT_KO.md`
+- `docs/contracts/LIVE_EXPORT_SEMANTICS.md`
+- `docs/contracts/STARTUP_DEPLOY_CONTROL_LAYER.md`
+- `docs/contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md`
+- `docs/runbooks/SMOKE_TEST_CHECKLIST.md`
+- `docs/runbooks/BACKUP_AND_ROLLBACK.md`
+- `docs/tutorials/MODDING_FROM_ZERO.md`
+- `docs/tutorials/REPO_STRUCTURE.md`
