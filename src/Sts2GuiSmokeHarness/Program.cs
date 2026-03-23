@@ -449,7 +449,7 @@ static async Task<bool> RunBootstrapPhaseAsync(
     string sessionRoot,
     DateTimeOffset sessionDeadline)
 {
-    const int TransitionSettleMs = 2000;
+    const int TransitionSettleMs = 1000;
     const int ManualCleanBootObserverBootstrapPollMs = 500;
     const int ManualCleanBootObserverBootstrapPollCount = 12;
 
@@ -684,11 +684,11 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
     string trustStateAtStart,
     int? maxSteps)
 {
-    const int PassiveWaitMs = 1000;
-    const int ActionSettleMinimumMs = 350;
-    const int CombatActionSettleMinimumMs = 120;
-    const int CombatNoOpProbeGraceMs = 100;
-    const int TransitionSettleMs = 2000;
+    const int PassiveWaitMs = 450;
+    const int ActionSettleMinimumMs = 180;
+    const int CombatActionSettleMinimumMs = 90;
+    const int CombatNoOpProbeGraceMs = 80;
+    const int TransitionSettleMs = 1000;
     const int ManualCleanBootObserverBootstrapPollMs = 500;
     const int ManualCleanBootObserverBootstrapPollCount = 12;
 
@@ -1880,7 +1880,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         }
 
         var settleDelayMs = GetActionSettleDelayMs(completedPhase, decision, ActionSettleMinimumMs, CombatActionSettleMinimumMs);
-        var progressProbeDelayMs = Math.Min(settleDelayMs, completedPhase == GuiSmokePhase.HandleCombat ? 100 : 300);
+        var progressProbeDelayMs = Math.Min(settleDelayMs, completedPhase == GuiSmokePhase.HandleCombat ? 80 : 180);
         if (progressProbeDelayMs > 0)
         {
             await Task.Delay(progressProbeDelayMs).ConfigureAwait(false);
@@ -2038,9 +2038,18 @@ static int? TryGetPositiveIntOption(IReadOnlyDictionary<string, string> options,
 
 static int GetDecisionWaitMinimumMs(GuiSmokePhase phase)
 {
-    return phase == GuiSmokePhase.HandleCombat
-        ? 250
-        : 350;
+    return phase switch
+    {
+        GuiSmokePhase.HandleCombat => 140,
+        GuiSmokePhase.WaitRunLoad or GuiSmokePhase.WaitMainMenu or GuiSmokePhase.WaitCharacterSelect => 260,
+        GuiSmokePhase.WaitMap or GuiSmokePhase.WaitEventRelease or GuiSmokePhase.WaitPostMapNodeRoom => 220,
+        _ => 200,
+    };
+}
+
+static int GetLaunchPollingIntervalMs()
+{
+    return 250;
 }
 
 static int GetActionSettleDelayMs(
@@ -2703,6 +2712,7 @@ static string DescribeGoldenSceneChecks(GuiSmokeReplayGoldenSceneFixture fixture
 static async Task WaitForLiveGameWindowAsync(DateTimeOffset launchedAt, TimeSpan timeout)
 {
     var deadline = DateTimeOffset.UtcNow.Add(timeout);
+    var pollMs = GetLaunchPollingIntervalMs();
     while (DateTimeOffset.UtcNow < deadline)
     {
         var window = WindowLocator.TryFindSts2Window();
@@ -2719,7 +2729,7 @@ static async Task WaitForLiveGameWindowAsync(DateTimeOffset launchedAt, TimeSpan
         }
 
         LogHarness($"waiting for STS2 window launchIssuedAt={launchedAt:O}");
-        await Task.Delay(1000).ConfigureAwait(false);
+        await Task.Delay(pollMs).ConfigureAwait(false);
     }
 
     throw new TimeoutException("Timed out waiting for a live STS2 game window.");
@@ -2729,6 +2739,7 @@ static async Task MaintainLaunchFocusAsync(TimeSpan duration, TimeSpan requiredS
 {
     var deadline = DateTimeOffset.UtcNow.Add(duration);
     DateTimeOffset? stableSince = null;
+    var pollMs = GetLaunchPollingIntervalMs();
     while (DateTimeOffset.UtcNow < deadline)
     {
         var window = WindowLocator.TryFindSts2Window();
@@ -2752,7 +2763,7 @@ static async Task MaintainLaunchFocusAsync(TimeSpan duration, TimeSpan requiredS
             stableSince = null;
         }
 
-        await Task.Delay(1000).ConfigureAwait(false);
+        await Task.Delay(pollMs).ConfigureAwait(false);
     }
 }
 
@@ -3735,6 +3746,15 @@ static void RunSelfTest()
     Assert(
         explicitMapPointDecision is not null,
         "Explicit map point fixture should remain decisionable after source correction.");
+
+    Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.HandleCombat) == 140, "Combat decision wait minimum should use the reduced fast-path baseline.");
+    Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.WaitRunLoad) == 260, "Run-load waits should keep a slightly higher minimum than stable foreground phases.");
+    Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.HandleEvent) == 200, "Stable non-combat foreground phases should use the reduced baseline wait.");
+    Assert(GetLaunchPollingIntervalMs() == 250, "Launch/focus polling should use the faster cadence.");
+    Assert(ScreenCaptureService.GetCaptureRetryDelayMs(0) == 0, "Initial capture attempt should not pay retry backoff.");
+    Assert(ScreenCaptureService.GetCaptureRetryDelayMs(1) == 200, "Second capture attempt should use the short backoff.");
+    Assert(ScreenCaptureService.GetCaptureRetryDelayMs(2) == 350, "Third capture attempt should use the medium backoff.");
+    Assert(ScreenCaptureService.GetCaptureRetryDelayMs(3) == 500, "Later capture attempts should clamp to the bounded max backoff.");
 
     var combatScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-self-test-{Guid.NewGuid():N}.png");
     try
@@ -29757,6 +29777,17 @@ static class MapForegroundReconciliation
 
 sealed class ScreenCaptureService
 {
+    internal static int GetCaptureRetryDelayMs(int attempt)
+    {
+        return attempt switch
+        {
+            0 => 0,
+            1 => 200,
+            2 => 350,
+            _ => 500,
+        };
+    }
+
     public bool TryCapture(WindowCaptureTarget target, string outputPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
@@ -29778,7 +29809,7 @@ sealed class ScreenCaptureService
         }
 
         Bitmap? lastCapture = null;
-        for (var attempt = 0; attempt < 5; attempt += 1)
+        for (var attempt = 0; attempt < 3; attempt += 1)
         {
             target = WindowLocator.EnsureInteractive(target);
             lastCapture?.Dispose();
@@ -29788,7 +29819,11 @@ sealed class ScreenCaptureService
                 return lastCapture;
             }
 
-            Thread.Sleep(TimeSpan.FromSeconds(2));
+            var retryDelayMs = GetCaptureRetryDelayMs(attempt + 1);
+            if (retryDelayMs > 0)
+            {
+                Thread.Sleep(retryDelayMs);
+            }
         }
 
         lastCapture?.Dispose();
