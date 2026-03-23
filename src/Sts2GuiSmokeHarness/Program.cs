@@ -12118,6 +12118,8 @@ static string[] BuildAllowedActionsCore(
     var claimableRewardPresent = context.ClaimableRewardPresent;
     var mapOverlayState = context.MapOverlayState;
     var mapForegroundOwnership = MapForegroundReconciliation.HasMapForegroundOwnership(observer, history);
+    var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
+    var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
     var explicitRestSiteChoiceAuthority = HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
     if (phase == GuiSmokePhase.WaitRunLoad && GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(observer, out var postRunLoadPhase))
     {
@@ -12156,6 +12158,10 @@ static string[] BuildAllowedActionsCore(
                 ? new[] { "click first reachable node", "click visible map advance", "click reward back", "wait" }
                 : new[] { "click first reachable node", "click visible map advance", "wait" },
         GuiSmokePhase.HandleRewards => new[] { "click proceed", "click reward", "wait" },
+        GuiSmokePhase.ChooseFirstNode when ancientMapOwner && ancientMapSurfacePending
+            => new[] { "wait" },
+        GuiSmokePhase.ChooseFirstNode when ancientMapOwner
+            => new[] { "click exported reachable node", "click visible map advance", "wait" },
         GuiSmokePhase.ChooseFirstNode when explicitRestSiteChoiceAuthority
             => BuildExplicitRestSiteAllowedActions(observer.Summary),
         GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteProceedState(observer.Summary)
@@ -12181,6 +12187,8 @@ static string[] BuildAllowedActionsCore(
             => new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", rewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" },
         GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && ShouldPreferRewardProgressionOverMapFallback(observer)
             => new[] { "click reward", "click reward skip", "click proceed", "wait" },
+        GuiSmokePhase.HandleEvent when ancientMapOwner && ancientMapSurfacePending
+            => new[] { "wait" },
         GuiSmokePhase.HandleEvent when AncientEventObserverSignals.IsDialogueActive(observer.Summary)
             => new[] { "click ancient dialogue advance", "wait" },
         GuiSmokePhase.HandleEvent when AncientEventObserverSignals.HasExplicitCompletionAction(observer.Summary)
@@ -17423,6 +17431,32 @@ static class MapNodeSourceSupport
 
 static class AncientEventObserverSignals
 {
+    public static string? GetForegroundOwner(ObserverSummary observer)
+    {
+        return TryGetMetaString(observer, "foregroundOwner");
+    }
+
+    public static string? GetForegroundActionLane(ObserverSummary observer)
+    {
+        return TryGetMetaString(observer, "foregroundActionLane");
+    }
+
+    public static bool IsMapForegroundOwner(ObserverSummary observer)
+    {
+        return string.Equals(GetForegroundOwner(observer), "map", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsEventForegroundOwner(ObserverSummary observer)
+    {
+        return string.Equals(GetForegroundOwner(observer), "event", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsMapSurfacePending(ObserverSummary observer)
+    {
+        return IsMapForegroundOwner(observer)
+               && TryGetMetaBool(observer, "mapSurfacePending") == true;
+    }
+
     public static bool IsAncientEventDetected(ObserverSummary observer)
     {
         return TryGetMetaBool(observer, "ancientEventDetected") == true;
@@ -17430,12 +17464,24 @@ static class AncientEventObserverSignals
 
     public static bool IsDialogueActive(ObserverSummary observer)
     {
+        if (IsEventForegroundOwner(observer)
+            && string.Equals(GetForegroundActionLane(observer), "ancient-dialogue", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         return IsAncientEventDetected(observer)
                && TryGetMetaBool(observer, "ancientDialogueActive") == true;
     }
 
     public static bool HasExplicitOptionSelection(ObserverSummary observer)
     {
+        if (IsEventForegroundOwner(observer)
+            && string.Equals(GetForegroundActionLane(observer), "ancient-option", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         if (!IsAncientEventDetected(observer))
         {
             return false;
@@ -17454,6 +17500,12 @@ static class AncientEventObserverSignals
 
     public static bool HasExplicitCompletionAction(ObserverSummary observer)
     {
+        if (IsEventForegroundOwner(observer)
+            && string.Equals(GetForegroundActionLane(observer), "ancient-completion", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         if (!IsAncientEventDetected(observer))
         {
             return false;
@@ -17483,6 +17535,11 @@ static class AncientEventObserverSignals
 
     public static bool HasMapReleaseAuthority(ObserverSummary observer, string? declaringType, string? instanceType)
     {
+        if (IsMapForegroundOwner(observer) || TryGetMetaBool(observer, "mapReleaseAuthority") == true)
+        {
+            return true;
+        }
+
         static bool IsMapScreenTypeName(string? typeName)
         {
             return !string.IsNullOrWhiteSpace(typeName)
@@ -17515,6 +17572,16 @@ static class AncientEventObserverSignals
 
     public static bool HasForegroundAuthority(ObserverSummary observer)
     {
+        if (IsMapForegroundOwner(observer))
+        {
+            return false;
+        }
+
+        if (IsEventForegroundOwner(observer))
+        {
+            return true;
+        }
+
         return IsDialogueActive(observer)
                || HasExplicitCompletionAction(observer)
                || HasExplicitOptionSelection(observer);
@@ -17702,6 +17769,13 @@ static class AncientEventObserverSignals
                     ? parsed
                     : null
                : null;
+    }
+
+    private static string? TryGetMetaString(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value)
+            ? value
+            : null;
     }
 
     private static int? TryGetMetaInt(ObserverSummary observer, string key)
@@ -19447,6 +19521,11 @@ static class GuiSmokeForegroundHeuristics
 
     private static bool HasEventForegroundAuthority(ObserverSummary observer)
     {
+        if (AncientEventObserverSignals.IsMapForegroundOwner(observer))
+        {
+            return false;
+        }
+
         if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
             || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
             || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
@@ -19471,9 +19550,12 @@ static class GuiSmokeForegroundHeuristics
 
         return observer.ActionNodes.Any(node =>
                    node.Actionable
+                   && !MapNodeSourceSupport.IsExplicitMapPointNode(node)
                    && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
                    && HasUsableBounds(node.ScreenBounds))
                || observer.Choices.Any(choice =>
+                   !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
+                   && 
                    HasUsableBounds(choice.ScreenBounds)
                    && !LooksLikeProceedOrSkip(choice.Label));
     }
@@ -19859,7 +19941,8 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool TryGetPostEventReleasePhase(ObserverSummary observer, string? declaringType, string? instanceType, out GuiSmokePhase nextPhase)
     {
-        if (AncientEventObserverSignals.HasMapReleaseAuthority(observer, declaringType, instanceType))
+        if (AncientEventObserverSignals.IsMapForegroundOwner(observer)
+            || AncientEventObserverSignals.HasMapReleaseAuthority(observer, declaringType, instanceType))
         {
             nextPhase = GuiSmokePhase.ChooseFirstNode;
             return true;
@@ -19979,6 +20062,11 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool LooksLikeEventState(ObserverSummary observer, string? declaringType, string? instanceType)
     {
+        if (AncientEventObserverSignals.IsMapForegroundOwner(observer))
+        {
+            return false;
+        }
+
         if (AncientEventObserverSignals.HasForegroundAuthority(observer))
         {
             return true;

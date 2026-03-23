@@ -1187,12 +1187,19 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         var strictSuccess = strictAttempts.FirstOrDefault(result => result.Choices.Count > 0);
-        var mapStrict = strictAttempts.FirstOrDefault(result =>
-            string.Equals(result.Decision.ExtractorPath, "map", StringComparison.OrdinalIgnoreCase)
-            && result.Choices.Count > 0);
+        var mapAttempt = strictAttempts.FirstOrDefault(result =>
+            string.Equals(result.Decision.ExtractorPath, "map", StringComparison.OrdinalIgnoreCase));
+        var mapStrict = mapAttempt is { Choices.Count: > 0 }
+            ? mapAttempt
+            : null;
         var eventStrict = strictAttempts.FirstOrDefault(result =>
             string.Equals(result.Decision.ExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
             && result.Choices.Count > 0);
+        var normalizedAncientOwnership = NormalizeAncientForegroundOwnership(
+            ancientEventStrict,
+            mapAttempt,
+            currentActiveScreenType,
+            rootSceneObservation);
         if (mapStrict is not null && eventStrict is not null)
         {
             strictSuccess = MergeMixedContextChoices(eventStrict, mapStrict, maxEntries);
@@ -1213,6 +1220,21 @@ internal static class RuntimeSnapshotReflectionExtractor
                     .Take(512)
                     .ToArray(),
                 Decision = restSiteUpgradeStrict.Decision with
+                {
+                    FailureReason = JoinFailureReasons(strictAttempts.Select(result => result.Decision.FailureReason), null),
+                },
+            };
+        }
+
+        if (normalizedAncientOwnership is not null)
+        {
+            return normalizedAncientOwnership with
+            {
+                Candidates = strictAttempts
+                    .SelectMany(result => result.Candidates)
+                    .Take(512)
+                    .ToArray(),
+                Decision = normalizedAncientOwnership.Decision with
                 {
                     FailureReason = JoinFailureReasons(strictAttempts.Select(result => result.Decision.FailureReason), null),
                 },
@@ -1294,6 +1316,141 @@ internal static class RuntimeSnapshotReflectionExtractor
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Take(64)
                     .ToArray()));
+    }
+
+    private static ChoiceExtractionResult? NormalizeAncientForegroundOwnership(
+        ChoiceExtractionResult? ancientEventStrict,
+        ChoiceExtractionResult? mapAttempt,
+        string? currentActiveScreenType,
+        RootSceneTransitionObservation rootSceneObservation)
+    {
+        if (ancientEventStrict is null || !IsAncientEventDetected(ancientEventStrict))
+        {
+            return null;
+        }
+
+        var ancientPhase = ancientEventStrict.Meta.TryGetValue("ancientPhase", out var phaseValue)
+            ? phaseValue
+            : null;
+        var mapReleaseAuthority = HasAncientMapReleaseAuthority(mapAttempt, currentActiveScreenType, rootSceneObservation);
+        if (!mapReleaseAuthority)
+        {
+            return WithForegroundMetadata(
+                ancientEventStrict,
+                ancientEventStrict.Meta,
+                "event",
+                ancientPhase switch
+                {
+                    "dialogue" => "ancient-dialogue",
+                    "options" => "ancient-option",
+                    "completion" => "ancient-completion",
+                    _ => "ancient-option",
+                },
+                eventTeardownInProgress: false,
+                mapReleaseAuthority: false,
+                mapSurfacePending: false,
+                ancientPhase: ancientPhase);
+        }
+
+        if (mapAttempt is not null && mapAttempt.Choices.Count > 0)
+        {
+            return WithForegroundMetadata(
+                mapAttempt,
+                ancientEventStrict.Meta,
+                "map",
+                "map-node",
+                eventTeardownInProgress: true,
+                mapReleaseAuthority: true,
+                mapSurfacePending: false,
+                ancientPhase: "teardown");
+        }
+
+        return WithForegroundMetadata(
+            new ChoiceExtractionResult(
+                Array.Empty<LiveExportChoiceSummary>(),
+                mapAttempt?.Candidates ?? Array.Empty<LiveExportChoiceCandidate>(),
+                new LiveExportChoiceDecision(
+                    "map",
+                    UsedStrictExtractor: true,
+                    CandidateCount: mapAttempt?.Candidates.Count ?? 0,
+                    AcceptedCount: 0,
+                    "none",
+                    "map release authority is active but reachable map-node surface is still pending",
+                    Array.Empty<string>()))
+            {
+                Meta = mapAttempt?.Meta is not null
+                    ? new Dictionary<string, string?>(mapAttempt.Meta, StringComparer.OrdinalIgnoreCase)
+                    : new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase),
+            },
+            ancientEventStrict.Meta,
+            "map",
+            "none",
+            eventTeardownInProgress: true,
+            mapReleaseAuthority: true,
+            mapSurfacePending: true,
+            ancientPhase: "teardown");
+    }
+
+    private static ChoiceExtractionResult WithForegroundMetadata(
+        ChoiceExtractionResult result,
+        IReadOnlyDictionary<string, string?>? supplementalMeta,
+        string foregroundOwner,
+        string foregroundActionLane,
+        bool eventTeardownInProgress,
+        bool mapReleaseAuthority,
+        bool mapSurfacePending,
+        string? ancientPhase)
+    {
+        var metadata = new Dictionary<string, string?>(result.Meta, StringComparer.OrdinalIgnoreCase)
+        {
+            ["foregroundOwner"] = foregroundOwner,
+            ["foregroundActionLane"] = foregroundActionLane,
+            ["eventTeardownInProgress"] = eventTeardownInProgress ? "true" : "false",
+            ["mapReleaseAuthority"] = mapReleaseAuthority ? "true" : "false",
+            ["mapSurfacePending"] = mapSurfacePending ? "true" : "false",
+        };
+        if (!string.IsNullOrWhiteSpace(ancientPhase))
+        {
+            metadata["ancientPhase"] = ancientPhase;
+        }
+
+        if (supplementalMeta is not null)
+        {
+            foreach (var entry in supplementalMeta)
+            {
+                metadata.TryAdd(entry.Key, entry.Value);
+            }
+        }
+
+        return result with
+        {
+            Meta = metadata,
+        };
+    }
+
+    private static bool HasAncientMapReleaseAuthority(
+        ChoiceExtractionResult? mapAttempt,
+        string? currentActiveScreenType,
+        RootSceneTransitionObservation rootSceneObservation)
+    {
+        if (!HasMapForegroundAuthority(currentActiveScreenType, rootSceneObservation))
+        {
+            return false;
+        }
+
+        if (mapAttempt is null)
+        {
+            return false;
+        }
+
+        if (mapAttempt.Candidates.Count > 0 || mapAttempt.Choices.Count > 0)
+        {
+            return true;
+        }
+
+        return mapAttempt.Meta.TryGetValue("mapPointCount", out var mapPointCount)
+               && int.TryParse(mapPointCount, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+               && parsed > 0;
     }
 
     private static LiveExportEncounterSummary? ExtractEncounter(
@@ -4064,6 +4221,13 @@ internal static class RuntimeSnapshotReflectionExtractor
             ["ancientOptionCount"] = enabledButtons.ToString(CultureInfo.InvariantCulture),
             ["ancientCompletionActive"] = completionButtons > 0 ? "true" : "false",
             ["ancientCompletionCount"] = completionButtons.ToString(CultureInfo.InvariantCulture),
+            ["ancientPhase"] = dialogueActive
+                ? "dialogue"
+                : completionButtons > 0
+                    ? "completion"
+                    : enabledButtons > 0
+                        ? "options"
+                        : "await-options",
             ["ancientEventExtractionPath"] = choices.Any(choice => string.Equals(choice.Kind, "event-dialogue", StringComparison.OrdinalIgnoreCase))
                 ? "ancient-dialogue-hitbox"
                 : completionButtons > 0

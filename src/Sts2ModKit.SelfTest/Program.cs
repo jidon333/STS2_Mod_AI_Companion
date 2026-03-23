@@ -54,6 +54,8 @@ Run("runtime reflection reports filtered mixed-aftermath map-point diagnostics",
 Run("runtime reflection exports explicit ancient dialogue advance before Neow options", TestRuntimeReflectionAncientEventDialogueExport, failures);
 Run("runtime reflection exports explicit ancient option buttons and suppresses pseudo-choice duplicates", TestRuntimeReflectionAncientEventOptionExport, failures);
 Run("runtime reflection marks ancient post-choice completion buttons explicitly", TestRuntimeReflectionAncientEventCompletionExport, failures);
+Run("runtime reflection normalizes ancient mixed post-proceed ownership to map lane", TestRuntimeReflectionAncientMixedPostProceedOwnershipNormalization, failures);
+Run("runtime reflection keeps map owner when post-proceed map surface is pending", TestRuntimeReflectionAncientMixedPostProceedMapPending, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
@@ -1768,6 +1770,12 @@ static void TestRuntimeReflectionAncientEventDialogueExport()
     Assert(observation.Meta.TryGetValue("ancientEventExtractionPath", out var ancientPath)
            && string.Equals(ancientPath, "ancient-dialogue-hitbox", StringComparison.OrdinalIgnoreCase),
         "Ancient dialogue phase should report the dialogue-hitbox extraction path.");
+    Assert(observation.Meta.TryGetValue("foregroundOwner", out var foregroundOwner)
+           && string.Equals(foregroundOwner, "event", StringComparison.OrdinalIgnoreCase),
+        "Ancient dialogue phase should remain event-owned.");
+    Assert(observation.Meta.TryGetValue("foregroundActionLane", out var foregroundLane)
+           && string.Equals(foregroundLane, "ancient-dialogue", StringComparison.OrdinalIgnoreCase),
+        "Ancient dialogue phase should export the ancient-dialogue foreground lane.");
     Assert(observation.Meta.TryGetValue("ancientOptionCount", out var ancientOptionCount)
            && string.Equals(ancientOptionCount, "0", StringComparison.OrdinalIgnoreCase),
         "Ancient dialogue phase should not pretend option buttons are already enabled.");
@@ -1844,6 +1852,12 @@ static void TestRuntimeReflectionAncientEventOptionExport()
     Assert(observation.Meta.TryGetValue("ancientEventExtractionPath", out var ancientPath)
            && string.Equals(ancientPath, "ancient-option-buttons", StringComparison.OrdinalIgnoreCase),
         "Ancient option phase should report the explicit button extraction path.");
+    Assert(observation.Meta.TryGetValue("foregroundOwner", out var foregroundOwner)
+           && string.Equals(foregroundOwner, "event", StringComparison.OrdinalIgnoreCase),
+        "Ancient option phase should remain event-owned.");
+    Assert(observation.Meta.TryGetValue("foregroundActionLane", out var foregroundLane)
+           && string.Equals(foregroundLane, "ancient-option", StringComparison.OrdinalIgnoreCase),
+        "Ancient option phase should export the ancient-option foreground lane.");
 
     var exportedOptions = observation.Choices
         .Where(choice => string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase))
@@ -1904,6 +1918,12 @@ static void TestRuntimeReflectionAncientEventCompletionExport()
     Assert(observation.Meta.TryGetValue("ancientEventExtractionPath", out var ancientPath)
            && string.Equals(ancientPath, "ancient-completion-button", StringComparison.OrdinalIgnoreCase),
         "Ancient post-choice proceed should report the completion-button extraction path.");
+    Assert(observation.Meta.TryGetValue("foregroundOwner", out var foregroundOwner)
+           && string.Equals(foregroundOwner, "event", StringComparison.OrdinalIgnoreCase),
+        "Ancient completion should remain event-owned before map release truth appears.");
+    Assert(observation.Meta.TryGetValue("foregroundActionLane", out var foregroundLane)
+           && string.Equals(foregroundLane, "ancient-completion", StringComparison.OrdinalIgnoreCase),
+        "Ancient completion should export the ancient-completion foreground lane.");
     Assert(observation.Meta.TryGetValue("ancientCompletionUsesDefaultFocus", out var usesDefaultFocus)
            && string.Equals(usesDefaultFocus, "true", StringComparison.OrdinalIgnoreCase),
         "Ancient completion export should record when the proceed button matches the layout default focused control.");
@@ -1919,6 +1939,131 @@ static void TestRuntimeReflectionAncientEventCompletionExport()
         "Ancient post-choice proceed should carry explicit completion semantic hints.");
     Assert(completionChoice.SemanticHints.Contains("option-role:proceed", StringComparer.OrdinalIgnoreCase),
         "Ancient post-choice proceed should preserve the canonical Option.IsProceed role.");
+}
+
+static void TestRuntimeReflectionAncientMixedPostProceedOwnershipNormalization()
+{
+    var proceedButton = new FakeNEventOptionButton(
+        0,
+        "진행",
+        "[gold][b]진행[/b][/gold]",
+        460,
+        942,
+        enabled: true,
+        isProceed: true);
+    var ancientLayout = new FakeNAncientEventLayout
+    {
+        Visible = true,
+        IsDialogueOnLastLine = true,
+        DefaultFocusedControl = proceedButton,
+        Children = new object[] { proceedButton },
+    };
+    var eventRoom = new FakeNEventRoom
+    {
+        Visible = true,
+        Children = new object[] { ancientLayout },
+    };
+    var mapScreen = new FakeNMapScreen
+    {
+        Visible = true,
+        IsOpen = true,
+        _mapPointDictionary = new Dictionary<string, object>
+        {
+            ["1,3"] = new FakeNMapPointNode("Monster", 1, 3, 440, 300, enabled: true, width: 92, height: 92),
+            ["1,6"] = new FakeNMapPointNode("Monster", 1, 6, 760, 300, enabled: true, width: 92, height: 92),
+        },
+    };
+
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = mapScreen,
+            },
+            eventRoom,
+            mapScreen,
+        },
+        "event");
+
+    Assert(observation.Meta.TryGetValue("foregroundOwner", out var foregroundOwner)
+           && string.Equals(foregroundOwner, "map", StringComparison.OrdinalIgnoreCase),
+        "Mixed post-proceed state should normalize foreground ownership to map once map release truth is active.");
+    Assert(observation.Meta.TryGetValue("foregroundActionLane", out var foregroundLane)
+           && string.Equals(foregroundLane, "map-node", StringComparison.OrdinalIgnoreCase),
+        "Mixed post-proceed state should normalize the foreground action lane to map-node.");
+    Assert(observation.Meta.TryGetValue("choiceExtractorPath", out var extractorPath)
+           && string.Equals(extractorPath, "map", StringComparison.OrdinalIgnoreCase),
+        "Mixed post-proceed state should switch the choice extractor path to map.");
+    Assert(observation.Meta.TryGetValue("eventTeardownInProgress", out var eventTeardown)
+           && string.Equals(eventTeardown, "true", StringComparison.OrdinalIgnoreCase),
+        "Mixed post-proceed state should mark ancient residue as teardown/background state.");
+    Assert(observation.Meta.TryGetValue("mapReleaseAuthority", out var mapReleaseAuthority)
+           && string.Equals(mapReleaseAuthority, "true", StringComparison.OrdinalIgnoreCase),
+        "Mixed post-proceed state should record map release authority.");
+    Assert(observation.Choices.Any(choice => string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)),
+        "Mixed post-proceed state should surface actionable map-node choices.");
+    Assert(!observation.Choices.Any(choice => string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)),
+        "Mixed post-proceed state should not keep ancient completion residue as the foreground action lane.");
+}
+
+static void TestRuntimeReflectionAncientMixedPostProceedMapPending()
+{
+    var proceedButton = new FakeNEventOptionButton(
+        0,
+        "진행",
+        "[gold][b]진행[/b][/gold]",
+        460,
+        942,
+        enabled: true,
+        isProceed: true);
+    var ancientLayout = new FakeNAncientEventLayout
+    {
+        Visible = true,
+        IsDialogueOnLastLine = true,
+        Children = new object[] { proceedButton },
+    };
+    var eventRoom = new FakeNEventRoom
+    {
+        Visible = true,
+        Children = new object[] { ancientLayout },
+    };
+    var mapScreen = new FakeNMapScreen
+    {
+        Visible = true,
+        IsOpen = true,
+        _mapPointDictionary = new Dictionary<string, object>
+        {
+            ["1,3"] = new FakeNMapPointNode("Monster", 1, 3, 440, 300, enabled: false, width: 92, height: 92),
+        },
+    };
+
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = mapScreen,
+            },
+            eventRoom,
+            mapScreen,
+        },
+        "event");
+
+    Assert(observation.Meta.TryGetValue("foregroundOwner", out var foregroundOwner)
+           && string.Equals(foregroundOwner, "map", StringComparison.OrdinalIgnoreCase),
+        "Map release truth should keep ownership on map even if no actionable node surface is ready yet.");
+    Assert(observation.Meta.TryGetValue("foregroundActionLane", out var foregroundLane)
+           && string.Equals(foregroundLane, "none", StringComparison.OrdinalIgnoreCase),
+        "Map-pending post-proceed state should expose no foreground action lane until a map node is actionable.");
+    Assert(observation.Meta.TryGetValue("mapSurfacePending", out var mapSurfacePending)
+           && string.Equals(mapSurfacePending, "true", StringComparison.OrdinalIgnoreCase),
+        "Map-pending post-proceed state should explicitly mark map surface pending.");
+    Assert(observation.Meta.TryGetValue("choiceExtractorPath", out var extractorPath)
+           && string.Equals(extractorPath, "map", StringComparison.OrdinalIgnoreCase),
+        "Map-pending post-proceed state should still use the map extractor path.");
+    Assert(!observation.Choices.Any(choice => string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)),
+        "Map-pending post-proceed state should not reactivate ancient completion as the foreground lane.");
 }
 
 static void TestInventoryPublisherMapNodeSourceCorrection()
@@ -4491,6 +4636,14 @@ file class FakeNMapPoint
 file sealed class FakeNBossMapPoint : FakeNMapPoint
 {
     public FakeNBossMapPoint(string pointType, int row, int col, double x, double y, bool enabled, double width, double height)
+        : base(pointType, row, col, x, y, enabled, width, height)
+    {
+    }
+}
+
+file sealed class FakeNMapPointNode : FakeNMapPoint
+{
+    public FakeNMapPointNode(string pointType, int row, int col, double x, double y, bool enabled, double width, double height)
         : base(pointType, row, col, x, y, enabled, width, height)
     {
     }
