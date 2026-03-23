@@ -1,0 +1,47 @@
+[
+  {
+    "name": "ancient-post-proceed-map-handoff",
+    "requestPath": "tests/replay-fixtures/m6-parity/ancient-map-handoff.request.json",
+    "expectedActionKind": "click",
+    "expectedTargetContains": "exported reachable map node",
+    "expectedForegroundOwner": "map",
+    "expectedForegroundActionLane": "map-node",
+    "expectedChoiceExtractorPath": "map"
+  },
+  {
+    "name": "reward-card-pick",
+    "requestPath": "tests/replay-fixtures/m6-parity/reward-pick-card.request.json",
+    "expectedActionKind": "click",
+    "expectedTargetContains": "reward pick card",
+    "expectedForegroundOwner": null,
+    "expectedForegroundActionLane": null,
+    "expectedChoiceExtractorPath": "card-selection-reward-pick"
+  },
+  {
+    "name": "reward-aftermath-map-handoff",
+    "requestPath": "tests/replay-fixtures/m6-parity/reward-map-handoff.request.json",
+    "expectedActionKind": "click",
+    "expectedTargetContains": "exported reachable map node",
+    "expectedForegroundOwner": null,
+    "expectedForegroundActionLane": null,
+    "expectedChoiceExtractorPath": "map"
+  },
+  {
+    "name": "shop-proceed-after-bounded-purchase",
+    "requestPath": "tests/replay-fixtures/m6-parity/shop-proceed.request.json",
+    "expectedActionKind": "click",
+    "expectedTargetContains": "shop proceed",
+    "expectedForegroundOwner": null,
+    "expectedForegroundActionLane": null,
+    "expectedChoiceExtractorPath": "shop"
+  },
+  {
+    "name": "elite-route-after-reward",
+    "requestPath": "tests/replay-fixtures/m6-parity/elite-route-after-reward.request.json",
+    "expectedActionKind": "click",
+    "expectedTargetContains": "exported reachable map node",
+    "expectedForegroundOwner": null,
+    "expectedForegroundActionLane": null,
+    "expectedChoiceExtractorPath": "map"
+  }
+]

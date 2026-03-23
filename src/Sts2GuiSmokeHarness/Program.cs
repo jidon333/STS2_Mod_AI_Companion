@@ -42,6 +42,9 @@ try
         case "replay-test":
             return ReplayGoldenScenes(options, workspaceRoot);
 
+        case "replay-parity-test":
+            return ReplayParityScenes(options, workspaceRoot);
+
         case "self-test":
             RunSelfTest();
             Console.WriteLine("GUI smoke harness self-test passed.");
@@ -2493,6 +2496,130 @@ static int ReplayGoldenScenes(IReadOnlyDictionary<string, string> options, strin
     return 0;
 }
 
+static int ReplayParityScenes(IReadOnlyDictionary<string, string> options, string workspaceRoot)
+{
+    var suitePath = options.TryGetValue("--suite", out var explicitSuitePath)
+        ? ResolveCliPath(explicitSuitePath, workspaceRoot)
+        : Path.Combine(workspaceRoot, "tests", "replay-fixtures", "gui-smoke-parity-scenes.json");
+    if (!File.Exists(suitePath))
+    {
+        throw new FileNotFoundException("Replay parity suite not found.", suitePath);
+    }
+
+    var fixtures = JsonSerializer.Deserialize<IReadOnlyList<GuiSmokeReplayParityFixture>>(File.ReadAllText(suitePath), GuiSmokeShared.JsonOptions)
+                   ?? throw new InvalidOperationException("Failed to parse replay parity suite.");
+    var results = new List<object>(fixtures.Count);
+    var traceEnabled = options.ContainsKey("--trace");
+    for (var index = 0; index < fixtures.Count; index += 1)
+    {
+        var fixture = fixtures[index];
+        var trace = new GuiSmokeReplayTracer($"replay-parity {index + 1}/{fixtures.Count}:{fixture.Name}", traceEnabled);
+        var requestPath = ResolveCliPath(fixture.RequestPath, workspaceRoot);
+        trace.Info($"start request={requestPath}");
+
+        var lightweightLoad = trace.Measure(
+            "load-request-lightweight",
+            () => LoadReplayRequest(requestPath, trace, fullRequestRebuild: false),
+            "lightweight-request",
+            alwaysLog: true);
+        var rebuiltLoad = trace.Measure(
+            "load-request-rebuilt",
+            () => LoadReplayRequest(requestPath, trace, fullRequestRebuild: true),
+            "full-request-rebuild",
+            alwaysLog: true);
+        var lightweightEvaluation = trace.Measure(
+            "analyze-lightweight",
+            () => EvaluateAutoDecisionWithDiagnostics(requestPath, lightweightLoad.Request),
+            Path.GetFileName(lightweightLoad.Request.ScreenshotPath),
+            alwaysLog: true);
+        var rebuiltEvaluation = trace.Measure(
+            "analyze-rebuilt",
+            () => EvaluateAutoDecisionWithDiagnostics(requestPath, rebuiltLoad.Request),
+            Path.GetFileName(rebuiltLoad.Request.ScreenshotPath),
+            alwaysLog: true);
+
+        var lightweightSummary = BuildReplayParityDecisionSummary(lightweightLoad.Request, lightweightEvaluation.Decision);
+        var rebuiltSummary = BuildReplayParityDecisionSummary(rebuiltLoad.Request, rebuiltEvaluation.Decision);
+        var lightweightAllowedActionKey = BuildReplayParityAllowedActionKey(lightweightLoad.Request.AllowedActions);
+        var rebuiltAllowedActionKey = BuildReplayParityAllowedActionKey(rebuiltLoad.Request.AllowedActions);
+        Assert(string.Equals(lightweightSummary, rebuiltSummary, StringComparison.OrdinalIgnoreCase),
+            $"Replay parity scene '{fixture.Name}' drifted: lightweight='{lightweightSummary}' rebuilt='{rebuiltSummary}'.");
+        Assert(string.Equals(lightweightAllowedActionKey, rebuiltAllowedActionKey, StringComparison.OrdinalIgnoreCase),
+            $"Replay parity scene '{fixture.Name}' changed allowed-action semantics between saved and rebuilt requests.");
+
+        if (!string.IsNullOrWhiteSpace(fixture.ExpectedActionKind))
+        {
+            Assert(string.Equals(lightweightEvaluation.Decision.ActionKind, fixture.ExpectedActionKind, StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(rebuiltEvaluation.Decision.ActionKind, fixture.ExpectedActionKind, StringComparison.OrdinalIgnoreCase),
+                $"Replay parity scene '{fixture.Name}' expected action kind '{fixture.ExpectedActionKind}'.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(fixture.ExpectedTargetContains))
+        {
+            Assert((lightweightEvaluation.Decision.TargetLabel ?? string.Empty).Contains(fixture.ExpectedTargetContains, StringComparison.OrdinalIgnoreCase)
+                   && (rebuiltEvaluation.Decision.TargetLabel ?? string.Empty).Contains(fixture.ExpectedTargetContains, StringComparison.OrdinalIgnoreCase),
+                $"Replay parity scene '{fixture.Name}' expected target containing '{fixture.ExpectedTargetContains}'.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(fixture.ExpectedForegroundOwner))
+        {
+            Assert(string.Equals(TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundOwner"), fixture.ExpectedForegroundOwner, StringComparison.OrdinalIgnoreCase),
+                $"Replay parity scene '{fixture.Name}' expected foreground owner '{fixture.ExpectedForegroundOwner}'.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(fixture.ExpectedForegroundActionLane))
+        {
+            Assert(string.Equals(TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundActionLane"), fixture.ExpectedForegroundActionLane, StringComparison.OrdinalIgnoreCase),
+                $"Replay parity scene '{fixture.Name}' expected foreground action lane '{fixture.ExpectedForegroundActionLane}'.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(fixture.ExpectedChoiceExtractorPath))
+        {
+            Assert(string.Equals(lightweightLoad.Request.Observer.ChoiceExtractorPath, fixture.ExpectedChoiceExtractorPath, StringComparison.OrdinalIgnoreCase),
+                $"Replay parity scene '{fixture.Name}' expected choice extractor '{fixture.ExpectedChoiceExtractorPath}'.");
+        }
+
+        results.Add(new
+        {
+            fixture.Name,
+            fixture.RequestPath,
+            ObserverStateLoaded = new
+            {
+                Lightweight = lightweightLoad.ObserverStateLoaded,
+                Rebuilt = rebuiltLoad.ObserverStateLoaded,
+            },
+            RequestContract = new
+            {
+                ForegroundOwner = TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundOwner"),
+                ForegroundActionLane = TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundActionLane"),
+                ChoiceExtractorPath = lightweightLoad.Request.Observer.ChoiceExtractorPath,
+            },
+            Lightweight = new
+            {
+                Decision = lightweightEvaluation.Decision.TargetLabel,
+                Summary = lightweightSummary,
+                AllowedActions = lightweightLoad.Request.AllowedActions,
+            },
+            Rebuilt = new
+            {
+                Decision = rebuiltEvaluation.Decision.TargetLabel,
+                Summary = rebuiltSummary,
+                AllowedActions = rebuiltLoad.Request.AllowedActions,
+            },
+            ElapsedMs = trace.Entries.Sum(static entry => entry.ElapsedMs),
+        });
+        trace.Info($"ok summary={lightweightSummary} foreground={TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundOwner") ?? "null"} lane={TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundActionLane") ?? "null"}");
+    }
+
+    Console.WriteLine(JsonSerializer.Serialize(new
+    {
+        SuitePath = suitePath,
+        SceneCount = fixtures.Count,
+        Results = results,
+    }, GuiSmokeShared.JsonOptions));
+    return 0;
+}
+
 static GuiSmokeReplayRequestLoadResult LoadReplayRequest(string requestPath, GuiSmokeReplayTracer? trace = null, bool fullRequestRebuild = false)
 {
     var request = (trace ?? new GuiSmokeReplayTracer("replay-load", verbose: false)).Measure(
@@ -2707,6 +2834,64 @@ static string DescribeGoldenSceneChecks(GuiSmokeReplayGoldenSceneFixture fixture
     return checks.Count == 0
         ? "none"
         : string.Join(" | ", checks);
+}
+
+static string BuildReplayParityDecisionSummary(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
+{
+    string? combatSemanticAction = null;
+    if (string.Equals(request.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+        && CombatDecisionContract.TryMapSemanticAction(request, decision, out var mappedSemanticAction))
+    {
+        combatSemanticAction = mappedSemanticAction;
+    }
+
+    static string Normalize(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "null"
+            : value.Trim().ToLowerInvariant();
+    }
+
+    static string FormatCoord(double? value)
+    {
+        return value is null
+            ? "null"
+            : value.Value.ToString("0.000", CultureInfo.InvariantCulture);
+    }
+
+    return string.Join(
+        "|",
+        new[]
+        {
+            $"status:{Normalize(decision.Status)}",
+            $"action:{Normalize(decision.ActionKind)}",
+            $"key:{Normalize(decision.KeyText)}",
+            $"target:{Normalize(decision.TargetLabel)}",
+            $"x:{FormatCoord(decision.NormalizedX)}",
+            $"y:{FormatCoord(decision.NormalizedY)}",
+            $"combat:{Normalize(combatSemanticAction)}",
+        });
+}
+
+static string BuildReplayParityAllowedActionKey(IReadOnlyList<string> allowedActions)
+{
+    return string.Join(
+        "|",
+        allowedActions
+            .OrderBy(static action => action, StringComparer.OrdinalIgnoreCase)
+            .Select(static action => action.Trim().ToLowerInvariant()));
+}
+
+static string? TryGetObserverMeta(ObserverSummary observer, string key)
+{
+    if (observer.Meta is null)
+    {
+        return null;
+    }
+
+    return observer.Meta.TryGetValue(key, out var value)
+        ? value
+        : null;
 }
 
 static async Task WaitForLiveGameWindowAsync(DateTimeOffset launchedAt, TimeSpan timeout)
@@ -3750,11 +3935,66 @@ static void RunSelfTest()
     Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.HandleCombat) == 140, "Combat decision wait minimum should use the reduced fast-path baseline.");
     Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.WaitRunLoad) == 260, "Run-load waits should keep a slightly higher minimum than stable foreground phases.");
     Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.HandleEvent) == 200, "Stable non-combat foreground phases should use the reduced baseline wait.");
-    Assert(GetLaunchPollingIntervalMs() == 250, "Launch/focus polling should use the faster cadence.");
-    Assert(ScreenCaptureService.GetCaptureRetryDelayMs(0) == 0, "Initial capture attempt should not pay retry backoff.");
-    Assert(ScreenCaptureService.GetCaptureRetryDelayMs(1) == 200, "Second capture attempt should use the short backoff.");
-    Assert(ScreenCaptureService.GetCaptureRetryDelayMs(2) == 350, "Third capture attempt should use the medium backoff.");
-    Assert(ScreenCaptureService.GetCaptureRetryDelayMs(3) == 500, "Later capture attempts should clamp to the bounded max backoff.");
+        Assert(GetLaunchPollingIntervalMs() == 250, "Launch/focus polling should use the faster cadence.");
+        Assert(ScreenCaptureService.GetCaptureRetryDelayMs(0) == 0, "Initial capture attempt should not pay retry backoff.");
+        Assert(ScreenCaptureService.GetCaptureRetryDelayMs(1) == 200, "Second capture attempt should use the short backoff.");
+        Assert(ScreenCaptureService.GetCaptureRetryDelayMs(2) == 350, "Third capture attempt should use the medium backoff.");
+        Assert(ScreenCaptureService.GetCaptureRetryDelayMs(3) == 500, "Later capture attempts should clamp to the bounded max backoff.");
+        var replayParitySummary = BuildReplayParityDecisionSummary(
+            new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                99,
+                GuiSmokePhase.ChooseFirstNode.ToString(),
+                "Parity summary should capture generic non-combat decision semantics.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:choosefirstnode|screen:event",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    true,
+                    "mixed",
+                    "stable",
+                    null,
+                    null,
+                    "map",
+                    80,
+                    80,
+                    null,
+                    new[] { "Monster (1,3)" },
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    Array.Empty<ObserverChoice>(),
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["foregroundOwner"] = "map",
+                        ["foregroundActionLane"] = "map-node",
+                    },
+                },
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                new[] { "click exported reachable node", "wait" },
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Parity summary should preserve the exported map-node contract.",
+                "Choose the exported reachable map node."),
+            new GuiSmokeStepDecision("act", "click", null, 0.401, 0.522, "exported reachable map node", "test", 0.95, "map", null, false, null));
+        Assert(replayParitySummary.Contains("target:exported reachable map node", StringComparison.OrdinalIgnoreCase), "Replay parity summary should preserve the generic decision target label.");
+        Assert(replayParitySummary.Contains("x:0.401", StringComparison.OrdinalIgnoreCase) && replayParitySummary.Contains("y:0.522", StringComparison.OrdinalIgnoreCase), "Replay parity summary should preserve normalized click coordinates.");
+        Assert(string.Equals(BuildReplayParityAllowedActionKey(new[] { "wait", "Click Exported Reachable Node" }), "click exported reachable node|wait", StringComparison.OrdinalIgnoreCase), "Replay parity allowlist key should sort and normalize action labels.");
 
     var combatScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-self-test-{Guid.NewGuid():N}.png");
     try
@@ -15752,6 +15992,7 @@ static void WriteUsage()
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>] [--trace] [--full-request-rebuild]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-test [--suite <path>] [--trace] [--full-request-rebuild]");
+    Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-parity-test [--suite <path>] [--trace]");
     Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- self-test");
 }
 
@@ -16494,6 +16735,15 @@ sealed record GuiSmokeReplayGoldenSceneFixture(
     IReadOnlyList<string> RequiredCandidateLabels,
     IReadOnlyList<string> RequiredSuppressedLabels,
     IReadOnlyList<string> ForbiddenTargetLabels);
+
+sealed record GuiSmokeReplayParityFixture(
+    string Name,
+    string RequestPath,
+    string? ExpectedActionKind,
+    string? ExpectedTargetContains,
+    string? ExpectedForegroundOwner,
+    string? ExpectedForegroundActionLane,
+    string? ExpectedChoiceExtractorPath);
 
 sealed record GuiSmokeReplayEvaluation(
     string RequestPath,

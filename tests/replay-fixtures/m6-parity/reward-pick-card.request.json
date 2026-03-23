@@ -1,0 +1,520 @@
+{
+  "runId": "20260323-230733-boot-to-long-run-attempt-0001",
+  "scenarioId": "boot-to-long-run",
+  "stepIndex": 11,
+  "phase": "HandleRewards",
+  "goal": "Resolve the visible reward screen so the run can return to map.",
+  "issuedAt": "2026-03-23T14:08:37.3205469+00:00",
+  "screenshotPath": "tests\\replay-fixtures\\m6-parity\\reward-pick-card.screen.png",
+  "windowBounds": {
+    "x": 551,
+    "y": 325,
+    "width": 1280,
+    "height": 720
+  },
+  "sceneSignature": "phase:handlerewards|screen:rewards|visible:rewards|encounter:none|ready:true|stability:stable|reward:fast-path|card-selection:reward-pick|card-selection-selected:0|reward-owner:visible|reward-proceed:visible|reward-explicit-progression|substate:reward-choice",
+  "attemptId": "0001",
+  "attemptOrdinal": 1,
+  "boundedExplorationBudget": 3,
+  "firstSeenScene": true,
+  "reasoningMode": "tactical",
+  "observer": {
+    "currentScreen": "rewards",
+    "visibleScreen": "rewards",
+    "inCombat": false,
+    "capturedAt": "2026-03-23T14:08:35.7821443+00:00",
+    "inventoryId": "6d8d86b4997b138b",
+    "sceneReady": true,
+    "sceneAuthority": "mixed",
+    "sceneStability": "stable",
+    "encounterKind": "None",
+    "choiceExtractorPath": "card-selection-reward-pick",
+    "playerCurrentHp": 73,
+    "playerMaxHp": 80,
+    "playerEnergy": 0,
+    "currentChoices": [
+      "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+      "\uB118\uAE30\uAE30",
+      "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+      "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+      "\uC9C4\uC815\uD55C \uB048\uAE30",
+      "\uC804\uD22C\uC7A5\uBE44",
+      "\uB118\uAE30\uAE30",
+      "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+      "\uC9C4\uC815\uD55C \uB048\uAE30",
+      "\uC804\uD22C\uC7A5\uBE44"
+    ],
+    "lastEventsTail": [
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:32.233122\u002B00:00\u0022,\u0022seq\u0022:82,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022runtime-poll\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022source\u0022:\u0022scene-poll\u0022,\u0022rootCount\u0022:149,\u0022sceneName\u0022:\u0022Game\u0022,\u0022currentSceneType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022sceneRootType\u0022:\u0022Godot.Window\u0022,\u0022traversedNodeCount\u0022:165,\u0022visibleNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022Godot.Node2D\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022,\u0022MegaCrit.Sts2.Core.Nodes.HoverTips.NHoverTipSet\u0022],\u0022interestingNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Vfx.Utilities.NScreenShake\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NFeedbackScreenOpener\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackScreen\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerTimeoutOverlay\u0022,\u0022Godot.Node2D\u0022,\u0022Godot.AudioStreamPlayer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022],\u0022transitionInProgress\u0022:false,\u0022rootSceneCurrentType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022rootSceneIsMainMenu\u0022:false,\u0022rootSceneIsRun\u0022:true,\u0022currentRunNodePresent\u0022:true,\u0022currentRunRoomType\u0022:null,\u0022currentRunRoomSceneType\u0022:null,\u0022cardSelectionScreenDetected\u0022:false,\u0022cardSelectionScreenType\u0022:null,\u0022cardSelectionPrompt\u0022:null,\u0022cardSelectionMinSelect\u0022:null,\u0022cardSelectionMaxSelect\u0022:null,\u0022cardSelectionSelectedCount\u0022:0,\u0022cardSelectionRequireManualConfirmation\u0022:null,\u0022cardSelectionCancelable\u0022:null,\u0022cardSelectionPreviewVisible\u0022:false,\u0022cardSelectionMainConfirmEnabled\u0022:false,\u0022cardSelectionPreviewConfirmEnabled\u0022:false,\u0022cardSelectionPreviewMode\u0022:null,\u0022cardSelectionRootType\u0022:null,\u0022treasureRoomDetected\u0022:false,\u0022treasureChestClickable\u0022:false,\u0022treasureChestOpened\u0022:false,\u0022treasureRelicCollectionOpen\u0022:false,\u0022sharedRelicPickingActive\u0022:false,\u0022mapScreenOpen\u0022:false,\u0022treasureRelicHolderCount\u0022:0,\u0022treasureVisibleRelicHolderCount\u0022:0,\u0022treasureEnabledRelicHolderCount\u0022:0,\u0022treasureProceedEnabled\u0022:false,\u0022treasureInspectOverlayVisible\u0022:false,\u0022treasureRoomRootType\u0022:null,\u0022shopRoomDetected\u0022:false,\u0022shopRoomVisible\u0022:false,\u0022shopForegroundOwned\u0022:false,\u0022shopTeardownInProgress\u0022:false,\u0022shopIsCurrentActiveScreen\u0022:false,\u0022mapCurrentActiveScreen\u0022:false,\u0022activeScreenType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022shopRootType\u0022:null,\u0022shopInventoryOpen\u0022:false,\u0022shopMerchantButtonVisible\u0022:false,\u0022shopMerchantButtonEnabled\u0022:false,\u0022shopProceedEnabled\u0022:false,\u0022shopBackVisible\u0022:false,\u0022shopBackEnabled\u0022:false,\u0022shopOptionCount\u0022:0,\u0022shopAffordableOptionCount\u0022:0,\u0022shopCardRemovalVisible\u0022:false,\u0022shopCardRemovalEnabled\u0022:false,\u0022shopCardRemovalEnoughGold\u0022:false,\u0022shopCardRemovalUsed\u0022:false,\u0022rewardScreenDetected\u0022:true,\u0022rewardScreenVisible\u0022:true,\u0022rewardForegroundOwned\u0022:true,\u0022rewardTeardownInProgress\u0022:false,\u0022rewardIsCurrentActiveScreen\u0022:true,\u0022rewardIsTopOverlay\u0022:true,\u0022rewardScreenRootType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022rewardProceedVisible\u0022:true,\u0022rewardProceedEnabled\u0022:true,\u0022rewardVisibleButtonCount\u0022:1,\u0022rewardEnabledButtonCount\u0022:1,\u0022terminalRunBoundary\u0022:false,\u0022gameOverScreenDetected\u0022:false,\u0022unlockScreenDetected\u0022:false,\u0022timelineUnlockDetected\u0022:false,\u0022mainMenuReturnDetected\u0022:false,\u0022choiceExtractorPath\u0022:\u0022reward\u0022,\u0022choiceCount\u0022:3,\u0022choiceSignature\u0022:\u0022card:CardReward:null;choice:\\uB118\\uAE30\\uAE30:null;card:CardReward:null\u0022,\u0022restSiteButtonsVisible\u0022:false,\u0022restSiteUpgradeScreenVisible\u0022:false,\u0022restSiteUpgradeScreenDetected\u0022:false,\u0022restSiteUpgradeObserverMiss\u0022:false,\u0022restSiteUpgradeCardCount\u0022:0,\u0022restSiteUpgradeConfirmVisible\u0022:false,\u0022restSiteUpgradeConfirmEnabled\u0022:false,\u0022combatCardPlayPending\u0022:false,\u0022combatPlayMode\u0022:\u0022Play\u0022,\u0022combatTargetingInProgress\u0022:false,\u0022combatValidTargetsType\u0022:\u0022None\u0022,\u0022combatTargetableEnemyCount\u0022:0,\u0022combatTargetableEnemyIds\u0022:[],\u0022combatHittableEnemyCount\u0022:0,\u0022combatHittableEnemyIds\u0022:[]}}",
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:32.9476425\u002B00:00\u0022,\u0022seq\u0022:83,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022runtime-poll\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022source\u0022:\u0022scene-poll\u0022,\u0022rootCount\u0022:149,\u0022sceneName\u0022:\u0022Game\u0022,\u0022currentSceneType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022sceneRootType\u0022:\u0022Godot.Window\u0022,\u0022traversedNodeCount\u0022:165,\u0022visibleNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022Godot.Node2D\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022,\u0022MegaCrit.Sts2.Core.Nodes.HoverTips.NHoverTipSet\u0022],\u0022interestingNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Vfx.Utilities.NScreenShake\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NFeedbackScreenOpener\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackScreen\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerTimeoutOverlay\u0022,\u0022Godot.Node2D\u0022,\u0022Godot.AudioStreamPlayer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022],\u0022transitionInProgress\u0022:false,\u0022rootSceneCurrentType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022rootSceneIsMainMenu\u0022:false,\u0022rootSceneIsRun\u0022:true,\u0022currentRunNodePresent\u0022:true,\u0022currentRunRoomType\u0022:null,\u0022currentRunRoomSceneType\u0022:null,\u0022cardSelectionScreenDetected\u0022:false,\u0022cardSelectionScreenType\u0022:null,\u0022cardSelectionPrompt\u0022:null,\u0022cardSelectionMinSelect\u0022:null,\u0022cardSelectionMaxSelect\u0022:null,\u0022cardSelectionSelectedCount\u0022:0,\u0022cardSelectionRequireManualConfirmation\u0022:null,\u0022cardSelectionCancelable\u0022:null,\u0022cardSelectionPreviewVisible\u0022:false,\u0022cardSelectionMainConfirmEnabled\u0022:false,\u0022cardSelectionPreviewConfirmEnabled\u0022:false,\u0022cardSelectionPreviewMode\u0022:null,\u0022cardSelectionRootType\u0022:null,\u0022treasureRoomDetected\u0022:false,\u0022treasureChestClickable\u0022:false,\u0022treasureChestOpened\u0022:false,\u0022treasureRelicCollectionOpen\u0022:false,\u0022sharedRelicPickingActive\u0022:false,\u0022mapScreenOpen\u0022:false,\u0022treasureRelicHolderCount\u0022:0,\u0022treasureVisibleRelicHolderCount\u0022:0,\u0022treasureEnabledRelicHolderCount\u0022:0,\u0022treasureProceedEnabled\u0022:false,\u0022treasureInspectOverlayVisible\u0022:false,\u0022treasureRoomRootType\u0022:null,\u0022shopRoomDetected\u0022:false,\u0022shopRoomVisible\u0022:false,\u0022shopForegroundOwned\u0022:false,\u0022shopTeardownInProgress\u0022:false,\u0022shopIsCurrentActiveScreen\u0022:false,\u0022mapCurrentActiveScreen\u0022:false,\u0022activeScreenType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022shopRootType\u0022:null,\u0022shopInventoryOpen\u0022:false,\u0022shopMerchantButtonVisible\u0022:false,\u0022shopMerchantButtonEnabled\u0022:false,\u0022shopProceedEnabled\u0022:false,\u0022shopBackVisible\u0022:false,\u0022shopBackEnabled\u0022:false,\u0022shopOptionCount\u0022:0,\u0022shopAffordableOptionCount\u0022:0,\u0022shopCardRemovalVisible\u0022:false,\u0022shopCardRemovalEnabled\u0022:false,\u0022shopCardRemovalEnoughGold\u0022:false,\u0022shopCardRemovalUsed\u0022:false,\u0022rewardScreenDetected\u0022:true,\u0022rewardScreenVisible\u0022:true,\u0022rewardForegroundOwned\u0022:true,\u0022rewardTeardownInProgress\u0022:false,\u0022rewardIsCurrentActiveScreen\u0022:true,\u0022rewardIsTopOverlay\u0022:true,\u0022rewardScreenRootType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022rewardProceedVisible\u0022:true,\u0022rewardProceedEnabled\u0022:true,\u0022rewardVisibleButtonCount\u0022:1,\u0022rewardEnabledButtonCount\u0022:1,\u0022terminalRunBoundary\u0022:false,\u0022gameOverScreenDetected\u0022:false,\u0022unlockScreenDetected\u0022:false,\u0022timelineUnlockDetected\u0022:false,\u0022mainMenuReturnDetected\u0022:false,\u0022choiceExtractorPath\u0022:\u0022reward\u0022,\u0022choiceCount\u0022:3,\u0022choiceSignature\u0022:\u0022card:CardReward:null;choice:\\uB118\\uAE30\\uAE30:null;card:CardReward:null\u0022,\u0022restSiteButtonsVisible\u0022:false,\u0022restSiteUpgradeScreenVisible\u0022:false,\u0022restSiteUpgradeScreenDetected\u0022:false,\u0022restSiteUpgradeObserverMiss\u0022:false,\u0022restSiteUpgradeCardCount\u0022:0,\u0022restSiteUpgradeConfirmVisible\u0022:false,\u0022restSiteUpgradeConfirmEnabled\u0022:false,\u0022combatCardPlayPending\u0022:false,\u0022combatPlayMode\u0022:\u0022Play\u0022,\u0022combatTargetingInProgress\u0022:false,\u0022combatValidTargetsType\u0022:\u0022None\u0022,\u0022combatTargetableEnemyCount\u0022:0,\u0022combatTargetableEnemyIds\u0022:[],\u0022combatHittableEnemyCount\u0022:0,\u0022combatHittableEnemyIds\u0022:[]}}",
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:33.7755446\u002B00:00\u0022,\u0022seq\u0022:84,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022runtime-poll\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022source\u0022:\u0022scene-poll\u0022,\u0022rootCount\u0022:149,\u0022sceneName\u0022:\u0022Game\u0022,\u0022currentSceneType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022sceneRootType\u0022:\u0022Godot.Window\u0022,\u0022traversedNodeCount\u0022:165,\u0022visibleNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022Godot.Node2D\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022,\u0022MegaCrit.Sts2.Core.Nodes.HoverTips.NHoverTipSet\u0022],\u0022interestingNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Vfx.Utilities.NScreenShake\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NFeedbackScreenOpener\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackScreen\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerTimeoutOverlay\u0022,\u0022Godot.Node2D\u0022,\u0022Godot.AudioStreamPlayer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022],\u0022transitionInProgress\u0022:false,\u0022rootSceneCurrentType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022rootSceneIsMainMenu\u0022:false,\u0022rootSceneIsRun\u0022:true,\u0022currentRunNodePresent\u0022:true,\u0022currentRunRoomType\u0022:null,\u0022currentRunRoomSceneType\u0022:null,\u0022cardSelectionScreenDetected\u0022:false,\u0022cardSelectionScreenType\u0022:null,\u0022cardSelectionPrompt\u0022:null,\u0022cardSelectionMinSelect\u0022:null,\u0022cardSelectionMaxSelect\u0022:null,\u0022cardSelectionSelectedCount\u0022:0,\u0022cardSelectionRequireManualConfirmation\u0022:null,\u0022cardSelectionCancelable\u0022:null,\u0022cardSelectionPreviewVisible\u0022:false,\u0022cardSelectionMainConfirmEnabled\u0022:false,\u0022cardSelectionPreviewConfirmEnabled\u0022:false,\u0022cardSelectionPreviewMode\u0022:null,\u0022cardSelectionRootType\u0022:null,\u0022treasureRoomDetected\u0022:false,\u0022treasureChestClickable\u0022:false,\u0022treasureChestOpened\u0022:false,\u0022treasureRelicCollectionOpen\u0022:false,\u0022sharedRelicPickingActive\u0022:false,\u0022mapScreenOpen\u0022:false,\u0022treasureRelicHolderCount\u0022:0,\u0022treasureVisibleRelicHolderCount\u0022:0,\u0022treasureEnabledRelicHolderCount\u0022:0,\u0022treasureProceedEnabled\u0022:false,\u0022treasureInspectOverlayVisible\u0022:false,\u0022treasureRoomRootType\u0022:null,\u0022shopRoomDetected\u0022:false,\u0022shopRoomVisible\u0022:false,\u0022shopForegroundOwned\u0022:false,\u0022shopTeardownInProgress\u0022:false,\u0022shopIsCurrentActiveScreen\u0022:false,\u0022mapCurrentActiveScreen\u0022:false,\u0022activeScreenType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022shopRootType\u0022:null,\u0022shopInventoryOpen\u0022:false,\u0022shopMerchantButtonVisible\u0022:false,\u0022shopMerchantButtonEnabled\u0022:false,\u0022shopProceedEnabled\u0022:false,\u0022shopBackVisible\u0022:false,\u0022shopBackEnabled\u0022:false,\u0022shopOptionCount\u0022:0,\u0022shopAffordableOptionCount\u0022:0,\u0022shopCardRemovalVisible\u0022:false,\u0022shopCardRemovalEnabled\u0022:false,\u0022shopCardRemovalEnoughGold\u0022:false,\u0022shopCardRemovalUsed\u0022:false,\u0022rewardScreenDetected\u0022:true,\u0022rewardScreenVisible\u0022:true,\u0022rewardForegroundOwned\u0022:true,\u0022rewardTeardownInProgress\u0022:false,\u0022rewardIsCurrentActiveScreen\u0022:true,\u0022rewardIsTopOverlay\u0022:true,\u0022rewardScreenRootType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022rewardProceedVisible\u0022:true,\u0022rewardProceedEnabled\u0022:true,\u0022rewardVisibleButtonCount\u0022:1,\u0022rewardEnabledButtonCount\u0022:1,\u0022terminalRunBoundary\u0022:false,\u0022gameOverScreenDetected\u0022:false,\u0022unlockScreenDetected\u0022:false,\u0022timelineUnlockDetected\u0022:false,\u0022mainMenuReturnDetected\u0022:false,\u0022choiceExtractorPath\u0022:\u0022reward\u0022,\u0022choiceCount\u0022:3,\u0022choiceSignature\u0022:\u0022card:CardReward:null;choice:\\uB118\\uAE30\\uAE30:null;card:CardReward:null\u0022,\u0022restSiteButtonsVisible\u0022:false,\u0022restSiteUpgradeScreenVisible\u0022:false,\u0022restSiteUpgradeScreenDetected\u0022:false,\u0022restSiteUpgradeObserverMiss\u0022:false,\u0022restSiteUpgradeCardCount\u0022:0,\u0022restSiteUpgradeConfirmVisible\u0022:false,\u0022restSiteUpgradeConfirmEnabled\u0022:false,\u0022combatCardPlayPending\u0022:false,\u0022combatPlayMode\u0022:\u0022Play\u0022,\u0022combatTargetingInProgress\u0022:false,\u0022combatValidTargetsType\u0022:\u0022None\u0022,\u0022combatTargetableEnemyCount\u0022:0,\u0022combatTargetableEnemyIds\u0022:[],\u0022combatHittableEnemyCount\u0022:0,\u0022combatHittableEnemyIds\u0022:[]}}",
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:34.8213422\u002B00:00\u0022,\u0022seq\u0022:85,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022choice-list-presented\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022choices\u0022:[\u0022\\uC644\\uBCBD\\uD55C \\uD0C0\\uACA9\u0022,\u0022\\uC9C4\\uC815\\uD55C \\uB048\\uAE30\u0022,\u0022\\uC804\\uD22C\\uC7A5\\uBE44\u0022,\u0022\\uB118\\uAE30\\uAE30\u0022,\u0022\\uC644\\uBCBD\\uD55C \\uD0C0\\uACA9\u0022,\u0022\\uC9C4\\uC815\\uD55C \\uB048\\uAE30\u0022,\u0022\\uC804\\uD22C\\uC7A5\\uBE44\u0022]}}",
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:34.8213422\u002B00:00\u0022,\u0022seq\u0022:86,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022reward-screen-opened\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022method\u0022:\u0022_Ready\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022,\u0022transitionInProgress\u0022:false,\u0022rootSceneCurrentType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022rootSceneIsMainMenu\u0022:false,\u0022rootSceneIsRun\u0022:true,\u0022currentRunNodePresent\u0022:true,\u0022currentRunRoomType\u0022:null,\u0022currentRunRoomSceneType\u0022:null,\u0022cardSelectionScreenDetected\u0022:true,\u0022cardSelectionScreenType\u0022:\u0022reward-pick\u0022,\u0022cardSelectionPrompt\u0022:\u0022\\uCE74\\uB4DC\\uB97C \\uC120\\uD0DD\\uD558\\uC138\\uC694\u0022,\u0022cardSelectionMinSelect\u0022:1,\u0022cardSelectionMaxSelect\u0022:1,\u0022cardSelectionSelectedCount\u0022:0,\u0022cardSelectionRequireManualConfirmation\u0022:false,\u0022cardSelectionCancelable\u0022:false,\u0022cardSelectionPreviewVisible\u0022:false,\u0022cardSelectionMainConfirmEnabled\u0022:false,\u0022cardSelectionPreviewConfirmEnabled\u0022:false,\u0022cardSelectionPreviewMode\u0022:null,\u0022cardSelectionRootType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022choiceExtractorPath\u0022:\u0022reward\u0022,\u0022treasureRoomDetected\u0022:false,\u0022treasureChestClickable\u0022:false,\u0022treasureChestOpened\u0022:false,\u0022treasureRelicCollectionOpen\u0022:false,\u0022sharedRelicPickingActive\u0022:false,\u0022mapScreenOpen\u0022:false,\u0022treasureRelicHolderCount\u0022:0,\u0022treasureVisibleRelicHolderCount\u0022:0,\u0022treasureEnabledRelicHolderCount\u0022:0,\u0022treasureProceedEnabled\u0022:false,\u0022treasureInspectOverlayVisible\u0022:false,\u0022treasureRoomRootType\u0022:null,\u0022shopRoomDetected\u0022:false,\u0022shopRoomVisible\u0022:false,\u0022shopForegroundOwned\u0022:false,\u0022shopTeardownInProgress\u0022:false,\u0022shopIsCurrentActiveScreen\u0022:false,\u0022mapCurrentActiveScreen\u0022:false,\u0022activeScreenType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022shopRootType\u0022:null,\u0022shopInventoryOpen\u0022:false,\u0022shopMerchantButtonVisible\u0022:false,\u0022shopMerchantButtonEnabled\u0022:false,\u0022shopProceedEnabled\u0022:false,\u0022shopBackVisible\u0022:false,\u0022shopBackEnabled\u0022:false,\u0022shopOptionCount\u0022:0,\u0022shopAffordableOptionCount\u0022:0,\u0022shopCardRemovalVisible\u0022:false,\u0022shopCardRemovalEnabled\u0022:false,\u0022shopCardRemovalEnoughGold\u0022:false,\u0022shopCardRemovalUsed\u0022:false,\u0022rewardScreenDetected\u0022:true,\u0022rewardScreenVisible\u0022:true,\u0022rewardForegroundOwned\u0022:true,\u0022rewardTeardownInProgress\u0022:false,\u0022rewardIsCurrentActiveScreen\u0022:true,\u0022rewardIsTopOverlay\u0022:true,\u0022rewardScreenRootType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022rewardProceedVisible\u0022:true,\u0022rewardProceedEnabled\u0022:false,\u0022rewardVisibleButtonCount\u0022:1,\u0022rewardEnabledButtonCount\u0022:0,\u0022terminalRunBoundary\u0022:false,\u0022gameOverScreenDetected\u0022:false,\u0022unlockScreenDetected\u0022:false,\u0022timelineUnlockDetected\u0022:false,\u0022mainMenuReturnDetected\u0022:false,\u0022choiceCount\u0022:7,\u0022choiceSignature\u0022:\u0022card:\\uC644\\uBCBD\\uD55C \\uD0C0\\uACA9:null;card:\\uC9C4\\uC815\\uD55C \\uB048\\uAE30:null;card:\\uC804\\uD22C\\uC7A5\\uBE44:null;card:CardReward:null;reward-pick-card:reward-pick:true;reward-pick-card:reward-pick:true;reward-pick-card:reward-pick:true\u0022,\u0022restSiteButtonsVisible\u0022:false,\u0022restSiteUpgradeScreenVisible\u0022:false,\u0022restSiteUpgradeScreenDetected\u0022:false,\u0022restSiteUpgradeObserverMiss\u0022:false,\u0022restSiteUpgradeCardCount\u0022:0,\u0022restSiteUpgradeConfirmVisible\u0022:false,\u0022restSiteUpgradeConfirmEnabled\u0022:false}}",
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:35.2345539\u002B00:00\u0022,\u0022seq\u0022:87,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022choice-list-presented\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022choices\u0022:[\u0022\\uB118\\uAE30\\uAE30\u0022]}}",
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:35.2345539\u002B00:00\u0022,\u0022seq\u0022:88,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022reward-screen-opened\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022method\u0022:\u0022ShowScreen\u0022,\u0022declaringType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022hookCategory\u0022:\u0022screen\u0022,\u0022transitionInProgress\u0022:false,\u0022rootSceneCurrentType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022rootSceneIsMainMenu\u0022:false,\u0022rootSceneIsRun\u0022:true,\u0022currentRunNodePresent\u0022:true,\u0022currentRunRoomType\u0022:null,\u0022currentRunRoomSceneType\u0022:null,\u0022cardSelectionScreenDetected\u0022:false,\u0022cardSelectionScreenType\u0022:null,\u0022cardSelectionPrompt\u0022:null,\u0022cardSelectionMinSelect\u0022:null,\u0022cardSelectionMaxSelect\u0022:null,\u0022cardSelectionSelectedCount\u0022:0,\u0022cardSelectionRequireManualConfirmation\u0022:null,\u0022cardSelectionCancelable\u0022:null,\u0022cardSelectionPreviewVisible\u0022:false,\u0022cardSelectionMainConfirmEnabled\u0022:false,\u0022cardSelectionPreviewConfirmEnabled\u0022:false,\u0022cardSelectionPreviewMode\u0022:null,\u0022cardSelectionRootType\u0022:null,\u0022treasureRoomDetected\u0022:false,\u0022treasureChestClickable\u0022:false,\u0022treasureChestOpened\u0022:false,\u0022treasureRelicCollectionOpen\u0022:false,\u0022sharedRelicPickingActive\u0022:false,\u0022mapScreenOpen\u0022:false,\u0022treasureRelicHolderCount\u0022:0,\u0022treasureVisibleRelicHolderCount\u0022:0,\u0022treasureEnabledRelicHolderCount\u0022:0,\u0022treasureProceedEnabled\u0022:false,\u0022treasureInspectOverlayVisible\u0022:false,\u0022treasureRoomRootType\u0022:null,\u0022shopRoomDetected\u0022:false,\u0022shopRoomVisible\u0022:false,\u0022shopForegroundOwned\u0022:false,\u0022shopTeardownInProgress\u0022:false,\u0022shopIsCurrentActiveScreen\u0022:false,\u0022mapCurrentActiveScreen\u0022:false,\u0022activeScreenType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022shopRootType\u0022:null,\u0022shopInventoryOpen\u0022:false,\u0022shopMerchantButtonVisible\u0022:false,\u0022shopMerchantButtonEnabled\u0022:false,\u0022shopProceedEnabled\u0022:false,\u0022shopBackVisible\u0022:false,\u0022shopBackEnabled\u0022:false,\u0022shopOptionCount\u0022:0,\u0022shopAffordableOptionCount\u0022:0,\u0022shopCardRemovalVisible\u0022:false,\u0022shopCardRemovalEnabled\u0022:false,\u0022shopCardRemovalEnoughGold\u0022:false,\u0022shopCardRemovalUsed\u0022:false,\u0022rewardScreenDetected\u0022:false,\u0022rewardScreenVisible\u0022:false,\u0022rewardForegroundOwned\u0022:false,\u0022rewardTeardownInProgress\u0022:false,\u0022rewardIsCurrentActiveScreen\u0022:false,\u0022rewardIsTopOverlay\u0022:false,\u0022rewardScreenRootType\u0022:null,\u0022rewardProceedVisible\u0022:false,\u0022rewardProceedEnabled\u0022:false,\u0022rewardVisibleButtonCount\u0022:0,\u0022rewardEnabledButtonCount\u0022:0,\u0022terminalRunBoundary\u0022:false,\u0022gameOverScreenDetected\u0022:false,\u0022unlockScreenDetected\u0022:false,\u0022timelineUnlockDetected\u0022:false,\u0022mainMenuReturnDetected\u0022:false,\u0022choiceExtractorPath\u0022:\u0022reward\u0022,\u0022choiceCount\u0022:1,\u0022choiceSignature\u0022:\u0022card:CardReward:null\u0022,\u0022restSiteButtonsVisible\u0022:false,\u0022restSiteUpgradeScreenVisible\u0022:false,\u0022restSiteUpgradeScreenDetected\u0022:false,\u0022restSiteUpgradeObserverMiss\u0022:false,\u0022restSiteUpgradeCardCount\u0022:0,\u0022restSiteUpgradeConfirmVisible\u0022:false,\u0022restSiteUpgradeConfirmEnabled\u0022:false}}",
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:34.78354\u002B00:00\u0022,\u0022seq\u0022:89,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022choice-list-presented\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022choices\u0022:[\u0022\\uB371\\uC5D0 \\uCD94\\uAC00\\uD560 \\uCE74\\uB4DC\\uB97C \\uC120\\uD0DD\\uD558\\uC138\\uC694.\u0022,\u0022\\uB118\\uAE30\\uAE30\u0022,\u0022\\uB371\\uC5D0 \\uCD94\\uAC00\\uD560 \\uCE74\\uB4DC\\uB97C \\uC120\\uD0DD\\uD558\\uC138\\uC694.\u0022,\u0022\\uC644\\uBCBD\\uD55C \\uD0C0\\uACA9\u0022,\u0022\\uC9C4\\uC815\\uD55C \\uB048\\uAE30\u0022,\u0022\\uC804\\uD22C\\uC7A5\\uBE44\u0022,\u0022\\uB118\\uAE30\\uAE30\u0022,\u0022\\uC644\\uBCBD\\uD55C \\uD0C0\\uACA9\u0022,\u0022\\uC9C4\\uC815\\uD55C \\uB048\\uAE30\u0022,\u0022\\uC804\\uD22C\\uC7A5\\uBE44\u0022]}}",
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:34.78354\u002B00:00\u0022,\u0022seq\u0022:90,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022runtime-poll\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022source\u0022:\u0022scene-poll\u0022,\u0022rootCount\u0022:150,\u0022sceneName\u0022:\u0022Game\u0022,\u0022currentSceneType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022sceneRootType\u0022:\u0022Godot.Window\u0022,\u0022traversedNodeCount\u0022:166,\u0022visibleNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022Godot.Node2D\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022,\u0022MegaCrit.Sts2.Core.Nodes.HoverTips.NHoverTipSet\u0022],\u0022interestingNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Vfx.Utilities.NScreenShake\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NFeedbackScreenOpener\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackScreen\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerTimeoutOverlay\u0022,\u0022Godot.Node2D\u0022,\u0022Godot.AudioStreamPlayer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022],\u0022transitionInProgress\u0022:false,\u0022rootSceneCurrentType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022rootSceneIsMainMenu\u0022:false,\u0022rootSceneIsRun\u0022:true,\u0022currentRunNodePresent\u0022:true,\u0022currentRunRoomType\u0022:null,\u0022currentRunRoomSceneType\u0022:null,\u0022cardSelectionScreenDetected\u0022:true,\u0022cardSelectionScreenType\u0022:\u0022reward-pick\u0022,\u0022cardSelectionPrompt\u0022:\u0022\\uCE74\\uB4DC\\uB97C \\uC120\\uD0DD\\uD558\\uC138\\uC694\u0022,\u0022cardSelectionMinSelect\u0022:1,\u0022cardSelectionMaxSelect\u0022:1,\u0022cardSelectionSelectedCount\u0022:0,\u0022cardSelectionRequireManualConfirmation\u0022:false,\u0022cardSelectionCancelable\u0022:false,\u0022cardSelectionPreviewVisible\u0022:false,\u0022cardSelectionMainConfirmEnabled\u0022:false,\u0022cardSelectionPreviewConfirmEnabled\u0022:false,\u0022cardSelectionPreviewMode\u0022:null,\u0022cardSelectionRootType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022choiceExtractorPath\u0022:\u0022card-selection-reward-pick\u0022,\u0022treasureRoomDetected\u0022:false,\u0022treasureChestClickable\u0022:false,\u0022treasureChestOpened\u0022:false,\u0022treasureRelicCollectionOpen\u0022:false,\u0022sharedRelicPickingActive\u0022:false,\u0022mapScreenOpen\u0022:false,\u0022treasureRelicHolderCount\u0022:0,\u0022treasureVisibleRelicHolderCount\u0022:0,\u0022treasureEnabledRelicHolderCount\u0022:0,\u0022treasureProceedEnabled\u0022:false,\u0022treasureInspectOverlayVisible\u0022:false,\u0022treasureRoomRootType\u0022:null,\u0022shopRoomDetected\u0022:false,\u0022shopRoomVisible\u0022:false,\u0022shopForegroundOwned\u0022:false,\u0022shopTeardownInProgress\u0022:false,\u0022shopIsCurrentActiveScreen\u0022:false,\u0022mapCurrentActiveScreen\u0022:false,\u0022activeScreenType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022shopRootType\u0022:null,\u0022shopInventoryOpen\u0022:false,\u0022shopMerchantButtonVisible\u0022:false,\u0022shopMerchantButtonEnabled\u0022:false,\u0022shopProceedEnabled\u0022:false,\u0022shopBackVisible\u0022:false,\u0022shopBackEnabled\u0022:false,\u0022shopOptionCount\u0022:0,\u0022shopAffordableOptionCount\u0022:0,\u0022shopCardRemovalVisible\u0022:false,\u0022shopCardRemovalEnabled\u0022:false,\u0022shopCardRemovalEnoughGold\u0022:false,\u0022shopCardRemovalUsed\u0022:false,\u0022rewardScreenDetected\u0022:true,\u0022rewardScreenVisible\u0022:true,\u0022rewardForegroundOwned\u0022:false,\u0022rewardTeardownInProgress\u0022:false,\u0022rewardIsCurrentActiveScreen\u0022:false,\u0022rewardIsTopOverlay\u0022:false,\u0022rewardScreenRootType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022rewardProceedVisible\u0022:true,\u0022rewardProceedEnabled\u0022:false,\u0022rewardVisibleButtonCount\u0022:1,\u0022rewardEnabledButtonCount\u0022:0,\u0022terminalRunBoundary\u0022:false,\u0022gameOverScreenDetected\u0022:false,\u0022unlockScreenDetected\u0022:false,\u0022timelineUnlockDetected\u0022:false,\u0022mainMenuReturnDetected\u0022:false,\u0022choiceCount\u0022:10,\u0022choiceSignature\u0022:\u0022card:CardReward:null;choice:\\uB118\\uAE30\\uAE30:null;card:CardReward:null;card:\\uC644\\uBCBD\\uD55C \\uD0C0\\uACA9:null;card:\\uC9C4\\uC815\\uD55C \\uB048\\uAE30:null;card:\\uC804\\uD22C\\uC7A5\\uBE44:null;card:CardReward:null;reward-pick-card:reward-pick:true;reward-pick-card:reward-pick:true;reward-pick-card:reward-pick:true\u0022,\u0022restSiteButtonsVisible\u0022:false,\u0022restSiteUpgradeScreenVisible\u0022:false,\u0022restSiteUpgradeScreenDetected\u0022:false,\u0022restSiteUpgradeObserverMiss\u0022:false,\u0022restSiteUpgradeCardCount\u0022:0,\u0022restSiteUpgradeConfirmVisible\u0022:false,\u0022restSiteUpgradeConfirmEnabled\u0022:false,\u0022combatCardPlayPending\u0022:false,\u0022combatPlayMode\u0022:\u0022Play\u0022,\u0022combatTargetingInProgress\u0022:false,\u0022combatValidTargetsType\u0022:\u0022None\u0022,\u0022combatTargetableEnemyCount\u0022:0,\u0022combatTargetableEnemyIds\u0022:[],\u0022combatHittableEnemyCount\u0022:0,\u0022combatHittableEnemyIds\u0022:[]}}",
+      "{\u0022ts\u0022:\u00222026-03-23T14:08:35.7821443\u002B00:00\u0022,\u0022seq\u0022:91,\u0022runId\u0022:\u0022pending-ee658646\u0022,\u0022kind\u0022:\u0022runtime-poll\u0022,\u0022screen\u0022:\u0022rewards\u0022,\u0022act\u0022:null,\u0022floor\u0022:null,\u0022payload\u0022:{\u0022source\u0022:\u0022scene-poll\u0022,\u0022rootCount\u0022:147,\u0022sceneName\u0022:\u0022Game\u0022,\u0022currentSceneType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022sceneRootType\u0022:\u0022Godot.Window\u0022,\u0022traversedNodeCount\u0022:163,\u0022visibleNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022Godot.Node2D\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022,\u0022Godot.ColorRect\u0022],\u0022interestingNodeTypes\u0022:[\u0022MegaCrit.Sts2.Core.Nodes.NGame\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Vfx.Utilities.NScreenShake\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NFeedbackScreenOpener\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NSceneContainer\u0022,\u0022Godot.Control\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackScreen\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NTransition\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerTimeoutOverlay\u0022,\u0022Godot.Node2D\u0022,\u0022Godot.AudioStreamPlayer\u0022,\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge\u0022,\u0022Godot.TextureRect\u0022],\u0022transitionInProgress\u0022:false,\u0022rootSceneCurrentType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.NRun\u0022,\u0022rootSceneIsMainMenu\u0022:false,\u0022rootSceneIsRun\u0022:true,\u0022currentRunNodePresent\u0022:true,\u0022currentRunRoomType\u0022:null,\u0022currentRunRoomSceneType\u0022:null,\u0022cardSelectionScreenDetected\u0022:true,\u0022cardSelectionScreenType\u0022:\u0022reward-pick\u0022,\u0022cardSelectionPrompt\u0022:\u0022\\uCE74\\uB4DC\\uB97C \\uC120\\uD0DD\\uD558\\uC138\\uC694\u0022,\u0022cardSelectionMinSelect\u0022:1,\u0022cardSelectionMaxSelect\u0022:1,\u0022cardSelectionSelectedCount\u0022:0,\u0022cardSelectionRequireManualConfirmation\u0022:false,\u0022cardSelectionCancelable\u0022:false,\u0022cardSelectionPreviewVisible\u0022:false,\u0022cardSelectionMainConfirmEnabled\u0022:false,\u0022cardSelectionPreviewConfirmEnabled\u0022:false,\u0022cardSelectionPreviewMode\u0022:null,\u0022cardSelectionRootType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022choiceExtractorPath\u0022:\u0022card-selection-reward-pick\u0022,\u0022treasureRoomDetected\u0022:false,\u0022treasureChestClickable\u0022:false,\u0022treasureChestOpened\u0022:false,\u0022treasureRelicCollectionOpen\u0022:false,\u0022sharedRelicPickingActive\u0022:false,\u0022mapScreenOpen\u0022:false,\u0022treasureRelicHolderCount\u0022:0,\u0022treasureVisibleRelicHolderCount\u0022:0,\u0022treasureEnabledRelicHolderCount\u0022:0,\u0022treasureProceedEnabled\u0022:false,\u0022treasureInspectOverlayVisible\u0022:false,\u0022treasureRoomRootType\u0022:null,\u0022shopRoomDetected\u0022:false,\u0022shopRoomVisible\u0022:false,\u0022shopForegroundOwned\u0022:false,\u0022shopTeardownInProgress\u0022:false,\u0022shopIsCurrentActiveScreen\u0022:false,\u0022mapCurrentActiveScreen\u0022:false,\u0022activeScreenType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen\u0022,\u0022shopRootType\u0022:null,\u0022shopInventoryOpen\u0022:false,\u0022shopMerchantButtonVisible\u0022:false,\u0022shopMerchantButtonEnabled\u0022:false,\u0022shopProceedEnabled\u0022:false,\u0022shopBackVisible\u0022:false,\u0022shopBackEnabled\u0022:false,\u0022shopOptionCount\u0022:0,\u0022shopAffordableOptionCount\u0022:0,\u0022shopCardRemovalVisible\u0022:false,\u0022shopCardRemovalEnabled\u0022:false,\u0022shopCardRemovalEnoughGold\u0022:false,\u0022shopCardRemovalUsed\u0022:false,\u0022rewardScreenDetected\u0022:true,\u0022rewardScreenVisible\u0022:true,\u0022rewardForegroundOwned\u0022:false,\u0022rewardTeardownInProgress\u0022:false,\u0022rewardIsCurrentActiveScreen\u0022:false,\u0022rewardIsTopOverlay\u0022:false,\u0022rewardScreenRootType\u0022:\u0022MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen\u0022,\u0022rewardProceedVisible\u0022:true,\u0022rewardProceedEnabled\u0022:false,\u0022rewardVisibleButtonCount\u0022:1,\u0022rewardEnabledButtonCount\u0022:0,\u0022terminalRunBoundary\u0022:false,\u0022gameOverScreenDetected\u0022:false,\u0022unlockScreenDetected\u0022:false,\u0022timelineUnlockDetected\u0022:false,\u0022mainMenuReturnDetected\u0022:false,\u0022choiceCount\u0022:10,\u0022choiceSignature\u0022:\u0022card:CardReward:null;choice:\\uB118\\uAE30\\uAE30:null;card:CardReward:null;card:\\uC644\\uBCBD\\uD55C \\uD0C0\\uACA9:null;card:\\uC9C4\\uC815\\uD55C \\uB048\\uAE30:null;card:\\uC804\\uD22C\\uC7A5\\uBE44:null;card:CardReward:null;reward-pick-card:reward-pick:true;reward-pick-card:reward-pick:true;reward-pick-card:reward-pick:true\u0022,\u0022restSiteButtonsVisible\u0022:false,\u0022restSiteUpgradeScreenVisible\u0022:false,\u0022restSiteUpgradeScreenDetected\u0022:false,\u0022restSiteUpgradeObserverMiss\u0022:false,\u0022restSiteUpgradeCardCount\u0022:0,\u0022restSiteUpgradeConfirmVisible\u0022:false,\u0022restSiteUpgradeConfirmEnabled\u0022:false,\u0022combatCardPlayPending\u0022:false,\u0022combatPlayMode\u0022:\u0022Play\u0022,\u0022combatTargetingInProgress\u0022:false,\u0022combatValidTargetsType\u0022:\u0022None\u0022,\u0022combatTargetableEnemyCount\u0022:0,\u0022combatTargetableEnemyIds\u0022:[],\u0022combatHittableEnemyCount\u0022:0,\u0022combatHittableEnemyIds\u0022:[]}}"
+    ],
+    "actionNodes": [
+      {
+        "nodeId": "reward-item:0",
+        "kind": "reward-item",
+        "label": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+        "screenBounds": "758,374,402,86",
+        "actionable": true,
+        "typeName": "card",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:reward-item",
+          "value:\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+          "raw-kind:card",
+          "reward",
+          "reward-card",
+          "reward-type:CardReward"
+        ]
+      },
+      {
+        "nodeId": "proceed:1",
+        "kind": "proceed",
+        "label": "\uB118\uAE30\uAE30",
+        "screenBounds": "1983,764,269,108",
+        "actionable": true,
+        "typeName": "choice",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:proceed",
+          "raw-kind:choice"
+        ]
+      },
+      {
+        "nodeId": "reward-item:2",
+        "kind": "reward-item",
+        "label": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+        "actionable": true,
+        "typeName": "card",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:reward-item",
+          "value:CardReward",
+          "raw-kind:card",
+          "reward",
+          "reward-card",
+          "reward-type:CardReward"
+        ]
+      },
+      {
+        "nodeId": "reward-item:3",
+        "kind": "reward-item",
+        "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+        "actionable": true,
+        "typeName": "card",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:reward-item",
+          "value:CARD.PERFECTED_STRIKE",
+          "raw-kind:card"
+        ]
+      },
+      {
+        "nodeId": "reward-item:4",
+        "kind": "reward-item",
+        "label": "\uC9C4\uC815\uD55C \uB048\uAE30",
+        "actionable": true,
+        "typeName": "card",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:reward-item",
+          "value:CARD.TRUE_GRIT",
+          "raw-kind:card"
+        ]
+      },
+      {
+        "nodeId": "reward-item:5",
+        "kind": "reward-item",
+        "label": "\uC804\uD22C\uC7A5\uBE44",
+        "actionable": true,
+        "typeName": "card",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:reward-item",
+          "value:CARD.ARMAMENTS",
+          "raw-kind:card"
+        ]
+      },
+      {
+        "nodeId": "proceed:6",
+        "kind": "proceed",
+        "label": "\uB118\uAE30\uAE30",
+        "actionable": true,
+        "typeName": "card",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:proceed",
+          "value:ui_cancel",
+          "raw-kind:card",
+          "reward",
+          "reward-card",
+          "reward-type:CardReward"
+        ]
+      },
+      {
+        "nodeId": "card-selection:reward-pick:card:1",
+        "kind": "reward-item",
+        "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+        "screenBounds": "490,447.2,240,337.6",
+        "actionable": true,
+        "typeName": "reward-pick-card",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:reward-item",
+          "value:CARD.PERFECTED_STRIKE",
+          "raw-kind:reward-pick-card",
+          "node-id:card-selection:reward-pick:card:1",
+          "card-selection:reward-pick",
+          "reward-pick"
+        ]
+      },
+      {
+        "nodeId": "card-selection:reward-pick:card:2",
+        "kind": "reward-item",
+        "label": "\uC9C4\uC815\uD55C \uB048\uAE30",
+        "screenBounds": "840,447.2,240,337.6",
+        "actionable": true,
+        "typeName": "reward-pick-card",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:reward-item",
+          "value:CARD.TRUE_GRIT",
+          "raw-kind:reward-pick-card",
+          "node-id:card-selection:reward-pick:card:2",
+          "card-selection:reward-pick",
+          "reward-pick"
+        ]
+      },
+      {
+        "nodeId": "card-selection:reward-pick:card:3",
+        "kind": "reward-item",
+        "label": "\uC804\uD22C\uC7A5\uBE44",
+        "screenBounds": "1190,447.2,240,337.6",
+        "actionable": true,
+        "typeName": "reward-pick-card",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:reward-item",
+          "value:CARD.ARMAMENTS",
+          "raw-kind:reward-pick-card",
+          "node-id:card-selection:reward-pick:card:3",
+          "card-selection:reward-pick",
+          "reward-pick"
+        ]
+      }
+    ],
+    "choices": [
+      {
+        "kind": "card",
+        "label": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+        "screenBounds": "758,374,402,86",
+        "value": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+        "description": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+        "bindingKind": "reward-type",
+        "bindingId": "CardReward",
+        "semanticHints": [
+          "reward",
+          "reward-card",
+          "reward-type:CardReward"
+        ]
+      },
+      {
+        "kind": "choice",
+        "label": "\uB118\uAE30\uAE30",
+        "screenBounds": "1983,764,269,108",
+        "description": "\uB118\uAE30\uAE30",
+        "semanticHints": []
+      },
+      {
+        "kind": "card",
+        "label": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+        "value": "CardReward",
+        "description": "\uB371\uC5D0 \uCD94\uAC00\uD560 \uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694.",
+        "bindingKind": "reward-type",
+        "bindingId": "CardReward",
+        "semanticHints": [
+          "reward",
+          "reward-card",
+          "reward-type:CardReward"
+        ]
+      },
+      {
+        "kind": "card",
+        "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+        "value": "CARD.PERFECTED_STRIKE",
+        "description": "\uD53C\uD574\uB97C {CalculatedDamage:diff()} \uC90D\uB2C8\uB2E4. \uBCF4\uC720\uD55C \uCE74\uB4DC \uC911 \uC774\uB984\uC5D0 \u201C\uD0C0\uACA9\u201D\uC774 \uD3EC\uD568\uB41C \uCE74\uB4DC 1\uC7A5\uB2F9 \uD53C\uD574\uB7C9\uC774 {ExtraDamage:diff()} \uC99D\uAC00\uD569\uB2C8\uB2E4.",
+        "semanticHints": []
+      },
+      {
+        "kind": "card",
+        "label": "\uC9C4\uC815\uD55C \uB048\uAE30",
+        "value": "CARD.TRUE_GRIT",
+        "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4. {IfUpgraded:show:|\uBB34\uC791\uC704 }\uCE74\uB4DC\uB97C 1\uC7A5 [gold]\uC18C\uBA78[/gold]\uC2DC\uD0B5\uB2C8\uB2E4.",
+        "semanticHints": []
+      },
+      {
+        "kind": "card",
+        "label": "\uC804\uD22C\uC7A5\uBE44",
+        "value": "CARD.ARMAMENTS",
+        "description": "[gold]\uBC29\uC5B4\uB3C4[/gold]\uB97C {Block:diff()} \uC5BB\uC2B5\uB2C8\uB2E4. [gold]\uC190[/gold]\uC5D0 \uC788\uB294 {IfUpgraded:show:\uBAA8\uB4E0 \uCE74\uB4DC\uB97C|\uCE74\uB4DC\uB97C 1\uC7A5} [gold]\uAC15\uD654[/gold]\uD569\uB2C8\uB2E4.",
+        "semanticHints": []
+      },
+      {
+        "kind": "card",
+        "label": "\uB118\uAE30\uAE30",
+        "value": "ui_cancel",
+        "description": "\uB118\uAE30\uAE30",
+        "bindingKind": "reward-type",
+        "bindingId": "CardReward",
+        "semanticHints": [
+          "reward",
+          "reward-card",
+          "reward-type:CardReward"
+        ]
+      },
+      {
+        "kind": "reward-pick-card",
+        "label": "\uC644\uBCBD\uD55C \uD0C0\uACA9",
+        "screenBounds": "490,447.2,240,337.6",
+        "value": "CARD.PERFECTED_STRIKE",
+        "description": "\uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694",
+        "nodeId": "card-selection:reward-pick:card:1",
+        "bindingKind": "card-selection-card",
+        "bindingId": "reward-pick",
+        "enabled": true,
+        "semanticHints": [
+          "card-selection:reward-pick",
+          "reward-pick"
+        ]
+      },
+      {
+        "kind": "reward-pick-card",
+        "label": "\uC9C4\uC815\uD55C \uB048\uAE30",
+        "screenBounds": "840,447.2,240,337.6",
+        "value": "CARD.TRUE_GRIT",
+        "description": "\uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694",
+        "nodeId": "card-selection:reward-pick:card:2",
+        "bindingKind": "card-selection-card",
+        "bindingId": "reward-pick",
+        "enabled": true,
+        "semanticHints": [
+          "card-selection:reward-pick",
+          "reward-pick"
+        ]
+      },
+      {
+        "kind": "reward-pick-card",
+        "label": "\uC804\uD22C\uC7A5\uBE44",
+        "screenBounds": "1190,447.2,240,337.6",
+        "value": "CARD.ARMAMENTS",
+        "description": "\uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694",
+        "nodeId": "card-selection:reward-pick:card:3",
+        "bindingKind": "card-selection-card",
+        "bindingId": "reward-pick",
+        "enabled": true,
+        "semanticHints": [
+          "card-selection:reward-pick",
+          "reward-pick"
+        ]
+      }
+    ],
+    "combatHand": [],
+    "meta": {
+      "screen": "rewards",
+      "logicalScreen": "rewards",
+      "flowScreen": "rewards",
+      "visibleScreen": "rewards",
+      "sceneReady": "true",
+      "sceneAuthority": "mixed",
+      "sceneStability": "stable",
+      "readyMarker": "runtime-poll",
+      "semanticKind": "runtime-poll",
+      "source": "scene-poll",
+      "currentSceneType": "MegaCrit.Sts2.Core.Nodes.NGame",
+      "sceneRootType": "Godot.Window",
+      "combatPrimarySource": "CombatManager.IsInProgress",
+      "combatPrimaryValue": "false",
+      "combatCrossCheck": "CombatManager.IsPlayPhase=false;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+      "transitionInProgress": "false",
+      "rootSceneCurrentType": "MegaCrit.Sts2.Core.Nodes.NRun",
+      "rootSceneIsMainMenu": "false",
+      "rootSceneIsRun": "true",
+      "currentRunNodePresent": "true",
+      "currentRunRoomType": null,
+      "currentRunRoomSceneType": null,
+      "cardSelectionScreenDetected": "true",
+      "cardSelectionScreenType": "reward-pick",
+      "cardSelectionPrompt": "\uCE74\uB4DC\uB97C \uC120\uD0DD\uD558\uC138\uC694",
+      "cardSelectionMinSelect": "1",
+      "cardSelectionMaxSelect": "1",
+      "cardSelectionSelectedCount": "0",
+      "cardSelectionRequireManualConfirmation": "false",
+      "cardSelectionCancelable": "false",
+      "cardSelectionPreviewVisible": "false",
+      "cardSelectionMainConfirmEnabled": "false",
+      "cardSelectionPreviewConfirmEnabled": "false",
+      "cardSelectionPreviewMode": null,
+      "cardSelectionSelectedCardIds": null,
+      "cardSelectionRootType": "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+      "cardSelectionVisibleCardCount": "3",
+      "treasureRoomDetected": "false",
+      "treasureChestClickable": "false",
+      "treasureChestOpened": "false",
+      "treasureRelicCollectionOpen": "false",
+      "sharedRelicPickingActive": "false",
+      "mapScreenOpen": "false",
+      "treasureRelicHolderCount": "0",
+      "treasureVisibleRelicHolderCount": "0",
+      "treasureEnabledRelicHolderCount": "0",
+      "treasureProceedEnabled": "false",
+      "treasureInspectOverlayVisible": "false",
+      "treasureRelicHolderBounds": null,
+      "treasureRelicHolderIds": null,
+      "treasureRoomRootType": null,
+      "shopRoomDetected": "false",
+      "shopRoomVisible": "false",
+      "shopForegroundOwned": "false",
+      "shopTeardownInProgress": "false",
+      "shopIsCurrentActiveScreen": "false",
+      "mapCurrentActiveScreen": "false",
+      "activeScreenType": "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+      "shopRootType": null,
+      "shopInventoryOpen": "false",
+      "shopMerchantButtonVisible": "false",
+      "shopMerchantButtonEnabled": "false",
+      "shopProceedEnabled": "false",
+      "shopBackVisible": "false",
+      "shopBackEnabled": "false",
+      "shopOptionCount": "0",
+      "shopAffordableOptionCount": "0",
+      "shopAffordableOptionIds": null,
+      "shopAffordableRelicIds": null,
+      "shopAffordableCardIds": null,
+      "shopAffordablePotionIds": null,
+      "shopCardRemovalVisible": "false",
+      "shopCardRemovalEnabled": "false",
+      "shopCardRemovalEnoughGold": "false",
+      "shopCardRemovalUsed": "false",
+      "rewardScreenDetected": "true",
+      "rewardScreenVisible": "true",
+      "rewardForegroundOwned": "false",
+      "rewardTeardownInProgress": "false",
+      "rewardIsCurrentActiveScreen": "false",
+      "rewardIsTopOverlay": "false",
+      "rewardScreenRootType": "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+      "rewardProceedVisible": "true",
+      "rewardProceedEnabled": "false",
+      "rewardVisibleButtonCount": "1",
+      "rewardEnabledButtonCount": "0",
+      "terminalRunBoundary": "false",
+      "gameOverScreenDetected": "false",
+      "unlockScreenDetected": "false",
+      "timelineUnlockDetected": "false",
+      "mainMenuReturnDetected": "false",
+      "rootTypeSummary": "System.RuntimeType MegaCrit.Sts2.Core.Runs.RunManager MegaCrit.Sts2.Core.Combat.CombatManager MegaCrit.Sts2.Core.Saves.SaveManager MegaCrit.Sts2.Core.Runs.RunState Godot.SceneTree Godot.Window MegaCrit.Sts2.Core.Nodes.NGame MegaCrit.Sts2.Core.Nodes.Vfx.Utilities.NScreenShake MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NFeedbackScreenOpener MegaCrit.Sts2.Core.Nodes.NSceneContainer Godot.Control MegaCrit.Sts2.Core.Nodes.Multiplayer.NRemoteMouseCursorContainer MegaCrit.Sts2.Core.Nodes.Reaction.NReactionContainer MegaCrit.Sts2.Core.Nodes.CommonUi.NModalContainer MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackScreen MegaCrit.Sts2.Core.Nodes.NTransition MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerTimeoutOverlay Godot.Node2D Godot.AudioStreamPlayer MegaCrit.Sts2.Core.Nodes.NRun MegaCrit.Sts2.Core.Nodes.Reaction.NReactionWheelWedge Godot.TextureRect Godot.ColorRect Godot.Panel MegaCrit.Sts2.Core.Nodes.CommonUi.NBackButton MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackCartoon MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackFlower MegaCrit.Sts2.addons.mega_text.MegaLabel MegaCrit.Sts2.addons.mega_text.MegaRichTextLabel MegaCrit.Sts2.Core.Nodes.Audio.NRunMusicController MegaCrit.Sts2.Core.Nodes.CommonUi.NGlobalUi MegaCrit.Sts2.Core.Nodes.GodotExtensions.NMegaTextEdit Godot.HBoxContainer MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackButton MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NFeedbackCategoryDropdown MegaCrit.Sts2.Core.Nodes.Rooms.NCombatRoom MegaCrit.Sts2.Core.Nodes.Screens.Overlays.NOverlayStack MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen MegaCrit.Sts2.Core.Nodes.Screens.Capstones.NCapstoneContainer MegaCrit.Sts2.Core.Nodes.Multiplayer.NMultiplayerPlayerStateContainer MegaCrit.Sts2.Core.Nodes.Relics.NRelicInventory MegaCrit.Sts2.Core.Entities.Players.Player MegaCrit.Sts2.Core.Nodes.CommonUi.NTopBar MegaCrit.Sts2.Core.Nodes.CommonUi.NCardPreviewContainer MegaCrit.Sts2.Core.Nodes.CommonUi.NGridCardPreviewContainer MegaCrit.Sts2.Core.Nodes.CommonUi.NMessyCardPreviewContainer Godot.VBoxContainer MegaCrit.Sts2.Core.Nodes.Combat.NTargetManager MegaCrit.Sts2.Core.Nodes.Combat.NSelectionReticle MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen.NSendFeedbackEmojiButton MegaCrit.Sts2.Core.Nodes.Combat.NCombatSceneContainer MegaCrit.Sts2.Core.Nodes.Combat.NCombatUi MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen Godot.NinePatchRect MegaCrit.Sts2.Core.Nodes.Screens.NCapstoneSubmenuStack MegaCrit.Sts2.Core.Nodes.Relics.NRelicInventoryHolder MegaCrit.Sts2.Core.Models.Relics.BurningBlood MegaCrit.Sts2.Core.Models.Relics.NeowsTorment MegaCrit.Sts2.Core.Nodes.Combat.NTargetingArrow",
+      "choiceExtractorPath": "card-selection-reward-pick",
+      "restSiteButtonsVisible": "false",
+      "restSiteHoveredOptionId": null,
+      "restSiteExecutingOptionId": null,
+      "restSiteOptionsInteractive": "false",
+      "restSiteVisibleOptionSummary": null,
+      "restSiteUpgradeScreenVisible": "false",
+      "restSiteUpgradeScreenDetected": "false",
+      "restSiteUpgradeObserverMiss": "false",
+      "restSiteUpgradeCardCount": "0",
+      "restSiteUpgradeCardSummary": null,
+      "restSiteUpgradeConfirmVisible": "false",
+      "restSiteUpgradeConfirmEnabled": "false",
+      "restSiteUpgradeConfirmBounds": null,
+      "restSiteUpgradeSelectedCardCount": "0",
+      "restSiteUpgradeSelectedCards": null,
+      "restSiteUpgradePreviewMode": null,
+      "restSiteSelectionCurrentStatus": null,
+      "restSiteSelectionCurrentOptionId": null,
+      "restSiteSelectionObservedOptionId": null,
+      "restSiteSelectionOutcome": null,
+      "restSiteSelectionOutcomeEvidence": null,
+      "restSiteViewKind": null,
+      "restSiteTransitionAuthority": null,
+      "combatRuntimeStateAuthority": "runtime-reflection",
+      "combatCardPlayPending": "false",
+      "combatPlayMode": "Play",
+      "combatSelectedCardId": null,
+      "combatSelectedCardName": null,
+      "combatSelectedCardType": null,
+      "combatSelectedCardTargetType": null,
+      "combatSelectedCardSlot": null,
+      "combatAwaitingPlayCount": "0",
+      "combatAwaitingPlaySlots": null,
+      "combatTargetingInProgress": "false",
+      "combatValidTargetsType": "None",
+      "combatTargetableEnemyCount": "0",
+      "combatTargetableEnemyIds": null,
+      "combatHittableEnemyCount": "0",
+      "combatHittableEnemyIds": null,
+      "combatHoveredTargetKind": null,
+      "combatHoveredTargetId": null,
+      "combatHoveredTargetLabel": null,
+      "combatHoveredTargetIsHittable": null,
+      "combatTargetingLastFinishedFrame": "0",
+      "combatLastCardPlayStartedCardId": null,
+      "combatLastCardPlayStartedCardName": null,
+      "combatLastCardPlayStartedTargetId": null,
+      "combatLastCardPlayFinishedCardId": null,
+      "combatLastCardPlayFinishedCardName": null,
+      "combatLastCardPlayFinishedTargetId": null,
+      "combatLastCardPlayFinishedSuccess": null,
+      "rawObservedScreen": "rewards",
+      "declaringType": "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+      "instanceType": "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+      "mapPointCount": "1",
+      "mapPointSummary": "map:0:3@logical:880,1260,208,208@normalized:0.4583,1,0.1083,0.1926"
+    }
+  },
+  "knownRecipes": [],
+  "eventKnowledgeCandidates": [],
+  "combatCardKnowledge": [],
+  "allowedActions": [
+    "reward pick card",
+    "wait"
+  ],
+  "history": [
+    {
+      "phase": "EnterRun",
+      "action": "wait",
+      "recordedAt": "2026-03-23T14:08:05.3769572+00:00"
+    },
+    {
+      "phase": "EnterRun",
+      "action": "click",
+      "targetLabel": "continue",
+      "recordedAt": "2026-03-23T14:08:14.1132055+00:00"
+    },
+    {
+      "phase": "WaitRunLoad",
+      "action": "branch-rewards",
+      "recordedAt": "2026-03-23T14:08:24.5079534+00:00"
+    },
+    {
+      "phase": "HandleRewards",
+      "action": "click",
+      "targetLabel": "claim reward item",
+      "recordedAt": "2026-03-23T14:08:30.7793345+00:00"
+    },
+    {
+      "phase": "HandleRewards",
+      "action": "click",
+      "targetLabel": "reward card choice",
+      "recordedAt": "2026-03-23T14:08:34.7256017+00:00"
+    }
+  ],
+  "failureModeHint": "AI first: trust the explicit reward-pick card-selection subtype and choose a visible reward card before any screenshot fallback.",
+  "decisionRiskHint": "first-seen-scene"
+}
