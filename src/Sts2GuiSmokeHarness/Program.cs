@@ -1847,8 +1847,16 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         else
         {
             var clickPoint = MouseInputDriver.TransformNormalizedPoint(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
-            LogHarness($"step={stepIndex} click target={decision.TargetLabel ?? "null"} normalized=({decision.NormalizedX:0.000},{decision.NormalizedY:0.000}) absolute=({clickPoint.X},{clickPoint.Y}) bounds={DescribeBounds(clickWindow.Bounds)}");
-            inputDriver.Click(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
+            if (ShouldUseHoverPrimedClick(decision))
+            {
+                LogHarness($"step={stepIndex} click target={decision.TargetLabel ?? "null"} hoverPrime=true normalized=({decision.NormalizedX:0.000},{decision.NormalizedY:0.000}) absolute=({clickPoint.X},{clickPoint.Y}) bounds={DescribeBounds(clickWindow.Bounds)}");
+                inputDriver.HoverPrimedClick(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
+            }
+            else
+            {
+                LogHarness($"step={stepIndex} click target={decision.TargetLabel ?? "null"} normalized=({decision.NormalizedX:0.000},{decision.NormalizedY:0.000}) absolute=({clickPoint.X},{clickPoint.Y}) bounds={DescribeBounds(clickWindow.Bounds)}");
+                inputDriver.Click(clickWindow, decision.NormalizedX!.Value, decision.NormalizedY!.Value);
+            }
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "click", decision.TargetLabel, DateTimeOffset.UtcNow)
             {
                 Metadata = AutoDecisionProvider.BuildRestSiteHistoryMetadataForDecision(request, decision),
@@ -1967,6 +1975,13 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         {
             LogHarness($"step={stepIndex} post-action phase reconciliation WaitPostMapNodeRoom -> {postMapNodePhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
             phase = postMapNodePhase;
+        }
+
+        if (phase == GuiSmokePhase.WaitEventRelease
+            && GuiSmokeObserverPhaseHeuristics.TryGetPostEventReleasePhase(postActionObserver, out var postEventReleasePhase))
+        {
+            LogHarness($"step={stepIndex} post-action phase reconciliation WaitEventRelease -> {postEventReleasePhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
+            phase = postEventReleasePhase;
         }
 
         attemptsByPhase.Clear();
@@ -2159,6 +2174,12 @@ static bool IsRestSitePostClickFailureKind(string? value)
            || string.Equals(value, "rest-site-selection-failed", StringComparison.OrdinalIgnoreCase)
            || string.Equals(value, "rest-site-grid-not-visible-after-selection", StringComparison.OrdinalIgnoreCase)
            || string.Equals(value, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase);
+}
+
+static bool ShouldUseHoverPrimedClick(GuiSmokeStepDecision decision)
+{
+    return string.Equals(decision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
+           && string.Equals(decision.TargetLabel, "ancient event completion", StringComparison.OrdinalIgnoreCase);
 }
 
 static async Task StopGameProcessesAsync(TimeSpan timeout)
@@ -3996,13 +4017,277 @@ static void RunSelfTest()
             && eventReopenPhase == GuiSmokePhase.HandleEvent,
             "WaitMap should reopen explicit event progression when map becomes visible before the event foreground fully tears down.");
 
+        var ancientCompletionMixedObserver = new ObserverState(
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                true,
+                "mixed",
+                "stable",
+                null,
+                null,
+                "event",
+                80,
+                80,
+                null,
+                new[] { "진행" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("ancient-event-option:0", "event-option", "진행", "460,942,1000,100", true)
+                    {
+                        SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button", "option-role:proceed", "ancient-event-completion" },
+                    },
+                },
+                new[]
+                {
+                    new ObserverChoice("event-option", "진행", "460,942,1000,100", "0", "[gold][b]진행[/b][/gold]")
+                    {
+                        NodeId = "ancient-event-option:0",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button", "option-role:proceed", "ancient-event-completion" },
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ancientEventDetected"] = "true",
+                    ["ancientDialogueActive"] = "false",
+                    ["ancientOptionCount"] = "1",
+                    ["ancientCompletionActive"] = "true",
+                    ["ancientCompletionCount"] = "1",
+                    ["ancientEventExtractionPath"] = "ancient-completion-button",
+                    ["ancientCompletionUsesDefaultFocus"] = "true",
+                    ["ancientCompletionHasFocus"] = "true",
+                    ["mapCurrentActiveScreen"] = "true",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            GuiSmokeObserverPhaseHeuristics.LooksLikeEventState(
+                ancientCompletionMixedObserver.Summary,
+                "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen"),
+            "Explicit ancient post-choice completion should keep event foreground authoritative even when map-active background truth is present.");
+        Assert(
+            !TryAdvanceAlternateBranch(
+                GuiSmokePhase.HandleEvent,
+                ancientCompletionMixedObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                9,
+                true,
+                out _),
+            "HandleEvent should not hand off to ChooseFirstNode while an explicit ancient completion button is still active.");
+        var ancientCompletionPendingObserver = ancientCompletionMixedObserver with
+        {
+            Summary = ancientCompletionMixedObserver.Summary with
+            {
+                Meta = new Dictionary<string, string?>(ancientCompletionMixedObserver.Summary.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ancientEventDetected"] = "true",
+                    ["ancientDialogueActive"] = "false",
+                    ["ancientOptionCount"] = "1",
+                    ["ancientCompletionActive"] = "true",
+                    ["ancientCompletionCount"] = "1",
+                    ["ancientEventExtractionPath"] = "ancient-completion-button",
+                    ["ancientCompletionUsesDefaultFocus"] = "true",
+                    ["ancientCompletionHasFocus"] = "true",
+                    ["mapCurrentActiveScreen"] = "false",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom",
+                },
+            },
+        };
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.ChooseFirstNode,
+                ancientCompletionPendingObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                10,
+                true,
+                out var ancientCompletionRecoveryPhase)
+            && ancientCompletionRecoveryPhase == GuiSmokePhase.HandleEvent,
+            "ChooseFirstNode drift should recover back to HandleEvent while explicit ancient completion remains active.");
+        Assert(
+            !TryAdvanceAlternateBranch(
+                GuiSmokePhase.ChooseFirstNode,
+                ancientCompletionMixedObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                11,
+                true,
+                out _),
+            "ChooseFirstNode should not reopen HandleEvent once ancient proceed has already opened the map as the current active screen.");
+
+        var ancientCompletionReleasedObserver = new ObserverState(
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                true,
+                "mixed",
+                "stable",
+                null,
+                null,
+                "map",
+                80,
+                80,
+                null,
+                Array.Empty<string>(),
+                new[] { "{\"kind\":\"screen-changed\",\"screen\":\"map\"}" },
+                Array.Empty<ObserverActionNode>(),
+                new[]
+                {
+                    new ObserverChoice("map-node", "Monster (1,3)", "904,524,56,56", "1,3", null)
+                    {
+                        NodeId = "map:1:3",
+                        Enabled = true,
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ancientEventDetected"] = "true",
+                    ["ancientDialogueActive"] = "false",
+                    ["ancientOptionCount"] = "0",
+                    ["ancientCompletionActive"] = "false",
+                    ["ancientCompletionCount"] = "0",
+                    ["mapCurrentActiveScreen"] = "true",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.HandleEvent,
+                ancientCompletionReleasedObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                12,
+                true,
+                out var ancientCompletionReleasedPhase)
+            && ancientCompletionReleasedPhase == GuiSmokePhase.ChooseFirstNode,
+            "Once the explicit ancient completion lane is gone, HandleEvent should release control to map routing.");
+        Assert(
+            GetAllowedActions(GuiSmokePhase.HandleEvent, ancientCompletionMixedObserver).Contains("click ancient event completion", StringComparer.OrdinalIgnoreCase)
+            && !GetAllowedActions(GuiSmokePhase.HandleEvent, ancientCompletionMixedObserver).Contains("click event choice", StringComparer.OrdinalIgnoreCase),
+            "HandleEvent allowlist should expose ancient completion as its own explicit action instead of collapsing it into generic event choice.");
+        var ancientCompletionRequest = new GuiSmokeStepRequest(
+            "run",
+            "ancient-completion-self-test",
+            12,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "handle-event",
+            DateTimeOffset.UtcNow,
+            "ancient-completion.png",
+            new WindowBounds(0, 0, 1280, 720),
+            "scene:ancient-completion",
+            "0001",
+            1,
+            1,
+            true,
+            "semantic",
+            "Resolve the ancient event.",
+            ancientCompletionMixedObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            new[] { "click ancient event completion", "wait" },
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Ancient completion should resolve through the explicit proceed lane.",
+            null);
+        var ancientCompletionDecision = AutoDecisionProvider.Decide(ancientCompletionRequest);
+        Assert(
+            string.Equals(ancientCompletionDecision.ActionKind, "press-key", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(ancientCompletionDecision.KeyText, "Enter", StringComparison.OrdinalIgnoreCase),
+            "Ancient completion should use ui_select (Enter) when the explicit proceed button is also the default-focused control.");
+        var ancientCompletionNeedsHoverObserver = ancientCompletionMixedObserver with
+        {
+            Summary = ancientCompletionMixedObserver.Summary with
+            {
+                Meta = new Dictionary<string, string?>(ancientCompletionMixedObserver.Summary.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ancientEventDetected"] = "true",
+                    ["ancientDialogueActive"] = "false",
+                    ["ancientOptionCount"] = "1",
+                    ["ancientCompletionActive"] = "true",
+                    ["ancientCompletionCount"] = "1",
+                    ["ancientEventExtractionPath"] = "ancient-completion-button",
+                    ["ancientCompletionUsesDefaultFocus"] = "true",
+                    ["ancientCompletionHasFocus"] = "false",
+                    ["mapCurrentActiveScreen"] = "true",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                },
+            },
+        };
+        var ancientCompletionHoverRequest = ancientCompletionRequest with
+        {
+            Observer = ancientCompletionNeedsHoverObserver.Summary,
+        };
+        var ancientCompletionHoverDecision = AutoDecisionProvider.Decide(ancientCompletionHoverRequest);
+        Assert(
+            string.Equals(ancientCompletionHoverDecision.ActionKind, "click", StringComparison.OrdinalIgnoreCase),
+            "Ancient completion should fall back to an explicit button click when the proceed control is the default focus candidate but does not actually have focus.");
+        Assert(
+            GetPostHandleEventPhase(ancientCompletionDecision) == GuiSmokePhase.WaitEventRelease,
+            "Ancient completion clicks should enter a passive event-release wait phase instead of re-entering HandleEvent.");
+        Assert(
+            !TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitEventRelease,
+                ancientCompletionPendingObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                13,
+                true,
+                out _),
+            "WaitEventRelease should remain passive while the explicit ancient completion control is still foreground-active and map release authority has not yet appeared.");
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitEventRelease,
+                ancientCompletionMixedObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                14,
+                true,
+                out var ancientEventReleasePhaseFromMapActive)
+            && ancientEventReleasePhaseFromMapActive == GuiSmokePhase.ChooseFirstNode,
+            "WaitEventRelease should hand off to map routing once ancient proceed has opened the map as the current active screen, even if stale ancient completion residue is still visible.");
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitEventRelease,
+                ancientCompletionReleasedObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitMapMixedStateLogger,
+                15,
+                true,
+                out var ancientEventReleasePhase)
+            && ancientEventReleasePhase == GuiSmokePhase.ChooseFirstNode,
+            "WaitEventRelease should hand off to map routing once ancient completion is actually gone and map authority remains.");
+        Assert(
+            GuiSmokeNonCombatContractSupport.TryMapNonCombatAllowedAction(ancientCompletionDecision, out var mappedAncientCompletionAction)
+            && string.Equals(mappedAncientCompletionAction, "click ancient event completion", StringComparison.OrdinalIgnoreCase),
+            "Ancient completion target labels should map to their own non-combat allowlist action.");
+
         Assert(
             TryAdvanceAlternateBranch(
                 GuiSmokePhase.WaitMap,
                 cardSelectionMixedStateObserver,
                 new List<GuiSmokeHistoryEntry>(),
                 waitMapMixedStateLogger,
-                9,
+                16,
                 true,
                 out var cardSelectionReopenPhase)
             && cardSelectionReopenPhase == GuiSmokePhase.ChooseFirstNode,
@@ -6469,6 +6754,244 @@ static void RunSelfTest()
                && !postTransformEventDecision.TargetLabel.Contains("reachable node", StringComparison.OrdinalIgnoreCase)
                && !postTransformEventDecision.TargetLabel.Contains("map", StringComparison.OrdinalIgnoreCase),
             "Post-transform explicit event continue should outrank mixed-state map contamination.");
+
+        var ancientDialogueObserver = new ObserverState(
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-ancient-dialogue",
+                true,
+                "mixed",
+                "stable",
+                "episode-ancient-dialogue",
+                "None",
+                "event",
+                80,
+                80,
+                null,
+                new[] { "Ancient dialogue" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("ancient-dialogue:advance", "event-option", "Ancient dialogue", "0,0,1920,1080", true)
+                    {
+                        TypeName = "event-dialogue",
+                        SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-dialogue-hitbox" },
+                    },
+                },
+                new[]
+                {
+                    new ObserverChoice("event-dialogue", "Ancient dialogue", "0,0,1920,1080", "dialogue-hitbox")
+                    {
+                        NodeId = "ancient-dialogue:advance",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-dialogue-hitbox" },
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ancientEventDetected"] = "true",
+                    ["ancientDialogueActive"] = "true",
+                    ["ancientDialogueHitboxVisible"] = "true",
+                    ["ancientDialogueHitboxEnabled"] = "true",
+                    ["ancientOptionCount"] = "0",
+                    ["ancientEventExtractionPath"] = "ancient-dialogue-hitbox",
+                },
+            },
+            null,
+            null,
+            null);
+        var ancientDialogueActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, ancientDialogueObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(ancientDialogueActions.Contains("click ancient dialogue advance", StringComparer.OrdinalIgnoreCase)
+               && !ancientDialogueActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase),
+            "Ancient dialogue phase should expose only the explicit dialogue-advance lane.");
+        var ancientDialogueDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            12,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "Advance the ancient event dialogue.",
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            new WindowBounds(-1877, 405, 1280, 720),
+            "phase:handleevent|screen:event|visible:event|ready:true|stability:stable|substate:ancient-dialogue",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            ancientDialogueObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            ancientDialogueActions,
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Advance the explicit ancient dialogue hitbox first.",
+            null));
+        Assert(string.Equals(ancientDialogueDecision.TargetLabel, "ancient dialogue advance", StringComparison.OrdinalIgnoreCase),
+            "Ancient dialogue phase should click the explicit dialogue hitbox instead of selecting a generic event option.");
+
+        var ancientOptionObserver = new ObserverState(
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-ancient-options",
+                true,
+                "mixed",
+                "stable",
+                "episode-ancient-options",
+                "None",
+                "event",
+                80,
+                80,
+                null,
+                new[] { "니오우의 비탄", "비전 두루마리", "두루마리 상자" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("ancient-event-option:0", "event-option", "니오우의 비탄", "460,360,820,92", true)
+                    {
+                        TypeName = "event-option",
+                        SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button" },
+                    },
+                    new ObserverActionNode("event-option:pseudo", "event-option", "니오우의 비탄", "460,1100,1000,100", true)
+                    {
+                        TypeName = "choice",
+                        SemanticHints = new[] { "scene:event", "kind:event-option" },
+                    },
+                },
+                new[]
+                {
+                    new ObserverChoice("event-option", "니오우의 비탄", "460,360,820,92", "option-0")
+                    {
+                        NodeId = "ancient-event-option:0",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button" },
+                    },
+                    new ObserverChoice("choice", "니오우의 비탄", "460,1100,1000,100", "니오우의 비탄"),
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ancientEventDetected"] = "true",
+                    ["ancientDialogueActive"] = "false",
+                    ["ancientDialogueHitboxVisible"] = "false",
+                    ["ancientDialogueHitboxEnabled"] = "false",
+                    ["ancientOptionCount"] = "3",
+                    ["ancientEventExtractionPath"] = "ancient-option-buttons",
+                },
+            },
+            null,
+            null,
+            null);
+        var ancientOptionActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, ancientOptionObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(ancientOptionActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase)
+               && !ancientOptionActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
+            "Ancient option phase should use explicit event-option buttons instead of generic proceed.");
+        var ancientOptionDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            13,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "Select an explicit ancient event option.",
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:handleevent|screen:event|visible:event|ready:true|stability:stable|substate:ancient-options",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            ancientOptionObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            ancientOptionActions,
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Prefer the explicit ancient option button over pseudo-choice duplicates.",
+            null));
+        Assert(string.Equals(ancientOptionDecision.TargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+               && ancientOptionDecision.NormalizedY is < 0.95,
+            "Ancient option phase should click the explicit in-window option button instead of an off-window pseudo-choice.");
+
+        var ancientOffWindowOnlyObserver = new ObserverState(
+            ancientOptionObserver.Summary with
+            {
+                InventoryId = "inv-ancient-options-offwindow",
+                SceneEpisodeId = "episode-ancient-options-offwindow",
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("event-option:pseudo", "event-option", "니오우의 비탄", "460,1100,1000,100", true)
+                    {
+                        TypeName = "choice",
+                        SemanticHints = new[] { "scene:event", "kind:event-option" },
+                    },
+                },
+                Choices = new[]
+                {
+                    new ObserverChoice("choice", "니오우의 비탄", "460,1100,1000,100", "니오우의 비탄"),
+                },
+            },
+            null,
+            null,
+            null);
+        var ancientOffWindowDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            14,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "Do not click off-window pseudo-choice bounds.",
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:handleevent|screen:event|visible:event|ready:true|stability:stable|substate:ancient-options",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            ancientOffWindowOnlyObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            new[] { "click event choice", "wait" },
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "No explicit button bounds remain in-window.",
+            null));
+        Assert(string.Equals(ancientOffWindowDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+            "Ancient event decisioning should wait instead of throwing on off-window pseudo-choice bounds.");
+
+        var ancientFollowUpObserver = new ObserverState(
+            transformSubtypeObserver.Summary with
+            {
+                InventoryId = "inv-ancient-transform",
+                SceneEpisodeId = "episode-ancient-transform",
+                Meta = new Dictionary<string, string?>(transformSubtypeObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["ancientEventDetected"] = "true",
+                    ["ancientDialogueActive"] = "false",
+                    ["ancientOptionCount"] = "3",
+                    ["ancientEventExtractionPath"] = "ancient-option-buttons",
+                },
+            },
+            null,
+            null,
+            null);
+        var ancientFollowUpActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, ancientFollowUpObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(ancientFollowUpActions.Contains("transform select card", StringComparer.OrdinalIgnoreCase)
+               && !ancientFollowUpActions.Contains("click ancient dialogue advance", StringComparer.OrdinalIgnoreCase),
+            "Ancient option follow-up should hand off to the existing card-selection subtype instead of reopening ancient event routing.");
 
         var rewardPickObserver = new ObserverState(
             new ObserverSummary(
@@ -11658,6 +12181,12 @@ static string[] BuildAllowedActionsCore(
             => new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", rewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" },
         GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && ShouldPreferRewardProgressionOverMapFallback(observer)
             => new[] { "click reward", "click reward skip", "click proceed", "wait" },
+        GuiSmokePhase.HandleEvent when AncientEventObserverSignals.IsDialogueActive(observer.Summary)
+            => new[] { "click ancient dialogue advance", "wait" },
+        GuiSmokePhase.HandleEvent when AncientEventObserverSignals.HasExplicitCompletionAction(observer.Summary)
+            => new[] { "click ancient event completion", "wait" },
+        GuiSmokePhase.HandleEvent when AncientEventObserverSignals.HasExplicitOptionSelection(observer.Summary)
+            => new[] { "click event choice", "wait" },
         GuiSmokePhase.HandleEvent when forceEventProgressionAfterCardSelection
             => new[] { "click event choice", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent when treasureState is { RoomDetected: true }
@@ -11671,6 +12200,7 @@ static string[] BuildAllowedActionsCore(
                                         && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
             => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent => new[] { "click event choice", "click proceed", "wait" },
+        GuiSmokePhase.WaitEventRelease => new[] { "wait" },
         GuiSmokePhase.HandleShop => BuildShopAllowedActions(observer.Summary, history),
         GuiSmokePhase.HandleCombat => GetCombatAllowedActions(observer, combatCardKnowledge, screenshotPath, history),
         _ => new[] { "wait" },
@@ -12882,6 +13412,7 @@ static string BuildGoal(GuiSmokePhase phase)
         GuiSmokePhase.ChooseFirstNode => "Click the first reachable map node.",
         GuiSmokePhase.WaitPostMapNodeRoom => "Reconcile the destination room after clicking a reachable map node.",
         GuiSmokePhase.HandleEvent => "Resolve the event screen. If nothing else is obvious, pick the first visible option.",
+        GuiSmokePhase.WaitEventRelease => "Wait for the explicit ancient event completion click to release the event room before map handoff.",
         GuiSmokePhase.HandleShop => "Resolve explicit shop room semantics: open inventory, perform one bounded shop action, then back/proceed.",
         GuiSmokePhase.WaitCombat => "Wait until observer currentScreen=combat and encounter.inCombat=true.",
         GuiSmokePhase.HandleCombat => "Play the combat from the screenshot: choose cards, targets, or end turn until combat resolves.",
@@ -12984,6 +13515,7 @@ static string BuildFailureModeHintCoreWithContext(
         GuiSmokePhase.HandleEvent when LooksLikeTreasureState(observer.Summary)
             => "Treasure authority can linger on the event phase. Prefer explicit treasure chest, treasure relic holder, or treasure proceed over generic event or map routing.",
         GuiSmokePhase.HandleEvent => "If the event text is ambiguous, choose a large visible progression option, not inspect affordances or detail overlays.",
+        GuiSmokePhase.WaitEventRelease => "Ancient proceed was already clicked. Wait for event-room release or a concrete next room state instead of re-clicking the same proceed button.",
         GuiSmokePhase.WaitPostMapNodeRoom => "A reachable node starts room entry, not combat-only flow. Reconcile the destination room from observer truth before waiting or routing again.",
         GuiSmokePhase.WaitCombat => "Observer must end with combat screen and inCombat=true.",
         _ => "Fail closed when screenshot and observer disagree.",
@@ -13021,6 +13553,11 @@ static GuiSmokePhase GetPostChooseFirstNodePhase(GuiSmokeStepDecision decision)
 
 static GuiSmokePhase GetPostHandleEventPhase(GuiSmokeStepDecision decision)
 {
+    if (IsAncientEventCompletionTarget(decision.TargetLabel))
+    {
+        return GuiSmokePhase.WaitEventRelease;
+    }
+
     if (KeepsCurrentRoomPhase(decision.TargetLabel))
     {
         return GuiSmokePhase.HandleEvent;
@@ -13036,6 +13573,11 @@ static bool IsReachableNodeTarget(string? targetLabel)
     return string.Equals(targetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase);
+}
+
+static bool IsAncientEventCompletionTarget(string? targetLabel)
+{
+    return string.Equals(targetLabel, "ancient event completion", StringComparison.OrdinalIgnoreCase);
 }
 
 static bool IsRoomProgressTarget(string? targetLabel)
@@ -13076,6 +13618,7 @@ static bool IsPassiveWaitPhase(GuiSmokePhase phase)
         or GuiSmokePhase.WaitCharacterSelect
         or GuiSmokePhase.WaitMap
         or GuiSmokePhase.WaitPostMapNodeRoom
+        or GuiSmokePhase.WaitEventRelease
         or GuiSmokePhase.WaitCombat;
 }
 
@@ -13178,6 +13721,7 @@ static int GetSameActionStallLimit(GuiSmokePhase phase, GuiSmokeStepDecision dec
         "singleplayer" => 4,
         "ironclad" => 4,
         "embark" => 4,
+        "ancient event completion" => 4,
         "event progression choice" => 4,
         "first event option" => 4,
         "reward choice" => 3,
@@ -13783,6 +14327,31 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
+        if ((phase == GuiSmokePhase.ChooseFirstNode || phase == GuiSmokePhase.WaitPostMapNodeRoom)
+            && AncientEventObserverSignals.HasMapReleaseAuthority(
+                observer.Summary,
+                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"),
+                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
+        {
+            if (phase == GuiSmokePhase.WaitPostMapNodeRoom)
+            {
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-map", null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-map", observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = GuiSmokePhase.ChooseFirstNode;
+                return true;
+            }
+
+            return false;
+        }
+
+        if (AncientEventObserverSignals.HasForegroundAuthority(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.HandleEvent;
+            return true;
+        }
+
         if (phase == GuiSmokePhase.WaitPostMapNodeRoom
             && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(observer, out var postMapNodePhase))
         {
@@ -13950,6 +14519,11 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase == GuiSmokePhase.HandleEvent)
     {
+        if (AncientEventObserverSignals.HasForegroundAuthority(observer.Summary))
+        {
+            return false;
+        }
+
         if (GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "event-resolved-map", null, DateTimeOffset.UtcNow));
@@ -13971,6 +14545,17 @@ static bool TryAdvanceAlternateBranch(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "event-resolved-rewards", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "event-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
             nextPhase = GuiSmokePhase.HandleRewards;
+            return true;
+        }
+    }
+
+    if (phase == GuiSmokePhase.WaitEventRelease)
+    {
+        if (GuiSmokeObserverPhaseHeuristics.TryGetPostEventReleasePhase(observer, out var postEventReleasePhase))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "event-release-reconciled", null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "event-release-reconciled", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = postEventReleasePhase;
             return true;
         }
     }
@@ -15414,6 +15999,7 @@ enum GuiSmokePhase
     WaitPostMapNodeRoom,
     WaitCombat,
     HandleEvent,
+    WaitEventRelease,
     HandleShop,
     HandleCombat,
     Completed,
@@ -16654,6 +17240,9 @@ static class GuiSmokeNonCombatContractSupport
             { } label when label.Contains("treasure chest", StringComparison.OrdinalIgnoreCase) => "click treasure chest",
             { } label when label.Contains("treasure relic holder", StringComparison.OrdinalIgnoreCase) => "click treasure relic holder",
             { } label when label.Contains("treasure proceed", StringComparison.OrdinalIgnoreCase) => "click treasure proceed",
+            { } label when label.Contains("ancient dialogue advance", StringComparison.OrdinalIgnoreCase) => "click ancient dialogue advance",
+            { } label when label.Contains("ancient event completion", StringComparison.OrdinalIgnoreCase) => "click ancient event completion",
+            { } label when label.Contains("event progression choice", StringComparison.OrdinalIgnoreCase) => "click event choice",
             { } label when label.Contains("visible proceed", StringComparison.OrdinalIgnoreCase) => "click proceed",
             _ => string.Empty,
         };
@@ -16829,6 +17418,299 @@ static class MapNodeSourceSupport
                && height <= 120f
                && y <= 170f
                && x <= 200f;
+    }
+}
+
+static class AncientEventObserverSignals
+{
+    public static bool IsAncientEventDetected(ObserverSummary observer)
+    {
+        return TryGetMetaBool(observer, "ancientEventDetected") == true;
+    }
+
+    public static bool IsDialogueActive(ObserverSummary observer)
+    {
+        return IsAncientEventDetected(observer)
+               && TryGetMetaBool(observer, "ancientDialogueActive") == true;
+    }
+
+    public static bool HasExplicitOptionSelection(ObserverSummary observer)
+    {
+        if (!IsAncientEventDetected(observer))
+        {
+            return false;
+        }
+
+        var optionCount = TryGetMetaInt(observer, "ancientOptionCount") ?? 0;
+        var completionCount = TryGetMetaInt(observer, "ancientCompletionCount") ?? 0;
+        if (optionCount > completionCount)
+        {
+            return true;
+        }
+
+        return observer.ActionNodes.Any(node => IsExplicitAncientOptionNode(node) && !IsExplicitAncientCompletionNode(node))
+               || observer.Choices.Any(choice => IsExplicitAncientOptionChoice(choice) && !IsExplicitAncientCompletionChoice(choice));
+    }
+
+    public static bool HasExplicitCompletionAction(ObserverSummary observer)
+    {
+        if (!IsAncientEventDetected(observer))
+        {
+            return false;
+        }
+
+        var completionCount = TryGetMetaInt(observer, "ancientCompletionCount");
+        if (completionCount is > 0)
+        {
+            return true;
+        }
+
+        return observer.ActionNodes.Any(IsExplicitAncientCompletionNode)
+               || observer.Choices.Any(IsExplicitAncientCompletionChoice);
+    }
+
+    public static bool CompletionUsesDefaultFocus(ObserverSummary observer)
+    {
+        return HasExplicitCompletionAction(observer)
+               && TryGetMetaBool(observer, "ancientCompletionUsesDefaultFocus") == true;
+    }
+
+    public static bool CompletionHasFocus(ObserverSummary observer)
+    {
+        return HasExplicitCompletionAction(observer)
+               && TryGetMetaBool(observer, "ancientCompletionHasFocus") == true;
+    }
+
+    public static bool HasMapReleaseAuthority(ObserverSummary observer, string? declaringType, string? instanceType)
+    {
+        static bool IsMapScreenTypeName(string? typeName)
+        {
+            return !string.IsNullOrWhiteSpace(typeName)
+                   && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!IsAncientEventDetected(observer))
+        {
+            return false;
+        }
+
+        if (string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (TryGetMetaBool(observer, "mapCurrentActiveScreen") == true)
+        {
+            return true;
+        }
+
+        var activeScreenType = observer.Meta.TryGetValue("activeScreenType", out var activeScreenTypeValue)
+            ? activeScreenTypeValue
+            : null;
+        return IsMapScreenTypeName(activeScreenType)
+               || IsMapScreenTypeName(declaringType)
+               || IsMapScreenTypeName(instanceType);
+    }
+
+    public static bool HasForegroundAuthority(ObserverSummary observer)
+    {
+        return IsDialogueActive(observer)
+               || HasExplicitCompletionAction(observer)
+               || HasExplicitOptionSelection(observer);
+    }
+
+    public static bool IsAncientDialogueNode(ObserverActionNode node)
+    {
+        return node.Actionable
+               && (string.Equals(node.TypeName, "event-dialogue", StringComparison.OrdinalIgnoreCase)
+                   || node.NodeId.StartsWith("ancient-dialogue:", StringComparison.OrdinalIgnoreCase)
+                   || node.SemanticHints.Any(static hint => string.Equals(hint, "source:ancient-dialogue-hitbox", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static bool IsAncientDialogueChoice(ObserverChoice choice)
+    {
+        return string.Equals(choice.Kind, "event-dialogue", StringComparison.OrdinalIgnoreCase)
+               || (choice.NodeId?.StartsWith("ancient-dialogue:", StringComparison.OrdinalIgnoreCase) ?? false)
+               || choice.SemanticHints.Any(static hint => string.Equals(hint, "source:ancient-dialogue-hitbox", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsExplicitAncientOptionNode(ObserverActionNode node)
+    {
+        return node.Actionable
+               && ((node.NodeId?.StartsWith("ancient-event-option:", StringComparison.OrdinalIgnoreCase) ?? false)
+                   || node.SemanticHints.Any(static hint => string.Equals(hint, "source:ancient-option-button", StringComparison.OrdinalIgnoreCase))
+                   || string.Equals(node.TypeName, "event-option", StringComparison.OrdinalIgnoreCase)
+                      && node.SemanticHints.Any(static hint => string.Equals(hint, "ancient-event", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static bool IsExplicitAncientOptionChoice(ObserverChoice choice)
+    {
+        return string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+               && ((choice.NodeId?.StartsWith("ancient-event-option:", StringComparison.OrdinalIgnoreCase) ?? false)
+                   || choice.SemanticHints.Any(static hint => string.Equals(hint, "source:ancient-option-button", StringComparison.OrdinalIgnoreCase))
+                   || choice.SemanticHints.Any(static hint => string.Equals(hint, "ancient-event", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public static bool IsExplicitAncientCompletionNode(ObserverActionNode node)
+    {
+        return IsExplicitAncientOptionNode(node)
+               && node.SemanticHints.Any(static hint =>
+                   string.Equals(hint, "ancient-event-completion", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsExplicitAncientCompletionChoice(ObserverChoice choice)
+    {
+        return IsExplicitAncientOptionChoice(choice)
+               && choice.SemanticHints.Any(static hint =>
+                   string.Equals(hint, "ancient-event-completion", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static ObserverActionNode? GetActiveDialogueNode(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.ActionNodes.FirstOrDefault(node =>
+            IsAncientDialogueNode(node)
+            && HasActiveBounds(node.ScreenBounds, windowBounds));
+    }
+
+    public static ObserverChoice? GetActiveDialogueChoice(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.Choices.FirstOrDefault(choice =>
+            IsAncientDialogueChoice(choice)
+            && HasActiveBounds(choice.ScreenBounds, windowBounds));
+    }
+
+    public static IReadOnlyList<ObserverActionNode> GetActiveOptionNodes(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.ActionNodes
+            .Where(node =>
+                IsExplicitAncientOptionNode(node)
+                && !IsExplicitAncientCompletionNode(node)
+                && HasActiveBounds(node.ScreenBounds, windowBounds))
+            .OrderBy(GetNodeSortYInternal)
+            .ThenBy(GetNodeSortXInternal)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<ObserverChoice> GetActiveOptionChoices(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.Choices
+            .Where(choice =>
+                IsExplicitAncientOptionChoice(choice)
+                && !IsExplicitAncientCompletionChoice(choice)
+                && HasActiveBounds(choice.ScreenBounds, windowBounds))
+            .OrderBy(GetChoiceSortYInternal)
+            .ThenBy(GetChoiceSortXInternal)
+            .ToArray();
+    }
+
+    public static ObserverActionNode? GetActiveCompletionNode(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.ActionNodes.FirstOrDefault(node =>
+            IsExplicitAncientCompletionNode(node)
+            && HasActiveBounds(node.ScreenBounds, windowBounds));
+    }
+
+    public static ObserverChoice? GetActiveCompletionChoice(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.Choices.FirstOrDefault(choice =>
+            IsExplicitAncientCompletionChoice(choice)
+            && HasActiveBounds(choice.ScreenBounds, windowBounds));
+    }
+
+    private static bool HasActiveBounds(string? rawBounds, WindowBounds? windowBounds)
+    {
+        if (!TryParseBounds(rawBounds, out var bounds))
+        {
+            return false;
+        }
+
+        var centerX = bounds.X + bounds.Width / 2f;
+        var centerY = bounds.Y + bounds.Height / 2f;
+        if (centerX >= 0f
+            && centerY >= 0f
+            && centerX <= 1920f
+            && centerY <= 1080f)
+        {
+            return true;
+        }
+
+        if (windowBounds is null)
+        {
+            return true;
+        }
+
+        var windowRect = new RectangleF(windowBounds.X, windowBounds.Y, windowBounds.Width, windowBounds.Height);
+        return bounds.Width > 0f
+               && bounds.Height > 0f
+               && bounds.Right > windowRect.Left
+               && bounds.Bottom > windowRect.Top
+               && bounds.Left < windowRect.Right
+               && bounds.Top < windowRect.Bottom;
+    }
+
+    private static float GetNodeSortYInternal(ObserverActionNode node)
+    {
+        return TryParseBounds(node.ScreenBounds, out var bounds) ? bounds.Y : float.MaxValue;
+    }
+
+    private static float GetNodeSortXInternal(ObserverActionNode node)
+    {
+        return TryParseBounds(node.ScreenBounds, out var bounds) ? bounds.X : float.MaxValue;
+    }
+
+    private static float GetChoiceSortYInternal(ObserverChoice choice)
+    {
+        return TryParseBounds(choice.ScreenBounds, out var bounds) ? bounds.Y : float.MaxValue;
+    }
+
+    private static float GetChoiceSortXInternal(ObserverChoice choice)
+    {
+        return TryParseBounds(choice.ScreenBounds, out var bounds) ? bounds.X : float.MaxValue;
+    }
+
+    private static bool TryParseBounds(string? rawBounds, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(rawBounds))
+        {
+            return false;
+        }
+
+        var parts = rawBounds.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height)
+            || width <= 0f
+            || height <= 0f)
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return true;
+    }
+
+    private static bool? TryGetMetaBool(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value)
+               ? bool.TryParse(value, out var parsed)
+                    ? parsed
+                    : null
+               : null;
+    }
+
+    private static int? TryGetMetaInt(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value)
+               ? int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                    ? parsed
+                    : null
+               : null;
     }
 }
 
@@ -18541,6 +19423,11 @@ static class GuiSmokeForegroundHeuristics
 {
     public static bool ShouldPreferEventProgressionOverMapFallback(ObserverState observer)
     {
+        if (AncientEventObserverSignals.HasForegroundAuthority(observer.Summary))
+        {
+            return true;
+        }
+
         var declaringType = TryReadMetaString(observer.StateDocument, "declaringType");
         var instanceType = TryReadMetaString(observer.StateDocument, "instanceType");
         if (ContainsMapAuthority(declaringType) || ContainsMapAuthority(instanceType))
@@ -18575,6 +19462,11 @@ static class GuiSmokeForegroundHeuristics
         if (!eventScreenAuthority)
         {
             return false;
+        }
+
+        if (AncientEventObserverSignals.HasForegroundAuthority(observer))
+        {
+            return true;
         }
 
         return observer.ActionNodes.Any(node =>
@@ -18951,6 +19843,70 @@ static class GuiSmokeObserverPhaseHeuristics
         return TryGetPostEmbarkPhase(observer, out nextPhase);
     }
 
+    public static bool TryGetPostEventReleasePhase(ObserverState observer, out GuiSmokePhase nextPhase)
+    {
+        return TryGetPostEventReleasePhase(
+            observer.Summary,
+            TryReadObserverMetaString(observer.StateDocument, "declaringType"),
+            TryReadObserverMetaString(observer.StateDocument, "instanceType"),
+            out nextPhase);
+    }
+
+    public static bool TryGetPostEventReleasePhase(ObserverSummary observer, out GuiSmokePhase nextPhase)
+    {
+        return TryGetPostEventReleasePhase(observer, null, null, out nextPhase);
+    }
+
+    public static bool TryGetPostEventReleasePhase(ObserverSummary observer, string? declaringType, string? instanceType, out GuiSmokePhase nextPhase)
+    {
+        if (AncientEventObserverSignals.HasMapReleaseAuthority(observer, declaringType, instanceType))
+        {
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (AncientEventObserverSignals.HasForegroundAuthority(observer))
+        {
+            nextPhase = default;
+            return false;
+        }
+
+        if (RewardObserverSignals.IsRewardAuthorityActive(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleRewards;
+            return true;
+        }
+
+        if (LooksLikeCombatState(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleCombat;
+            return true;
+        }
+
+        if (LooksLikeShopState(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleShop;
+            return true;
+        }
+
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer)
+            || LooksLikeRestSiteState(observer)
+            || LooksLikeMapState(observer, declaringType, instanceType))
+        {
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (LooksLikeEventState(observer, declaringType, instanceType))
+        {
+            nextPhase = GuiSmokePhase.HandleEvent;
+            return true;
+        }
+
+        nextPhase = default;
+        return false;
+    }
+
     public static bool LooksLikeRewardsState(ObserverSummary observer)
     {
         var rewardState = RewardObserverSignals.TryGetState(observer);
@@ -19023,6 +19979,11 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool LooksLikeEventState(ObserverSummary observer, string? declaringType, string? instanceType)
     {
+        if (AncientEventObserverSignals.HasForegroundAuthority(observer))
+        {
+            return true;
+        }
+
         if (LooksLikeMapState(observer, declaringType, instanceType))
         {
             return false;
@@ -19911,6 +20872,55 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return rewardBackDecision;
         }
 
+        var ancientDialogueDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "ancient dialogue advance",
+            "ancient-dialogue",
+            0.95,
+            TryCreateAncientDialogueAdvanceDecision(request),
+            "no explicit ancient dialogue hitbox has usable bounds");
+        if (AncientEventObserverSignals.IsDialogueActive(request.Observer))
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("ancient-event-dialogue", "event-context");
+            GuiSmokeDecisionDebug.Suppress("click event choice", "ancient dialogue must finish before option selection");
+            GuiSmokeDecisionDebug.Suppress("click proceed", "ancient dialogue does not use generic proceed");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "ancient event foreground outranks map routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event foreground outranks screenshot map routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event foreground suppresses map-arrow fallback");
+            return ancientDialogueDecision ?? CreateWaitDecision("waiting for explicit ancient dialogue hitbox", request.Observer.CurrentScreen);
+        }
+
+        var ancientCompletionDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "ancient event completion",
+            "ancient-completion-button",
+            0.94,
+            TryCreateAncientEventCompletionDecision(request),
+            "no explicit ancient completion button has usable bounds");
+        if (AncientEventObserverSignals.HasExplicitCompletionAction(request.Observer))
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("ancient-event-completion", "event-context");
+            GuiSmokeDecisionDebug.Suppress("click proceed", "ancient completion remains event-owned through the explicit NEventOptionButton proceed lane");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "ancient event completion outranks map routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event completion outranks screenshot map routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event completion suppresses map-arrow fallback");
+            return ancientCompletionDecision ?? CreateWaitDecision("waiting for explicit ancient event completion", request.Observer.CurrentScreen);
+        }
+
+        var ancientOptionDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "explicit ancient event option",
+            "ancient-option-buttons",
+            0.93,
+            TryCreateAncientEventOptionDecision(request),
+            "no explicit ancient event option button has usable bounds");
+        if (AncientEventObserverSignals.HasExplicitOptionSelection(request.Observer))
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("ancient-event-options", "event-context");
+            GuiSmokeDecisionDebug.Suppress("click proceed", "ancient options should be selected from explicit option buttons");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "ancient event option selection outranks map routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event option selection outranks screenshot map routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event option selection suppresses map-arrow fallback");
+            return ancientOptionDecision ?? CreateWaitDecision("waiting for explicit ancient event option buttons", request.Observer.CurrentScreen);
+        }
+
         if (preferEventForeground)
         {
             var semanticDecision = GuiSmokeDecisionDebug.TraceCandidate(
@@ -20560,19 +21570,45 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateEventProgressChoiceDecision(GuiSmokeStepRequest request)
     {
+        var bestAncientDialogueNode = AncientEventObserverSignals.GetActiveDialogueNode(request.Observer, request.WindowBounds);
+        if (bestAncientDialogueNode is not null)
+        {
+            return CreateClickDecisionFromNode(request, bestAncientDialogueNode, "ancient dialogue advance");
+        }
+
+        var bestAncientDialogueChoice = AncientEventObserverSignals.GetActiveDialogueChoice(request.Observer, request.WindowBounds);
+        if (bestAncientDialogueChoice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                bestAncientDialogueChoice,
+                "ancient dialogue advance",
+                "Ancient event dialogue is still active. Advance it using the explicit dialogue hitbox before selecting an option.",
+                0.94,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                800);
+        }
+
         var bestNode = request.Observer.ActionNodes
-            .Where(node => node.Actionable && TryParseNodeBounds(node.ScreenBounds, out _) && ScoreProgressionNode(node) > 0)
+            .Where(node =>
+                node.Actionable
+                && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds)
+                && !AncientEventObserverSignals.IsAncientDialogueNode(node)
+                && ScoreProgressionNode(node) > 0)
             .OrderByDescending(ScoreProgressionNode)
             .ThenBy(GetNodeSortY)
             .ThenBy(GetNodeSortX)
             .FirstOrDefault();
         if (bestNode is not null)
         {
-            return CreateClickDecisionFromNode(request, bestNode, GetProgressChoiceTargetLabel(bestNode.Label, request.Observer));
+            return CreateClickDecisionFromNode(request, bestNode, GetProgressChoiceTargetLabel(bestNode, request.Observer));
         }
 
         var bestChoice = request.Observer.Choices
-            .Where(choice => ScoreProgressionChoice(choice) > 0 && TryParseNodeBounds(choice.ScreenBounds, out _))
+            .Where(choice =>
+                HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds)
+                && !AncientEventObserverSignals.IsAncientDialogueChoice(choice)
+                && ScoreProgressionChoice(choice) > 0)
             .OrderByDescending(ScoreProgressionChoice)
             .ThenBy(GetChoiceSortY)
             .ThenBy(GetChoiceSortX)
@@ -20585,6 +21621,119 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 GetProgressChoiceTargetLabel(bestChoice, request.Observer),
                 BuildProgressChoiceReason(bestChoice, request.Observer),
                 0.90,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                1400);
+        }
+
+        return null;
+    }
+
+    private static GuiSmokeStepDecision? TryCreateAncientDialogueAdvanceDecision(GuiSmokeStepRequest request)
+    {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click ancient dialogue advance"))
+        {
+            return null;
+        }
+
+        var node = AncientEventObserverSignals.GetActiveDialogueNode(request.Observer, request.WindowBounds);
+        if (node is not null)
+        {
+            return CreateClickDecisionFromNode(request, node, "ancient dialogue advance");
+        }
+
+        var choice = AncientEventObserverSignals.GetActiveDialogueChoice(request.Observer, request.WindowBounds);
+        if (choice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                choice,
+                "ancient dialogue advance",
+                "Ancient event dialogue is still active. Advance it through the explicit dialogue hitbox before selecting a reward option.",
+                0.95,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                800);
+        }
+
+        return null;
+    }
+
+    private static GuiSmokeStepDecision? TryCreateAncientEventOptionDecision(GuiSmokeStepRequest request)
+    {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click event choice"))
+        {
+            return null;
+        }
+
+        var node = AncientEventObserverSignals.GetActiveOptionNodes(request.Observer, request.WindowBounds)
+            .FirstOrDefault();
+        if (node is not null)
+        {
+            return CreateClickDecisionFromNode(request, node, "event progression choice");
+        }
+
+        var choice = AncientEventObserverSignals.GetActiveOptionChoices(request.Observer, request.WindowBounds)
+            .FirstOrDefault();
+        if (choice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                choice,
+                "event progression choice",
+                $"Ancient event option '{choice.Label}' is exported from an explicit NEventOptionButton. Prefer its real button bounds over generic title/layout pseudo-choices.",
+                0.94,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                1400);
+        }
+
+        return null;
+    }
+
+    private static GuiSmokeStepDecision? TryCreateAncientEventCompletionDecision(GuiSmokeStepRequest request)
+    {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click ancient event completion")
+            && !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click event choice"))
+        {
+            return null;
+        }
+
+        if (AncientEventObserverSignals.CompletionUsesDefaultFocus(request.Observer)
+            && AncientEventObserverSignals.CompletionHasFocus(request.Observer))
+        {
+            return CreateNonCombatPressKeyDecision(
+                "Enter",
+                "ancient event completion",
+                "Ancient completion is exported from the default-focused NEventOptionButton and the control already has focus. Use ui_select (Enter) so the canonical focused control handles the release.",
+                0.96,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                1400);
+        }
+
+        var node = AncientEventObserverSignals.GetActiveCompletionNode(request.Observer, request.WindowBounds);
+        if (node is not null)
+        {
+            return CreateClickDecisionFromNode(
+                request,
+                node,
+                "ancient event completion",
+                AncientEventObserverSignals.CompletionUsesDefaultFocus(request.Observer)
+                    ? "Ancient completion is exported from an explicit NEventOptionButton, but the control does not currently have focus. Use a hover-primed click so NClickableControl can enter its focused mouse-release path before event release."
+                    : $"Ancient event completion '{node.Label}' is still exported from an explicit NEventOptionButton proceed lane. Finish the event before handing off to map routing.",
+                AncientEventObserverSignals.CompletionUsesDefaultFocus(request.Observer) ? 0.94 : 0.95,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                1400);
+        }
+
+        var choice = AncientEventObserverSignals.GetActiveCompletionChoice(request.Observer, request.WindowBounds);
+        if (choice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                choice,
+                "ancient event completion",
+                AncientEventObserverSignals.CompletionUsesDefaultFocus(request.Observer)
+                    ? "Ancient completion is exported from an explicit NEventOptionButton, but the control does not currently have focus. Use a hover-primed click so NClickableControl can enter its focused mouse-release path before event release."
+                    : $"Ancient event completion '{choice.Label}' is still exported from an explicit NEventOptionButton proceed lane. Finish the event before handing off to map routing.",
+                AncientEventObserverSignals.CompletionUsesDefaultFocus(request.Observer) ? 0.94 : 0.95,
                 request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
                 1400);
         }
@@ -21337,6 +22486,64 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var rewardBackDecision = TryCreateRewardBackNavigationDecision(request);
         builder.Consider("click reward back", "reward-back-nav", 0.90d, () => rewardBackDecision, "reward-back-not-available", rawBounds: TryFindBackBounds(request), boundsSource: "observer-back");
 
+        var ancientDialogueDecision = TryCreateAncientDialogueAdvanceDecision(request);
+        builder.Consider(
+            "click ancient dialogue advance",
+            "ancient-dialogue",
+            0.98d,
+            () => ancientDialogueDecision,
+            "no-ancient-dialogue-hitbox",
+            rawBounds: TryFindEventChoiceBounds(request),
+            boundsSource: "observer-ancient-dialogue");
+        if (AncientEventObserverSignals.IsDialogueActive(request.Observer))
+        {
+            builder.AddSuppressed("click event choice", "ancient-dialogue-must-finish-before-option-selection");
+            builder.AddSuppressed("click proceed", "ancient-dialogue-does-not-use-generic-proceed");
+            builder.AddSuppressed("click exported reachable node", "ancient-event-dialogue-outranks-map-routing");
+            builder.AddSuppressed("click first reachable node", "ancient-event-dialogue-outranks-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "ancient-event-dialogue-suppresses-map-arrow-fallback");
+            builder.AddSuppressed("click room fallback", "ancient-event-dialogue-suppresses-room-fallback");
+            return builder.Build(CreateWaitDecision("waiting for explicit ancient dialogue hitbox", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        var ancientCompletionDecision = TryCreateAncientEventCompletionDecision(request);
+        builder.Consider(
+            "click ancient event completion",
+            "ancient-completion-button",
+            0.97d,
+            () => ancientCompletionDecision,
+            "no-explicit-ancient-completion-button",
+            rawBounds: TryFindEventChoiceBounds(request),
+            boundsSource: "observer-ancient-completion");
+        if (AncientEventObserverSignals.HasExplicitCompletionAction(request.Observer))
+        {
+            builder.AddSuppressed("click proceed", "ancient-completion-remains-event-owned-through-explicit-proceed-button");
+            builder.AddSuppressed("click exported reachable node", "ancient-event-completion-outranks-map-routing");
+            builder.AddSuppressed("click first reachable node", "ancient-event-completion-outranks-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "ancient-event-completion-suppresses-map-arrow-fallback");
+            builder.AddSuppressed("click room fallback", "ancient-event-completion-suppresses-room-fallback");
+            return builder.Build(CreateWaitDecision("waiting for explicit ancient event completion", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        var ancientOptionDecision = TryCreateAncientEventOptionDecision(request);
+        builder.Consider(
+            "click event choice",
+            "ancient-option-buttons",
+            0.96d,
+            () => ancientOptionDecision,
+            "no-explicit-ancient-option-button",
+            rawBounds: TryFindEventChoiceBounds(request),
+            boundsSource: "observer-ancient-option");
+        if (AncientEventObserverSignals.HasExplicitOptionSelection(request.Observer))
+        {
+            builder.AddSuppressed("click proceed", "ancient-event-options-should-use-explicit-option-buttons");
+            builder.AddSuppressed("click exported reachable node", "ancient-event-options-outrank-map-routing");
+            builder.AddSuppressed("click first reachable node", "ancient-event-options-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "ancient-event-options-suppress-map-arrow-fallback");
+            builder.AddSuppressed("click room fallback", "ancient-event-options-suppress-room-fallback");
+            return builder.Build(CreateWaitDecision("waiting for explicit ancient event option buttons", request.Observer.CurrentScreen), actualDecision);
+        }
+
         if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
         {
             if (mapOverlayState.StaleEventChoicePresent)
@@ -21418,6 +22625,21 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (rewardMapLayer.RewardPanelVisible)
         {
             return ("reward", rewardMapLayer.MapContextVisible ? "map" : null);
+        }
+
+        if (AncientEventObserverSignals.IsDialogueActive(request.Observer))
+        {
+            return ("ancient-event-dialogue", "event");
+        }
+
+        if (AncientEventObserverSignals.HasExplicitCompletionAction(request.Observer))
+        {
+            return ("ancient-event-completion", "event");
+        }
+
+        if (AncientEventObserverSignals.HasExplicitOptionSelection(request.Observer))
+        {
+            return ("ancient-event-options", "event");
         }
 
         if (GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer))
@@ -21519,6 +22741,18 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                    && (label.Contains("계속", StringComparison.OrdinalIgnoreCase)
                        || label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
                        || label.Contains("Proceed", StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (AncientEventObserverSignals.GetActiveDialogueNode(request.Observer, request.WindowBounds) is not null
+            || AncientEventObserverSignals.GetActiveDialogueChoice(request.Observer, request.WindowBounds) is not null)
+        {
+            return true;
+        }
+
+        if (AncientEventObserverSignals.GetActiveCompletionNode(request.Observer, request.WindowBounds) is not null
+            || AncientEventObserverSignals.GetActiveCompletionChoice(request.Observer, request.WindowBounds) is not null)
+        {
+            return true;
         }
 
         var activeEventChoices = request.Observer.Choices.Any(choice =>
@@ -21974,6 +23208,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         return decision?.TargetLabel switch
         {
             { } target when target.Contains("reward", StringComparison.OrdinalIgnoreCase) => "click reward choice",
+            { } target when target.Contains("ancient dialogue", StringComparison.OrdinalIgnoreCase) => "click ancient dialogue advance",
+            { } target when target.Contains("ancient event completion", StringComparison.OrdinalIgnoreCase) => "click ancient event completion",
             { } target when target.Contains("event", StringComparison.OrdinalIgnoreCase) => "click event choice",
             { } target when target.Contains("rest site:", StringComparison.OrdinalIgnoreCase) => "click rest site choice",
             { } target when target.Contains("smith card", StringComparison.OrdinalIgnoreCase) => "click smith card",
@@ -22014,7 +23250,13 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static string? TryFindEventChoiceBounds(GuiSmokeStepRequest request)
     {
-        return request.Observer.ActionNodes.FirstOrDefault(node =>
+        return AncientEventObserverSignals.GetActiveDialogueNode(request.Observer, request.WindowBounds)?.ScreenBounds
+               ?? AncientEventObserverSignals.GetActiveDialogueChoice(request.Observer, request.WindowBounds)?.ScreenBounds
+               ?? AncientEventObserverSignals.GetActiveCompletionNode(request.Observer, request.WindowBounds)?.ScreenBounds
+               ?? AncientEventObserverSignals.GetActiveCompletionChoice(request.Observer, request.WindowBounds)?.ScreenBounds
+               ?? AncientEventObserverSignals.GetActiveOptionNodes(request.Observer, request.WindowBounds).FirstOrDefault()?.ScreenBounds
+               ?? AncientEventObserverSignals.GetActiveOptionChoices(request.Observer, request.WindowBounds).FirstOrDefault()?.ScreenBounds
+               ?? request.Observer.ActionNodes.FirstOrDefault(node =>
                    node.Actionable
                    && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
                    && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))?.ScreenBounds
@@ -23991,8 +25233,33 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         return TryParseNodeBounds(node.ScreenBounds, out var bounds) ? bounds.X : float.MaxValue;
     }
 
+    private static string GetProgressChoiceTargetLabel(ObserverActionNode node, ObserverSummary observer)
+    {
+        if (AncientEventObserverSignals.IsAncientDialogueNode(node))
+        {
+            return "ancient dialogue advance";
+        }
+
+        if (AncientEventObserverSignals.IsExplicitAncientCompletionNode(node))
+        {
+            return "ancient event completion";
+        }
+
+        return GetProgressChoiceTargetLabel(node.Label, observer);
+    }
+
     private static string GetProgressChoiceTargetLabel(ObserverChoice choice, ObserverSummary observer)
     {
+        if (AncientEventObserverSignals.IsAncientDialogueChoice(choice))
+        {
+            return "ancient dialogue advance";
+        }
+
+        if (AncientEventObserverSignals.IsExplicitAncientCompletionChoice(choice))
+        {
+            return "ancient event completion";
+        }
+
         return GetProgressChoiceTargetLabel(choice.Label, observer);
     }
 
@@ -24052,6 +25319,16 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static string BuildProgressChoiceReason(ObserverChoice choice, ObserverSummary observer)
     {
+        if (AncientEventObserverSignals.IsAncientDialogueChoice(choice))
+        {
+            return "Ancient event dialogue is still active. Advance it through the explicit dialogue hitbox before selecting an option.";
+        }
+
+        if (AncientEventObserverSignals.IsExplicitAncientCompletionChoice(choice))
+        {
+            return $"Ancient event completion '{choice.Label}' is still exported from an explicit NEventOptionButton proceed lane. Finish the event before handing off to map routing.";
+        }
+
         if (IsSkipLikeLabel(choice.Label))
         {
             return $"Progression skip '{choice.Label}' is visible. Prefer it over inspect or preview affordances.";
@@ -24099,6 +25376,25 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             1200,
             true,
                 null);
+    }
+
+    private static GuiSmokeStepDecision CreateClickDecisionFromNode(
+        GuiSmokeStepRequest request,
+        ObserverActionNode node,
+        string targetLabel,
+        string reason,
+        double confidence,
+        string? expectedScreen,
+        int waitMs)
+    {
+        var decision = CreateClickDecisionFromNode(request, node, targetLabel);
+        return decision with
+        {
+            Reason = reason,
+            Confidence = confidence,
+            ExpectedScreen = expectedScreen,
+            WaitMs = waitMs,
+        };
     }
 
     private static GuiSmokeStepDecision CreateCombatEnemyTargetDecisionFromNode(
@@ -24169,6 +25465,29 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             reason,
             confidence,
             "combat",
+            waitMs,
+            true,
+            null);
+    }
+
+    private static GuiSmokeStepDecision CreateNonCombatPressKeyDecision(
+        string keyText,
+        string targetLabel,
+        string reason,
+        double confidence,
+        string expectedScreen,
+        int waitMs)
+    {
+        return new GuiSmokeStepDecision(
+            "act",
+            "press-key",
+            keyText,
+            null,
+            null,
+            targetLabel,
+            reason,
+            confidence,
+            expectedScreen,
             waitMs,
             true,
             null);
@@ -28430,6 +29749,8 @@ sealed class ScreenCaptureService
 
 sealed class MouseInputDriver
 {
+    private const int HoverPrimeDelayMs = 90;
+
     private static void PrepareWindow(WindowCaptureTarget target, int delayMs)
     {
         if (target.Handle == IntPtr.Zero)
@@ -28469,6 +29790,26 @@ sealed class MouseInputDriver
         if (sent != inputs.Length)
         {
             throw new InvalidOperationException("Failed to send mouse input.");
+        }
+    }
+
+    public void HoverPrimedClick(WindowCaptureTarget target, double normalizedX, double normalizedY)
+    {
+        PrepareWindow(target, 200);
+
+        var point = TransformNormalizedPoint(target, normalizedX, normalizedY);
+        NativeMethods.SetCursorPos(point.X, point.Y);
+        Thread.Sleep(HoverPrimeDelayMs);
+        NativeMethods.SetCursorPos(point.X, point.Y);
+        var inputs = new[]
+        {
+            NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_LEFTDOWN),
+            NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_LEFTUP),
+        };
+        var sent = NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
+        if (sent != inputs.Length)
+        {
+            throw new InvalidOperationException("Failed to send hover-primed mouse input.");
         }
     }
 

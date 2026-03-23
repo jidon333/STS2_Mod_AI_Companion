@@ -51,6 +51,9 @@ Run("runtime reflection exports explicit shop room semantics and typed shop choi
 Run("runtime reflection exports reward foreground ownership and teardown semantics", TestRuntimeReflectionRewardOwnershipExport, failures);
 Run("runtime reflection exports map-node from mixed rest-site aftermath authority", TestRuntimeReflectionMixedRestAftermathMapExport, failures);
 Run("runtime reflection reports filtered mixed-aftermath map-point diagnostics", TestRuntimeReflectionMixedRestAftermathMapDiagnostics, failures);
+Run("runtime reflection exports explicit ancient dialogue advance before Neow options", TestRuntimeReflectionAncientEventDialogueExport, failures);
+Run("runtime reflection exports explicit ancient option buttons and suppresses pseudo-choice duplicates", TestRuntimeReflectionAncientEventOptionExport, failures);
+Run("runtime reflection marks ancient post-choice completion buttons explicitly", TestRuntimeReflectionAncientEventCompletionExport, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
@@ -1705,6 +1708,217 @@ static void TestRuntimeReflectionMixedRestAftermathMapDiagnostics()
     Assert(observation.Meta.TryGetValue("mapPointRejectSummary", out var mapPointRejectSummary)
            && mapPointRejectSummary?.Contains("disabled=1", StringComparison.OrdinalIgnoreCase) == true,
         "Mixed-aftermath map diagnostics should explain when all seen map points were filtered as disabled.");
+}
+
+static void TestRuntimeReflectionAncientEventDialogueExport()
+{
+    var dialogueHitbox = new FakeDialogueHitboxNButton
+    {
+        Name = "DialogueHitbox",
+        Visible = true,
+        Enabled = true,
+        Position = new FakeVector2(0, 0),
+        Size = new FakeVector2(0, 0),
+    };
+    var fakeNextButton = new FakeSceneNode
+    {
+        Name = "FakeNextButton",
+        Visible = true,
+        Position = new FakeVector2(1550, 940),
+        Size = new FakeVector2(180, 70),
+    };
+    var precreatedOptionButtons = new object[]
+    {
+        new FakeNEventOptionButton(0, "니오우의 비탄", "덱에 카드를 추가합니다.", 460, 1100, enabled: true),
+        new FakeNEventOptionButton(1, "비전 두루마리", "희귀 카드를 얻습니다.", 460, 1196, enabled: true),
+        new FakeNEventOptionButton(2, "두루마리 상자", "카드 팩을 선택합니다.", 460, 1292, enabled: true),
+    };
+    var ancientLayout = new FakeNAncientEventLayout
+    {
+        Visible = true,
+        IsDialogueOnLastLine = false,
+        _fakeNextButton = fakeNextButton,
+        Children = new object[] { dialogueHitbox, fakeNextButton }.Concat(precreatedOptionButtons).ToArray(),
+    };
+    var eventRoom = new FakeNEventRoom
+    {
+        Visible = true,
+        Children = new object[] { ancientLayout },
+    };
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = eventRoom,
+            },
+            eventRoom,
+        },
+        "event");
+
+    Assert(observation.Meta.TryGetValue("choiceExtractorPath", out var extractorPath)
+           && string.Equals(extractorPath, "event", StringComparison.OrdinalIgnoreCase),
+        "Ancient dialogue phase should still use the explicit event extractor path.");
+    Assert(observation.Meta.TryGetValue("ancientEventDetected", out var ancientDetected)
+           && string.Equals(ancientDetected, "true", StringComparison.OrdinalIgnoreCase),
+        "Ancient dialogue phase should export explicit ancient-event detection.");
+    Assert(observation.Meta.TryGetValue("ancientDialogueActive", out var ancientDialogueActive)
+           && string.Equals(ancientDialogueActive, "true", StringComparison.OrdinalIgnoreCase),
+        "Ancient dialogue phase should export explicit dialogue-active truth.");
+    Assert(observation.Meta.TryGetValue("ancientEventExtractionPath", out var ancientPath)
+           && string.Equals(ancientPath, "ancient-dialogue-hitbox", StringComparison.OrdinalIgnoreCase),
+        "Ancient dialogue phase should report the dialogue-hitbox extraction path.");
+    Assert(observation.Meta.TryGetValue("ancientOptionCount", out var ancientOptionCount)
+           && string.Equals(ancientOptionCount, "0", StringComparison.OrdinalIgnoreCase),
+        "Ancient dialogue phase should not pretend option buttons are already enabled.");
+
+    var dialogueChoice = observation.Choices.SingleOrDefault(choice => string.Equals(choice.Kind, "event-dialogue", StringComparison.OrdinalIgnoreCase));
+    Assert(dialogueChoice is not null, "Ancient dialogue phase should export an explicit dialogue-advance choice.");
+    Assert(string.Equals(dialogueChoice!.NodeId, "ancient-dialogue:advance", StringComparison.OrdinalIgnoreCase)
+           && string.Equals(dialogueChoice.ScreenBounds, "1550,940,180,70", StringComparison.OrdinalIgnoreCase),
+        "Ancient dialogue advance should fall back to the runtime fake-next-button bounds when the dialogue hitbox itself has no usable bounds.");
+}
+
+static void TestRuntimeReflectionAncientEventOptionExport()
+{
+    var optionButtons = new object[]
+    {
+        new FakeNEventOptionButton(
+            0,
+            "니오우의 비탄",
+            "덱에 니오우의 격분을 1장 추가합니다.",
+            460,
+            360,
+            enabled: true),
+        new FakeNEventOptionButton(
+            1,
+            "비전 두루마리",
+            "무작위 희귀 카드를 1장 얻습니다.",
+            460,
+            468,
+            enabled: true),
+        new FakeNEventOptionButton(
+            2,
+            "두루마리 상자",
+            "모든 골드를 잃고 카드 팩을 선택합니다.",
+            460,
+            576,
+            enabled: true),
+        new FakeAncientPseudoChoice(
+            "니오우의 비탄",
+            "덱에 니오우의 격분을 1장 추가합니다.",
+            460,
+            1100),
+    };
+    var ancientLayout = new FakeNAncientEventLayout
+    {
+        Visible = true,
+        IsDialogueOnLastLine = true,
+        Children = optionButtons,
+    };
+    var eventRoom = new FakeNEventRoom
+    {
+        Visible = true,
+        Children = new object[] { ancientLayout },
+    };
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = eventRoom,
+            },
+            eventRoom,
+        },
+        "event");
+
+    Assert(observation.Meta.TryGetValue("ancientEventDetected", out var ancientDetected)
+           && string.Equals(ancientDetected, "true", StringComparison.OrdinalIgnoreCase),
+        "Ancient option phase should preserve ancient-event detection.");
+    Assert(observation.Meta.TryGetValue("ancientDialogueActive", out var ancientDialogueActive)
+           && string.Equals(ancientDialogueActive, "false", StringComparison.OrdinalIgnoreCase),
+        "Ancient option phase should clear dialogue-active truth once buttons are enabled.");
+    Assert(observation.Meta.TryGetValue("ancientOptionCount", out var ancientOptionCount)
+           && string.Equals(ancientOptionCount, "3", StringComparison.OrdinalIgnoreCase),
+        "Neow-like ancient option phase should report the enabled option-button count.");
+    Assert(observation.Meta.TryGetValue("ancientEventExtractionPath", out var ancientPath)
+           && string.Equals(ancientPath, "ancient-option-buttons", StringComparison.OrdinalIgnoreCase),
+        "Ancient option phase should report the explicit button extraction path.");
+
+    var exportedOptions = observation.Choices
+        .Where(choice => string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(choice => choice.NodeId, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    Assert(exportedOptions.Length == 3, "Ancient option phase should export only the three explicit option buttons.");
+    Assert(exportedOptions.All(choice => !string.IsNullOrWhiteSpace(choice.ScreenBounds)
+                                         && !choice.ScreenBounds!.Contains("1100", StringComparison.OrdinalIgnoreCase)),
+        "Ancient option phase should use the real button bounds instead of off-window pseudo-choice bounds.");
+    Assert(exportedOptions.Any(choice => string.Equals(choice.NodeId, "ancient-event-option:0", StringComparison.OrdinalIgnoreCase)
+                                         && choice.SemanticHints.Contains("source:ancient-option-button", StringComparer.OrdinalIgnoreCase)),
+        "Ancient option phase should retain explicit button-source hints for the harness contract.");
+}
+
+static void TestRuntimeReflectionAncientEventCompletionExport()
+{
+    var proceedButton = new FakeNEventOptionButton(
+        0,
+        "진행",
+        "[gold][b]진행[/b][/gold]",
+        460,
+        942,
+        enabled: true,
+        isProceed: true);
+    proceedButton.HasFocusState = true;
+    var ancientLayout = new FakeNAncientEventLayout
+    {
+        Visible = true,
+        IsDialogueOnLastLine = true,
+        DefaultFocusedControl = proceedButton,
+        Children = new object[]
+        {
+            proceedButton,
+        },
+    };
+    var eventRoom = new FakeNEventRoom
+    {
+        Visible = true,
+        Children = new object[] { ancientLayout },
+    };
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = eventRoom,
+            },
+            eventRoom,
+        },
+        "event");
+
+    Assert(observation.Meta.TryGetValue("ancientCompletionActive", out var ancientCompletionActive)
+           && string.Equals(ancientCompletionActive, "true", StringComparison.OrdinalIgnoreCase),
+        "Ancient post-choice proceed should export explicit completion-active truth.");
+    Assert(observation.Meta.TryGetValue("ancientCompletionCount", out var ancientCompletionCount)
+           && string.Equals(ancientCompletionCount, "1", StringComparison.OrdinalIgnoreCase),
+        "Ancient post-choice proceed should report the explicit completion-button count.");
+    Assert(observation.Meta.TryGetValue("ancientEventExtractionPath", out var ancientPath)
+           && string.Equals(ancientPath, "ancient-completion-button", StringComparison.OrdinalIgnoreCase),
+        "Ancient post-choice proceed should report the completion-button extraction path.");
+    Assert(observation.Meta.TryGetValue("ancientCompletionUsesDefaultFocus", out var usesDefaultFocus)
+           && string.Equals(usesDefaultFocus, "true", StringComparison.OrdinalIgnoreCase),
+        "Ancient completion export should record when the proceed button matches the layout default focused control.");
+    Assert(observation.Meta.TryGetValue("ancientCompletionHasFocus", out var hasFocus)
+           && string.Equals(hasFocus, "true", StringComparison.OrdinalIgnoreCase),
+        "Ancient completion export should record whether the explicit proceed control actually has focus.");
+    Assert(observation.Meta.TryGetValue("ancientCompletionBoundsSource", out var boundsSource)
+           && !string.IsNullOrWhiteSpace(boundsSource),
+        "Ancient completion export should report which interactive bounds source was used for the proceed button.");
+
+    var completionChoice = observation.Choices.Single(choice => string.Equals(choice.NodeId, "ancient-event-option:0", StringComparison.OrdinalIgnoreCase));
+    Assert(completionChoice.SemanticHints.Contains("ancient-event-completion", StringComparer.OrdinalIgnoreCase),
+        "Ancient post-choice proceed should carry explicit completion semantic hints.");
+    Assert(completionChoice.SemanticHints.Contains("option-role:proceed", StringComparer.OrdinalIgnoreCase),
+        "Ancient post-choice proceed should preserve the canonical Option.IsProceed role.");
 }
 
 static void TestInventoryPublisherMapNodeSourceCorrection()
@@ -4126,6 +4340,126 @@ file sealed class FakeNMapScreen
     public bool Visible { get; init; }
 
     public object? _mapPointDictionary { get; init; }
+}
+
+file class FakeSceneNode
+{
+    public string? Name { get; init; }
+
+    public bool Visible { get; init; }
+
+    public bool Enabled { get; init; } = true;
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+
+    public object[] Children { get; init; } = Array.Empty<object>();
+
+    public bool IsVisibleInTree()
+    {
+        return Visible;
+    }
+
+    public IEnumerable<object> GetChildren(bool includeInternal = false)
+    {
+        return Children;
+    }
+
+    public int GetChildCount(bool includeInternal = false)
+    {
+        return Children.Length;
+    }
+
+    public object GetChild(int index, bool includeInternal = false)
+    {
+        return Children[index];
+    }
+}
+
+file sealed class FakeNEventRoom : FakeSceneNode
+{
+}
+
+file sealed class FakeNAncientEventLayout : FakeSceneNode
+{
+    public bool IsDialogueOnLastLine { get; init; }
+
+    public object? _fakeNextButton { get; init; }
+
+    public object? _fakeNextButtonContainer { get; init; }
+
+    public object? DefaultFocusedControl { get; init; }
+}
+
+file sealed class FakeDialogueHitboxNButton : FakeSceneNode
+{
+}
+
+file sealed class FakeEventOptionModel
+{
+    public string? Id { get; init; }
+
+    public string? Title { get; init; }
+
+    public string? Description { get; init; }
+
+    public bool IsLocked { get; init; }
+
+    public bool IsProceed { get; init; }
+}
+
+file sealed class FakeNEventOptionButton : FakeSceneNode
+{
+    public FakeNEventOptionButton(int index, string title, string description, double x, double y, bool enabled, bool isProceed = false)
+    {
+        Index = index;
+        Visible = true;
+        Enabled = enabled;
+        Position = new FakeVector2(x, y);
+        Size = new FakeVector2(820, 92);
+        Option = new FakeEventOptionModel
+        {
+            Id = $"option-{index}",
+            Title = title,
+            Description = description,
+            IsLocked = false,
+            IsProceed = isProceed,
+        };
+    }
+
+    public int Index { get; }
+
+    public FakeEventOptionModel Option { get; }
+
+    public bool HasFocusState { get; set; }
+
+    public bool HasFocus()
+    {
+        return HasFocusState;
+    }
+}
+
+file sealed class FakeAncientPseudoChoice
+{
+    public FakeAncientPseudoChoice(string title, string description, double x, double y)
+    {
+        Option = new FakeEventOptionModel
+        {
+            Id = title,
+            Title = title,
+            Description = description,
+            IsLocked = false,
+        };
+        Position = new FakeVector2(x, y);
+        Size = new FakeVector2(1000, 100);
+    }
+
+    public FakeEventOptionModel Option { get; }
+
+    public object Position { get; }
+
+    public object Size { get; }
 }
 
 file sealed class FakeRestSiteOption

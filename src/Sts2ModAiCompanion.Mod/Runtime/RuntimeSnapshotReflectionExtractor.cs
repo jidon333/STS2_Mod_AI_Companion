@@ -107,7 +107,10 @@ internal static class RuntimeSnapshotReflectionExtractor
     private sealed record ChoiceExtractionResult(
         IReadOnlyList<LiveExportChoiceSummary> Choices,
         IReadOnlyList<LiveExportChoiceCandidate> Candidates,
-        LiveExportChoiceDecision Decision);
+        LiveExportChoiceDecision Decision)
+    {
+        public IReadOnlyDictionary<string, string?> Meta { get; init; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+    }
 
     private sealed record RestSiteExtractorCandidate(
         object Source,
@@ -493,6 +496,8 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         var warnings = BuildWarnings(player, deck, relics, potions, choices);
+
+        AppendChoiceExtractionMetadata(choiceResult, meta, payload);
 
         meta["screen"] = screen;
         meta["rootTypeSummary"] = rootTypeSummary;
@@ -1128,6 +1133,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         ChoiceExtractionResult? restSiteUpgradeStrict = null;
+        ChoiceExtractionResult? ancientEventStrict = null;
         if (LooksLikeRestSiteUpgradeContext(triggerKind, screenHint, choiceRoots))
         {
             restSiteUpgradeStrict = ExtractRestSiteSmithUpgradeChoices(choiceRoots, maxEntries, screenHint);
@@ -1141,12 +1147,17 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         if (LooksLikeEventContext(triggerKind, screenHint, choiceRoots))
         {
-            strictAttempts.Add(
-                EvaluateChoiceSet(
-                    "event",
-                    CollectEventChoiceItems(choiceRoots),
-                    maxEntries,
-                    strictExtractor: true));
+            ancientEventStrict = ExtractAncientEventChoices(choiceRoots, maxEntries);
+            strictAttempts.Add(ancientEventStrict);
+            if (!IsAncientEventDetected(ancientEventStrict))
+            {
+                strictAttempts.Add(
+                    EvaluateChoiceSet(
+                        "event",
+                        CollectEventChoiceItems(choiceRoots),
+                        maxEntries,
+                        strictExtractor: true));
+            }
         }
 
         if (LooksLikeShopContext(triggerKind, screenHint, choiceRoots))
@@ -1202,6 +1213,22 @@ internal static class RuntimeSnapshotReflectionExtractor
                     .Take(512)
                     .ToArray(),
                 Decision = restSiteUpgradeStrict.Decision with
+                {
+                    FailureReason = JoinFailureReasons(strictAttempts.Select(result => result.Decision.FailureReason), null),
+                },
+            };
+        }
+
+        if (ancientEventStrict is not null
+            && IsAncientEventDetected(ancientEventStrict))
+        {
+            return ancientEventStrict with
+            {
+                Candidates = strictAttempts
+                    .SelectMany(result => result.Candidates)
+                    .Take(512)
+                    .ToArray(),
+                Decision = ancientEventStrict.Decision with
                 {
                     FailureReason = JoinFailureReasons(strictAttempts.Select(result => result.Decision.FailureReason), null),
                 },
@@ -3918,6 +3945,569 @@ internal static class RuntimeSnapshotReflectionExtractor
             "_optionButtons");
     }
 
+    private static ChoiceExtractionResult ExtractAncientEventChoices(IEnumerable<object> roots, int maxEntries)
+    {
+        var layouts = FindAncientEventLayouts(roots)
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        if (layouts.Length == 0)
+        {
+            return new ChoiceExtractionResult(
+                Array.Empty<LiveExportChoiceSummary>(),
+                Array.Empty<LiveExportChoiceCandidate>(),
+                new LiveExportChoiceDecision(
+                    "event",
+                    UsedStrictExtractor: true,
+                    CandidateCount: 0,
+                    AcceptedCount: 0,
+                    "none",
+                    null,
+                    Array.Empty<string>()));
+        }
+
+        var optionButtons = layouts
+            .SelectMany(FindAncientEventOptionButtons)
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        var defaultFocusedControl = layouts
+            .Select(layout => TryGetMemberValue(layout, "DefaultFocusedControl"))
+            .FirstOrDefault(static control => control is not null);
+        var candidates = new List<LiveExportChoiceCandidate>();
+        var choices = new List<LiveExportChoiceSummary>();
+        string? ancientCompletionBoundsSource = null;
+        string? ancientCompletionControlType = null;
+        bool? ancientCompletionUsesDefaultFocus = null;
+        bool? ancientCompletionHasFocus = null;
+        var dialogueOnLastLine = layouts
+            .Select(layout => TryReadBool(layout, "IsDialogueOnLastLine"))
+            .Where(static value => value is not null)
+            .Select(static value => value!.Value)
+            .DefaultIfEmpty()
+            .Last();
+        var dialogueHitbox = layouts
+            .Select(TryFindAncientDialogueHitbox)
+            .FirstOrDefault(static node => node is not null);
+        var dialogueVisible = dialogueHitbox is not null && IsVisibleNode(dialogueHitbox);
+        var dialogueEnabled = dialogueHitbox is not null
+                              && (TryResolveInteractiveEnabled(dialogueHitbox)
+                                  ?? TryResolveControlEnabled(dialogueHitbox)
+                                  ?? TryReadBool(dialogueHitbox, "IsEnabled", "Enabled")
+                                  ?? true);
+        var hasAuthoritativeDialogueState = layouts.Any(layout => TryReadBool(layout, "IsDialogueOnLastLine") is not null);
+        var dialogueActive = hasAuthoritativeDialogueState
+            ? !dialogueOnLastLine
+            : dialogueVisible && dialogueEnabled;
+        if (dialogueActive && dialogueHitbox is not null)
+        {
+            var authoritativeLayout = layouts.FirstOrDefault() ?? dialogueHitbox;
+            var dialogueSummary = TryCreateAncientDialogueChoiceSummary(authoritativeLayout, dialogueHitbox, out var rejectReason);
+            candidates.Add(new LiveExportChoiceCandidate(
+                "event",
+                dialogueHitbox.GetType().FullName ?? dialogueHitbox.GetType().Name,
+                dialogueSummary?.Label ?? "Ancient dialogue",
+                dialogueSummary?.Value,
+                dialogueSummary?.Description,
+                dialogueSummary is null ? 90 : 150,
+                Accepted: dialogueSummary is not null,
+                RejectReason: rejectReason));
+            if (dialogueSummary is not null)
+            {
+                AddChoiceSummary(choices, dialogueSummary, maxEntries);
+            }
+        }
+        else
+        {
+            foreach (var button in optionButtons)
+            {
+                var summary = TryCreateAncientEventOptionChoiceSummary(
+                    button,
+                    defaultFocusedControl,
+                    out var rejectReason,
+                    out var boundsSource,
+                    out var usesDefaultFocus,
+                    out var controlType,
+                    out var hasFocus);
+                candidates.Add(new LiveExportChoiceCandidate(
+                    "event",
+                    button.GetType().FullName ?? button.GetType().Name,
+                    summary?.Label ?? TryResolveChoiceLabel(button) ?? TryReadString(TryGetMemberValue(button, "Option"), "Title", "Label", "Name"),
+                    summary?.Value,
+                    summary?.Description,
+                    summary is null ? 80 : 140,
+                    Accepted: summary is not null,
+                    RejectReason: rejectReason));
+                if (summary is not null)
+                {
+                    AddChoiceSummary(choices, summary, maxEntries);
+                    if (IsAncientEventCompletionChoice(summary))
+                    {
+                        ancientCompletionBoundsSource ??= boundsSource;
+                        ancientCompletionUsesDefaultFocus ??= usesDefaultFocus;
+                        ancientCompletionControlType ??= controlType;
+                        ancientCompletionHasFocus ??= hasFocus;
+                    }
+                }
+            }
+        }
+
+        var enabledButtons = choices
+            .Count(choice => string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase));
+        var completionButtons = choices.Count(IsAncientEventCompletionChoice);
+
+        var rejectSummary = BuildEventRejectSummary(candidates);
+        var metadata = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ancientEventDetected"] = "true",
+            ["ancientDialogueActive"] = dialogueActive ? "true" : "false",
+            ["ancientDialogueHitboxVisible"] = dialogueVisible ? "true" : "false",
+            ["ancientDialogueHitboxEnabled"] = dialogueEnabled ? "true" : "false",
+            ["ancientOptionCount"] = enabledButtons.ToString(CultureInfo.InvariantCulture),
+            ["ancientCompletionActive"] = completionButtons > 0 ? "true" : "false",
+            ["ancientCompletionCount"] = completionButtons.ToString(CultureInfo.InvariantCulture),
+            ["ancientEventExtractionPath"] = choices.Any(choice => string.Equals(choice.Kind, "event-dialogue", StringComparison.OrdinalIgnoreCase))
+                ? "ancient-dialogue-hitbox"
+                : completionButtons > 0
+                    ? "ancient-completion-button"
+                : enabledButtons > 0
+                    ? "ancient-option-buttons"
+                    : "ancient-await-options",
+        };
+        if (choices.Any(choice => string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)))
+        {
+            metadata["ancientOptionSummary"] = string.Join(
+                ";",
+                choices
+                    .Where(choice => string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase))
+                    .Take(6)
+                    .Select(choice => $"{choice.NodeId ?? choice.Label}@{choice.ScreenBounds ?? "no-bounds"}"));
+        }
+        if (completionButtons > 0)
+        {
+            metadata["ancientCompletionSummary"] = string.Join(
+                ";",
+                choices
+                    .Where(IsAncientEventCompletionChoice)
+                    .Take(3)
+                    .Select(choice => $"{choice.NodeId ?? choice.Label}@{choice.ScreenBounds ?? "no-bounds"}"));
+            if (!string.IsNullOrWhiteSpace(ancientCompletionBoundsSource))
+            {
+                metadata["ancientCompletionBoundsSource"] = ancientCompletionBoundsSource;
+            }
+
+            if (!string.IsNullOrWhiteSpace(ancientCompletionControlType))
+            {
+                metadata["ancientCompletionControlType"] = ancientCompletionControlType;
+            }
+
+            if (ancientCompletionUsesDefaultFocus.HasValue)
+            {
+                metadata["ancientCompletionUsesDefaultFocus"] = ancientCompletionUsesDefaultFocus.Value ? "true" : "false";
+            }
+
+            if (ancientCompletionHasFocus.HasValue)
+            {
+                metadata["ancientCompletionHasFocus"] = ancientCompletionHasFocus.Value ? "true" : "false";
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(rejectSummary))
+        {
+            metadata["eventRejectSummary"] = rejectSummary;
+        }
+
+        return new ChoiceExtractionResult(
+            choices,
+            candidates,
+            new LiveExportChoiceDecision(
+                "event",
+                UsedStrictExtractor: true,
+                CandidateCount: candidates.Count,
+                AcceptedCount: choices.Count,
+                choices.Count == 0 ? "none" : "accepted",
+                choices.Count == 0
+                    ? rejectSummary ?? "ancient event detected but no explicit dialogue hitbox or enabled option button was actionable"
+                    : rejectSummary,
+                Array.Empty<string>()))
+        {
+            Meta = metadata,
+        };
+    }
+
+    private static IEnumerable<object> FindAncientEventLayouts(IEnumerable<object> roots)
+    {
+        foreach (var root in roots)
+        {
+            foreach (var item in EnumerateDescendantsAndSelf(root, maxDepth: 6))
+            {
+                if (IsAncientEventLayoutType(item.GetType()))
+                {
+                    yield return item;
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<object> FindAncientEventOptionButtons(object layout)
+    {
+        return EnumerateDescendantsAndSelf(layout, maxDepth: 6)
+            .Where(static item => IsAncientEventOptionButtonType(item.GetType()));
+    }
+
+    private static bool IsEnabledAncientEventOptionButton(object button)
+    {
+        var option = TryGetMemberValue(button, "Option");
+        var locked = TryReadBool(option, "IsLocked") == true;
+        if (locked)
+        {
+            return false;
+        }
+
+        var enabled = TryResolveInteractiveEnabled(button)
+                      ?? TryResolveControlEnabled(button)
+                      ?? TryReadBool(button, "IsEnabled", "Enabled")
+                      ?? true;
+        return enabled;
+    }
+
+    private static LiveExportChoiceSummary? TryCreateAncientEventOptionChoiceSummary(
+        object button,
+        object? defaultFocusedControl,
+        out string? rejectReason,
+        out string? boundsSource,
+        out bool usesDefaultFocus,
+        out string? controlType,
+        out bool? hasFocus)
+    {
+        rejectReason = null;
+        boundsSource = null;
+        usesDefaultFocus = false;
+        controlType = null;
+        hasFocus = null;
+        if (!IsAncientEventOptionButtonType(button.GetType()))
+        {
+            rejectReason = "not-ancient-option-button";
+            return null;
+        }
+
+        if (!IsVisibleNode(button))
+        {
+            rejectReason = "hidden";
+            return null;
+        }
+
+        var enabled = TryResolveInteractiveEnabled(button)
+                      ?? TryResolveControlEnabled(button)
+                      ?? TryReadBool(button, "IsEnabled", "Enabled")
+                      ?? true;
+        if (!enabled)
+        {
+            rejectReason = "disabled";
+            return null;
+        }
+
+        var option = TryGetMemberValue(button, "Option");
+        if (TryReadBool(option, "IsLocked") == true)
+        {
+            rejectReason = "locked";
+            return null;
+        }
+
+        var interactiveControl = TryResolveInteractiveControl(button, out var interactiveBoundsSource) ?? button;
+        boundsSource = interactiveBoundsSource;
+        controlType = interactiveControl.GetType().FullName ?? interactiveControl.GetType().Name;
+        usesDefaultFocus = defaultFocusedControl is not null
+                           && (ReferenceEquals(interactiveControl, defaultFocusedControl)
+                               || ReferenceEquals(button, defaultFocusedControl));
+        hasFocus = TryResolveControlHasFocus(interactiveControl)
+                   ?? TryResolveControlHasFocus(button);
+
+        var screenBounds = TryResolveInteractiveScreenBounds(button, out interactiveBoundsSource);
+        boundsSource = interactiveBoundsSource;
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            rejectReason = "missing-interactive-bounds";
+            return null;
+        }
+        if (!HasUsableAncientEventBounds(screenBounds))
+        {
+            rejectReason = "offscreen-interactive-bounds";
+            return null;
+        }
+
+        var label = FirstNonEmpty(
+            TryReadString(option, "Title", "Label", "Name"),
+            TryResolveChoiceLabel(button));
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            rejectReason = "missing-label";
+            return null;
+        }
+
+        var index = TryReadInt(button, "Index");
+        var value = FirstNonEmpty(
+            TryReadString(option, "Id", "Name"),
+            index?.ToString(CultureInfo.InvariantCulture));
+        var description = FirstNonEmpty(
+            TryReadString(option, "Description", "Body"),
+            TryResolveChoiceDescription(button));
+        var isProceed = TryReadBool(option, "IsProceed") == true;
+        var semanticHints = new List<string>
+        {
+            "scene:event",
+            "ancient-event",
+            "source:ancient-option-button",
+            isProceed ? "option-role:proceed" : "option-role:choice",
+        };
+        if (index is not null)
+        {
+            semanticHints.Add($"option-index:{index.Value}");
+        }
+
+        if (isProceed)
+        {
+            semanticHints.Add("ancient-event-completion");
+        }
+
+        return new LiveExportChoiceSummary(
+            "event-option",
+            label.Trim(),
+            value,
+            description)
+        {
+            NodeId = index is not null
+                ? $"ancient-event-option:{index.Value}"
+                : $"ancient-event-option:{SanitizeNodeKey(label)}",
+            ScreenBounds = screenBounds,
+            Enabled = true,
+            SemanticHints = semanticHints,
+        };
+    }
+
+    private static bool? TryResolveControlHasFocus(object? item)
+    {
+        if (item is null)
+        {
+            return null;
+        }
+
+        return TryConvertToBool(TryInvokeMethod(item, "HasFocus"))
+               ?? TryReadBool(item, "IsFocused");
+    }
+
+    private static LiveExportChoiceSummary? TryCreateAncientDialogueChoiceSummary(object layout, object dialogueHitbox, out string? rejectReason)
+    {
+        rejectReason = null;
+        if (!IsVisibleNode(dialogueHitbox))
+        {
+            rejectReason = "dialogue-hitbox-hidden";
+            return null;
+        }
+
+        var enabled = TryResolveInteractiveEnabled(dialogueHitbox)
+                      ?? TryResolveControlEnabled(dialogueHitbox)
+                      ?? TryReadBool(dialogueHitbox, "IsEnabled", "Enabled")
+                      ?? true;
+        if (!enabled)
+        {
+            rejectReason = "dialogue-hitbox-disabled";
+            return null;
+        }
+
+        var screenBounds = TryResolveAncientDialogueScreenBounds(layout, dialogueHitbox, out _);
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            rejectReason = "dialogue-hitbox-missing-bounds";
+            return null;
+        }
+        if (!HasUsableAncientEventBounds(screenBounds))
+        {
+            rejectReason = "dialogue-hitbox-offscreen-bounds";
+            return null;
+        }
+
+        return new LiveExportChoiceSummary(
+            "event-dialogue",
+            "Ancient dialogue",
+            "dialogue-hitbox",
+            "Advance the ancient event dialogue using the explicit %DialogueHitbox.")
+        {
+            NodeId = "ancient-dialogue:advance",
+            ScreenBounds = screenBounds,
+            Enabled = true,
+            SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-dialogue-hitbox" },
+        };
+    }
+
+    private static object? TryFindAncientDialogueHitbox(object layout)
+    {
+        var explicitNode = TryInvokeMethod(layout, "GetNodeOrNull", "%DialogueHitbox");
+        if (explicitNode is not null)
+        {
+            return explicitNode;
+        }
+
+        return EnumerateDescendantsAndSelf(layout, maxDepth: 6)
+            .FirstOrDefault(static item => HasNamedDialogueHitbox(item));
+    }
+
+    private static string? TryResolveAncientDialogueScreenBounds(object layout, object dialogueHitbox, out string boundsSource)
+    {
+        var hitboxBounds = TryResolveInteractiveScreenBounds(dialogueHitbox, out boundsSource);
+        if (HasUsableAncientEventBounds(hitboxBounds))
+        {
+            return hitboxBounds;
+        }
+
+        var fakeNextButton = TryReadValue(layout, "_fakeNextButton", "FakeNextButton")
+                             ?? TryInvokeMethod(layout, "GetNodeOrNull", "%FakeNextButton")
+                             ?? TryInvokeMethod(layout, "GetNodeOrNull", "FakeNextButton");
+        var fakeNextButtonBounds = fakeNextButton is null
+            ? null
+            : TryResolveScreenBounds(fakeNextButton);
+        if (HasUsableAncientEventBounds(fakeNextButtonBounds))
+        {
+            boundsSource = "fake-next-button";
+            return fakeNextButtonBounds;
+        }
+
+        var fakeNextButtonContainer = TryReadValue(layout, "_fakeNextButtonContainer", "FakeNextButtonContainer")
+                                      ?? TryInvokeMethod(layout, "GetNodeOrNull", "%FakeNextButtonContainer")
+                                      ?? TryInvokeMethod(layout, "GetNodeOrNull", "FakeNextButtonContainer");
+        var fakeNextButtonContainerBounds = fakeNextButtonContainer is null
+            ? null
+            : TryResolveScreenBounds(fakeNextButtonContainer);
+        if (HasUsableAncientEventBounds(fakeNextButtonContainerBounds))
+        {
+            boundsSource = "fake-next-button-container";
+            return fakeNextButtonContainerBounds;
+        }
+
+        return hitboxBounds;
+    }
+
+    private static bool HasUsableAncientEventBounds(string? screenBounds)
+    {
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return false;
+        }
+
+        var parts = screenBounds.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4
+            || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+        {
+            return false;
+        }
+
+        if (width <= 0d || height <= 0d)
+        {
+            return false;
+        }
+
+        var centerX = x + width / 2d;
+        var centerY = y + height / 2d;
+        return centerX >= 0d
+               && centerY >= 0d
+               && centerX <= 1920d
+               && centerY <= 1080d;
+    }
+
+    private static bool IsAncientEventCompletionChoice(LiveExportChoiceSummary choice)
+    {
+        return choice.SemanticHints.Any(static hint =>
+            string.Equals(hint, "ancient-event-completion", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static IEnumerable<object> EnumerateDescendantsAndSelf(object root, int maxDepth)
+    {
+        if (root is null || maxDepth < 0)
+        {
+            yield break;
+        }
+
+        var seen = new HashSet<int>();
+        var queue = new Queue<(object Item, int Depth)>();
+        queue.Enqueue((root, 0));
+        while (queue.Count > 0)
+        {
+            var (item, depth) = queue.Dequeue();
+            if (!seen.Add(RuntimeHelpers.GetHashCode(item)))
+            {
+                continue;
+            }
+
+            yield return item;
+            if (depth >= maxDepth)
+            {
+                continue;
+            }
+
+            foreach (var child in TryEnumerateChildren(item).Take(64))
+            {
+                queue.Enqueue((child, depth + 1));
+            }
+        }
+    }
+
+    private static bool IsAncientEventDetected(ChoiceExtractionResult result)
+    {
+        return result.Meta.TryGetValue("ancientEventDetected", out var detected)
+               && string.Equals(detected, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsAncientEventLayoutType(Type type)
+    {
+        var typeName = type.FullName ?? type.Name;
+        return typeName.Contains("NAncientEventLayout", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsAncientEventOptionButtonType(Type type)
+    {
+        var typeName = type.FullName ?? type.Name;
+        return typeName.Contains("NEventOptionButton", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasNamedDialogueHitbox(object item)
+    {
+        var name = TryReadString(item, "Name")
+                   ?? TryConvertToDisplayString(TryGetMemberValue(item, "Name"));
+        return !string.IsNullOrWhiteSpace(name)
+               && (string.Equals(name, "%DialogueHitbox", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(name, "DialogueHitbox", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? BuildEventRejectSummary(IReadOnlyList<LiveExportChoiceCandidate> candidates)
+    {
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        if (candidates.Any(static candidate => candidate.Accepted))
+        {
+            return null;
+        }
+
+        var rejectCounts = candidates
+            .Where(static candidate => !candidate.Accepted && !string.IsNullOrWhiteSpace(candidate.RejectReason))
+            .GroupBy(candidate => candidate.RejectReason!, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(static group => group.Count())
+            .ThenBy(static group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .Take(4)
+            .Select(group => $"{group.Key}={group.Count()}")
+            .ToArray();
+        if (rejectCounts.Length == 0)
+        {
+            return $"event candidates seen={candidates.Count} but none were accepted";
+        }
+
+        return $"event candidates seen={candidates.Count} but filtered: {string.Join(",", rejectCounts)}";
+    }
+
     private static IEnumerable<object> CollectShopChoiceItems(IEnumerable<object> choiceRoots)
     {
         return CollectChoiceItems(
@@ -6242,6 +6832,23 @@ internal static class RuntimeSnapshotReflectionExtractor
             BindingId = rewardTypeName is null ? null : GetRewardTypeId(rewardTypeName),
             SemanticHints = BuildChoiceSemanticHints(rewardTypeName),
         };
+    }
+
+    private static void AppendChoiceExtractionMetadata(
+        ChoiceExtractionResult choiceResult,
+        IDictionary<string, string?> meta,
+        IDictionary<string, object?> payload)
+    {
+        foreach (var entry in choiceResult.Meta)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Key) || string.IsNullOrWhiteSpace(entry.Value))
+            {
+                continue;
+            }
+
+            meta[entry.Key] = entry.Value;
+            payload[entry.Key] = entry.Value;
+        }
     }
 
     private static bool LooksLikeMapContext(
