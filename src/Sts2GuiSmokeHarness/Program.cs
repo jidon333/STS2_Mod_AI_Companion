@@ -9060,6 +9060,165 @@ static void RunSelfTest()
         Assert(nonEnemyBarrierActions.Contains("select non-enemy slot 3", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should keep alternate non-enemy slots available.");
         Assert(nonEnemyBarrierActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should keep end-turn fallback available.");
 
+        var endTurnBarrierCapturedAt = DateTimeOffset.UtcNow;
+        var endTurnBarrierKnowledge = new[]
+        {
+            new CombatCardKnowledgeHint(1, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+        };
+        var endTurnBarrierSeedObserver = new ObserverSummary(
+            "combat",
+            "combat",
+            true,
+            endTurnBarrierCapturedAt,
+            "inv-end-turn-barrier-seed",
+            true,
+            "hook",
+            "stable",
+            "episode-end-turn-barrier",
+            "Monster",
+            "combat",
+            82,
+            80,
+            2,
+            new[] { "2턴 종료" },
+            Array.Empty<string>(),
+            new[] { new ObserverActionNode("end-turn", "button", "2턴 종료", "1604,846,220,90", true) },
+            Array.Empty<ObserverChoice>(),
+            new[]
+            {
+                new ObservedCombatHandCard(1, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+            })
+        {
+            SnapshotVersion = 40,
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatRoundNumber"] = "2",
+                ["combatPlayerActionsDisabled"] = "false",
+                ["combatEndingPlayerTurnPhaseOne"] = "false",
+                ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                ["combatHistoryStartedCount"] = "5",
+                ["combatHistoryFinishedCount"] = "5",
+                ["combatInteractionRevision"] = "5:5:false:false:none",
+                ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false",
+            },
+        };
+        var endTurnBarrierSeedRequest = BuildBarrierRequest(
+            "0007",
+            34,
+            endTurnBarrierSeedObserver,
+            endTurnBarrierKnowledge,
+            new[] { "wait" },
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Seed end-turn barrier metadata.");
+        var endTurnBarrierMetadata = AutoDecisionProvider.BuildHistoryMetadataForDecision(
+            endTurnBarrierSeedRequest,
+            new GuiSmokeStepDecision("act", "press-key", "E", null, null, "auto-end turn", "seed", 0.8, "combat", 120, true, null));
+        Assert(endTurnBarrierMetadata is not null, "EndTurn barrier seed metadata should serialize the armed round.");
+        var endTurnBarrierHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "auto-end turn", DateTimeOffset.UtcNow)
+            {
+                Metadata = endTurnBarrierMetadata,
+            },
+        };
+        var endTurnBarrierAckObserver = endTurnBarrierSeedObserver with
+        {
+            CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(250),
+            InventoryId = "inv-end-turn-barrier-ack",
+            SnapshotVersion = 41,
+            Meta = new Dictionary<string, string?>(endTurnBarrierSeedObserver.Meta, StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatRoundNumber"] = "2",
+                ["combatPlayerActionsDisabled"] = "true",
+                ["combatEndingPlayerTurnPhaseOne"] = "true",
+                ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                ["combatCrossCheck"] = "CombatManager.IsPlayPhase=false;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false",
+            },
+        };
+        var endTurnBarrierAckActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(endTurnBarrierAckObserver, null, null, null),
+            endTurnBarrierKnowledge,
+            runtimeStateOnlyScreenshotPath,
+            endTurnBarrierHistory);
+        Assert(endTurnBarrierAckActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase), "EndTurn barrier should stay wait-only after acknowledgement but before the next round reopens.");
+        Assert(CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(endTurnBarrierAckObserver, null, null, null),
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory,
+                endTurnBarrierKnowledge)
+                .CombatBarrierEvaluation.IsActive,
+            "EndTurn barrier should remain active during the acknowledged closed-window band.");
+
+        var endTurnBarrierReopenedObserver = endTurnBarrierSeedObserver with
+        {
+            CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(650),
+            InventoryId = "inv-end-turn-barrier-reopened",
+            SnapshotVersion = 42,
+            PlayerEnergy = 3,
+            CurrentChoices = new[] { "3턴 종료" },
+            ActionNodes = new[] { new ObserverActionNode("end-turn", "button", "3턴 종료", "1604,846,220,90", true) },
+            Meta = new Dictionary<string, string?>(endTurnBarrierSeedObserver.Meta, StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatRoundNumber"] = "3",
+                ["combatPlayerActionsDisabled"] = "false",
+                ["combatEndingPlayerTurnPhaseOne"] = "false",
+                ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false",
+            },
+        };
+        var endTurnBarrierReopenedActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(endTurnBarrierReopenedObserver, null, null, null),
+            endTurnBarrierKnowledge,
+            runtimeStateOnlyScreenshotPath,
+            endTurnBarrierHistory);
+        Assert(!endTurnBarrierReopenedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase), "EndTurn barrier should release once the next player turn reopens on a higher round.");
+        Assert(CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(endTurnBarrierReopenedObserver, null, null, null),
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory,
+                endTurnBarrierKnowledge)
+                .CombatBarrierEvaluation.IsActive == false,
+            "EndTurn barrier should be inactive after round-advanced player-turn reopen.");
+        var endTurnBarrierReopenedRequest = BuildBarrierRequest(
+            "0008",
+            35,
+            endTurnBarrierReopenedObserver,
+            endTurnBarrierKnowledge,
+            endTurnBarrierReopenedActions,
+            endTurnBarrierHistory,
+            "Release end-turn barrier after the next player turn reopens.");
+        var endTurnBarrierReopenedDecision = AutoDecisionProvider.Decide(endTurnBarrierReopenedRequest);
+        Assert(!string.Equals(endTurnBarrierReopenedDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+               || endTurnBarrierReopenedDecision.Reason?.Contains("combat barrier wait", StringComparison.OrdinalIgnoreCase) != true,
+            "EndTurn barrier release should prevent combat barrier wait reentry on the reopened player turn.");
+
+        var stickyEndTurnBarrierHistory = new[]
+        {
+            endTurnBarrierHistory[0],
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "wait", null, DateTimeOffset.UtcNow.AddMilliseconds(100)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "wait", null, DateTimeOffset.UtcNow.AddMilliseconds(200)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "wait", null, DateTimeOffset.UtcNow.AddMilliseconds(300)),
+        };
+        var stickyEndTurnBarrierActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            new ObserverState(endTurnBarrierReopenedObserver, null, null, null),
+            endTurnBarrierKnowledge,
+            runtimeStateOnlyScreenshotPath,
+            stickyEndTurnBarrierHistory);
+        Assert(!stickyEndTurnBarrierActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase), "EndTurn sticky release should ignore trailing wait-only history once the round has advanced and player control reopened.");
+        Assert(CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(endTurnBarrierReopenedObserver, null, null, null),
+                runtimeStateOnlyScreenshotPath,
+                stickyEndTurnBarrierHistory,
+                endTurnBarrierKnowledge)
+                .CombatBarrierEvaluation.IsActive == false,
+            "EndTurn sticky release should keep the same auto-end-turn source from re-arming after a reopened player turn.");
+
         var slotAlignmentObserver = new ObserverState(
             new ObserverSummary(
                 "combat",
@@ -27875,7 +28034,16 @@ sealed record CombatBarrierHistoryMetadata(
     string? InteractionRevision,
     int? HistoryStartedCount,
     int? HistoryFinishedCount,
-    string? LastFinishedCardId);
+    string? LastFinishedCardId)
+{
+    public int? RoundNumber { get; init; }
+
+    public bool? PlayerActionsDisabled { get; init; }
+
+    public bool? EndingPlayerTurnPhaseOne { get; init; }
+
+    public bool? EndingPlayerTurnPhaseTwo { get; init; }
+}
 
 static class CombatBarrierSupport
 {
@@ -27930,6 +28098,7 @@ static class CombatBarrierSupport
                 source,
                 observer,
                 freshSnapshotSeen,
+                runtime,
                 combatPlayerActionWindowClosed),
             _ => Inactive,
         };
@@ -27971,7 +28140,13 @@ static class CombatBarrierSupport
                 runtime.InteractionRevision,
                 runtime.HistoryStartedCount,
                 runtime.HistoryFinishedCount,
-                runtime.LastCardPlayFinishedCardId),
+                runtime.LastCardPlayFinishedCardId)
+            {
+                RoundNumber = runtime.RoundNumber,
+                PlayerActionsDisabled = runtime.PlayerActionsDisabled,
+                EndingPlayerTurnPhaseOne = runtime.EndingPlayerTurnPhaseOne,
+                EndingPlayerTurnPhaseTwo = runtime.EndingPlayerTurnPhaseTwo,
+            },
             GuiSmokeShared.JsonOptions);
     }
 
@@ -28121,23 +28296,65 @@ static class CombatBarrierSupport
         BarrierSource source,
         ObserverState observer,
         bool freshSnapshotSeen,
+        CombatRuntimeState runtime,
         bool combatPlayerActionWindowClosed)
     {
-        if (freshSnapshotSeen
-            && (combatPlayerActionWindowClosed
-                || observer.InCombat != true
-                || !string.Equals(observer.CurrentScreen ?? observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase)))
+        if (observer.InCombat != true
+            || !string.Equals(observer.CurrentScreen ?? observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase))
         {
-            return Released(source, "combat player action window closed after end turn");
+            return Released(source, "combat exited after end turn");
+        }
+
+        var reopenedPlayerWindow = IsReopenedPlayerActionWindow(observer.Summary, runtime);
+        var roundAdvanced = runtime.RoundNumber is not null
+                            && source.Metadata?.RoundNumber is not null
+                            && runtime.RoundNumber > source.Metadata.RoundNumber;
+        if (roundAdvanced && reopenedPlayerWindow)
+        {
+            return Released(
+                source,
+                $"next player turn reopened after round advanced from {source.Metadata!.RoundNumber!.Value.ToString(CultureInfo.InvariantCulture)} to {runtime.RoundNumber!.Value.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (!freshSnapshotSeen)
+        {
+            return Active(source, "waiting for a fresh post-end-turn snapshot", false, true);
+        }
+
+        if (HasEndTurnTransitionAcknowledgement(observer.Summary, runtime, combatPlayerActionWindowClosed))
+        {
+            return Active(source, "end turn acknowledged; waiting for the next round reopen", false, true);
         }
 
         return Active(
             source,
-            freshSnapshotSeen
-                ? "end turn is still waiting for the combat player-action window to close"
-                : "waiting for a fresh post-end-turn snapshot",
+            "end turn has not yet been acknowledged by combat turn transition",
             false,
             true);
+    }
+
+    private static bool HasEndTurnTransitionAcknowledgement(
+        ObserverSummary observer,
+        CombatRuntimeState runtime,
+        bool combatPlayerActionWindowClosed)
+    {
+        return combatPlayerActionWindowClosed
+               || runtime.PlayerActionsDisabled == true
+               || runtime.EndingPlayerTurnPhaseOne == true
+               || runtime.EndingPlayerTurnPhaseTwo == true
+               || CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsEnemyTurnStarted", "CombatManager.IsEnemyTurnStarted") == true
+               || CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsPlayPhase", "CombatManager.IsPlayPhase") == false;
+    }
+
+    private static bool IsReopenedPlayerActionWindow(ObserverSummary observer, CombatRuntimeState runtime)
+    {
+        var isPlayPhase = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsPlayPhase", "CombatManager.IsPlayPhase");
+        var isEnemyTurnStarted = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsEnemyTurnStarted", "CombatManager.IsEnemyTurnStarted");
+        return isPlayPhase == true
+               && isEnemyTurnStarted == false
+               && runtime.PlayerActionsDisabled == false
+               && runtime.EndingPlayerTurnPhaseOne == false
+               && runtime.EndingPlayerTurnPhaseTwo == false;
     }
 
     private static CombatBarrierEvaluation Released(BarrierSource source, string reason)
@@ -28580,6 +28797,14 @@ sealed record CombatRuntimeState(
     string? LastCardPlayFinishedCardId,
     string? LastCardPlayFinishedCardName)
 {
+    public int? RoundNumber { get; init; }
+
+    public bool? PlayerActionsDisabled { get; init; }
+
+    public bool? EndingPlayerTurnPhaseOne { get; init; }
+
+    public bool? EndingPlayerTurnPhaseTwo { get; init; }
+
     public int? HistoryStartedCount { get; init; }
 
     public int? HistoryFinishedCount { get; init; }
@@ -28611,42 +28836,111 @@ sealed record CombatRuntimeState(
         && !HasExplicitEnemyTargetingEvidence;
 }
 
+static class CombatAuthoritySupport
+{
+    public static string? TryGetMetaValue(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value) ? value : null;
+    }
+
+    public static bool? TryGetBoolOrCrossCheck(ObserverSummary observer, string key, string crossCheckKey)
+    {
+        if (observer.Meta.TryGetValue(key, out var value)
+            && bool.TryParse(value, out var parsed))
+        {
+            return parsed;
+        }
+
+        return TryGetCrossCheckValue(observer, crossCheckKey, out value) && bool.TryParse(value, out parsed)
+            ? parsed
+            : null;
+    }
+
+    public static int? TryGetIntOrCrossCheck(ObserverSummary observer, string key, string crossCheckKey)
+    {
+        if (observer.Meta.TryGetValue(key, out var value)
+            && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+
+        return TryGetCrossCheckValue(observer, crossCheckKey, out value)
+               && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)
+            ? parsed
+            : null;
+    }
+
+    private static bool TryGetCrossCheckValue(ObserverSummary observer, string key, out string value)
+    {
+        value = string.Empty;
+        if (!observer.Meta.TryGetValue("combatCrossCheck", out var combatCrossCheck)
+            || string.IsNullOrWhiteSpace(combatCrossCheck))
+        {
+            return false;
+        }
+
+        foreach (var segment in combatCrossCheck.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separatorIndex = segment.IndexOf('=');
+            if (separatorIndex <= 0)
+            {
+                continue;
+            }
+
+            var candidateKey = segment[..separatorIndex].Trim();
+            if (!string.Equals(candidateKey, key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            value = segment[(separatorIndex + 1)..].Trim();
+            return true;
+        }
+
+        return false;
+    }
+}
+
 static class CombatRuntimeStateSupport
 {
     public static CombatRuntimeState Read(ObserverSummary observer, IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
     {
-        var selectedCardSlot = TryGetMetaInt(observer, "combatSelectedCardSlot");
-        var awaitingPlaySlots = ParseSlotList(TryGetMetaValue(observer, "combatAwaitingPlaySlots"));
+        var selectedCardSlot = CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatSelectedCardSlot", "combatSelectedCardSlot");
+        var awaitingPlaySlots = ParseSlotList(CombatAuthoritySupport.TryGetMetaValue(observer, "combatAwaitingPlaySlots"));
         if (selectedCardSlot is null && awaitingPlaySlots.Count > 0)
         {
             selectedCardSlot = awaitingPlaySlots[0];
         }
 
-        var selectedCardTargetType = TryGetMetaValue(observer, "combatSelectedCardTargetType");
-        var selectedCardType = TryGetMetaValue(observer, "combatSelectedCardType");
+        var selectedCardTargetType = CombatAuthoritySupport.TryGetMetaValue(observer, "combatSelectedCardTargetType");
+        var selectedCardType = CombatAuthoritySupport.TryGetMetaValue(observer, "combatSelectedCardType");
         var pendingSelection = TryResolvePendingSelection(selectedCardSlot, selectedCardTargetType, selectedCardType, observer, combatCardKnowledge);
 
         return new CombatRuntimeState(
-            TryGetMetaBool(observer, "combatCardPlayPending"),
-            TryGetMetaValue(observer, "combatPlayMode"),
+            CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatCardPlayPending", "combatCardPlayPending"),
+            CombatAuthoritySupport.TryGetMetaValue(observer, "combatPlayMode"),
             pendingSelection,
-            TryGetMetaBool(observer, "combatTargetingInProgress"),
-            TryGetMetaValue(observer, "combatValidTargetsType"),
-            TryGetMetaInt(observer, "combatTargetableEnemyCount"),
-            ParseIdList(TryGetMetaValue(observer, "combatTargetableEnemyIds")),
-            TryGetMetaInt(observer, "combatHittableEnemyCount"),
-            ParseIdList(TryGetMetaValue(observer, "combatHittableEnemyIds")),
-            TryGetMetaValue(observer, "combatHoveredTargetKind"),
-            TryGetMetaValue(observer, "combatHoveredTargetId"),
-            TryGetMetaValue(observer, "combatHoveredTargetLabel"),
-            TryGetMetaBool(observer, "combatHoveredTargetIsHittable"),
-            TryGetMetaValue(observer, "combatLastCardPlayStartedCardId"),
-            TryGetMetaValue(observer, "combatLastCardPlayFinishedCardId"),
-            TryGetMetaValue(observer, "combatLastCardPlayFinishedCardName"))
+            CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatTargetingInProgress", "combatTargetingInProgress"),
+            CombatAuthoritySupport.TryGetMetaValue(observer, "combatValidTargetsType"),
+            CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatTargetableEnemyCount", "combatTargetableEnemyCount"),
+            ParseIdList(CombatAuthoritySupport.TryGetMetaValue(observer, "combatTargetableEnemyIds")),
+            CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatHittableEnemyCount", "combatHittableEnemyCount"),
+            ParseIdList(CombatAuthoritySupport.TryGetMetaValue(observer, "combatHittableEnemyIds")),
+            CombatAuthoritySupport.TryGetMetaValue(observer, "combatHoveredTargetKind"),
+            CombatAuthoritySupport.TryGetMetaValue(observer, "combatHoveredTargetId"),
+            CombatAuthoritySupport.TryGetMetaValue(observer, "combatHoveredTargetLabel"),
+            CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatHoveredTargetIsHittable", "combatHoveredTargetIsHittable"),
+            CombatAuthoritySupport.TryGetMetaValue(observer, "combatLastCardPlayStartedCardId"),
+            CombatAuthoritySupport.TryGetMetaValue(observer, "combatLastCardPlayFinishedCardId"),
+            CombatAuthoritySupport.TryGetMetaValue(observer, "combatLastCardPlayFinishedCardName"))
         {
-            HistoryStartedCount = TryGetMetaInt(observer, "combatHistoryStartedCount"),
-            HistoryFinishedCount = TryGetMetaInt(observer, "combatHistoryFinishedCount"),
-            InteractionRevision = TryGetMetaValue(observer, "combatInteractionRevision"),
+            RoundNumber = CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatRoundNumber", "CombatState.RoundNumber"),
+            PlayerActionsDisabled = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatPlayerActionsDisabled", "CombatManager.PlayerActionsDisabled"),
+            EndingPlayerTurnPhaseOne = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatEndingPlayerTurnPhaseOne", "CombatManager.EndingPlayerTurnPhaseOne"),
+            EndingPlayerTurnPhaseTwo = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatEndingPlayerTurnPhaseTwo", "CombatManager.EndingPlayerTurnPhaseTwo"),
+            HistoryStartedCount = CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatHistoryStartedCount", "combatHistoryStartedCount"),
+            HistoryFinishedCount = CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatHistoryFinishedCount", "combatHistoryFinishedCount"),
+            InteractionRevision = CombatAuthoritySupport.TryGetMetaValue(observer, "combatInteractionRevision"),
             ScreenEpisodeId = observer.SceneEpisodeId,
         };
     }
@@ -28833,24 +29127,6 @@ static class CombatRuntimeStateSupport
             .ToArray();
     }
 
-    private static string? TryGetMetaValue(ObserverSummary observer, string key)
-    {
-        return observer.Meta.TryGetValue(key, out var value) ? value : null;
-    }
-
-    private static bool? TryGetMetaBool(ObserverSummary observer, string key)
-    {
-        return observer.Meta.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed)
-            ? parsed
-            : null;
-    }
-
-    private static int? TryGetMetaInt(ObserverSummary observer, string key)
-    {
-        return observer.Meta.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : null;
-    }
 }
 
 static class CombatTargetabilitySupport
@@ -29029,14 +29305,27 @@ static class CombatEligibilitySupport
 {
     public static bool IsCombatPlayerActionWindowClosed(ObserverSummary observer)
     {
-        if (TryGetCombatCrossCheckFlag(observer, "CombatManager.IsEnemyTurnStarted", out var enemyTurnStarted)
-            && enemyTurnStarted)
+        if (CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatPlayerActionsDisabled", "CombatManager.PlayerActionsDisabled") == true)
         {
             return true;
         }
 
-        if (TryGetCombatCrossCheckFlag(observer, "CombatManager.IsPlayPhase", out var isPlayPhase)
-            && !isPlayPhase)
+        if (CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatEndingPlayerTurnPhaseOne", "CombatManager.EndingPlayerTurnPhaseOne") == true)
+        {
+            return true;
+        }
+
+        if (CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatEndingPlayerTurnPhaseTwo", "CombatManager.EndingPlayerTurnPhaseTwo") == true)
+        {
+            return true;
+        }
+
+        if (CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsEnemyTurnStarted", "CombatManager.IsEnemyTurnStarted") == true)
+        {
+            return true;
+        }
+
+        if (CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsPlayPhase", "CombatManager.IsPlayPhase") == false)
         {
             return true;
         }
@@ -29097,41 +29386,6 @@ static class CombatEligibilitySupport
             ? new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown)
             : AutoCombatAnalyzer.Analyze(request.ScreenshotPath);
         return HasSelectedNonEnemyConfirmEvidence(request.Observer, request.CombatCardKnowledge, analysis, pendingSelection);
-    }
-
-    private static bool TryGetCombatCrossCheckFlag(ObserverSummary observer, string key, out bool value)
-    {
-        value = false;
-        if (observer.Meta.TryGetValue(key, out var directValue)
-            && bool.TryParse(directValue, out value))
-        {
-            return true;
-        }
-
-        if (!observer.Meta.TryGetValue("combatCrossCheck", out var combatCrossCheck)
-            || string.IsNullOrWhiteSpace(combatCrossCheck))
-        {
-            return false;
-        }
-
-        foreach (var segment in combatCrossCheck.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var separatorIndex = segment.IndexOf('=');
-            if (separatorIndex <= 0)
-            {
-                continue;
-            }
-
-            var candidateKey = segment[..separatorIndex].Trim();
-            if (!string.Equals(candidateKey, key, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            return bool.TryParse(segment[(separatorIndex + 1)..].Trim(), out value);
-        }
-
-        return false;
     }
 
     private static bool IsAutoNonEnemyPromotionEligible(CombatCardKnowledgeHint card)

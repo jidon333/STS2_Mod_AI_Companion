@@ -2242,7 +2242,10 @@ static void TestRuntimeReflectionCombatMetadataExport()
         System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
     Assert(method is not null, "Expected private combat runtime metadata export helper.");
 
-    var meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+    var meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false",
+    };
     var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
     var roots = new object[]
     {
@@ -2321,7 +2324,15 @@ static void TestRuntimeReflectionCombatMetadataExport()
                 },
             },
         },
-        new FakeCombatManagerState { IsInProgress = true, IsPlayPhase = true },
+        new FakeCombatManagerState
+        {
+            IsInProgress = true,
+            IsPlayPhase = true,
+            PlayerActionsDisabled = false,
+            EndingPlayerTurnPhaseOne = false,
+            EndingPlayerTurnPhaseTwo = true,
+        },
+        new FakeCombatState { RoundNumber = 3 },
     };
 
     method!.Invoke(null, new object?[] { roots, new LiveExportEncounterSummary("Cultist", "Monster", true, 1), meta, payload });
@@ -2335,8 +2346,25 @@ static void TestRuntimeReflectionCombatMetadataExport()
     Assert(meta.TryGetValue("combatHistoryStartedCount", out var startedCount) && startedCount == "1", "Expected runtime export to include combat history started count.");
     Assert(meta.TryGetValue("combatHistoryFinishedCount", out var finishedCount) && finishedCount == "1", "Expected runtime export to include combat history finished count.");
     Assert(meta.TryGetValue("combatInteractionRevision", out var interactionRevision) && interactionRevision == "1:1:true:true:2", "Expected runtime export to include the raw combat interaction revision.");
+    Assert(meta.TryGetValue("combatRoundNumber", out var combatRoundNumber) && combatRoundNumber == "3", "Expected runtime export to include combatRoundNumber.");
+    Assert(meta.TryGetValue("combatPlayerActionsDisabled", out var combatPlayerActionsDisabled) && combatPlayerActionsDisabled == "false", "Expected runtime export to include PlayerActionsDisabled.");
+    Assert(meta.TryGetValue("combatEndingPlayerTurnPhaseOne", out var endingPhaseOne) && endingPhaseOne == "false", "Expected runtime export to include EndingPlayerTurnPhaseOne.");
+    Assert(meta.TryGetValue("combatEndingPlayerTurnPhaseTwo", out var endingPhaseTwo) && endingPhaseTwo == "true", "Expected runtime export to include EndingPlayerTurnPhaseTwo.");
+    Assert(meta.TryGetValue("combatCrossCheck", out var combatCrossCheck)
+           && combatCrossCheck is not null
+           && combatCrossCheck.Contains("CombatManager.IsPlayPhase=true", StringComparison.OrdinalIgnoreCase)
+           && combatCrossCheck.Contains("CombatManager.IsEnemyTurnStarted=false", StringComparison.OrdinalIgnoreCase)
+           && combatCrossCheck.Contains("CombatState.RoundNumber=3", StringComparison.OrdinalIgnoreCase)
+           && combatCrossCheck.Contains("CombatManager.PlayerActionsDisabled=false", StringComparison.OrdinalIgnoreCase)
+           && combatCrossCheck.Contains("CombatManager.EndingPlayerTurnPhaseOne=false", StringComparison.OrdinalIgnoreCase)
+           && combatCrossCheck.Contains("CombatManager.EndingPlayerTurnPhaseTwo=true", StringComparison.OrdinalIgnoreCase),
+        "Expected runtime export to append round and phase truth into combatCrossCheck without losing existing segments.");
     Assert(meta.TryGetValue("combatLastCardPlayFinishedCardId", out var finishedCardId) && finishedCardId == "CARD.DEFEND_IRONCLAD", "Expected runtime export to include the last finished card id.");
     Assert(meta.TryGetValue("combatLastCardPlayFinishedSuccess", out var finishedSuccess) && finishedSuccess is null, "Expected runtime export not to infer explicit finished success from combat history alone.");
+    Assert(payload.TryGetValue("combatRoundNumber", out var payloadRoundNumber) && payloadRoundNumber is 3, "Expected runtime payload to include combatRoundNumber.");
+    Assert(payload.TryGetValue("combatPlayerActionsDisabled", out var payloadPlayerActionsDisabled) && payloadPlayerActionsDisabled is false, "Expected runtime payload to include PlayerActionsDisabled.");
+    Assert(payload.TryGetValue("combatEndingPlayerTurnPhaseOne", out var payloadEndingPhaseOne) && payloadEndingPhaseOne is false, "Expected runtime payload to include EndingPlayerTurnPhaseOne.");
+    Assert(payload.TryGetValue("combatEndingPlayerTurnPhaseTwo", out var payloadEndingPhaseTwo) && payloadEndingPhaseTwo is true, "Expected runtime payload to include EndingPlayerTurnPhaseTwo.");
     Assert(payload.TryGetValue("combatHistoryStartedCount", out var payloadStartedCount) && payloadStartedCount is 1, "Expected runtime payload to include combat history started count.");
     Assert(payload.TryGetValue("combatHistoryFinishedCount", out var payloadFinishedCount) && payloadFinishedCount is 1, "Expected runtime payload to include combat history finished count.");
     Assert(payload.TryGetValue("combatInteractionRevision", out var payloadInteractionRevision) && string.Equals(payloadInteractionRevision as string, "1:1:true:true:2", StringComparison.Ordinal), "Expected runtime payload to include the combat interaction revision.");
@@ -2387,13 +2415,25 @@ static void TestRuntimeReflectionCaptureClearsCombatMetadata()
                     },
                 },
             },
-            new FakeCombatManagerState { IsInProgress = true, IsPlayPhase = true },
+            new FakeCombatManagerState
+            {
+                IsInProgress = true,
+                IsPlayPhase = true,
+                PlayerActionsDisabled = false,
+                EndingPlayerTurnPhaseOne = false,
+                EndingPlayerTurnPhaseTwo = false,
+            },
+            new FakeCombatState(),
         },
         null,
     }) as LiveExportObservation;
     Assert(captureObservation is not null, "Expected Capture to return a live export observation.");
     Assert(captureObservation!.Meta.TryGetValue("combatSelectedCardSlot", out var selectedCardSlot) && selectedCardSlot is null, "Expected Capture to clear combatSelectedCardSlot when no active slot exists.");
     Assert(captureObservation.Meta.TryGetValue("combatLastCardPlayFinishedSuccess", out var finishedSuccess) && finishedSuccess is null, "Expected Capture to keep finished-success null without an explicit success source.");
+    Assert(captureObservation.Meta.TryGetValue("combatRoundNumber", out var clearedRoundNumber) && clearedRoundNumber is null, "Expected Capture to clear combatRoundNumber when no combat state authority exists.");
+    Assert(captureObservation.Meta.TryGetValue("combatPlayerActionsDisabled", out var clearedPlayerActionsDisabled) && clearedPlayerActionsDisabled == "false", "Expected Capture to export PlayerActionsDisabled=false when the combat manager is reopened.");
+    Assert(captureObservation.Meta.TryGetValue("combatEndingPlayerTurnPhaseOne", out var clearedPhaseOne) && clearedPhaseOne == "false", "Expected Capture to export EndingPlayerTurnPhaseOne=false when phase one is inactive.");
+    Assert(captureObservation.Meta.TryGetValue("combatEndingPlayerTurnPhaseTwo", out var clearedPhaseTwo) && clearedPhaseTwo == "false", "Expected Capture to export EndingPlayerTurnPhaseTwo=false when phase two is inactive.");
 
     var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\combat");
     tracker.Apply(CreateObservation("runtime-poll", "combat", 1, 1, 70, 120, new[] { "Strike" }, Array.Empty<string>(), Array.Empty<string>()) with
@@ -2402,6 +2442,10 @@ static void TestRuntimeReflectionCaptureClearsCombatMetadata()
         {
             ["combatSelectedCardSlot"] = "2",
             ["combatLastCardPlayFinishedSuccess"] = "true",
+            ["combatRoundNumber"] = "9",
+            ["combatPlayerActionsDisabled"] = "true",
+            ["combatEndingPlayerTurnPhaseOne"] = "true",
+            ["combatEndingPlayerTurnPhaseTwo"] = "true",
         },
     });
     var merged = tracker.Apply(captureObservation with
@@ -2412,6 +2456,10 @@ static void TestRuntimeReflectionCaptureClearsCombatMetadata()
     }).Snapshot;
     Assert(merged.Meta.TryGetValue("combatSelectedCardSlot", out var mergedSlot) && mergedSlot is null, "Expected tracker merge to clear stale combatSelectedCardSlot when Capture reports no active slot.");
     Assert(merged.Meta.TryGetValue("combatLastCardPlayFinishedSuccess", out var mergedSuccess) && mergedSuccess is null, "Expected tracker merge to clear stale finished-success inference when Capture reports null.");
+    Assert(merged.Meta.TryGetValue("combatRoundNumber", out var mergedRoundNumber) && mergedRoundNumber is null, "Expected tracker merge to clear stale combatRoundNumber when Capture reports no current combat state.");
+    Assert(merged.Meta.TryGetValue("combatPlayerActionsDisabled", out var mergedPlayerActionsDisabled) && mergedPlayerActionsDisabled == "false", "Expected tracker merge to overwrite stale PlayerActionsDisabled with the current reopened value.");
+    Assert(merged.Meta.TryGetValue("combatEndingPlayerTurnPhaseOne", out var mergedPhaseOne) && mergedPhaseOne == "false", "Expected tracker merge to overwrite stale EndingPlayerTurnPhaseOne with the current reopened value.");
+    Assert(merged.Meta.TryGetValue("combatEndingPlayerTurnPhaseTwo", out var mergedPhaseTwo) && mergedPhaseTwo == "false", "Expected tracker merge to overwrite stale EndingPlayerTurnPhaseTwo with the current reopened value.");
 }
 
 static void TestLiveExportTrackerPartialMerge()
@@ -4912,6 +4960,17 @@ file sealed class FakeCombatManagerState
     public bool IsPlayPhase { get; init; }
 
     public bool IsEnemyTurnStarted { get; init; }
+
+    public bool PlayerActionsDisabled { get; init; }
+
+    public bool EndingPlayerTurnPhaseOne { get; init; }
+
+    public bool EndingPlayerTurnPhaseTwo { get; init; }
+}
+
+file sealed class FakeCombatState
+{
+    public int? RoundNumber { get; init; }
 }
 
 file sealed class FakeEncounterState
@@ -4933,7 +4992,7 @@ file sealed class FakeCombatUiNode
 
 file sealed class FakeRuntimeCaptureHook
 {
-    public void Observe(object? hand, object? history, object? combatManager)
+    public void Observe(object? hand, object? history, object? combatManager, object? combatState)
     {
     }
 }

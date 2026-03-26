@@ -1559,6 +1559,30 @@ internal static class RuntimeSnapshotReflectionExtractor
             return;
         }
 
+        var combatManagerRoots = roots
+            .Where(root =>
+            {
+                var typeName = root.GetType().FullName ?? root.GetType().Name;
+                return typeName.Contains("CombatManager", StringComparison.OrdinalIgnoreCase);
+            })
+            .Concat(FindRoots(roots, "CombatManager"))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        var combatStateRoots = roots
+            .Where(root =>
+            {
+                var typeName = root.GetType().FullName ?? root.GetType().Name;
+                return typeName.Contains("CombatState", StringComparison.OrdinalIgnoreCase);
+            })
+            .Concat(combatManagerRoots.Select(root =>
+                    TryGetMemberValue(root, "_state")
+                    ?? TryGetMemberValue(root, "State")
+                    ?? TryGetMemberValue(root, "CurrentState"))
+                .Where(static root => root is not null)
+                .Cast<object>())
+            .Concat(FindRoots(roots, "CombatState"))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
         var handRoot = roots
             .Where(root =>
             {
@@ -1596,6 +1620,10 @@ internal static class RuntimeSnapshotReflectionExtractor
                 TryGetMemberValue(root, "CardPlaysStarted") is not null
                 || TryGetMemberValue(root, "CardPlaysFinished") is not null
                 || TryGetMemberValue(root, "Entries") is not null);
+        var combatRoundNumber = TryReadInt(combatStateRoots, "RoundNumber");
+        var playerActionsDisabled = TryReadBool(combatManagerRoots, "PlayerActionsDisabled");
+        var endingPlayerTurnPhaseOne = TryReadBool(combatManagerRoots, "EndingPlayerTurnPhaseOne");
+        var endingPlayerTurnPhaseTwo = TryReadBool(combatManagerRoots, "EndingPlayerTurnPhaseTwo");
 
         var cardPlayPending = TryReadBool(handRoot, "InCardPlay");
         var playMode = TryReadString(handRoot, "CurrentMode");
@@ -1668,6 +1696,10 @@ internal static class RuntimeSnapshotReflectionExtractor
             selectedCardSlot?.ToString(CultureInfo.InvariantCulture) ?? "none");
 
         meta["combatRuntimeStateAuthority"] = "runtime-reflection";
+        meta["combatRoundNumber"] = combatRoundNumber?.ToString(CultureInfo.InvariantCulture);
+        meta["combatPlayerActionsDisabled"] = playerActionsDisabled?.ToString().ToLowerInvariant();
+        meta["combatEndingPlayerTurnPhaseOne"] = endingPlayerTurnPhaseOne?.ToString().ToLowerInvariant();
+        meta["combatEndingPlayerTurnPhaseTwo"] = endingPlayerTurnPhaseTwo?.ToString().ToLowerInvariant();
         meta["combatCardPlayPending"] = cardPlayPending?.ToString().ToLowerInvariant();
         meta["combatPlayMode"] = playMode;
         meta["combatSelectedCardId"] = selectedCardId;
@@ -1708,6 +1740,64 @@ internal static class RuntimeSnapshotReflectionExtractor
         meta["combatLastCardPlayFinishedCardName"] = lastFinishedCardName;
         meta["combatLastCardPlayFinishedTargetId"] = lastFinishedTargetId;
         meta["combatLastCardPlayFinishedSuccess"] = null;
+        var combatCrossCheckSegments = meta.TryGetValue("combatCrossCheck", out var existingCombatCrossCheck)
+                                       && !string.IsNullOrWhiteSpace(existingCombatCrossCheck)
+            ? existingCombatCrossCheck.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
+            : new List<string>();
+        void AppendCombatCrossCheck(string segment)
+        {
+            if (string.IsNullOrWhiteSpace(segment)
+                || combatCrossCheckSegments.Contains(segment, StringComparer.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            combatCrossCheckSegments.Add(segment);
+        }
+
+        if (combatRoundNumber is not null)
+        {
+            AppendCombatCrossCheck($"CombatState.RoundNumber={combatRoundNumber.Value.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (playerActionsDisabled is not null)
+        {
+            AppendCombatCrossCheck($"CombatManager.PlayerActionsDisabled={playerActionsDisabled.Value.ToString().ToLowerInvariant()}");
+        }
+
+        if (endingPlayerTurnPhaseOne is not null)
+        {
+            AppendCombatCrossCheck($"CombatManager.EndingPlayerTurnPhaseOne={endingPlayerTurnPhaseOne.Value.ToString().ToLowerInvariant()}");
+        }
+
+        if (endingPlayerTurnPhaseTwo is not null)
+        {
+            AppendCombatCrossCheck($"CombatManager.EndingPlayerTurnPhaseTwo={endingPlayerTurnPhaseTwo.Value.ToString().ToLowerInvariant()}");
+        }
+
+        meta["combatCrossCheck"] = combatCrossCheckSegments.Count == 0
+            ? null
+            : string.Join(";", combatCrossCheckSegments);
+
+        if (combatRoundNumber is not null)
+        {
+            payload["combatRoundNumber"] = combatRoundNumber.Value;
+        }
+
+        if (playerActionsDisabled is not null)
+        {
+            payload["combatPlayerActionsDisabled"] = playerActionsDisabled.Value;
+        }
+
+        if (endingPlayerTurnPhaseOne is not null)
+        {
+            payload["combatEndingPlayerTurnPhaseOne"] = endingPlayerTurnPhaseOne.Value;
+        }
+
+        if (endingPlayerTurnPhaseTwo is not null)
+        {
+            payload["combatEndingPlayerTurnPhaseTwo"] = endingPlayerTurnPhaseTwo.Value;
+        }
 
         if (cardPlayPending is not null)
         {
