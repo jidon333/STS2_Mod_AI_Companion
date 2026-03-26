@@ -1379,7 +1379,7 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
 
         if (string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase))
         {
-            var waitFingerprint = BuildDecisionWaitFingerprint(phase, request.SceneSignature, observer);
+            var waitFingerprint = BuildDecisionWaitFingerprint(phase, request.SceneSignature, observer, stepAnalysisContext);
             if (string.Equals(lastDecisionWaitFingerprint, waitFingerprint, StringComparison.Ordinal))
             {
                 consecutiveDecisionWaitCount += 1;
@@ -9360,6 +9360,179 @@ static void RunSelfTest()
                 endTurnBarrierKnowledge)
                 .CombatBarrierEvaluation.IsActive,
             "EndTurn barrier should remain active during the acknowledged closed-window band.");
+        Assert(!CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(endTurnBarrierAckObserver, null, null, null),
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory,
+                endTurnBarrierKnowledge)
+                .CombatBarrierEvaluation.OverWaitRisk,
+            "Acknowledged EndTurn transit should not be flagged as an over-wait plateau risk by itself.");
+
+        var endTurnTransitProgressObservers = new[]
+        {
+            endTurnBarrierSeedObserver with
+            {
+                CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(250),
+                InventoryId = "inv-end-turn-transit-1",
+                SnapshotVersion = 53,
+                Meta = new Dictionary<string, string?>(endTurnBarrierSeedObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatRoundNumber"] = "1",
+                    ["combatPlayerActionsDisabled"] = "true",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "true",
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=false;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false",
+                },
+            },
+            endTurnBarrierSeedObserver with
+            {
+                CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(500),
+                InventoryId = "inv-end-turn-transit-2",
+                SnapshotVersion = 54,
+                Meta = new Dictionary<string, string?>(endTurnBarrierSeedObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatRoundNumber"] = "1",
+                    ["combatPlayerActionsDisabled"] = "true",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "true",
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=false;CombatManager.IsEnemyTurnStarted=true;CombatManager.IsEnding=false",
+                },
+            },
+            endTurnBarrierSeedObserver with
+            {
+                CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(750),
+                InventoryId = "inv-end-turn-transit-3",
+                SnapshotVersion = 55,
+                Meta = new Dictionary<string, string?>(endTurnBarrierSeedObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatRoundNumber"] = "2",
+                    ["combatPlayerActionsDisabled"] = "false",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "true",
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=false;CombatManager.IsEnemyTurnStarted=true;CombatManager.IsEnding=false",
+                },
+            },
+            endTurnBarrierSeedObserver with
+            {
+                CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(1000),
+                InventoryId = "inv-end-turn-transit-4",
+                SnapshotVersion = 56,
+                Meta = new Dictionary<string, string?>(endTurnBarrierSeedObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatRoundNumber"] = "2",
+                    ["combatPlayerActionsDisabled"] = "false",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "true",
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=false;CombatManager.IsEnemyTurnStarted=true;CombatManager.IsEnding=false",
+                },
+            },
+        };
+        string? lastEndTurnTransitFingerprint = null;
+        var endTurnTransitWaitCount = 0;
+        for (var index = 0; index < endTurnTransitProgressObservers.Length; index += 1)
+        {
+            var transitObserverState = new ObserverState(endTurnTransitProgressObservers[index], null, null, null);
+            var transitActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                transitObserverState,
+                endTurnBarrierKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory);
+            Assert(transitActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase), "Acknowledged EndTurn transit should remain wait-only before the player window reopens.");
+            var transitRequest = BuildBarrierRequest(
+                "0007-transit",
+                40 + index,
+                endTurnTransitProgressObservers[index],
+                endTurnBarrierKnowledge,
+                transitActions,
+                endTurnBarrierHistory,
+                "Acknowledged EndTurn transit progress should remain a safe wait.");
+            var transitContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                transitObserverState,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory,
+                endTurnBarrierKnowledge);
+            Assert(transitContext.CombatBarrierEvaluation.IsActive
+                   && !transitContext.CombatBarrierEvaluation.OverWaitRisk,
+                "Acknowledged EndTurn transit should stay active without being classified as an over-wait risk.");
+            var transitFingerprint = BuildDecisionWaitFingerprint(
+                GuiSmokePhase.HandleCombat,
+                transitRequest.SceneSignature,
+                transitObserverState,
+                transitContext);
+            endTurnTransitWaitCount = string.Equals(lastEndTurnTransitFingerprint, transitFingerprint, StringComparison.Ordinal)
+                ? endTurnTransitWaitCount + 1
+                : 1;
+            lastEndTurnTransitFingerprint = transitFingerprint;
+            Assert(
+                !CombatBarrierSupport.TryClassifyWaitPlateau(transitRequest, transitContext, endTurnTransitWaitCount, out _, out _),
+                "Acknowledged EndTurn transit with authority progress should not classify as combat-barrier-wait-plateau.");
+            Assert(
+                !TryClassifyDecisionWaitPlateau(GuiSmokePhase.HandleCombat, transitObserverState, endTurnTransitWaitCount, out _, out _),
+                "Acknowledged EndTurn transit with authority progress should not classify as generic decision-wait-plateau.");
+        }
+
+        var frozenEndTurnTransitObserver = endTurnBarrierSeedObserver with
+        {
+            CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(1200),
+            InventoryId = "inv-end-turn-transit-frozen",
+            SnapshotVersion = 57,
+            Meta = new Dictionary<string, string?>(endTurnBarrierSeedObserver.Meta, StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatRoundNumber"] = "2",
+                ["combatPlayerActionsDisabled"] = "false",
+                ["combatEndingPlayerTurnPhaseOne"] = "false",
+                ["combatEndingPlayerTurnPhaseTwo"] = "true",
+                ["combatCrossCheck"] = "CombatManager.IsPlayPhase=false;CombatManager.IsEnemyTurnStarted=true;CombatManager.IsEnding=false",
+            },
+        };
+        string? lastFrozenEndTurnTransitFingerprint = null;
+        var frozenEndTurnTransitWaitCount = 0;
+        GuiSmokeStepRequest? frozenTransitRequest = null;
+        GuiSmokeStepAnalysisContext? frozenTransitContext = null;
+        for (var index = 0; index < 4; index += 1)
+        {
+            var frozenObserverState = new ObserverState(frozenEndTurnTransitObserver, null, null, null);
+            var frozenActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                frozenObserverState,
+                endTurnBarrierKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory);
+            frozenTransitRequest = BuildBarrierRequest(
+                "0007-frozen",
+                50 + index,
+                frozenEndTurnTransitObserver,
+                endTurnBarrierKnowledge,
+                frozenActions,
+                endTurnBarrierHistory,
+                "Frozen acknowledged EndTurn transit may still stall.");
+            frozenTransitContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                frozenObserverState,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory,
+                endTurnBarrierKnowledge);
+            var frozenFingerprint = BuildDecisionWaitFingerprint(
+                GuiSmokePhase.HandleCombat,
+                frozenTransitRequest.SceneSignature,
+                frozenObserverState,
+                frozenTransitContext);
+            frozenEndTurnTransitWaitCount = string.Equals(lastFrozenEndTurnTransitFingerprint, frozenFingerprint, StringComparison.Ordinal)
+                ? frozenEndTurnTransitWaitCount + 1
+                : 1;
+            lastFrozenEndTurnTransitFingerprint = frozenFingerprint;
+        }
+        Assert(frozenTransitRequest is not null && frozenTransitContext is not null, "Frozen transit fixtures should be created for stall classification.");
+        Assert(
+            !CombatBarrierSupport.TryClassifyWaitPlateau(frozenTransitRequest!, frozenTransitContext!, frozenEndTurnTransitWaitCount, out _, out _),
+            "Acknowledged EndTurn transit should not use combat-barrier-wait-plateau even when frozen.");
+        Assert(
+            TryClassifyDecisionWaitPlateau(GuiSmokePhase.HandleCombat, new ObserverState(frozenEndTurnTransitObserver, null, null, null), frozenEndTurnTransitWaitCount, out var frozenTransitCause, out _)
+            && string.Equals(frozenTransitCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase),
+            "Frozen acknowledged EndTurn transit should still be stallable via the generic wait plateau path.");
 
         var endTurnBarrierReopenedObserver = endTurnBarrierSeedObserver with
         {
@@ -14717,8 +14890,15 @@ static bool IsPassiveWaitPhase(GuiSmokePhase phase)
         or GuiSmokePhase.WaitCombat;
 }
 
-static string BuildDecisionWaitFingerprint(GuiSmokePhase phase, string sceneSignature, ObserverState observer)
+static string BuildDecisionWaitFingerprint(
+    GuiSmokePhase phase,
+    string sceneSignature,
+    ObserverState observer,
+    GuiSmokeStepAnalysisContext? analysisContext = null)
 {
+    var safeTransitFingerprint = phase == GuiSmokePhase.HandleCombat && analysisContext is not null
+        ? CombatBarrierSupport.TryBuildSafeTransitProgressFingerprint(analysisContext.CombatBarrierEvaluation, observer.Summary)
+        : null;
     return string.Join("|",
         phase.ToString(),
         NormalizeSceneSignatureForPlateau(sceneSignature),
@@ -14727,7 +14907,8 @@ static string BuildDecisionWaitFingerprint(GuiSmokePhase phase, string sceneSign
         observer.ChoiceExtractorPath ?? "unknown",
         GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType") ?? "unknown",
         observer.InventoryId ?? "unknown",
-        BuildActionableStateSignature(observer.ActionNodes));
+        BuildActionableStateSignature(observer.ActionNodes),
+        safeTransitFingerprint ?? "transit:none");
 }
 
 static string BuildOverlayLoopFingerprint(string sceneSignature, ObserverState observer)
@@ -28452,6 +28633,7 @@ static class CombatBarrierSupport
         var barrier = context.CombatBarrierEvaluation;
         if (!barrier.IsActive
             || !barrier.IsHardWaitBarrier
+            || !barrier.OverWaitRisk
             || consecutiveDecisionWaitCount < CombatBarrierPolicy.HandleCombatWaitPlateauLimit)
         {
             terminalCause = string.Empty;
@@ -28503,7 +28685,7 @@ static class CombatBarrierSupport
     {
         if (!freshSnapshotSeen)
         {
-            return Active(source, "waiting for a fresh post-enemy-click snapshot", false, false);
+            return Active(source, "waiting for a fresh post-enemy-click snapshot", false, true);
         }
 
         if (canResolveCombatEnemyTarget)
@@ -28615,7 +28797,7 @@ static class CombatBarrierSupport
 
         if (HasEndTurnTransitionAcknowledgement(observer.Summary, runtime, combatPlayerActionWindowClosed))
         {
-            return Active(source, "end turn acknowledged; waiting for the next round reopen", false, true);
+            return Active(source, "end turn acknowledged; waiting for the next round reopen", false, false);
         }
 
         return Active(
@@ -28647,6 +28829,37 @@ static class CombatBarrierSupport
                && runtime.PlayerActionsDisabled == false
                && runtime.EndingPlayerTurnPhaseOne == false
                && runtime.EndingPlayerTurnPhaseTwo == false;
+    }
+
+    public static string? TryBuildSafeTransitProgressFingerprint(CombatBarrierEvaluation barrier, ObserverSummary observer)
+    {
+        if (!barrier.IsActive
+            || !barrier.IsHardWaitBarrier
+            || barrier.Kind != CombatBarrierKind.EndTurn
+            || barrier.OverWaitRisk)
+        {
+            return null;
+        }
+
+        return string.Join("|",
+            observer.SnapshotVersion?.ToString(CultureInfo.InvariantCulture) ?? "snapshot:none",
+            observer.CapturedAt?.ToString("O", CultureInfo.InvariantCulture) ?? "captured:none",
+            CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatRoundNumber", "CombatState.RoundNumber")?.ToString(CultureInfo.InvariantCulture) ?? "round:none",
+            FormatNullableBool(CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsPlayPhase", "CombatManager.IsPlayPhase")),
+            FormatNullableBool(CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsEnemyTurnStarted", "CombatManager.IsEnemyTurnStarted")),
+            FormatNullableBool(CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatPlayerActionsDisabled", "CombatManager.PlayerActionsDisabled")),
+            FormatNullableBool(CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatEndingPlayerTurnPhaseOne", "CombatManager.EndingPlayerTurnPhaseOne")),
+            FormatNullableBool(CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatEndingPlayerTurnPhaseTwo", "CombatManager.EndingPlayerTurnPhaseTwo")));
+    }
+
+    private static string FormatNullableBool(bool? value)
+    {
+        return value switch
+        {
+            true => "true",
+            false => "false",
+            _ => "null",
+        };
     }
 
     private static CombatBarrierEvaluation Released(BarrierSource source, string reason)
