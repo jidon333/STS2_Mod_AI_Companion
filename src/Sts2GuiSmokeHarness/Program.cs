@@ -5468,6 +5468,157 @@ static void RunSelfTest()
     Assert(
         RootSceneTransitionObserverSignals.ShouldTreatCaptureAsTransitionWait(GuiSmokePhase.WaitRunLoad, waitRunLoadTransitionObserver.Summary),
         "Explicit run-load transition truth should suppress generic black-frame recovery nudges.");
+    Assert(
+        BuildAllowedActions(GuiSmokePhase.WaitRunLoad, waitRunLoadTransitionObserver, Array.Empty<CombatCardKnowledgeHint>(), null, Array.Empty<GuiSmokeHistoryEntry>()).SequenceEqual(new[] { "wait" }),
+        "WaitRunLoad should remain wait-only while explicit transition truth is still active.");
+
+    var waitRunLoadStuckContinueObserver = new ObserverState(
+        new ObserverSummary(
+            "main-menu",
+            "main-menu",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            true,
+            "mixed",
+            "stable",
+            "main-menu",
+            null,
+            null,
+            24,
+            24,
+            null,
+            new[] { "\uACC4\uC18D", "\uBA40\uD2F0\uD50C\uB808\uC774", "\uC885\uB8CC" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("main-menu:continue", "continue-run", "\uACC4\uC18D", "676,659,200,50", true)
+                {
+                    TypeName = "continue-run",
+                    SemanticHints = new[] { "scene:main-menu", "kind:continue-run", "value:main-menu:continue" },
+                },
+            },
+            new[]
+            {
+                new ObserverChoice("continue-run", "\uACC4\uC18D", "676,659,200,50", "main-menu:continue", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuContinueButton")
+                {
+                    NodeId = "main-menu:continue",
+                    BindingKind = "continue-run",
+                    Enabled = true,
+                },
+            },
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["transitionInProgress"] = "false",
+                ["rootSceneIsMainMenu"] = "true",
+                ["rootSceneIsRun"] = "false",
+                ["currentRunNodePresent"] = "false",
+                ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                ["terminalRunBoundary"] = "true",
+                ["mainMenuReturnDetected"] = "true",
+                ["choiceExtractorPath"] = "main-menu",
+            },
+        },
+        null,
+        null,
+        null);
+    Assert(
+        WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadStuckContinueObserver.Summary),
+        "Stable main-menu continue authority without transition evidence should reopen EnterRun from WaitRunLoad.");
+    Assert(
+        !RootSceneTransitionObserverSignals.ShouldTreatCaptureAsTransitionWait(GuiSmokePhase.WaitRunLoad, waitRunLoadStuckContinueObserver.Summary),
+        "Stable main-menu continue authority should not be treated as an in-flight run-load transition.");
+    var waitRunLoadRetryActions = BuildAllowedActions(
+        GuiSmokePhase.WaitRunLoad,
+        waitRunLoadStuckContinueObserver,
+        Array.Empty<CombatCardKnowledgeHint>(),
+        null,
+        Array.Empty<GuiSmokeHistoryEntry>());
+    Assert(
+        waitRunLoadRetryActions.Contains("click continue", StringComparer.OrdinalIgnoreCase)
+        && waitRunLoadRetryActions.Contains("wait", StringComparer.OrdinalIgnoreCase),
+        "WaitRunLoad should reopen EnterRun actions when Continue remains visible on a stable main menu.");
+    var waitRunLoadRetryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+        "run",
+        "boot-to-long-run",
+        6,
+        GuiSmokePhase.WaitRunLoad.ToString(),
+        "Wait for run-load readiness.",
+        DateTimeOffset.UtcNow,
+        "screen.png",
+        new WindowBounds(0, 0, 1280, 720),
+        "phase:wait-run-load|screen:main-menu|visible:main-menu|ready:true|stability:stable",
+        "0001",
+        1,
+        3,
+        true,
+        "tactical",
+        null,
+        waitRunLoadStuckContinueObserver.Summary,
+        Array.Empty<KnownRecipeHint>(),
+        Array.Empty<EventKnowledgeCandidate>(),
+        Array.Empty<CombatCardKnowledgeHint>(),
+        waitRunLoadRetryActions,
+        Array.Empty<GuiSmokeHistoryEntry>(),
+        string.Empty,
+        null));
+    Assert(
+        string.Equals(waitRunLoadRetryDecision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(waitRunLoadRetryDecision.TargetLabel, "continue", StringComparison.OrdinalIgnoreCase),
+        "WaitRunLoad should retry Continue instead of returning a passive wait decision when the stable main-menu continue surface persists.");
+
+    var waitRunLoadTerminalMainMenuObserver = new ObserverState(
+        new ObserverSummary(
+            "main-menu",
+            "main-menu",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            true,
+            "mixed",
+            "stable",
+            "main-menu",
+            null,
+            null,
+            24,
+            24,
+            null,
+            new[] { "\uBA40\uD2F0\uD50C\uB808\uC774", "\uC885\uB8CC" },
+            Array.Empty<string>(),
+            new[]
+            {
+                new ObserverActionNode("main-menu:multiplayer", "menu-action", "\uBA40\uD2F0\uD50C\uB808\uC774", "676,759,200,50", true),
+            },
+            new[]
+            {
+                new ObserverChoice("menu-action", "\uBA40\uD2F0\uD50C\uB808\uC774", "676,759,200,50", "main-menu:multiplayer", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuTextButton")
+                {
+                    NodeId = "main-menu:multiplayer",
+                    Enabled = true,
+                },
+            },
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["transitionInProgress"] = "false",
+                ["rootSceneIsMainMenu"] = "true",
+                ["rootSceneIsRun"] = "false",
+                ["currentRunNodePresent"] = "false",
+                ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                ["terminalRunBoundary"] = "true",
+                ["mainMenuReturnDetected"] = "true",
+                ["choiceExtractorPath"] = "main-menu",
+            },
+        },
+        null,
+        null,
+        null);
+    Assert(
+        !WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadTerminalMainMenuObserver.Summary),
+        "Terminal main-menu returns without Continue should not be retried as run-load recovery.");
 
     var waitCharacterSelectBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-wait-character-select-branch-{Guid.NewGuid():N}");
     Directory.CreateDirectory(waitCharacterSelectBranchRoot);
@@ -5477,10 +5628,33 @@ static void RunSelfTest()
         Assert(
             TryAdvanceAlternateBranch(
                 GuiSmokePhase.WaitRunLoad,
-                postEnterRunTreasureObserver,
+                waitRunLoadStuckContinueObserver,
                 new List<GuiSmokeHistoryEntry>(),
                 waitCharacterSelectLogger,
                 4,
+                true,
+                out var waitRunLoadRetryPhase)
+            && waitRunLoadRetryPhase == GuiSmokePhase.EnterRun,
+            "WaitRunLoad should bounce back to EnterRun when Continue remains visible on a stable main-menu surface without transition evidence.");
+
+        Assert(
+            !TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitRunLoad,
+                waitRunLoadTerminalMainMenuObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitCharacterSelectLogger,
+                5,
+                true,
+                out _),
+            "WaitRunLoad should not misclassify terminal main-menu returns without Continue as run-load retries.");
+
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.WaitRunLoad,
+                postEnterRunTreasureObserver,
+                new List<GuiSmokeHistoryEntry>(),
+                waitCharacterSelectLogger,
+                6,
                 true,
                 out var waitRunLoadTreasurePhase)
             && waitRunLoadTreasurePhase == GuiSmokePhase.ChooseFirstNode,
@@ -5492,7 +5666,7 @@ static void RunSelfTest()
                 rewardMixedStateObserver,
                 new List<GuiSmokeHistoryEntry>(),
                 waitCharacterSelectLogger,
-                5,
+                7,
                 true,
                 out var waitRunLoadRewardPhase)
             && waitRunLoadRewardPhase == GuiSmokePhase.HandleRewards,
@@ -5527,7 +5701,7 @@ static void RunSelfTest()
                     null),
                 new List<GuiSmokeHistoryEntry>(),
                 waitCharacterSelectLogger,
-                6,
+                8,
                 true,
                 out var waitRunLoadEventPhase)
             && waitRunLoadEventPhase == GuiSmokePhase.HandleEvent,
@@ -5562,7 +5736,7 @@ static void RunSelfTest()
                     null),
                 new List<GuiSmokeHistoryEntry>(),
                 waitCharacterSelectLogger,
-                7,
+                9,
                 true,
                 out var waitRunLoadCombatPhase)
             && waitRunLoadCombatPhase == GuiSmokePhase.HandleCombat,
@@ -5574,7 +5748,7 @@ static void RunSelfTest()
                 postEnterRunCharacterSelectObserver,
                 new List<GuiSmokeHistoryEntry>(),
                 waitCharacterSelectLogger,
-                8,
+                10,
                 true,
                 out var waitCharacterSelectPhase)
             && waitCharacterSelectPhase == GuiSmokePhase.ChooseCharacter,
@@ -13016,6 +13190,11 @@ static string[] BuildAllowedActionsCore(
         return BuildAllowedActions(postRunLoadPhase, observer, combatCardKnowledge, screenshotPath, history);
     }
 
+    if (phase == GuiSmokePhase.WaitRunLoad && WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(observer.Summary))
+    {
+        return BuildAllowedActions(GuiSmokePhase.EnterRun, observer, combatCardKnowledge, screenshotPath, history);
+    }
+
     if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out var observedPhase))
     {
         return BuildAllowedActions(observedPhase, observer, combatCardKnowledge, screenshotPath, history);
@@ -14362,7 +14541,9 @@ static string BuildFailureModeHintCoreWithContext(
 
     if (phase == GuiSmokePhase.WaitRunLoad)
     {
-        return "AI first: trust transition/runtime root-scene state. While transitionInProgress is true, or rootSceneIsRun/currentRunNodePresent is not yet true, wait without acting; only branch once the resumed or newly created run scene becomes explicit.";
+        return WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(observer.Summary)
+            ? "Stable main-menu continue authority is still foreground-visible with no transition evidence. Reopen EnterRun and retry Continue instead of idling in WaitRunLoad."
+            : "AI first: trust transition/runtime root-scene state. While transitionInProgress is true, or rootSceneIsRun/currentRunNodePresent is not yet true, wait without acting; only branch once the resumed or newly created run scene becomes explicit.";
     }
 
     if (phase == GuiSmokePhase.HandleRewards && context.UseRewardFastPath)
@@ -15059,6 +15240,14 @@ static bool TryAdvanceAlternateBranch(
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
             nextPhase = postRunLoadPhase;
+            return true;
+        }
+
+        if (WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(observer.Summary))
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "retry-enter-run", observer.CurrentScreen, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "retry-enter-run", observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = GuiSmokePhase.EnterRun;
             return true;
         }
     }
@@ -18977,6 +19166,11 @@ static class RootSceneTransitionObserverSignals
             return false;
         }
 
+        if (WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(observer))
+        {
+            return false;
+        }
+
         if (state.RootSceneIsMainMenu)
         {
             return true;
@@ -19012,6 +19206,63 @@ static class RootSceneTransitionObserverSignals
                && bool.TryParse(value, out var parsed)
             ? parsed
             : null;
+    }
+}
+
+static class WaitRunLoadRecoverySignals
+{
+    public static bool ShouldRetryEnterRunFromWaitRunLoad(ObserverSummary observer)
+    {
+        if (observer.SceneReady == false
+            || !string.Equals(observer.SceneStability, "stable", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var transitionState = RootSceneTransitionObserverSignals.TryGetState(observer);
+        if (transitionState?.TransitionInProgress == true
+            || transitionState?.RootSceneIsRun == true
+            || transitionState?.CurrentRunNodePresent == true)
+        {
+            return false;
+        }
+
+        var mainMenuSurfaceVisible = string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(observer.VisibleScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
+                                     || string.Equals(observer.ChoiceExtractorPath, "main-menu", StringComparison.OrdinalIgnoreCase)
+                                     || transitionState?.RootSceneIsMainMenu == true;
+        if (!mainMenuSurfaceVisible)
+        {
+            return false;
+        }
+
+        return observer.ActionNodes.Any(IsActionableContinueRunNode)
+               || observer.Choices.Any(IsContinueRunChoice)
+               || observer.CurrentChoices.Any(IsContinueRunLabel);
+    }
+
+    private static bool IsActionableContinueRunNode(ObserverActionNode node)
+    {
+        return node.Actionable
+               && (string.Equals(node.Kind, "continue-run", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(node.NodeId, "main-menu:continue", StringComparison.OrdinalIgnoreCase)
+                   || node.SemanticHints.Any(static hint => hint.Contains("continue-run", StringComparison.OrdinalIgnoreCase))
+                   || IsContinueRunLabel(node.Label));
+    }
+
+    private static bool IsContinueRunChoice(ObserverChoice choice)
+    {
+        return string.Equals(choice.Kind, "continue-run", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(choice.BindingKind, "continue-run", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(choice.Value, "main-menu:continue", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(choice.NodeId, "main-menu:continue", StringComparison.OrdinalIgnoreCase)
+               || (choice.Enabled ?? true) && IsContinueRunLabel(choice.Label);
+    }
+
+    private static bool IsContinueRunLabel(string? label)
+    {
+        return string.Equals(label, "Continue", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "\uACC4\uC18D", StringComparison.OrdinalIgnoreCase);
     }
 }
 
@@ -21454,6 +21705,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 GuiSmokePhase.ChooseCharacter => DecideChooseCharacter(request with { Phase = GuiSmokePhase.ChooseCharacter.ToString() }),
                 _ => CreateWaitDecision("waiting for post-run-load room state", request.Observer.CurrentScreen),
             };
+        }
+
+        if (WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(request.Observer))
+        {
+            return DecideEnterRun(request with { Phase = GuiSmokePhase.EnterRun.ToString() });
         }
 
         return CreateWaitDecision("waiting for root-scene transition and run load readiness", request.Observer.CurrentScreen);
