@@ -3516,10 +3516,10 @@ static void RunSelfTest()
         }
     }
 
-    var attemptDesktopVideoRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-video-attempt-desktop-self-test-{Guid.NewGuid():N}");
+    var unsupportedWindowVideoRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-video-unsupported-window-self-test-{Guid.NewGuid():N}");
     try
     {
-        Directory.CreateDirectory(attemptDesktopVideoRoot);
+        Directory.CreateDirectory(unsupportedWindowVideoRoot);
 
         using var recorder = GuiSmokeVideoRecorder.Create(
             workspaceRoot,
@@ -3529,33 +3529,31 @@ static void RunSelfTest()
             },
             "self-test-session",
             "self-test-run",
-            attemptDesktopVideoRoot,
-            attemptDesktopVideoRoot,
+            unsupportedWindowVideoRoot,
+            unsupportedWindowVideoRoot,
             attemptId: "0001",
             scopeKind: "attempt");
         var started = recorder.TryStart(new WindowCaptureTarget(IntPtr.Zero, "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
-        Assert(started, "Attempt review video should use live desktop capture when an executable is available.");
-        recorder.Complete(keepRecording: true, completionReason: "self-test-attempt-desktop-video");
+        Assert(!started, "Video recorder should skip when the selected executable lacks gdigrab window capture support.");
+        recorder.Complete(keepRecording: true, completionReason: "self-test-unsupported-window-video");
 
-        var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(attemptDesktopVideoRoot, "video-recording.json"))
-                       ?? throw new InvalidOperationException("Expected attempt desktop-crop video metadata.");
-        Assert(!string.Equals(metadata.Status, "recording", StringComparison.OrdinalIgnoreCase), "Attempt video metadata must finalize out of transient recording state.");
-        Assert(string.Equals(metadata.CaptureMode, "desktop-crop", StringComparison.OrdinalIgnoreCase), "Attempt metadata should honestly report live desktop-crop capture.");
-        Assert(metadata.WindowScopedCaptureRequested, "Attempt desktop capture should preserve the requested window-scoped intent.");
-        Assert(metadata.CommandLine is not null && metadata.CommandLine.Contains("-f gdigrab", StringComparison.OrdinalIgnoreCase), "Attempt desktop capture should record the live ffmpeg gdigrab command.");
+        var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(unsupportedWindowVideoRoot, "video-recording.json"))
+                       ?? throw new InvalidOperationException("Expected unsupported-window video metadata.");
+        Assert(string.Equals(metadata.Status, "skipped", StringComparison.OrdinalIgnoreCase), "Unsupported ffmpeg should produce skipped video metadata.");
+        Assert(metadata.SkipReason is not null && metadata.SkipReason.Contains("ffmpeg-missing-gdigrab", StringComparison.OrdinalIgnoreCase), "Unsupported ffmpeg metadata should explain missing gdigrab support.");
     }
     finally
     {
-        if (Directory.Exists(attemptDesktopVideoRoot))
+        if (Directory.Exists(unsupportedWindowVideoRoot))
         {
-            Directory.Delete(attemptDesktopVideoRoot, recursive: true);
+            Directory.Delete(unsupportedWindowVideoRoot, recursive: true);
         }
     }
 
-    var desktopCropVideoRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-video-desktop-crop-self-test-{Guid.NewGuid():N}");
+    var attemptWindowVideoRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-video-attempt-window-self-test-{Guid.NewGuid():N}");
     try
     {
-        Directory.CreateDirectory(desktopCropVideoRoot);
+        Directory.CreateDirectory(attemptWindowVideoRoot);
         using var recorder = GuiSmokeVideoRecorder.Create(
             workspaceRoot,
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -3564,26 +3562,64 @@ static void RunSelfTest()
             },
             "self-test-session",
             "self-test-run",
-            desktopCropVideoRoot,
-            desktopCropVideoRoot,
-            attemptId: null,
-            scopeKind: "bootstrap");
-        var started = recorder.TryStart(new WindowCaptureTarget(IntPtr.Zero, "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
-        Assert(started, "Bootstrap recorder should still attempt best-effort desktop crop when an executable is available.");
-        recorder.Complete(keepRecording: false, completionReason: "self-test-desktop-crop-video");
+            attemptWindowVideoRoot,
+            attemptWindowVideoRoot,
+            attemptId: "0001",
+            scopeKind: "attempt",
+            captureSupportOverride: new GuiSmokeFfmpegCaptureSupport(true));
+        var started = recorder.TryStart(new WindowCaptureTarget(new IntPtr(12345), "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
+        Assert(started, "Attempt review video should use single-window capture when gdigrab is available.");
+        recorder.Complete(keepRecording: true, completionReason: "self-test-attempt-window-video");
 
-        var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(desktopCropVideoRoot, "video-recording.json"))
-                       ?? throw new InvalidOperationException("Expected desktop crop video metadata.");
-        Assert(!string.Equals(metadata.Status, "recording", StringComparison.OrdinalIgnoreCase), "Bootstrap video metadata must finalize out of transient recording state.");
-        Assert(string.Equals(metadata.CaptureMode, "desktop-crop", StringComparison.OrdinalIgnoreCase), "Bootstrap metadata should honestly report desktop-crop capture mode.");
-        Assert(metadata.WindowScopedCaptureRequested, "Bootstrap desktop crop should preserve the requested window-scoped intent.");
-        Assert(metadata.CaptureModeNote is not null && metadata.CaptureModeNote.Contains("desktop crop", StringComparison.OrdinalIgnoreCase), "Bootstrap metadata should explain desktop crop contamination risk.");
+        var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(attemptWindowVideoRoot, "video-recording.json"))
+                       ?? throw new InvalidOperationException("Expected attempt window video metadata.");
+        Assert(!string.Equals(metadata.Status, "recording", StringComparison.OrdinalIgnoreCase), "Attempt video metadata must finalize out of transient recording state.");
+        Assert(string.Equals(metadata.CaptureMode, "window-hwnd", StringComparison.OrdinalIgnoreCase), "Attempt metadata should honestly report window-handle capture mode.");
+        Assert(metadata.WindowScopedCaptureRequested, "Attempt window capture should preserve the requested window-scoped intent.");
+        Assert(metadata.CaptureInputPattern is not null && metadata.CaptureInputPattern.Contains("hwnd=12345", StringComparison.OrdinalIgnoreCase), "Attempt window capture should record the handle-based input pattern.");
+        Assert(metadata.CommandLine is not null && metadata.CommandLine.Contains("-f gdigrab", StringComparison.OrdinalIgnoreCase) && metadata.CommandLine.Contains("hwnd=12345", StringComparison.OrdinalIgnoreCase), "Attempt window capture should record the live ffmpeg gdigrab command.");
     }
     finally
     {
-        if (Directory.Exists(desktopCropVideoRoot))
+        if (Directory.Exists(attemptWindowVideoRoot))
         {
-            Directory.Delete(desktopCropVideoRoot, recursive: true);
+            Directory.Delete(attemptWindowVideoRoot, recursive: true);
+        }
+    }
+
+    var bootstrapWindowVideoRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-video-bootstrap-window-self-test-{Guid.NewGuid():N}");
+    try
+    {
+        Directory.CreateDirectory(bootstrapWindowVideoRoot);
+        using var recorder = GuiSmokeVideoRecorder.Create(
+            workspaceRoot,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["--ffmpeg-path"] = cmdWindowsPath,
+            },
+            "self-test-session",
+            "self-test-run",
+            bootstrapWindowVideoRoot,
+            bootstrapWindowVideoRoot,
+            attemptId: null,
+            scopeKind: "bootstrap",
+            captureSupportOverride: new GuiSmokeFfmpegCaptureSupport(true));
+        var started = recorder.TryStart(new WindowCaptureTarget(IntPtr.Zero, "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
+        Assert(started, "Bootstrap recorder should use single-window capture when a window title is available.");
+        recorder.Complete(keepRecording: false, completionReason: "self-test-bootstrap-window-video");
+
+        var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(bootstrapWindowVideoRoot, "video-recording.json"))
+                       ?? throw new InvalidOperationException("Expected bootstrap window video metadata.");
+        Assert(!string.Equals(metadata.Status, "recording", StringComparison.OrdinalIgnoreCase), "Bootstrap video metadata must finalize out of transient recording state.");
+        Assert(string.Equals(metadata.CaptureMode, "window-title", StringComparison.OrdinalIgnoreCase), "Bootstrap metadata should honestly report window-title capture mode.");
+        Assert(metadata.WindowScopedCaptureRequested, "Bootstrap window capture should preserve the requested window-scoped intent.");
+        Assert(metadata.CaptureModeNote is not null && metadata.CaptureModeNote.Contains("Single-window", StringComparison.OrdinalIgnoreCase), "Bootstrap metadata should explain single-window capture semantics.");
+    }
+    finally
+    {
+        if (Directory.Exists(bootstrapWindowVideoRoot))
+        {
+            Directory.Delete(bootstrapWindowVideoRoot, recursive: true);
         }
     }
 
@@ -31981,6 +32017,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
     private readonly string _workspaceRoot;
     private readonly string _metadataPath;
     private readonly GuiSmokeVideoRecordingMetadata _metadata;
+    private readonly GuiSmokeFfmpegCaptureSupport? _captureSupportOverride;
     private readonly List<string> _diagnosticLines = new();
     private readonly object _diagnosticLock = new();
     private string? _ffmpegProcessPath;
@@ -31991,11 +32028,13 @@ sealed class GuiSmokeVideoRecorder : IDisposable
     private GuiSmokeVideoRecorder(
         string workspaceRoot,
         string rootPath,
-        GuiSmokeVideoRecordingMetadata metadata)
+        GuiSmokeVideoRecordingMetadata metadata,
+        GuiSmokeFfmpegCaptureSupport? captureSupportOverride)
     {
         _workspaceRoot = workspaceRoot;
         _metadataPath = Path.Combine(rootPath, "video-recording.json");
         _metadata = metadata;
+        _captureSupportOverride = captureSupportOverride;
         PersistMetadata();
     }
 
@@ -32007,7 +32046,8 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         string rootPath,
         string sessionRoot,
         string? attemptId,
-        string scopeKind)
+        string scopeKind,
+        GuiSmokeFfmpegCaptureSupport? captureSupportOverride = null)
     {
         Directory.CreateDirectory(rootPath);
         var outputPath = Path.Combine(rootPath, "video.review.mkv");
@@ -32021,7 +32061,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         {
             AttemptId = attemptId,
         };
-        var recorder = new GuiSmokeVideoRecorder(workspaceRoot, rootPath, metadata);
+        var recorder = new GuiSmokeVideoRecorder(workspaceRoot, rootPath, metadata, captureSupportOverride);
         recorder.InitializeAvailability(options);
         return recorder;
     }
@@ -32054,10 +32094,19 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             return false;
         }
 
+        var inputPattern = TryBuildWindowCaptureInputPattern(target);
+        if (string.IsNullOrWhiteSpace(inputPattern))
+        {
+            MarkSkipped("window-input-unavailable");
+            return false;
+        }
+
         _metadata.WindowScopedCaptureRequested = !target.IsFallback;
-        _metadata.CaptureMode = "desktop-crop";
-        _metadata.CaptureInputPattern = null;
-        _metadata.CaptureModeNote = "Best-effort desktop crop of requested bounds; overlapping windows can contaminate review footage.";
+        _metadata.CaptureMode = inputPattern.StartsWith("hwnd=", StringComparison.OrdinalIgnoreCase)
+            ? "window-hwnd"
+            : "window-title";
+        _metadata.CaptureInputPattern = inputPattern;
+        _metadata.CaptureModeNote = "Single-window ffmpeg gdigrab capture of the detected game window.";
         _metadata.WindowTitle = target.Title;
         _metadata.CaptureBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height);
 
@@ -32065,7 +32114,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         var workingDirectory = GetProcessCompatiblePath(_workspaceRoot);
         var executablePath = _metadata.FfmpegPath!;
         var commandPath = _ffmpegProcessPath ?? executablePath;
-        var arguments = BuildFfmpegArguments(bounds, outputProcessPath);
+        var arguments = BuildFfmpegArguments(inputPattern, outputProcessPath);
         _metadata.CommandLine = QuoteCommand(commandPath, arguments);
         try
         {
@@ -32193,6 +32242,8 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             return;
         }
 
+        var hasExplicitFfmpegOverride = options.ContainsKey("--ffmpeg-path")
+            || !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("STS2_GUI_SMOKE_FFMPEG_PATH"));
         var ffmpegPath = ResolveFfmpegPath(options, _workspaceRoot);
         if (ffmpegPath is null)
         {
@@ -32204,9 +32255,39 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             return;
         }
 
-        _metadata.FfmpegPath = ffmpegPath.HostPath;
-        _ffmpegProcessPath = ffmpegPath.ProcessPath;
-        _metadata.FfmpegAvailable = true;
+        if (!TryBindCaptureReadyFfmpeg(ffmpegPath))
+        {
+            if (!hasExplicitFfmpegOverride)
+            {
+                var attemptedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ffmpegPath.HostPath,
+                };
+                foreach (var fallbackProbePath in GetDefaultFfmpegFallbackProbePaths())
+                {
+                    var alternateBinding = ResolveExecutablePath(fallbackProbePath, _workspaceRoot);
+                    if (alternateBinding is null || !attemptedPaths.Add(alternateBinding.HostPath))
+                    {
+                        continue;
+                    }
+
+                    if (TryBindCaptureReadyFfmpeg(alternateBinding))
+                    {
+                        PersistMetadata();
+                        LogVideo($"video scope={_metadata.ScopeKind} availability ready ffmpeg={_metadata.FfmpegPath}");
+                        return;
+                    }
+                }
+            }
+
+            _metadata.Status = "skipped";
+            _metadata.FfmpegAvailable = false;
+            _metadata.SkipReason = "ffmpeg-missing-gdigrab";
+            PersistMetadata();
+            LogVideo($"video scope={_metadata.ScopeKind} availability skipped reason={_metadata.SkipReason} ffmpeg={_metadata.FfmpegPath ?? "null"}");
+            return;
+        }
+
         PersistMetadata();
         LogVideo($"video scope={_metadata.ScopeKind} availability ready ffmpeg={_metadata.FfmpegPath}");
     }
@@ -32305,7 +32386,83 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         return new Rectangle(bounds.X, bounds.Y, width, height);
     }
 
-    private static string BuildFfmpegArguments(Rectangle bounds, string outputPath)
+    private static string? TryBuildWindowCaptureInputPattern(WindowCaptureTarget target)
+    {
+        if (target.Handle != IntPtr.Zero)
+        {
+            return $"hwnd={target.Handle.ToInt64().ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(target.Title))
+        {
+            return $"title={target.Title}";
+        }
+
+        return null;
+    }
+
+    private bool TryBindCaptureReadyFfmpeg(VideoPathBinding ffmpegPath)
+    {
+        _metadata.FfmpegPath = ffmpegPath.HostPath;
+        _ffmpegProcessPath = ffmpegPath.ProcessPath;
+
+        var captureSupport = _captureSupportOverride ?? ProbeCaptureSupport(ffmpegPath);
+        if (!captureSupport.SupportsGdigrab)
+        {
+            _metadata.FfmpegAvailable = false;
+            RecordDiagnosticLine($"ffmpeg path={ffmpegPath.HostPath} missing gdigrab support");
+            return false;
+        }
+
+        _metadata.FfmpegAvailable = true;
+        _metadata.SkipReason = null;
+        return true;
+    }
+
+    private static GuiSmokeFfmpegCaptureSupport ProbeCaptureSupport(VideoPathBinding ffmpegPath)
+    {
+        try
+        {
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = ffmpegPath.HostPath,
+                    Arguments = "-hide_banner -devices",
+                    WorkingDirectory = Path.GetDirectoryName(ffmpegPath.HostPath) ?? Environment.CurrentDirectory,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                },
+            };
+            process.Start();
+            var standardOutput = process.StandardOutput.ReadToEnd();
+            var standardError = process.StandardError.ReadToEnd();
+            if (!process.WaitForExit(StopTimeoutMs))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                }
+
+                return new GuiSmokeFfmpegCaptureSupport(false);
+            }
+
+            return new GuiSmokeFfmpegCaptureSupport(
+                standardOutput.Contains("gdigrab", StringComparison.OrdinalIgnoreCase)
+                || standardError.Contains("gdigrab", StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            return new GuiSmokeFfmpegCaptureSupport(false);
+        }
+    }
+
+    private static string BuildFfmpegArguments(string inputPattern, string outputPath)
     {
         return string.Join(
             " ",
@@ -32315,11 +32472,9 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             "-y",
             "-f gdigrab",
             $"-framerate {CaptureFramerate.ToString(CultureInfo.InvariantCulture)}",
-            $"-offset_x {bounds.X.ToString(CultureInfo.InvariantCulture)}",
-            $"-offset_y {bounds.Y.ToString(CultureInfo.InvariantCulture)}",
-            $"-video_size {bounds.Width.ToString(CultureInfo.InvariantCulture)}x{bounds.Height.ToString(CultureInfo.InvariantCulture)}",
             "-draw_mouse 0",
-            "-i desktop",
+            "-i",
+            QuoteArgument(inputPattern),
             "-c:v libx264",
             "-preset ultrafast",
             "-pix_fmt yuv420p",
@@ -32740,3 +32895,4 @@ sealed class GuiSmokeVideoRecorder : IDisposable
 }
 
 sealed record VideoPathBinding(string HostPath, string ProcessPath);
+sealed record GuiSmokeFfmpegCaptureSupport(bool SupportsGdigrab);
