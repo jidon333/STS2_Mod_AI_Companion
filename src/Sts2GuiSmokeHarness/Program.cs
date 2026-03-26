@@ -4,7 +4,6 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Runtime.Serialization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -3498,7 +3497,7 @@ static void RunSelfTest()
             videoSkipRoot,
             videoSkipRoot,
             attemptId: "0001",
-            scopeKind: "bootstrap");
+            scopeKind: "attempt");
         var started = recorder.TryStart(new WindowCaptureTarget(IntPtr.Zero, "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
         Assert(!started, "Video recorder should skip when ffmpeg is unavailable.");
         recorder.Complete(keepRecording: true, completionReason: "self-test-video-skip");
@@ -3521,19 +3520,8 @@ static void RunSelfTest()
     try
     {
         Directory.CreateDirectory(Path.Combine(composedAttemptVideoRoot, "steps"));
-        using (var frame1 = new Bitmap(24, 24))
-        using (var graphics1 = Graphics.FromImage(frame1))
-        {
-            graphics1.Clear(Color.Firebrick);
-            frame1.Save(Path.Combine(composedAttemptVideoRoot, "steps", "0002.screen.png"), ImageFormat.Png);
-        }
-
-        using (var frame2 = new Bitmap(24, 24))
-        using (var graphics2 = Graphics.FromImage(frame2))
-        {
-            graphics2.Clear(Color.DarkSeaGreen);
-            frame2.Save(Path.Combine(composedAttemptVideoRoot, "steps", "0001.screen.png"), ImageFormat.Png);
-        }
+        File.WriteAllText(Path.Combine(composedAttemptVideoRoot, "steps", "0002.screen.png"), "fake-screen-2");
+        File.WriteAllText(Path.Combine(composedAttemptVideoRoot, "steps", "0001.screen.png"), "fake-screen-1");
 
         var orderedScreens = GuiSmokeVideoRecorder.GetAttemptStepScreenshotPathsForSelfTest(composedAttemptVideoRoot);
         Assert(orderedScreens.Count == 2, "Attempt video composition should discover step screenshots.");
@@ -3541,9 +3529,19 @@ static void RunSelfTest()
                && orderedScreens[1].EndsWith("0002.screen.png", StringComparison.OrdinalIgnoreCase),
             "Attempt video composition should preserve step order.");
 
+        var concatLines = GuiSmokeVideoRecorder.BuildStepScreenshotConcatLinesForSelfTest(orderedScreens);
+        Assert(concatLines.Length == 5, "Concat manifest should include file/duration pairs and repeat the last frame.");
+        Assert(concatLines[0].Contains("0001.screen.png", StringComparison.OrdinalIgnoreCase)
+               && concatLines[2].Contains("0002.screen.png", StringComparison.OrdinalIgnoreCase)
+               && concatLines[^1].Contains("0002.screen.png", StringComparison.OrdinalIgnoreCase),
+            "Concat manifest should preserve ordered step screenshot inputs.");
+
         using var recorder = GuiSmokeVideoRecorder.Create(
             workspaceRoot,
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["--ffmpeg-path"] = cmdWindowsPath,
+            },
             "self-test-session",
             "self-test-run",
             composedAttemptVideoRoot,
@@ -3560,10 +3558,7 @@ static void RunSelfTest()
         Assert(string.Equals(metadata.CaptureMode, "step-screens", StringComparison.OrdinalIgnoreCase), "Attempt video should report step-screens as the actual capture mode.");
         Assert(string.Equals(metadata.CaptureInputPattern, "steps/*.screen.png", StringComparison.OrdinalIgnoreCase), "Attempt video metadata should disclose the screenshot source pattern.");
         Assert(!metadata.WindowScopedCaptureRequested, "Step-screenshot composition should not claim live window-scoped capture.");
-        Assert(metadata.CommandLine is null, "Attempt GIF composition should not require an ffmpeg command line.");
-        Assert(metadata.OutputPath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase), "Attempt review output should use a GIF artifact path.");
-        Assert(File.Exists(metadata.OutputPath), "Attempt review GIF should be created from authoritative step screenshots.");
-        Assert(string.Equals(metadata.Status, "kept", StringComparison.OrdinalIgnoreCase), "Attempt review GIF should be kept when requested.");
+        Assert(metadata.CommandLine is not null && metadata.CommandLine.Contains("video.frames.txt", StringComparison.OrdinalIgnoreCase), "Attempt video composition should record the ffmpeg concat command when encoding is attempted.");
     }
     finally
     {
@@ -31779,9 +31774,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         string scopeKind)
     {
         Directory.CreateDirectory(rootPath);
-        var outputPath = string.Equals(scopeKind, "attempt", StringComparison.OrdinalIgnoreCase)
-            ? Path.Combine(rootPath, "video.review.gif")
-            : Path.Combine(rootPath, "video.review.mkv");
+        var outputPath = Path.Combine(rootPath, "video.review.mkv");
         var metadata = new GuiSmokeVideoRecordingMetadata(
             scopeKind,
             sessionId,
@@ -31816,7 +31809,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         {
             _metadata.CaptureMode = "step-screens";
             _metadata.CaptureInputPattern = "steps/*.screen.png";
-            _metadata.CaptureModeNote = "Composed after completion from authoritative per-step screenshots as an animated GIF review artifact.";
+            _metadata.CaptureModeNote = "Composed after completion from authoritative per-step screenshots.";
             _metadata.WindowScopedCaptureRequested = false;
             _metadata.WindowTitle = null;
             _metadata.CaptureBounds = null;
@@ -31989,14 +31982,6 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             return;
         }
 
-        if (UsesStepScreenshotComposition())
-        {
-            _metadata.FfmpegAvailable = false;
-            PersistMetadata();
-            LogVideo($"video scope={_metadata.ScopeKind} availability ready composer=internal-gif");
-            return;
-        }
-
         var ffmpegPath = ResolveFfmpegPath(options, _workspaceRoot);
         if (ffmpegPath is null)
         {
@@ -32166,9 +32151,71 @@ sealed class GuiSmokeVideoRecorder : IDisposable
 
     private static IEnumerable<string> GetDefaultFfmpegFallbackProbePaths()
     {
+        foreach (var wingetCandidate in GetWingetFfmpegFallbackProbePaths())
+        {
+            yield return wingetCandidate;
+        }
+
         yield return @"C:\Program Files\SteelSeries\GG\apps\moments\ffmpeg.exe";
         yield return @"C:\Program Files\ffmpeg\bin\ffmpeg.exe";
         yield return @"C:\ffmpeg\bin\ffmpeg.exe";
+    }
+
+    private static IEnumerable<string> GetWingetFfmpegFallbackProbePaths()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localAppData))
+        {
+            yield break;
+        }
+
+        var packagesRoot = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages");
+        if (!Directory.Exists(packagesRoot))
+        {
+            yield break;
+        }
+
+        IEnumerable<string> packageDirectories;
+        try
+        {
+            packageDirectories = Directory.EnumerateDirectories(packagesRoot, "*FFmpeg*", SearchOption.TopDirectoryOnly)
+                .Concat(Directory.EnumerateDirectories(packagesRoot, "*ffmpeg*", SearchOption.TopDirectoryOnly))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path.IndexOf("Gyan.FFmpeg", StringComparison.OrdinalIgnoreCase) >= 0 ? 0 : 1)
+                .ThenBy(path => path.IndexOf("BtbN.FFmpeg", StringComparison.OrdinalIgnoreCase) >= 0 ? 0 : 1)
+                .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch
+        {
+            yield break;
+        }
+
+        var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var packageDirectory in packageDirectories)
+        {
+            IEnumerable<string> candidates;
+            try
+            {
+                candidates = Directory.EnumerateFiles(packageDirectory, "ffmpeg.exe", SearchOption.AllDirectories)
+                    .OrderBy(path => path.IndexOf("essentials_build", StringComparison.OrdinalIgnoreCase) >= 0 ? 0 : 1)
+                    .ThenBy(path => path.IndexOf($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}ffmpeg.exe", StringComparison.OrdinalIgnoreCase) >= 0 ? 0 : 1)
+                    .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var candidate in candidates)
+            {
+                if (yielded.Add(candidate))
+                {
+                    yield return candidate;
+                }
+            }
+        }
     }
 
     private void MarkSkipped(string reason)
@@ -32276,6 +32323,12 @@ sealed class GuiSmokeVideoRecorder : IDisposable
     private bool TryComposeAttemptVideoFromStepScreens(out string? failureReason)
     {
         failureReason = null;
+        if (!_metadata.FfmpegAvailable || string.IsNullOrWhiteSpace(_metadata.FfmpegPath))
+        {
+            failureReason = "compose-ffmpeg-unavailable";
+            return false;
+        }
+
         var screenshotPaths = GetAttemptStepScreenshotPaths(_metadata.RootPath);
         if (screenshotPaths.Count == 0)
         {
@@ -32283,17 +32336,74 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             return false;
         }
 
+        var concatFilePath = Path.Combine(_metadata.RootPath, "video.frames.txt");
+        var concatProcessPath = GetProcessCompatiblePath(concatFilePath);
+        var outputProcessPath = GetProcessCompatiblePath(_metadata.OutputPath);
+        var workingDirectory = GetProcessCompatiblePath(_workspaceRoot);
+        var executablePath = _metadata.FfmpegPath!;
+        var commandPath = _ffmpegProcessPath ?? executablePath;
+        var arguments = BuildStepScreenshotComposeArguments(concatProcessPath, outputProcessPath);
+        _metadata.CommandLine = QuoteCommand(commandPath, arguments);
         try
         {
-            WriteAnimatedGif(_metadata.OutputPath, screenshotPaths, AttemptComposeFrameDurationSeconds);
-            _metadata.ExitCode = null;
-            _metadata.CommandLine = null;
+            File.WriteAllLines(concatFilePath, BuildStepScreenshotConcatLines(screenshotPaths), new UTF8Encoding(false));
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = executablePath,
+                    Arguments = arguments,
+                    WorkingDirectory = workingDirectory,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                },
+            };
+            process.OutputDataReceived += (_, eventArgs) => RecordDiagnosticLine(eventArgs.Data);
+            process.ErrorDataReceived += (_, eventArgs) => RecordDiagnosticLine(eventArgs.Data);
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            if (!process.WaitForExit(ComposeTimeoutMs))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                    process.WaitForExit(StopTimeoutMs);
+                }
+                catch
+                {
+                }
+
+                _metadata.ExitCode = process.HasExited ? process.ExitCode : null;
+                failureReason = "compose-timeout";
+                return false;
+            }
+
+            _metadata.ExitCode = process.ExitCode;
+            if (process.ExitCode != 0)
+            {
+                failureReason = $"compose-exit-code:{process.ExitCode.ToString(CultureInfo.InvariantCulture)}";
+                return false;
+            }
+
+            if (!File.Exists(_metadata.OutputPath))
+            {
+                failureReason = "compose-missing-output";
+                return false;
+            }
+
             return true;
         }
         catch (Exception exception)
         {
             failureReason = $"compose-failed:{exception.GetType().Name}:{SanitizeText(exception.Message)}";
             return false;
+        }
+        finally
+        {
+            TryDeleteTemporaryFile(concatFilePath);
         }
     }
 
@@ -32364,90 +32474,6 @@ sealed class GuiSmokeVideoRecorder : IDisposable
     internal static string[] BuildStepScreenshotConcatLinesForSelfTest(IReadOnlyList<string> screenshotPaths)
     {
         return BuildStepScreenshotConcatLines(screenshotPaths).ToArray();
-    }
-
-    private static void WriteAnimatedGif(string outputPath, IReadOnlyList<string> screenshotPaths, double frameDurationSeconds)
-    {
-        if (screenshotPaths.Count == 0)
-        {
-            throw new InvalidOperationException("At least one screenshot is required to compose an animated GIF.");
-        }
-
-        using var firstSource = Image.FromFile(screenshotPaths[0]);
-        using var firstFrame = CreateGifFrameBitmap(firstSource, new Size(firstSource.Width, firstSource.Height));
-        if (screenshotPaths.Count == 1)
-        {
-            firstFrame.Save(outputPath, ImageFormat.Gif);
-            return;
-        }
-
-        ApplyGifAnimationMetadata(
-            firstFrame,
-            screenshotPaths.Count,
-            Math.Max(1, (int)Math.Round(frameDurationSeconds * 100d, MidpointRounding.AwayFromZero)));
-
-        var gifEncoder = GetGifEncoder();
-        using var multiFrameParameters = new EncoderParameters(1);
-        multiFrameParameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.SaveFlag, (long)EncoderValue.MultiFrame);
-        firstFrame.Save(outputPath, gifEncoder, multiFrameParameters);
-
-        for (var i = 1; i < screenshotPaths.Count; i += 1)
-        {
-            using var sourceFrame = Image.FromFile(screenshotPaths[i]);
-            using var animationFrame = CreateGifFrameBitmap(sourceFrame, firstFrame.Size);
-            using var frameParameters = new EncoderParameters(1);
-            frameParameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.SaveFlag, (long)EncoderValue.FrameDimensionTime);
-            firstFrame.SaveAdd(animationFrame, frameParameters);
-        }
-
-        using var flushParameters = new EncoderParameters(1);
-        flushParameters.Param[0] = new EncoderParameter(System.Drawing.Imaging.Encoder.SaveFlag, (long)EncoderValue.Flush);
-        firstFrame.SaveAdd(flushParameters);
-    }
-
-    private static Bitmap CreateGifFrameBitmap(Image source, Size canvasSize)
-    {
-        var frame = new Bitmap(canvasSize.Width, canvasSize.Height);
-        using var graphics = Graphics.FromImage(frame);
-        graphics.Clear(Color.Black);
-        graphics.DrawImage(source, 0, 0, canvasSize.Width, canvasSize.Height);
-        return frame;
-    }
-
-    private static ImageCodecInfo GetGifEncoder()
-    {
-        return ImageCodecInfo.GetImageEncoders()
-            .First(static codec => codec.FormatID == ImageFormat.Gif.Guid);
-    }
-
-    private static void ApplyGifAnimationMetadata(Image image, int frameCount, int frameDelayCentiseconds)
-    {
-        image.SetPropertyItem(CreatePropertyItem(0x5100, 4, BuildGifFrameDelayBytes(frameCount, frameDelayCentiseconds)));
-        image.SetPropertyItem(CreatePropertyItem(0x5101, 3, new byte[] { 0, 0 }));
-    }
-
-    private static byte[] BuildGifFrameDelayBytes(int frameCount, int frameDelayCentiseconds)
-    {
-        var bytes = new byte[frameCount * 4];
-        var delayBytes = BitConverter.GetBytes(frameDelayCentiseconds);
-        for (var i = 0; i < frameCount; i += 1)
-        {
-            Buffer.BlockCopy(delayBytes, 0, bytes, i * 4, 4);
-        }
-
-        return bytes;
-    }
-
-    private static PropertyItem CreatePropertyItem(int id, short type, byte[] value)
-    {
-#pragma warning disable SYSLIB0050
-        var item = (PropertyItem)FormatterServices.GetUninitializedObject(typeof(PropertyItem));
-#pragma warning restore SYSLIB0050
-        item.Id = id;
-        item.Type = type;
-        item.Len = value.Length;
-        item.Value = value;
-        return item;
     }
 
     private static string EscapeFfmpegConcatPath(string path)
