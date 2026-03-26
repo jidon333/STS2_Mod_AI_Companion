@@ -25,11 +25,15 @@ public sealed class LiveExportStateTracker
     {
         var previousSnapshot = _snapshot;
         var nextSnapshot = MergeSnapshot(_snapshot, observation);
+        var collectorStatus = UpdateCollectorStatus(nextSnapshot, observation);
+        nextSnapshot = nextSnapshot with
+        {
+            Meta = ApplyScreenMeta(nextSnapshot.Meta, previousSnapshot.Meta, observation, nextSnapshot.CurrentScreen),
+        };
         var events = new List<LiveExportEventEnvelope>();
         events.AddRange(BuildDerivedEvents(previousSnapshot, nextSnapshot, observation));
         events.Add(CreateEnvelope(observation.TriggerKind, nextSnapshot, observation.Payload, observation.ObservedAt));
         var screenTransitions = BuildScreenTransitions(previousSnapshot, nextSnapshot, observation);
-        var collectorStatus = UpdateCollectorStatus(nextSnapshot, observation);
 
         _snapshot = nextSnapshot;
         var session = new LiveExportSession(
@@ -468,7 +472,7 @@ public sealed class LiveExportStateTracker
         return merged;
     }
 
-    private static IReadOnlyDictionary<string, string?> ApplyScreenMeta(
+    private IReadOnlyDictionary<string, string?> ApplyScreenMeta(
         IReadOnlyDictionary<string, string?> mergedMeta,
         IReadOnlyDictionary<string, string?> previousMeta,
         LiveExportObservation observation,
@@ -484,6 +488,7 @@ public sealed class LiveExportStateTracker
             ["logicalScreen"] = logicalScreen,
             ["flowScreen"] = logicalScreen,
             ["visibleScreen"] = visibleScreen,
+            ["screen-episode"] = _activeScreenEpisode,
             ["sceneReady"] = sceneReady ? "true" : "false",
             ["sceneAuthority"] = sceneAuthority,
             ["sceneStability"] = sceneStability,

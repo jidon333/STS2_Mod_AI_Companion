@@ -1648,6 +1648,8 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         var lastStartedEntry = TryGetLastCombatHistoryEntry(historyRoot, "CardPlaysStarted", "CardPlayStartedEntry");
         var lastFinishedEntry = TryGetLastCombatHistoryEntry(historyRoot, "CardPlaysFinished", "CardPlayFinishedEntry");
+        var historyStartedCount = CountCombatHistoryEntries(historyRoot, "CardPlaysStarted", "CardPlayStartedEntry");
+        var historyFinishedCount = CountCombatHistoryEntries(historyRoot, "CardPlaysFinished", "CardPlayFinishedEntry");
         var lastStartedPlay = TryGetMemberValue(lastStartedEntry!, "CardPlay");
         var lastFinishedPlay = TryGetMemberValue(lastFinishedEntry!, "CardPlay");
         var lastStartedCard = TryExtractCombatCardFromPlay(lastStartedPlay);
@@ -1658,6 +1660,12 @@ internal static class RuntimeSnapshotReflectionExtractor
         var lastFinishedCardId = TryReadString(lastFinishedCard, "Id", "CardId", "Name", "Title");
         var lastFinishedCardName = TryReadString(lastFinishedCard, "Title", "DisplayName", "Name", "Id", "CardId");
         var lastFinishedTargetId = TryExtractCombatTargetId(TryGetMemberValue(lastFinishedPlay!, "Target"));
+        var interactionRevision = string.Join(":",
+            historyStartedCount?.ToString(CultureInfo.InvariantCulture) ?? "none",
+            historyFinishedCount?.ToString(CultureInfo.InvariantCulture) ?? "none",
+            cardPlayPending?.ToString().ToLowerInvariant() ?? "none",
+            targetingInProgress?.ToString().ToLowerInvariant() ?? "none",
+            selectedCardSlot?.ToString(CultureInfo.InvariantCulture) ?? "none");
 
         meta["combatRuntimeStateAuthority"] = "runtime-reflection";
         meta["combatCardPlayPending"] = cardPlayPending?.ToString().ToLowerInvariant();
@@ -1690,6 +1698,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         meta["combatHoveredTargetLabel"] = hoveredTargetLabel;
         meta["combatHoveredTargetIsHittable"] = hoveredTargetIsHittable?.ToString().ToLowerInvariant();
         meta["combatTargetingLastFinishedFrame"] = targetingLastFinishedFrame;
+        meta["combatHistoryStartedCount"] = historyStartedCount?.ToString(CultureInfo.InvariantCulture);
+        meta["combatHistoryFinishedCount"] = historyFinishedCount?.ToString(CultureInfo.InvariantCulture);
+        meta["combatInteractionRevision"] = interactionRevision;
         meta["combatLastCardPlayStartedCardId"] = lastStartedCardId;
         meta["combatLastCardPlayStartedCardName"] = lastStartedCardName;
         meta["combatLastCardPlayStartedTargetId"] = lastStartedTargetId;
@@ -1722,6 +1733,18 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             payload["combatTargetingInProgress"] = targetingInProgress.Value;
         }
+
+        if (historyStartedCount is not null)
+        {
+            payload["combatHistoryStartedCount"] = historyStartedCount.Value;
+        }
+
+        if (historyFinishedCount is not null)
+        {
+            payload["combatHistoryFinishedCount"] = historyFinishedCount.Value;
+        }
+
+        payload["combatInteractionRevision"] = interactionRevision;
 
         if (!string.IsNullOrWhiteSpace(validTargetsType))
         {
@@ -1895,6 +1918,31 @@ internal static class RuntimeSnapshotReflectionExtractor
                 var typeName = entry.GetType().FullName ?? entry.GetType().Name;
                 return typeName.Contains(entryTypeName, StringComparison.OrdinalIgnoreCase);
             });
+    }
+
+    private static int? CountCombatHistoryEntries(object? historyRoot, string collectionMemberName, string entryTypeName)
+    {
+        if (historyRoot is null)
+        {
+            return null;
+        }
+
+        var explicitEntries = ExpandEnumerable(TryGetMemberValue(historyRoot, collectionMemberName)).ToArray();
+        if (explicitEntries.Length > 0)
+        {
+            return explicitEntries.Length;
+        }
+
+        var filteredEntries = ExpandEnumerable(TryGetMemberValue(historyRoot, "Entries"))
+            .Where(entry =>
+            {
+                var typeName = entry.GetType().FullName ?? entry.GetType().Name;
+                return typeName.Contains(entryTypeName, StringComparison.OrdinalIgnoreCase);
+            })
+            .ToArray();
+        return filteredEntries.Length == 0
+            ? null
+            : filteredEntries.Length;
     }
 
     private static ChoiceExtractionResult EvaluateChoiceSet(

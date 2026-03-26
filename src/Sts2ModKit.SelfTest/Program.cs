@@ -2332,8 +2332,14 @@ static void TestRuntimeReflectionCombatMetadataExport()
     Assert(meta.TryGetValue("combatSelectedCardSlot", out var selectedCardSlot) && selectedCardSlot == "2", "Expected runtime export to include the active hand slot.");
     Assert(meta.TryGetValue("combatTargetingInProgress", out var targetingInProgress) && targetingInProgress == "true", "Expected runtime export to include targeting state.");
     Assert(meta.TryGetValue("combatHoveredTargetLabel", out var hoveredTargetLabel) && hoveredTargetLabel == "Jaw Worm", "Expected runtime export to include hovered target label.");
+    Assert(meta.TryGetValue("combatHistoryStartedCount", out var startedCount) && startedCount == "1", "Expected runtime export to include combat history started count.");
+    Assert(meta.TryGetValue("combatHistoryFinishedCount", out var finishedCount) && finishedCount == "1", "Expected runtime export to include combat history finished count.");
+    Assert(meta.TryGetValue("combatInteractionRevision", out var interactionRevision) && interactionRevision == "1:1:true:true:2", "Expected runtime export to include the raw combat interaction revision.");
     Assert(meta.TryGetValue("combatLastCardPlayFinishedCardId", out var finishedCardId) && finishedCardId == "CARD.DEFEND_IRONCLAD", "Expected runtime export to include the last finished card id.");
     Assert(meta.TryGetValue("combatLastCardPlayFinishedSuccess", out var finishedSuccess) && finishedSuccess is null, "Expected runtime export not to infer explicit finished success from combat history alone.");
+    Assert(payload.TryGetValue("combatHistoryStartedCount", out var payloadStartedCount) && payloadStartedCount is 1, "Expected runtime payload to include combat history started count.");
+    Assert(payload.TryGetValue("combatHistoryFinishedCount", out var payloadFinishedCount) && payloadFinishedCount is 1, "Expected runtime payload to include combat history finished count.");
+    Assert(payload.TryGetValue("combatInteractionRevision", out var payloadInteractionRevision) && string.Equals(payloadInteractionRevision as string, "1:1:true:true:2", StringComparison.Ordinal), "Expected runtime payload to include the combat interaction revision.");
 }
 
 static void TestRuntimeReflectionCaptureClearsCombatMetadata()
@@ -2676,6 +2682,7 @@ static void TestLiveExportTrackerCollectorMode()
     Assert(firstCollectorStatus.LastSemanticScreen == "rewards", "Expected collector status to remember the latest semantic screen.");
     Assert(firstCollectorStatus.LastAcceptedExtractorPath == "reward._options", "Expected collector status to remember the accepted extractor path.");
     Assert(firstCollectorStatus.ChoiceExtractionStatus == "resolved (1)", "Expected collector status to report accepted choice count.");
+    Assert(firstBatch.Snapshot.Meta.TryGetValue("screen-episode", out var firstScreenEpisode) && firstScreenEpisode == "rewards", "Expected tracker snapshot meta to export the active screen episode.");
     Assert(firstBatch.ScreenTransitions.Count == 1 && firstBatch.ScreenTransitions[0].After == "rewards", "Expected collector mode to emit a screen transition for the semantic screen.");
 
     var fallbackPoll = new LiveExportObservation(
@@ -2711,6 +2718,7 @@ static void TestLiveExportTrackerCollectorMode()
     Assert(secondBatch.Snapshot.CurrentScreen == "rewards", "Expected collector merge to keep the reward episode active across a fallback runtime poll.");
     Assert(secondBatch.ScreenTransitions.Count == 1 && secondBatch.ScreenTransitions[0].KeptPreviousScreen, "Expected collector transition log to mark when a previous semantic screen is kept.");
     Assert(secondBatch.CollectorStatus is not null && secondBatch.CollectorStatus.ActiveScreenEpisode == "rewards", "Expected active screen episode to remain on rewards during fallback polls.");
+    Assert(secondBatch.Snapshot.Meta.TryGetValue("screen-episode", out var secondScreenEpisode) && secondScreenEpisode == "rewards", "Expected snapshot meta to preserve the active screen episode across fallback polls.");
     var secondCollectorStatus = secondBatch.CollectorStatus!;
     Assert(secondCollectorStatus.LastAcceptedExtractorPath == "reward._options", "Expected last accepted extractor path to persist across fallback polls.");
     Assert(secondCollectorStatus.LastDegradedReason == "no visible choices resolved for this observation.", "Expected degraded reason to reflect the latest failed extraction.");
