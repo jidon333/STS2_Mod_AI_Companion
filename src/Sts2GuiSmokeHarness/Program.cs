@@ -3168,6 +3168,23 @@ static bool IsUnknownObserverScreen(string? screen)
 
 static void RunSelfTest()
 {
+    GuiSmokeStepDecision InvokeForegroundAwareNonCombatWaitDecision(
+        GuiSmokeStepRequest selfTestRequest,
+        string reason,
+        bool allowFastForegroundWait = true)
+    {
+        var method = typeof(AutoDecisionProvider).GetMethod(
+            "CreateForegroundAwareNonCombatWaitDecision",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        if (method is null)
+        {
+            throw new InvalidOperationException("Self-test could not find CreateForegroundAwareNonCombatWaitDecision.");
+        }
+
+        return (GuiSmokeStepDecision)(method.Invoke(null, new object?[] { selfTestRequest, reason, allowFastForegroundWait })
+                                      ?? throw new InvalidOperationException("Foreground-aware noncombat wait helper returned null."));
+    }
+
     var point = MouseInputDriver.TransformNormalizedPoint(
         new WindowCaptureTarget(IntPtr.Zero, "test", new Rectangle(100, 200, 1000, 800), false, false),
         0.5,
@@ -5872,6 +5889,47 @@ static void RunSelfTest()
             null);
         Assert(GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(mapTransitionObserver, out var postMapPhase) && postMapPhase == GuiSmokePhase.ChooseFirstNode, "Map-screen authority should win over stale event labels when observer meta already points at NMapScreen.");
         Assert(GetAllowedActions(GuiSmokePhase.HandleEvent, mapTransitionObserver).Contains("click visible map advance", StringComparer.OrdinalIgnoreCase), "Event allowlist should open map affordances when map transition evidence is stronger than the stale event screen.");
+        var mapTransitionWaitObserver = new ObserverState(
+            mapTransitionObserver.Summary with
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["transitionInProgress"] = "true",
+                    ["rootSceneIsRun"] = "true",
+                    ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.NRun",
+                    ["mapCurrentActiveScreen"] = "true",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                },
+            },
+            mapTransitionStateDocument,
+            null,
+            null);
+        var mapTransitionWaitDecision = InvokeForegroundAwareNonCombatWaitDecision(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            41,
+            GuiSmokePhase.ChooseFirstNode.ToString(),
+            "Wait during an explicit map transition boundary.",
+            DateTimeOffset.UtcNow,
+            mapTransitionScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            ComputeSceneSignature(mapTransitionScreenshotPath, mapTransitionWaitObserver, GuiSmokePhase.ChooseFirstNode),
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            mapTransitionWaitObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            BuildAllowedActions(GuiSmokePhase.ChooseFirstNode, mapTransitionWaitObserver, Array.Empty<CombatCardKnowledgeHint>(), mapTransitionScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>()),
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Explicit transition truth should keep noncombat waits conservative.",
+            null),
+            "waiting for explicit map transition completion");
+        Assert(mapTransitionWaitDecision.WaitMs == 2000, "Explicit transition/loading truth should keep noncombat waits at the conservative duration.");
     }
     finally
     {
@@ -5972,6 +6030,7 @@ static void RunSelfTest()
             "Explicit event options must outrank background map contamination.",
             null));
         Assert(eventDecision.TargetLabel is not null && eventDecision.TargetLabel.Contains("event", StringComparison.OrdinalIgnoreCase), "Event decisioning should click an explicit event option instead of a map fallback when NEventRoom authority is present.");
+        Assert(string.Equals(DetermineReasoningMode(GuiSmokePhase.HandleEvent, eventObserverState, firstSeenScene: true), "semantic", StringComparison.OrdinalIgnoreCase), "Ambiguous event scenes should stay in semantic reasoning mode until ownership becomes explicit.");
 
         using var eventProceedStateDocument = JsonDocument.Parse("""{"meta":{"declaringType":"MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom","instanceType":"MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom","choiceExtractorPath":"event","mapOverlayVisible":"true"}}""");
         var explicitProceedObserverState = new ObserverState(
@@ -6029,6 +6088,7 @@ static void RunSelfTest()
             null,
             null);
         Assert(GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(explicitProceedObserverState), "Explicit EventOption.IsProceed authority should keep event foreground preferred even when stale map overlay evidence is present.");
+        Assert(string.Equals(DetermineReasoningMode(GuiSmokePhase.HandleEvent, explicitProceedObserverState, firstSeenScene: true), "tactical", StringComparison.OrdinalIgnoreCase), "Explicit event proceed ownership should collapse HandleEvent reasoning to tactical mode.");
         var explicitProceedAllowedActions = GetAllowedActions(GuiSmokePhase.HandleEvent, explicitProceedObserverState);
         Assert(explicitProceedAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
                && !explicitProceedAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
@@ -6063,6 +6123,32 @@ static void RunSelfTest()
             && string.Equals(explicitProceedDecision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
             && string.Equals(explicitProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
             "HandleEvent should click the explicit event proceed lane instead of waiting when EventOption.IsProceed is exported.");
+        var explicitProceedWaitDecision = InvokeForegroundAwareNonCombatWaitDecision(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            45,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "Wait on explicit event proceed ownership.",
+            DateTimeOffset.UtcNow,
+            eventContaminationScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            ComputeSceneSignature(eventContaminationScreenshotPath, explicitProceedObserverState, GuiSmokePhase.HandleEvent),
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            explicitProceedObserverState.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            explicitProceedAllowedActions,
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Explicit event proceed should use the reduced noncombat wait.",
+            null),
+            "waiting for explicit event progression choice");
+        Assert(explicitProceedWaitDecision.WaitMs == 400, "Stable explicit event proceed ownership should use the faster noncombat wait.");
     }
     finally
     {
@@ -6736,6 +6822,7 @@ static void RunSelfTest()
         Assert(NonCombatForegroundOwnership.Resolve(live5bMixedAftermathObserver) == NonCombatForegroundOwner.Map, "Map current-active-screen authority should own mixed event/map aftermath even when event proceed residue lingers.");
         Assert(!EventProceedObserverSignals.HasExplicitEventProceedAuthority(live5bMixedAftermathObserver, new WindowBounds(1, 32, 1280, 720)), "Lingering EventOption.IsProceed residue should not stay authoritative once NMapScreen is the current active screen owner.");
         Assert(!GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(live5bMixedAftermathObserver), "Event foreground preference should release when map becomes the explicit top-layer owner.");
+        Assert(string.Equals(DetermineReasoningMode(GuiSmokePhase.HandleEvent, live5bMixedAftermathObserver, firstSeenScene: true), "tactical", StringComparison.OrdinalIgnoreCase), "Mixed aftermath with explicit NMapScreen ownership should collapse HandleEvent reasoning to tactical mode.");
         var mixedAftermathAllowedActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, live5bMixedAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>());
         Assert(mixedAftermathAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
                && !mixedAftermathAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
@@ -6795,6 +6882,32 @@ static void RunSelfTest()
             "Map owner should click an exported travelable node instead of waiting.",
             null));
         Assert(string.Equals(mixedAftermathDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase), "ChooseFirstNode should act on exported travelable map nodes in mixed aftermath instead of stalling behind stale event residue.");
+        var mixedAftermathWaitDecision = InvokeForegroundAwareNonCombatWaitDecision(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            52,
+            GuiSmokePhase.ChooseFirstNode.ToString(),
+            "Wait while stable explicit map ownership remains foreground-active.",
+            DateTimeOffset.UtcNow,
+            mapOverlayScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:choosefirstnode|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|current-node-arrow-visible|reachable-node-candidate-present|exported-reachable-node-present",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            live5bMixedAftermathObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            BuildAllowedActions(GuiSmokePhase.ChooseFirstNode, live5bMixedAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>()),
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Stable explicit map ownership should use the faster noncombat wait.",
+            null),
+            "waiting for exported or screenshot-reachable map node");
+        Assert(mixedAftermathWaitDecision.WaitMs == 400, "Stable explicit map ownership should use the faster noncombat wait.");
         var mapOverlayReplay = AutoDecisionProvider.Analyze(new GuiSmokeStepRequest(
             "run",
             "boot-to-long-run",
@@ -13295,11 +13408,30 @@ static bool HasSceneSignatureHistory(string sessionRoot, string sceneSignature)
 
 static string DetermineReasoningMode(GuiSmokePhase phase, ObserverState observer, bool firstSeenScene)
 {
-    if (phase == GuiSmokePhase.HandleEvent
-        && (firstSeenScene
-            || string.Equals(observer.CurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase)
-            || observer.Summary.CurrentChoices.Count > 0))
+    if (phase != GuiSmokePhase.HandleEvent)
+    {
+        return "tactical";
+    }
+
+    var foregroundOwner = NonCombatForegroundOwnership.Resolve(observer);
+    if (foregroundOwner is NonCombatForegroundOwner.Map
+        or NonCombatForegroundOwner.Reward
+        or NonCombatForegroundOwner.Shop
+        or NonCombatForegroundOwner.RestSite)
+    {
+        return "tactical";
+    }
+
+    if (AncientEventObserverSignals.HasForegroundAuthority(observer.Summary)
+        || EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer, null))
+    {
+        return "tactical";
+    }
+
+    if (firstSeenScene
+        || string.Equals(observer.CurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(observer.VisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+        || observer.Summary.CurrentChoices.Count > 0)
     {
         return "semantic";
     }
@@ -22482,7 +22614,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return CreateRewardOwnershipReleaseWaitDecision(request);
         }
 
-        return CreateWaitDecision("waiting for reward actions", request.Observer.CurrentScreen);
+        return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for reward actions");
     }
 
     private static GuiSmokeStepDecision CreateRewardOwnershipReleaseWaitDecision(GuiSmokeStepRequest request)
@@ -22512,7 +22644,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                        0.92,
                        TryCreateRestSiteUpgradeDecision(request),
                        "rest-site upgrade grid is not currently actionable")
-                   ?? CreateWaitDecision("waiting for an explicit rest-site choice", request.Observer.CurrentScreen);
+                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for an explicit rest-site choice");
         }
 
         var treasureDecision = TryCreateTreasureRoomDecision(request);
@@ -22524,7 +22656,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room explicit affordances outrank screenshot map routing");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room explicit affordances suppress map-arrow fallback");
             GuiSmokeDecisionDebug.Suppress("click map back", "treasure-room progression is chest-holder-proceed, not map back");
-            return treasureDecision ?? CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen);
+            return treasureDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for treasure room progression");
         }
 
         if (ShopObserverSignals.IsShopAuthorityActive(request.Observer))
@@ -22538,7 +22670,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click map back", "shop foreground uses merchant/back/proceed affordances instead of map overlay cleanup");
             var shopDecision = DecideHandleShop(request);
             return string.Equals(shopDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
-                ? CreateWaitDecision("waiting for explicit shop room progression", request.Observer.CurrentScreen)
+                ? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit shop room progression")
                 : shopDecision;
         }
 
@@ -22582,7 +22714,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                        0.90,
                        TryFindFirstReachableMapNodeDecision(request),
                        "no screenshot-reachable next node was detected")
-                   ?? CreateWaitDecision("waiting for exported or screenshot-reachable map node", request.Observer.CurrentScreen);
+                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for exported or screenshot-reachable map node");
         }
 
         if (LooksLikeScreenshotFirstRoomState(request))
@@ -22612,7 +22744,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                    TryFindVisibleMapAdvanceDecision(request),
                    "no current-node-arrow fallback was permitted")
                ?? (GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request)
-                   ? CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen)
+                   ? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for reachable map node")
                    : GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
                        request,
                        "map progression evidence is present but request allowlist does not permit map routing; waiting for exporter/phase reconciliation"));
@@ -22635,7 +22767,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var shopState = ShopObserverSignals.TryGetState(request.Observer);
         if (shopState is null)
         {
-            return CreateWaitDecision("waiting for explicit shop room authority", request.Observer.CurrentScreen);
+            return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit shop room authority");
         }
 
         var screen = request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "shop";
@@ -22762,7 +22894,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             }
         }
 
-        return CreateWaitDecision("waiting for explicit shop inventory/proceed affordances", request.Observer.CurrentScreen);
+        return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit shop inventory/proceed affordances");
     }
 
     private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request)
@@ -22800,7 +22932,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                        0.90,
                        TryFindFirstReachableMapNodeDecision(request),
                        "no screenshot-reachable next node was detected")
-                   ?? CreateWaitDecision("waiting for map-overlay foreground resolution", request.Observer.CurrentScreen);
+                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for map-overlay foreground resolution");
         }
 
         if (preferEventForeground)
@@ -22844,7 +22976,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room explicit affordances outrank screenshot map routing");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room explicit affordances suppress map-arrow fallback");
             GuiSmokeDecisionDebug.Suppress("click event choice", "treasure-room explicit affordances outrank generic event choices");
-            return treasureDecision ?? CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen);
+            return treasureDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for treasure room progression");
         }
 
         var explicitRewardDecision = GuiSmokeDecisionDebug.TraceCandidate(
@@ -22883,7 +23015,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click exported reachable node", "ancient event foreground outranks map routing");
             GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event foreground outranks screenshot map routing");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event foreground suppresses map-arrow fallback");
-            return ancientDialogueDecision ?? CreateWaitDecision("waiting for explicit ancient dialogue hitbox", request.Observer.CurrentScreen);
+            return ancientDialogueDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient dialogue hitbox");
         }
 
         var ancientCompletionDecision = GuiSmokeDecisionDebug.TraceCandidate(
@@ -22899,7 +23031,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click exported reachable node", "ancient event completion outranks map routing");
             GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event completion outranks screenshot map routing");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event completion suppresses map-arrow fallback");
-            return ancientCompletionDecision ?? CreateWaitDecision("waiting for explicit ancient event completion", request.Observer.CurrentScreen);
+            return ancientCompletionDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient event completion");
         }
 
         var ancientOptionDecision = GuiSmokeDecisionDebug.TraceCandidate(
@@ -22915,7 +23047,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click exported reachable node", "ancient event option selection outranks map routing");
             GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event option selection outranks screenshot map routing");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event option selection suppresses map-arrow fallback");
-            return ancientOptionDecision ?? CreateWaitDecision("waiting for explicit ancient event option buttons", request.Observer.CurrentScreen);
+            return ancientOptionDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient event option buttons");
         }
 
         if (preferEventForeground)
@@ -22984,7 +23116,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             }
         }
 
-        return CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen);
+        return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for an explicit event progression choice");
     }
 
     private static GuiSmokeStepDecision? TryCreateCardSelectionDecision(GuiSmokeStepRequest request)
@@ -27715,6 +27847,50 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             waitMs,
             true,
             null);
+    }
+
+    private static GuiSmokeStepDecision CreateForegroundAwareNonCombatWaitDecision(
+        GuiSmokeStepRequest request,
+        string reason,
+        bool allowFastForegroundWait = true)
+    {
+        var waitMs = allowFastForegroundWait && ShouldUseFastNonCombatForegroundWait(request)
+            ? 400
+            : 2000;
+        return CreateWaitDecision(reason, request.Observer.CurrentScreen, waitMs);
+    }
+
+    private static bool ShouldUseFastNonCombatForegroundWait(GuiSmokeStepRequest request)
+    {
+        if (request.Observer.SceneReady == false
+            || !string.Equals(request.Observer.SceneStability, "stable", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (RootSceneTransitionObserverSignals.TryGetState(request.Observer)?.TransitionInProgress == true)
+        {
+            return false;
+        }
+
+        if (request.Phase is not nameof(GuiSmokePhase.HandleEvent)
+            and not nameof(GuiSmokePhase.ChooseFirstNode)
+            and not nameof(GuiSmokePhase.HandleRewards)
+            and not nameof(GuiSmokePhase.HandleShop))
+        {
+            return false;
+        }
+
+        return NonCombatForegroundOwnership.Resolve(request.Observer) switch
+        {
+            NonCombatForegroundOwner.Map
+            or NonCombatForegroundOwner.Reward
+            or NonCombatForegroundOwner.Shop
+            or NonCombatForegroundOwner.RestSite => true,
+            NonCombatForegroundOwner.Event => AncientEventObserverSignals.HasForegroundAuthority(request.Observer)
+                                              || EventProceedObserverSignals.HasExplicitEventProceedAuthority(request.Observer, request.WindowBounds),
+            _ => false,
+        };
     }
 
     public static string? BuildHistoryMetadataForDecision(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
