@@ -5972,6 +5972,97 @@ static void RunSelfTest()
             "Explicit event options must outrank background map contamination.",
             null));
         Assert(eventDecision.TargetLabel is not null && eventDecision.TargetLabel.Contains("event", StringComparison.OrdinalIgnoreCase), "Event decisioning should click an explicit event option instead of a map fallback when NEventRoom authority is present.");
+
+        using var eventProceedStateDocument = JsonDocument.Parse("""{"meta":{"declaringType":"MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom","instanceType":"MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom","choiceExtractorPath":"event","mapOverlayVisible":"true"}}""");
+        var explicitProceedObserverState = new ObserverState(
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-event-proceed",
+                true,
+                "mixed",
+                "stable",
+                "episode-event-proceed",
+                "None",
+                "event",
+                80,
+                80,
+                null,
+                new[] { "계속", "계속", "휴식 (1,2)" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("event-option:0", "event-option", "계속", "918,595.5,808,101", true)
+                    {
+                        SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:proceed", "event-proceed" },
+                    },
+                },
+                new[]
+                {
+                    new ObserverChoice("event-option", "계속", "918,595.5,808,101", "PROCEED", "[gold][b]계속[/b][/gold]")
+                    {
+                        NodeId = "event-option:0",
+                        BindingKind = "event-option",
+                        BindingId = "PROCEED",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:proceed", "event-proceed" },
+                    },
+                    new ObserverChoice("map-node", "휴식 (1,2)", "897,581,124,124", "1,2", "type:Rest;coord:1,2")
+                    {
+                        NodeId = "map:1:2",
+                        Enabled = true,
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["choiceExtractorPath"] = "event",
+                    ["eventProceedOptionVisible"] = "true",
+                    ["eventProceedOptionEnabled"] = "true",
+                    ["eventProceedOptionCount"] = "1",
+                },
+            },
+            eventProceedStateDocument,
+            null,
+            null);
+        Assert(GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(explicitProceedObserverState), "Explicit EventOption.IsProceed authority should keep event foreground preferred even when stale map overlay evidence is present.");
+        var explicitProceedAllowedActions = GetAllowedActions(GuiSmokePhase.HandleEvent, explicitProceedObserverState);
+        Assert(explicitProceedAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
+               && !explicitProceedAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+               && !explicitProceedAllowedActions.Contains("click first reachable node", StringComparer.OrdinalIgnoreCase),
+            "Explicit event proceed should keep HandleEvent on the event progression lane instead of collapsing to map-only fallback.");
+        var explicitProceedDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            44,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "Resolve the event follow-up.",
+            DateTimeOffset.UtcNow,
+            eventContaminationScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            ComputeSceneSignature(eventContaminationScreenshotPath, explicitProceedObserverState, GuiSmokePhase.HandleEvent),
+            "0001",
+            1,
+            3,
+            true,
+            "semantic",
+            null,
+            explicitProceedObserverState.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            explicitProceedAllowedActions,
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Explicit event proceed should beat stale map overlay evidence.",
+            null));
+        Assert(
+            string.Equals(explicitProceedDecision.Status, "act", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(explicitProceedDecision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(explicitProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
+            "HandleEvent should click the explicit event proceed lane instead of waiting when EventOption.IsProceed is exported.");
     }
     finally
     {
@@ -6535,17 +6626,17 @@ static void RunSelfTest()
                 80,
                 80,
                 null,
-                new[] { "계속", "LeftArrow", "휴식 (1,2)" },
+                new[] { "계속", "Back", "휴식 (1,2)" },
                 Array.Empty<string>(),
                 new[]
                 {
                     new ObserverActionNode("event-option:0", "event-option", "계속", "922,596,800,100", true),
-                    new ObserverActionNode("back:left", "choice", "LeftArrow", "48,930,88,88", true),
+                    new ObserverActionNode("back:left", "choice", "Back", "48,930,88,88", true),
                 },
                 new[]
                 {
                     new ObserverChoice("choice", "계속", "922,596,800,100", "계속"),
-                    new ObserverChoice("choice", "LeftArrow", "48,930,88,88", "LeftArrow"),
+                    new ObserverChoice("choice", "Back", "48,930,88,88", "Back"),
                     new ObserverChoice("map-node", "휴식 (1,2)", "897,581,124,124", "1,2", "type:Rest;coord:1,2"),
                 },
                 Array.Empty<ObservedCombatHandCard>()),
@@ -6559,6 +6650,151 @@ static void RunSelfTest()
         Assert(!GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver).Contains("click visible map advance", StringComparer.OrdinalIgnoreCase), "ChooseFirstNode should not expose visible map advance while map overlay foreground is active.");
         Assert(GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver).Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase), "ChooseFirstNode should promote exported map points to first-class candidates in mixed map-overlay state.");
         Assert(GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mapOverlayObserver).Contains("click map back", StringComparer.OrdinalIgnoreCase), "ChooseFirstNode should open map back-navigation in mixed map-overlay state.");
+        Assert(GetAllowedActions(GuiSmokePhase.HandleEvent, mapOverlayObserver).Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+               && !GetAllowedActions(GuiSmokePhase.HandleEvent, mapOverlayObserver).Contains("click proceed", StringComparer.OrdinalIgnoreCase),
+            "True map-overlay foreground should still win during HandleEvent when explicit event proceed authority is absent.");
+        var live5bMixedAftermathObserver = new ObserverState(
+            mapOverlayObserver.Summary with
+            {
+                ChoiceExtractorPath = "event+map",
+                CurrentChoices = new[] { "계속", "계속", "Monster (5,1)", "RestSite (5,2)", "Monster (5,3)" },
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("event-option:0", "event-option", "계속", "922,596,800,100", true)
+                    {
+                        TypeName = "event-option",
+                        SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:proceed", "event-proceed" },
+                    },
+                    new ObserverActionNode("event-option:proceed", "event-option", "계속", null, true)
+                    {
+                        TypeName = "event-option",
+                        SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:proceed", "event-proceed" },
+                    },
+                    new ObserverActionNode("map:5:1", "event-option", "Monster (5,1)", "621.923,513.368,56,56", true)
+                    {
+                        TypeName = "map-node",
+                        SemanticHints = new[] { "scene:event", "kind:event-option", "raw-kind:map-node", "node-id:map:5:1", "coord:5,1" },
+                    },
+                    new ObserverActionNode("map:5:2", "event-option", "RestSite (5,2)", "770.838,528.498,56,56", true)
+                    {
+                        TypeName = "map-node",
+                        SemanticHints = new[] { "scene:event", "kind:event-option", "raw-kind:map-node", "node-id:map:5:2", "coord:5,2" },
+                    },
+                    new ObserverActionNode("map:5:3", "event-option", "Monster (5,3)", "890.219,509.932,56,56", true)
+                    {
+                        TypeName = "map-node",
+                        SemanticHints = new[] { "scene:event", "kind:event-option", "raw-kind:map-node", "node-id:map:5:3", "coord:5,3" },
+                    },
+                },
+                Choices = new[]
+                {
+                    new ObserverChoice("event-option", "계속", "922,596,800,100", "PROCEED", "[gold][b]계속[/b][/gold]")
+                    {
+                        NodeId = "event-option:0",
+                        BindingKind = "event-option",
+                        BindingId = "PROCEED",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:proceed", "event-proceed" },
+                    },
+                    new ObserverChoice("event-option", "계속", null, "PROCEED", "계속")
+                    {
+                        NodeId = "event-option:proceed",
+                        BindingKind = "event-option",
+                        BindingId = "PROCEED",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:proceed", "event-proceed" },
+                    },
+                    new ObserverChoice("map-node", "Monster (5,1)", "621.923,513.368,56,56", "5,1", "type:Monster;state:Travelable;coord:5,1")
+                    {
+                        NodeId = "map:5:1",
+                        Enabled = true,
+                    },
+                    new ObserverChoice("map-node", "RestSite (5,2)", "770.838,528.498,56,56", "5,2", "type:RestSite;state:Travelable;coord:5,2")
+                    {
+                        NodeId = "map:5:2",
+                        Enabled = true,
+                    },
+                    new ObserverChoice("map-node", "Monster (5,3)", "890.219,509.932,56,56", "5,3", "type:Monster;state:Travelable;coord:5,3")
+                    {
+                        NodeId = "map:5:3",
+                        Enabled = true,
+                    },
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["choiceExtractorPath"] = "event+map",
+                    ["eventProceedOptionVisible"] = "true",
+                    ["eventProceedOptionEnabled"] = "true",
+                    ["eventProceedOptionCount"] = "1",
+                    ["mapCurrentActiveScreen"] = "true",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                },
+            },
+            mapOverlayStateDocument,
+            null,
+            null);
+        Assert(NonCombatForegroundOwnership.Resolve(live5bMixedAftermathObserver) == NonCombatForegroundOwner.Map, "Map current-active-screen authority should own mixed event/map aftermath even when event proceed residue lingers.");
+        Assert(!EventProceedObserverSignals.HasExplicitEventProceedAuthority(live5bMixedAftermathObserver, new WindowBounds(1, 32, 1280, 720)), "Lingering EventOption.IsProceed residue should not stay authoritative once NMapScreen is the current active screen owner.");
+        Assert(!GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(live5bMixedAftermathObserver), "Event foreground preference should release when map becomes the explicit top-layer owner.");
+        var mixedAftermathAllowedActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, live5bMixedAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(mixedAftermathAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+               && !mixedAftermathAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
+            "HandleEvent should reopen the map lane instead of the stale event-proceed lane when map owns the foreground.");
+        var contradictoryMapFallbackMethod = typeof(AutoDecisionProvider).GetMethod("HasContradictoryForegroundOwnerAgainstMapFallback", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert(contradictoryMapFallbackMethod is not null
+               && !(bool)(contradictoryMapFallbackMethod.Invoke(null, new object?[]
+               {
+                   new GuiSmokeStepRequest(
+                       "run",
+                       "boot-to-long-run",
+                       51,
+                       GuiSmokePhase.ChooseFirstNode.ToString(),
+                       "Click the first reachable map node.",
+                       DateTimeOffset.UtcNow,
+                       mapOverlayScreenshotPath,
+                       new WindowBounds(1, 32, 1280, 720),
+                       "phase:choosefirstnode|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|current-node-arrow-visible|reachable-node-candidate-present|exported-reachable-node-present",
+                       "0001",
+                       1,
+                       3,
+                       true,
+                       "tactical",
+                       null,
+                       live5bMixedAftermathObserver.Summary,
+                       Array.Empty<KnownRecipeHint>(),
+                       Array.Empty<EventKnowledgeCandidate>(),
+                       Array.Empty<CombatCardKnowledgeHint>(),
+                       BuildAllowedActions(GuiSmokePhase.ChooseFirstNode, live5bMixedAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>()),
+                       Array.Empty<GuiSmokeHistoryEntry>(),
+                       "Map owner should beat lingering event proceed residue.",
+                       null),
+               })! ?? false),
+            "Map-node routing should not be suppressed by contradictory foreground-owner guards once map is the explicit top-layer owner.");
+        var mixedAftermathDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            51,
+            GuiSmokePhase.ChooseFirstNode.ToString(),
+            "Click the first reachable map node.",
+            DateTimeOffset.UtcNow,
+            mapOverlayScreenshotPath,
+            new WindowBounds(1, 32, 1280, 720),
+            "phase:choosefirstnode|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|current-node-arrow-visible|reachable-node-candidate-present|exported-reachable-node-present",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            live5bMixedAftermathObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            BuildAllowedActions(GuiSmokePhase.ChooseFirstNode, live5bMixedAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>()),
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            "Map owner should click an exported travelable node instead of waiting.",
+            null));
+        Assert(string.Equals(mixedAftermathDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase), "ChooseFirstNode should act on exported travelable map nodes in mixed aftermath instead of stalling behind stale event residue.");
         var mapOverlayReplay = AutoDecisionProvider.Analyze(new GuiSmokeStepRequest(
             "run",
             "boot-to-long-run",
@@ -13347,6 +13583,7 @@ static string[] BuildAllowedActionsCore(
     var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
     var treasureState = TreasureRoomObserverSignals.TryGetState(observer.Summary);
     var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelectionForAllowlist(observer, history);
+    var explicitEventProceedAuthority = EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer.Summary, null);
     var rewardMapLayer = context.RewardMapLayerState;
     var explicitRewardProgressionPresent = observer.Summary.Choices.Any(choice => IsCurrentRewardProgressionChoiceForObserver(choice, null))
                                           || observer.Summary.ActionNodes.Any(node => IsCurrentRewardProgressionNodeForObserver(node, null));
@@ -13441,7 +13678,7 @@ static string[] BuildAllowedActionsCore(
             => new[] { "click event choice", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent when treasureState is { RoomDetected: true }
             => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
-        GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible
+        GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !explicitEventProceedAuthority
             => mapOverlayState.MapBackNavigationAvailable
                 ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
                 : new[] { "click exported reachable node", "click first reachable node", "wait" },
@@ -14218,7 +14455,8 @@ static bool HasLargeChoiceBounds(string? screenBounds)
 
 static bool IsProceedNode(ObserverActionNode node)
 {
-    return node.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
+    return EventProceedObserverSignals.HasExplicitEventProceedSemantic(node.SemanticHints)
+           || node.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
            || node.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
            || node.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)
            || node.Label.Contains("계속", StringComparison.OrdinalIgnoreCase)
@@ -14229,7 +14467,8 @@ static bool IsProceedChoice(ObserverChoice choice)
 {
     return !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
            && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
-           && IsProceedLikeLabel(choice.Label);
+           && (EventProceedObserverSignals.HasExplicitEventProceedSemantic(choice.SemanticHints)
+               || IsProceedLikeLabel(choice.Label));
 }
 
 static bool IsBackNode(ObserverActionNode node)
@@ -15925,6 +16164,11 @@ static bool TryReopenMixedStateModalBranchFromWaitMap(
 
 static bool HasExplicitEventProgressionChoiceVisibleForWaitMap(ObserverState observer)
 {
+    if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
+    {
+        return false;
+    }
+
     var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
                          || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
                          || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
@@ -19281,6 +19525,279 @@ sealed record ObserverState(
     public string? ChoiceExtractorPath => Summary.ChoiceExtractorPath;
 }
 
+enum NonCombatForegroundOwner
+{
+    Unknown,
+    Combat,
+    Reward,
+    Shop,
+    RestSite,
+    Map,
+    Event,
+}
+
+static class NonCombatForegroundOwnership
+{
+    public static NonCombatForegroundOwner Resolve(ObserverState observer)
+        => Resolve(observer.Summary);
+
+    public static NonCombatForegroundOwner Resolve(ObserverSummary observer)
+    {
+        if (RewardObserverSignals.IsTerminalRunBoundary(observer))
+        {
+            return NonCombatForegroundOwner.Unknown;
+        }
+
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
+        {
+            return NonCombatForegroundOwner.Combat;
+        }
+
+        if (RewardObserverSignals.IsRewardAuthorityActive(observer))
+        {
+            return NonCombatForegroundOwner.Reward;
+        }
+
+        if (ShopObserverSignals.IsShopAuthorityActive(observer))
+        {
+            return NonCombatForegroundOwner.Shop;
+        }
+
+        if (AncientEventObserverSignals.HasForegroundAuthority(observer))
+        {
+            return NonCombatForegroundOwner.Event;
+        }
+
+        if (HasExplicitMapForegroundAuthority(observer))
+        {
+            return NonCombatForegroundOwner.Map;
+        }
+
+        if (HasExplicitRestSiteForegroundAuthority(observer))
+        {
+            return NonCombatForegroundOwner.RestSite;
+        }
+
+        if (HasExplicitEventForegroundAuthority(observer))
+        {
+            return NonCombatForegroundOwner.Event;
+        }
+
+        return NonCombatForegroundOwner.Unknown;
+    }
+
+    public static bool HasExplicitMapForegroundAuthority(ObserverState observer)
+        => HasExplicitMapForegroundAuthority(observer.Summary);
+
+    public static bool HasExplicitMapForegroundAuthority(ObserverSummary observer)
+    {
+        if (RewardObserverSignals.IsTerminalRunBoundary(observer)
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
+        {
+            return false;
+        }
+
+        return AncientEventObserverSignals.IsMapForegroundOwner(observer)
+               || TryGetMetaBool(observer, "mapCurrentActiveScreen") == true
+               || IsMapScreenTypeName(TryGetMetaValue(observer, "activeScreenType"));
+    }
+
+    public static bool HasExplicitRestSiteForegroundAuthority(ObserverSummary observer)
+    {
+        if (HasExplicitMapForegroundAuthority(observer))
+        {
+            return false;
+        }
+
+        return string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+               && (RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
+                   || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
+                   || GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer));
+    }
+
+    public static bool HasExplicitEventForegroundAuthority(ObserverSummary observer)
+    {
+        if (HasExplicitMapForegroundAuthority(observer)
+            || RewardObserverSignals.IsRewardAuthorityActive(observer)
+            || ShopObserverSignals.IsShopAuthorityActive(observer)
+            || HasExplicitRestSiteForegroundAuthority(observer)
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
+        {
+            return false;
+        }
+
+        if (AncientEventObserverSignals.HasForegroundAuthority(observer))
+        {
+            return true;
+        }
+
+        if (!EventProceedObserverSignals.HasEventChoiceAuthority(observer))
+        {
+            return false;
+        }
+
+        if (EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, null))
+        {
+            return true;
+        }
+
+        return observer.ActionNodes.Any(node =>
+                   node.Actionable
+                   && !MapNodeSourceSupport.IsExplicitMapPointNode(node)
+                   && (node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(node.TypeName, "event-option", StringComparison.OrdinalIgnoreCase)))
+               || observer.Choices.Any(choice =>
+                   !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
+                   && (string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.BindingKind, "event-option", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool? TryGetMetaBool(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value)
+               && bool.TryParse(value, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static string? TryGetMetaValue(ObserverSummary observer, string key)
+        => observer.Meta.TryGetValue(key, out var value) ? value : null;
+
+    private static bool IsMapScreenTypeName(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+}
+
+static class EventProceedObserverSignals
+{
+    public static bool HasExplicitEventProceedAuthority(ObserverState observer, WindowBounds? windowBounds)
+    {
+        return HasExplicitEventProceedAuthority(observer.Summary, windowBounds);
+    }
+
+    public static bool HasExplicitEventProceedAuthority(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        if (!HasEventChoiceAuthority(observer))
+        {
+            return false;
+        }
+
+        if (NonCombatForegroundOwnership.Resolve(observer) is not NonCombatForegroundOwner.Event and not NonCombatForegroundOwner.Unknown)
+        {
+            return false;
+        }
+
+        return HasExplicitEventProceedSignal(observer, windowBounds);
+    }
+
+    public static bool HasExplicitEventProceedSignal(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        if (TryGetMetaBool(observer, "eventProceedOptionEnabled") == true
+            || TryGetMetaBool(observer, "eventProceedOptionVisible") == true)
+        {
+            return true;
+        }
+
+        return observer.ActionNodes.Any(node =>
+                   IsExplicitEventProceedNode(node)
+                   && HasActiveBounds(node.ScreenBounds, windowBounds))
+               || observer.Choices.Any(choice =>
+                   IsExplicitEventProceedChoice(choice)
+                   && HasActiveBounds(choice.ScreenBounds, windowBounds));
+    }
+
+    public static bool HasEventChoiceAuthority(ObserverSummary observer)
+    {
+        return string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsExplicitEventProceedNode(ObserverActionNode node)
+    {
+        return node.Actionable
+               && ((node.NodeId?.StartsWith("event-option:", StringComparison.OrdinalIgnoreCase) ?? false)
+                   || node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase))
+               && HasExplicitEventProceedSemantic(node.SemanticHints);
+    }
+
+    public static bool IsExplicitEventProceedChoice(ObserverChoice choice)
+    {
+        return !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+               && HasExplicitEventProceedSemantic(choice.SemanticHints);
+    }
+
+    public static bool HasExplicitEventProceedSemantic(IReadOnlyList<string> semanticHints)
+    {
+        return semanticHints.Any(static hint =>
+            string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hint, "event-proceed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool TryGetMetaBool(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value)
+               && bool.TryParse(value, out var parsed)
+               && parsed;
+    }
+
+    private static bool HasActiveBounds(string? screenBounds, WindowBounds? windowBounds)
+    {
+        if (HasUsableLogicalBounds(screenBounds))
+        {
+            return true;
+        }
+
+        return windowBounds is not null && IsBoundsInsideWindow(screenBounds, windowBounds);
+    }
+
+    private static bool HasUsableLogicalBounds(string? screenBounds)
+    {
+        return TryParseBounds(screenBounds, out var bounds)
+               && bounds.X >= 0f
+               && bounds.Y >= 0f
+               && bounds.Right <= 1920f
+               && bounds.Bottom <= 1080f;
+    }
+
+    private static bool IsBoundsInsideWindow(string? screenBounds, WindowBounds windowBounds)
+    {
+        return TryParseBounds(screenBounds, out var bounds)
+               && bounds.Right > windowBounds.X
+               && bounds.Bottom > windowBounds.Y
+               && bounds.X < windowBounds.X + windowBounds.Width
+               && bounds.Y < windowBounds.Y + windowBounds.Height;
+    }
+
+    private static bool TryParseBounds(string? rawBounds, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(rawBounds))
+        {
+            return false;
+        }
+
+        var parts = rawBounds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 4
+            || !float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height)
+            || width <= 0f
+            || height <= 0f)
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return true;
+    }
+}
+
 sealed record RootSceneTransitionState(
     bool TransitionInProgress,
     string? RootSceneCurrentType,
@@ -20898,6 +21415,11 @@ static class GuiSmokeForegroundHeuristics
             return true;
         }
 
+        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
+        {
+            return false;
+        }
+
         var declaringType = TryReadMetaString(observer.StateDocument, "declaringType");
         var instanceType = TryReadMetaString(observer.StateDocument, "instanceType");
         if (ContainsMapAuthority(declaringType) || ContainsMapAuthority(instanceType))
@@ -20905,41 +21427,27 @@ static class GuiSmokeForegroundHeuristics
             return false;
         }
 
-        return HasEventForegroundAuthority(observer.Summary)
-               || ContainsEventAuthority(declaringType)
-               || ContainsEventAuthority(instanceType);
+        return NonCombatForegroundOwnership.Resolve(observer) == NonCombatForegroundOwner.Event;
     }
 
     public static bool ShouldPreferEventProgressionOverMapFallback(ObserverSummary observer)
     {
-        return HasEventForegroundAuthority(observer);
+        return NonCombatForegroundOwnership.Resolve(observer) == NonCombatForegroundOwner.Event;
     }
 
     private static bool HasEventForegroundAuthority(ObserverSummary observer)
     {
-        if (AncientEventObserverSignals.IsMapForegroundOwner(observer))
-        {
-            return false;
-        }
-
-        if (string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var eventScreenAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-                                   || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-                                   || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
-                                   || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
-        if (!eventScreenAuthority)
+        if (NonCombatForegroundOwnership.Resolve(observer) != NonCombatForegroundOwner.Event)
         {
             return false;
         }
 
         if (AncientEventObserverSignals.HasForegroundAuthority(observer))
+        {
+            return true;
+        }
+
+        if (EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer, null))
         {
             return true;
         }
@@ -24244,6 +24752,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                        || label.Contains("Proceed", StringComparison.OrdinalIgnoreCase));
         }
 
+        if (HasExplicitEventProceedAuthority(request.Observer, request.WindowBounds))
+        {
+            return true;
+        }
+
         if (AncientEventObserverSignals.GetActiveDialogueNode(request.Observer, request.WindowBounds) is not null
             || AncientEventObserverSignals.GetActiveDialogueChoice(request.Observer, request.WindowBounds) is not null)
         {
@@ -24273,6 +24786,46 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             && !IsGenericContinueLabel(node.Label)
             && !IsBackChoiceLabel(node.Label)
             && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasExplicitEventProceedAuthority(ObserverState observer, WindowBounds? windowBounds)
+    {
+        return EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer, windowBounds);
+    }
+
+    private static bool HasExplicitEventProceedAuthority(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer, windowBounds);
+    }
+
+    private static bool HasEventChoiceAuthority(ObserverSummary observer)
+    {
+        return string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsExplicitEventProceedNode(ObserverActionNode node)
+    {
+        return node.Actionable
+               && ((node.NodeId?.StartsWith("event-option:", StringComparison.OrdinalIgnoreCase) ?? false)
+                   || node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase))
+               && HasExplicitEventProceedSemantic(node.SemanticHints);
+    }
+
+    private static bool IsExplicitEventProceedChoice(ObserverChoice choice)
+    {
+        return !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+               && HasExplicitEventProceedSemantic(choice.SemanticHints);
+    }
+
+    private static bool HasExplicitEventProceedSemantic(IReadOnlyList<string> semanticHints)
+    {
+        return semanticHints.Any(static hint =>
+            string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hint, "event-proceed", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool ShouldPrioritizeExplicitEventProgressionAfterCardSelection(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry> history)
@@ -24312,6 +24865,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool HasExplicitEventProgressionChoiceVisible(ObserverState observer, WindowBounds? windowBounds)
     {
+        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
+        {
+            return false;
+        }
+
         var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
@@ -24332,6 +24890,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool HasExplicitEventProgressionChoiceVisible(ObserverSummary observer, WindowBounds? windowBounds)
     {
+        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
+        {
+            return false;
+        }
+
         var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
@@ -25840,6 +26403,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool HasContradictoryForegroundOwnerAgainstMapFallback(GuiSmokeStepRequest request)
     {
+        var foregroundOwner = NonCombatForegroundOwnership.Resolve(request.Observer);
         return RewardObserverSignals.IsTerminalRunBoundary(request.Observer)
                || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)
                || CardSelectionObserverSignals.TryGetState(request.Observer) is not null
@@ -25847,7 +26411,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                || TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer)
                || ShopObserverSignals.IsShopAuthorityActive(request.Observer)
                || RewardObserverSignals.IsRewardAuthorityActive(request.Observer)
-               || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer);
+               || foregroundOwner is NonCombatForegroundOwner.Event
+                   or NonCombatForegroundOwner.RestSite
+                   or NonCombatForegroundOwner.Shop
+                   or NonCombatForegroundOwner.Reward
+                   or NonCombatForegroundOwner.Combat;
     }
 
     private static GuiSmokeStepDecision? TryFindVisibleMapAdvanceDecision(GuiSmokeStepRequest request)
@@ -26639,6 +27207,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return -120;
         }
 
+        if (IsExplicitEventProceedChoice(choice))
+        {
+            return 180;
+        }
+
         if (IsRewardCardChoice(choice))
         {
             return 240;
@@ -26687,6 +27260,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (IsDismissLikeLabel(node.Label))
         {
             return -120;
+        }
+
+        if (IsExplicitEventProceedNode(node))
+        {
+            return 180;
         }
 
         if (IsSkipLikeLabel(node.Label))
@@ -26746,6 +27324,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return "ancient event completion";
         }
 
+        if (IsExplicitEventProceedNode(node))
+        {
+            return "visible proceed";
+        }
+
         return GetProgressChoiceTargetLabel(node.Label, observer);
     }
 
@@ -26759,6 +27342,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (AncientEventObserverSignals.IsExplicitAncientCompletionChoice(choice))
         {
             return "ancient event completion";
+        }
+
+        if (IsExplicitEventProceedChoice(choice))
+        {
+            return "visible proceed";
         }
 
         return GetProgressChoiceTargetLabel(choice.Label, observer);
@@ -26828,6 +27416,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         if (AncientEventObserverSignals.IsExplicitAncientCompletionChoice(choice))
         {
             return $"Ancient event completion '{choice.Label}' is still exported from an explicit NEventOptionButton proceed lane. Finish the event before handing off to map routing.";
+        }
+
+        if (IsExplicitEventProceedChoice(choice))
+        {
+            return $"Explicit event proceed '{choice.Label}' is exported from EventOption.IsProceed authority. Advance the event before considering any stale map overlay candidate.";
         }
 
         if (IsSkipLikeLabel(choice.Label))
@@ -27104,6 +27697,11 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision CreateWaitDecision(string reason, string? expectedScreen)
     {
+        return CreateWaitDecision(reason, expectedScreen, 2000);
+    }
+
+    private static GuiSmokeStepDecision CreateWaitDecision(string reason, string? expectedScreen, int waitMs)
+    {
         return new GuiSmokeStepDecision(
             "wait",
             null,
@@ -27114,7 +27712,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             reason,
             0.60,
             expectedScreen,
-            2000,
+            waitMs,
             true,
             null);
     }
@@ -31750,6 +32348,11 @@ static class MapForegroundReconciliation
 
     private static bool HasExplicitEventProgressionForeground(ObserverState observer)
     {
+        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
+        {
+            return false;
+        }
+
         var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
