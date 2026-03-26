@@ -3516,25 +3516,10 @@ static void RunSelfTest()
         }
     }
 
-    var composedAttemptVideoRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-video-compose-self-test-{Guid.NewGuid():N}");
+    var attemptDesktopVideoRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-video-attempt-desktop-self-test-{Guid.NewGuid():N}");
     try
     {
-        Directory.CreateDirectory(Path.Combine(composedAttemptVideoRoot, "steps"));
-        File.WriteAllText(Path.Combine(composedAttemptVideoRoot, "steps", "0002.screen.png"), "fake-screen-2");
-        File.WriteAllText(Path.Combine(composedAttemptVideoRoot, "steps", "0001.screen.png"), "fake-screen-1");
-
-        var orderedScreens = GuiSmokeVideoRecorder.GetAttemptStepScreenshotPathsForSelfTest(composedAttemptVideoRoot);
-        Assert(orderedScreens.Count == 2, "Attempt video composition should discover step screenshots.");
-        Assert(orderedScreens[0].EndsWith("0001.screen.png", StringComparison.OrdinalIgnoreCase)
-               && orderedScreens[1].EndsWith("0002.screen.png", StringComparison.OrdinalIgnoreCase),
-            "Attempt video composition should preserve step order.");
-
-        var concatLines = GuiSmokeVideoRecorder.BuildStepScreenshotConcatLinesForSelfTest(orderedScreens);
-        Assert(concatLines.Length == 5, "Concat manifest should include file/duration pairs and repeat the last frame.");
-        Assert(concatLines[0].Contains("0001.screen.png", StringComparison.OrdinalIgnoreCase)
-               && concatLines[2].Contains("0002.screen.png", StringComparison.OrdinalIgnoreCase)
-               && concatLines[^1].Contains("0002.screen.png", StringComparison.OrdinalIgnoreCase),
-            "Concat manifest should preserve ordered step screenshot inputs.");
+        Directory.CreateDirectory(attemptDesktopVideoRoot);
 
         using var recorder = GuiSmokeVideoRecorder.Create(
             workspaceRoot,
@@ -3544,27 +3529,26 @@ static void RunSelfTest()
             },
             "self-test-session",
             "self-test-run",
-            composedAttemptVideoRoot,
-            composedAttemptVideoRoot,
+            attemptDesktopVideoRoot,
+            attemptDesktopVideoRoot,
             attemptId: "0001",
             scopeKind: "attempt");
-        var started = recorder.TryStart(target: null);
-        Assert(started, "Attempt review video should be able to start without a live desktop capture target.");
-        recorder.Complete(keepRecording: true, completionReason: "self-test-compose-attempt-video");
+        var started = recorder.TryStart(new WindowCaptureTarget(IntPtr.Zero, "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
+        Assert(started, "Attempt review video should use live desktop capture when an executable is available.");
+        recorder.Complete(keepRecording: true, completionReason: "self-test-attempt-desktop-video");
 
-        var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(composedAttemptVideoRoot, "video-recording.json"))
-                       ?? throw new InvalidOperationException("Expected composed attempt video metadata.");
+        var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(attemptDesktopVideoRoot, "video-recording.json"))
+                       ?? throw new InvalidOperationException("Expected attempt desktop-crop video metadata.");
         Assert(!string.Equals(metadata.Status, "recording", StringComparison.OrdinalIgnoreCase), "Attempt video metadata must finalize out of transient recording state.");
-        Assert(string.Equals(metadata.CaptureMode, "step-screens", StringComparison.OrdinalIgnoreCase), "Attempt video should report step-screens as the actual capture mode.");
-        Assert(string.Equals(metadata.CaptureInputPattern, "steps/*.screen.png", StringComparison.OrdinalIgnoreCase), "Attempt video metadata should disclose the screenshot source pattern.");
-        Assert(!metadata.WindowScopedCaptureRequested, "Step-screenshot composition should not claim live window-scoped capture.");
-        Assert(metadata.CommandLine is not null && metadata.CommandLine.Contains("video.frames.txt", StringComparison.OrdinalIgnoreCase), "Attempt video composition should record the ffmpeg concat command when encoding is attempted.");
+        Assert(string.Equals(metadata.CaptureMode, "desktop-crop", StringComparison.OrdinalIgnoreCase), "Attempt metadata should honestly report live desktop-crop capture.");
+        Assert(metadata.WindowScopedCaptureRequested, "Attempt desktop capture should preserve the requested window-scoped intent.");
+        Assert(metadata.CommandLine is not null && metadata.CommandLine.Contains("-f gdigrab", StringComparison.OrdinalIgnoreCase), "Attempt desktop capture should record the live ffmpeg gdigrab command.");
     }
     finally
     {
-        if (Directory.Exists(composedAttemptVideoRoot))
+        if (Directory.Exists(attemptDesktopVideoRoot))
         {
-            Directory.Delete(composedAttemptVideoRoot, recursive: true);
+            Directory.Delete(attemptDesktopVideoRoot, recursive: true);
         }
     }
 
@@ -31736,10 +31720,8 @@ sealed record GuiSmokeVideoRecordingMetadata(
 sealed class GuiSmokeVideoRecorder : IDisposable
 {
     private const int StopTimeoutMs = 5000;
-    private const int ComposeTimeoutMs = 30000;
     private const int MinimumCaptureDimension = 2;
     private const int CaptureFramerate = 15;
-    private const double AttemptComposeFrameDurationSeconds = 0.5d;
     private const int MaxDiagnosticLines = 8;
 
     private readonly string _workspaceRoot;
@@ -31803,22 +31785,6 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             PersistMetadata();
             LogVideo($"video scope={_metadata.ScopeKind} start skipped status={_metadata.Status} reason={_metadata.SkipReason ?? "none"}");
             return false;
-        }
-
-        if (UsesStepScreenshotComposition())
-        {
-            _metadata.CaptureMode = "step-screens";
-            _metadata.CaptureInputPattern = "steps/*.screen.png";
-            _metadata.CaptureModeNote = "Composed after completion from authoritative per-step screenshots.";
-            _metadata.WindowScopedCaptureRequested = false;
-            _metadata.WindowTitle = null;
-            _metadata.CaptureBounds = null;
-            _metadata.CommandLine = null;
-            _metadata.Status = "recording";
-            _metadata.RecordingStartedAt = DateTimeOffset.UtcNow;
-            PersistMetadata();
-            LogVideo($"video scope={_metadata.ScopeKind} captureMode={_metadata.CaptureMode} source={_metadata.CaptureInputPattern}");
-            return true;
         }
 
         if (target is null)
@@ -31896,15 +31862,6 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         _completed = true;
         _metadata.CompletionReason = completionReason;
         _metadata.RecordingEndedAt = DateTimeOffset.UtcNow;
-
-        if (UsesStepScreenshotComposition())
-        {
-            CompleteStepScreenshotComposition(keepRecording);
-            AppendDiagnosticSummary();
-            PersistMetadata();
-            LogVideo($"video scope={_metadata.ScopeKind} completed status={_metadata.Status} kept={_metadata.Kept?.ToString() ?? "null"} reason={_metadata.CompletionReason ?? "none"} skipReason={_metadata.SkipReason ?? "none"} exitCode={_metadata.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "null"} captureMode={_metadata.CaptureMode ?? "null"}");
-            return;
-        }
 
         if (_process is not null)
         {
@@ -32094,11 +32051,6 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         return new Rectangle(bounds.X, bounds.Y, width, height);
     }
 
-    private bool UsesStepScreenshotComposition()
-    {
-        return string.Equals(_metadata.ScopeKind, "attempt", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static string BuildFfmpegArguments(Rectangle bounds, string outputPath)
     {
         return string.Join(
@@ -32114,25 +32066,6 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             $"-video_size {bounds.Width.ToString(CultureInfo.InvariantCulture)}x{bounds.Height.ToString(CultureInfo.InvariantCulture)}",
             "-draw_mouse 0",
             "-i desktop",
-            "-c:v libx264",
-            "-preset ultrafast",
-            "-pix_fmt yuv420p",
-            QuoteArgument(outputPath));
-    }
-
-    private static string BuildStepScreenshotComposeArguments(string inputListPath, string outputPath)
-    {
-        return string.Join(
-            " ",
-            "-hide_banner",
-            "-loglevel error",
-            "-nostats",
-            "-y",
-            "-f concat",
-            "-safe 0",
-            "-i",
-            QuoteArgument(inputListPath),
-            "-vsync vfr",
             "-c:v libx264",
             "-preset ultrafast",
             "-pix_fmt yuv420p",
@@ -32289,124 +32222,6 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         }
     }
 
-    private void CompleteStepScreenshotComposition(bool keepRecording)
-    {
-        if (string.Equals(_metadata.Status, "pending", StringComparison.OrdinalIgnoreCase))
-        {
-            _metadata.Status = "skipped";
-            _metadata.SkipReason ??= "recording-never-started";
-            _metadata.Kept = false;
-            return;
-        }
-
-        if (string.Equals(_metadata.Status, "skipped", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(_metadata.Status, "start-failed", StringComparison.OrdinalIgnoreCase))
-        {
-            _metadata.Kept ??= false;
-            return;
-        }
-
-        if (TryComposeAttemptVideoFromStepScreens(out var composeFailureReason))
-        {
-            ApplyOutputDisposition(keepRecording);
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(composeFailureReason))
-        {
-            _metadata.SkipReason = composeFailureReason;
-        }
-
-        ApplyMissingOutputDisposition(keepRecording);
-    }
-
-    private bool TryComposeAttemptVideoFromStepScreens(out string? failureReason)
-    {
-        failureReason = null;
-        if (!_metadata.FfmpegAvailable || string.IsNullOrWhiteSpace(_metadata.FfmpegPath))
-        {
-            failureReason = "compose-ffmpeg-unavailable";
-            return false;
-        }
-
-        var screenshotPaths = GetAttemptStepScreenshotPaths(_metadata.RootPath);
-        if (screenshotPaths.Count == 0)
-        {
-            failureReason = "compose-no-step-screens";
-            return false;
-        }
-
-        var concatFilePath = Path.Combine(_metadata.RootPath, "video.frames.txt");
-        var concatProcessPath = GetProcessCompatiblePath(concatFilePath);
-        var outputProcessPath = GetProcessCompatiblePath(_metadata.OutputPath);
-        var workingDirectory = GetProcessCompatiblePath(_workspaceRoot);
-        var executablePath = _metadata.FfmpegPath!;
-        var commandPath = _ffmpegProcessPath ?? executablePath;
-        var arguments = BuildStepScreenshotComposeArguments(concatProcessPath, outputProcessPath);
-        _metadata.CommandLine = QuoteCommand(commandPath, arguments);
-        try
-        {
-            File.WriteAllLines(concatFilePath, BuildStepScreenshotConcatLines(screenshotPaths), new UTF8Encoding(false));
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = executablePath,
-                    Arguments = arguments,
-                    WorkingDirectory = workingDirectory,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                },
-            };
-            process.OutputDataReceived += (_, eventArgs) => RecordDiagnosticLine(eventArgs.Data);
-            process.ErrorDataReceived += (_, eventArgs) => RecordDiagnosticLine(eventArgs.Data);
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            if (!process.WaitForExit(ComposeTimeoutMs))
-            {
-                try
-                {
-                    process.Kill(entireProcessTree: true);
-                    process.WaitForExit(StopTimeoutMs);
-                }
-                catch
-                {
-                }
-
-                _metadata.ExitCode = process.HasExited ? process.ExitCode : null;
-                failureReason = "compose-timeout";
-                return false;
-            }
-
-            _metadata.ExitCode = process.ExitCode;
-            if (process.ExitCode != 0)
-            {
-                failureReason = $"compose-exit-code:{process.ExitCode.ToString(CultureInfo.InvariantCulture)}";
-                return false;
-            }
-
-            if (!File.Exists(_metadata.OutputPath))
-            {
-                failureReason = "compose-missing-output";
-                return false;
-            }
-
-            return true;
-        }
-        catch (Exception exception)
-        {
-            failureReason = $"compose-failed:{exception.GetType().Name}:{SanitizeText(exception.Message)}";
-            return false;
-        }
-        finally
-        {
-            TryDeleteTemporaryFile(concatFilePath);
-        }
-    }
-
     private void ApplyOutputDisposition(bool keepRecording)
     {
         if (File.Exists(_metadata.OutputPath) && keepRecording)
@@ -32434,65 +32249,6 @@ sealed class GuiSmokeVideoRecorder : IDisposable
     {
         _metadata.Status = keepRecording ? "kept-missing-output" : "deleted-missing-output";
         _metadata.Kept = keepRecording;
-    }
-
-    private static IReadOnlyList<string> GetAttemptStepScreenshotPaths(string rootPath)
-    {
-        var stepsRoot = Path.Combine(rootPath, "steps");
-        if (!Directory.Exists(stepsRoot))
-        {
-            return Array.Empty<string>();
-        }
-
-        return Directory.EnumerateFiles(stepsRoot, "*.screen.png", SearchOption.TopDirectoryOnly)
-            .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-    }
-
-    private static IEnumerable<string> BuildStepScreenshotConcatLines(IReadOnlyList<string> screenshotPaths)
-    {
-        if (screenshotPaths.Count == 0)
-        {
-            yield break;
-        }
-
-        var durationText = AttemptComposeFrameDurationSeconds.ToString("0.###", CultureInfo.InvariantCulture);
-        foreach (var screenshotPath in screenshotPaths)
-        {
-            yield return $"file '{EscapeFfmpegConcatPath(GetProcessCompatiblePath(screenshotPath))}'";
-            yield return $"duration {durationText}";
-        }
-
-        yield return $"file '{EscapeFfmpegConcatPath(GetProcessCompatiblePath(screenshotPaths[^1]))}'";
-    }
-
-    internal static IReadOnlyList<string> GetAttemptStepScreenshotPathsForSelfTest(string rootPath)
-    {
-        return GetAttemptStepScreenshotPaths(rootPath);
-    }
-
-    internal static string[] BuildStepScreenshotConcatLinesForSelfTest(IReadOnlyList<string> screenshotPaths)
-    {
-        return BuildStepScreenshotConcatLines(screenshotPaths).ToArray();
-    }
-
-    private static string EscapeFfmpegConcatPath(string path)
-    {
-        return path.Replace('\\', '/').Replace("'", "'\\''", StringComparison.Ordinal);
-    }
-
-    private static void TryDeleteTemporaryFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch
-        {
-        }
     }
 
     private void RecordDiagnosticLine(string? line)
