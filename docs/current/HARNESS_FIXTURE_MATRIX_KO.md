@@ -39,7 +39,7 @@ coverage status 의미:
 |---|---|---|---|---|---|
 | `MAP-01` | `ChooseFirstNode` | map-node | green | replay parity fixtures expecting `foregroundOwner=map`, exported map-node self-tests | explicit map node routing strong |
 | `MAP-02` | `ChooseFirstNode` / `HandleEvent` | map-overlay foreground | green | `Program.cs` map-overlay signature/assertions, `map-overlay-noop-loop` sentinel self-test | stale event residue suppression covered |
-| `MAP-03` | `WaitMap` | room reopen | green | `Program.cs` `WaitMap should reopen reward/event/treasure handling...` assertions | mixed modal canonical foreground owner reopen covered |
+| `MAP-03` | `WaitMap` | room reopen | green | `Program.cs` `WaitMap should reopen reward/event/treasure handling...` assertions | mixed modal reopen stays green while reward/event routing now reads canonical scene wrappers |
 | `MAP-04` | `WaitPostMapNodeRoom` | destination room handoff | partial | goal text + phase reconciliation helpers + self-tests around event/combat reopen | needs broader canonical live roots |
 
 ## Combat
@@ -65,8 +65,8 @@ coverage status 의미:
 | `EVENT-02` | `HandleEvent` | explicit event proceed | green | `Program.cs` explicit `EventOption.IsProceed` self-tests | proceed lane tactical + fast wait |
 | `EVENT-03` | `HandleEvent` | ancient dialogue | green | `Program.cs` ancient dialogue/completion assertions | explicit ancient lane covered |
 | `EVENT-04` | `HandleEvent` / `WaitEventRelease` | ancient dialogue / completion | green | `Program.cs` ancient dialogue/completion allowlist, post-phase, release assertions | ancient lane split strong |
-| `EVENT-05` | `HandleEvent` | event reward substate | partial | latest-event sentinel uses reward residue vs latest event, reward/event mixed tests exist | reward substate exists but long-run matrix thin |
-| `EVENT-06` | `HandleEvent` / `ChooseFirstNode` | event/map mixed aftermath | green | `live5b`-family self-tests in `Program.cs`, canonical foreground owner assertions | canonical foreground owner rule covered for event/map |
+| `EVENT-05` | `HandleEvent` | event reward substate | partial | `Program.cs` canonical `EventSceneState` assertions delegate colorless/reward follow-up into reward lane; reward/event mixed tests still exist | owner/action/release now route through canonical event state, but fresh current-main live evidence is still thin |
+| `EVENT-06` | `HandleEvent` / `ChooseFirstNode` | event/map mixed aftermath | green | `live5b`-family self-tests in `Program.cs`, canonical foreground owner assertions | current green event/map behavior is preserved while mixed routing now goes through canonical event wrappers |
 | `TREASURE-01` | `ChooseFirstNode` / `HandleEvent` | treasure room | green | treasure room self-tests, WaitMap reopen to treasure, status doc continuity roots | explicit treasure room state strong |
 | `REST-01` | `ChooseFirstNode` | rest-site explicit choice | green | rest-site metadata-first self-tests | authoritative metadata contract strong |
 | `REST-02` | `ChooseFirstNode` | rest-site post-click release | green | grace / noop / selection-failed self-tests | explicit release/no-op guard present |
@@ -129,7 +129,7 @@ coverage status 의미:
 |---|---|---|
 | P0 | reward post-click release/handoff canonicalization | `REWARD-03` / `REWARD-05` / `REWARD-06` are still partial and `REWARD-09` is missing |
 | P0 | combat post-wait recapture canonical coverage | `COMBAT-09` is code-covered and self-test-covered, but still partial until fresh current-main live evidence exists |
-| P1 | owner/action/release duplication inventory for rewards and events | same state meaning still split across multiple helpers |
+| P1 | shared noncombat owner/release extraction after reward/event canonicalization | event wrapperization landed, but reward/event/shop/rest/treasure still do not share one contract |
 | P1 | current-main live evidence refresh for noncombat mixed aftermath | status docs are stronger than the state-specific matrix today |
 | P2 | strict lifecycle chain evidence | `TERM-02` remains intentionally open |
 

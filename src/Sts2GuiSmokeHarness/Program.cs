@@ -6395,6 +6395,53 @@ static void RunSelfTest()
             null),
             "waiting for explicit event progression choice");
         Assert(explicitProceedWaitDecision.WaitMs == 400, "Stable explicit event proceed ownership should use the faster noncombat wait.");
+
+        var explicitProceedReleaseHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "visible proceed", DateTimeOffset.UtcNow.AddMilliseconds(-200)),
+        };
+        var explicitProceedReleaseState = BuildEventSceneState(
+            explicitProceedObserverState,
+            new WindowBounds(0, 0, 1280, 720),
+            explicitProceedReleaseHistory,
+            eventContaminationScreenshotPath);
+        Assert(explicitProceedReleaseState.ReleaseStage == EventReleaseStage.ReleasePending,
+            "A fresh explicit event proceed on the same authority band should enter event release-pending.");
+        Assert(explicitProceedReleaseState.SuppressSameProceedReissue,
+            "Event release-pending should suppress same proceed reissue until ownership changes.");
+        Assert(BuildAllowedActions(
+            GuiSmokePhase.HandleEvent,
+            explicitProceedObserverState,
+            Array.Empty<CombatCardKnowledgeHint>(),
+            eventContaminationScreenshotPath,
+            explicitProceedReleaseHistory).SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+            "Event release-pending should collapse the HandleEvent allowlist to wait instead of reopening proceed.");
+        var explicitProceedReissueDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            46,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "Do not reissue explicit event proceed on the same authority band.",
+            DateTimeOffset.UtcNow,
+            eventContaminationScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            ComputeSceneSignature(eventContaminationScreenshotPath, explicitProceedObserverState, GuiSmokePhase.HandleEvent),
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            explicitProceedObserverState.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            new[] { "wait" },
+            explicitProceedReleaseHistory,
+            "Explicit event proceed release-pending should wait for release instead of reissuing proceed.",
+            null));
+        Assert(string.Equals(explicitProceedReissueDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+            "HandleEvent should wait instead of reissuing the same explicit proceed on the same authority band.");
     }
     finally
     {
@@ -11094,6 +11141,10 @@ static void RunSelfTest()
             },
             Array.Empty<ObservedCombatHandCard>());
         var colorlessObserverState = new ObserverState(colorlessObserver, null, null, null);
+        var colorlessEventScene = BuildEventSceneState(colorlessObserverState, new WindowBounds(0, 0, 1920, 1080), Array.Empty<GuiSmokeHistoryEntry>(), colorlessRewardScreenshotPath);
+        Assert(colorlessEventScene.CanonicalForegroundOwner == NonCombatForegroundOwner.Reward
+               && colorlessEventScene.ExplicitAction == EventExplicitActionKind.RewardSubstate,
+            "Event reward follow-up should canonicalize to the reward foreground lane instead of generic event ownership.");
         Assert(GetAllowedActions(GuiSmokePhase.HandleEvent, colorlessObserverState).Contains("click colorless card choice", StringComparer.OrdinalIgnoreCase), "Colorless reward state should expose colorless card actions instead of generic event options.");
         var colorlessDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
             "run",
@@ -14189,6 +14240,7 @@ static string[] BuildAllowedActionsCore(
     var rewardBackNavigationAvailable = context.RewardBackNavigationAvailable;
     var claimableRewardPresent = context.ClaimableRewardPresent;
     var mapOverlayState = context.MapOverlayState;
+    var eventScene = BuildEventSceneState(observer, null, history, screenshotPath);
     var mapForegroundOwnership = MapForegroundReconciliation.HasMapForegroundOwnership(observer, history);
     var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
     var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
@@ -14239,6 +14291,10 @@ static string[] BuildAllowedActionsCore(
             => new[] { "press escape", "click inspect overlay close", "wait" },
         GuiSmokePhase.HandleEvent when cardSelectionState is not null
             => BuildCardSelectionAllowedActions(cardSelectionState),
+        GuiSmokePhase.HandleEvent when eventScene.RewardSubstateActive
+            => BuildRewardAllowedActionsFromState(observer, eventScene.RewardScene),
+        GuiSmokePhase.HandleEvent when eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending
+            => new[] { "wait" },
         GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && (claimableRewardPresent || LooksLikeColorlessCardChoiceState(observer))
             => new[] { "click colorless card choice", "click reward skip", "click proceed", "press escape", "wait" },
         GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && (claimableRewardPresent || LooksLikeRewardChoiceState(observer))
@@ -14257,7 +14313,7 @@ static string[] BuildAllowedActionsCore(
             => new[] { "click event choice", "click proceed", "wait" },
         GuiSmokePhase.HandleEvent when treasureState is { RoomDetected: true }
             => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
-        GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !explicitEventProceedAuthority
+        GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !eventScene.StrongForegroundChoice && !explicitEventProceedAuthority
             => mapOverlayState.MapBackNavigationAvailable
                 ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
                 : new[] { "click exported reachable node", "click first reachable node", "wait" },
@@ -14313,6 +14369,22 @@ static string[] BuildRewardAllowedActions(ObserverState observer, GuiSmokeStepAn
     }
 
     var rewardScene = BuildRewardSceneState(observer, null, context.History, context.ScreenshotPath);
+    return BuildRewardAllowedActionsFromState(observer, rewardScene);
+}
+
+static string[] BuildRewardAllowedActionsFromState(ObserverState observer, RewardSceneState rewardScene)
+{
+    if (LooksLikeInspectOverlayState(observer))
+    {
+        return new[] { "press escape", "click inspect overlay close", "wait" };
+    }
+
+    var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
+    if (cardSelectionState is not null)
+    {
+        return BuildCardSelectionAllowedActions(cardSelectionState);
+    }
+
     if (rewardScene.LayerState.TerminalRunBoundary || rewardScene.ReleaseToMapPending)
     {
         return new[] { "wait" };
@@ -14483,6 +14555,15 @@ static RewardSceneState BuildRewardSceneState(
     string? screenshotPath = null)
 {
     return AutoDecisionProvider.BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
+}
+
+static EventSceneState BuildEventSceneState(
+    ObserverState observer,
+    WindowBounds? windowBounds,
+    IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+    string? screenshotPath = null)
+{
+    return AutoDecisionProvider.BuildEventSceneState(observer, windowBounds, history, screenshotPath);
 }
 
 static bool ShouldPreferRewardProgressionOverMapFallbackSummary(ObserverSummary observer)
@@ -15499,6 +15580,20 @@ static string BuildFailureModeHintCoreWithContext(
         return "AI first: trust reward observer/runtime state. Use reward foreground ownership, explicit reward choices, and proceed availability before any screenshot fallback; only inspect the screenshot when explicit reward authority is missing or contradictory.";
     }
 
+    if (phase == GuiSmokePhase.HandleEvent)
+    {
+        var eventScene = BuildEventSceneState(observer, null, history, screenshotPath);
+        if (eventScene.RewardSubstateActive)
+        {
+            return "AI first: this event is currently in a reward substate. Reuse the canonical reward lane, finish reward claim/skip/proceed, and do not fall back to generic event or map routing until reward ownership releases.";
+        }
+
+        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)
+        {
+            return "Explicit event proceed/completion was already fired on the same authority band. Wait for release or handoff instead of reissuing the same proceed click or reopening map routing early.";
+        }
+    }
+
     return phase switch
     {
         GuiSmokePhase.EnterRun => "Continue may be absent. Use Singleplayer only if Continue is not visible.",
@@ -16295,10 +16390,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeEventState(
-                observer.Summary,
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"),
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
+        if (ShouldRouteToHandleEvent(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
@@ -16362,10 +16454,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeEventState(
-                observer.Summary,
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"),
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
+        if (ShouldRouteToHandleEvent(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
@@ -16492,10 +16581,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeEventState(
-                observer.Summary,
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"),
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
+        if (ShouldRouteToHandleEvent(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
@@ -16544,10 +16630,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeEventState(
-                observer.Summary,
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"),
-                GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
+        if (ShouldRouteToHandleEvent(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-resolved-event", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-resolved-event", observer.CurrentScreen, observer.InCombat, null));
@@ -16673,8 +16756,7 @@ static bool TryReopenMixedStateModalBranchFromWaitMap(
         branchKind = "branch-shop";
         nextPhase = GuiSmokePhase.HandleShop;
     }
-    else if (HasExplicitEventProgressionChoiceVisibleForWaitMap(observer)
-             || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
+    else if (ShouldRouteToHandleEvent(observer, history))
     {
         branchKind = "branch-event";
         nextPhase = GuiSmokePhase.HandleEvent;
@@ -16712,27 +16794,39 @@ static bool ShouldRouteToHandleRewards(
 
 static bool HasExplicitEventProgressionChoiceVisibleForWaitMap(ObserverState observer)
 {
-    if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
+    var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+    return eventScene.EventForegroundOwned
+           && eventScene.ReleaseStage == EventReleaseStage.Active
+           && eventScene.HasExplicitProgression;
+}
+
+static bool ShouldRouteToHandleEvent(
+    ObserverState observer,
+    IReadOnlyList<GuiSmokeHistoryEntry>? history,
+    string? screenshotPath = null)
+{
+    if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
+        || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
+        || LooksLikeRestSiteState(observer.Summary)
+        || LooksLikeRestSiteProceedState(observer.Summary)
+        || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary)
+        || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
     {
         return false;
     }
 
-    var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-                         || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-                         || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
-                         || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
-    if (!eventAuthority)
+    var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history, screenshotPath);
+    if (eventScene.EventForegroundOwned
+        && eventScene.ReleaseStage == EventReleaseStage.Active)
     {
-        return false;
+        return true;
     }
 
-    return observer.ActionNodes.Any(static node =>
-               node.Actionable
-               && TryParseNodeBounds(node.ScreenBounds, out _)
-               && IsProceedNode(node))
-           || observer.Choices.Any(static choice =>
-               TryParseNodeBounds(choice.ScreenBounds, out _)
-               && IsProceedChoice(choice));
+    return EventProceedObserverSignals.HasEventChoiceAuthority(observer.Summary)
+           && !NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer)
+           && !ShouldRouteToHandleRewards(observer, history, screenshotPath)
+           && !AutoDecisionProvider.HasRecentEventReleaseIntent(history)
+           && AutoDecisionProvider.HasRawEventProgressionSurface(observer.Summary, null);
 }
 
 static int IncrementAttempt(Dictionary<GuiSmokePhase, int> attemptsByPhase, GuiSmokePhase phase)
@@ -18718,6 +18812,44 @@ sealed record RewardSceneState(
     public bool ReleaseToMapPending => ReleaseStage is RewardReleaseStage.ReleasePending or RewardReleaseStage.Released;
 }
 
+enum EventReleaseStage
+{
+    None,
+    Active,
+    ReleasePending,
+    Released,
+}
+
+enum EventExplicitActionKind
+{
+    None,
+    RewardSubstate,
+    AncientDialogue,
+    AncientCompletion,
+    AncientOption,
+    EventChoice,
+    Proceed,
+}
+
+sealed record EventSceneState(
+    NonCombatForegroundOwner CanonicalForegroundOwner,
+    EventReleaseStage ReleaseStage,
+    EventExplicitActionKind ExplicitAction,
+    RewardSceneState RewardScene,
+    MapOverlayState MapOverlayState,
+    bool MapContextVisible,
+    bool RewardSubstateActive,
+    bool HasExplicitProgression,
+    bool StrongForegroundChoice,
+    bool ForceProgressionAfterCardSelection,
+    bool ExplicitProceedVisible,
+    bool SuppressSameProceedReissue)
+{
+    public bool EventForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Event;
+    public bool RewardForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Reward;
+    public bool MapForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Map;
+}
+
 sealed record MapOverlayState(
     bool ForegroundVisible,
     bool EventBackgroundPresent,
@@ -20199,39 +20331,10 @@ static class NonCombatForegroundOwnership
 
     public static bool HasExplicitEventForegroundAuthority(ObserverSummary observer)
     {
-        if (HasExplicitMapForegroundAuthority(observer)
-            || RewardObserverSignals.IsRewardAuthorityActive(observer)
-            || ShopObserverSignals.IsShopAuthorityActive(observer)
-            || HasExplicitRestSiteForegroundAuthority(observer)
-            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
-        {
-            return false;
-        }
-
-        if (AncientEventObserverSignals.HasForegroundAuthority(observer))
-        {
-            return true;
-        }
-
-        if (!EventProceedObserverSignals.HasEventChoiceAuthority(observer))
-        {
-            return false;
-        }
-
-        if (EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, null))
-        {
-            return true;
-        }
-
-        return observer.ActionNodes.Any(node =>
-                   node.Actionable
-                   && !MapNodeSourceSupport.IsExplicitMapPointNode(node)
-                   && (node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(node.TypeName, "event-option", StringComparison.OrdinalIgnoreCase)))
-               || observer.Choices.Any(choice =>
-                   !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
-                   && (string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(choice.BindingKind, "event-option", StringComparison.OrdinalIgnoreCase)));
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+        return eventScene.EventForegroundOwned
+               && eventScene.ReleaseStage == EventReleaseStage.Active
+               && eventScene.HasExplicitProgression;
     }
 
     private static bool? TryGetMetaBool(ObserverSummary observer, string key)
@@ -21992,11 +22095,6 @@ static class GuiSmokeForegroundHeuristics
 {
     public static bool ShouldPreferEventProgressionOverMapFallback(ObserverState observer)
     {
-        if (AncientEventObserverSignals.HasForegroundAuthority(observer.Summary))
-        {
-            return true;
-        }
-
         if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
         {
             return false;
@@ -22009,41 +22107,24 @@ static class GuiSmokeForegroundHeuristics
             return false;
         }
 
-        return NonCombatForegroundOwnership.Resolve(observer) == NonCombatForegroundOwner.Event;
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+        return eventScene.EventForegroundOwned
+               && eventScene.ReleaseStage == EventReleaseStage.Active;
     }
 
     public static bool ShouldPreferEventProgressionOverMapFallback(ObserverSummary observer)
     {
-        return NonCombatForegroundOwnership.Resolve(observer) == NonCombatForegroundOwner.Event;
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+        return eventScene.EventForegroundOwned
+               && eventScene.ReleaseStage == EventReleaseStage.Active;
     }
 
     private static bool HasEventForegroundAuthority(ObserverSummary observer)
     {
-        if (NonCombatForegroundOwnership.Resolve(observer) != NonCombatForegroundOwner.Event)
-        {
-            return false;
-        }
-
-        if (AncientEventObserverSignals.HasForegroundAuthority(observer))
-        {
-            return true;
-        }
-
-        if (EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer, null))
-        {
-            return true;
-        }
-
-        return observer.ActionNodes.Any(node =>
-                   node.Actionable
-                   && !MapNodeSourceSupport.IsExplicitMapPointNode(node)
-                   && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
-                   && HasUsableBounds(node.ScreenBounds))
-               || observer.Choices.Any(choice =>
-                   !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
-                   && 
-                   HasUsableBounds(choice.ScreenBounds)
-                   && !LooksLikeProceedOrSkip(choice.Label));
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+        return eventScene.EventForegroundOwned
+               && eventScene.ReleaseStage == EventReleaseStage.Active
+               && eventScene.HasExplicitProgression;
     }
 
     private static bool HasUsableBounds(string? rawBounds)
@@ -23347,11 +23428,17 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request)
     {
-        var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelection(request);
-        var preferEventForeground = GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer)
-                                    || forceEventProgressionAfterCardSelection;
-        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        var strongEventForegroundChoice = HasStrongForegroundEventChoice(request) || forceEventProgressionAfterCardSelection;
+        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        if (eventScene.RewardSubstateActive)
+        {
+            return DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() });
+        }
+
+        var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
+        var preferEventForeground = eventScene.EventForegroundOwned
+                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
+        var mapOverlayState = eventScene.MapOverlayState;
+        var strongEventForegroundChoice = eventScene.StrongForegroundChoice || forceEventProgressionAfterCardSelection;
         if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
         {
             GuiSmokeDecisionDebug.SetSceneModel("map-overlay", mapOverlayState.EventBackgroundPresent ? "event-context" : "map-context");
@@ -23480,6 +23567,17 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event completion outranks screenshot map routing");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event completion suppresses map-arrow fallback");
             return ancientCompletionDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient event completion");
+        }
+
+        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("event-release-pending", eventScene.MapContextVisible ? "map-context" : "event-context");
+            GuiSmokeDecisionDebug.Suppress("click proceed", "event release-pending suppresses same proceed reissue");
+            GuiSmokeDecisionDebug.Suppress("click event choice", "event release-pending suppresses stale event reissue");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "event release-pending waits for explicit release before map routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "event release-pending waits for explicit release before map routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "event release-pending suppresses stale map contamination");
+            return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit event release");
         }
 
         var ancientOptionDecision = GuiSmokeDecisionDebug.TraceCandidate(
@@ -25064,11 +25162,17 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeDecisionAnalysis AnalyzeHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
     {
-        var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelection(request);
-        var preferEventForeground = GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer)
-                                    || forceEventProgressionAfterCardSelection;
-        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        var strongEventForegroundChoice = HasStrongForegroundEventChoice(request) || forceEventProgressionAfterCardSelection;
+        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        if (eventScene.RewardSubstateActive)
+        {
+            return AnalyzeHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, actualDecision);
+        }
+
+        var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
+        var preferEventForeground = eventScene.EventForegroundOwned
+                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
+        var mapOverlayState = eventScene.MapOverlayState;
+        var strongEventForegroundChoice = eventScene.StrongForegroundChoice || forceEventProgressionAfterCardSelection;
         var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
         var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
 
@@ -25161,6 +25265,17 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return builder.Build(CreateWaitDecision("waiting for explicit ancient event completion", request.Observer.CurrentScreen), actualDecision);
         }
 
+        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)
+        {
+            builder.AddSuppressed("click proceed", "event-release-pending-suppresses-same-proceed-reissue");
+            builder.AddSuppressed("click event choice", "event-release-pending-suppresses-stale-event-choice-reissue");
+            builder.AddSuppressed("click exported reachable node", "event-release-pending-waits-for-explicit-release-before-map-routing");
+            builder.AddSuppressed("click first reachable node", "event-release-pending-waits-for-explicit-release-before-map-routing");
+            builder.AddSuppressed("click visible map advance", "event-release-pending-suppresses-map-contamination");
+            builder.AddSuppressed("click room fallback", "event-release-pending-suppresses-room-fallback");
+            return builder.Build(CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit event release"), actualDecision);
+        }
+
         var ancientOptionDecision = TryCreateAncientEventOptionDecision(request);
         builder.Consider(
             "click event choice",
@@ -25251,34 +25366,38 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return ($"card-selection:{cardSelectionState.ScreenType}", request.Observer.CurrentScreen);
         }
 
-        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        if (mapOverlayState.ForegroundVisible && !HasStrongForegroundEventChoice(request))
+        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        if (eventScene.RewardSubstateActive)
         {
-            return ("map-overlay", mapOverlayState.EventBackgroundPresent ? "event" : "map");
+            return ("reward", eventScene.RewardScene.LayerState.MapContextVisible ? "map" : null);
         }
 
-        var rewardScene = BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
-        if (rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage == RewardReleaseStage.ReleasePending)
+        if (eventScene.MapOverlayState.ForegroundVisible && !eventScene.StrongForegroundChoice)
         {
-            return ("reward", rewardScene.LayerState.MapContextVisible ? "map" : null);
+            return ("map-overlay", eventScene.MapOverlayState.EventBackgroundPresent ? "event" : "map");
         }
 
-        if (AncientEventObserverSignals.IsDialogueActive(request.Observer))
+        if (eventScene.ExplicitAction == EventExplicitActionKind.AncientDialogue)
         {
             return ("ancient-event-dialogue", "event");
         }
 
-        if (AncientEventObserverSignals.HasExplicitCompletionAction(request.Observer))
+        if (eventScene.ExplicitAction == EventExplicitActionKind.AncientCompletion)
         {
             return ("ancient-event-completion", "event");
         }
 
-        if (AncientEventObserverSignals.HasExplicitOptionSelection(request.Observer))
+        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)
+        {
+            return ("event-release-pending", eventScene.MapContextVisible ? "map" : null);
+        }
+
+        if (eventScene.ExplicitAction == EventExplicitActionKind.AncientOption)
         {
             return ("ancient-event-options", "event");
         }
 
-        if (GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer))
+        if (eventScene.EventForegroundOwned)
         {
             return ("event", request.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase) ? "map" : null);
         }
@@ -25371,48 +25490,8 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool HasStrongForegroundEventChoice(GuiSmokeStepRequest request)
     {
-        static bool IsGenericContinueLabel(string? label)
-        {
-            return !string.IsNullOrWhiteSpace(label)
-                   && (label.Contains("계속", StringComparison.OrdinalIgnoreCase)
-                       || label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
-                       || label.Contains("Proceed", StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (HasExplicitEventProceedAuthority(request.Observer, request.WindowBounds))
-        {
-            return true;
-        }
-
-        if (AncientEventObserverSignals.GetActiveDialogueNode(request.Observer, request.WindowBounds) is not null
-            || AncientEventObserverSignals.GetActiveDialogueChoice(request.Observer, request.WindowBounds) is not null)
-        {
-            return true;
-        }
-
-        if (AncientEventObserverSignals.GetActiveCompletionNode(request.Observer, request.WindowBounds) is not null
-            || AncientEventObserverSignals.GetActiveCompletionChoice(request.Observer, request.WindowBounds) is not null)
-        {
-            return true;
-        }
-
-        var activeEventChoices = request.Observer.Choices.Any(choice =>
-            HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds)
-            && !IsGenericContinueLabel(choice.Label)
-            && !IsBackChoiceLabel(choice.Label)
-            && (string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)));
-        if (activeEventChoices)
-        {
-            return true;
-        }
-
-        return request.Observer.ActionNodes.Any(node =>
-            node.Actionable
-            && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds)
-            && !IsGenericContinueLabel(node.Label)
-            && !IsBackChoiceLabel(node.Label)
-            && node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase));
+        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        return eventScene.StrongForegroundChoice;
     }
 
     private static bool HasExplicitEventProceedAuthority(ObserverState observer, WindowBounds? windowBounds)
@@ -25492,51 +25571,58 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool HasExplicitEventProgressionChoiceVisible(ObserverState observer, WindowBounds? windowBounds)
     {
-        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
-        {
-            return false;
-        }
-
-        var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
-        if (!eventAuthority)
-        {
-            return false;
-        }
-
-        return observer.ActionNodes.Any(node =>
-                   node.Actionable
-                   && HasActiveNodeBounds(node.ScreenBounds, windowBounds)
-                   && ScoreProgressionNode(node) > 0)
-               || observer.Choices.Any(choice =>
-                   HasActiveNodeBounds(choice.ScreenBounds, windowBounds)
-                   && ScoreProgressionChoice(choice) > 0);
+        var eventScene = BuildEventSceneState(observer, windowBounds);
+        return eventScene.EventForegroundOwned
+               && eventScene.ReleaseStage == EventReleaseStage.Active
+               && eventScene.HasExplicitProgression;
     }
 
     private static bool HasExplicitEventProgressionChoiceVisible(ObserverSummary observer, WindowBounds? windowBounds)
     {
-        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
-        {
-            return false;
-        }
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, windowBounds);
+        return eventScene.EventForegroundOwned
+               && eventScene.ReleaseStage == EventReleaseStage.Active
+               && eventScene.HasExplicitProgression;
+    }
 
-        var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
-        if (!eventAuthority)
+    internal static bool HasRawExplicitEventChoiceVisible(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        static bool IsGenericContinueLabel(string? label)
         {
-            return false;
+            return !string.IsNullOrWhiteSpace(label)
+                   && (label.Contains("계속", StringComparison.OrdinalIgnoreCase)
+                       || label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
+                       || label.Contains("Proceed", StringComparison.OrdinalIgnoreCase));
         }
 
         return observer.ActionNodes.Any(node =>
                    node.Actionable
                    && HasActiveNodeBounds(node.ScreenBounds, windowBounds)
+                   && !MapNodeSourceSupport.IsExplicitMapPointNode(node)
+                   && !IsGenericContinueLabel(node.Label)
+                   && !IsBackChoiceLabel(node.Label)
+                   && (node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(node.TypeName, "event-option", StringComparison.OrdinalIgnoreCase)))
+               || observer.Choices.Any(choice =>
+                   HasActiveNodeBounds(choice.ScreenBounds, windowBounds)
+                   && !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
+                   && !IsGenericContinueLabel(choice.Label)
+                   && !IsBackChoiceLabel(choice.Label)
+                   && (string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.BindingKind, "event-option", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    internal static bool HasRawEventProgressionSurface(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.ActionNodes.Any(node =>
+                   node.Actionable
+                   && HasActiveNodeBounds(node.ScreenBounds, windowBounds)
+                   && !MapNodeSourceSupport.IsExplicitMapPointNode(node)
                    && ScoreProgressionNode(node) > 0)
                || observer.Choices.Any(choice =>
                    HasActiveNodeBounds(choice.ScreenBounds, windowBounds)
+                   && !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
                    && ScoreProgressionChoice(choice) > 0);
     }
 
@@ -27506,6 +27592,110 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             suppressSameSkipReissue);
     }
 
+    internal static EventSceneState BuildEventSceneState(
+        ObserverState observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null)
+    {
+        return BuildEventSceneState(observer.Summary, windowBounds, history, screenshotPath);
+    }
+
+    internal static EventSceneState BuildEventSceneState(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null)
+    {
+        var rewardScene = BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath);
+        var mapExplicitOwner = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer);
+        var ancientDialogueActive = AncientEventObserverSignals.IsDialogueActive(observer);
+        var ancientCompletionActive = AncientEventObserverSignals.HasExplicitCompletionAction(observer);
+        var ancientOptionActive = AncientEventObserverSignals.HasExplicitOptionSelection(observer);
+        var eventChoiceAuthority = EventProceedObserverSignals.HasEventChoiceAuthority(observer);
+        var genericEventProgressVisible = eventChoiceAuthority
+                                          && !rewardScene.RewardForegroundOwned
+                                          && HasRawEventProgressionSurface(observer, windowBounds);
+        var explicitProceedVisible = eventChoiceAuthority
+                                     && !mapExplicitOwner
+                                     && !rewardScene.RewardForegroundOwned
+                                     && EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
+        var activeEventChoiceVisible = eventChoiceAuthority
+                                       && !mapExplicitOwner
+                                       && !rewardScene.RewardForegroundOwned
+                                       && HasRawExplicitEventChoiceVisible(observer, windowBounds);
+        var forceProgressionAfterCardSelection = HasRecentCardSelectionSubtypeAftermath(history ?? Array.Empty<GuiSmokeHistoryEntry>())
+                                                && (explicitProceedVisible || activeEventChoiceVisible || genericEventProgressVisible);
+        var rewardSubstateActive = rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage == RewardReleaseStage.ReleasePending;
+        var mapContextVisible = mapOverlayState.ForegroundVisible
+                                || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                || rewardScene.LayerState.MapContextVisible
+                                || mapExplicitOwner;
+        var hasExplicitProgression = ancientDialogueActive
+                                     || ancientCompletionActive
+                                     || ancientOptionActive
+                                     || explicitProceedVisible
+                                     || activeEventChoiceVisible
+                                     || genericEventProgressVisible
+                                     || forceProgressionAfterCardSelection;
+        var strongForegroundChoice = ancientDialogueActive
+                                     || ancientCompletionActive
+                                     || ancientOptionActive
+                                     || explicitProceedVisible
+                                     || activeEventChoiceVisible
+                                     || forceProgressionAfterCardSelection;
+        var suppressSameProceedReissue = !rewardSubstateActive
+                                         && (ancientCompletionActive || explicitProceedVisible)
+                                         && HasRecentEventReleaseIntent(history);
+        var canonicalOwner = rewardSubstateActive
+            ? NonCombatForegroundOwner.Reward
+            : mapExplicitOwner
+                ? NonCombatForegroundOwner.Map
+                : mapOverlayState.ForegroundVisible && !strongForegroundChoice
+                    ? NonCombatForegroundOwner.Map
+                    : ancientDialogueActive || ancientCompletionActive || ancientOptionActive || (eventChoiceAuthority && hasExplicitProgression)
+                        ? NonCombatForegroundOwner.Event
+                        : NonCombatForegroundOwner.Unknown;
+        var releaseStage = rewardSubstateActive
+            ? EventReleaseStage.Released
+            : canonicalOwner == NonCombatForegroundOwner.Event
+                ? suppressSameProceedReissue
+                    ? EventReleaseStage.ReleasePending
+                    : EventReleaseStage.Active
+                : HasRecentEventReleaseIntent(history) && (mapExplicitOwner || mapOverlayState.ForegroundVisible)
+                    ? EventReleaseStage.Released
+                    : EventReleaseStage.None;
+        var explicitAction = rewardSubstateActive
+            ? EventExplicitActionKind.RewardSubstate
+            : ancientDialogueActive
+                ? EventExplicitActionKind.AncientDialogue
+                : ancientCompletionActive
+                    ? EventExplicitActionKind.AncientCompletion
+                    : ancientOptionActive
+                        ? EventExplicitActionKind.AncientOption
+                        : explicitProceedVisible
+                            ? EventExplicitActionKind.Proceed
+                            : activeEventChoiceVisible || forceProgressionAfterCardSelection
+                                ? EventExplicitActionKind.EventChoice
+                                : EventExplicitActionKind.None;
+
+        return new EventSceneState(
+            canonicalOwner,
+            releaseStage,
+            explicitAction,
+            rewardScene,
+            mapOverlayState,
+            mapContextVisible,
+            rewardSubstateActive,
+            hasExplicitProgression,
+            strongForegroundChoice,
+            forceProgressionAfterCardSelection,
+            explicitProceedVisible,
+            suppressSameProceedReissue);
+    }
+
     private static bool HasRecentRewardSkipReleaseIntent(IReadOnlyList<GuiSmokeHistoryEntry>? history)
     {
         if (history is null || history.Count == 0)
@@ -27527,6 +27717,32 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
             return string.Equals(entry.TargetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(entry.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    internal static bool HasRecentEventReleaseIntent(IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
+        if (history is null || history.Count == 0)
+        {
+            return false;
+        }
+
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "observer-accepted", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "recapture-required", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("observer-", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return string.Equals(entry.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.TargetLabel, "ancient event completion", StringComparison.OrdinalIgnoreCase);
         }
 
         return false;
