@@ -3929,6 +3929,13 @@ static void RunSelfTest()
     Assert(
         GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(treasureRequest.Observer, null, null, null)).Contains("click treasure chest", StringComparer.OrdinalIgnoreCase),
         "Treasure room with a closed chest should expose the explicit treasure chest lane.");
+    Assert(BuildTreasureSceneState(new ObserverState(treasureRequest.Observer, null, null, null)) is
+        {
+            CanonicalForegroundOwner: NonCombatCanonicalForegroundOwner.Treasure,
+            HandoffTarget: NonCombatHandoffTarget.ChooseFirstNode,
+            AllowsFastForegroundWait: false,
+        },
+        "Treasure wrapper should preserve ChooseFirstNode handoff without enabling fast foreground waits.");
     Assert(
         !GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(treasureRequest.Observer, null, null, null)).Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
         "Treasure room authority should suppress generic exported reachable-node routing.");
@@ -5361,6 +5368,13 @@ static void RunSelfTest()
             });
         Assert(BuildAllowedActions(GuiSmokePhase.HandleShop, shopOpenInventoryObserver, Array.Empty<CombatCardKnowledgeHint>(), null, Array.Empty<GuiSmokeHistoryEntry>()).Contains("click shop open inventory", StringComparer.OrdinalIgnoreCase), "HandleShop allowlist should open merchant inventory when it is closed and the merchant button is enabled.");
         Assert(string.Equals(DecideShop(shopOpenInventoryObserver).TargetLabel, "shop open inventory", StringComparison.OrdinalIgnoreCase), "HandleShop should click the explicit merchant button when inventory is closed.");
+        Assert(BuildShopSceneState(shopOpenInventoryObserver, Array.Empty<GuiSmokeHistoryEntry>()) is
+            {
+                CanonicalForegroundOwner: NonCombatCanonicalForegroundOwner.Shop,
+                HandoffTarget: NonCombatHandoffTarget.HandleShop,
+                AllowsFastForegroundWait: true,
+            },
+            "Shop wrapper should preserve shop ownership, HandleShop handoff, and fast-wait eligibility.");
 
         var shopRelicObserver = CreateShopObserver(
             inventoryOpen: true,
@@ -6409,6 +6423,8 @@ static void RunSelfTest()
             "A fresh explicit event proceed on the same authority band should enter event release-pending.");
         Assert(explicitProceedReleaseState.SuppressSameProceedReissue,
             "Event release-pending should suppress same proceed reissue until ownership changes.");
+        Assert(((ICanonicalNonCombatSceneState)explicitProceedReleaseState).HandoffTarget == NonCombatHandoffTarget.WaitEventRelease,
+            "Canonical event contract should expose WaitEventRelease while explicit proceed is still release-pending.");
         Assert(BuildAllowedActions(
             GuiSmokePhase.HandleEvent,
             explicitProceedObserverState,
@@ -6838,6 +6854,13 @@ static void RunSelfTest()
         Assert(restSiteProceedRequest.AllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
                && !restSiteProceedRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase),
             "ChooseFirstNode allowlist should reopen the rest-site proceed lane before stale smith/wait residue.");
+        Assert(BuildRestSiteSceneState(restSiteProceedObserver) is
+            {
+                CanonicalForegroundOwner: NonCombatCanonicalForegroundOwner.RestSite,
+                HandoffTarget: NonCombatHandoffTarget.ChooseFirstNode,
+                AllowsFastForegroundWait: true,
+            },
+            "Rest-site wrapper should preserve ChooseFirstNode handoff and fast foreground waits.");
         var restSiteProceedDecision = AutoDecisionProvider.Decide(restSiteProceedRequest);
         Assert(string.Equals(restSiteProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
             "Observer-visible rest-site proceed choice should create a visible proceed decision without waiting for screenshot arrows.");
@@ -7601,6 +7624,8 @@ static void RunSelfTest()
             rewardRankingScreenshotPath);
         Assert(rewardReleasePendingState.ReleaseStage == RewardReleaseStage.ReleasePending, "A fresh reward skip on the same mixed reward/map authority band should enter reward release-pending.");
         Assert(rewardReleasePendingState.SuppressSameSkipReissue, "Reward release-pending should suppress same reward skip reissue until ownership changes.");
+        Assert(((ICanonicalNonCombatSceneState)rewardReleasePendingState).HandoffTarget == NonCombatHandoffTarget.WaitMap,
+            "Canonical reward contract should expose WaitMap while reward skip release is pending.");
         Assert(BuildAllowedActions(
             GuiSmokePhase.HandleRewards,
             rewardReleasePendingObserver,
@@ -13939,6 +13964,17 @@ static string DetermineReasoningMode(GuiSmokePhase phase, ObserverState observer
         return "tactical";
     }
 
+    var eventScene = BuildEventSceneState(observer, null);
+    if (eventScene.EventForegroundOwned && eventScene.ExplicitAction == EventExplicitActionKind.EventChoice)
+    {
+        return (firstSeenScene
+                || string.Equals(observer.CurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(observer.VisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+                || observer.Summary.CurrentChoices.Count > 0)
+            ? "semantic"
+            : "tactical";
+    }
+
     if (AncientEventObserverSignals.HasForegroundAuthority(observer.Summary)
         || EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer, null))
     {
@@ -14564,6 +14600,32 @@ static EventSceneState BuildEventSceneState(
     string? screenshotPath = null)
 {
     return AutoDecisionProvider.BuildEventSceneState(observer, windowBounds, history, screenshotPath);
+}
+
+static ShopSceneState? BuildShopSceneState(
+    ObserverState observer,
+    IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
+{
+    return AutoDecisionProvider.BuildShopSceneState(observer, history);
+}
+
+static RestSiteSceneState? BuildRestSiteSceneState(ObserverState observer)
+{
+    return AutoDecisionProvider.BuildRestSiteSceneState(observer);
+}
+
+static TreasureSceneState? BuildTreasureSceneState(ObserverState observer)
+{
+    return AutoDecisionProvider.BuildTreasureSceneState(observer);
+}
+
+static ICanonicalNonCombatSceneState? TryBuildCanonicalNonCombatSceneState(
+    ObserverState observer,
+    WindowBounds? windowBounds,
+    IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+    string? screenshotPath = null)
+{
+    return AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, windowBounds, history, screenshotPath);
 }
 
 static bool ShouldPreferRewardProgressionOverMapFallbackSummary(ObserverSummary observer)
@@ -16741,25 +16803,8 @@ static bool TryReopenMixedStateModalBranchFromWaitMap(
         branchKind = "branch-card-selection";
         nextPhase = GuiSmokePhase.ChooseFirstNode;
     }
-    else if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary))
+    else if (TryGetCanonicalWaitMapReopenBranch(observer, history, out branchKind, out nextPhase))
     {
-        branchKind = "branch-treasure";
-        nextPhase = GuiSmokePhase.ChooseFirstNode;
-    }
-    else if (ShouldRouteToHandleRewards(observer, history))
-    {
-        branchKind = "branch-rewards";
-        nextPhase = GuiSmokePhase.HandleRewards;
-    }
-    else if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
-    {
-        branchKind = "branch-shop";
-        nextPhase = GuiSmokePhase.HandleShop;
-    }
-    else if (ShouldRouteToHandleEvent(observer, history))
-    {
-        branchKind = "branch-event";
-        nextPhase = GuiSmokePhase.HandleEvent;
     }
 
     if (branchKind is null)
@@ -16827,6 +16872,55 @@ static bool ShouldRouteToHandleEvent(
            && !ShouldRouteToHandleRewards(observer, history, screenshotPath)
            && !AutoDecisionProvider.HasRecentEventReleaseIntent(history)
            && AutoDecisionProvider.HasRawEventProgressionSurface(observer.Summary, null);
+}
+
+static bool TryGetCanonicalWaitMapReopenBranch(
+    ObserverState observer,
+    IReadOnlyList<GuiSmokeHistoryEntry>? history,
+    out string? branchKind,
+    out GuiSmokePhase nextPhase)
+{
+    branchKind = null;
+    nextPhase = GuiSmokePhase.WaitMap;
+
+    if (BuildTreasureSceneState(observer) is not null)
+    {
+        branchKind = "branch-treasure";
+        nextPhase = GuiSmokePhase.ChooseFirstNode;
+        return true;
+    }
+
+    var rewardScene = BuildRewardSceneState(observer, null, history);
+    if (rewardScene.RewardForegroundOwned && rewardScene.ReleaseStage == RewardReleaseStage.Active)
+    {
+        branchKind = "branch-rewards";
+        nextPhase = GuiSmokePhase.HandleRewards;
+        return true;
+    }
+
+    if (BuildShopSceneState(observer, history) is { ReleaseStage: NonCombatReleaseStage.Active })
+    {
+        branchKind = "branch-shop";
+        nextPhase = GuiSmokePhase.HandleShop;
+        return true;
+    }
+
+    if (BuildRestSiteSceneState(observer) is { ReleaseStage: NonCombatReleaseStage.Active })
+    {
+        branchKind = "branch-rest-site";
+        nextPhase = GuiSmokePhase.ChooseFirstNode;
+        return true;
+    }
+
+    var eventScene = BuildEventSceneState(observer, null, history);
+    if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active)
+    {
+        branchKind = "branch-event";
+        nextPhase = GuiSmokePhase.HandleEvent;
+        return true;
+    }
+
+    return false;
 }
 
 static int IncrementAttempt(Dictionary<GuiSmokePhase, int> attemptsByPhase, GuiSmokePhase phase)
@@ -18796,6 +18890,54 @@ enum RewardExplicitActionKind
     Back,
 }
 
+enum NonCombatCanonicalForegroundOwner
+{
+    Unknown,
+    Reward,
+    Event,
+    Shop,
+    RestSite,
+    Treasure,
+    Map,
+}
+
+enum NonCombatReleaseStage
+{
+    None,
+    Active,
+    ReleasePending,
+    Released,
+}
+
+enum NonCombatHandoffTarget
+{
+    None,
+    HandleRewards,
+    HandleEvent,
+    HandleShop,
+    ChooseFirstNode,
+    WaitEventRelease,
+    WaitMap,
+    WaitPostMapNodeRoom,
+}
+
+interface ICanonicalNonCombatSceneState
+{
+    NonCombatCanonicalForegroundOwner CanonicalForegroundOwner { get; }
+
+    NonCombatReleaseStage ReleaseStage { get; }
+
+    NonCombatHandoffTarget HandoffTarget { get; }
+
+    bool SuppressSameActionReissue { get; }
+
+    bool AllowsFastForegroundWait { get; }
+
+    string? ForegroundDebugKind { get; }
+
+    string? BackgroundDebugKind { get; }
+}
+
 sealed record RewardSceneState(
     RewardMapLayerState LayerState,
     RewardScreenState? ScreenState,
@@ -18806,10 +18948,39 @@ sealed record RewardSceneState(
     bool ColorlessChoiceVisible,
     bool ClaimableRewardPresent,
     bool ExplicitProceedVisible,
-    bool SuppressSameSkipReissue)
+    bool SuppressSameSkipReissue) : ICanonicalNonCombatSceneState
 {
     public bool RewardForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Reward;
     public bool ReleaseToMapPending => ReleaseStage is RewardReleaseStage.ReleasePending or RewardReleaseStage.Released;
+
+    NonCombatCanonicalForegroundOwner ICanonicalNonCombatSceneState.CanonicalForegroundOwner => NonCombatCanonicalForegroundOwner.Reward;
+
+    NonCombatReleaseStage ICanonicalNonCombatSceneState.ReleaseStage => ReleaseStage switch
+    {
+        RewardReleaseStage.Active => NonCombatReleaseStage.Active,
+        RewardReleaseStage.ReleasePending => NonCombatReleaseStage.ReleasePending,
+        RewardReleaseStage.Released => NonCombatReleaseStage.Released,
+        _ => NonCombatReleaseStage.None,
+    };
+
+    NonCombatHandoffTarget ICanonicalNonCombatSceneState.HandoffTarget => ReleaseToMapPending
+        ? NonCombatHandoffTarget.WaitMap
+        : RewardForegroundOwned
+            ? NonCombatHandoffTarget.HandleRewards
+            : NonCombatHandoffTarget.None;
+
+    bool ICanonicalNonCombatSceneState.SuppressSameActionReissue => SuppressSameSkipReissue;
+
+    bool ICanonicalNonCombatSceneState.AllowsFastForegroundWait => RewardForegroundOwned
+                                                                   && ReleaseStage == RewardReleaseStage.Active;
+
+    string? ICanonicalNonCombatSceneState.ForegroundDebugKind => ReleaseToMapPending
+        ? "reward-release-pending"
+        : RewardForegroundOwned
+            ? "reward"
+            : null;
+
+    string? ICanonicalNonCombatSceneState.BackgroundDebugKind => LayerState.MapContextVisible ? "map" : null;
 }
 
 enum EventReleaseStage
@@ -18843,11 +19014,134 @@ sealed record EventSceneState(
     bool StrongForegroundChoice,
     bool ForceProgressionAfterCardSelection,
     bool ExplicitProceedVisible,
-    bool SuppressSameProceedReissue)
+    bool SuppressSameProceedReissue) : ICanonicalNonCombatSceneState
 {
     public bool EventForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Event;
     public bool RewardForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Reward;
     public bool MapForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Map;
+
+    NonCombatCanonicalForegroundOwner ICanonicalNonCombatSceneState.CanonicalForegroundOwner => CanonicalForegroundOwner switch
+    {
+        NonCombatForegroundOwner.Reward => NonCombatCanonicalForegroundOwner.Reward,
+        NonCombatForegroundOwner.Event => NonCombatCanonicalForegroundOwner.Event,
+        NonCombatForegroundOwner.Map => NonCombatCanonicalForegroundOwner.Map,
+        _ => NonCombatCanonicalForegroundOwner.Unknown,
+    };
+
+    NonCombatReleaseStage ICanonicalNonCombatSceneState.ReleaseStage => ReleaseStage switch
+    {
+        EventReleaseStage.Active => NonCombatReleaseStage.Active,
+        EventReleaseStage.ReleasePending => NonCombatReleaseStage.ReleasePending,
+        EventReleaseStage.Released => NonCombatReleaseStage.Released,
+        _ => NonCombatReleaseStage.None,
+    };
+
+    NonCombatHandoffTarget ICanonicalNonCombatSceneState.HandoffTarget => RewardSubstateActive
+        ? NonCombatHandoffTarget.HandleRewards
+        : EventForegroundOwned
+            ? ReleaseStage == EventReleaseStage.ReleasePending
+                ? NonCombatHandoffTarget.WaitEventRelease
+                : NonCombatHandoffTarget.HandleEvent
+            : MapForegroundOwned
+                ? NonCombatHandoffTarget.WaitMap
+                : NonCombatHandoffTarget.None;
+
+    bool ICanonicalNonCombatSceneState.SuppressSameActionReissue => SuppressSameProceedReissue;
+
+    bool ICanonicalNonCombatSceneState.AllowsFastForegroundWait => EventForegroundOwned
+        && ReleaseStage == EventReleaseStage.Active
+        && (ExplicitAction is EventExplicitActionKind.Proceed
+            or EventExplicitActionKind.AncientDialogue
+            or EventExplicitActionKind.AncientCompletion
+            or EventExplicitActionKind.AncientOption);
+
+    string? ICanonicalNonCombatSceneState.ForegroundDebugKind => RewardSubstateActive
+        ? "reward"
+        : ExplicitAction switch
+        {
+            EventExplicitActionKind.AncientDialogue => "ancient-event-dialogue",
+            EventExplicitActionKind.AncientCompletion => "ancient-event-completion",
+            EventExplicitActionKind.AncientOption => "ancient-event-options",
+            _ when EventForegroundOwned && ReleaseStage == EventReleaseStage.ReleasePending => "event-release-pending",
+            _ when EventForegroundOwned => "event",
+            _ when MapForegroundOwned => "map",
+            _ => null,
+        };
+
+    string? ICanonicalNonCombatSceneState.BackgroundDebugKind => RewardSubstateActive
+        ? (RewardScene.LayerState.MapContextVisible ? "map" : null)
+        : MapContextVisible
+            ? "map"
+            : null;
+}
+
+sealed record ShopSceneState(
+    ShopRoomState ShopState,
+    bool AlreadyPurchased) : ICanonicalNonCombatSceneState
+{
+    public NonCombatCanonicalForegroundOwner CanonicalForegroundOwner => NonCombatCanonicalForegroundOwner.Shop;
+
+    public NonCombatReleaseStage ReleaseStage => ShopState.ForegroundOwned
+        ? NonCombatReleaseStage.Active
+        : ShopState.TeardownInProgress || ShopState.MapIsCurrentActiveScreen
+            ? NonCombatReleaseStage.Released
+            : NonCombatReleaseStage.None;
+
+    public NonCombatHandoffTarget HandoffTarget => ShopState.ForegroundOwned
+        ? NonCombatHandoffTarget.HandleShop
+        : ShopState.TeardownInProgress || ShopState.MapIsCurrentActiveScreen
+            ? NonCombatHandoffTarget.WaitMap
+            : NonCombatHandoffTarget.None;
+
+    public bool SuppressSameActionReissue => false;
+
+    public bool AllowsFastForegroundWait => ShopState.ForegroundOwned;
+
+    public string? ForegroundDebugKind => ShopState.InventoryOpen ? "shop-inventory" : "shop";
+
+    public string? BackgroundDebugKind => ShopState.MapIsCurrentActiveScreen ? "map" : null;
+}
+
+sealed record RestSiteSceneState(
+    bool ExplicitChoiceVisible,
+    bool SmithUpgradeActive,
+    bool SmithConfirmVisible,
+    bool ProceedVisible,
+    bool MapContextVisible) : ICanonicalNonCombatSceneState
+{
+    public NonCombatCanonicalForegroundOwner CanonicalForegroundOwner => NonCombatCanonicalForegroundOwner.RestSite;
+
+    public NonCombatReleaseStage ReleaseStage => NonCombatReleaseStage.Active;
+
+    public NonCombatHandoffTarget HandoffTarget => NonCombatHandoffTarget.ChooseFirstNode;
+
+    public bool SuppressSameActionReissue => false;
+
+    public bool AllowsFastForegroundWait => true;
+
+    public string? ForegroundDebugKind => SmithUpgradeActive
+        ? SmithConfirmVisible ? "rest-site-smith-confirm" : "rest-site-smith-grid"
+        : "rest-site";
+
+    public string? BackgroundDebugKind => MapContextVisible ? "map" : null;
+}
+
+sealed record TreasureSceneState(
+    TreasureRoomSubtypeState TreasureState) : ICanonicalNonCombatSceneState
+{
+    public NonCombatCanonicalForegroundOwner CanonicalForegroundOwner => NonCombatCanonicalForegroundOwner.Treasure;
+
+    public NonCombatReleaseStage ReleaseStage => NonCombatReleaseStage.Active;
+
+    public NonCombatHandoffTarget HandoffTarget => NonCombatHandoffTarget.ChooseFirstNode;
+
+    public bool SuppressSameActionReissue => false;
+
+    public bool AllowsFastForegroundWait => false;
+
+    public string? ForegroundDebugKind => TreasureState.InspectOverlayVisible ? "treasure-overlay" : "treasure";
+
+    public string? BackgroundDebugKind => null;
 }
 
 sealed record MapOverlayState(
@@ -20267,17 +20561,23 @@ static class NonCombatForegroundOwnership
             return NonCombatForegroundOwner.Combat;
         }
 
-        if (RewardObserverSignals.IsRewardAuthorityActive(observer))
+        var observerState = new ObserverState(observer, null, null, null);
+        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observerState, null);
+        if (rewardScene.RewardForegroundOwned)
         {
             return NonCombatForegroundOwner.Reward;
         }
 
-        if (ShopObserverSignals.IsShopAuthorityActive(observer))
+        if (AutoDecisionProvider.BuildShopSceneState(observerState) is { ReleaseStage: NonCombatReleaseStage.Active })
         {
             return NonCombatForegroundOwner.Shop;
         }
 
-        if (AncientEventObserverSignals.HasForegroundAuthority(observer))
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observerState, null);
+        if (eventScene.EventForegroundOwned
+            && eventScene.ExplicitAction is EventExplicitActionKind.AncientDialogue
+                or EventExplicitActionKind.AncientCompletion
+                or EventExplicitActionKind.AncientOption)
         {
             return NonCombatForegroundOwner.Event;
         }
@@ -20287,12 +20587,12 @@ static class NonCombatForegroundOwnership
             return NonCombatForegroundOwner.Map;
         }
 
-        if (HasExplicitRestSiteForegroundAuthority(observer))
+        if (AutoDecisionProvider.BuildRestSiteSceneState(observerState) is { ReleaseStage: NonCombatReleaseStage.Active })
         {
             return NonCombatForegroundOwner.RestSite;
         }
 
-        if (HasExplicitEventForegroundAuthority(observer))
+        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active)
         {
             return NonCombatForegroundOwner.Event;
         }
@@ -25402,6 +25702,16 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return ("event", request.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase) ? "map" : null);
         }
 
+        if (BuildShopSceneState(request.Observer, request.History) is { ReleaseStage: NonCombatReleaseStage.Active } shopScene)
+        {
+            return (shopScene.ForegroundDebugKind, shopScene.BackgroundDebugKind);
+        }
+
+        if (BuildTreasureSceneState(request.Observer) is { } treasureScene)
+        {
+            return (treasureScene.ForegroundDebugKind, treasureScene.BackgroundDebugKind);
+        }
+
         if (LooksLikeRestSiteState(request.Observer))
         {
             return ("rest-site", request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase) ? "map" : null);
@@ -27116,19 +27426,16 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool HasContradictoryForegroundOwnerAgainstMapFallback(GuiSmokeStepRequest request)
     {
-        var foregroundOwner = NonCombatForegroundOwnership.Resolve(request.Observer);
+        var canonicalScene = TryBuildCanonicalNonCombatSceneState(
+            request.Observer,
+            request.WindowBounds,
+            request.History,
+            request.ScreenshotPath);
         return RewardObserverSignals.IsTerminalRunBoundary(request.Observer)
                || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)
                || CardSelectionObserverSignals.TryGetState(request.Observer) is not null
                || HasExplicitRestSiteChoiceAuthority(request)
-               || TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer)
-               || ShopObserverSignals.IsShopAuthorityActive(request.Observer)
-               || RewardObserverSignals.IsRewardAuthorityActive(request.Observer)
-               || foregroundOwner is NonCombatForegroundOwner.Event
-                   or NonCombatForegroundOwner.RestSite
-                   or NonCombatForegroundOwner.Shop
-                   or NonCombatForegroundOwner.Reward
-                   or NonCombatForegroundOwner.Combat;
+               || canonicalScene is { CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown and not NonCombatCanonicalForegroundOwner.Map };
     }
 
     private static GuiSmokeStepDecision? TryFindVisibleMapAdvanceDecision(GuiSmokeStepRequest request)
@@ -27694,6 +28001,124 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             forceProgressionAfterCardSelection,
             explicitProceedVisible,
             suppressSameProceedReissue);
+    }
+
+    internal static ShopSceneState? BuildShopSceneState(
+        ObserverState observer,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
+    {
+        var state = ShopObserverSignals.TryGetState(observer.Summary);
+        return state is null
+            ? null
+            : new ShopSceneState(state, ShopObserverSignals.HasRecentPurchase(history ?? Array.Empty<GuiSmokeHistoryEntry>()));
+    }
+
+    internal static ShopSceneState? BuildShopSceneState(
+        ObserverSummary observer,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
+    {
+        return BuildShopSceneState(new ObserverState(observer, null, null, null), history);
+    }
+
+    internal static RestSiteSceneState? BuildRestSiteSceneState(ObserverState observer)
+    {
+        var explicitScreenAuthority = string.Equals(observer.CurrentScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
+                                      || string.Equals(observer.VisibleScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
+                                      || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+                                      || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase);
+        var smithUpgradeActive = RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary);
+        var hasAuthoritativeChoiceMetadata = RestSiteChoiceSupport.HasAuthoritativeMetadata(observer.Summary);
+        var explicitChoiceVisible = hasAuthoritativeChoiceMetadata
+                                    || (explicitScreenAuthority
+                                        && RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer.Summary));
+        var proceedVisible = explicitScreenAuthority
+                             && GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary);
+        if (!smithUpgradeActive && !explicitChoiceVisible && !proceedVisible)
+        {
+            return null;
+        }
+
+        var mapContextVisible = string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                || NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer.Summary);
+        return new RestSiteSceneState(
+            explicitChoiceVisible,
+            smithUpgradeActive,
+            RestSiteObserverSignals.HasSmithConfirmVisible(observer.Summary),
+            proceedVisible,
+            mapContextVisible);
+    }
+
+    internal static RestSiteSceneState? BuildRestSiteSceneState(ObserverSummary observer)
+    {
+        return BuildRestSiteSceneState(new ObserverState(observer, null, null, null));
+    }
+
+    internal static TreasureSceneState? BuildTreasureSceneState(ObserverState observer)
+    {
+        var state = TreasureRoomObserverSignals.TryGetState(observer.Summary);
+        return state is null ? null : new TreasureSceneState(state);
+    }
+
+    internal static TreasureSceneState? BuildTreasureSceneState(ObserverSummary observer)
+    {
+        return BuildTreasureSceneState(new ObserverState(observer, null, null, null));
+    }
+
+    internal static ICanonicalNonCombatSceneState? TryBuildCanonicalNonCombatSceneState(
+        ObserverState observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null)
+    {
+        if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+        {
+            return null;
+        }
+
+        var rewardScene = BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
+        if (rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage != RewardReleaseStage.None)
+        {
+            return rewardScene;
+        }
+
+        if (BuildShopSceneState(observer, history) is { ReleaseStage: not NonCombatReleaseStage.None } shopScene)
+        {
+            return shopScene;
+        }
+
+        if (BuildRestSiteSceneState(observer) is { } restSiteScene)
+        {
+            return restSiteScene;
+        }
+
+        if (BuildTreasureSceneState(observer) is { } treasureScene)
+        {
+            return treasureScene;
+        }
+
+        var eventScene = BuildEventSceneState(observer, windowBounds, history, screenshotPath);
+        if (eventScene.RewardSubstateActive)
+        {
+            return eventScene.RewardScene;
+        }
+
+        if (eventScene.EventForegroundOwned || eventScene.ReleaseStage != EventReleaseStage.None)
+        {
+            return eventScene;
+        }
+
+        return null;
+    }
+
+    internal static ICanonicalNonCombatSceneState? TryBuildCanonicalNonCombatSceneState(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null)
+    {
+        return TryBuildCanonicalNonCombatSceneState(new ObserverState(observer, null, null, null), windowBounds, history, screenshotPath);
     }
 
     private static bool HasRecentRewardSkipReleaseIntent(IReadOnlyList<GuiSmokeHistoryEntry>? history)
@@ -28666,16 +29091,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return false;
         }
 
-        return NonCombatForegroundOwnership.Resolve(request.Observer) switch
+        if (TryBuildCanonicalNonCombatSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath) is { } canonicalScene)
         {
-            NonCombatForegroundOwner.Map
-            or NonCombatForegroundOwner.Reward
-            or NonCombatForegroundOwner.Shop
-            or NonCombatForegroundOwner.RestSite => true,
-            NonCombatForegroundOwner.Event => AncientEventObserverSignals.HasForegroundAuthority(request.Observer)
-                                              || EventProceedObserverSignals.HasExplicitEventProceedAuthority(request.Observer, request.WindowBounds),
-            _ => false,
-        };
+            return canonicalScene.AllowsFastForegroundWait;
+        }
+
+        return NonCombatForegroundOwnership.Resolve(request.Observer) == NonCombatForegroundOwner.Map;
     }
 
     public static string? BuildHistoryMetadataForDecision(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)

@@ -82,7 +82,7 @@ coverage status 의미:
 | `REWARD-05` | `HandleRewards` | reward teardown / release wait | partial | stale reward cleanup self-tests, layered reward state assertions | teardown exists, handoff proof incomplete |
 | `REWARD-06` | `HandleRewards` / `WaitMap` | reward/map mixed aftermath | partial | layered reward state, stale cleanup, `reward-map-loop` sentinel self-tests | owner underweight and post-click release both remain high-risk |
 | `REWARD-07` | `WaitMap` | reward -> map handoff | partial | reward teardown self-tests and WaitMap reopen assertions | release target exists but canonical handoff contract is still split |
-| `REWARD-09` | `HandleRewards` | same skip reissue suppression | missing | no canonical current-main reward state machine yet suppresses same skip on the same authority band | immediate gap |
+| `REWARD-09` | `HandleRewards` | same skip reissue suppression | green | `Program.cs` reward release-pending assertions now prove same-band skip suppression, wait-only allowlist, and shared `WaitMap` handoff under the canonical reward contract | canonical reward release now owns reissue suppression instead of leaving it to the loop sentinel |
 | `REWARD-10` | `HandleRewards` / `WaitMap` | reward-map loop sentinel | partial | `Program.cs` `reward-map-loop` sentinel self-tests | sentinel exists, but it should remain fallback not primary flow |
 
 ## Shop
@@ -127,9 +127,9 @@ coverage status 의미:
 
 | Priority | Work Item | Why |
 |---|---|---|
-| P0 | reward post-click release/handoff canonicalization | `REWARD-03` / `REWARD-05` / `REWARD-06` are still partial and `REWARD-09` is missing |
+| P0 | reward post-click release/handoff live proof | `REWARD-03` / `REWARD-05` / `REWARD-06` still need fresh current-main live evidence even though the canonical reward contract now covers `REWARD-09` |
 | P0 | combat post-wait recapture canonical coverage | `COMBAT-09` is code-covered and self-test-covered, but still partial until fresh current-main live evidence exists |
-| P1 | shared noncombat owner/release extraction after reward/event canonicalization | event wrapperization landed, but reward/event/shop/rest/treasure still do not share one contract |
+| P1 | shared noncombat contract cleanup | reward/event/shop/rest/treasure now share one contract, but duplicated legacy heuristics and wrapper-only call sites still need cleanup |
 | P1 | current-main live evidence refresh for noncombat mixed aftermath | status docs are stronger than the state-specific matrix today |
 | P2 | strict lifecycle chain evidence | `TERM-02` remains intentionally open |
 
