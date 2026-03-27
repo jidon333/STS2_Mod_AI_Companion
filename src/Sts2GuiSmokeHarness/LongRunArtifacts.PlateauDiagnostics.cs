@@ -23,7 +23,7 @@ static partial class LongRunArtifacts
     {
         var failureSummary = TryReadJson<GuiSmokeFailureSummary>(Path.Combine(runRoot, "failure-summary.json"));
         var selfMetaReview = TryReadJson<GuiSmokeSelfMetaReview>(Path.Combine(runRoot, "self-meta-review.json"));
-        var progress = ReadNdjson<GuiSmokeStepProgress>(Path.Combine(runRoot, "progress.ndjson"));
+        var progress = ReadNdjsonRecords<GuiSmokeStepProgress>(Path.Combine(runRoot, "progress.ndjson"));
         var latestStepContext = LoadLatestStepContext(runRoot);
         var latestProgress = progress.LastOrDefault();
         var sameActionStallCount = progress.Count(entry => entry.ObserverSignals.Contains("same-action-stall", StringComparer.OrdinalIgnoreCase));

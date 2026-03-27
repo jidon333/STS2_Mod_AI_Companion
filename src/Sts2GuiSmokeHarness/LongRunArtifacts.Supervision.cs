@@ -158,10 +158,10 @@ static partial class LongRunArtifacts
     public static GuiSmokeSessionSummary RefreshSessionSummary(string sessionRoot)
     {
         var goal = LoadOrCreateGoalContract(sessionRoot);
-        var attemptEntries = ReadNdjson<GuiSmokeAttemptIndexEntry>(Path.Combine(sessionRoot, "attempt-index.ndjson"))
+        var attemptEntries = ReadNdjsonRecords<GuiSmokeAttemptIndexEntry>(Path.Combine(sessionRoot, "attempt-index.ndjson"))
             .OrderBy(static entry => entry.AttemptOrdinal)
             .ToArray();
-        var restartEvents = ReadNdjson<GuiSmokeRestartEvent>(GetRestartEventsPath(sessionRoot))
+        var restartEvents = ReadNdjsonRecords<GuiSmokeRestartEvent>(GetRestartEventsPath(sessionRoot))
             .OrderBy(static entry => entry.RecordedAt)
             .ThenBy(static entry => entry.AttemptOrdinal)
             .ToArray();
@@ -262,10 +262,10 @@ static partial class LongRunArtifacts
 
     public static void RefreshStallSentinel(string sessionRoot)
     {
-        var attemptEntries = ReadNdjson<GuiSmokeAttemptIndexEntry>(Path.Combine(sessionRoot, "attempt-index.ndjson"))
+        var attemptEntries = ReadNdjsonRecords<GuiSmokeAttemptIndexEntry>(Path.Combine(sessionRoot, "attempt-index.ndjson"))
             .OrderBy(static entry => entry.AttemptOrdinal)
             .ToArray();
-        var restartEvents = ReadNdjson<GuiSmokeRestartEvent>(GetRestartEventsPath(sessionRoot))
+        var restartEvents = ReadNdjsonRecords<GuiSmokeRestartEvent>(GetRestartEventsPath(sessionRoot))
             .OrderBy(static entry => entry.RecordedAt)
             .ThenBy(static entry => entry.AttemptOrdinal)
             .ToArray();
@@ -306,10 +306,10 @@ static partial class LongRunArtifacts
         var now = observationOverride?.Now ?? DateTimeOffset.UtcNow;
         var goal = LoadOrCreateGoalContract(sessionRoot);
         var prevalidation = LoadOrCreatePrevalidation(sessionRoot);
-        var attemptEntries = ReadNdjson<GuiSmokeAttemptIndexEntry>(Path.Combine(sessionRoot, "attempt-index.ndjson"))
+        var attemptEntries = ReadNdjsonRecords<GuiSmokeAttemptIndexEntry>(Path.Combine(sessionRoot, "attempt-index.ndjson"))
             .OrderBy(static entry => entry.AttemptOrdinal)
             .ToArray();
-        var restartEvents = ReadNdjson<GuiSmokeRestartEvent>(GetRestartEventsPath(sessionRoot))
+        var restartEvents = ReadNdjsonRecords<GuiSmokeRestartEvent>(GetRestartEventsPath(sessionRoot))
             .OrderBy(static entry => entry.RecordedAt)
             .ThenBy(static entry => entry.AttemptOrdinal)
             .ToArray();
