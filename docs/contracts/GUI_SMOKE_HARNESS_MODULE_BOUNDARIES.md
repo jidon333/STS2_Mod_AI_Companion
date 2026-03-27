@@ -91,23 +91,33 @@ current blocker, latest authoritative root, active session handoff는 이 문서
 - `Artifacts/`
 - `GuiSmokeRuntimeContracts.cs`
 - `GuiSmokeReplayContracts.cs`
+- `GuiSmokeObserverContracts.cs`
+- `GuiSmokeDecisionContracts.cs`
 - `LongRunArtifacts.Review.cs`
 - `LongRunArtifacts.Startup.cs`
 - `LongRunArtifacts.Supervision.cs`
 - `LongRunArtifacts.PlateauDiagnostics.cs`
 - `LongRunArtifacts.Storage.cs`
+- `AutoDecisionProvider.*`
+- `Program.StepRequests.cs`
+- `Program.SceneReasoning.cs`
+- `Program.AllowedActions.*.cs`
+- `Program.PhaseFailureHints.cs`
+- `Program.PhaseLoopRouting.cs`
+- `Program.ProgressAndValidation.cs`
 
 현재 남은 주요 hotspot:
 
-- [`Program.cs`](../../src/Sts2GuiSmokeHarness/Program.cs) `14037` lines
-- [`Program.Runner.cs`](../../src/Sts2GuiSmokeHarness/Program.Runner.cs) `2055` lines
+- [`Program.cs`](../../src/Sts2GuiSmokeHarness/Program.cs) `56` lines
+- [`Program.Runner.AttemptLifecycle.cs`](../../src/Sts2GuiSmokeHarness/Program.Runner.AttemptLifecycle.cs)
+- [`Program.PhaseLoopRouting.cs`](../../src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
 - [`Program.SelfTests.CombatContracts.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.CombatContracts.cs)
 - [`Program.SelfTests.PhaseRouting.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.PhaseRouting.cs)
 
 구조적으로 가장 큰 문제는 아래 둘이다.
 
-- top-level shell 파일에 shared contracts와 decision vertical이 아직 같이 남아 있다
-- `RunAttemptAsync`가 orchestration, actuation, failure classification, artifact flush를 한 본문에 같이 품고 있다
+- `Program.cs` shell-only는 달성했지만, phase/loop routing helper가 아직 큰 단일 file band로 남아 있다
+- `RunAttemptAsync` seam은 분리됐지만 self-test hotspot과 일부 runner/loop helper band가 여전히 크게 남아 있다
 
 ## 4. Target Module Boundaries
 
