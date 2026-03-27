@@ -7376,6 +7376,85 @@ static void RunSelfTest()
         Assert(string.Equals(rewardAftermathDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "HandleRewards should wait/release instead of opening map fallback directly during reward teardown aftermath.");
         Assert(GetPostRewardPhase(rewardAftermathDecision) == GuiSmokePhase.WaitMap, "Reward teardown aftermath should hand off through WaitMap, not keep HandleRewards ownership.");
 
+        var rewardReleasePendingHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleRewards.ToString(), "click", "reward skip", DateTimeOffset.UtcNow.AddSeconds(-2)),
+        };
+        var rewardReleasePendingObserver = new ObserverState(
+            new ObserverSummary(
+                "rewards",
+                "map",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-reward-release-pending",
+                false,
+                "mixed",
+                "stabilizing",
+                "episode-reward-release-pending",
+                "Monster",
+                "reward",
+                80,
+                80,
+                null,
+                new[] { "넘기기" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("proceed:0", "proceed", "넘기기", "1180,764,269,108", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("choice", "넘기기", "1180,764,269,108"),
+                },
+                Array.Empty<ObservedCombatHandCard>()),
+            null,
+            null,
+            null);
+        var rewardReleasePendingState = BuildRewardSceneState(
+            rewardReleasePendingObserver,
+            new WindowBounds(0, 0, 1280, 720),
+            rewardReleasePendingHistory,
+            rewardRankingScreenshotPath);
+        Assert(rewardReleasePendingState.ReleaseStage == RewardReleaseStage.ReleasePending, "A fresh reward skip on the same mixed reward/map authority band should enter reward release-pending.");
+        Assert(rewardReleasePendingState.SuppressSameSkipReissue, "Reward release-pending should suppress same reward skip reissue until ownership changes.");
+        Assert(BuildAllowedActions(
+            GuiSmokePhase.HandleRewards,
+            rewardReleasePendingObserver,
+            Array.Empty<CombatCardKnowledgeHint>(),
+            rewardRankingScreenshotPath,
+            rewardReleasePendingHistory).SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+            "Reward release-pending should collapse the HandleRewards allowlist to wait instead of reopening reward skip.");
+        var rewardReleasePendingDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            45,
+            GuiSmokePhase.HandleRewards.ToString(),
+            "Do not reissue reward skip on the same mixed reward/map authority band.",
+            DateTimeOffset.UtcNow,
+            rewardRankingScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            ComputeSceneSignature(rewardRankingScreenshotPath, rewardReleasePendingObserver, GuiSmokePhase.HandleRewards),
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            rewardReleasePendingObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                rewardReleasePendingObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardRankingScreenshotPath,
+                rewardReleasePendingHistory),
+            rewardReleasePendingHistory,
+            "Reward release-pending should wait for ownership release instead of reissuing skip.",
+            null));
+        Assert(string.Equals(rewardReleasePendingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "Reward release-pending should wait instead of clicking reward skip again.");
+
         var postShopRewardMixedObserver = new ObserverState(
             new ObserverSummary(
                 "shop",
@@ -13998,27 +14077,8 @@ static string[] BuildAllowedActionsCore(
         GuiSmokePhase.WaitRunLoad => new[] { "wait" },
         GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "click character confirm", "wait" },
         GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
-        GuiSmokePhase.HandleRewards when LooksLikeInspectOverlayState(observer)
-            => new[] { "press escape", "click inspect overlay close", "wait" },
-        GuiSmokePhase.HandleRewards when cardSelectionState is not null
-            => BuildCardSelectionAllowedActions(cardSelectionState),
-        GuiSmokePhase.HandleRewards when rewardMapLayer.TerminalRunBoundary
-            => new[] { "wait" },
-        GuiSmokePhase.HandleRewards when rewardForegroundVisible && (claimableRewardPresent || LooksLikeColorlessCardChoiceState(observer))
-            => new[] { "click colorless card choice", "click reward skip", "click proceed", "press escape", "wait" },
-        GuiSmokePhase.HandleRewards when rewardForegroundVisible && (claimableRewardPresent || LooksLikeRewardChoiceState(observer))
-            => new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", rewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" },
-        GuiSmokePhase.HandleRewards when rewardForegroundVisible && (ShouldPreferRewardProgressionOverMapFallback(observer) || explicitRewardProgressionPresent)
-            => claimableRewardPresent
-                ? new[] { "click reward card choice", "click reward", "click reward skip", "click proceed", "wait" }
-                : new[] { "click reward", "click reward skip", "click proceed", "wait" },
-        GuiSmokePhase.HandleRewards when rewardMapLayer.RewardTeardownInProgress || rewardMapLayer.MapCurrentActiveScreen
-            => new[] { "wait" },
-        GuiSmokePhase.HandleRewards when rewardMapLayer.MapContextVisible
-            => rewardBackNavigationAvailable
-                ? new[] { "click first reachable node", "click visible map advance", "click reward back", "wait" }
-                : new[] { "click first reachable node", "click visible map advance", "wait" },
-        GuiSmokePhase.HandleRewards => new[] { "click proceed", "click reward", "wait" },
+        GuiSmokePhase.HandleRewards
+            => BuildRewardAllowedActions(observer, context),
         GuiSmokePhase.ChooseFirstNode when ancientMapOwner && ancientMapSurfacePending
             => new[] { "wait" },
         GuiSmokePhase.ChooseFirstNode when ancientMapOwner
@@ -14099,6 +14159,11 @@ static string[] BuildShopAllowedActions(ObserverSummary observer, IReadOnlyList<
 
 static string[] BuildRewardAllowedActionsFastPath(ObserverState observer, GuiSmokeStepAnalysisContext context)
 {
+    return BuildRewardAllowedActions(observer, context);
+}
+
+static string[] BuildRewardAllowedActions(ObserverState observer, GuiSmokeStepAnalysisContext context)
+{
     if (LooksLikeInspectOverlayState(observer))
     {
         return new[] { "press escape", "click inspect overlay close", "wait" };
@@ -14110,47 +14175,28 @@ static string[] BuildRewardAllowedActionsFastPath(ObserverState observer, GuiSmo
         return BuildCardSelectionAllowedActions(cardSelectionState);
     }
 
-    var rewardMapLayer = context.RewardMapLayerState;
-    var explicitRewardProgressionPresent = HasExplicitRewardProgressionAffordance(observer.Summary);
-    var rewardChoiceVisible = LooksLikeRewardChoiceState(observer);
-    var colorlessChoiceVisible = LooksLikeColorlessCardChoiceState(observer);
-    var rewardBackNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable;
-
-    if (rewardMapLayer.TerminalRunBoundary)
+    var rewardScene = BuildRewardSceneState(observer, null, context.History, context.ScreenshotPath);
+    if (rewardScene.LayerState.TerminalRunBoundary || rewardScene.ReleaseToMapPending)
     {
         return new[] { "wait" };
     }
 
-    if (rewardMapLayer.RewardForegroundOwned && colorlessChoiceVisible)
+    return rewardScene.ExplicitAction switch
     {
-        return new[] { "click colorless card choice", "click reward skip", "click proceed", "press escape", "wait" };
-    }
-
-    if (rewardMapLayer.RewardForegroundOwned && rewardChoiceVisible)
-    {
-        return new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", rewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" };
-    }
-
-    if (rewardMapLayer.RewardForegroundOwned && (ShouldPreferRewardProgressionOverMapFallback(observer) || explicitRewardProgressionPresent))
-    {
-        return rewardChoiceVisible
-            ? new[] { "click reward card choice", "click reward", "click reward skip", "click proceed", "wait" }
-            : new[] { "click reward", "click reward skip", "click proceed", "wait" };
-    }
-
-    if (rewardMapLayer.RewardTeardownInProgress || rewardMapLayer.MapCurrentActiveScreen)
-    {
-        return new[] { "wait" };
-    }
-
-    if (rewardMapLayer.MapContextVisible)
-    {
-        return rewardBackNavigationAvailable
-            ? new[] { "click first reachable node", "click visible map advance", "click reward back", "wait" }
-            : new[] { "click first reachable node", "click visible map advance", "wait" };
-    }
-
-    return new[] { "click proceed", "click reward", "wait" };
+        RewardExplicitActionKind.ColorlessChoice
+            => new[] { "click colorless card choice", "click reward skip", "click proceed", "press escape", "wait" },
+        RewardExplicitActionKind.CardChoice
+            => new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", rewardScene.LayerState.RewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" },
+        RewardExplicitActionKind.Claim
+            => rewardScene.RewardChoiceVisible
+                ? new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", rewardScene.LayerState.RewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" }
+                : new[] { "click reward", "click reward skip", "click proceed", "wait" },
+        RewardExplicitActionKind.SkipProceed
+            => new[] { "click reward skip", "click proceed", "wait" },
+        RewardExplicitActionKind.Back
+            => new[] { "click reward back", "wait" },
+        _ => new[] { "wait" },
+    };
 }
 
 static bool LooksLikeInspectOverlayState(ObserverState observer)
@@ -14242,39 +14288,12 @@ static bool ShouldPrioritizeExplicitEventProgressionAfterCardSelectionForAllowli
 
 static bool LooksLikeRewardChoiceState(ObserverState observer)
 {
-    if (CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer.Summary))
-    {
-        return false;
-    }
-
-    if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
-    {
-        return false;
-    }
-
-    var rewardAuthority = HasRewardChoiceAuthority(observer);
-    if (!rewardAuthority)
-    {
-        return false;
-    }
-
-    var rewardCardCount = observer.Choices.Count(IsRewardCardChoice);
-    var inspectPreviewCount = observer.Choices.Count(static choice =>
-        string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
-        || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true);
-    return rewardCardCount > 0
-           || (rewardAuthority && inspectPreviewCount > 0 && observer.Choices.Any(static choice => IsSkipOrProceedLabel(choice.Label)));
+    return BuildRewardSceneState(observer, null).RewardChoiceVisible;
 }
 
 static bool LooksLikeColorlessCardChoiceState(ObserverState observer)
 {
-    return !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer.Summary)
-           && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)
-           && HasRewardChoiceAuthority(observer)
-           && observer.Choices.Any(IsRewardCardChoice)
-           && observer.Choices.Any(static choice =>
-               string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
-               || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true);
+    return BuildRewardSceneState(observer, null).ColorlessChoiceVisible;
 }
 
 static bool ShouldSuppressRoomSubstateHeuristics(GuiSmokePhase phase, ObserverState observer)
@@ -14285,22 +14304,17 @@ static bool ShouldSuppressRoomSubstateHeuristics(GuiSmokePhase phase, ObserverSt
 
 static bool HasRewardChoiceAuthority(ObserverState observer)
 {
-    if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary))
-    {
-        return false;
-    }
-
-    return HasStrongRewardScreenAuthority(observer)
-           || (RewardObserverSignals.TryGetState(observer.Summary) is { ScreenVisible: true, MapIsCurrentActiveScreen: false })
-           || string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
-           || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase);
+    var rewardScene = BuildRewardSceneState(observer, null);
+    return rewardScene.RewardForegroundOwned
+           || rewardScene.LayerState.StaleRewardChoicePresent
+           || rewardScene.ScreenState?.ScreenVisible == true;
 }
 
 static bool HasStrongRewardScreenAuthority(ObserverState observer)
 {
-    return HasStrongRewardScreenAuthoritySummary(observer.Summary)
+    var rewardScene = BuildRewardSceneState(observer, null);
+    return rewardScene.ScreenState?.ForegroundOwned == true
+           || rewardScene.ScreenState?.ScreenVisible == true
            || IsRewardsScreenType(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"))
            || IsRewardsScreenType(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType"));
 }
@@ -14319,7 +14333,19 @@ static bool IsRewardsScreenType(string? typeName)
 
 static bool ShouldPreferRewardProgressionOverMapFallback(ObserverState observer)
 {
-    return ShouldPreferRewardProgressionOverMapFallbackSummary(observer.Summary);
+    var rewardScene = BuildRewardSceneState(observer, null);
+    return rewardScene.RewardForegroundOwned
+           && rewardScene.ReleaseStage == RewardReleaseStage.Active
+           && rewardScene.ExplicitProceedVisible;
+}
+
+static RewardSceneState BuildRewardSceneState(
+    ObserverState observer,
+    WindowBounds? windowBounds,
+    IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+    string? screenshotPath = null)
+{
+    return AutoDecisionProvider.BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
 }
 
 static bool ShouldPreferRewardProgressionOverMapFallbackSummary(ObserverSummary observer)
@@ -14971,59 +14997,7 @@ static bool HasStrongMapTransitionEvidenceFromScene(ObserverSummary observer, st
 
 static RewardMapLayerState BuildRewardMapLayerStateForObserver(ObserverSummary observer, WindowBounds? windowBounds)
 {
-    var rewardState = RewardObserverSignals.TryGetState(observer);
-    var mapContextVisible = rewardState?.MapIsCurrentActiveScreen == true
-                            || GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
-                            || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase);
-    var rewardBackNavigationAvailable = observer.CurrentChoices.Any(static label =>
-                                            label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
-                                            || label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
-                                            || label.Contains("뒤로", StringComparison.OrdinalIgnoreCase)
-                                            || label.Contains("Back", StringComparison.OrdinalIgnoreCase))
-                                        || observer.ActionNodes.Any(static node =>
-                                            node.Actionable
-                                            && (node.Label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
-                                                || node.Label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
-                                                || node.Label.Contains("뒤로", StringComparison.OrdinalIgnoreCase)
-                                                || node.Label.Contains("Back", StringComparison.OrdinalIgnoreCase)));
-    var activeRewardChoices = observer.Choices.Count(choice => IsCurrentRewardProgressionChoiceForObserver(choice, windowBounds));
-    var activeRewardNodes = observer.ActionNodes.Count(node => IsCurrentRewardProgressionNodeForObserver(node, windowBounds));
-    var staleRewardChoices = observer.Choices.Count(choice => IsStaleRewardProgressionChoiceForObserver(choice, windowBounds));
-    var staleRewardNodes = observer.ActionNodes.Count(node => IsStaleRewardProgressionNodeForObserver(node, windowBounds));
-    var fallbackRewardChoiceAuthority = !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
-                                        && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
-                                        && (observer.Choices.Any(IsRewardCardChoice)
-                                            || (observer.Choices.Any(IsInspectPreviewChoice)
-                                                && observer.Choices.Any(static choice => IsSkipOrProceedLabel(choice.Label))));
-    var rewardScreenHint = rewardState?.ScreenVisible == true
-                           || GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer)
-                           || string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-                           || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-                           || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
-                           || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
-                           || fallbackRewardChoiceAuthority;
-    var rewardForegroundOwned = rewardState?.ForegroundOwned == true
-                                || (rewardScreenHint
-                                    && rewardState?.MapIsCurrentActiveScreen != true
-                                    && (activeRewardChoices > 0 || activeRewardNodes > 0 || fallbackRewardChoiceAuthority));
-    var rewardPanelVisible = rewardForegroundOwned;
-    var staleRewardChoicePresent = !rewardPanelVisible && (staleRewardChoices > 0 || staleRewardNodes > 0);
-    var staleRewardBoundsPresent = staleRewardChoicePresent;
-    var offWindowBoundsReused = observer.Choices.Any(choice => IsOffWindowBoundsForObserver(choice.ScreenBounds, windowBounds))
-                              || observer.ActionNodes.Any(node => IsOffWindowBoundsForObserver(node.ScreenBounds, windowBounds));
-    return new RewardMapLayerState(
-        rewardPanelVisible,
-        mapContextVisible,
-        rewardBackNavigationAvailable,
-        staleRewardChoicePresent,
-        staleRewardBoundsPresent,
-        offWindowBoundsReused,
-        rewardForegroundOwned,
-        rewardState?.TeardownInProgress == true,
-        rewardState?.RewardIsCurrentActiveScreen == true,
-        rewardState?.MapIsCurrentActiveScreen == true,
-        rewardState?.TerminalRunBoundary == true);
+    return AutoDecisionProvider.BuildRewardSceneState(observer, windowBounds).LayerState;
 }
 
 static bool LooksLikeRewardBackNavigationAffordance(ObserverSummary observer, string? screenshotPath)
@@ -15443,6 +15417,11 @@ static GuiSmokePhase GetPostEnterRunPhase(GuiSmokeStepDecision decision)
 
 static GuiSmokePhase GetPostRewardPhase(GuiSmokeStepDecision decision)
 {
+    if (IsRewardReleaseTarget(decision.TargetLabel))
+    {
+        return GuiSmokePhase.WaitMap;
+    }
+
     if (KeepsCurrentRoomPhase(decision.TargetLabel))
     {
         return GuiSmokePhase.HandleRewards;
@@ -15521,6 +15500,12 @@ static bool KeepsCurrentRoomPhase(string? targetLabel)
            || string.Equals(targetLabel, "colorless card choice", StringComparison.OrdinalIgnoreCase)
            || string.Equals(targetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
            || IsOverlayCleanupTarget(targetLabel);
+}
+
+static bool IsRewardReleaseTarget(string? targetLabel)
+{
+    return string.Equals(targetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(targetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase);
 }
 
 static bool IsPassiveWaitPhase(GuiSmokePhase phase)
@@ -15683,12 +15668,13 @@ static bool TryClassifyRewardMapLoop(
         return false;
     }
 
-    var rewardMapLayer = BuildRewardMapLayerStateForObserver(request.Observer, request.WindowBounds);
+    var rewardScene = AutoDecisionProvider.BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+    var rewardMapLayer = rewardScene.LayerState;
     var mapContextVisible = rewardMapLayer.MapContextVisible
                             || request.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase)
                             || request.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)
                             || request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase);
-    if ((!rewardMapLayer.RewardPanelVisible && !rewardMapLayer.StaleRewardChoicePresent)
+    if ((!rewardScene.RewardForegroundOwned && !rewardMapLayer.StaleRewardChoicePresent)
         || !mapContextVisible)
     {
         return false;
@@ -16132,7 +16118,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
+        if (ShouldRouteToHandleRewards(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
@@ -16199,7 +16185,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
+        if (ShouldRouteToHandleRewards(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
@@ -16314,7 +16300,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
+        if (ShouldRouteToHandleRewards(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
@@ -16405,7 +16391,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
+        if (ShouldRouteToHandleRewards(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-resolved-rewards", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
@@ -16474,7 +16460,7 @@ static bool TryAdvanceAlternateBranch(
             return true;
         }
 
-        if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
+        if (ShouldRouteToHandleRewards(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "event-resolved-rewards", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "event-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
@@ -16496,7 +16482,7 @@ static bool TryAdvanceAlternateBranch(
 
     if (phase == GuiSmokePhase.HandleCombat)
     {
-        if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
+        if (ShouldRouteToHandleRewards(observer, history))
         {
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-resolved-rewards", null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
@@ -16540,7 +16526,7 @@ static bool TryReopenMixedStateModalBranchFromWaitMap(
         branchKind = "branch-treasure";
         nextPhase = GuiSmokePhase.ChooseFirstNode;
     }
-    else if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
+    else if (ShouldRouteToHandleRewards(observer, history))
     {
         branchKind = "branch-rewards";
         nextPhase = GuiSmokePhase.HandleRewards;
@@ -16565,6 +16551,26 @@ static bool TryReopenMixedStateModalBranchFromWaitMap(
     history.Add(new GuiSmokeHistoryEntry(GuiSmokePhase.WaitMap.ToString(), branchKind, null, DateTimeOffset.UtcNow));
     logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, GuiSmokePhase.WaitMap.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
     return true;
+}
+
+static bool ShouldRouteToHandleRewards(
+    ObserverState observer,
+    IReadOnlyList<GuiSmokeHistoryEntry>? history,
+    string? screenshotPath = null)
+{
+    if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary)
+        || LooksLikeRestSiteProceedState(observer.Summary)
+        || LooksLikeRestSiteState(observer.Summary)
+        || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
+        || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
+        || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+    {
+        return false;
+    }
+
+    var rewardScene = BuildRewardSceneState(observer, null, history, screenshotPath);
+    return rewardScene.RewardForegroundOwned
+           && rewardScene.ReleaseStage == RewardReleaseStage.Active;
 }
 
 static bool HasExplicitEventProgressionChoiceVisibleForWaitMap(ObserverState observer)
@@ -18540,6 +18546,40 @@ sealed record RewardMapLayerState(
     bool RewardIsCurrentActiveScreen,
     bool MapCurrentActiveScreen,
     bool TerminalRunBoundary);
+
+enum RewardReleaseStage
+{
+    None,
+    Active,
+    ReleasePending,
+    Released,
+}
+
+enum RewardExplicitActionKind
+{
+    None,
+    Claim,
+    CardChoice,
+    ColorlessChoice,
+    SkipProceed,
+    Back,
+}
+
+sealed record RewardSceneState(
+    RewardMapLayerState LayerState,
+    RewardScreenState? ScreenState,
+    NonCombatForegroundOwner CanonicalForegroundOwner,
+    RewardReleaseStage ReleaseStage,
+    RewardExplicitActionKind ExplicitAction,
+    bool RewardChoiceVisible,
+    bool ColorlessChoiceVisible,
+    bool ClaimableRewardPresent,
+    bool ExplicitProceedVisible,
+    bool SuppressSameSkipReissue)
+{
+    public bool RewardForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Reward;
+    public bool ReleaseToMapPending => ReleaseStage is RewardReleaseStage.ReleasePending or RewardReleaseStage.Released;
+}
 
 sealed record MapOverlayState(
     bool ForegroundVisible,
@@ -22848,8 +22888,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision DecideHandleRewards(GuiSmokeStepRequest request)
     {
-        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        var rewardState = RewardObserverSignals.TryGetState(request.Observer);
+        var rewardScene = BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
         var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
         if (overlayDecision is not null)
         {
@@ -22862,27 +22901,26 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return cardSelectionDecision;
         }
 
-        var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
+        var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request, rewardScene);
         if (explicitRewardDecision is not null)
         {
             return explicitRewardDecision;
         }
 
-        var rewardBackDecision = TryCreateRewardBackNavigationDecision(request);
+        var rewardBackDecision = TryCreateRewardBackNavigationDecision(request, rewardScene);
         if (rewardBackDecision is not null)
         {
             return rewardBackDecision;
         }
 
-        if (rewardState is { TerminalRunBoundary: true })
+        if (rewardScene.LayerState.TerminalRunBoundary)
         {
             return CreateWaitDecision("terminal reward boundary is active; do not reopen gameplay map fallback from reward aftermath.", request.Observer.CurrentScreen);
         }
 
-        if (!rewardMapLayer.RewardForegroundOwned
-            && (rewardMapLayer.RewardTeardownInProgress
-                || rewardMapLayer.MapCurrentActiveScreen
-                || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)))
+        if (rewardScene.ReleaseToMapPending
+            || (!rewardScene.RewardForegroundOwned
+                && GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)))
         {
             return CreateRewardOwnershipReleaseWaitDecision(request);
         }
@@ -23595,17 +23633,22 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateExplicitRewardResolutionDecision(GuiSmokeStepRequest request)
     {
-        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        var rewardChoiceDecision = TryCreateRewardChoiceDecision(request);
+        return TryCreateExplicitRewardResolutionDecision(
+            request,
+            BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath));
+    }
+
+    private static GuiSmokeStepDecision? TryCreateExplicitRewardResolutionDecision(GuiSmokeStepRequest request, RewardSceneState rewardScene)
+    {
+        var rewardChoiceDecision = TryCreateRewardChoiceDecision(request, rewardScene);
         if (rewardChoiceDecision is not null)
         {
             return rewardChoiceDecision;
         }
 
-        if (!rewardMapLayer.RewardPanelVisible
-            && !HasStrongRewardScreenAuthority(request.Observer)
-            && !LooksLikeRewardChoiceState(request.Observer)
-            && !LooksLikeColorlessCardChoiceState(request.Observer))
+        if (!rewardScene.RewardForegroundOwned
+            || rewardScene.ReleaseStage != RewardReleaseStage.Active
+            || rewardScene.ExplicitAction is not RewardExplicitActionKind.SkipProceed and not RewardExplicitActionKind.Claim and not RewardExplicitActionKind.CardChoice and not RewardExplicitActionKind.ColorlessChoice)
         {
             return null;
         }
@@ -23761,19 +23804,28 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateRewardBackNavigationDecision(GuiSmokeStepRequest request)
     {
-        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        if (!rewardMapLayer.RewardForegroundOwned || rewardMapLayer.MapCurrentActiveScreen)
+        return TryCreateRewardBackNavigationDecision(
+            request,
+            BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath));
+    }
+
+    private static GuiSmokeStepDecision? TryCreateRewardBackNavigationDecision(GuiSmokeStepRequest request, RewardSceneState rewardScene)
+    {
+        if (!rewardScene.RewardForegroundOwned
+            || rewardScene.ReleaseStage != RewardReleaseStage.Active
+            || rewardScene.ExplicitAction != RewardExplicitActionKind.Back
+            || rewardScene.LayerState.MapCurrentActiveScreen)
         {
             return null;
         }
 
-        var backNavigationAvailable = rewardMapLayer.RewardBackNavigationAvailable;
-        if (!backNavigationAvailable || !rewardMapLayer.MapContextVisible)
+        var backNavigationAvailable = rewardScene.LayerState.RewardBackNavigationAvailable;
+        if (!backNavigationAvailable || !rewardScene.LayerState.MapContextVisible)
         {
             return null;
         }
 
-        if (!rewardMapLayer.StaleRewardChoicePresent)
+        if (!rewardScene.LayerState.StaleRewardChoicePresent)
         {
             return null;
         }
@@ -23828,7 +23880,16 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateRewardChoiceDecision(GuiSmokeStepRequest request)
     {
-        if (!BuildRewardMapLayerState(request.Observer, request.WindowBounds).RewardPanelVisible)
+        return TryCreateRewardChoiceDecision(
+            request,
+            BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath));
+    }
+
+    private static GuiSmokeStepDecision? TryCreateRewardChoiceDecision(GuiSmokeStepRequest request, RewardSceneState rewardScene)
+    {
+        if (!rewardScene.RewardForegroundOwned
+            || rewardScene.ReleaseStage != RewardReleaseStage.Active
+            || rewardScene.ExplicitAction is not RewardExplicitActionKind.Claim and not RewardExplicitActionKind.CardChoice and not RewardExplicitActionKind.ColorlessChoice)
         {
             return null;
         }
@@ -24627,8 +24688,9 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static GuiSmokeDecisionAnalysis AnalyzeHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
     {
-        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        var rewardState = RewardObserverSignals.TryGetState(request.Observer);
+        var rewardScene = BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        var rewardMapLayer = rewardScene.LayerState;
+        var rewardState = rewardScene.ScreenState;
         var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
         var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
 
@@ -24651,7 +24713,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return builder.Build(CreateWaitDecision("waiting for card-selection subtype progression", request.Observer.CurrentScreen), actualDecision);
         }
 
-        var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
+        var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request, rewardScene);
         builder.Consider(
             ToCandidateLabel(explicitRewardDecision, "click reward choice"),
             "reward-explicit",
@@ -24661,7 +24723,7 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             rawBounds: TryFindRewardBounds(request),
             boundsSource: "observer-reward");
 
-        var rewardBackDecision = TryCreateRewardBackNavigationDecision(request);
+        var rewardBackDecision = TryCreateRewardBackNavigationDecision(request, rewardScene);
         builder.Consider("click reward back", "reward-back-nav", 0.88d, () => rewardBackDecision, "reward-back-not-available", rawBounds: TryFindBackBounds(request), boundsSource: "observer-back");
 
         if (rewardState is { TerminalRunBoundary: true })
@@ -24669,10 +24731,9 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             builder.AddSuppressed("click first reachable node", "terminal-boundary-suppresses-gameplay-map-fallback");
             builder.AddSuppressed("click visible map advance", "terminal-boundary-suppresses-gameplay-map-fallback");
         }
-        else if (!rewardMapLayer.RewardForegroundOwned
-                 && (rewardMapLayer.RewardTeardownInProgress
-                     || rewardMapLayer.MapCurrentActiveScreen
-                     || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)))
+        else if (rewardScene.ReleaseToMapPending
+                 || (!rewardScene.RewardForegroundOwned
+                     && GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)))
         {
             builder.AddSuppressed("click first reachable node", "reward-ownership-release-defers-map-routing-to-waitmap-reconciliation");
             builder.AddSuppressed("click visible map advance", "reward-ownership-release-defers-map-routing-to-waitmap-reconciliation");
@@ -25059,10 +25120,10 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             return ("map-overlay", mapOverlayState.EventBackgroundPresent ? "event" : "map");
         }
 
-        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        if (rewardMapLayer.RewardPanelVisible)
+        var rewardScene = BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        if (rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage == RewardReleaseStage.ReleasePending)
         {
-            return ("reward", rewardMapLayer.MapContextVisible ? "map" : null);
+            return ("reward", rewardScene.LayerState.MapContextVisible ? "map" : null);
         }
 
         if (AncientEventObserverSignals.IsDialogueActive(request.Observer))
@@ -27190,7 +27251,20 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
             || label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static RewardMapLayerState BuildRewardMapLayerState(ObserverSummary observer, WindowBounds? windowBounds)
+    internal static RewardSceneState BuildRewardSceneState(
+        ObserverState observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null)
+    {
+        return BuildRewardSceneState(observer.Summary, windowBounds, history, screenshotPath);
+    }
+
+    internal static RewardSceneState BuildRewardSceneState(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null)
     {
         var rewardState = RewardObserverSignals.TryGetState(observer);
         var mapContextVisible = rewardState?.MapIsCurrentActiveScreen == true
@@ -27204,39 +27278,126 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
         var staleRewardChoices = observer.Choices.Where(choice => IsStaleRewardProgressionChoice(choice, windowBounds)).ToArray();
         var staleRewardNodes = observer.ActionNodes.Where(node => IsStaleRewardProgressionNode(node, windowBounds)).ToArray();
         var explicitRewardChoicesPresent = activeRewardChoices.Length > 0 || activeRewardNodes.Length > 0;
+        var rewardContextVisible = rewardState?.ScreenVisible == true
+                                   || RewardObserverSignals.IsRewardAuthorityActive(observer)
+                                   || GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer)
+                                   || string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase);
+        var intrinsicRewardCardAuthority = observer.Choices.Any(IsRewardCardChoice);
         var fallbackRewardChoiceAuthority = !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
                                             && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
-                                            && (observer.Choices.Any(IsRewardCardChoice)
-                                                || (observer.Choices.Any(IsInspectPreviewChoice)
+                                            && (intrinsicRewardCardAuthority
+                                                || (rewardContextVisible
+                                                    && observer.Choices.Any(IsInspectPreviewChoice)
                                                     && observer.Choices.Any(static choice => IsSkipOrProceedLabel(choice.Label))));
-        var rewardScreenHint = rewardState?.ScreenVisible == true
-                               || HasStrongRewardScreenAuthority(observer)
-                               || string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-                               || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-                               || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
-                               || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
-                               || fallbackRewardChoiceAuthority;
+        var rewardScreenHint = rewardContextVisible || fallbackRewardChoiceAuthority;
         var rewardForegroundOwned = rewardState?.ForegroundOwned == true
                                     || (rewardScreenHint
                                         && rewardState?.MapIsCurrentActiveScreen != true
                                         && (explicitRewardChoicesPresent || fallbackRewardChoiceAuthority));
-        var rewardPanelVisible = rewardForegroundOwned;
-        var staleRewardChoicePresent = !rewardPanelVisible && (staleRewardChoices.Length > 0 || staleRewardNodes.Length > 0);
+        var staleRewardChoicePresent = !rewardForegroundOwned && (staleRewardChoices.Length > 0 || staleRewardNodes.Length > 0);
         var offWindowBoundsReused = staleRewardChoices.Any(choice => IsOffWindowBounds(choice.ScreenBounds, windowBounds))
                                   || staleRewardNodes.Any(node => IsOffWindowBounds(node.ScreenBounds, windowBounds));
-        var staleRewardBoundsPresent = staleRewardChoicePresent && (staleRewardChoices.Length > 0 || staleRewardNodes.Length > 0);
-        return new RewardMapLayerState(
-            rewardPanelVisible,
-            mapContextVisible,
-            rewardBackNavigationAvailable,
-            staleRewardChoicePresent,
-            staleRewardBoundsPresent,
-            offWindowBoundsReused,
-            rewardForegroundOwned,
-            rewardState?.TeardownInProgress == true,
-            rewardState?.RewardIsCurrentActiveScreen == true,
-            rewardState?.MapIsCurrentActiveScreen == true,
-            rewardState?.TerminalRunBoundary == true);
+        var layerState = new RewardMapLayerState(
+            RewardPanelVisible: rewardForegroundOwned,
+            MapContextVisible: mapContextVisible,
+            RewardBackNavigationAvailable: rewardBackNavigationAvailable,
+            StaleRewardChoicePresent: staleRewardChoicePresent,
+            StaleRewardBoundsPresent: staleRewardChoicePresent && (staleRewardChoices.Length > 0 || staleRewardNodes.Length > 0),
+            OffWindowBoundsReused: offWindowBoundsReused,
+            RewardForegroundOwned: rewardForegroundOwned,
+            RewardTeardownInProgress: rewardState?.TeardownInProgress == true,
+            RewardIsCurrentActiveScreen: rewardState?.RewardIsCurrentActiveScreen == true,
+            MapCurrentActiveScreen: rewardState?.MapIsCurrentActiveScreen == true,
+            TerminalRunBoundary: rewardState?.TerminalRunBoundary == true);
+
+        var rewardChoiceVisible = !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
+                                  && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
+                                  && rewardScreenHint
+                                  && (observer.Choices.Count(IsRewardCardChoice) > 0
+                                      || (observer.Choices.Count(IsInspectPreviewChoice) > 0
+                                          && observer.Choices.Any(static choice => IsSkipOrProceedLabel(choice.Label))));
+        var colorlessChoiceVisible = !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
+                                     && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
+                                     && rewardScreenHint
+                                     && observer.Choices.Any(IsRewardCardChoice)
+                                     && observer.Choices.Any(IsInspectPreviewChoice);
+        var explicitProceedVisible = activeRewardChoices.Any(choice => IsSkipOrProceedLabel(choice.Label))
+                                     || activeRewardNodes.Any(IsProceedNode);
+        var claimableRewardPresent = activeRewardChoices.Any(choice => !IsSkipOrProceedLabel(choice.Label))
+                                     || activeRewardNodes.Any(node => !IsProceedNode(node))
+                                     || (!string.IsNullOrWhiteSpace(screenshotPath)
+                                         && HasScreenshotClaimableRewardEvidenceInScreenshot(observer, screenshotPath));
+        var suppressSameSkipReissue = rewardForegroundOwned
+                                      && explicitProceedVisible
+                                      && !claimableRewardPresent
+                                      && HasRecentRewardSkipReleaseIntent(history);
+        var canonicalOwner = rewardForegroundOwned
+            ? NonCombatForegroundOwner.Reward
+            : (layerState.RewardTeardownInProgress || layerState.MapCurrentActiveScreen
+                ? NonCombatForegroundOwner.Map
+                : NonCombatForegroundOwner.Unknown);
+        var releaseStage = canonicalOwner == NonCombatForegroundOwner.Reward
+            ? (suppressSameSkipReissue ? RewardReleaseStage.ReleasePending : RewardReleaseStage.Active)
+            : ((layerState.RewardTeardownInProgress || layerState.MapCurrentActiveScreen)
+                ? RewardReleaseStage.Released
+                : RewardReleaseStage.None);
+        var explicitAction = releaseStage != RewardReleaseStage.Active
+            ? RewardExplicitActionKind.None
+            : colorlessChoiceVisible
+                ? RewardExplicitActionKind.ColorlessChoice
+                : rewardChoiceVisible || claimableRewardPresent
+                    ? (rewardChoiceVisible ? RewardExplicitActionKind.CardChoice : RewardExplicitActionKind.Claim)
+                    : rewardBackNavigationAvailable && mapContextVisible && staleRewardChoicePresent && !layerState.MapCurrentActiveScreen
+                        ? RewardExplicitActionKind.Back
+                        : explicitProceedVisible
+                            ? RewardExplicitActionKind.SkipProceed
+                            : RewardExplicitActionKind.None;
+
+        return new RewardSceneState(
+            layerState,
+            rewardState,
+            canonicalOwner,
+            releaseStage,
+            explicitAction,
+            rewardChoiceVisible,
+            colorlessChoiceVisible,
+            claimableRewardPresent,
+            explicitProceedVisible,
+            suppressSameSkipReissue);
+    }
+
+    private static bool HasRecentRewardSkipReleaseIntent(IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
+        if (history is null || history.Count == 0)
+        {
+            return false;
+        }
+
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "observer-accepted", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "recapture-required", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("observer-", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return string.Equals(entry.TargetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    private static RewardMapLayerState BuildRewardMapLayerState(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return BuildRewardSceneState(observer, windowBounds).LayerState;
     }
 
     private static bool LooksLikeInspectOverlayState(ObserverSummary observer)
@@ -27247,22 +27408,17 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool HasRewardChoiceAuthority(ObserverSummary observer)
     {
-        if (RewardObserverSignals.IsTerminalRunBoundary(observer))
-        {
-            return false;
-        }
-
-        return RewardObserverSignals.IsRewardAuthorityActive(observer)
-               || (RewardObserverSignals.TryGetState(observer) is { ScreenVisible: true, MapIsCurrentActiveScreen: false })
-               || string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase);
+        var rewardScene = BuildRewardSceneState(observer, null);
+        return rewardScene.RewardForegroundOwned
+               || rewardScene.LayerState.StaleRewardChoicePresent
+               || rewardScene.ScreenState?.ScreenVisible == true;
     }
 
     private static bool HasStrongRewardScreenAuthority(ObserverSummary observer)
     {
-        return RewardObserverSignals.IsRewardAuthorityActive(observer)
+        var rewardScene = BuildRewardSceneState(observer, null);
+        return rewardScene.ScreenState?.ForegroundOwned == true
+               || rewardScene.ScreenState?.ScreenVisible == true
                || GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer);
     }
 
@@ -27274,9 +27430,10 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool ShouldPreferRewardProgressionOverMapFallback(ObserverSummary observer)
     {
-        var rewardMapLayer = BuildRewardMapLayerState(observer, null);
-        return rewardMapLayer.RewardForegroundOwned
-               && HasExplicitRewardProgressionAffordance(observer);
+        var rewardScene = BuildRewardSceneState(observer, null);
+        return rewardScene.RewardForegroundOwned
+               && rewardScene.ReleaseStage == RewardReleaseStage.Active
+               && rewardScene.ExplicitProceedVisible;
     }
 
     private static bool HasExplicitRewardProgressionAffordance(ObserverSummary observer)
@@ -27394,34 +27551,12 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
 
     private static bool LooksLikeRewardChoiceState(ObserverSummary observer)
     {
-        if (CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer))
-        {
-            return false;
-        }
-
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
-        {
-            return false;
-        }
-
-        if (!HasRewardChoiceAuthority(observer))
-        {
-            return false;
-        }
-
-        var rewardCardCount = observer.Choices.Count(IsRewardCardChoice);
-        var inspectPreviewCount = observer.Choices.Count(IsInspectPreviewChoice);
-        return rewardCardCount > 0
-               || (inspectPreviewCount > 0 && observer.Choices.Any(static choice => IsSkipOrProceedLabel(choice.Label)));
+        return BuildRewardSceneState(observer, null).RewardChoiceVisible;
     }
 
     private static bool LooksLikeColorlessCardChoiceState(ObserverSummary observer)
     {
-        return !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
-               && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
-               && HasRewardChoiceAuthority(observer)
-               && observer.Choices.Any(IsRewardCardChoice)
-               && observer.Choices.Any(IsInspectPreviewChoice);
+        return BuildRewardSceneState(observer, null).ColorlessChoiceVisible;
     }
 
     private static bool IsRewardCardChoice(ObserverChoice choice)
