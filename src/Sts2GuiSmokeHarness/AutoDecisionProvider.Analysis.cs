@@ -1,0 +1,452 @@
+using System.Drawing;
+using System.Text.Json;
+
+sealed partial class AutoDecisionProvider
+{
+    private static GuiSmokeDecisionAnalysis AnalyzeGenericPhase(
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision? actualDecision,
+        Func<GuiSmokeStepDecision> factory,
+        string? foregroundKind,
+        string? backgroundKind)
+    {
+        var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
+        var predictedDecision = factory();
+        builder.Consider(
+            predictedDecision.TargetLabel ?? predictedDecision.ActionKind ?? predictedDecision.Status,
+            "phase-generic",
+            predictedDecision.Confidence ?? 0.50d,
+            () => predictedDecision,
+            "generic-phase-candidate-unavailable",
+            boundsSource: predictedDecision.ActionKind is "click" or "right-click" ? "decision-normalized" : "decision-nonpoint");
+        return builder.Build(CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen), actualDecision);
+    }
+
+    private static GuiSmokeDecisionAnalysis AnalyzeHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
+    {
+        var rewardScene = BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        var rewardMapLayer = rewardScene.LayerState;
+        var rewardState = rewardScene.ScreenState;
+        var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
+        var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
+
+        var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
+        builder.Consider("click inspect overlay close", "overlay-cleanup", 1.00d, () => overlayDecision, "no-room-overlay-cleanup", boundsSource: "overlay-cleanup");
+
+        var cardSelectionDecision = TryCreateCardSelectionDecision(request);
+        builder.Consider(
+            ToCandidateLabel(cardSelectionDecision, "click card-selection subtype"),
+            "card-selection-runtime",
+            0.98d,
+            () => cardSelectionDecision,
+            "no-card-selection-subtype-decision");
+        if (CardSelectionObserverSignals.IsCardSelectionState(request.Observer))
+        {
+            builder.AddSuppressed("click reward choice", "card-selection-subtype-foreground-suppresses-reward-row-reuse");
+            builder.AddSuppressed("click reward back", "card-selection-subtype-foreground-suppresses-reward-back-nav");
+            builder.AddSuppressed("click first reachable node", "card-selection-subtype-foreground-suppresses-map-fallback");
+            builder.AddSuppressed("click visible map advance", "card-selection-subtype-foreground-suppresses-map-fallback");
+            return builder.Build(CreateWaitDecision("waiting for card-selection subtype progression", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request, rewardScene);
+        builder.Consider(
+            ToCandidateLabel(explicitRewardDecision, "click reward choice"),
+            "reward-explicit",
+            0.95d,
+            () => explicitRewardDecision,
+            "no-explicit-reward-progression",
+            rawBounds: TryFindRewardBounds(request),
+            boundsSource: "observer-reward");
+
+        var rewardBackDecision = TryCreateRewardBackNavigationDecision(request, rewardScene);
+        builder.Consider("click reward back", "reward-back-nav", 0.88d, () => rewardBackDecision, "reward-back-not-available", rawBounds: TryFindBackBounds(request), boundsSource: "observer-back");
+
+        if (rewardState is { TerminalRunBoundary: true })
+        {
+            builder.AddSuppressed("click first reachable node", "terminal-boundary-suppresses-gameplay-map-fallback");
+            builder.AddSuppressed("click visible map advance", "terminal-boundary-suppresses-gameplay-map-fallback");
+        }
+        else if (rewardScene.ReleaseToMapPending
+                 || (!rewardScene.RewardForegroundOwned
+                     && GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)))
+        {
+            builder.AddSuppressed("click first reachable node", "reward-ownership-release-defers-map-routing-to-waitmap-reconciliation");
+            builder.AddSuppressed("click visible map advance", "reward-ownership-release-defers-map-routing-to-waitmap-reconciliation");
+            return builder.Build(CreateRewardOwnershipReleaseWaitDecision(request), actualDecision);
+        }
+        else
+        {
+            builder.AddSuppressed("click first reachable node", "reward-foreground-keeps-map-fallback-suppressed");
+            builder.AddSuppressed("click visible map advance", "reward-foreground-keeps-map-fallback-suppressed");
+        }
+
+        return builder.Build(CreateWaitDecision("waiting for reward actions", request.Observer.CurrentScreen), actualDecision);
+    }
+
+    private static GuiSmokeDecisionAnalysis AnalyzeChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
+    {
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
+        var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
+
+        if (HasExplicitRestSiteChoiceAuthority(request))
+        {
+            builder.AddSuppressed("click exported reachable node", "rest-site-explicit-choices-outrank-exported-map-routing");
+            builder.AddSuppressed("click first reachable node", "rest-site-explicit-choices-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "rest-site-explicit-choices-suppress-current-node-arrow");
+            builder.AddSuppressed("click map back", "rest-site-explicit-choices-are-the-progression-lane");
+            foreach (var restSiteCandidate in BuildRestSiteDecisionCandidates(request))
+            {
+                var capturedCandidate = restSiteCandidate;
+                builder.Consider(
+                    capturedCandidate.Label,
+                    capturedCandidate.Source,
+                    capturedCandidate.Score,
+                    () => capturedCandidate.Decision,
+                    capturedCandidate.RejectReason ?? "no-rest-site-explicit-choice",
+                    rawBounds: capturedCandidate.RawBounds,
+                    boundsSource: capturedCandidate.BoundsSource);
+            }
+
+            builder.Consider(
+                ToCandidateLabel(TryCreateRestSiteUpgradeDecision(request), "click smith card"),
+                "rest-site-upgrade",
+                0.92d,
+                () => TryCreateRestSiteUpgradeDecision(request),
+                "rest-site-upgrade-grid-not-visible");
+            return builder.Build(CreateWaitDecision("waiting for an explicit rest-site choice", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (LooksLikeRestSiteState(request.Observer)
+            && TryCreateRestSiteUpgradeDecision(request) is { } observerUpgradeDecision)
+        {
+            builder.AddSuppressed("click exported reachable node", "rest-site-upgrade-outranks-exported-map-routing");
+            builder.AddSuppressed("click first reachable node", "rest-site-upgrade-outranks-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "rest-site-upgrade-suppresses-current-node-arrow");
+            builder.AddSuppressed("click map back", "rest-site-upgrade-remains-foreground-authority");
+            builder.Consider(
+                ToCandidateLabel(observerUpgradeDecision, "click smith card"),
+                "rest-site-upgrade",
+                observerUpgradeDecision.TargetLabel?.Contains("confirm", StringComparison.OrdinalIgnoreCase) == true ? 0.95d : 0.92d,
+                () => observerUpgradeDecision,
+                "rest-site-upgrade-grid-not-visible",
+                rawBounds: TryFindRestSiteUpgradeBounds(request, observerUpgradeDecision),
+                boundsSource: TryResolveRestSiteUpgradeBoundsSource(request, observerUpgradeDecision));
+            return builder.Build(CreateWaitDecision("waiting for smith grid or confirm state", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(request.Observer)
+            && HasRecentRestSiteExplicitClick(request, "rest site: smith"))
+        {
+            builder.AddSuppressed("click exported reachable node", "rest-site-upgrade-observer-state-suppresses-map-routing");
+            builder.AddSuppressed("click first reachable node", "rest-site-upgrade-observer-state-suppresses-map-routing");
+            builder.AddSuppressed("click visible map advance", "rest-site-upgrade-observer-state-suppresses-current-node-arrow");
+            builder.AddSuppressed("click map back", "rest-site-upgrade-observer-state-remains-foreground-authority");
+            var observerMissDecision = CreateRestSitePostClickNoOpWaitDecision(request, "rest site: smith", request.Observer.CurrentScreen);
+            builder.Consider(
+                "click smith card",
+                "rest-site-upgrade",
+                0.92d,
+                () => TryCreateRestSiteUpgradeDecision(request),
+                "rest-site-upgrade-grid-not-visible");
+            builder.Consider(
+                "wait",
+                "rest-site-upgrade-observer",
+                0.97d,
+                () => observerMissDecision,
+                "rest-site-upgrade-post-click-state-unavailable");
+            return builder.Build(observerMissDecision, actualDecision);
+        }
+
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
+        {
+            builder.AddSuppressed("click exported reachable node", "treasure-room-explicit-affordances-outrank-map-routing");
+            builder.AddSuppressed("click first reachable node", "treasure-room-explicit-affordances-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "treasure-room-explicit-affordances-suppress-current-node-arrow");
+            builder.AddSuppressed("click map back", "treasure-room-progression-is-chest-holder-proceed");
+            var treasureDecision = TryCreateTreasureRoomDecision(request);
+            builder.Consider(
+                ToCandidateLabel(treasureDecision, "click treasure room action"),
+                "treasure-room-runtime",
+                0.98d,
+                () => treasureDecision,
+                "no-treasure-room-actionable-affordance");
+            return builder.Build(CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (mapOverlayState.ForegroundVisible)
+        {
+            if (mapOverlayState.StaleEventChoicePresent)
+            {
+                builder.AddSuppressed("click event choice", "map-overlay-foreground-removes-stale-event-choice");
+            }
+
+            if (mapOverlayState.CurrentNodeArrowVisible)
+            {
+                builder.AddSuppressed("click visible map advance", "current-node-arrow-is-not-a-reachable-node");
+            }
+
+            if (!GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request))
+            {
+                builder.AddSuppressed("click exported reachable node", "request-allowlist-excludes-map-routing");
+                builder.AddSuppressed("click first reachable node", "request-allowlist-excludes-map-routing");
+                builder.AddSuppressed("click map back", "request-allowlist-excludes-map-routing");
+                builder.AddSuppressed("click visible map advance", "request-allowlist-excludes-map-routing");
+                return builder.Build(
+                    GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
+                        request,
+                        "map overlay is visible but request allowlist does not permit map routing; waiting for exporter/phase reconciliation"),
+                    actualDecision);
+            }
+
+            builder.Consider(
+                "click exported reachable node",
+                "observer-export:map-node",
+                1.00d,
+                () => TryCreateExportedReachableMapPointDecision(request),
+                "no-exported-reachable-node",
+                rawBounds: TryFindMapNodeBounds(request),
+                boundsSource: "observer-map-node");
+            builder.Consider(
+                "click map back",
+                "overlay-back-navigation",
+                0.90d,
+                () => TryCreateMapBackNavigationDecision(request),
+                "map-back-navigation-unavailable",
+                rawBounds: TryFindBackBounds(request),
+                boundsSource: "overlay-back");
+            builder.Consider(
+                "click first reachable node",
+                "screenshot-reachable-node",
+                0.82d,
+                () => TryFindFirstReachableMapNodeDecision(request),
+                "no-screenshot-reachable-node",
+                boundsSource: "screenshot-map-node");
+            return builder.Build(CreateWaitDecision("waiting for exported or screenshot-reachable map node", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (LooksLikeScreenshotFirstRoomState(request))
+        {
+            if (AutoMapAnalyzer.Analyze(request.ScreenshotPath).HasCurrentArrow)
+            {
+                builder.AddSuppressed("click visible map advance", "room-explicit-choice-takes-priority-over-current-node-arrow");
+            }
+
+            var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
+            builder.Consider(
+                ToCandidateLabel(roomDecision, "click room explicit choice"),
+                "screenshot-room-explicit",
+                0.96d,
+                () => roomDecision,
+                "no-room-explicit-choice");
+            return builder.Build(CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        builder.Consider(
+            "click exported reachable node",
+            "observer-export:map-node",
+            0.96d,
+            () => TryCreateExportedReachableMapPointDecision(request),
+            "no-exported-reachable-node",
+            rawBounds: TryFindMapNodeBounds(request),
+            boundsSource: "observer-map-node");
+        builder.Consider(
+            "click visible map advance",
+            "screenshot-current-arrow",
+            0.62d,
+            () => TryFindVisibleMapAdvanceDecision(request),
+            "visible-map-advance-suppressed-or-unavailable",
+            boundsSource: "screenshot-map-arrow");
+        return builder.Build(CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen), actualDecision);
+    }
+
+    private static GuiSmokeDecisionAnalysis AnalyzeHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
+    {
+        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        if (eventScene.RewardSubstateActive)
+        {
+            return AnalyzeHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, actualDecision);
+        }
+
+        var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
+        var preferEventForeground = eventScene.EventForegroundOwned
+                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
+        var mapOverlayState = eventScene.MapOverlayState;
+        var strongEventForegroundChoice = eventScene.StrongForegroundChoice || forceEventProgressionAfterCardSelection;
+        var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
+        var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
+
+        var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
+        builder.Consider("click inspect overlay close", "overlay-cleanup", 1.00d, () => overlayDecision, "no-room-overlay-cleanup", boundsSource: "overlay-cleanup");
+
+        var cardSelectionDecision = TryCreateCardSelectionDecision(request);
+        builder.Consider(
+            ToCandidateLabel(cardSelectionDecision, "click card-selection subtype"),
+            "card-selection-runtime",
+            0.99d,
+            () => cardSelectionDecision,
+            "no-card-selection-subtype-decision");
+        if (CardSelectionObserverSignals.IsCardSelectionState(request.Observer))
+        {
+            builder.AddSuppressed("click reward choice", "card-selection-subtype-foreground-suppresses-reward-row-reuse");
+            builder.AddSuppressed("click reward back", "card-selection-subtype-foreground-suppresses-reward-back-nav");
+            builder.AddSuppressed("click event choice", "card-selection-subtype-foreground-suppresses-generic-event-choice");
+            builder.AddSuppressed("click first reachable node", "card-selection-subtype-foreground-suppresses-map-fallback");
+            builder.AddSuppressed("click room fallback", "card-selection-subtype-foreground-suppresses-room-fallback");
+            return builder.Build(CreateWaitDecision("waiting for card-selection subtype progression", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        var treasureDecision = TryCreateTreasureRoomDecision(request);
+        builder.Consider(
+            ToCandidateLabel(treasureDecision, "click treasure room action"),
+            "treasure-room-runtime",
+            0.97d,
+            () => treasureDecision,
+            "no-treasure-room-actionable-affordance");
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
+        {
+            builder.AddSuppressed("click exported reachable node", "treasure-room-explicit-affordances-outrank-map-routing");
+            builder.AddSuppressed("click first reachable node", "treasure-room-explicit-affordances-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "treasure-room-explicit-affordances-suppress-current-node-arrow");
+            builder.AddSuppressed("click event choice", "treasure-room-explicit-affordances-outrank-generic-event-choice");
+            builder.AddSuppressed("click proceed", "treasure-room-explicit-proceed-is-handled-by-treasure-state-machine");
+            return builder.Build(CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        var explicitRewardDecision = TryCreateExplicitRewardResolutionDecision(request);
+        builder.Consider(
+            ToCandidateLabel(explicitRewardDecision, "click reward choice"),
+            "reward-explicit",
+            0.96d,
+            () => explicitRewardDecision,
+            "no-reward-resolution-needed",
+            rawBounds: TryFindRewardBounds(request),
+            boundsSource: "observer-reward");
+
+        var rewardBackDecision = TryCreateRewardBackNavigationDecision(request);
+        builder.Consider("click reward back", "reward-back-nav", 0.90d, () => rewardBackDecision, "reward-back-not-available", rawBounds: TryFindBackBounds(request), boundsSource: "observer-back");
+
+        var ancientDialogueDecision = TryCreateAncientDialogueAdvanceDecision(request);
+        builder.Consider(
+            "click ancient dialogue advance",
+            "ancient-dialogue",
+            0.98d,
+            () => ancientDialogueDecision,
+            "no-ancient-dialogue-hitbox",
+            rawBounds: TryFindEventChoiceBounds(request),
+            boundsSource: "observer-ancient-dialogue");
+        if (AncientEventObserverSignals.IsDialogueActive(request.Observer))
+        {
+            builder.AddSuppressed("click event choice", "ancient-dialogue-must-finish-before-option-selection");
+            builder.AddSuppressed("click proceed", "ancient-dialogue-does-not-use-generic-proceed");
+            builder.AddSuppressed("click exported reachable node", "ancient-event-dialogue-outranks-map-routing");
+            builder.AddSuppressed("click first reachable node", "ancient-event-dialogue-outranks-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "ancient-event-dialogue-suppresses-map-arrow-fallback");
+            builder.AddSuppressed("click room fallback", "ancient-event-dialogue-suppresses-room-fallback");
+            return builder.Build(CreateWaitDecision("waiting for explicit ancient dialogue hitbox", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        var ancientCompletionDecision = TryCreateAncientEventCompletionDecision(request);
+        builder.Consider(
+            "click ancient event completion",
+            "ancient-completion-button",
+            0.97d,
+            () => ancientCompletionDecision,
+            "no-explicit-ancient-completion-button",
+            rawBounds: TryFindEventChoiceBounds(request),
+            boundsSource: "observer-ancient-completion");
+        if (AncientEventObserverSignals.HasExplicitCompletionAction(request.Observer))
+        {
+            builder.AddSuppressed("click proceed", "ancient-completion-remains-event-owned-through-explicit-proceed-button");
+            builder.AddSuppressed("click exported reachable node", "ancient-event-completion-outranks-map-routing");
+            builder.AddSuppressed("click first reachable node", "ancient-event-completion-outranks-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "ancient-event-completion-suppresses-map-arrow-fallback");
+            builder.AddSuppressed("click room fallback", "ancient-event-completion-suppresses-room-fallback");
+            return builder.Build(CreateWaitDecision("waiting for explicit ancient event completion", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)
+        {
+            builder.AddSuppressed("click proceed", "event-release-pending-suppresses-same-proceed-reissue");
+            builder.AddSuppressed("click event choice", "event-release-pending-suppresses-stale-event-choice-reissue");
+            builder.AddSuppressed("click exported reachable node", "event-release-pending-waits-for-explicit-release-before-map-routing");
+            builder.AddSuppressed("click first reachable node", "event-release-pending-waits-for-explicit-release-before-map-routing");
+            builder.AddSuppressed("click visible map advance", "event-release-pending-suppresses-map-contamination");
+            builder.AddSuppressed("click room fallback", "event-release-pending-suppresses-room-fallback");
+            return builder.Build(CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit event release"), actualDecision);
+        }
+
+        var ancientOptionDecision = TryCreateAncientEventOptionDecision(request);
+        builder.Consider(
+            "click event choice",
+            "ancient-option-buttons",
+            0.96d,
+            () => ancientOptionDecision,
+            "no-explicit-ancient-option-button",
+            rawBounds: TryFindEventChoiceBounds(request),
+            boundsSource: "observer-ancient-option");
+        if (AncientEventObserverSignals.HasExplicitOptionSelection(request.Observer))
+        {
+            builder.AddSuppressed("click proceed", "ancient-event-options-should-use-explicit-option-buttons");
+            builder.AddSuppressed("click exported reachable node", "ancient-event-options-outrank-map-routing");
+            builder.AddSuppressed("click first reachable node", "ancient-event-options-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "ancient-event-options-suppress-map-arrow-fallback");
+            builder.AddSuppressed("click room fallback", "ancient-event-options-suppress-room-fallback");
+            return builder.Build(CreateWaitDecision("waiting for explicit ancient event option buttons", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
+        {
+            if (mapOverlayState.StaleEventChoicePresent)
+            {
+                builder.AddSuppressed("click event choice", "map-overlay-foreground-removes-stale-event-choice");
+            }
+
+            if (mapOverlayState.CurrentNodeArrowVisible)
+            {
+                builder.AddSuppressed("click visible map advance", "current-node-arrow-is-not-a-reachable-node");
+            }
+
+            builder.Consider("click exported reachable node", "observer-export:map-node", 0.88d, () => TryCreateExportedReachableMapPointDecision(request), "no-exported-reachable-node", rawBounds: TryFindMapNodeBounds(request), boundsSource: "observer-map-node");
+            builder.Consider("click map back", "overlay-back-navigation", 0.84d, () => TryCreateMapBackNavigationDecision(request), "map-back-navigation-unavailable", rawBounds: TryFindBackBounds(request), boundsSource: "overlay-back");
+            builder.Consider("click first reachable node", "screenshot-reachable-node", 0.78d, () => TryFindFirstReachableMapNodeDecision(request), "no-screenshot-reachable-node", boundsSource: "screenshot-map-node");
+            return builder.Build(CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (forceEventProgressionAfterCardSelection)
+        {
+            builder.AddSuppressed("click exported reachable node", "post-card-selection-event-explicit-progression-outranks-map-routing");
+            builder.AddSuppressed("click first reachable node", "post-card-selection-event-explicit-progression-outranks-map-routing");
+            builder.AddSuppressed("click visible map advance", "post-card-selection-event-explicit-progression-outranks-map-routing");
+        }
+
+        if (preferEventForeground
+            && (request.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase)
+                || request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase)
+                || request.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)))
+        {
+            builder.AddSuppressed("click visible map advance", "event-foreground-suppresses-background-map-contamination");
+        }
+
+        var semanticDecision = TryCreateSemanticEventDecision(request);
+        builder.Consider("click event choice", "semantic-event", preferEventForeground ? 0.98d : 0.72d, () => semanticDecision, "no-semantic-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");
+
+        var explicitEventChoice = TryCreateEventProgressChoiceDecision(request);
+        builder.Consider("click event choice", "observer:event-choice", preferEventForeground ? 0.94d : 0.68d, () => explicitEventChoice, "no-explicit-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");
+
+        if (LooksLikeMapTransitionState(request))
+        {
+            builder.Consider("click first reachable node", "branch:choose-first-node", 0.66d, () => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }), "no-map-transition-candidate", boundsSource: "branch-choose-first-node");
+        }
+        else
+        {
+            builder.AddSuppressed("click first reachable node", "event-foreground-keeps-map-transition-branch-suppressed");
+        }
+
+        var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
+        builder.Consider(ToCandidateLabel(roomDecision, "click room fallback"), "screenshot-room-fallback", 0.60d, () => roomDecision, "no-room-fallback-available", boundsSource: "screenshot-room");
+
+        return builder.Build(CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen), actualDecision);
+    }
+}

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-sealed partial class AutoDecisionProvider
+sealed partial class AutoDecisionProvider : IGuiDecisionProvider
 {
     private sealed class CandidateWorkItem
     {
