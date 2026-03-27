@@ -1,0 +1,427 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
+using System.Windows.Forms;
+using Sts2AiCompanion.Foundation.Contracts;
+using Sts2ModAiCompanion.Mod;
+using Sts2ModKit.Core.Configuration;
+using Sts2ModKit.Core.Harness;
+using Sts2ModKit.Core.LiveExport;
+using static GuiSmokeChoicePrimitiveSupport;
+
+internal static partial class Program
+{
+    private static void RunManualCleanBootSelfTests()
+    {
+        var manualCleanBootRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-clean-boot-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(manualCleanBootRoot);
+            var harnessRoot = Path.Combine(manualCleanBootRoot, "harness");
+            var inboxRoot = Path.Combine(harnessRoot, "inbox");
+            var outboxRoot = Path.Combine(harnessRoot, "outbox");
+            Directory.CreateDirectory(inboxRoot);
+            Directory.CreateDirectory(outboxRoot);
+            var harnessLayout = new HarnessQueueLayout(
+                manualCleanBootRoot,
+                harnessRoot,
+                inboxRoot,
+                Path.Combine(inboxRoot, "actions.ndjson"),
+                outboxRoot,
+                Path.Combine(outboxRoot, "results.ndjson"),
+                Path.Combine(harnessRoot, "status.json"),
+                Path.Combine(outboxRoot, "trace.ndjson"),
+                Path.Combine(harnessRoot, "arm.json"),
+                Path.Combine(outboxRoot, "inventory.latest.json"));
+            File.WriteAllText(
+                harnessLayout.StatusPath,
+                JsonSerializer.Serialize(
+                    new HarnessBridgeStatus(true, "active", null, null, DateTimeOffset.UtcNow, "warming up", null, null),
+                    GuiSmokeShared.JsonOptions));
+            File.WriteAllText(
+                harnessLayout.InventoryPath,
+                JsonSerializer.Serialize(
+                    new HarnessNodeInventory(
+                        "inventory-clean-boot",
+                        DateTimeOffset.UtcNow,
+                        "pending",
+                        "main-menu",
+                        null,
+                        "dormant",
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
+                        Array.Empty<HarnessNodeInventoryItem>()),
+                    GuiSmokeShared.JsonOptions));
+            File.WriteAllText(harnessLayout.ActionsPath, "{}" + Environment.NewLine);
+
+            LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootRoot, "clean-boot-session", "boot-to-long-run", "headless");
+            var screenshotPath = Path.Combine(manualCleanBootRoot, "main-menu.png");
+            var observerPath = Path.Combine(manualCleanBootRoot, "main-menu.observer.json");
+            var manualCleanBootFreshnessFloor = DateTimeOffset.UtcNow.AddSeconds(-5);
+            File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
+            File.WriteAllText(observerPath, "{}");
+            Assert(
+                LongRunArtifacts.TryMarkManualCleanBootVerified(
+                    manualCleanBootRoot,
+                    harnessLayout,
+                    new ObserverState(
+                        new ObserverSummary(
+                            "main-menu",
+                            "main-menu",
+                            false,
+                            DateTimeOffset.UtcNow,
+                            "inv-main-menu",
+                            true,
+                            "mixed",
+                            "stable",
+                            "episode-main-menu",
+                            null,
+                            "main-menu",
+                            null,
+                            null,
+                            null,
+                            new[] { "Singleplayer" },
+                            Array.Empty<string>(),
+                            Array.Empty<ObserverActionNode>(),
+                            Array.Empty<ObserverChoice>(),
+                            Array.Empty<ObservedCombatHandCard>()),
+                        null,
+                        null,
+                        null),
+                    Array.Empty<GuiSmokeHistoryEntry>(),
+                    screenshotPath,
+                    observerPath,
+                    manualCleanBootFreshnessFloor),
+                "Manual clean boot should verify on a clean main-menu first step even when status mode is transiently non-dormant.");
+            var cleanBootPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(File.ReadAllText(Path.Combine(manualCleanBootRoot, "prevalidation.json")), GuiSmokeShared.JsonOptions)
+                                      ?? throw new InvalidOperationException("Failed to read manual clean boot prevalidation self-test.");
+            Assert(cleanBootPrevalidation.ManualCleanBootVerified, "Manual clean boot prevalidation should be marked valid on the inert stale-actions path.");
+            Assert(cleanBootPrevalidation.ManualCleanBootEvidence?.ActionsQueueClear == true, "Inert stale actions should still satisfy the manual clean boot actions gate.");
+            Assert(cleanBootPrevalidation.ManualCleanBootEvidence?.EvaluationNotes?.Contains("stale-actions-observed-but-inert", StringComparer.OrdinalIgnoreCase) == true, "Manual clean boot evidence should explain why stale actions were treated as inert.");
+        }
+        finally
+        {
+            if (Directory.Exists(manualCleanBootRoot))
+            {
+                Directory.Delete(manualCleanBootRoot, recursive: true);
+            }
+        }
+
+        var manualCleanBootBlockedRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-clean-boot-blocked-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(manualCleanBootBlockedRoot);
+            var harnessRoot = Path.Combine(manualCleanBootBlockedRoot, "harness");
+            var inboxRoot = Path.Combine(harnessRoot, "inbox");
+            var outboxRoot = Path.Combine(harnessRoot, "outbox");
+            Directory.CreateDirectory(inboxRoot);
+            Directory.CreateDirectory(outboxRoot);
+            var harnessLayout = new HarnessQueueLayout(
+                manualCleanBootBlockedRoot,
+                harnessRoot,
+                inboxRoot,
+                Path.Combine(inboxRoot, "actions.ndjson"),
+                outboxRoot,
+                Path.Combine(outboxRoot, "results.ndjson"),
+                Path.Combine(harnessRoot, "status.json"),
+                Path.Combine(outboxRoot, "trace.ndjson"),
+                Path.Combine(harnessRoot, "arm.json"),
+                Path.Combine(outboxRoot, "inventory.latest.json"));
+            File.WriteAllText(
+                harnessLayout.InventoryPath,
+                JsonSerializer.Serialize(
+                    new HarnessNodeInventory(
+                        "inventory-clean-boot-blocked",
+                        DateTimeOffset.UtcNow,
+                        "pending",
+                        "main-menu",
+                        null,
+                        "dormant",
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
+                        Array.Empty<HarnessNodeInventoryItem>()),
+                    GuiSmokeShared.JsonOptions));
+            File.WriteAllText(
+                harnessLayout.ArmSessionPath,
+                JsonSerializer.Serialize(
+                    new HarnessArmSession("token", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5), "self-test"),
+                    GuiSmokeShared.JsonOptions));
+
+            LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootBlockedRoot, "clean-boot-blocked-session", "boot-to-long-run", "headless");
+            var screenshotPath = Path.Combine(manualCleanBootBlockedRoot, "main-menu.png");
+            var observerPath = Path.Combine(manualCleanBootBlockedRoot, "main-menu.observer.json");
+            var blockedManualCleanBootFreshnessFloor = DateTimeOffset.UtcNow.AddSeconds(-5);
+            File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
+            File.WriteAllText(observerPath, "{}");
+            Assert(
+                !LongRunArtifacts.TryMarkManualCleanBootVerified(
+                    manualCleanBootBlockedRoot,
+                    harnessLayout,
+                    new ObserverState(
+                        new ObserverSummary(
+                            "main-menu",
+                            "main-menu",
+                            false,
+                            DateTimeOffset.UtcNow,
+                            "inv-bootstrap-boundary",
+                            true,
+                            "mixed",
+                            "stable",
+                            "episode-bootstrap-boundary",
+                            null,
+                            "main-menu",
+                            null,
+                            null,
+                            null,
+                            Array.Empty<string>(),
+                            Array.Empty<string>(),
+                            Array.Empty<ObserverActionNode>(),
+                            Array.Empty<ObserverChoice>(),
+                            Array.Empty<ObservedCombatHandCard>()),
+                        null,
+                        null,
+                        null),
+                    Array.Empty<GuiSmokeHistoryEntry>(),
+                    screenshotPath,
+                    observerPath,
+                    blockedManualCleanBootFreshnessFloor),
+                "Manual clean boot should remain invalid when an external arm session is present.");
+            var blockedPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(File.ReadAllText(Path.Combine(manualCleanBootBlockedRoot, "prevalidation.json")), GuiSmokeShared.JsonOptions)
+                                     ?? throw new InvalidOperationException("Failed to read blocked manual clean boot prevalidation self-test.");
+            Assert(blockedPrevalidation.ManualCleanBootEvidence?.BlockingReasons?.Contains("arm-session-present", StringComparer.OrdinalIgnoreCase) == true, "Manual clean boot failure evidence should record the blocking arm session.");
+        }
+        finally
+        {
+            if (Directory.Exists(manualCleanBootBlockedRoot))
+            {
+                Directory.Delete(manualCleanBootBlockedRoot, recursive: true);
+            }
+        }
+
+        var manualCleanBootBootstrapRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-clean-boot-bootstrap-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(manualCleanBootBootstrapRoot);
+            var harnessRoot = Path.Combine(manualCleanBootBootstrapRoot, "harness");
+            var inboxRoot = Path.Combine(harnessRoot, "inbox");
+            var outboxRoot = Path.Combine(harnessRoot, "outbox");
+            var liveRoot = Path.Combine(manualCleanBootBootstrapRoot, "live");
+            Directory.CreateDirectory(inboxRoot);
+            Directory.CreateDirectory(outboxRoot);
+            Directory.CreateDirectory(liveRoot);
+            var harnessLayout = new HarnessQueueLayout(
+                manualCleanBootBootstrapRoot,
+                harnessRoot,
+                inboxRoot,
+                Path.Combine(inboxRoot, "actions.ndjson"),
+                outboxRoot,
+                Path.Combine(outboxRoot, "results.ndjson"),
+                Path.Combine(harnessRoot, "status.json"),
+                Path.Combine(outboxRoot, "trace.ndjson"),
+                Path.Combine(harnessRoot, "arm.json"),
+                Path.Combine(outboxRoot, "inventory.latest.json"));
+            var liveLayout = new LiveExportLayout(
+                manualCleanBootBootstrapRoot,
+                liveRoot,
+                Path.Combine(liveRoot, "events.ndjson"),
+                Path.Combine(liveRoot, "state.latest.json"),
+                Path.Combine(liveRoot, "state.latest.txt"),
+                Path.Combine(liveRoot, "session.json"))
+            {
+                SemanticSnapshotsRoot = Path.Combine(liveRoot, "semantic-snapshots"),
+            };
+            var inventoryCapturedAt = DateTimeOffset.UtcNow;
+            File.WriteAllText(
+                harnessLayout.InventoryPath,
+                JsonSerializer.Serialize(
+                    new HarnessNodeInventory(
+                        "inventory-main-menu-only",
+                        inventoryCapturedAt,
+                        null,
+                        "main-menu",
+                        "episode-main-menu-only",
+                        "dormant",
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
+                        Array.Empty<HarnessNodeInventoryItem>()),
+                    GuiSmokeShared.JsonOptions));
+
+            var inventoryOnlyObserver = new ObserverSnapshotReader(liveLayout, harnessLayout).Read();
+            Assert(string.Equals(inventoryOnlyObserver.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Observer should fall back to harness inventory sceneType when state.latest.json is not available.");
+            Assert(string.Equals(inventoryOnlyObserver.VisibleScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Observer visibleScreen should fall back to harness inventory sceneType when state.latest.json is not available.");
+            Assert(inventoryOnlyObserver.CapturedAt == inventoryCapturedAt, "Observer capturedAt should fall back to harness inventory when state.latest.json is not available.");
+
+            LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootBootstrapRoot, "clean-boot-bootstrap-session", "boot-to-long-run", "headless");
+            var screenshotPath = Path.Combine(manualCleanBootBootstrapRoot, "main-menu.png");
+            var observerPath = Path.Combine(manualCleanBootBootstrapRoot, "main-menu.observer.json");
+            File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
+            File.WriteAllText(observerPath, "{}");
+            Assert(
+                LongRunArtifacts.TryMarkManualCleanBootVerified(
+                    manualCleanBootBootstrapRoot,
+                    harnessLayout,
+                    inventoryOnlyObserver,
+                    Array.Empty<GuiSmokeHistoryEntry>(),
+                    screenshotPath,
+                    observerPath,
+                    inventoryCapturedAt.AddSeconds(-5)),
+                "Manual clean boot should verify from fresh harness inventory main-menu evidence when state.latest.json is not available yet.");
+
+            var bootstrapStates = new[]
+            {
+                new ObserverState(
+                    new ObserverSummary(
+                        null,
+                        null,
+                        false,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Array.Empty<string>(),
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+                new ObserverState(
+                    new ObserverSummary(
+                        "main-menu",
+                        "main-menu",
+                        false,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
+                        "episode-main-menu-bootstrap",
+                        null,
+                        "main-menu",
+                        null,
+                        null,
+                        null,
+                        Array.Empty<string>(),
+                        Array.Empty<string>(),
+                        Array.Empty<ObserverActionNode>(),
+                        Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>()),
+                    null,
+                    null,
+                    null),
+            };
+            var bootstrapIndex = 0;
+            var bootstrappedObserver = BootstrapManualCleanBootObserverAsync(
+                    bootstrapStates[bootstrapIndex],
+                    () => bootstrapStates[Math.Min(++bootstrapIndex, bootstrapStates.Length - 1)],
+                    DateTimeOffset.UtcNow.AddSeconds(-5),
+                    2,
+                    0,
+                    static _ => Task.CompletedTask)
+                .GetAwaiter()
+                .GetResult();
+            Assert(string.Equals(bootstrappedObserver.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Manual clean boot bootstrap should keep polling until a fresh main-menu observer arrives.");
+        }
+        finally
+        {
+            if (Directory.Exists(manualCleanBootBootstrapRoot))
+            {
+                Directory.Delete(manualCleanBootBootstrapRoot, recursive: true);
+            }
+        }
+
+        var manualCleanBootObserverNotReadyRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-clean-boot-observer-not-ready-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(manualCleanBootObserverNotReadyRoot);
+            var harnessRoot = Path.Combine(manualCleanBootObserverNotReadyRoot, "harness");
+            var inboxRoot = Path.Combine(harnessRoot, "inbox");
+            var outboxRoot = Path.Combine(harnessRoot, "outbox");
+            Directory.CreateDirectory(inboxRoot);
+            Directory.CreateDirectory(outboxRoot);
+            var harnessLayout = new HarnessQueueLayout(
+                manualCleanBootObserverNotReadyRoot,
+                harnessRoot,
+                inboxRoot,
+                Path.Combine(inboxRoot, "actions.ndjson"),
+                outboxRoot,
+                Path.Combine(outboxRoot, "results.ndjson"),
+                Path.Combine(harnessRoot, "status.json"),
+                Path.Combine(outboxRoot, "trace.ndjson"),
+                Path.Combine(harnessRoot, "arm.json"),
+                Path.Combine(outboxRoot, "inventory.latest.json"));
+            LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootObserverNotReadyRoot, "clean-boot-observer-not-ready-session", "boot-to-long-run", "headless");
+            var screenshotPath = Path.Combine(manualCleanBootObserverNotReadyRoot, "unknown.png");
+            var observerPath = Path.Combine(manualCleanBootObserverNotReadyRoot, "unknown.observer.json");
+            File.WriteAllBytes(screenshotPath, Array.Empty<byte>());
+            File.WriteAllText(observerPath, "{}");
+            Assert(
+                !LongRunArtifacts.TryMarkManualCleanBootVerified(
+                    manualCleanBootObserverNotReadyRoot,
+                    harnessLayout,
+                    new ObserverState(
+                        new ObserverSummary(
+                            null,
+                            null,
+                            false,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            Array.Empty<string>(),
+                            Array.Empty<string>(),
+                            Array.Empty<ObserverActionNode>(),
+                            Array.Empty<ObserverChoice>(),
+                            Array.Empty<ObservedCombatHandCard>()),
+                        null,
+                        null,
+                        null),
+                    Array.Empty<GuiSmokeHistoryEntry>(),
+                    screenshotPath,
+                    observerPath,
+                    DateTimeOffset.UtcNow.AddSeconds(-5)),
+                "Manual clean boot should remain invalid while observer evidence is not ready.");
+            var notReadyPrevalidation = JsonSerializer.Deserialize<GuiSmokePrevalidation>(
+                                            File.ReadAllText(Path.Combine(manualCleanBootObserverNotReadyRoot, "prevalidation.json")),
+                                            GuiSmokeShared.JsonOptions)
+                                        ?? throw new InvalidOperationException("Failed to read observer-not-ready manual clean boot self-test.");
+            Assert(notReadyPrevalidation.ManualCleanBootEvidence?.BlockingReasons?.Contains("observer-not-ready", StringComparer.OrdinalIgnoreCase) == true, "Manual clean boot should report observer-not-ready instead of observer-not-main-menu:unknown.");
+        }
+        finally
+        {
+            if (Directory.Exists(manualCleanBootObserverNotReadyRoot))
+            {
+                Directory.Delete(manualCleanBootObserverNotReadyRoot, recursive: true);
+            }
+        }
+    }
+}
