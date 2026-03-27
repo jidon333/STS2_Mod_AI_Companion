@@ -89,6 +89,8 @@ current blocker, latest authoritative root, active session handoff는 이 문서
 - `Interop/`
 - `Analysis/`
 - `Artifacts/`
+- `GuiSmokeRuntimeContracts.cs`
+- `GuiSmokeReplayContracts.cs`
 - `LongRunArtifacts.Review.cs`
 - `LongRunArtifacts.Startup.cs`
 - `LongRunArtifacts.Supervision.cs`
@@ -97,7 +99,7 @@ current blocker, latest authoritative root, active session handoff는 이 문서
 
 현재 남은 주요 hotspot:
 
-- [`Program.cs`](../../src/Sts2GuiSmokeHarness/Program.cs) `14568` lines
+- [`Program.cs`](../../src/Sts2GuiSmokeHarness/Program.cs) `14037` lines
 - [`Program.Runner.cs`](../../src/Sts2GuiSmokeHarness/Program.Runner.cs) `2055` lines
 - [`Program.SelfTests.CombatContracts.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.CombatContracts.cs)
 - [`Program.SelfTests.PhaseRouting.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.PhaseRouting.cs)
@@ -156,24 +158,30 @@ current blocker, latest authoritative root, active session handoff는 이 문서
 
 아래 순서가 `GuiSmokeHarness` 장기 리팩터링의 canonical order다.
 
-### Wave 1. Core contracts extraction
+### Wave 1. Runtime/session/replay core contracts extraction
 
-- phase, request/decision/evaluation records, observer summary family, session/run/replay DTO를 `Program.cs` 밖으로 이동한다.
+- phase, history/window bounds, session/run/deploy/trace/replay fixture DTO를 `Program.cs` 밖으로 이동한다.
 - 타입 이동만 하고 behavior는 바꾸지 않는다.
-- 이 wave가 끝나면 구조 review 시 `Program.cs`를 열지 않고도 타입 소유권을 찾을 수 있어야 한다.
+- 이 wave가 끝나면 runner/artifact/replay review에서 필요한 pure contracts는 `Program.cs` 밖에서 찾을 수 있어야 한다.
 
-### Wave 2. `AutoDecisionProvider` noncombat vertical split
+### Wave 2. Observer/decision-facing contracts extraction
+
+- request/decision/evaluation records, observer summary family, room-state records, `IGuiDecisionProvider`를 `Program.cs` 밖으로 이동한다.
+- 타입 이동만 하고 behavior는 바꾸지 않는다.
+- 이 wave가 끝나면 구조 review 시 `Program.cs`를 열지 않고도 decision/observer contract 소유권을 찾을 수 있어야 한다.
+
+### Wave 3. `AutoDecisionProvider` noncombat vertical split
 
 - reward / event / shop / rest-site / treasure / map-aftermath decision과 scene-state build를 noncombat owner로 모은다.
 - observer contract를 다시 구현하지 않고 소비만 하게 만든다.
 - noncombat stale wrapper와 duplicate helper는 같은 wave에서 삭제한다.
 
-### Wave 3. `AutoDecisionProvider` combat vertical split
+### Wave 4. `AutoDecisionProvider` combat vertical split
 
 - combat action selection, target resolution, barrier/eligibility support를 combat owner로 모은다.
 - combat duplicate helper는 canonical combat support owner만 남긴다.
 
-### Wave 4. Runner seam extraction
+### Wave 5. Runner seam extraction
 
 - [`Program.Runner.cs`](../../src/Sts2GuiSmokeHarness/Program.Runner.cs)의 `RunAttemptAsync`를 단계별 seam으로 분해한다.
 - target seams:
@@ -185,17 +193,17 @@ current blocker, latest authoritative root, active session handoff는 이 문서
   - artifact flush
 - 이 wave가 끝나면 runner는 읽히는 orchestrator여야 한다.
 
-### Wave 5. Shared helper owner 정리
+### Wave 6. Shared helper owner 정리
 
 - top-level에 남은 scene signature, plateau fingerprint, bounds normalization, action factory, replay support helper를 의미별 owner로 이동한다.
 - 이 wave가 끝나면 `Program.cs`는 shell 외의 helper owner 역할을 하지 않는다.
 
-### Wave 6. Large self-test split
+### Wave 7. Large self-test split
 
 - `CombatContracts`, `PhaseRouting`, `NonCombatDecisionContracts`, `StartupRuntimeEvidence` 같은 large self-test file을 더 세분화한다.
 - 공용 fixture builder는 shared test support로 분리한다.
 
-### Wave 7. Final cleanup
+### Wave 8. Final cleanup
 
 - permanent shim, stale wrapper, compiler-proven dead code, temporary partial-file seam을 제거한다.
 - 최종 목표는 blocker 추적 시 `Observer 1개 + Decision 1개 + Runner/Artifacts 1개` 정도만 열면 원인을 따라갈 수 있는 구조다.
