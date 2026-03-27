@@ -5749,6 +5749,106 @@ static void RunSelfTest()
         BuildAllowedActions(GuiSmokePhase.WaitRunLoad, waitRunLoadTransitionObserver, Array.Empty<CombatCardKnowledgeHint>(), null, Array.Empty<GuiSmokeHistoryEntry>()).SequenceEqual(new[] { "wait" }),
         "WaitRunLoad should remain wait-only while explicit transition truth is still active.");
 
+    var waitRunLoadNotReadyRewardObserver = new ObserverState(
+        new ObserverSummary(
+            "rewards",
+            "map",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            false,
+            "mixed",
+            "stabilizing",
+            null,
+            null,
+            "reward",
+            59,
+            80,
+            0,
+            new[] { "{gold} 골드", "덱에 추가할 카드를 선택하세요.", "넘기기", "{gold} 골드" },
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            new[]
+            {
+                new ObserverChoice("gold", "GoldReward", "460,250,240,340"),
+                new ObserverChoice("card", "CardReward", "740,250,240,340"),
+                new ObserverChoice("choice", "넘기기", "860,900,220,80")
+                {
+                    Enabled = true,
+                },
+            },
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["transitionInProgress"] = "false",
+                ["rootSceneIsMainMenu"] = "false",
+                ["rootSceneIsRun"] = "true",
+                ["currentRunNodePresent"] = "true",
+                ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.NRun",
+                ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                ["rewardScreenDetected"] = "true",
+                ["rewardScreenVisible"] = "true",
+                ["rewardForegroundOwned"] = "true",
+                ["rewardTeardownInProgress"] = "false",
+                ["rewardIsCurrentActiveScreen"] = "true",
+                ["rewardIsTopOverlay"] = "true",
+                ["rewardProceedVisible"] = "true",
+                ["rewardProceedEnabled"] = "true",
+                ["rewardVisibleButtonCount"] = "2",
+                ["rewardEnabledButtonCount"] = "2",
+                ["mapCurrentActiveScreen"] = "false",
+                ["choiceExtractorPath"] = "reward",
+            },
+        },
+        null,
+        null,
+        null);
+    Assert(
+        GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(waitRunLoadNotReadyRewardObserver, out var waitRunLoadNotReadyRewardPhase)
+        && waitRunLoadNotReadyRewardPhase == GuiSmokePhase.HandleRewards,
+        "WaitRunLoad should hand off to rewards when non-ready resumed run authority is already explicitly reward-owned.");
+
+    var waitRunLoadNotReadyMapObserver = new ObserverState(
+        new ObserverSummary(
+            "map",
+            "map",
+            false,
+            DateTimeOffset.UtcNow,
+            null,
+            false,
+            "mixed",
+            "stabilizing",
+            null,
+            null,
+            "generic",
+            59,
+            80,
+            0,
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            Array.Empty<ObserverChoice>(),
+            Array.Empty<ObservedCombatHandCard>())
+        {
+            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["transitionInProgress"] = "false",
+                ["rootSceneIsMainMenu"] = "false",
+                ["rootSceneIsRun"] = "true",
+                ["currentRunNodePresent"] = "true",
+                ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.NRun",
+                ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                ["mapCurrentActiveScreen"] = "true",
+            },
+        },
+        null,
+        null,
+        null);
+    Assert(
+        !GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(waitRunLoadNotReadyMapObserver, out _),
+        "WaitRunLoad should stay blocked while scene is not ready when only map authority is present.");
+
     var waitRunLoadStuckContinueObserver = new ObserverState(
         new ObserverSummary(
             "main-menu",
@@ -22687,8 +22787,7 @@ static class GuiSmokeObserverPhaseHeuristics
             && !string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
         {
-            nextPhase = default;
-            return false;
+            return TryGetPostRunLoadNonReadyRoomPhase(observer, out nextPhase);
         }
 
         if (string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
@@ -22705,6 +22804,42 @@ static class GuiSmokeObserverPhaseHeuristics
 
         nextPhase = default;
         return false;
+    }
+
+    private static bool TryGetPostRunLoadNonReadyRoomPhase(ObserverSummary observer, out GuiSmokePhase nextPhase)
+    {
+        if (LooksLikeCombatState(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleCombat;
+            return true;
+        }
+
+        if (AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null) is { } canonicalScene
+            && canonicalScene.CanonicalForegroundOwner is not NonCombatCanonicalForegroundOwner.Unknown and not NonCombatCanonicalForegroundOwner.Map
+            && TryMapExplicitRunLoadRoomHandoffTarget(canonicalScene.HandoffTarget, out nextPhase))
+        {
+            return true;
+        }
+
+        nextPhase = default;
+        return false;
+    }
+
+    private static bool TryMapExplicitRunLoadRoomHandoffTarget(NonCombatHandoffTarget handoffTarget, out GuiSmokePhase nextPhase)
+    {
+        nextPhase = handoffTarget switch
+        {
+            NonCombatHandoffTarget.HandleRewards => GuiSmokePhase.HandleRewards,
+            NonCombatHandoffTarget.HandleEvent => GuiSmokePhase.HandleEvent,
+            NonCombatHandoffTarget.HandleShop => GuiSmokePhase.HandleShop,
+            NonCombatHandoffTarget.ChooseFirstNode => GuiSmokePhase.ChooseFirstNode,
+            _ => default,
+        };
+
+        return handoffTarget is NonCombatHandoffTarget.HandleRewards
+            or NonCombatHandoffTarget.HandleEvent
+            or NonCombatHandoffTarget.HandleShop
+            or NonCombatHandoffTarget.ChooseFirstNode;
     }
 
     public static bool TryGetPostCharacterSelectPhase(ObserverState observer, out GuiSmokePhase nextPhase)
