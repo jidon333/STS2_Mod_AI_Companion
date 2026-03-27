@@ -15,8 +15,8 @@
 
 - 이 프로젝트의 현재 핵심 시스템은 `Sts2GuiSmokeHarness` long-run 하네스다.
 - 이 하네스는 게임을 실제로 진행하는 개발용 black-box tester다.
-- 행동 결정의 1차 기준은 여전히 `screenshot-first`다.
-- observer/export는 아직 최종 결정권은 아니지만, 후보 생성과 검증 입력으로 점진 승격 중이다.
+- 행동 결정은 current `main`에서 `observer-derived authority + screenshot analysis` 혼합 구조로 읽는다.
+- observer/export는 telemetry-only가 아니라 scene authority와 phase handoff의 canonical source다.
 - long-run에서 `완료`는 "게임이 잘 끝났다"가 아니라 "신뢰 가능한 restart progression 증거가 artifact로 닫혔다"를 뜻한다.
 - `restart-events.ndjson`는 chronology source로, `attempt-index.ndjson` / `session-summary.json` / `supervisor-state.json`는 projection으로 읽는 것이 현재 현실과 가장 잘 맞는다.
 - quartet semantics는 `restart-events = chronology`, `attempt-index = terminal projection`, `session-summary = reviewer projection`, `supervisor-state = machine verdict projection`으로 읽는다.
@@ -72,7 +72,11 @@ authoritative attempt / session accounting은 아래 quartet로 고정한다.
 ### 이 문서가 설명하는 것
 
 - `src/Sts2GuiSmokeHarness/Program.cs`
+- `src/Sts2GuiSmokeHarness/Program.Runner.cs`
+- `src/Sts2GuiSmokeHarness/Program.Runner.AttemptLifecycle.cs`
+- `src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs`
 - `src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs`
+- `src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs`
 - `docs/reference/harness/HARNESS_MODE.md`
 - `docs/snapshots/harness/STS2_HARNESS_REVIEW.md`
 - `docs/reference/harness/DECOMPILED_SOURCE_FIRST_OBSERVER_STRATEGY.md`
@@ -110,7 +114,7 @@ authoritative attempt / session accounting은 아래 quartet로 고정한다.
 그 다음 필요에 따라 나눠 읽으면 된다.
 
 - 런타임 구조가 궁금하면 `6. 현재 시스템 개요`, `7. 런타임 역할 아키텍처`, `8. 핵심 artifact 계약`, `9. 상태 모델`
-- observer와 screenshot-first 관계가 궁금하면 `10. Observer / Screenshot-First / Scene Authority`
+- observer-derived authority와 screenshot analysis 관계가 궁금하면 `10. Observer / Scene Authority / Screenshot Analysis`
 - 최근 어디서 막히는지가 궁금하면 `11. 최근 실제 병목 이동`
 - 사람과 AI 에이전트 운영 구조가 궁금하면 `12. 개발/운영 에이전트 분업 구조`, `13. 현재 workflow`
 
@@ -214,7 +218,7 @@ flowchart LR
 | trust gate | 이 실행 결과를 믿어도 되는지 확인하는 사전 검증 문 |
 | milestone | long-run이 정말 원하는 증거 체인이 닫혔는지 나타내는 단계 |
 | observer | 게임 내부 상태를 밖으로 export하는 관측 계층 |
-| screenshot-first | 진행 판단을 먼저 스크린샷 의미 해석에 두는 방식 |
+| observer-backed + screenshot-analysis | observer/export로 scene authority를 닫고, screenshot analysis로 actionable geometry와 fallback evidence를 보강하는 현재 하네스 구조 |
 | scene authority | "지금 정말 어떤 화면이 준비되었는가"를 권위 있게 판단하는 기준 |
 | orchestration | 사람, 에이전트, 프로그램 역할을 연결해 다음 행동 순서를 정하는 것 |
 | stall | 하네스가 더 진행하지 못하고 같은 상태에 머무는 문제 |
@@ -280,11 +284,18 @@ flowchart LR
 1. 게임을 실제로 진행하는 것
 2. 그 진행을 나중에 검증할 수 있게 evidence로 남기는 것
 
-최신 상태를 반영하면, observer/export의 위치는 "그저 사후 로그"보다 조금 더 올라와 있다. 다만 아직도 최종 행동 결정의 권위는 아니다. 현재 observer/export는 다음 용도로 점진 승격 중이다.
+최신 상태를 반영하면, observer/export의 위치는 "그저 사후 로그"가 아니다. current `main`에서는 observer/export가 scene authority와 phase handoff의 canonical source이고, screenshot analysis는 actionable geometry와 fallback evidence를 보강한다.
 
-- screenshot-first가 고른 후보를 보강하거나 좁히는 입력
-- mixed-state에서 foreground/background를 구분하는 힌트
-- post-click recapture와 loop diagnosis의 검증 입력
+현재 observer/export와 screenshot analysis의 역할은 아래처럼 나뉜다.
+
+- observer/export
+  - scene authority
+  - canonical foreground owner
+  - phase handoff / transition hold
+- screenshot analysis
+  - clickable geometry
+  - map node / card grid / combat target 후보
+  - observer drift나 mixed residue의 보강 증거
 
 ### `boot-to-long-run`이란 무엇인가
 
@@ -311,11 +322,11 @@ long-run에서는 아래 세 가지가 동시에 필요하다.
 상태:
 - `이미 구현됨`
 
-- screenshot-first 방향은 유지되고 있다.
-- observer/export는 최종 권한은 아니지만 candidate generation과 validation input으로 점진 승격 중이다.
+- observer/export는 scene authority와 phase handoff의 canonical source다.
+- screenshot analysis는 actionable geometry와 fallback evidence를 담당한다.
 - combat은 이전보다 훨씬 덜 "고정 좌표 감"에 의존한다.
 - reward-map recovery는 실제 전진했고, reward와 map을 동시에 보는 layered state가 생겼다.
-- 최신 blocker는 "event choice를 못 읽는 문제"보다 "event foreground 위에 섞여 보이는 map overlay와 current-node arrow를 잘못 모델링하는 문제"다.
+- mixed-state follow-up은 event foreground보다 reward aftermath 이후 map-node continuity 쪽으로 이동했다.
 
 ## 7. 런타임 역할 아키텍처
 
@@ -384,6 +395,10 @@ flowchart LR
 
 중심 구현:
 - `src/Sts2GuiSmokeHarness/Program.cs`
+- `src/Sts2GuiSmokeHarness/Program.Runner*.cs`
+- `src/Sts2GuiSmokeHarness/LongRunArtifacts.*.cs`
+- `src/Sts2GuiSmokeHarness/Observer/*.cs`
+- `src/Sts2GuiSmokeHarness/AutoDecisionProvider.*.cs`
 
 | 항목 | 내용 |
 |---|---|
@@ -514,7 +529,7 @@ flowchart TD
 | `stall-diagnosis.ndjson` | 왜 막혔는지 분류한 진단 결과 | stall sentinel | 분석 에이전트, 인간 조율자, 구현 에이전트 | 병목 유형 라우팅 | 직접 recovery를 수행하지 않음 | `이미 구현됨` |
 | `progress.ndjson` | step별 진행 요약 | runner | stall sentinel, self meta review, 분석자 | plateau, same-action-stall, overlay loop 해석 | raw screenshot 없이 보면 과잉 해석 위험 | `이미 구현됨` |
 | `run.log` | 사람이 읽기 쉬운 실행 로그 | runner | 인간 조율자, 분석/테스트 에이전트 | 보조 해석 | 권위 있는 증거는 아님 | `이미 구현됨` |
-| `steps/*.screen.png` | 각 step의 실제 화면 증거 | runner | runner, 분석/테스트 에이전트, supervisor | next attempt first-screen proof, screenshot-first 판단 | scene authority를 이것만으로 완전히 닫을 수는 없음 | `이미 구현됨` |
+| `steps/*.screen.png` | 각 step의 실제 화면 증거 | runner | runner, 분석/테스트 에이전트, supervisor | next attempt first-screen proof, screenshot analysis evidence | scene authority를 이것만으로 완전히 닫을 수는 없음 | `이미 구현됨` |
 | `session root / attempts/<id>/` | 세션 전체 증거와 개별 실행 증거를 분리한 폴더 구조 | runner | supervisor, sentinel, 분석자 | 세션 vs attempt 경계 유지 | 현재는 파일 시스템 계약 중심 | `이미 구현됨` |
 
 ### Chronology vs Projection Contract
@@ -975,11 +990,11 @@ flowchart LR
 
 현재 취약점도 분명하다.
 
-- screenshot-first routing은 room substate와 mixed-state에서 계속 새로운 병목을 드러낸다.
+- observer-derived authority와 screenshot analysis의 경계는 정리됐지만, mixed-state aftermath와 map-node continuity는 계속 새로운 병목을 드러낸다.
 - supervisor와 stall sentinel은 아직 논리 역할 분리가 중심이지, 물리 프로세스 분리까지 닫힌 것은 아니다.
 - 완전 자동 orchestration을 지금 당장 신뢰하기에는 운영 문맥 의존성이 아직 크다.
 - reward back / claimable reward extractor와 event/map overlay foreground 모델은 아직 더 강해져야 한다.
 
 지금 시점에서 가장 중요한 설계 원칙은 아래 한 줄로 요약된다.
 
-`신뢰와 완료는 artifact로 증명하고, 진행은 screenshot-first로 유지하되, observer/export는 후보 생성과 검증 입력으로 점진 승격한다.`
+`신뢰와 완료는 artifact로 증명하고, 진행은 observer-derived authority + screenshot analysis 구조로 유지한다.`

@@ -29,7 +29,12 @@
 
 - 이 문서는 `startup/deploy 제어층`에 집중한다.
 - reward/event/combat 의사결정 규칙 자체를 전부 설명하는 문서는 아니다.
-- authoritative source는 여전히 [Program.cs](../../src/Sts2GuiSmokeHarness/Program.cs)와 [LongRunArtifacts.Supervision.cs](../../src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs)다.
+- authoritative source는 current runner / startup / artifact owner files다.
+  - [Program.Runner.cs](../../src/Sts2GuiSmokeHarness/Program.Runner.cs)
+  - [Program.Runner.Bootstrap.cs](../../src/Sts2GuiSmokeHarness/Program.Runner.Bootstrap.cs)
+  - [Program.Runner.Deploy.cs](../../src/Sts2GuiSmokeHarness/Program.Runner.Deploy.cs)
+  - [LongRunArtifacts.Startup.cs](../../src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
+  - [LongRunArtifacts.Supervision.cs](../../src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs)
 
 ## 2. 한눈에 보는 구조
 
@@ -113,7 +118,7 @@ current/terminal/restart target을 읽을 때는 아래를 기준으로 본다.
 
 ### 5.1 `run`
 
-`run` 명령은 [Program.cs](../../src/Sts2GuiSmokeHarness/Program.cs)에서 `RunScenarioAsync(...)`로 들어간다.
+`run` 명령은 [Program.cs](../../src/Sts2GuiSmokeHarness/Program.cs)에서 dispatch되고, 실제 session orchestration은 [Program.Runner.cs](../../src/Sts2GuiSmokeHarness/Program.Runner.cs)의 `RunScenarioAsync(...)`로 들어간다.
 
 현재 이 제어층이 가장 중요하게 쓰이는 scenario는 `boot-to-long-run`이다.
 

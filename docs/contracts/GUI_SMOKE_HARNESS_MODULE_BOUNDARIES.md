@@ -263,11 +263,10 @@ dead/stale/duplicate code 제거 시점은 아래 규칙으로 고정한다.
 - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-test`
 - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-parity-test`
 
-parity baseline은 아래로 고정한다.
+replay parity baseline은 `docs/current/PROJECT_STATUS.md`와 `docs/current/AI_SESSION_HANDOFF_KO.md`에 기록된 current baseline을 유지한다.
 
-- existing known red `reward-aftermath-map-handoff` 하나만 유지
 - failing fixture 수 증가 금지
-- existing failing fixture의 failure shape drift 금지
+- documented failing fixture의 failure shape drift 금지
 
 추가 live validation 규칙:
 

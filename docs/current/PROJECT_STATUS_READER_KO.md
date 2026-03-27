@@ -4,292 +4,87 @@
 > 대상 독자: 한국어 사용자, 개발자, 새로 합류한 작업자
 > 기준 문서: [PROJECT_STATUS.md](./PROJECT_STATUS.md)
 
-## 이 문서는 왜 있나
-
-`PROJECT_STATUS.md`는 기준 문서다.  
-그래서 코드 식별자, artifact key, milestone id, 내부 운영 용어가 많이 들어간다.
-
-이 문서는 같은 내용을 **사람이 빨리 읽기 쉬운 말**로 다시 적어 둔 설명서다.
-
-원칙은 이렇다.
-
-- 판단의 기준은 항상 [PROJECT_STATUS.md](./PROJECT_STATUS.md)와 실제 artifact다.
-- 이 문서는 그 판단을 한국어로 풀어쓴 안내서다.
-
 ## 지금 어디까지 왔나
 
-현재 프로젝트는 `M5`를 제품 진행 순서 기준으로는 닫았고,  
-`M6` replay/parity 점검도 대표 장면 suite로 마감했다.  
-이제는 `M7 -> M8`를 차례로 평가하면서 `M9`를 시작할 준비를 하는 단계다.
+지금은 “하네스 구조를 사람이 읽을 수 있게 정리하는 작업”이 큰 틀에서 끝난 상태입니다.
 
 쉽게 말하면:
 
-- 예전에는 “게임이 제대로 켜졌는가”, “신뢰 가능한 시도 번호가 만들어졌는가”, “니오우/맵 겹침 같은 장면에서 하네스가 멈추지 않는가”가 큰 문제였다.
-- 지금은 그 급한 문제들이 많이 정리됐다.
-- 이제는 “비전투 화면이 전반적으로 안정적인가”, “전투 품질을 어디까지 닫았다고 볼 수 있는가”, “조언 품질 평가를 시작할 준비가 됐는가”를 평가해야 한다.
+- 예전에는 `Program.cs` 한 파일이 너무 커서, 뭘 고쳤는지 추적하기가 어려웠습니다.
+- 지금은 하네스가 `runner / observer / analysis / decisions / artifacts / self-test`로 나뉘어 있습니다.
+- 그래서 앞으로 남은 문제는 “구조를 어떻게 나눌까”보다 “남은 semantic gap을 어디서 좁힐까” 쪽입니다.
 
 ## 지금 안정됐다고 볼 수 있는 것
 
-### 1. 기본 실행 기반
+### 1. 하네스 구조
 
-이제는 아래를 매번 다시 의심할 단계가 아니다.
+- `Program.cs`는 이제 거의 shell만 남았습니다.
+- startup/deploy, step loop, observer, decision, artifact, self-test가 분리됐습니다.
+- 관련 문서도 [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md), [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md) 기준으로 읽으면 됩니다.
 
-- 배포가 엉켜서 다른 DLL이 섞여 들어간 상태
-- 게임이 애매하게 켜져서 신뢰할 수 없는 상태
-- 첫 시도 번호나 요약 파일이 꼬여서 현재 실행을 믿을 수 없는 상태
+### 2. 기본 검증 세트
 
-한마디로:
+current `main`에서 아래는 green입니다.
 
-```text
-"지금 보고 있는 실행은 현재 코드 기준으로 읽어도 된다"
-```
+- `dotnet build`
+- `Sts2ModKit.SelfTest`
+- `Sts2GuiSmokeHarness -- self-test`
+- `Sts2GuiSmokeHarness -- replay-test`
 
-는 기반이 생겼다.
+### 3. 예전에 막던 큰 blocker
 
-### 2. 니오우/맵 겹침 문제
+`WaitRunLoad`가 resumed reward/map mixed state에서 room phase handoff를 못 하던 문제는 이미 닫혔습니다.
 
-니오우 보상 선택 뒤에 이벤트 잔상과 맵이 같이 보이는 장면에서,  
-예전에는 하네스가 이벤트와 맵 사이를 왔다 갔다 하며 자주 막혔다.
+즉 이제는 예전 handoff bug를 다시 파고들 단계가 아닙니다.
 
-지금은:
+## 지금 남아 있는 핵심
 
-- 맵이 실제로 열린 상태라면
-- 이벤트 잔상 버튼보다
-- 맵 노드를 앞 화면의 실제 행동 대상으로 본다
+현재 남은 건 “reward aftermath 이후 map 쪽으로 자연스럽게 넘어가는가”입니다.
 
-즉:
+대표 신호는 두 개입니다.
 
-```text
-"겹친 화면에서 맵이 앞에 있으면 맵을 우선한다"
-```
+1. latest valid live root에서는 `ChooseFirstNode`에서 `decision-wait-plateau`가 남아 있음
+2. replay parity에는 `reward-aftermath-map-handoff`라는 known red가 하나 남아 있음
 
-가 실제 artifact로 확인됐다.
-
-### 3. 속도
-
-하네스는 지금 예전보다 훨씬 덜 굼뜨다.
-
-- 무의미하게 오래 기다리는 시간을 줄였고
-- 화면 캡처 재시도도 짧게 줄였고
-- 이 속도 개선이 짧은 smoke뿐 아니라 더 긴 run에서도 유지됐다
-
-### 4. 장기 실행 연속성
-
-장기 실행에서 아래 흐름이 여러 번 이어지는 것이 확인됐다.
-
-- 전투
-- 보상 선택
-- 맵으로 복귀
-- 다음 노드 클릭
-- 상점 방문
-- 다시 맵 복귀
-- 다음 전투
-
-그리고 더 중요한 건:
-
-- 인공 step 제한에 걸려 멈춘 것이 아니라
-- 실제 플레이 도중 엘리트전에서 패배하는 자연스러운 종료 지점까지 갔다
-
-즉:
+즉 요약하면:
 
 ```text
-"하네스가 중간에 멈춘 것"이 아니라
-"게임 한 판이 실제로 진행되다가 자연스럽게 끝난 것"
+reward aftermath 이후
+WaitMap / ChooseFirstNode / map-node routing family가
+아직 완전히 닫히지 않았다
 ```
-
-이 확인됐다.
-
-### 5. replay/parity 점검
-
-최신 ownership 정규화와 속도 개선 뒤에도,  
-saved request를 그대로 읽은 경우와 request를 다시 rebuilt한 경우가 같은 결론을 내는지 대표 장면 묶음으로 다시 확인했다.
-
-지금은 다음이 준비돼 있다.
-
-- `tests/replay-fixtures/gui-smoke-parity-scenes.json`
-- `replay-test`
-- `replay-parity-test`
-- [verify-m6-parity-closeout-20260324-0034](./../../artifacts/replay-audit/verify-m6-parity-closeout-20260324-0034)
-
-즉:
-
-```text
-"이제는 live에서만 맞고 replay에서는 어긋나는가?"
-```
-
-를 대표 장면 기준으로 다시 막아 둔 상태다.
-
-## 아직 조금 더 확인해야 하는 것
-
-### 1. M7: 비전투 화면
-
-고대 이벤트/맵 겹침은 많이 정리됐다.  
-하지만 아래는 아직 한 번 더 정리해야 한다.
-
-- 일반 이벤트
-- 모달/오버레이
-- 종료 화면 이후 메뉴 흐름
-- 재시작 이후의 화면 전환
-
-즉:
-
-```text
-"비전투 화면 전체가 안정적이다"
-```
-
-라고 말하려면 아직 목록화와 판정이 더 필요하다.
-
-### 2. M8: 전투
-
-지금은 더 이상
-
-```text
-"첫 전투조차 제대로 못 넘긴다"
-```
-
-는 상태가 아니다.
-
-하지만 그렇다고
-
-```text
-"전투 품질도 충분히 닫혔다"
-```
-
-고 말하기에는 아직 이르다.
-
-남아 있는 확인 포인트는 예를 들면:
-
-- 가끔 나오는 no-op 성향
-- non-enemy/self 계열 확인 흐름
-- 엘리트전처럼 더 강한 전투에서의 품질
-
-## 아직 안 닫힌 것
-
-### 1. 패배 후 재시작 자동화
-
-이번 장기 run은 자연 패배까지 갔다.  
-하지만 그 다음까지는 아직 닫지 않았다.
-
-즉 아직 미완료인 건:
-
-- 패배 화면을 넘기고
-- 재시작을 타고
-- 다음 시도의 첫 화면이 실제로 열리는지
-
-이 자동화다.
-
-이건 중요하지만, 지금은 `M5 전체 미완료`로 되돌리는 대신  
-**남은 lifecycle 자동화 과제**로 따로 추적한다.
-
-### 2. M9 준비 문서
-
-`M9`는 “조언 품질” 단계다.  
-그런데 아직 아래가 완전히 고정되지는 않았다.
-
-- 어떤 장면 묶음을 평가 대상으로 삼을지
-- 어떤 artifact 묶음을 보고 판정할지
-- 정직성/유용성 기준을 어디까지 요구할지
-
-즉 조언 품질을 보기 전에,  
-**무엇을 가지고 좋다/나쁘다를 판단할지** 먼저 정해야 한다.
 
 ## 지금 작업할 때의 원칙
 
-### 1. 하네스는 제품이 아니라 검증 도구다
+### 1. 큰 리팩터링은 다시 열지 않는다
 
-`Smoke Harness`는 계속 개발용 검증 도구로 본다.
+구조 분리 작업은 현재 기준선으로 본다.
 
-즉:
+앞으로는:
 
-- 하네스의 내부 lifecycle 규칙
-- 제품 마일스톤 진행 순서
+- 새 semantic gap을 좁게 수정하고
+- 관련 self-test / replay / live evidence만 확인하는 식으로 가는 게 맞습니다.
 
-는 같은 말이 아니다.
+### 2. 새 문제는 새 owner 파일에서 본다
 
-### 2. 애매한 상태가 나오면 먼저 게임 소스를 본다
+예전처럼 `Program.cs` 하나만 보면 안 됩니다.
 
-겹친 화면이나 이상한 전환이 나오면,
+지금은 보통 아래 중 2~3개 파일만 보면 됩니다.
+
+- [Program.PhaseLoopRouting.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
+- [Program.AllowedActions.NonCombat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.NonCombat.cs)
+- [Observer/GuiSmokeObserverPhaseHeuristics.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/GuiSmokeObserverPhaseHeuristics.cs)
+- [AutoDecisionProvider.NonCombatSceneState.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
+- [AutoDecisionProvider.NonCombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
+
+### 3. replay red와 live blocker를 같이 본다
+
+parity에서 붉은 장면 하나가 있고 live에서도 비슷한 family가 보이면, 그 둘이 같은 원인인지 먼저 확인해야 합니다.
+
+## 한 줄 요약
 
 ```text
-"스크린샷 규칙을 더 붙이기"
+하네스 구조 정리는 끝났고,
+이제 남은 건 reward aftermath 이후 map routing gap을
+새 owner 구조 안에서 좁게 닫는 것이다.
 ```
-
-보다 먼저:
-
-- `artifacts/knowledge/decompiled`
-- runtime ownership state
-
-를 확인한다.
-
-즉:
-
-```text
-"게임이 스스로 지금 상태를 뭐라고 말하는가"
-```
-
-를 먼저 보는 게 원칙이다.
-
-### 3. 큰 리팩터링보다 작은 다음 작업을 고른다
-
-지금은 전면 재작성 타이밍이 아니다.
-
-순서는:
-
-1. M7 평가
-2. M8 평가
-3. M9 준비 문서 정리
-4. 그 결과를 바탕으로 작은 다음 작업 선택
-
-이다.
-
-## 바로 다음에 할 일
-
-### 1. M7 Non-Combat Stability Evaluation
-
-비전투 화면 쪽에서:
-
-- 지금 당장 막는 문제
-- 지금은 받아들일 수 있는 잔여 문제
-
-를 나눈다.
-
-### 2. M8 Combat Stability Evaluation
-
-전투를:
-
-- 안전성
-- 품질
-
-로 나눠 보고, 어디까지 닫았는지 판정한다.
-
-### 3. M9 준비 문서
-
-조언 품질을 평가할 장면 묶음과 기준 문서를 정리한다.
-
-## 용어를 쉽게 풀면
-
-### `valid trust attempt`
-
-믿고 판정해도 되는 시도 실행.
-
-### `quartet/accounting semantics`
-
-시도 번호, 세션 요약, 재시작 기록, 감독 상태 파일이 서로 같은 이야기를 하도록 맞춘 규칙.
-
-### `mixed-state`
-
-이벤트 잔상과 맵처럼 서로 다른 화면 성격이 한 프레임에 같이 보이는 상태.
-
-### `terminal boundary`
-
-전투 승리/패배처럼 한 판의 흐름이 실제로 끝나는 지점.
-
-### `lifecycle automation`
-
-한 판이 끝난 뒤 다음 화면, 다음 시도, 다음 판으로 이어지는 자동화 흐름.
-
-## 같이 읽으면 좋은 문서
-
-1. [PROJECT_STATUS.md](./PROJECT_STATUS.md)
-2. [AI_HANDOFF_PROMPT_KO.md](./AI_HANDOFF_PROMPT_KO.md)
-3. [ROADMAP.md](../ROADMAP.md)

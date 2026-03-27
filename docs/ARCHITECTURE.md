@@ -111,30 +111,32 @@ advisor mode는 production read-only surface입니다.
 
 ### 4.3 Harness Mode
 
-harness mode는 test-only action-enabled 경로입니다.
+harness mode는 test-only action-enabled 검증 경로입니다.
 
-포함 대상:
+현재는 아래 세 층으로 읽는 것이 맞습니다.
 
-- scenario runner
-- legacy scenario runner
-- smoke scenario loop
-- action executor
-- recovery manager
-- acceptance evaluator
-- replay controller
-- test-only action ingress bridge
+- legacy harness
+  - `src/Sts2AiCompanion.Harness`
+  - scenario runner / action executor abstraction / recovery / evaluation / replay
+- in-game test ingress
+  - `src/Sts2ModAiCompanion.HarnessBridge`
+  - dormant / arm / inventory / queue / test-only actuation ingress
+- GUI smoke harness
+  - `src/Sts2GuiSmokeHarness`
+  - bootstrap/deploy/trust/session orchestration
+  - observer-backed scene authority + screenshot analysis
+  - step request / allowed action / decision / actuation loop
+  - long-run artifacts / supervisor / plateau diagnostics
 
 용어 규칙:
+
 - `Harness Bridge`는 `src/Sts2ModAiCompanion.HarnessBridge`를 가리킨다.
-- `Smoke Scenario Loop`는 GUI 스모크 하네스 내부 상태 머신을 가리킨다.
+- `Smoke Scenario Loop`는 `src/Sts2GuiSmokeHarness` 내부 step loop를 가리킨다.
 - `Legacy Scenario Runner`는 `src/Sts2AiCompanion.Harness/Scenarios/ScenarioRunner.cs`를 가리킨다.
 
-현재 구현상 주요 위치:
-
-- `src/Sts2AiCompanion.Harness`
-- `src/Sts2ModAiCompanion.HarnessBridge`
-- `scenarios/`
-- `tests/replay-fixtures/`
+상세 file owner와 current module map은
+[GUI_SMOKE_HARNESS_ARCHITECTURE.md](./reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)
+를 기준으로 본다.
 
 ## 5. 외부 Host
 
@@ -171,3 +173,16 @@ harness mode는 test-only action-enabled 경로입니다.
 - 게임이 죽지 않아도 외부 앱은 죽을 수 있어야 함
 - 외부 앱이 죽어도 게임은 계속 진행 가능해야 함
 - harness action layer는 production build와 계약을 공유하지 않도록 분리
+
+## 8. Harness Architecture Pointer
+
+하네스 내부 구조는 이제 별도 문서로 본다.
+
+- current smoke harness module map:
+  - [GUI_SMOKE_HARNESS_ARCHITECTURE.md](./reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)
+- module boundary / refactor contract:
+  - [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](./contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)
+- startup/deploy sequencing:
+  - [STARTUP_DEPLOY_CONTROL_LAYER.md](./contracts/STARTUP_DEPLOY_CONTROL_LAYER.md)
+- runner/supervisor chronology:
+  - [RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](./contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)
