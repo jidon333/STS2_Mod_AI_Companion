@@ -589,8 +589,33 @@ static async Task<bool> RunBootstrapPhaseAsync(
         var capturePrefix = Path.Combine(bootstrapRoot, captureIndex.ToString("0000"));
         var screenshotPath = capturePrefix + ".screen.png";
         var observerStatePath = capturePrefix + ".observer.state.json";
-        if (!captureService.TryCapture(window, screenshotPath))
+        var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
+        if (!captureResult.Succeeded)
         {
+            if (captureResult.FailureKind is CaptureBoundaryFailureKind.TimedOut or CaptureBoundaryFailureKind.Exception)
+            {
+                var bootstrapCaptureFailureReason = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
+                    ? "bootstrap-capture-timeout"
+                    : "bootstrap-capture-exception";
+                RecordBootstrapFailure(bootstrapCaptureFailureReason, new Dictionary<string, string?>
+                {
+                    ["detail"] = captureResult.Detail,
+                    ["exceptionType"] = captureResult.Exception?.GetType().Name,
+                });
+                bootstrapVideo.Complete(
+                    keepRecording: true,
+                    completionReason: bootstrapCaptureFailureReason);
+                try
+                {
+                    await StopGameProcessesAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+
+                return false;
+            }
+
             if (WindowLocator.IsHungWindow(window))
             {
                 RecordBootstrapFailure("bootstrap-window-not-responding");
@@ -988,9 +1013,57 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         LogHarness($"step={stepIndex} phase={phase} window={DescribeWindow(window)}");
         var stepPrefix = Path.Combine(stepsRoot, stepIndex.ToString("0000"));
         var screenshotPath = stepPrefix + ".screen.png";
-        if (!captureService.TryCapture(window, screenshotPath))
+        var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
+        if (!captureResult.Succeeded)
         {
             var captureFailureObserver = observerReader.Read();
+            if (captureResult.FailureKind is CaptureBoundaryFailureKind.TimedOut or CaptureBoundaryFailureKind.Exception)
+            {
+                ResetDecisionWaitTracking();
+                var captureTerminalSignal = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
+                    ? "capture-timeout"
+                    : "capture-exception";
+                var captureFailureMessage = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
+                    ? "capture-timeout"
+                    : $"capture-exception: {captureResult.Detail ?? captureResult.Exception?.GetType().Name ?? "unknown"}";
+                LogHarness($"step={stepIndex} {captureTerminalSignal} detail={captureResult.Detail ?? "none"}");
+                logger.AppendTrace(new GuiSmokeTraceEntry(
+                    DateTimeOffset.UtcNow,
+                    stepIndex,
+                    phase.ToString(),
+                    captureTerminalSignal,
+                    captureFailureObserver.CurrentScreen,
+                    captureFailureObserver.InCombat,
+                    null));
+                AppendProgressIfLongRun(
+                    isLongRun,
+                    logger,
+                    EvaluateStepProgress(
+                        stepIndex,
+                        phase,
+                        "capture-boundary-failure",
+                        captureFailureObserver,
+                        null,
+                        null,
+                        false,
+                        "capture-boundary",
+                        false,
+                        sameActionStallCount,
+                        captureTerminalSignal));
+                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                    phase.ToString(),
+                    captureFailureMessage,
+                    captureFailureObserver.CurrentScreen,
+                    captureFailureObserver.InCombat,
+                    screenshotPath));
+                return CompleteAttempt(
+                    1,
+                    "failed",
+                    captureFailureMessage,
+                    terminalCause: captureTerminalSignal,
+                    failureClass: ClassifyFailureForAttempt(phase, captureFailureObserver, captureTerminalSignal, launchFailed: false));
+            }
+
             if (WindowLocator.IsHungWindow(window))
             {
                 ResetDecisionWaitTracking();
@@ -4131,14 +4204,78 @@ static void RunSelfTest()
         explicitMapPointDecision is not null,
         "Explicit map point fixture should remain decisionable after source correction.");
 
-    Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.HandleCombat) == 140, "Combat decision wait minimum should use the reduced fast-path baseline.");
-    Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.WaitRunLoad) == 260, "Run-load waits should keep a slightly higher minimum than stable foreground phases.");
-    Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.HandleEvent) == 200, "Stable non-combat foreground phases should use the reduced baseline wait.");
+        Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.HandleCombat) == 140, "Combat decision wait minimum should use the reduced fast-path baseline.");
+        Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.WaitRunLoad) == 260, "Run-load waits should keep a slightly higher minimum than stable foreground phases.");
+        Assert(GetDecisionWaitMinimumMs(GuiSmokePhase.HandleEvent) == 200, "Stable non-combat foreground phases should use the reduced baseline wait.");
         Assert(GetLaunchPollingIntervalMs() == 250, "Launch/focus polling should use the faster cadence.");
         Assert(ScreenCaptureService.GetCaptureRetryDelayMs(0) == 0, "Initial capture attempt should not pay retry backoff.");
         Assert(ScreenCaptureService.GetCaptureRetryDelayMs(1) == 200, "Second capture attempt should use the short backoff.");
         Assert(ScreenCaptureService.GetCaptureRetryDelayMs(2) == 350, "Third capture attempt should use the medium backoff.");
         Assert(ScreenCaptureService.GetCaptureRetryDelayMs(3) == 500, "Later capture attempts should clamp to the bounded max backoff.");
+        var detailedCaptureService = new ScreenCaptureService();
+        var detailedCaptureRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-capture-boundary-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(detailedCaptureRoot);
+        try
+        {
+            var captureTarget = new WindowCaptureTarget(IntPtr.Zero, "test", new Rectangle(0, 0, 32, 32), true, false);
+
+            var successfulCapturePath = Path.Combine(detailedCaptureRoot, "success.png");
+            var successfulCaptureResult = detailedCaptureService.TryCaptureDetailed(
+                captureTarget,
+                successfulCapturePath,
+                TimeSpan.FromSeconds(1),
+                static _ =>
+                {
+                    var bitmap = new Bitmap(8, 8);
+                    using var graphics = Graphics.FromImage(bitmap);
+                    graphics.Clear(Color.White);
+                    return bitmap;
+                });
+            Assert(successfulCaptureResult.Succeeded && File.Exists(successfulCapturePath), "Detailed capture should persist a valid bitmap on success.");
+
+            var blackFrameCaptureResult = detailedCaptureService.TryCaptureDetailed(
+                captureTarget,
+                Path.Combine(detailedCaptureRoot, "black-frame.png"),
+                TimeSpan.FromSeconds(1),
+                static _ => new Bitmap(8, 8));
+            Assert(
+                !blackFrameCaptureResult.Succeeded && blackFrameCaptureResult.FailureKind == CaptureBoundaryFailureKind.UnusableFrame,
+                "Detailed capture should classify a mostly black bitmap as an unusable frame.");
+
+            var timeoutCaptureResult = detailedCaptureService.TryCaptureDetailed(
+                captureTarget,
+                Path.Combine(detailedCaptureRoot, "timeout.png"),
+                TimeSpan.FromMilliseconds(25),
+                static _ =>
+                {
+                    Thread.Sleep(250);
+                    var bitmap = new Bitmap(8, 8);
+                    using var graphics = Graphics.FromImage(bitmap);
+                    graphics.Clear(Color.White);
+                    return bitmap;
+                });
+            Assert(
+                !timeoutCaptureResult.Succeeded && timeoutCaptureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut,
+                "Detailed capture should classify an over-budget capture as capture-timeout.");
+
+            var exceptionCaptureResult = detailedCaptureService.TryCaptureDetailed(
+                captureTarget,
+                Path.Combine(detailedCaptureRoot, "exception.png"),
+                TimeSpan.FromSeconds(1),
+                static _ => throw new InvalidOperationException("boom"));
+            Assert(
+                !exceptionCaptureResult.Succeeded
+                && exceptionCaptureResult.FailureKind == CaptureBoundaryFailureKind.Exception
+                && exceptionCaptureResult.Exception is InvalidOperationException,
+                "Detailed capture should classify thrown capture failures as capture-exception.");
+        }
+        finally
+        {
+            if (Directory.Exists(detailedCaptureRoot))
+            {
+                Directory.Delete(detailedCaptureRoot, recursive: true);
+            }
+        }
         var replayParitySummary = BuildReplayParityDecisionSummary(
             new GuiSmokeStepRequest(
                 "run",
@@ -33036,6 +33173,8 @@ static class MapForegroundReconciliation
 
 sealed class ScreenCaptureService
 {
+    internal static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(15);
+
     internal static int GetCaptureRetryDelayMs(int attempt)
     {
         return attempt switch
@@ -33049,15 +33188,78 @@ sealed class ScreenCaptureService
 
     public bool TryCapture(WindowCaptureTarget target, string outputPath)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-        using var bitmap = TryCaptureProcessWindow(target);
-        if (bitmap is null)
-        {
-            return false;
-        }
+        return TryCaptureDetailed(target, outputPath, CaptureTimeout).Succeeded;
+    }
 
-        bitmap.Save(outputPath, ImageFormat.Png);
-        return true;
+    internal CaptureBoundaryResult TryCaptureDetailed(
+        WindowCaptureTarget target,
+        string outputPath,
+        TimeSpan timeout,
+        Func<WindowCaptureTarget, Bitmap?>? captureOverride = null)
+    {
+        try
+        {
+            Bitmap? bitmap;
+            try
+            {
+                bitmap = Task.Factory.StartNew(
+                        () => (captureOverride ?? TryCaptureProcessWindow)(target),
+                        CancellationToken.None,
+                        TaskCreationOptions.LongRunning,
+                        TaskScheduler.Default)
+                    .WaitAsync(timeout)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (TimeoutException exception)
+            {
+                return new CaptureBoundaryResult(
+                    false,
+                    CaptureBoundaryFailureKind.TimedOut,
+                    exception.Message,
+                    exception);
+            }
+            catch (Exception exception)
+            {
+                return new CaptureBoundaryResult(
+                    false,
+                    CaptureBoundaryFailureKind.Exception,
+                    exception.Message,
+                    exception);
+            }
+
+            if (bitmap is null)
+            {
+                return new CaptureBoundaryResult(
+                    false,
+                    CaptureBoundaryFailureKind.UnusableFrame,
+                    "capture returned no bitmap");
+            }
+
+            using (bitmap)
+            {
+                if (IsMostlyBlack(bitmap))
+                {
+                    return new CaptureBoundaryResult(
+                        false,
+                        CaptureBoundaryFailureKind.UnusableFrame,
+                        "capture returned a mostly black bitmap");
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+                bitmap.Save(outputPath, ImageFormat.Png);
+            }
+
+            return new CaptureBoundaryResult(true, CaptureBoundaryFailureKind.None, null);
+        }
+        catch (Exception exception)
+        {
+            return new CaptureBoundaryResult(
+                false,
+                CaptureBoundaryFailureKind.Exception,
+                exception.Message,
+                exception);
+        }
     }
 
     private static Bitmap? TryCaptureProcessWindow(WindowCaptureTarget target)
@@ -33324,6 +33526,20 @@ sealed record WindowCaptureTarget(
     Rectangle Bounds,
     bool IsFallback,
     bool IsMinimized);
+
+enum CaptureBoundaryFailureKind
+{
+    None,
+    UnusableFrame,
+    TimedOut,
+    Exception,
+}
+
+sealed record CaptureBoundaryResult(
+    bool Succeeded,
+    CaptureBoundaryFailureKind FailureKind,
+    string? Detail,
+    Exception? Exception = null);
 
 static class WindowLocator
 {

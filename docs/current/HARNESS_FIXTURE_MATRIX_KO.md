@@ -26,7 +26,7 @@ coverage status 의미:
 |---|---|---|---|---|---|
 | `VAL-01` | validation | deploy/runtime identity | green | [SMOKE_TEST_CHECKLIST.md](../runbooks/SMOKE_TEST_CHECKLIST.md), [PROJECT_STATUS.md](./PROJECT_STATUS.md) startup/trust roots | current `main` 운영 규칙 고정 |
 | `VAL-02` | validation | manual-clean-boot | green | [ROADMAP.md](../ROADMAP.md) M4, [PROJECT_STATUS.md](./PROJECT_STATUS.md) bootstrap/trust roots | trust gate는 current baseline에 포함 |
-| `VAL-03` | any phase post-log | capture boundary | partial | `Program.cs` capture retry/backoff self-test, bounded failure rules are not fully canonical on current `main` | silent-hang hardening은 추가 evidence 필요 |
+| `VAL-03` | any phase post-log | capture boundary | partial | `Program.cs` detailed capture boundary self-tests and bounded failure emission now exist on current `main`; fresh live proof is still pending | silent-hang hardening live evidence still needed |
 | `MENU-01` | `WaitMainMenu` / `EnterRun` | main menu | green | `Program.cs` main-menu / enter-run self-tests, [SMOKE_TEST_CHECKLIST.md](../runbooks/SMOKE_TEST_CHECKLIST.md) | continue vs singleplayer contract 고정 |
 | `MENU-02` | `EnterRun` | continue lane | green | `GetPostEnterRunPhase`, replay parity summaries, main-menu self-tests | continue preferred 유지 |
 | `MENU-03` | `WaitRunLoad` | transition wait | green | `Program.cs` `WaitRunLoad should remain wait-only while explicit transition truth is still active.` | explicit transition truth wait-only |
@@ -54,7 +54,7 @@ coverage status 의미:
 | `COMBAT-06` | `HandleCombat` | acknowledged transit wait | partial | safe-transit plateau fix lives outside current `main` baseline as high-signal branch evidence | canonical main coverage incomplete |
 | `COMBAT-07` | `HandleCombat` | enemy-turn closed play phase | partial | legitimate wait semantics exist in current code and self-tests, but current-main replay/live evidence is thin | keep wait semantics explicit |
 | `COMBAT-08` | `HandleCombat` | next-round reopen | partial | prior replay/live closure referenced in conversation, not yet promoted to current `main` docs | needs current-main replay/live row |
-| `COMBAT-09` | post-wait recapture | capture/request continuity | missing | no canonical current-main root proves bounded recapture after legitimate wait | immediate gap |
+| `COMBAT-09` | post-wait recapture | capture/request continuity | partial | `Program.cs` bounded capture boundary self-tests now cover timeout/exception/unusable-frame paths; fresh current-main combat wait root still missing | live proof of legitimate wait -> next capture/failure still needed |
 | `COMBAT-10` | combat -> rewards | room handoff | green | [PROJECT_STATUS.md](./PROJECT_STATUS.md) long-run continuity roots, repeated combat/reward continuity | strong long-run evidence in status doc |
 
 ## Event / Ancient / Treasure / Rest
@@ -128,7 +128,7 @@ coverage status 의미:
 | Priority | Work Item | Why |
 |---|---|---|
 | P0 | reward post-click release/handoff canonicalization | `REWARD-03` / `REWARD-05` / `REWARD-06` are still partial and `REWARD-09` is missing |
-| P0 | combat post-wait recapture canonical coverage | `COMBAT-09` is still missing |
+| P0 | combat post-wait recapture canonical coverage | `COMBAT-09` is code-covered and self-test-covered, but still partial until fresh current-main live evidence exists |
 | P1 | owner/action/release duplication inventory for rewards and events | same state meaning still split across multiple helpers |
 | P1 | current-main live evidence refresh for noncombat mixed aftermath | status docs are stronger than the state-specific matrix today |
 | P2 | strict lifecycle chain evidence | `TERM-02` remains intentionally open |
