@@ -1,0 +1,33 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
+using System.Windows.Forms;
+using Sts2AiCompanion.Foundation.Contracts;
+using Sts2ModAiCompanion.Mod;
+using Sts2ModKit.Core.Configuration;
+using Sts2ModKit.Core.Harness;
+using Sts2ModKit.Core.LiveExport;
+using static GuiSmokeChoicePrimitiveSupport;
+
+static class GuiSmokeCombatConstants
+{
+    public const double NonEnemyPrimeNormalizedX = 0.280;
+    public const double NonEnemyPrimeNormalizedY = 0.620;
+    public const double NonEnemyConfirmNormalizedX = 0.500;
+    public const double NonEnemyConfirmNormalizedY = 0.560;
+    public const int NonEnemyConfirmHoldMs = 75;
+    public static readonly (double X, double Y, string Label)[] EnemyTargetCandidates =
+    {
+        (0.744, 0.542, "auto-target enemy"),
+        (0.708, 0.532, "auto-target enemy recenter"),
+        (0.778, 0.556, "auto-target enemy alternate"),
+    };
+}
