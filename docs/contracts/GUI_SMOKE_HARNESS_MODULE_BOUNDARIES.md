@@ -111,13 +111,19 @@ current blocker, latest authoritative root, active session handoff는 이 문서
 - [`Program.cs`](../../src/Sts2GuiSmokeHarness/Program.cs) `56` lines
 - [`Program.Runner.AttemptLifecycle.cs`](../../src/Sts2GuiSmokeHarness/Program.Runner.AttemptLifecycle.cs)
 - [`Program.PhaseLoopRouting.cs`](../../src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
-- [`Program.SelfTests.CombatContracts.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.CombatContracts.cs)
-- [`Program.SelfTests.PhaseRouting.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.PhaseRouting.cs)
+- [`Program.SelfTests.StartupRuntimeEvidence.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.StartupRuntimeEvidence.cs)
+- [`Program.SelfTests.NonCombatForegroundOwnership.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.NonCombatForegroundOwnership.cs)
 
 구조적으로 가장 큰 문제는 아래 둘이다.
 
 - `Program.cs` shell-only는 달성했지만, phase/loop routing helper가 아직 큰 단일 file band로 남아 있다
-- `RunAttemptAsync` seam은 분리됐지만 self-test hotspot과 일부 runner/loop helper band가 여전히 크게 남아 있다
+- `RunAttemptAsync` seam은 분리됐지만 runner/loop helper band와 일부 self-test hotspot이 여전히 크게 남아 있다
+
+최근 완료된 큰 분해:
+
+- `CombatContracts` self-test는 band별 sibling files로 분리됐다
+- `PhaseRouting` self-test는 mixed-state / enter-run / run-load / embark band로 분리됐다
+- `NonCombatDecisionContracts` self-test는 reward / subtype-event band로 분리됐다
 
 ## 4. Target Module Boundaries
 
