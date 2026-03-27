@@ -609,7 +609,7 @@ internal static partial class Program
                         GuiSmokePhase.HandleShop.ToString(),
                         "Prefer shop proceed after a bounded purchase.",
                         DateTimeOffset.UtcNow,
-                        null,
+                        "shop.png",
                         new WindowBounds(0, 0, 1280, 720),
                         "phase:handleshop|screen:shop",
                         "0001",

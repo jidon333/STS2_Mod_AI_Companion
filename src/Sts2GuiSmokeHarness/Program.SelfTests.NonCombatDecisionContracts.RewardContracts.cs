@@ -215,8 +215,9 @@ internal static partial class Program
                 null);
             var rewardAftermathContradictionState = RewardObserverSignals.TryGetState(rewardAftermathContradictionObserver.Summary);
             Assert(rewardAftermathContradictionState is not null, "Contradictory reward aftermath observer should still parse as a reward screen state.");
-            Assert(!rewardAftermathContradictionState.ForegroundOwned, "Map-current reward teardown should override stale top-overlay foreground ownership.");
-            Assert(rewardAftermathContradictionState.TeardownInProgress, "Map-current reward teardown should be recognized even when old metadata still claims foreground ownership.");
+            var parsedRewardAftermathContradictionState = rewardAftermathContradictionState!;
+            Assert(!parsedRewardAftermathContradictionState.ForegroundOwned, "Map-current reward teardown should override stale top-overlay foreground ownership.");
+            Assert(parsedRewardAftermathContradictionState.TeardownInProgress, "Map-current reward teardown should be recognized even when old metadata still claims foreground ownership.");
             Assert(
                 !TryReopenMixedStateModalBranchFromWaitMap(
                     rewardAftermathContradictionObserver,

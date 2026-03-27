@@ -81,7 +81,7 @@ current blocker, latest authoritative root, active session handoff는 이 문서
 
 ## 3. Current Structure Snapshot
 
-현재 구조는 “logical modularity는 꽤 생겼지만 physical modularity는 아직 불완전한 상태”로 읽는다.
+현재 구조는 production owner가 대부분 분리된 상태로 읽는다. 남은 작업은 대형 monolith 해체라기보다 localized maintenance와 follow-up cleanup에 가깝다.
 
 이미 canonical owner 방향으로 분리된 영역:
 
@@ -114,7 +114,7 @@ current blocker, latest authoritative root, active session handoff는 이 문서
 - [`Program.SelfTests.StartupRuntimeEvidence.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.StartupRuntimeEvidence.cs)
 - [`Program.SelfTests.NonCombatForegroundOwnership.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.NonCombatForegroundOwnership.cs)
 
-구조적으로 가장 큰 문제는 아래 둘이다.
+구조적으로 가장 큰 남은 포인트는 아래 둘이다.
 
 - `Program.cs` shell-only는 달성했지만, phase/loop routing helper가 아직 큰 단일 file band로 남아 있다
 - `RunAttemptAsync` seam은 분리됐지만 runner/loop helper band와 일부 self-test hotspot이 여전히 크게 남아 있다
@@ -171,6 +171,8 @@ current blocker, latest authoritative root, active session handoff는 이 문서
 - category file은 assertion과 fixture orchestration만 남기고, production semantics의 canonical owner가 되지 않는다.
 
 ## 5. Ordered Extraction Waves
+
+아래 8개 canonical wave는 현재 `main`에서 모두 완료됐다. 이 섹션은 앞으로의 todo list가 아니라, 현재 구조를 만든 extraction order와 cleanup 기준을 기록하는 완료 이력으로 유지한다.
 
 아래 순서가 `GuiSmokeHarness` 장기 리팩터링의 canonical order다.
 

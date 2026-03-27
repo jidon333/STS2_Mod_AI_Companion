@@ -23,15 +23,81 @@ internal static partial class Program
     {
         RunCliStartupSelfTests();
         RunCaptureReplaySelfTests();
-        RunPhaseRoutingSelfTests();
+        RunPhaseRoutingSelfTestBands();
         RunNonCombatForegroundOwnershipSelfTests();
-        RunNonCombatDecisionContractsSelfTests();
-        RunCombatContractsSelfTests();
+        RunNonCombatDecisionContractBands();
+        RunCombatContractBands();
         RunEventRewardSubstateSelfTests();
         RunManualCleanBootSelfTests();
         RunStartupRuntimeEvidenceSelfTests();
         RunStallSentinelSelfTests();
         RunLongRunSupervisorSelfTests();
+    }
+
+    private static void RunPhaseRoutingSelfTestBands()
+    {
+        var request = CreateBaseSelfTestRequest();
+
+        RunPhaseRoutingCombatAndMixedStateSelfTests(request);
+        RunPhaseRoutingEnterRunAndPostNodeSelfTests();
+        RunPhaseRoutingRunLoadRecoverySelfTests();
+        RunPhaseRoutingEmbarkWaitsSelfTests();
+    }
+
+    private static void RunNonCombatDecisionContractBands()
+    {
+        var rewardRankingScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-reward-ranking-self-test-{Guid.NewGuid():N}.png");
+        try
+        {
+            using (var bitmap = new Bitmap(1280, 720))
+            using (var graphics = Graphics.FromImage(bitmap))
+            using (var panelBrush = new SolidBrush(Color.FromArgb(222, 205, 168)))
+            using (var arrowBrush = new SolidBrush(Color.FromArgb(220, 60, 55)))
+            {
+                graphics.Clear(Color.Black);
+                graphics.FillRectangle(panelBrush, new Rectangle(420, 180, 480, 320));
+                graphics.FillEllipse(arrowBrush, new Rectangle(595, 450, 90, 70));
+                bitmap.Save(rewardRankingScreenshotPath, ImageFormat.Png);
+            }
+
+            RunNonCombatRewardDecisionContractSelfTests(rewardRankingScreenshotPath);
+            RunNonCombatSubtypeDecisionContractSelfTests(rewardRankingScreenshotPath);
+        }
+        finally
+        {
+            if (File.Exists(rewardRankingScreenshotPath))
+            {
+                File.Delete(rewardRankingScreenshotPath);
+            }
+        }
+    }
+
+    private static void RunCombatContractBands()
+    {
+        var combatNoOpScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-noop-self-test-{Guid.NewGuid():N}.png");
+        var handleCombatParityRequestPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-handle-combat-parity-{Guid.NewGuid():N}.request.json");
+        var runtimeStateOnlyScreenshotPath = Path.Combine(Path.GetTempPath(), "sts2-runtime-state-only-self-test-missing.png");
+
+        try
+        {
+            RunCombatContractsNoOpAndBlockedLaneSelfTests(combatNoOpScreenshotPath);
+            RunCombatContractsNonEnemyAndRuntimeStateSelfTests(combatNoOpScreenshotPath);
+            RunCombatContractsParityAndBarrierSelfTests(combatNoOpScreenshotPath, handleCombatParityRequestPath, runtimeStateOnlyScreenshotPath);
+            RunCombatContractsTargetSelectionSelfTests(combatNoOpScreenshotPath);
+            RunCombatContractsFallbacksAndProbeGraceSelfTests(combatNoOpScreenshotPath);
+        }
+        finally
+        {
+            if (File.Exists(handleCombatParityRequestPath))
+            {
+                File.Delete(handleCombatParityRequestPath);
+            }
+
+            if (File.Exists(combatNoOpScreenshotPath))
+            {
+                File.Delete(combatNoOpScreenshotPath);
+            }
+        }
     }
 
     private static GuiSmokeStepDecision InvokeForegroundAwareNonCombatWaitDecision(
