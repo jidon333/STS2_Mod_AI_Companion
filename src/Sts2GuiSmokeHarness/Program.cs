@@ -10469,6 +10469,147 @@ static void RunSelfTest()
             && !string.Equals(noOpFallbackOrderingSemantic, "click end turn", StringComparison.OrdinalIgnoreCase),
             "Combat decisioning should not fall straight to end turn while another safe combat fallback still exists after a blocked attack lane.");
 
+        var blockedOpenAttackSelectionObserver = new ObserverState(
+            new ObserverSummary(
+                "combat",
+                "combat",
+                true,
+                DateTimeOffset.UtcNow,
+                "inv-blocked-open-attack-selection",
+                true,
+                "mixed",
+                "stable",
+                "episode-blocked-open-attack-selection",
+                "Monster",
+                "combat-targets",
+                1,
+                80,
+                2,
+                new[] { "Jaw Worm" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("enemy-target:jaw-worm:1", "enemy-target", "Jaw Worm", "720,180,180,260", true)
+                    {
+                        TypeName = "enemy-target",
+                        SemanticHints = new[] { "combat-targetable", "combat-hittable", "source:target-manager", "target-id:Jaw Worm" },
+                    },
+                },
+                Array.Empty<ObserverChoice>(),
+                new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.NEOWS_FURY", "Attack", 1),
+                    new ObservedCombatHandCard(2, "CARD.TRUE_GRIT", "Skill", 1),
+                    new ObservedCombatHandCard(3, "CARD.SLIMED", "Status", 1),
+                })
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCardPlayPending"] = "true",
+                    ["combatPlayMode"] = "Play",
+                    ["combatSelectedCardSlot"] = "1",
+                    ["combatSelectedCardType"] = "Attack",
+                    ["combatSelectedCardTargetType"] = "AnyEnemy",
+                    ["combatTargetingInProgress"] = "true",
+                    ["combatTargetableEnemyCount"] = "1",
+                    ["combatTargetableEnemyIds"] = "Jaw Worm",
+                    ["combatRoundNumber"] = "5",
+                    ["combatPlayerActionsDisabled"] = "false",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                    ["combatHistoryStartedCount"] = "11",
+                    ["combatHistoryFinishedCount"] = "11",
+                    ["combatInteractionRevision"] = "11:11:true:true:1",
+                },
+            },
+            null,
+            null,
+            null);
+        var blockedOpenAttackSelectionHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-6)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "click", "combat enemy target Jaw Worm", DateTimeOffset.UtcNow.AddSeconds(-5)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 1", DateTimeOffset.UtcNow.AddSeconds(-4)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-3)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 1", DateTimeOffset.UtcNow.AddSeconds(-2)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 2", DateTimeOffset.UtcNow.AddSeconds(-1)),
+        };
+        var blockedOpenAttackSelectionAllowedActions = BuildAllowedActions(
+            GuiSmokePhase.HandleCombat,
+            blockedOpenAttackSelectionObserver,
+            new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.NEOWS_FURY", "Attack", "AnyEnemy", 1, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.TRUE_GRIT", "Skill", "Self", 1, "self-test"),
+                new CombatCardKnowledgeHint(3, "CARD.SLIMED", "Status", "None", 1, "self-test"),
+            },
+            combatNoOpScreenshotPath,
+            blockedOpenAttackSelectionHistory);
+        Assert(blockedOpenAttackSelectionAllowedActions.Contains("right-click cancel selected card", StringComparer.OrdinalIgnoreCase), "Blocked open attack selections should expose an explicit cancel lane before end turn fallback.");
+        var blockedOpenAttackSelectionDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            11,
+            GuiSmokePhase.HandleCombat.ToString(),
+            "Cancel a blocked open attack selection before falling back to end turn.",
+            DateTimeOffset.UtcNow,
+            combatNoOpScreenshotPath,
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|combat-targeting:active|combat-selection:attacklike|combat-slot:1|combat-play-open",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            blockedOpenAttackSelectionObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.NEOWS_FURY", "Attack", "AnyEnemy", 1, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.TRUE_GRIT", "Skill", "Self", 1, "self-test"),
+                new CombatCardKnowledgeHint(3, "CARD.SLIMED", "Status", "None", 1, "self-test"),
+            },
+            blockedOpenAttackSelectionAllowedActions,
+            blockedOpenAttackSelectionHistory,
+            "Cancel a blocked open attack selection before ending the turn.",
+            null));
+        Assert(CombatDecisionContract.TryMapSemanticAction(
+                new GuiSmokeStepRequest(
+                    "run",
+                    "boot-to-long-run",
+                    11,
+                    GuiSmokePhase.HandleCombat.ToString(),
+                    "Cancel a blocked open attack selection before falling back to end turn.",
+                    DateTimeOffset.UtcNow,
+                    combatNoOpScreenshotPath,
+                    new WindowBounds(0, 0, 1280, 720),
+                    "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|combat-targeting:active|combat-selection:attacklike|combat-slot:1|combat-play-open",
+                    "0001",
+                    1,
+                    3,
+                    false,
+                    "tactical",
+                    null,
+                    blockedOpenAttackSelectionObserver.Summary,
+                    Array.Empty<KnownRecipeHint>(),
+                    Array.Empty<EventKnowledgeCandidate>(),
+                    new[]
+                    {
+                        new CombatCardKnowledgeHint(1, "CARD.NEOWS_FURY", "Attack", "AnyEnemy", 1, "self-test"),
+                        new CombatCardKnowledgeHint(2, "CARD.TRUE_GRIT", "Skill", "Self", 1, "self-test"),
+                        new CombatCardKnowledgeHint(3, "CARD.SLIMED", "Status", "None", 1, "self-test"),
+                    },
+                    blockedOpenAttackSelectionAllowedActions,
+                    blockedOpenAttackSelectionHistory,
+                    "Cancel a blocked open attack selection before ending the turn.",
+                    null),
+                blockedOpenAttackSelectionDecision,
+                out var blockedOpenAttackSelectionSemantic)
+            && string.Equals(blockedOpenAttackSelectionSemantic, "right-click cancel selected card", StringComparison.OrdinalIgnoreCase),
+            "Blocked open attack selections should cancel the lingering card instead of falling straight to end turn.");
+
         var repeatedAttackOrderingObserver = new ObserverState(
             new ObserverSummary(
                 "combat",
@@ -14386,7 +14527,7 @@ static string[] GetCombatAllowedActions(
 
     actions.Add("click end turn");
 
-    if (HasCombatSelectionToCancelFromAnalysis(observer, combatCardKnowledge, analysis, pendingSelection))
+    if (HasCombatSelectionToCancelFromAnalysis(observer, combatCardKnowledge, analysis, pendingSelection, combatContext))
     {
         actions.Add("right-click cancel selected card");
     }
@@ -14579,8 +14720,14 @@ static bool HasCombatSelectionToCancelFromAnalysis(
     ObserverState observer,
     IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
     AutoCombatAnalysis analysis,
-    PendingCombatSelection? pendingSelection)
+    PendingCombatSelection? pendingSelection,
+    ReconstructedHandleCombatContext? combatContext = null)
 {
+    if (HasBlockedOpenAttackSelectionToCancel(observer.Summary, combatCardKnowledge, pendingSelection, combatContext))
+    {
+        return true;
+    }
+
     if (CombatRuntimeStateSupport.HasSelectionToKeep(observer.Summary, combatCardKnowledge))
     {
         return false;
@@ -14588,6 +14735,23 @@ static bool HasCombatSelectionToCancelFromAnalysis(
 
     return analysis.HasSelectedCard
            && !CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, analysis, pendingSelection);
+}
+
+static bool HasBlockedOpenAttackSelectionToCancel(
+    ObserverSummary observer,
+    IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+    PendingCombatSelection? pendingSelection,
+    ReconstructedHandleCombatContext? combatContext)
+{
+    if (combatContext is null
+        || pendingSelection?.Kind != AutoCombatCardKind.AttackLike
+        || pendingSelection.SlotIndex is < 1 or > 5
+        || !CombatRuntimeStateSupport.HasSelectionToKeep(observer, combatCardKnowledge))
+    {
+        return false;
+    }
+
+    return HandleCombatContextSupport.GetCombatNoOpCountForSlot(combatContext, pendingSelection.SlotIndex) >= 2;
 }
 
 static string BuildCombatFailureModeHint(
@@ -24321,6 +24485,30 @@ sealed class AutoDecisionProvider : IGuiDecisionProvider
                 null), out var allowedNonEnemySlotDecision))
             {
                 return allowedNonEnemySlotDecision;
+            }
+        }
+
+        var blockedOpenAttackSelection = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                                         && pendingSelection.SlotIndex is >= 1 and <= 5
+                                         && CombatRuntimeStateSupport.HasSelectionToKeep(request.Observer, request.CombatCardKnowledge)
+                                         && HandleCombatContextSupport.GetCombatNoOpCountForSlot(combatContext, pendingSelection.SlotIndex) >= 2;
+        if (blockedOpenAttackSelection)
+        {
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
+                "act",
+                "right-click",
+                null,
+                null,
+                null,
+                "cancel unresolved selected card",
+                $"The selected attack lane {pendingSelection!.SlotIndex} is still open after repeated no-op outcomes. Cancel it before ending the turn or choosing another lane.",
+                0.84,
+                "combat",
+                250,
+                true,
+                null), out var allowedBlockedSelectionCancelDecision))
+            {
+                return allowedBlockedSelectionCancelDecision;
             }
         }
 
