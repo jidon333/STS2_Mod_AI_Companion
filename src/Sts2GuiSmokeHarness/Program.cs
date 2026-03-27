@@ -61,6 +61,34 @@ catch (Exception exception)
     return 1;
 }
 
+static string ResolveProviderKind(IReadOnlyDictionary<string, string> options, bool isLongRun)
+{
+    if (!options.TryGetValue("--provider", out var providerRaw) || string.IsNullOrWhiteSpace(providerRaw))
+    {
+        return isLongRun
+            ? "auto"
+            : "session";
+    }
+
+    return providerRaw.Trim().ToLowerInvariant() switch
+    {
+        "session" => "session",
+        "auto" => "auto",
+        "headless" => "headless",
+        _ => throw new InvalidOperationException($"Unsupported provider: {providerRaw}"),
+    };
+}
+
+static void ValidateProviderConfiguration(string providerKind, IReadOnlyDictionary<string, string> options)
+{
+    if (string.Equals(providerKind, "headless", StringComparison.OrdinalIgnoreCase)
+        && (!options.TryGetValue("--provider-command", out var providerCommand)
+            || string.IsNullOrWhiteSpace(providerCommand)))
+    {
+        throw new InvalidOperationException("--provider-command is required for --provider headless.");
+    }
+}
+
 static async Task<int> RunScenarioAsync(
     ScaffoldConfiguration configuration,
     string workspaceRoot,
@@ -75,11 +103,8 @@ static async Task<int> RunScenarioAsync(
         throw new InvalidOperationException($"Unsupported scenario: {scenarioId}");
     }
 
-    var providerKind = options.TryGetValue("--provider", out var providerRaw)
-        ? providerRaw
-        : isLongRun
-            ? "headless"
-            : "session";
+    var providerKind = ResolveProviderKind(options, isLongRun);
+    ValidateProviderConfiguration(providerKind, options);
     var liveLayout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
     var harnessLayout = HarnessPathResolver.Resolve(configuration.GamePaths, configuration.Harness);
     var sessionId = $"{DateTimeOffset.Now:yyyyMMdd-HHmmss}-{scenarioId}";
@@ -566,6 +591,23 @@ static async Task<bool> RunBootstrapPhaseAsync(
         var observerStatePath = capturePrefix + ".observer.state.json";
         if (!captureService.TryCapture(window, screenshotPath))
         {
+            if (WindowLocator.IsHungWindow(window))
+            {
+                RecordBootstrapFailure("bootstrap-window-not-responding");
+                bootstrapVideo.Complete(
+                    keepRecording: true,
+                    completionReason: "bootstrap-window-not-responding");
+                try
+                {
+                    await StopGameProcessesAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+
+                return false;
+            }
+
             if (window.IsFallback && !HasLiveGameProcess())
             {
                 consecutiveFallbackCapturesWithoutProcess += 1;
@@ -948,9 +990,35 @@ static async Task<GuiSmokeAttemptResult> RunAttemptAsync(
         var screenshotPath = stepPrefix + ".screen.png";
         if (!captureService.TryCapture(window, screenshotPath))
         {
+            var captureFailureObserver = observerReader.Read();
+            if (WindowLocator.IsHungWindow(window))
+            {
+                ResetDecisionWaitTracking();
+                LogHarness($"step={stepIndex} window not responding; aborting capture-driven wait");
+                logger.AppendTrace(new GuiSmokeTraceEntry(
+                    DateTimeOffset.UtcNow,
+                    stepIndex,
+                    phase.ToString(),
+                    "window-not-responding",
+                    captureFailureObserver.CurrentScreen,
+                    captureFailureObserver.InCombat,
+                    null));
+                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                    phase.ToString(),
+                    "game-window-not-responding",
+                    captureFailureObserver.CurrentScreen,
+                    captureFailureObserver.InCombat,
+                    screenshotPath));
+                return CompleteAttempt(
+                    1,
+                    "failed",
+                    "game-window-not-responding",
+                    terminalCause: "game-window-not-responding",
+                    failureClass: "launch-runtime-noise");
+            }
+
             ResetDecisionWaitTracking();
             consecutiveBlackFrames += 1;
-            var captureFailureObserver = observerReader.Read();
             var transitionBlackFrame = RootSceneTransitionObserverSignals.ShouldTreatCaptureAsTransitionWait(phase, captureFailureObserver.Summary);
             var captureFailureSignal = transitionBlackFrame ? "transition-black-frame" : "capture-unusable";
             LogHarness(transitionBlackFrame
@@ -3184,6 +3252,47 @@ static void RunSelfTest()
         return (GuiSmokeStepDecision)(method.Invoke(null, new object?[] { selfTestRequest, reason, allowFastForegroundWait })
                                       ?? throw new InvalidOperationException("Foreground-aware noncombat wait helper returned null."));
     }
+
+    Assert(
+        string.Equals(ResolveProviderKind(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), isLongRun: true), "auto", StringComparison.OrdinalIgnoreCase),
+        "Long-run scenario should default to the auto provider.");
+    Assert(
+        string.Equals(ResolveProviderKind(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), isLongRun: false), "session", StringComparison.OrdinalIgnoreCase),
+        "Boot-to-combat should keep the session provider default.");
+    Assert(
+        string.Equals(
+            ResolveProviderKind(
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["--provider"] = "headless",
+                },
+                isLongRun: true),
+            "headless",
+            StringComparison.OrdinalIgnoreCase),
+        "Explicit headless provider should remain selectable.");
+
+    var missingHeadlessProviderCommandRejected = false;
+    try
+    {
+        ValidateProviderConfiguration(
+            "headless",
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+    }
+    catch (InvalidOperationException exception) when (exception.Message.Contains("--provider-command is required for --provider headless.", StringComparison.OrdinalIgnoreCase))
+    {
+        missingHeadlessProviderCommandRejected = true;
+    }
+
+    Assert(missingHeadlessProviderCommandRejected, "Headless provider selection should fail fast before launch when --provider-command is missing.");
+    ValidateProviderConfiguration(
+        "auto",
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+    Assert(
+        !WindowLocator.IsHungWindow(new WindowCaptureTarget(IntPtr.Zero, "fallback", new Rectangle(0, 0, 100, 100), true, false), _ => true),
+        "Fallback capture targets should never be treated as hung windows.");
+    Assert(
+        WindowLocator.IsHungWindow(new WindowCaptureTarget(new IntPtr(12345), "test", new Rectangle(0, 0, 100, 100), false, false), _ => true),
+        "Explicit window handles should honor the hung-window probe.");
 
     var point = MouseInputDriver.TransformNormalizedPoint(
         new WindowCaptureTarget(IntPtr.Zero, "test", new Rectangle(100, 200, 1000, 800), false, false),
@@ -32895,6 +33004,24 @@ sealed record WindowCaptureTarget(
 
 static class WindowLocator
 {
+    public static bool IsHungWindow(WindowCaptureTarget target, Func<IntPtr, bool>? hungProbe = null)
+    {
+        if (target.IsFallback || target.Handle == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var probe = hungProbe ?? NativeMethods.IsHungAppWindow;
+        try
+        {
+            return probe(target.Handle);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static WindowCaptureTarget? TryFindSts2Window()
     {
         foreach (var process in Process.GetProcesses())
@@ -33042,6 +33169,10 @@ static class NativeMethods
     public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsHungAppWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -33072,6 +33203,11 @@ static class NativeMethods
     public static bool TryCaptureClientArea(IntPtr handle, Rectangle clientBounds, out Bitmap bitmap)
     {
         bitmap = null!;
+        if (IsHungAppWindow(handle))
+        {
+            return false;
+        }
+
         if (!GetWindowRect(handle, out var windowRect))
         {
             return false;
