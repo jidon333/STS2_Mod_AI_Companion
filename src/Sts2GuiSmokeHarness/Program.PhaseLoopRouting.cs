@@ -548,7 +548,7 @@ internal static partial class Program
                     GuiSmokePhase.HandleEvent => "branch-event",
                     GuiSmokePhase.HandleShop => "branch-shop",
                     GuiSmokePhase.ChooseFirstNode when TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary) => "branch-treasure",
-                    GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
+                    GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
                     GuiSmokePhase.ChooseFirstNode => "branch-map",
                     _ => "branch-room",
                 };
@@ -569,7 +569,7 @@ internal static partial class Program
 
         if (phase == GuiSmokePhase.WaitCharacterSelect)
         {
-            if (LooksLikeSingleplayerSubmenuState(observer.Summary))
+            if (MatchesCompatibilityScreen(observer, "singleplayer-submenu"))
             {
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-singleplayer-submenu", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-singleplayer-submenu", observer.CurrentScreen, observer.InCombat, null));
@@ -594,7 +594,7 @@ internal static partial class Program
                 GuiSmokePhase.HandleCombat => "branch-combat",
                 GuiSmokePhase.HandleEvent => "branch-event",
                 GuiSmokePhase.HandleShop => "branch-shop",
-                GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
+                GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
                 GuiSmokePhase.ChooseFirstNode => "branch-map",
                 _ => "branch-room",
             };
@@ -726,7 +726,7 @@ internal static partial class Program
                     GuiSmokePhase.HandleEvent => "branch-event",
                     GuiSmokePhase.HandleShop => "branch-shop",
                     GuiSmokePhase.ChooseFirstNode when TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary) => "branch-treasure",
-                    GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
+                    GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
                     GuiSmokePhase.ChooseFirstNode => "branch-map",
                     _ => "branch-room",
                 };

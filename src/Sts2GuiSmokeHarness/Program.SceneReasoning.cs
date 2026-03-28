@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static GuiSmokeNonCombatAllowedActionSupport;
 using static ObserverScreenProvenance;
 
 internal static partial class Program
@@ -104,12 +105,12 @@ internal static partial class Program
             }
         }
 
-        if (LooksLikeTreasureState(observer.Summary))
+        if (TreasureRoomObserverSignals.LooksLikeTreasureState(observer.Summary))
         {
             tags.Add("room:treasure");
         }
 
-        if (LooksLikeRestSiteState(observer.Summary))
+        if (GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer.Summary))
         {
             tags.Add("room:rest-site");
         }
@@ -444,7 +445,7 @@ internal static partial class Program
 
         return phase switch
         {
-            GuiSmokePhase.HandleEvent => LooksLikeTreasureState(observer.Summary)
+            GuiSmokePhase.HandleEvent => TreasureRoomObserverSignals.LooksLikeTreasureState(observer.Summary)
                 ? "Interpret the room state, identify whether the chest is unopened, opened, or in reward follow-up, and choose the safest progress action."
                 : "Interpret the event screen, infer what each visible option means, and choose a low-risk action that keeps the run progressing.",
             GuiSmokePhase.HandleCombat => "Interpret the combat board, hand, and targets before committing to the next action.",

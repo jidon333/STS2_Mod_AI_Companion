@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static GuiSmokeNonCombatAllowedActionSupport;
 
 internal static partial class Program
 {
@@ -138,9 +139,9 @@ internal static partial class Program
             GuiSmokePhase.HandleRewards => "Prefer the proceed arrow when the reward can be skipped; otherwise pick a valid reward card.",
             GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, screenshotPath)
                 => "Rest-site explicit choices are foreground-authoritative here. Prefer 휴식/재련/부화 over any map overlay candidate or current-node arrow. If the smith card grid appears afterward, select a card and then confirm.",
-            GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
+            GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer.Summary)
                 => "Rest site is screenshot-first. If the explicit rest options are visible, choose one of them before any map candidate. If the smith card grid is visible, click one card first and then click the right-side confirm button.",
-            GuiSmokePhase.ChooseFirstNode when LooksLikeTreasureState(observer.Summary)
+            GuiSmokePhase.ChooseFirstNode when TreasureRoomObserverSignals.LooksLikeTreasureState(observer.Summary)
                 => "Treasure room authority is explicit. Use chest -> treasure relic holder -> treasure proceed, and ignore top-left inventory relic icons or map-node contamination.",
             GuiSmokePhase.ChooseFirstNode => "Do not click non-reachable map nodes.",
             GuiSmokePhase.HandleShop => "Shop authority is explicit. Open inventory if needed, buy only typed affordable shop entries, keep card removal separate from normal purchases, then back/proceed.",
@@ -154,7 +155,7 @@ internal static partial class Program
                 => "Reward screen authority is stronger than the background map. Resolve the visible reward, skip, or proceed affordance before considering any map fallback.",
             GuiSmokePhase.HandleEvent when GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                 => "Map evidence is stronger than the stale event label. Prefer reachable map-node or visible-map-advance actions over repeating event progression.",
-            GuiSmokePhase.HandleEvent when LooksLikeTreasureState(observer.Summary)
+            GuiSmokePhase.HandleEvent when TreasureRoomObserverSignals.LooksLikeTreasureState(observer.Summary)
                 => "Treasure authority can linger on the event phase. Prefer explicit treasure chest, treasure relic holder, or treasure proceed over generic event or map routing.",
             GuiSmokePhase.HandleEvent => "If the event text is ambiguous, choose a large visible progression option, not inspect affordances or detail overlays.",
             GuiSmokePhase.WaitEventRelease => "Ancient proceed was already clicked. Wait for event-room release or a concrete next room state instead of re-clicking the same proceed button.",

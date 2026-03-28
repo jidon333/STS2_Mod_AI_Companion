@@ -16,21 +16,10 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static GuiSmokeNonCombatAllowedActionSupport;
 
 internal static partial class Program
 {
-    static string[] BuildMapOverlayRoutingAllowedActions(MapOverlayState mapOverlayState)
-    {
-        return mapOverlayState.MapBackNavigationAvailable
-            ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
-            : new[] { "click exported reachable node", "click first reachable node", "wait" };
-    }
-
-    static string[] BuildMapForegroundRoutingAllowedActions()
-    {
-        return new[] { "click exported reachable node", "click visible map advance", "wait" };
-    }
-
     static string[] GetAllowedActions(GuiSmokePhase phase, ObserverState observer)
     {
         return BuildAllowedActions(phase, observer, Array.Empty<CombatCardKnowledgeHint>(), null, Array.Empty<GuiSmokeHistoryEntry>());
@@ -106,7 +95,7 @@ internal static partial class Program
                 => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.ChooseFirstNode when explicitRestSiteChoiceAuthority
                 => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
-            GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteProceedState(observer.Summary)
+            GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary)
                 => new[] { "click proceed", "wait" },
             GuiSmokePhase.ChooseFirstNode when treasureState is { RoomDetected: true }
                 => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
@@ -114,7 +103,7 @@ internal static partial class Program
                 => BuildMapOverlayRoutingAllowedActions(mapOverlayState),
             GuiSmokePhase.ChooseFirstNode when mapForegroundOwnership
                 => BuildMapForegroundRoutingAllowedActions(),
-            GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
+            GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer.Summary)
                 => new[] { "click smith card", "click smith confirm", "wait" },
             GuiSmokePhase.ChooseFirstNode => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
@@ -228,42 +217,6 @@ internal static partial class Program
                 => new[] { "click reward back", "wait" },
             _ => new[] { "wait" },
         };
-    }
-
-    static bool LooksLikeInspectOverlayState(ObserverState observer)
-    {
-        return observer.CurrentChoices.Any(static label =>
-                   label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase))
-               || observer.ActionNodes.Any(static node =>
-                   node.Label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
-                   || node.Label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
-                   || node.Label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase));
-    }
-
-    static string[] BuildCardSelectionAllowedActions(CardSelectionSubtypeState state)
-    {
-        return state.ScreenType switch
-        {
-            "reward-pick" => new[] { "reward pick card", "wait" },
-            "transform" when CardSelectionObserverSignals.IsConfirmReady(state)
-                => new[] { "transform confirm", "wait" },
-            "transform" => new[] { "transform select card", "wait" },
-            "deck-remove" when CardSelectionObserverSignals.IsConfirmReady(state)
-                => new[] { "deck remove confirm", "wait" },
-            "deck-remove" => new[] { "deck remove select card", "wait" },
-            "upgrade" when CardSelectionObserverSignals.IsConfirmReady(state)
-                => new[] { "upgrade confirm", "wait" },
-            "upgrade" => new[] { "upgrade select card", "wait" },
-            _ => new[] { "wait" },
-        };
-    }
-
-    static bool ShouldSuppressRoomSubstateHeuristics(GuiSmokePhase phase, ObserverState observer)
-    {
-        return phase == GuiSmokePhase.HandleCombat
-               || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary);
     }
 
 }

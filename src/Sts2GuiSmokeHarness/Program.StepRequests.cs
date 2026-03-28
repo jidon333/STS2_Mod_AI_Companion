@@ -16,6 +16,8 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static GuiSmokeNonCombatAllowedActionSupport;
+using static GuiSmokeRewardMapEvidenceSupport;
 using static ObserverScreenProvenance;
 
 internal static partial class Program
@@ -147,7 +149,7 @@ internal static partial class Program
                 || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
                 || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
                 || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
-                || HasRestSiteAuthority(observer.Summary)
+                || GuiSmokeNonCombatContractSupport.HasRestSiteAuthority(observer.Summary)
                 || eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active
                 || eventScene.EventForegroundOwned && eventScene.HasExplicitProgression
                 || LooksLikeInspectOverlayState(observer))
@@ -186,10 +188,10 @@ internal static partial class Program
             combatCardKnowledge,
             ComputeUseCombatFastPath,
             ComputeUseRewardFastPath,
-            () => BuildRewardMapLayerStateForObserver(observer.Summary, windowBounds),
+            () => BuildRewardMapLayerState(observer.Summary, windowBounds),
             () =>
             {
-                var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, windowBounds);
+                var rewardMapLayer = BuildRewardMapLayerState(observer.Summary, windowBounds);
                 return rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
             },
             () => HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath),

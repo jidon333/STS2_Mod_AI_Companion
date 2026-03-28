@@ -756,7 +756,7 @@ internal static partial class Program
                 },
             };
             var restSiteProceedObserver = new ObserverState(restSiteProceedSummary, null, null, null);
-            Assert(LooksLikeRestSiteProceedState(restSiteProceedSummary),
+            Assert(GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(restSiteProceedSummary),
                 "Rest-site proceed helper should recognize post-confirm proceed-visible observer state.");
             var restSiteProceedRequest = restSiteMetadataRequest with
             {
@@ -784,7 +784,7 @@ internal static partial class Program
                     new ObserverChoice("relic", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD"),
                 },
             };
-            Assert(LooksLikeRestSiteProceedState(restSiteProceedLabelOnlySummary),
+            Assert(GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(restSiteProceedLabelOnlySummary),
                 "Rest-site proceed helper should still promote post-confirm proceed when currentChoices expose the proceed affordance before structured choice export stabilizes.");
             var restSiteProceedBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-rest-site-proceed-{Guid.NewGuid():N}");
             Directory.CreateDirectory(restSiteProceedBranchRoot);

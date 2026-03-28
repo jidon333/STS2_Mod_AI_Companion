@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static GuiSmokeRewardMapEvidenceSupport;
 
 internal static partial class Program
 {
@@ -153,13 +154,13 @@ internal static partial class Program
                 null,
                 null,
                 null);
-            var layeredRewardState = BuildRewardMapLayerStateForObserver(layeredRewardObserver.Summary, new WindowBounds(0, 0, 1280, 720));
+            var layeredRewardState = BuildRewardMapLayerState(layeredRewardObserver.Summary, new WindowBounds(0, 0, 1280, 720));
             Assert(layeredRewardState.RewardPanelVisible, "Layered reward/map state should keep the reward panel as foreground while explicit reward bounds remain usable.");
             Assert(layeredRewardState.MapContextVisible, "Layered reward/map state should preserve background map context instead of forcing a single exclusive screen.");
             Assert(layeredRewardState.RewardBackNavigationAvailable, "Layered reward/map state should record reward back-navigation affordances.");
 
             var staleRewardObserver = CreateStaleRewardObserver();
-            var staleRewardState = BuildRewardMapLayerStateForObserver(staleRewardObserver.Summary, new WindowBounds(1, 32, 1280, 720));
+            var staleRewardState = BuildRewardMapLayerState(staleRewardObserver.Summary, new WindowBounds(1, 32, 1280, 720));
             Assert(!staleRewardState.RewardPanelVisible, "Reward foreground should clear once only stale off-window reward bounds remain.");
             Assert(staleRewardState.StaleRewardChoicePresent, "Layered reward/map state should mark stale reward choices after panel authority disappears.");
             Assert(staleRewardState.OffWindowBoundsReused, "Off-window reward bounds should be flagged for reward/map loop diagnosis.");
@@ -278,7 +279,7 @@ internal static partial class Program
                 null,
                 null,
                 null);
-            var rewardAftermathState = BuildRewardMapLayerStateForObserver(rewardAftermathObserver.Summary, new WindowBounds(0, 0, 1280, 720));
+            var rewardAftermathState = BuildRewardMapLayerState(rewardAftermathObserver.Summary, new WindowBounds(0, 0, 1280, 720));
             var rewardAftermathScene = AutoDecisionProvider.BuildRewardSceneState(
                 rewardAftermathObserver,
                 new WindowBounds(0, 0, 1280, 720),

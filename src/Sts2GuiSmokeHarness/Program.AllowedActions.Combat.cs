@@ -348,58 +348,6 @@ internal static partial class Program
                || node.Kind.Contains("proceed", StringComparison.OrdinalIgnoreCase);
     }
 
-    static RewardMapLayerState BuildRewardMapLayerStateForObserver(ObserverSummary observer, WindowBounds? windowBounds)
-    {
-        return AutoDecisionProvider.BuildRewardSceneState(observer, windowBounds).LayerState;
-    }
-
-    static bool LooksLikeRewardBackNavigationAffordance(ObserverSummary observer, string? screenshotPath)
-    {
-        if (observer.CurrentChoices.Any(static label =>
-                label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("뒤로", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("Back", StringComparison.OrdinalIgnoreCase))
-            || observer.ActionNodes.Any(static node =>
-                node.Actionable
-                && (node.Label.Contains("LeftArrow", StringComparison.OrdinalIgnoreCase)
-                    || node.Label.Contains("Backstop", StringComparison.OrdinalIgnoreCase)
-                    || node.Label.Contains("뒤로", StringComparison.OrdinalIgnoreCase)
-                    || node.Label.Contains("Back", StringComparison.OrdinalIgnoreCase))))
-        {
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(screenshotPath) || !File.Exists(screenshotPath))
-        {
-            return false;
-        }
-
-        var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(screenshotPath);
-        return overlayAnalysis.HasBottomLeftBackArrow
-               && !overlayAnalysis.HasCentralOverlayPanel
-               && (string.Equals(CompatibilityVisibleScreen(observer), "map", StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(CompatibilityCurrentScreen(observer), "rewards", StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase));
-    }
-
-    static bool HasScreenshotClaimableRewardEvidence(ObserverSummary observer, string? screenshotPath)
-    {
-        if (string.IsNullOrWhiteSpace(screenshotPath) || !File.Exists(screenshotPath))
-        {
-            return false;
-        }
-
-        if (!MatchesCompatibilityScreen(observer, "rewards")
-            && !string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return AutoEventCardGridAnalyzer.Analyze(screenshotPath).HasSelectableCard;
-    }
-
     static bool IsCurrentRewardProgressionChoiceForObserver(ObserverChoice choice, WindowBounds? windowBounds)
     {
         return IsProgressionLikeRewardChoice(choice)
@@ -534,44 +482,4 @@ internal static partial class Program
                || string.Equals(targetLabel, "inspect overlay escape", StringComparison.OrdinalIgnoreCase);
     }
 
-    static bool LooksLikeTreasureState(ObserverSummary observer)
-    {
-        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer)
-            || string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "treasure", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return observer.CurrentChoices.Any(static label =>
-            label.Contains("Chest", StringComparison.OrdinalIgnoreCase)
-            || label.Contains("\uC0C1\uC790", StringComparison.OrdinalIgnoreCase));
-    }
-
-    static bool LooksLikeRestSiteState(ObserverSummary observer)
-    {
-        return GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer);
-    }
-
-    static bool LooksLikeRestSiteProceedState(ObserverSummary observer)
-    {
-        return GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer);
-    }
-
-    static bool HasRestSiteAuthority(ObserverSummary observer)
-    {
-        return string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
-               || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer);
-    }
-
-    static bool HasExplicitRestSiteChoiceAffordance(ObserverSummary observer)
-    {
-        return RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
-    }
-
-    static bool LooksLikeSingleplayerSubmenuState(ObserverSummary observer)
-    {
-        return MatchesCompatibilityScreen(observer, "singleplayer-submenu");
-    }
 }

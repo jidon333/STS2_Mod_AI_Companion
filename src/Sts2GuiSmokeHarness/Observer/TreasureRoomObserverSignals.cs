@@ -61,6 +61,20 @@ static class TreasureRoomObserverSignals
     public static bool IsTreasureAuthorityActive(ObserverSummary observer)
         => TryGetState(observer) is { RoomDetected: true };
 
+    public static bool LooksLikeTreasureState(ObserverSummary observer)
+    {
+        if (IsTreasureAuthorityActive(observer)
+            || string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(observer.ChoiceExtractorPath, "treasure", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return observer.CurrentChoices.Any(static label =>
+            label.Contains("Chest", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("\uC0C1\uC790", StringComparison.OrdinalIgnoreCase));
+    }
+
     public static string[] BuildAllowedActions(TreasureRoomSubtypeState state)
     {
         if (state.InspectOverlayVisible)

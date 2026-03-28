@@ -262,7 +262,7 @@ static class GuiSmokeNonCombatContractSupport
                || string.Equals(targetLabel, "reward back", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool HasRestSiteAuthority(ObserverSummary observer)
+    public static bool HasRestSiteAuthority(ObserverSummary observer)
     {
         return string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
                || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
