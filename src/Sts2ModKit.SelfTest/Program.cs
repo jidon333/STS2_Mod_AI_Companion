@@ -59,6 +59,7 @@ Run("runtime reflection normalizes ancient mixed post-proceed ownership to map l
 Run("runtime reflection keeps map owner when post-proceed map surface is pending", TestRuntimeReflectionAncientMixedPostProceedMapPending, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("tracker and inventory preserve raw and compatibility screen provenance", TestTrackerAndInventoryPreserveScreenProvenance, failures);
+Run("tracker re-emits additive screen provenance aliases", TestTrackerReEmitsAdditiveScreenProvenanceAliases, failures);
 Run("inventory publisher prefers explicit compatibility scene provenance", TestInventoryPublisherPrefersCompatibilitySceneProvenance, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
@@ -2218,10 +2219,16 @@ static void TestTrackerAndInventoryPreserveScreenProvenance()
     Assert(snapshot.CompatibilitySceneReady == false, "Reward/map mixed aftermath should demote compatibility scene-ready while leaving raw screen intact.");
     Assert(snapshot.Meta.TryGetValue("screen", out var rawScreenMeta)
            && string.Equals(rawScreenMeta, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker meta 'screen' should now preserve raw observed screen.");
+    Assert(snapshot.Meta.TryGetValue("rawCurrentScreen", out var rawCurrentScreen)
+           && string.Equals(rawCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should emit rawCurrentScreen alongside rawObservedScreen for additive provenance migration.");
     Assert(snapshot.Meta.TryGetValue("compatLogicalScreen", out var compatLogicalScreen)
            && string.Equals(compatLogicalScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should write compatibility logical screen into dedicated meta.");
+    Assert(snapshot.Meta.TryGetValue("compatibilityCurrentScreen", out var compatibilityCurrentScreen)
+           && string.Equals(compatibilityCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should emit compatibilityCurrentScreen alongside compatLogicalScreen for additive provenance migration.");
     Assert(snapshot.Meta.TryGetValue("compatVisibleScreen", out var compatVisibleScreen)
            && string.Equals(compatVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should write compatibility visible screen into dedicated meta.");
+    Assert(snapshot.Meta.TryGetValue("compatibilityVisibleScreen", out var compatibilityVisibleScreen)
+           && string.Equals(compatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should emit compatibilityVisibleScreen alongside compatVisibleScreen for additive provenance migration.");
 
     var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
         ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
@@ -2237,6 +2244,47 @@ static void TestTrackerAndInventoryPreserveScreenProvenance()
     Assert(string.Equals(inventory.CompatibilityVisibleScene, "map", StringComparison.OrdinalIgnoreCase), "Inventory should preserve compatibility visible scene for downstream diagnostics.");
     Assert(string.Equals(inventory.CompatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility visible screen explicitly for downstream consumers.");
     Assert(inventory.CompatibilitySceneReady == false, "Inventory should preserve compatibility scene-ready instead of recomputing raw winner truth.");
+}
+
+static void TestTrackerReEmitsAdditiveScreenProvenanceAliases()
+{
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
+    var observation = new LiveExportObservation(
+        "runtime-poll",
+        DateTimeOffset.UtcNow,
+        "run-provenance-alias-self-test",
+        "active",
+        "map",
+        null,
+        null,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        Array.Empty<LiveExportChoiceSummary>(),
+        Array.Empty<string>(),
+        null,
+        new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["rawCurrentScreen"] = "rewards",
+            ["instanceType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+        });
+
+    var snapshot = tracker.Apply(observation).Snapshot;
+    Assert(string.Equals(snapshot.RawObservedScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should accept rawCurrentScreen input as the raw observed screen source.");
+    Assert(string.Equals(snapshot.CompatibilityLogicalScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should keep compatibility logical screen sourced from tracker shaping.");
+    Assert(string.Equals(snapshot.CompatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should keep compatibility visible screen sourced from tracker shaping.");
+    Assert(snapshot.Meta.TryGetValue("rawObservedScreen", out var rawObservedScreenMeta)
+           && string.Equals(rawObservedScreenMeta, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should preserve rawObservedScreen meta when rawCurrentScreen input is provided.");
+    Assert(snapshot.Meta.TryGetValue("rawCurrentScreen", out var rawCurrentScreenMeta)
+           && string.Equals(rawCurrentScreenMeta, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should re-emit rawCurrentScreen meta after reading additive input.");
+    Assert(snapshot.Meta.TryGetValue("compatibilityCurrentScreen", out var compatibilityCurrentScreenMeta)
+           && string.Equals(compatibilityCurrentScreenMeta, "map", StringComparison.OrdinalIgnoreCase), "Tracker should emit compatibilityCurrentScreen even when only additive raw input was provided.");
+    Assert(snapshot.Meta.TryGetValue("compatibilityVisibleScreen", out var compatibilityVisibleScreenMeta)
+           && string.Equals(compatibilityVisibleScreenMeta, "map", StringComparison.OrdinalIgnoreCase), "Tracker should emit compatibilityVisibleScreen even when only additive raw input was provided.");
 }
 
 static void TestInventoryPublisherPrefersCompatibilitySceneProvenance()

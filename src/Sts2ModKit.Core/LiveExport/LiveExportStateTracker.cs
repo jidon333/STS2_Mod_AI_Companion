@@ -189,14 +189,18 @@ public sealed class LiveExportStateTracker
             warnings = MergeWarnings(warnings, new[] { $"state-regression: combat-conflict-with-screen:{screen}" });
         }
         var meta = ApplyScreenMeta(MergeMeta(previous.Meta, observation.Meta), previous.Meta, observation, screen);
-        var rawObservedScreen = ReadMetaValue(meta, "rawObservedScreen")
+        var rawObservedScreen = ReadMetaValue(meta, "rawCurrentScreen")
+                                ?? ReadMetaValue(meta, "rawObservedScreen")
                                 ?? ReadMetaValue(observation.Meta, "rawObservedScreen")
+                                ?? ReadMetaValue(observation.Meta, "rawCurrentScreen")
                                 ?? observation.Screen
                                 ?? screen;
-        var compatibilityLogicalScreen = ReadMetaValue(meta, "compatLogicalScreen")
+        var compatibilityLogicalScreen = ReadMetaValue(meta, "compatibilityCurrentScreen")
+                                         ?? ReadMetaValue(meta, "compatLogicalScreen")
                                          ?? ReadMetaValue(meta, "logicalScreen")
                                          ?? screen;
-        var compatibilityVisibleScreen = ReadMetaValue(meta, "compatVisibleScreen")
+        var compatibilityVisibleScreen = ReadMetaValue(meta, "compatibilityVisibleScreen")
+                                         ?? ReadMetaValue(meta, "compatVisibleScreen")
                                          ?? ReadMetaValue(meta, "visibleScreen")
                                          ?? compatibilityLogicalScreen;
         var compatibilitySceneReady = ReadMetaBool(meta, "compatSceneReady")
@@ -500,7 +504,8 @@ public sealed class LiveExportStateTracker
         LiveExportObservation observation,
         string logicalScreen)
     {
-        var rawObservedScreen = ReadMetaValue(mergedMeta, "rawObservedScreen")
+        var rawObservedScreen = ReadMetaValue(mergedMeta, "rawCurrentScreen")
+                                ?? ReadMetaValue(mergedMeta, "rawObservedScreen")
                                 ?? ReadMetaValue(mergedMeta, "screen")
                                 ?? observation.Screen
                                 ?? logicalScreen;
@@ -520,6 +525,9 @@ public sealed class LiveExportStateTracker
             ["sceneStability"] = sceneStability,
             ["compatLogicalScreen"] = logicalScreen,
             ["compatVisibleScreen"] = visibleScreen,
+            ["rawCurrentScreen"] = rawObservedScreen,
+            ["compatibilityCurrentScreen"] = logicalScreen,
+            ["compatibilityVisibleScreen"] = visibleScreen,
             ["compatSceneReady"] = sceneReady ? "true" : "false",
             ["compatSceneAuthority"] = sceneAuthority,
             ["compatSceneStability"] = sceneStability,
