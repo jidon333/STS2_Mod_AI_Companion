@@ -59,6 +59,7 @@ Run("runtime reflection normalizes ancient mixed post-proceed ownership to map l
 Run("runtime reflection keeps map owner when post-proceed map surface is pending", TestRuntimeReflectionAncientMixedPostProceedMapPending, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("tracker and inventory preserve raw and compatibility screen provenance", TestTrackerAndInventoryPreserveScreenProvenance, failures);
+Run("inventory publisher prefers explicit compatibility scene provenance", TestInventoryPublisherPrefersCompatibilitySceneProvenance, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
@@ -2222,6 +2223,43 @@ static void TestTrackerAndInventoryPreserveScreenProvenance()
     Assert(inventory.CompatibilitySceneReady == false, "Inventory should preserve compatibility scene-ready instead of recomputing raw winner truth.");
 }
 
+static void TestInventoryPublisherPrefersCompatibilitySceneProvenance()
+{
+    var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
+        ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(buildInventoryMethod is not null, "Expected private InventoryPublisher.BuildInventory helper.");
+
+    var snapshot = CreateInventoryPublisherSnapshot(
+        Array.Empty<LiveExportChoiceSummary>()) with
+    {
+        CurrentScreen = "rewards",
+        RawObservedScreen = "rewards",
+        CompatibilityLogicalScreen = "rewards",
+        CompatibilityVisibleScreen = "map",
+        CompatibilitySceneReady = false,
+        CompatibilitySceneAuthority = "mixed",
+        CompatibilitySceneStability = "stabilizing",
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["logicalScreen"] = "event",
+            ["flowScreen"] = "event",
+            ["visibleScreen"] = "event",
+            ["sceneReady"] = "true",
+            ["sceneAuthority"] = "polling",
+            ["sceneStability"] = "stable",
+        },
+    };
+
+    var normalizedScene = new CompanionNormalizedScene("event", "event", 1.0, "test");
+    var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
+    Assert(inventory is not null, "Expected inventory publisher to build an inventory.");
+    Assert(string.Equals(inventory!.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory scene type should follow explicit compatibility logical screen, not legacy logicalScreen/flowScreen meta.");
+    Assert(string.Equals(inventory.CompatibilityVisibleScene, "map", StringComparison.OrdinalIgnoreCase), "Inventory visible scene should follow explicit compatibility visible screen, not legacy visibleScreen meta.");
+    Assert(inventory.CompatibilitySceneReady == false, "Inventory scene-ready should preserve explicit compatibility truth.");
+    Assert(string.Equals(inventory.CompatibilitySceneAuthority, "mixed", StringComparison.OrdinalIgnoreCase), "Inventory scene authority should preserve explicit compatibility truth.");
+    Assert(string.Equals(inventory.CompatibilitySceneStability, "stabilizing", StringComparison.OrdinalIgnoreCase), "Inventory scene stability should preserve explicit compatibility truth.");
+}
+
 static void TestRuntimeReflectionRejectsOverlayLikePlayerRoots()
 {
     var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
@@ -2776,11 +2814,13 @@ static void TestCompanionStateMapperVisibleAndFlowSceneSplit()
         new LiveExportEncounterSummary("root", null, false, null),
         new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
         {
-            ["visibleScreen"] = "map",
-            ["flowScreen"] = "rewards",
             ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.NGame",
             ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
-        });
+        })
+    {
+        CompatibilityLogicalScreen = "rewards",
+        CompatibilityVisibleScreen = "map",
+    };
 
     var state = CompanionStateMapper.FromLiveExport(snapshot, session: null, Array.Empty<LiveExportEventEnvelope>());
 

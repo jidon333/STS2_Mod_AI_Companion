@@ -12,11 +12,12 @@ public static class CompanionStateMapper
     {
         var sanitizedChoices = CompanionSceneNormalizer.SanitizeChoices(snapshot.CurrentChoices);
         var normalizedScene = CompanionSceneNormalizer.Normalize(snapshot);
-        var flowScene = TryGetMeta(snapshot.Meta, "flowScreen")
+        var flowScene = snapshot.CompatibilityLogicalScreen
+                        ?? TryGetMeta(snapshot.Meta, "compatLogicalScreen")
                         ?? snapshot.CurrentScreen
                         ?? normalizedScene.SceneType;
-        var visibleScene = TryGetMeta(snapshot.Meta, "visibleScreen")
-                           ?? normalizedScene.SceneType
+        var visibleScene = snapshot.CompatibilityVisibleScreen
+                           ?? TryGetMeta(snapshot.Meta, "compatVisibleScreen")
                            ?? flowScene;
         var sceneType = flowScene;
         var confidence = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)

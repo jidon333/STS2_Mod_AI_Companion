@@ -41,8 +41,6 @@ sealed class ObserverSnapshotReader
                                               ?? inventorySceneType;
         var compatibilityCurrentScreen = TryReadString(stateDocument?.RootElement, "currentScreen")
                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatLogicalScreen")
-                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "logicalScreen")
-                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "flowScreen")
                                          ?? inventoryCompatibilitySceneType;
         var rawCurrentScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "rawObservedScreen")
                                ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen")
@@ -51,7 +49,6 @@ sealed class ObserverSnapshotReader
         var currentScreen = compatibilityCurrentScreen;
         var snapshotVersion = TryReadInt64(stateDocument?.RootElement, "version");
         var compatibilityVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatVisibleScreen")
-                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "visibleScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScene")
                                          ?? currentScreen
                                          ?? inventoryCompatibilitySceneType;
@@ -63,17 +60,14 @@ sealed class ObserverSnapshotReader
             ? null
             : TryReadString(inventoryDocument.RootElement, "inventoryId");
         var compatibilitySceneReady = TryReadNestedBool(stateDocument?.RootElement, "meta", "compatSceneReady")
-                                      ?? TryReadNestedBool(stateDocument?.RootElement, "meta", "sceneReady")
                                       ?? TryReadBool(inventoryDocument?.RootElement, "compatibilitySceneReady")
                                       ?? TryReadBool(inventoryDocument?.RootElement, "sceneReady");
         var sceneReady = compatibilitySceneReady;
         var compatibilitySceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneAuthority")
-                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "sceneAuthority")
                                           ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneAuthority")
                                           ?? TryReadString(inventoryDocument?.RootElement, "sceneAuthority");
         var sceneAuthority = compatibilitySceneAuthority;
         var compatibilitySceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneStability")
-                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "sceneStability")
                                           ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneStability")
                                           ?? TryReadString(inventoryDocument?.RootElement, "sceneStability");
         var sceneStability = compatibilitySceneStability;

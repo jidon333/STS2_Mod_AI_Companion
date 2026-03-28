@@ -30,13 +30,13 @@ internal sealed class InventoryPublisher
 
         var normalizedScene = CompanionSceneNormalizer.Normalize(snapshot);
         var inventory = BuildInventory(snapshot, mode, normalizedScene);
-        if (ShouldSuppressPublish(normalizedScene.SceneType))
+        if (ShouldSuppressPublish(inventory.SceneType))
         {
             return new InventoryPublishAttempt(
                 Published: false,
                 Suppressed: true,
                 Inventory: inventory,
-                RawSceneType: string.IsNullOrWhiteSpace(snapshot.CurrentScreen) ? "unknown" : snapshot.CurrentScreen.Trim(),
+                RawSceneType: string.IsNullOrWhiteSpace(inventory.RawSceneType) ? "unknown" : inventory.RawSceneType,
                 SuppressionReason: "scene-not-yet-stable");
         }
 
@@ -47,7 +47,7 @@ internal sealed class InventoryPublisher
                 Published: false,
                 Suppressed: false,
                 Inventory: inventory,
-                RawSceneType: string.IsNullOrWhiteSpace(snapshot.CurrentScreen) ? "unknown" : snapshot.CurrentScreen.Trim(),
+                RawSceneType: string.IsNullOrWhiteSpace(inventory.RawSceneType) ? "unknown" : inventory.RawSceneType,
                 SuppressionReason: null);
         }
 
@@ -57,7 +57,7 @@ internal sealed class InventoryPublisher
             Published: true,
             Suppressed: false,
             Inventory: inventory,
-            RawSceneType: string.IsNullOrWhiteSpace(snapshot.CurrentScreen) ? "unknown" : snapshot.CurrentScreen.Trim(),
+            RawSceneType: string.IsNullOrWhiteSpace(inventory.RawSceneType) ? "unknown" : inventory.RawSceneType,
             SuppressionReason: null);
     }
 
@@ -130,8 +130,7 @@ internal sealed class InventoryPublisher
         var logicalScreen = NormalizeSceneToken(snapshot.CompatibilityLogicalScreen)
             ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatLogicalScreen"))
             ?? NormalizeSceneToken(snapshot.CurrentScreen)
-            ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "logicalScreen"))
-            ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "flowScreen"));
+            ?? normalizedScene.SceneType;
 
         if (logicalScreen is not null)
         {
@@ -353,33 +352,12 @@ internal sealed class InventoryPublisher
             return compatibilitySceneReady;
         }
 
-        if (bool.TryParse(TryGetMeta(snapshot.Meta, "sceneReady"), out var sceneReady))
-        {
-            return sceneReady;
-        }
-
         if (!string.IsNullOrWhiteSpace(blockingModal))
         {
             return false;
         }
 
-        if (normalizedScene.SceneType is "unknown" or "startup" or "feedback-overlay" or "blocking-overlay")
-        {
-            return false;
-        }
-
-        if (normalizedScene.SceneType == "combat")
-        {
-            return snapshot.Encounter?.InCombat == true;
-        }
-
-        var visibleScreen = NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"));
-        if (normalizedScene.SceneType == "rewards" && visibleScreen == "map")
-        {
-            return false;
-        }
-
-        return true;
+        return null;
     }
 
     private static string? ResolveSceneAuthority(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
@@ -395,21 +373,7 @@ internal sealed class InventoryPublisher
             return compatibilityAuthority;
         }
 
-        var explicitAuthority = TryGetMeta(snapshot.Meta, "sceneAuthority");
-        if (!string.IsNullOrWhiteSpace(explicitAuthority))
-        {
-            return explicitAuthority;
-        }
-
-        var source = TryGetMeta(snapshot.Meta, "source");
-        if (!string.IsNullOrWhiteSpace(source) && !string.Equals(source, "scene-poll", StringComparison.OrdinalIgnoreCase))
-        {
-            return "hook";
-        }
-
-        return normalizedScene.Source.StartsWith("meta:", StringComparison.OrdinalIgnoreCase)
-            ? "mixed"
-            : "polling";
+        return null;
     }
 
     private static string? ResolveSceneStability(
@@ -428,35 +392,21 @@ internal sealed class InventoryPublisher
             return compatibilityStability;
         }
 
-        var explicitStability = TryGetMeta(snapshot.Meta, "sceneStability");
-        if (!string.IsNullOrWhiteSpace(explicitStability))
-        {
-            return explicitStability;
-        }
-
         if (!string.IsNullOrWhiteSpace(blockingModal))
         {
             return "blocked";
         }
 
-        if (normalizedScene.SceneType is "unknown" or "startup" or "feedback-overlay" or "blocking-overlay")
-        {
-            return "transient";
-        }
-
-        if (ResolveSceneReady(snapshot, normalizedScene, blockingModal) == true)
-        {
-            return "stable";
-        }
-
-        return "stabilizing";
+        return null;
     }
 
     private static string? ResolveCompatibilityVisibleScene(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
     {
         return NormalizeSceneToken(snapshot.CompatibilityVisibleScreen)
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatVisibleScreen"))
-               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"))
+               ?? NormalizeSceneToken(snapshot.CompatibilityLogicalScreen)
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatLogicalScreen"))
+               ?? NormalizeSceneToken(snapshot.CurrentScreen)
                ?? normalizedScene.SceneType;
     }
 
