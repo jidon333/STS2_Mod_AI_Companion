@@ -55,12 +55,17 @@ internal static partial class Program
 
         var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
         var treasureState = TreasureRoomObserverSignals.TryGetState(observer.Summary);
-        var forceEventProgressionAfterCardSelection = ShouldPrioritizeExplicitEventProgressionAfterCardSelectionForAllowlist(observer, history);
-        var explicitEventProceedAuthority = EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer.Summary, null);
         var rewardMapLayer = context.RewardMapLayerState;
         var claimableRewardPresent = context.ClaimableRewardPresent;
         var mapOverlayState = context.MapOverlayState;
         var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history, screenshotPath);
+        var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
+        var explicitEventProceedAuthority = eventScene.ExplicitProceedVisible;
+        var preferRewardProgressionOverMapFallback = eventScene.RewardScene.RewardForegroundOwned
+                                                     && eventScene.RewardScene.ReleaseStage == RewardReleaseStage.Active
+                                                     && eventScene.RewardScene.ExplicitProceedVisible;
+        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
+                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
         var mapForegroundOwnership = MapForegroundReconciliation.HasMapForegroundOwnership(observer, history);
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
         var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
@@ -119,7 +124,7 @@ internal static partial class Program
                 => new[] { "click colorless card choice", "click reward skip", "click proceed", "press escape", "wait" },
             GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && (claimableRewardPresent || GuiSmokeRewardSceneSignals.LooksLikeRewardChoiceState(observer))
                 => new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", context.RewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" },
-            GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && GuiSmokeRewardSceneSignals.ShouldPreferRewardProgressionOverMapFallback(observer)
+            GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && preferRewardProgressionOverMapFallback
                 => new[] { "click reward", "click reward skip", "click proceed", "wait" },
             GuiSmokePhase.HandleEvent when ancientMapOwner && ancientMapSurfacePending
                 => new[] { "wait" },
@@ -139,7 +144,7 @@ internal static partial class Program
                     : new[] { "click exported reachable node", "click first reachable node", "wait" },
             GuiSmokePhase.HandleEvent when HasStrongMapTransitionEvidence(observer)
                                             && !forceEventProgressionAfterCardSelection
-                                            && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+                                            && !preferEventProgressionOverMapFallback
                 => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
             GuiSmokePhase.HandleEvent => new[] { "click event choice", "click proceed", "wait" },
             GuiSmokePhase.WaitEventRelease => new[] { "wait" },
@@ -256,63 +261,6 @@ internal static partial class Program
             "upgrade" => new[] { "upgrade select card", "wait" },
             _ => new[] { "wait" },
         };
-    }
-
-    static bool ShouldPrioritizeExplicitEventProgressionAfterCardSelectionForAllowlist(
-        ObserverState observer,
-        IReadOnlyList<GuiSmokeHistoryEntry> history)
-    {
-        static bool IsProgressionLabel(string? label)
-        {
-            return !string.IsNullOrWhiteSpace(label)
-                   && (label.Contains("계속", StringComparison.OrdinalIgnoreCase)
-                       || label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
-                       || label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
-                       || label.Contains("진행", StringComparison.OrdinalIgnoreCase)
-                       || label.Contains("확인", StringComparison.OrdinalIgnoreCase));
-        }
-
-        static bool IsSubtypeTarget(string? targetLabel)
-        {
-            return !string.IsNullOrWhiteSpace(targetLabel)
-                   && (targetLabel.StartsWith("transform ", StringComparison.OrdinalIgnoreCase)
-                       || targetLabel.StartsWith("deck remove ", StringComparison.OrdinalIgnoreCase)
-                       || targetLabel.StartsWith("upgrade ", StringComparison.OrdinalIgnoreCase));
-        }
-
-        var recentSubtypeAftermath = false;
-        for (var index = history.Count - 1; index >= 0 && index >= history.Count - 6; index -= 1)
-        {
-            var entry = history[index];
-            if (string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase)
-                && IsSubtypeTarget(entry.TargetLabel))
-            {
-                recentSubtypeAftermath = true;
-                break;
-            }
-        }
-
-        if (!recentSubtypeAftermath)
-        {
-            return false;
-        }
-
-        var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
-        if (!eventAuthority)
-        {
-            return false;
-        }
-
-        return observer.ActionNodes.Any(node =>
-                   node.Actionable
-                   && TryParseScreenBounds(node.ScreenBounds, out _)
-                   && IsProgressionLabel(node.Label))
-               || observer.Choices.Any(choice =>
-                   TryParseScreenBounds(choice.ScreenBounds, out _)
-                   && IsProgressionLabel(choice.Label));
     }
 
     static bool ShouldSuppressRoomSubstateHeuristics(GuiSmokePhase phase, ObserverState observer)

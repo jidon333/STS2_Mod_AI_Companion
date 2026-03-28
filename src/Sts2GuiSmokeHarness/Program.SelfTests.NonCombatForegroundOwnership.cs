@@ -260,7 +260,6 @@ internal static partial class Program
                 eventProceedStateDocument,
                 null,
                 null);
-            Assert(GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(explicitProceedObserverState), "Explicit EventOption.IsProceed authority should keep event foreground preferred even when stale map overlay evidence is present.");
             Assert(string.Equals(DetermineReasoningMode(GuiSmokePhase.HandleEvent, explicitProceedObserverState, firstSeenScene: true), "tactical", StringComparison.OrdinalIgnoreCase), "Explicit event proceed ownership should collapse HandleEvent reasoning to tactical mode.");
             var explicitProceedAllowedActions = GetAllowedActions(GuiSmokePhase.HandleEvent, explicitProceedObserverState);
             Assert(explicitProceedAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
@@ -1050,42 +1049,37 @@ internal static partial class Program
                 null);
             Assert(NonCombatForegroundOwnership.Resolve(live5bMixedAftermathObserver) == NonCombatForegroundOwner.Map, "Map current-active-screen authority should own mixed event/map aftermath even when event proceed residue lingers.");
             Assert(!EventProceedObserverSignals.HasExplicitEventProceedAuthority(live5bMixedAftermathObserver, new WindowBounds(1, 32, 1280, 720)), "Lingering EventOption.IsProceed residue should not stay authoritative once NMapScreen is the current active screen owner.");
-            Assert(!GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(live5bMixedAftermathObserver), "Event foreground preference should release when map becomes the explicit top-layer owner.");
             Assert(string.Equals(DetermineReasoningMode(GuiSmokePhase.HandleEvent, live5bMixedAftermathObserver, firstSeenScene: true), "tactical", StringComparison.OrdinalIgnoreCase), "Mixed aftermath with explicit NMapScreen ownership should collapse HandleEvent reasoning to tactical mode.");
             var mixedAftermathAllowedActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, live5bMixedAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>());
             Assert(mixedAftermathAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
                    && !mixedAftermathAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
                 "HandleEvent should reopen the map lane instead of the stale event-proceed lane when map owns the foreground.");
-            var contradictoryMapFallbackMethod = typeof(AutoDecisionProvider).GetMethod("HasContradictoryForegroundOwnerAgainstMapFallback", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            Assert(contradictoryMapFallbackMethod is not null
-                   && !(bool)(contradictoryMapFallbackMethod.Invoke(null, new object?[]
-                   {
-                       new GuiSmokeStepRequest(
-                           "run",
-                           "boot-to-long-run",
-                           51,
-                           GuiSmokePhase.ChooseFirstNode.ToString(),
-                           "Click the first reachable map node.",
-                           DateTimeOffset.UtcNow,
-                           mapOverlayScreenshotPath,
-                           new WindowBounds(1, 32, 1280, 720),
-                           "phase:choosefirstnode|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|current-node-arrow-visible|reachable-node-candidate-present|exported-reachable-node-present",
-                           "0001",
-                           1,
-                           3,
-                           true,
-                           "tactical",
-                           null,
-                           live5bMixedAftermathObserver.Summary,
-                           Array.Empty<KnownRecipeHint>(),
-                           Array.Empty<EventKnowledgeCandidate>(),
-                           Array.Empty<CombatCardKnowledgeHint>(),
-                           BuildAllowedActions(GuiSmokePhase.ChooseFirstNode, live5bMixedAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>()),
-                           Array.Empty<GuiSmokeHistoryEntry>(),
-                           "Map owner should beat lingering event proceed residue.",
-                           null),
-                   })! ?? false),
-                "Map-node routing should not be suppressed by contradictory foreground-owner guards once map is the explicit top-layer owner.");
+            var mixedAftermathChooseFirstNodeDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                51,
+                GuiSmokePhase.ChooseFirstNode.ToString(),
+                "Click the first reachable map node.",
+                DateTimeOffset.UtcNow,
+                mapOverlayScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:choosefirstnode|screen:event|visible:event|layer:map-overlay-foreground|layer:event-background|stale:event-choice|current-node-arrow-visible|reachable-node-candidate-present|exported-reachable-node-present",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                live5bMixedAftermathObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                BuildAllowedActions(GuiSmokePhase.ChooseFirstNode, live5bMixedAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>()),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Map owner should beat lingering event proceed residue.",
+                null));
+            Assert(string.Equals(mixedAftermathChooseFirstNodeDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase),
+                "Map-node routing should not stay blocked once mixed event aftermath resolves to map foreground ownership.");
             var mixedAftermathDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",

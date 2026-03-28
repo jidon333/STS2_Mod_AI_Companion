@@ -915,8 +915,11 @@ sealed partial class AutoDecisionProvider
     {
         var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
+                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
         if (!rewardMapLayer.RewardPanelVisible
-            && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(request.Observer)
+            && !preferEventProgressionOverMapFallback
             && !mapOverlayState.ForegroundVisible)
         {
             var visibleMapNodeDecision = GuiSmokeDecisionDebug.TraceCandidate(

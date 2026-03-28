@@ -1070,17 +1070,8 @@ internal static partial class Program
         }
 
         var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history, screenshotPath);
-        if (eventScene.EventForegroundOwned
-            && eventScene.ReleaseStage == EventReleaseStage.Active)
-        {
-            return true;
-        }
-
-        return EventProceedObserverSignals.HasEventChoiceAuthority(observer.Summary)
-               && !NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer)
-               && !ShouldRouteToHandleRewards(observer, history, screenshotPath)
-               && !AutoDecisionProvider.HasRecentEventReleaseIntent(history)
-               && AutoDecisionProvider.HasRawEventProgressionSurface(observer.Summary, null);
+        return eventScene.EventForegroundOwned
+               && eventScene.ReleaseStage == EventReleaseStage.Active;
     }
 
     static bool TryGetCanonicalWaitMapReopenBranch(

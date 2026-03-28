@@ -102,6 +102,10 @@ internal static partial class Program
     {
         var observerSignals = new List<string>();
         var suppressRoomSubstateHeuristics = ShouldSuppressRoomSubstateHeuristics(phase, observer);
+        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null);
+        var preferRewardProgressionOverMapFallback = rewardScene.RewardForegroundOwned
+                                                     && rewardScene.ReleaseStage == RewardReleaseStage.Active
+                                                     && rewardScene.ExplicitProceedVisible;
         if (observer.SceneReady is not null)
         {
             observerSignals.Add(observer.SceneReady == true ? "scene-ready-true" : "scene-ready-false");
@@ -214,7 +218,7 @@ internal static partial class Program
 
             if (HasStrongMapTransitionEvidence(observer)
                 && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                && !GuiSmokeRewardSceneSignals.ShouldPreferRewardProgressionOverMapFallback(observer))
+                && !preferRewardProgressionOverMapFallback)
             {
                 observerSignals.Add("map-transition-evidence");
             }
@@ -519,4 +523,3 @@ internal static partial class Program
         }
     }
 }
-

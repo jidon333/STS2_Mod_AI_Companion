@@ -71,6 +71,13 @@ internal static partial class Program
         var rewardBackNavigationAvailable = context.RewardBackNavigationAvailable;
         var claimableRewardPresent = context.ClaimableRewardPresent;
         var mapOverlayState = context.MapOverlayState;
+        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null);
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+        var preferRewardProgressionOverMapFallback = rewardScene.RewardForegroundOwned
+                                                     && rewardScene.ReleaseStage == RewardReleaseStage.Active
+                                                     && rewardScene.ExplicitProceedVisible;
+        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
+                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
         var tags = new List<string>(capacity: 10)
         {
             $"phase:{phase.ToString().ToLowerInvariant()}",
@@ -205,8 +212,8 @@ internal static partial class Program
             if (!mapOverlayState.ForegroundVisible
                 && HasStrongMapTransitionEvidence(observer)
                 && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                && !GuiSmokeRewardSceneSignals.ShouldPreferRewardProgressionOverMapFallback(observer)
-                && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
+                && !preferRewardProgressionOverMapFallback
+                && !preferEventProgressionOverMapFallback)
             {
                 tags.Add("substate:map-transition");
             }
@@ -216,15 +223,15 @@ internal static partial class Program
             {
                 if (!mapOverlayState.ForegroundVisible)
                 {
-                    tags.Add(rewardMapLayer.RewardPanelVisible && GuiSmokeRewardSceneSignals.ShouldPreferRewardProgressionOverMapFallback(observer)
+                    tags.Add(rewardMapLayer.RewardPanelVisible && preferRewardProgressionOverMapFallback
                         ? "contamination:map-arrow"
-                        : GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+                        : preferEventProgressionOverMapFallback
                             ? "contamination:map-arrow"
                             : "visible:map-arrow");
                 }
             }
 
-            if (GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
+            if (preferEventProgressionOverMapFallback)
             {
                 tags.Add("layer:event-foreground");
             }

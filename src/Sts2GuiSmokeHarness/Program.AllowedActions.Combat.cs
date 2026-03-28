@@ -377,35 +377,41 @@ internal static partial class Program
 
     static bool HasStrongMapTransitionEvidence(ObserverState observer)
     {
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
+                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
         if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
             || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)
             || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
             || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
             || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
             || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
-            || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
+            || preferEventProgressionOverMapFallback)
         {
             return false;
         }
 
         return GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
-               && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer);
+               && !preferEventProgressionOverMapFallback;
     }
 
     static bool HasStrongMapTransitionEvidenceFromScene(ObserverSummary observer, string? sceneSignature)
     {
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
+                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
         if (RewardObserverSignals.IsTerminalRunBoundary(observer)
             || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
             || CardSelectionObserverSignals.TryGetState(observer) is not null
             || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer)
             || ShopObserverSignals.IsShopAuthorityActive(observer)
             || RewardObserverSignals.IsRewardAuthorityActive(observer)
-            || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
+            || preferEventProgressionOverMapFallback)
         {
             return false;
         }
 
-        return !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+        return !preferEventProgressionOverMapFallback
                && (GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
                || (!string.IsNullOrWhiteSpace(sceneSignature)
                    && (sceneSignature.Contains("substate:map-transition", StringComparison.OrdinalIgnoreCase)

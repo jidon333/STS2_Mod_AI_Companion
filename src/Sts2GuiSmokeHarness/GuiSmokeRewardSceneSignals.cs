@@ -45,19 +45,6 @@ internal static class GuiSmokeRewardSceneSignals
                || GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer);
     }
 
-    internal static bool ShouldPreferRewardProgressionOverMapFallback(ObserverState observer)
-    {
-        return ShouldPreferRewardProgressionOverMapFallback(observer.Summary);
-    }
-
-    internal static bool ShouldPreferRewardProgressionOverMapFallback(ObserverSummary observer)
-    {
-        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null);
-        return rewardScene.RewardForegroundOwned
-               && rewardScene.ReleaseStage == RewardReleaseStage.Active
-               && rewardScene.ExplicitProceedVisible;
-    }
-
     private static bool IsRewardsScreenType(string? typeName)
     {
         return !string.IsNullOrWhiteSpace(typeName)

@@ -20,14 +20,18 @@ static class MapForegroundReconciliation
             return false;
         }
 
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history);
         var mapVisible = GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
                          || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
                          || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase);
         return mapVisible
-               && !HasStrongerForegroundModalAuthority(observer, history);
+               && !HasStrongerForegroundModalAuthority(observer, history, eventScene);
     }
 
-    private static bool HasStrongerForegroundModalAuthority(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry> history)
+    private static bool HasStrongerForegroundModalAuthority(
+        ObserverState observer,
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        EventSceneState eventScene)
     {
         if (CardSelectionObserverSignals.TryGetState(observer.Summary) is not null)
         {
@@ -50,22 +54,22 @@ static class MapForegroundReconciliation
         }
 
         if (HasExplicitEventProgressionForeground(observer)
-            || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer))
+            || eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active)
         {
             return true;
         }
 
-        return HasRecentMapOpenAftermath(history) && !IsMapOnlyForegroundState(observer);
+        return HasRecentMapOpenAftermath(history) && !IsMapOnlyForegroundState(observer, eventScene);
     }
 
-    private static bool IsMapOnlyForegroundState(ObserverState observer)
+    private static bool IsMapOnlyForegroundState(ObserverState observer, EventSceneState eventScene)
     {
         return CardSelectionObserverSignals.TryGetState(observer.Summary) is null
                && !TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
                && !LooksLikeInspectOverlayForeground(observer)
                && !LooksLikeRewardForeground(observer)
                && !HasExplicitEventProgressionForeground(observer)
-               && !GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer);
+               && !(eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active);
     }
 
     private static bool LooksLikeInspectOverlayForeground(ObserverState observer)

@@ -61,6 +61,10 @@ internal static partial class Program
         GuiSmokeStepAnalysisContext? analysisContext)
     {
         var context = analysisContext ?? CreateStepAnalysisContext(phase, observer, screenshotPath, history, combatCardKnowledge);
+        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null, history, screenshotPath);
+        var preferRewardProgressionOverMapFallback = rewardScene.RewardForegroundOwned
+                                                     && rewardScene.ReleaseStage == RewardReleaseStage.Active
+                                                     && rewardScene.ExplicitProceedVisible;
         if (phase == GuiSmokePhase.HandleCombat)
         {
             return !context.CanResolveCombatEnemyTarget
@@ -125,7 +129,7 @@ internal static partial class Program
                 => "This is a colorless reward choice. Pick a visible card first; do not click the small relic inspect icons in the top-left.",
             GuiSmokePhase.HandleRewards when GuiSmokeRewardSceneSignals.LooksLikeRewardChoiceState(observer)
                 => "Reward follow-up is active. Prefer reward cards or skip/proceed over inspect, preview, or detail affordances.",
-            GuiSmokePhase.HandleRewards when GuiSmokeRewardSceneSignals.ShouldPreferRewardProgressionOverMapFallback(observer)
+            GuiSmokePhase.HandleRewards when preferRewardProgressionOverMapFallback
                 => "Reward screen authority is stronger than the background map. Claim the visible reward or use skip/proceed first, and ignore any contaminated map arrow until the reward panel disappears.",
             GuiSmokePhase.HandleRewards when HasStrongMapTransitionEvidence(observer)
                 => "Map authority is already stronger than the lingering event label. Prefer a reachable node or screenshot-derived map advance instead of repeating proceed/event clicks.",
@@ -146,7 +150,7 @@ internal static partial class Program
                 => "The event follow-up is a colorless card choice. Select a card from the card area; do not treat relic previews as event options.",
             GuiSmokePhase.HandleEvent when GuiSmokeRewardSceneSignals.LooksLikeRewardChoiceState(observer)
                 => "The event has entered a reward substate. Prefer reward cards, reward choices, or skip/proceed over inspect affordances.",
-            GuiSmokePhase.HandleEvent when GuiSmokeRewardSceneSignals.ShouldPreferRewardProgressionOverMapFallback(observer)
+            GuiSmokePhase.HandleEvent when preferRewardProgressionOverMapFallback
                 => "Reward screen authority is stronger than the background map. Resolve the visible reward, skip, or proceed affordance before considering any map fallback.",
             GuiSmokePhase.HandleEvent when HasStrongMapTransitionEvidence(observer)
                 => "Map evidence is stronger than the stale event label. Prefer reachable map-node or visible-map-advance actions over repeating event progression.",

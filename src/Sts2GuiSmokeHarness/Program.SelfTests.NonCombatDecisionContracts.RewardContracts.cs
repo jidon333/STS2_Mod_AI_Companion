@@ -340,10 +340,6 @@ internal static partial class Program
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 "Released-to-map reward aftermath should route to exported map nodes, not stay blocked behind stale reward wrappers.",
                 null);
-            var rewardAftermathContradictoryMapFallbackMethod = typeof(AutoDecisionProvider).GetMethod("HasContradictoryForegroundOwnerAgainstMapFallback", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            Assert(rewardAftermathContradictoryMapFallbackMethod is not null
-                   && !(bool)(rewardAftermathContradictoryMapFallbackMethod.Invoke(null, new object?[] { rewardAftermathChooseFirstNodeRequest })! ?? false),
-                "Released-to-map reward aftermath should not be blocked by contradictory foreground-owner map-fallback guards.");
             var rewardAftermathMapNodeDecision = AutoDecisionProvider.Decide(rewardAftermathChooseFirstNodeRequest);
             Assert(string.Equals(rewardAftermathMapNodeDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase), "ChooseFirstNode should click the exported travelable map node once reward ownership has released to map.");
 
@@ -529,35 +525,34 @@ internal static partial class Program
                 null,
                 null,
                 null);
-            var contradictoryMapFallbackMethod = typeof(AutoDecisionProvider).GetMethod("HasContradictoryForegroundOwnerAgainstMapFallback", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            Assert(contradictoryMapFallbackMethod is not null, "Expected private contradictory map fallback helper.");
-            Assert((bool)(contradictoryMapFallbackMethod!.Invoke(null, new object?[]
-            {
-                new GuiSmokeStepRequest(
-                    "run",
-                    "boot-to-long-run",
-                    46,
-                    GuiSmokePhase.ChooseFirstNode.ToString(),
-                    "Combat should suppress stale map fallback.",
-                    DateTimeOffset.UtcNow,
-                    rewardRankingScreenshotPath,
-                    new WindowBounds(0, 0, 1280, 720),
-                    "phase:choosefirstnode|screen:combat|visible:combat|layer:map-background|visible:map-arrow",
-                    "0001",
-                    1,
-                    3,
-                    true,
-                    "tactical",
-                    null,
-                    combatContradictionObserver.Summary,
-                    Array.Empty<KnownRecipeHint>(),
-                    Array.Empty<EventKnowledgeCandidate>(),
-                    Array.Empty<CombatCardKnowledgeHint>(),
-                    GetAllowedActions(GuiSmokePhase.HandleCombat, combatContradictionObserver),
-                    Array.Empty<GuiSmokeHistoryEntry>(),
-                    "Combat foreground should suppress stale map fallback.",
-                    null),
-            }) ?? false), "Combat foreground should explicitly suppress stale map fallback lanes.");
+            var combatContradictionDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                46,
+                GuiSmokePhase.ChooseFirstNode.ToString(),
+                "Combat should suppress stale map fallback.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:choosefirstnode|screen:combat|visible:combat|layer:map-background|visible:map-arrow",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                combatContradictionObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                GetAllowedActions(GuiSmokePhase.HandleCombat, combatContradictionObserver),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Combat foreground should suppress stale map fallback.",
+                null));
+            Assert(!string.Equals(combatContradictionDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase)
+                   && !string.Equals(combatContradictionDecision.TargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
+                   && !string.Equals(combatContradictionDecision.TargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase),
+                "Combat foreground should keep stale map fallback lanes closed.");
 
             var terminalBoundaryObserver = new ObserverState(
                 new ObserverSummary(

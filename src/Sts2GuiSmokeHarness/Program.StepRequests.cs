@@ -144,13 +144,14 @@ internal static partial class Program
                 return false;
             }
 
+            var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
             if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
                 || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
                 || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
                 || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
                 || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
                 || HasRestSiteAuthority(observer.Summary)
-                || GuiSmokeForegroundHeuristics.ShouldPreferEventProgressionOverMapFallback(observer)
+                || eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active
                 || HasExplicitEventForeground()
                 || LooksLikeInspectOverlayState(observer))
             {

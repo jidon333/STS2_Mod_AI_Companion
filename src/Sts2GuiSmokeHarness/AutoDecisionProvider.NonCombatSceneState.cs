@@ -129,7 +129,12 @@ sealed partial class AutoDecisionProvider
         IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
         string? screenshotPath = null)
     {
-        return BuildEventSceneState(observer.Summary, windowBounds, history, screenshotPath);
+        return BuildEventSceneState(
+            observer.Summary,
+            windowBounds,
+            history,
+            screenshotPath,
+            NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer));
     }
 
     internal static EventSceneState BuildEventSceneState(
@@ -138,9 +143,23 @@ sealed partial class AutoDecisionProvider
         IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
         string? screenshotPath = null)
     {
+        return BuildEventSceneState(
+            observer,
+            windowBounds,
+            history,
+            screenshotPath,
+            NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer));
+    }
+
+    private static EventSceneState BuildEventSceneState(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history,
+        string? screenshotPath,
+        bool mapExplicitOwner)
+    {
         var rewardScene = BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath);
-        var mapExplicitOwner = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer);
         var ancientDialogueActive = AncientEventObserverSignals.IsDialogueActive(observer);
         var ancientCompletionActive = AncientEventObserverSignals.HasExplicitCompletionAction(observer);
         var ancientOptionActive = AncientEventObserverSignals.HasExplicitOptionSelection(observer);
