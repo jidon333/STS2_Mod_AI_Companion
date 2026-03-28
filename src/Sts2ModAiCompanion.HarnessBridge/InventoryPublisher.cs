@@ -30,7 +30,7 @@ internal sealed class InventoryPublisher
 
         var normalizedScene = CompanionSceneNormalizer.Normalize(snapshot);
         var inventory = BuildInventory(snapshot, mode, normalizedScene);
-        if (ShouldSuppressPublish(inventory.SceneType))
+        if (ShouldSuppressPublish(inventory))
         {
             return new InventoryPublishAttempt(
                 Published: false,
@@ -61,8 +61,9 @@ internal sealed class InventoryPublisher
             SuppressionReason: null);
     }
 
-    private bool ShouldSuppressPublish(string sceneType)
+    private bool ShouldSuppressPublish(HarnessNodeInventory inventory)
     {
+        var sceneType = inventory.SceneType;
         if (string.Equals(_lastObservedSceneType, sceneType, StringComparison.OrdinalIgnoreCase))
         {
             _lastObservedSceneStreak += 1;
@@ -73,7 +74,9 @@ internal sealed class InventoryPublisher
             _lastObservedSceneStreak = 1;
         }
 
-        if (CompanionSceneNormalizer.IsStableSceneForImmediateInventoryPublish(sceneType))
+        if (CompanionSceneNormalizer.IsStableSceneForImmediateInventoryPublish(sceneType)
+            && !HasExplicitCompatibilityInstability(inventory)
+            && !HasPrimaryScreenDisagreement(inventory))
         {
             return false;
         }
@@ -91,7 +94,7 @@ internal sealed class InventoryPublisher
         var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
         var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
         var nodes = snapshot.CurrentChoices
-            .Select((choice, index) => BuildNode(compatibilitySceneType, choice, index))
+            .Select((choice, index) => BuildNode(compatibilitySceneType, rawSceneType, choice, index))
             .ToArray();
 
         return new HarnessNodeInventory(
@@ -110,6 +113,7 @@ internal sealed class InventoryPublisher
             RawSceneType = rawSceneType,
             RawCurrentScreen = rawSceneType,
             CompatibilitySceneType = compatibilitySceneType,
+            CompatibilityLogicalScreen = compatibilitySceneType,
             CompatibilityCurrentScreen = compatibilitySceneType,
             CompatibilityVisibleScene = compatibilityVisibleScene,
             CompatibilityVisibleScreen = compatibilityVisibleScene,
@@ -143,12 +147,12 @@ internal sealed class InventoryPublisher
         return normalizedScene.SceneType;
     }
 
-    private static HarnessNodeInventoryItem BuildNode(string sceneType, LiveExportChoiceSummary choice, int index)
+    private static HarnessNodeInventoryItem BuildNode(string compatibilitySceneType, string rawSceneType, LiveExportChoiceSummary choice, int index)
     {
         var label = choice.Label?.Trim() ?? string.Empty;
-        var kind = ResolveKind(sceneType, choice);
+        var kind = ResolveKind(compatibilitySceneType, choice);
         var actionable = !string.IsNullOrWhiteSpace(label) && !CompanionSceneNormalizer.IsOverlayChoice(label);
-        var hints = BuildHints(sceneType, choice, kind);
+        var hints = BuildHints(compatibilitySceneType, rawSceneType, choice, kind);
 
         return new HarnessNodeInventoryItem(
             NodeId: string.IsNullOrWhiteSpace(choice.NodeId) ? $"{kind}:{index}" : choice.NodeId,
@@ -186,13 +190,19 @@ internal sealed class InventoryPublisher
         };
     }
 
-    private static IReadOnlyList<string> BuildHints(string sceneType, LiveExportChoiceSummary choice, string resolvedKind)
+    private static IReadOnlyList<string> BuildHints(string compatibilitySceneType, string rawSceneType, LiveExportChoiceSummary choice, string resolvedKind)
     {
         var hints = new List<string>(capacity: 8)
         {
-            $"scene:{sceneType}",
+            $"scene:{compatibilitySceneType}",
+            $"scene-compat:{compatibilitySceneType}",
             $"kind:{resolvedKind}",
         };
+
+        if (!string.IsNullOrWhiteSpace(rawSceneType))
+        {
+            hints.Add($"scene-raw:{rawSceneType}");
+        }
 
         if (!string.IsNullOrWhiteSpace(choice.Value))
         {
@@ -476,6 +486,18 @@ internal sealed class InventoryPublisher
         var builder = new StringBuilder();
         builder.Append(inventory.SceneType);
         builder.Append('|');
+        builder.Append(inventory.RawSceneType);
+        builder.Append('|');
+        builder.Append(inventory.CompatibilityLogicalScreen);
+        builder.Append('|');
+        builder.Append(inventory.CompatibilityVisibleScene);
+        builder.Append('|');
+        builder.Append(inventory.CompatibilitySceneReady);
+        builder.Append('|');
+        builder.Append(inventory.CompatibilitySceneAuthority);
+        builder.Append('|');
+        builder.Append(inventory.CompatibilitySceneStability);
+        builder.Append('|');
         builder.Append(inventory.Mode);
         builder.Append('|');
         builder.Append(inventory.BlockingModal);
@@ -497,6 +519,24 @@ internal sealed class InventoryPublisher
 
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
         return Convert.ToHexString(bytes);
+    }
+
+    private static bool HasExplicitCompatibilityInstability(HarnessNodeInventory inventory)
+    {
+        return inventory.CompatibilitySceneReady == false
+               || (!string.IsNullOrWhiteSpace(inventory.CompatibilitySceneStability)
+                   && !string.Equals(inventory.CompatibilitySceneStability, "stable", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasPrimaryScreenDisagreement(HarnessNodeInventory inventory)
+    {
+        var sceneType = inventory.SceneType;
+        var rawSceneType = inventory.RawSceneType;
+        var compatibilityVisibleScene = inventory.CompatibilityVisibleScene;
+        return !string.IsNullOrWhiteSpace(rawSceneType)
+               && !string.Equals(rawSceneType, sceneType, StringComparison.OrdinalIgnoreCase)
+               || !string.IsNullOrWhiteSpace(compatibilityVisibleScene)
+               && !string.Equals(compatibilityVisibleScene, sceneType, StringComparison.OrdinalIgnoreCase);
     }
 }
 

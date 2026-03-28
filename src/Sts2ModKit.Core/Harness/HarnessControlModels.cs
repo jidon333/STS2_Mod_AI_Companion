@@ -25,6 +25,8 @@ public sealed record HarnessNodeInventory(
 
     public string? CompatibilitySceneType { get; init; }
 
+    public string? CompatibilityLogicalScreen { get; init; }
+
     public string? CompatibilityCurrentScreen { get; init; }
 
     public string? CompatibilityVisibleScene { get; init; }

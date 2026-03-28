@@ -61,6 +61,8 @@ Run("inventory publisher preserves strict map-node source contract", TestInvento
 Run("tracker and inventory preserve raw and compatibility screen provenance", TestTrackerAndInventoryPreserveScreenProvenance, failures);
 Run("tracker re-emits additive screen provenance aliases", TestTrackerReEmitsAdditiveScreenProvenanceAliases, failures);
 Run("inventory publisher prefers explicit compatibility scene provenance", TestInventoryPublisherPrefersCompatibilitySceneProvenance, failures);
+Run("inventory publisher suppresses immediate publish for unstable mixed provenance", TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance, failures);
+Run("inventory publisher fingerprint tracks provenance fields", TestInventoryPublisherFingerprintTracksProvenanceFields, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
@@ -2240,6 +2242,7 @@ static void TestTrackerAndInventoryPreserveScreenProvenance()
     Assert(string.Equals(inventory.RawCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose raw current screen explicitly instead of forcing consumers to overload rawSceneType.");
     Assert(string.Equals(inventory.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory legacy scene type should remain the compatibility scene type.");
     Assert(string.Equals(inventory.CompatibilitySceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility scene type explicitly.");
+    Assert(string.Equals(inventory.CompatibilityLogicalScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility logical screen explicitly instead of forcing consumers to overload compatibility scene type.");
     Assert(string.Equals(inventory.CompatibilityCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility current screen explicitly instead of overloading sceneType.");
     Assert(string.Equals(inventory.CompatibilityVisibleScene, "map", StringComparison.OrdinalIgnoreCase), "Inventory should preserve compatibility visible scene for downstream diagnostics.");
     Assert(string.Equals(inventory.CompatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility visible screen explicitly for downstream consumers.");
@@ -2318,10 +2321,90 @@ static void TestInventoryPublisherPrefersCompatibilitySceneProvenance()
     var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
     Assert(inventory is not null, "Expected inventory publisher to build an inventory.");
     Assert(string.Equals(inventory!.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory scene type should follow explicit compatibility logical screen, not legacy logicalScreen/flowScreen meta.");
+    Assert(string.Equals(inventory.CompatibilityLogicalScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should preserve explicit compatibility logical screen separately from scene type.");
     Assert(string.Equals(inventory.CompatibilityVisibleScene, "map", StringComparison.OrdinalIgnoreCase), "Inventory visible scene should follow explicit compatibility visible screen, not legacy visibleScreen meta.");
     Assert(inventory.CompatibilitySceneReady == false, "Inventory scene-ready should preserve explicit compatibility truth.");
     Assert(string.Equals(inventory.CompatibilitySceneAuthority, "mixed", StringComparison.OrdinalIgnoreCase), "Inventory scene authority should preserve explicit compatibility truth.");
     Assert(string.Equals(inventory.CompatibilitySceneStability, "stabilizing", StringComparison.OrdinalIgnoreCase), "Inventory scene stability should preserve explicit compatibility truth.");
+}
+
+static void TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance()
+{
+    var publisherType = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher");
+    Assert(publisherType is not null, "Expected InventoryPublisher type.");
+    var buildInventoryMethod = publisherType!.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    var shouldSuppressMethod = publisherType.GetMethod("ShouldSuppressPublish", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+    Assert(buildInventoryMethod is not null, "Expected private InventoryPublisher.BuildInventory helper.");
+    Assert(shouldSuppressMethod is not null, "Expected private InventoryPublisher.ShouldSuppressPublish helper.");
+
+    var publisher = Activator.CreateInstance(
+        publisherType,
+        Path.Combine(Path.GetTempPath(), $"inventory-publisher-self-test-{Guid.NewGuid():N}.json"),
+        Path.Combine(Path.GetTempPath(), $"live-snapshot-self-test-{Guid.NewGuid():N}.json"));
+    Assert(publisher is not null, "Expected InventoryPublisher instance.");
+
+    var snapshot = CreateInventoryPublisherSnapshot(Array.Empty<LiveExportChoiceSummary>()) with
+    {
+        CurrentScreen = "rewards",
+        RawObservedScreen = "rewards",
+        CompatibilityLogicalScreen = "rewards",
+        CompatibilityVisibleScreen = "map",
+        CompatibilitySceneReady = false,
+        CompatibilitySceneAuthority = "mixed",
+        CompatibilitySceneStability = "stabilizing",
+    };
+
+    var normalizedScene = new CompanionNormalizedScene("map", "map", 1.0, "test");
+    var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
+    Assert(inventory is not null, "Expected inventory publisher to build an inventory.");
+
+    var shouldSuppress = shouldSuppressMethod!.Invoke(publisher, new object?[] { inventory! });
+    Assert(shouldSuppress is bool suppressed && suppressed, "Inventory publisher should suppress the first publish when compatibility truth is explicitly unstable or raw/visible provenance still disagrees.");
+}
+
+static void TestInventoryPublisherFingerprintTracksProvenanceFields()
+{
+    var publisherType = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher");
+    Assert(publisherType is not null, "Expected InventoryPublisher type.");
+    var buildFingerprintMethod = publisherType!.GetMethod("BuildFingerprint", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(buildFingerprintMethod is not null, "Expected private InventoryPublisher.BuildFingerprint helper.");
+
+    var baseline = new HarnessNodeInventory(
+        "inventory-1",
+        DateTimeOffset.UtcNow,
+        "run-id",
+        "rewards",
+        "episode-1",
+        "dormant",
+        null,
+        false,
+        "mixed",
+        "stabilizing",
+        Array.Empty<HarnessNodeInventoryItem>())
+    {
+        RawSceneType = "rewards",
+        RawCurrentScreen = "rewards",
+        CompatibilitySceneType = "rewards",
+        CompatibilityLogicalScreen = "rewards",
+        CompatibilityCurrentScreen = "rewards",
+        CompatibilityVisibleScene = "map",
+        CompatibilityVisibleScreen = "map",
+        CompatibilitySceneReady = false,
+        CompatibilitySceneAuthority = "mixed",
+        CompatibilitySceneStability = "stabilizing",
+    };
+
+    var changedVisible = baseline with
+    {
+        CompatibilityVisibleScene = "rewards",
+        CompatibilityVisibleScreen = "rewards",
+    };
+
+    var baselineFingerprint = buildFingerprintMethod!.Invoke(null, new object?[] { baseline }) as string;
+    var changedVisibleFingerprint = buildFingerprintMethod.Invoke(null, new object?[] { changedVisible }) as string;
+    Assert(!string.IsNullOrWhiteSpace(baselineFingerprint), "Expected inventory publisher fingerprint.");
+    Assert(!string.IsNullOrWhiteSpace(changedVisibleFingerprint), "Expected changed inventory publisher fingerprint.");
+    Assert(!string.Equals(baselineFingerprint, changedVisibleFingerprint, StringComparison.Ordinal), "Inventory publisher fingerprint should change when compatibility provenance changes even without node churn.");
 }
 
 static void TestRuntimeReflectionRejectsOverlayLikePlayerRoots()
