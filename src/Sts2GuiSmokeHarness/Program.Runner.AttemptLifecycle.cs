@@ -1025,7 +1025,7 @@ internal static partial class Program
             }
 
             var latestObserver = observerReader.Read();
-            if (ShouldRecaptureForObserverDrift(request.Observer, latestObserver))
+            if (ShouldRecaptureForObserverDrift(request.Observer, latestObserver, decision))
             {
                 LogHarness($"step={stepIndex} recapture required observer-drift requestScreen={request.Observer.CurrentScreen ?? "null"} latestScreen={latestObserver.CurrentScreen ?? "null"} requestVisible={request.Observer.VisibleScreen ?? "null"} latestVisible={latestObserver.VisibleScreen ?? "null"}");
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "observer-drift", decision.TargetLabel, DateTimeOffset.UtcNow));

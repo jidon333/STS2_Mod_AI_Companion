@@ -441,7 +441,8 @@ static class CombatBarrierSupport
                 continue;
             }
 
-            if (TryResolveBarrierKind(entry.TargetLabel, entry.Action, out var kind))
+            if (IsMeaningfulCombatAction(entry.Action)
+                && TryResolveBarrierKind(entry.TargetLabel, entry.Action, out var kind))
             {
                 var slotIndex = CombatHistorySupport.TryParsePendingCombatSelection(entry.TargetLabel, out var selection)
                     ? selection?.SlotIndex

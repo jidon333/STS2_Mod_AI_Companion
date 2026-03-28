@@ -524,7 +524,7 @@ internal static partial class Program
         GuiSmokeShared.HarnessLogSink = sink;
     }
 
-    static bool ShouldRecaptureForObserverDrift(ObserverSummary requestObserver, ObserverState latestObserver)
+    static bool ShouldRecaptureForObserverDrift(ObserverSummary requestObserver, ObserverState latestObserver, GuiSmokeStepDecision? decision = null)
     {
         if (latestObserver.CapturedAt is null || requestObserver.CapturedAt is null)
         {
@@ -553,6 +553,11 @@ internal static partial class Program
 
         if (!string.Equals(requestObserver.InventoryId, latestObserver.InventoryId, StringComparison.Ordinal))
         {
+            if (string.Equals(decision?.ActionKind, "press-key", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
             return true;
         }
 

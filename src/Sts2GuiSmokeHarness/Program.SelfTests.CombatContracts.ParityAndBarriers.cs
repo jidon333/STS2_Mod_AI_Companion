@@ -782,6 +782,54 @@ internal static partial class Program
                    || endTurnBarrierReopenedDecision.Reason?.Contains("combat barrier wait", StringComparison.OrdinalIgnoreCase) != true,
                 "EndTurn barrier release should prevent combat barrier wait reentry on the reopened player turn.");
 
+            var endTurnObserverDriftOnlyHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "observer-drift", "auto-end turn", DateTimeOffset.UtcNow),
+            };
+            var endTurnObserverDriftActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(endTurnBarrierSeedObserver, null, null, null),
+                endTurnBarrierKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                endTurnObserverDriftOnlyHistory);
+            Assert(!endTurnObserverDriftActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase), "Observer-drift auto-end-turn should not arm a hard EndTurn barrier before any input is sent.");
+            Assert(!CreateStepAnalysisContext(
+                    GuiSmokePhase.HandleCombat,
+                    new ObserverState(endTurnBarrierSeedObserver, null, null, null),
+                    runtimeStateOnlyScreenshotPath,
+                    endTurnObserverDriftOnlyHistory,
+                    endTurnBarrierKnowledge)
+                    .CombatBarrierEvaluation.IsActive,
+                "Observer-drift auto-end-turn should not produce an active EndTurn barrier.");
+
+            var inventoryOnlyDriftRequestObserver = endTurnBarrierSeedObserver with
+            {
+                InventoryId = "inv-end-turn-drift-request",
+                CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(1100),
+            };
+            var inventoryOnlyDriftLatestObserver = new ObserverState(
+                inventoryOnlyDriftRequestObserver with
+                {
+                    InventoryId = "inv-end-turn-drift-latest",
+                    CapturedAt = inventoryOnlyDriftRequestObserver.CapturedAt!.Value.AddMilliseconds(250),
+                    ActionNodes = new[] { new ObserverActionNode("end-turn", "button", "2턴 종료", "1605,846,220,90", true) },
+                },
+                null,
+                null,
+                null);
+            Assert(
+                !ShouldRecaptureForObserverDrift(
+                    inventoryOnlyDriftRequestObserver,
+                    inventoryOnlyDriftLatestObserver,
+                    new GuiSmokeStepDecision("act", "press-key", "E", null, null, "auto-end turn", "self-test", 0.5, "combat", 120, true, null)),
+                "Inventory-only observer drift should not cancel combat hotkey actuation.");
+            Assert(
+                ShouldRecaptureForObserverDrift(
+                    inventoryOnlyDriftRequestObserver,
+                    inventoryOnlyDriftLatestObserver,
+                    new GuiSmokeStepDecision("act", "click", null, 0.5, 0.5, "click end turn", "self-test", 0.5, "combat", 120, true, null)),
+                "Inventory-only observer drift should still recapture pointer-based combat clicks.");
+
             var stickyEndTurnBarrierHistory = new[]
             {
                 endTurnBarrierHistory[0],
