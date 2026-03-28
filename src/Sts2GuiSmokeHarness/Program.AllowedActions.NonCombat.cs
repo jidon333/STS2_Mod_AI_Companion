@@ -17,6 +17,7 @@ using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokeNonCombatAllowedActionSupport;
+using static GuiSmokeStepRequestFactory;
 
 internal static partial class Program
 {
@@ -35,7 +36,7 @@ internal static partial class Program
         return BuildAllowedActionsCore(phase, observer, combatCardKnowledge, screenshotPath, history, null);
     }
 
-    static string[] BuildAllowedActionsCore(
+    internal static string[] BuildAllowedActionsCore(
         GuiSmokePhase phase,
         ObserverState observer,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,

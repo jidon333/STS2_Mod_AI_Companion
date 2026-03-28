@@ -1,26 +1,11 @@
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.Globalization;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.Json.Nodes;
-using System.Windows.Forms;
+using System;
+using System.Collections.Generic;
 using Sts2AiCompanion.Foundation.Contracts;
-using Sts2ModAiCompanion.Mod;
-using Sts2ModKit.Core.Configuration;
-using Sts2ModKit.Core.Harness;
-using Sts2ModKit.Core.LiveExport;
-using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokeNonCombatAllowedActionSupport;
 
-internal static partial class Program
+static class GuiSmokePromptContractSupport
 {
-    static string BuildGoal(GuiSmokePhase phase)
+    internal static string BuildGoal(GuiSmokePhase phase)
     {
         return phase switch
         {
@@ -43,7 +28,7 @@ internal static partial class Program
         };
     }
 
-    static string BuildFailureModeHintCore(
+    internal static string BuildFailureModeHintCore(
         GuiSmokePhase phase,
         ObserverState observer,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
@@ -53,7 +38,7 @@ internal static partial class Program
         return BuildFailureModeHintCoreWithContext(phase, observer, combatCardKnowledge, screenshotPath, history, null);
     }
 
-    static string BuildFailureModeHintCoreWithContext(
+    internal static string BuildFailureModeHintCoreWithContext(
         GuiSmokePhase phase,
         ObserverState observer,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
@@ -61,7 +46,7 @@ internal static partial class Program
         IReadOnlyList<GuiSmokeHistoryEntry> history,
         GuiSmokeStepAnalysisContext? analysisContext)
     {
-        var context = analysisContext ?? CreateStepAnalysisContext(phase, observer, screenshotPath, history, combatCardKnowledge);
+        var context = analysisContext ?? GuiSmokeStepRequestFactory.CreateStepAnalysisContext(phase, observer, screenshotPath, history, combatCardKnowledge);
         var rewardScene = context.RewardScene;
         var preferRewardProgressionOverMapFallback = rewardScene.RewardForegroundOwned
                                                      && rewardScene.ReleaseStage == RewardReleaseStage.Active
@@ -69,7 +54,7 @@ internal static partial class Program
         if (phase == GuiSmokePhase.HandleCombat)
         {
             return !context.CanResolveCombatEnemyTarget
-                ? BuildCombatFailureModeHint(observer, combatCardKnowledge)
+                ? Program.BuildCombatFailureModeHint(observer, combatCardKnowledge)
                 : "AI first: trust observer/runtime combat state. Use selected-card, targetability, hittability, energy, and player-action-window truth before any screenshot fallback; only inspect the screenshot when explicit combat authority is missing or contradictory.";
         }
 
@@ -138,7 +123,7 @@ internal static partial class Program
                 => "AI first: use the screenshot as the primary source. If the map is clearly visible, you may click the first reachable node instead of forcing another reward proceed click.",
             GuiSmokePhase.HandleRewards => "Prefer the proceed arrow when the reward can be skipped; otherwise pick a valid reward card.",
             GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, screenshotPath)
-                => "Rest-site explicit choices are foreground-authoritative here. Prefer 휴식/재련/부화 over any map overlay candidate or current-node arrow. If the smith card grid appears afterward, select a card and then confirm.",
+                => "Rest-site explicit choices are foreground-authoritative here. Prefer 휴식/재련/부화 over any map overlay candidate or current-node arrow. If the smith card grid appears afterward, select a card and then click the right-side confirm button.",
             GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer.Summary)
                 => "Rest site is screenshot-first. If the explicit rest options are visible, choose one of them before any map candidate. If the smith card grid is visible, click one card first and then click the right-side confirm button.",
             GuiSmokePhase.ChooseFirstNode when TreasureRoomObserverSignals.LooksLikeTreasureState(observer.Summary)
@@ -163,105 +148,5 @@ internal static partial class Program
             GuiSmokePhase.WaitCombat => "Observer must end with combat screen and inCombat=true.",
             _ => "Fail closed when screenshot and observer disagree.",
         };
-    }
-
-    static GuiSmokePhase GetPostEnterRunPhase(GuiSmokeStepDecision decision)
-    {
-        return string.Equals(decision.TargetLabel, "continue", StringComparison.OrdinalIgnoreCase)
-            ? GuiSmokePhase.WaitRunLoad
-            : GuiSmokePhase.WaitCharacterSelect;
-    }
-
-    static GuiSmokePhase GetPostRewardPhase(GuiSmokeStepDecision decision)
-    {
-        if (IsRewardReleaseTarget(decision.TargetLabel))
-        {
-            return GuiSmokePhase.WaitMap;
-        }
-
-        if (KeepsCurrentRoomPhase(decision.TargetLabel))
-        {
-            return GuiSmokePhase.HandleRewards;
-        }
-
-        if (IsReachableNodeTarget(decision.TargetLabel))
-        {
-            return GuiSmokePhase.WaitPostMapNodeRoom;
-        }
-
-        return GuiSmokePhase.WaitMap;
-    }
-
-    static GuiSmokePhase GetPostChooseFirstNodePhase(GuiSmokeStepDecision decision)
-    {
-        return IsReachableNodeTarget(decision.TargetLabel)
-            ? GuiSmokePhase.WaitPostMapNodeRoom
-            : GuiSmokePhase.WaitMap;
-    }
-
-    static GuiSmokePhase GetPostHandleEventPhase(GuiSmokeStepDecision decision)
-    {
-        if (IsAncientEventCompletionTarget(decision.TargetLabel))
-        {
-            return GuiSmokePhase.WaitEventRelease;
-        }
-
-        if (KeepsCurrentRoomPhase(decision.TargetLabel))
-        {
-            return GuiSmokePhase.HandleEvent;
-        }
-
-        return IsRoomProgressTarget(decision.TargetLabel)
-            ? GetPostChooseFirstNodePhase(decision)
-            : GuiSmokePhase.HandleEvent;
-    }
-
-    static bool IsReachableNodeTarget(string? targetLabel)
-    {
-        return string.Equals(targetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase);
-    }
-
-    static bool IsAncientEventCompletionTarget(string? targetLabel)
-    {
-        return string.Equals(targetLabel, "ancient event completion", StringComparison.OrdinalIgnoreCase);
-    }
-
-    static bool IsRoomProgressTarget(string? targetLabel)
-    {
-        return IsReachableNodeTarget(targetLabel)
-               || string.Equals(targetLabel, "treasure chest center", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "treasure chest", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "treasure relic holder", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "treasure proceed", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "hidden overlay close", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "overlay back", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "overlay close", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "overlay backdrop close", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "treasure overlay back", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "rest site: rest", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "rest site: hatch", StringComparison.OrdinalIgnoreCase)
-               || (!string.IsNullOrWhiteSpace(targetLabel)
-                   && targetLabel.StartsWith("rest site: option:", StringComparison.OrdinalIgnoreCase));
-    }
-
-    static bool KeepsCurrentRoomPhase(string? targetLabel)
-    {
-        return string.Equals(targetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "reward choice", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "reward card choice", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "colorless card choice", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
-               || IsOverlayCleanupTarget(targetLabel);
-    }
-
-    static bool IsRewardReleaseTarget(string? targetLabel)
-    {
-        return string.Equals(targetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase);
     }
 }

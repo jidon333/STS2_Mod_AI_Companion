@@ -16,6 +16,8 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static GuiSmokeSceneReasoningSupport;
+using static GuiSmokeStepRequestFactory;
 using static ObserverScreenProvenance;
 
 internal static partial class Program
@@ -177,7 +179,7 @@ internal static partial class Program
             .OrderBy(static slotIndex => slotIndex);
     }
 
-    static bool CanResolveEnemyTargetFromStateAnalysis(
+    internal static bool CanResolveEnemyTargetFromStateAnalysis(
         ObserverState observer,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
         AutoCombatAnalysis analysis,
@@ -270,7 +272,7 @@ internal static partial class Program
         return HandleCombatContextSupport.GetCombatNoOpCountForSlot(combatContext, pendingSelection.SlotIndex) >= 2;
     }
 
-    static string BuildCombatFailureModeHint(
+    internal static string BuildCombatFailureModeHint(
         ObserverState observer,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
     {
@@ -473,7 +475,7 @@ internal static partial class Program
             .FirstOrDefault();
     }
 
-    static bool IsOverlayCleanupTarget(string? targetLabel)
+    internal static bool IsOverlayCleanupTarget(string? targetLabel)
     {
         return string.Equals(targetLabel, "hidden overlay close", StringComparison.OrdinalIgnoreCase)
                || string.Equals(targetLabel, "overlay back", StringComparison.OrdinalIgnoreCase)

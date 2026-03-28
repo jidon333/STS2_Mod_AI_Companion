@@ -20,34 +20,9 @@ using static GuiSmokeNonCombatAllowedActionSupport;
 using static GuiSmokeRewardMapEvidenceSupport;
 using static ObserverScreenProvenance;
 
-internal static partial class Program
+static class GuiSmokeStepRequestFactory
 {
-    static List<T> ReadNdjsonFixture<T>(string path)
-    {
-        var entries = new List<T>();
-        if (!File.Exists(path))
-        {
-            return entries;
-        }
-
-        foreach (var line in File.ReadLines(path))
-        {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            var entry = JsonSerializer.Deserialize<T>(line, GuiSmokeShared.JsonOptions);
-            if (entry is not null)
-            {
-                entries.Add(entry);
-            }
-        }
-
-        return entries;
-    }
-
-    static IReadOnlyList<GuiSmokeHistoryEntry> BuildSerializedStepHistory(
+    internal static IReadOnlyList<GuiSmokeHistoryEntry> BuildSerializedStepHistory(
         GuiSmokePhase phase,
         IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
@@ -56,7 +31,7 @@ internal static partial class Program
             : history.TakeLast(5).ToArray();
     }
 
-    static GuiSmokeStepAnalysisContext CreateStepAnalysisContext(
+    internal static GuiSmokeStepAnalysisContext CreateStepAnalysisContext(
         GuiSmokePhase phase,
         ObserverState observer,
         string? screenshotPath,
@@ -110,7 +85,7 @@ internal static partial class Program
                 GetRuntimeCombatState(),
                 GetCombatAnalysis(),
                 CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
-                CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
+                Program.CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
                 CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary));
 
         RewardSceneState GetRewardScene()
@@ -206,7 +181,7 @@ internal static partial class Program
             GetCombatHandAnalysis,
             () => CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary),
             () => CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
-            () => CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
+            () => Program.CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
             GetCombatBarrierEvaluation);
     }
 
@@ -222,7 +197,7 @@ internal static partial class Program
             request.WindowBounds);
     }
 
-    static GuiSmokeStepRequest CreateStepRequest(
+    internal static GuiSmokeStepRequest CreateStepRequest(
         string runId,
         string scenarioId,
         int stepIndex,
@@ -239,24 +214,24 @@ internal static partial class Program
         GuiSmokeSceneRequestContext? sceneContext = null)
     {
         var serializedHistory = analysisContext?.History ?? BuildSerializedStepHistory(phase, history);
-        var combatCardKnowledge = analysisContext?.CombatCardKnowledge ?? LoadCombatCardKnowledge(workspaceRoot, observer);
-        var sceneSignature = sceneContext?.SceneSignature ?? ComputeSceneSignatureCore(screenshotPath, observer, phase, analysisContext);
+        var combatCardKnowledge = analysisContext?.CombatCardKnowledge ?? GuiSmokeSceneReasoningSupport.LoadCombatCardKnowledge(workspaceRoot, observer);
+        var sceneSignature = sceneContext?.SceneSignature ?? GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(screenshotPath, observer, phase, analysisContext);
         var useAuthorityFastPath = analysisContext?.UseAuthorityFastPath == true;
-        var firstSeenScene = sceneContext?.FirstSeenScene ?? !HasSceneSignatureHistory(sessionRoot, sceneSignature);
-        var reasoningMode = sceneContext?.ReasoningMode ?? DetermineReasoningMode(phase, observer, firstSeenScene);
+        var firstSeenScene = sceneContext?.FirstSeenScene ?? !GuiSmokeSceneReasoningSupport.HasSceneSignatureHistory(sessionRoot, sceneSignature);
+        var reasoningMode = sceneContext?.ReasoningMode ?? GuiSmokeSceneReasoningSupport.DetermineReasoningMode(phase, observer, firstSeenScene);
         var knownRecipes = sceneContext?.KnownRecipes
             ?? (useAuthorityFastPath
                 ? Array.Empty<KnownRecipeHint>()
-                : LoadKnownRecipes(sessionRoot, sceneSignature, phase.ToString()));
+                : GuiSmokeSceneReasoningSupport.LoadKnownRecipes(sessionRoot, sceneSignature, phase.ToString()));
         var eventKnowledgeCandidates = useAuthorityFastPath
             ? Array.Empty<EventKnowledgeCandidate>()
-            : LoadEventKnowledgeCandidates(workspaceRoot, observer, reasoningMode);
+            : GuiSmokeSceneReasoningSupport.LoadEventKnowledgeCandidates(workspaceRoot, observer, reasoningMode);
         return new GuiSmokeStepRequest(
             runId,
             scenarioId,
             stepIndex,
             phase.ToString(),
-            BuildGoal(phase),
+            GuiSmokePromptContractSupport.BuildGoal(phase),
             DateTimeOffset.UtcNow,
             screenshotPath,
             new WindowBounds(window.Bounds.X, window.Bounds.Y, window.Bounds.Width, window.Bounds.Height),
@@ -266,14 +241,14 @@ internal static partial class Program
             3,
             firstSeenScene,
             reasoningMode,
-            BuildSemanticGoal(phase, observer, reasoningMode),
+            GuiSmokeSceneReasoningSupport.BuildSemanticGoal(phase, observer, reasoningMode),
             observer.Summary,
             knownRecipes,
             eventKnowledgeCandidates,
             combatCardKnowledge,
-            BuildAllowedActionsCore(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory, analysisContext),
+            Program.BuildAllowedActionsCore(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory, analysisContext),
             serializedHistory,
-            BuildFailureModeHintCoreWithContext(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory, analysisContext),
-            BuildDecisionRiskHint(phase, observer, firstSeenScene, reasoningMode));
+            GuiSmokePromptContractSupport.BuildFailureModeHintCoreWithContext(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory, analysisContext),
+            GuiSmokeSceneReasoningSupport.BuildDecisionRiskHint(phase, observer, firstSeenScene, reasoningMode));
     }
 }

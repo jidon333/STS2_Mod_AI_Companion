@@ -19,16 +19,16 @@ using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokeNonCombatAllowedActionSupport;
 using static ObserverScreenProvenance;
 
-internal static partial class Program
+static class GuiSmokeSceneReasoningSupport
 {
-    static string ComputeSceneSignature(string screenshotPath, ObserverState observer, GuiSmokePhase phase)
+    internal static string ComputeSceneSignature(string screenshotPath, ObserverState observer, GuiSmokePhase phase)
     {
         return ComputeSceneSignatureCore(screenshotPath, observer, phase, null);
     }
 
-    static string ComputeSceneSignatureCore(string screenshotPath, ObserverState observer, GuiSmokePhase phase, GuiSmokeStepAnalysisContext? analysisContext)
+    internal static string ComputeSceneSignatureCore(string screenshotPath, ObserverState observer, GuiSmokePhase phase, GuiSmokeStepAnalysisContext? analysisContext)
     {
-        var context = analysisContext ?? CreateStepAnalysisContext(phase, observer, screenshotPath, Array.Empty<GuiSmokeHistoryEntry>(), Array.Empty<CombatCardKnowledgeHint>());
+        var context = analysisContext ?? GuiSmokeStepRequestFactory.CreateStepAnalysisContext(phase, observer, screenshotPath, Array.Empty<GuiSmokeHistoryEntry>(), Array.Empty<CombatCardKnowledgeHint>());
         if (context.UseCombatFastPath)
         {
             var combatRuntimeState = context.RuntimeCombatState;
@@ -62,6 +62,7 @@ internal static partial class Program
             {
                 combatTags.Add("combat-play-open");
             }
+
             return string.Join("|", combatTags);
         }
 
@@ -225,14 +226,11 @@ internal static partial class Program
             }
 
             var mapAnalysis = AutoMapAnalyzer.Analyze(screenshotPath);
-            if (mapAnalysis.HasCurrentArrow)
+            if (mapAnalysis.HasCurrentArrow && !mapOverlayState.ForegroundVisible)
             {
-                if (!mapOverlayState.ForegroundVisible)
-                {
-                    tags.Add(suppressMapTransitionByForegroundAuthority
-                        ? "contamination:map-arrow"
-                        : "visible:map-arrow");
-                }
+                tags.Add(suppressMapTransitionByForegroundAuthority
+                    ? "contamination:map-arrow"
+                    : "visible:map-arrow");
             }
 
             if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active)
@@ -246,12 +244,12 @@ internal static partial class Program
             tags.Add("terminal-run-boundary");
         }
 
-        var screenshotFingerprint = ComputeFileFingerprint(screenshotPath);
+        var screenshotFingerprint = Program.ComputeFileFingerprint(screenshotPath);
         tags.Add($"shot:{screenshotFingerprint[..Math.Min(12, screenshotFingerprint.Length)]}");
         return string.Join("|", tags);
     }
 
-    static string ComputeRewardFastPathSceneSignature(ObserverState observer, GuiSmokeStepAnalysisContext context)
+    internal static string ComputeRewardFastPathSceneSignature(ObserverState observer, GuiSmokeStepAnalysisContext context)
     {
         var rewardState = RewardObserverSignals.TryGetState(observer.Summary);
         var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
@@ -319,7 +317,7 @@ internal static partial class Program
         return string.Join("|", rewardTags);
     }
 
-    static IReadOnlyList<KnownRecipeHint> LoadKnownRecipes(string sessionRoot, string sceneSignature, string phase)
+    internal static IReadOnlyList<KnownRecipeHint> LoadKnownRecipes(string sessionRoot, string sceneSignature, string phase)
     {
         var recipesPath = Path.Combine(sessionRoot, "scene-recipes.ndjson");
         if (!File.Exists(recipesPath))
@@ -361,12 +359,10 @@ internal static partial class Program
                 entry.Reason));
         }
 
-        return hints
-            .TakeLast(3)
-            .ToArray();
+        return hints.TakeLast(3).ToArray();
     }
 
-    static bool HasSceneSignatureHistory(string sessionRoot, string sceneSignature)
+    internal static bool HasSceneSignatureHistory(string sessionRoot, string sceneSignature)
     {
         foreach (var fileName in new[] { "scene-recipes.ndjson", "unknown-scenes.ndjson" })
         {
@@ -390,7 +386,7 @@ internal static partial class Program
         return false;
     }
 
-    static string DetermineReasoningMode(GuiSmokePhase phase, ObserverState observer, bool firstSeenScene)
+    internal static string DetermineReasoningMode(GuiSmokePhase phase, ObserverState observer, bool firstSeenScene)
     {
         if (phase != GuiSmokePhase.HandleEvent)
         {
@@ -436,7 +432,7 @@ internal static partial class Program
         return "tactical";
     }
 
-    static string? BuildSemanticGoal(GuiSmokePhase phase, ObserverState observer, string reasoningMode)
+    internal static string? BuildSemanticGoal(GuiSmokePhase phase, ObserverState observer, string reasoningMode)
     {
         if (!string.Equals(reasoningMode, "semantic", StringComparison.OrdinalIgnoreCase))
         {
@@ -453,7 +449,7 @@ internal static partial class Program
         };
     }
 
-    static string? BuildDecisionRiskHint(GuiSmokePhase phase, ObserverState observer, bool firstSeenScene, string reasoningMode)
+    internal static string? BuildDecisionRiskHint(GuiSmokePhase phase, ObserverState observer, bool firstSeenScene, string reasoningMode)
     {
         var hints = new List<string>();
         if (CompatibilitySceneReady(observer) == false)
@@ -481,12 +477,10 @@ internal static partial class Program
             hints.Add("observer-missing-energy");
         }
 
-        return hints.Count == 0
-            ? null
-            : string.Join(", ", hints);
+        return hints.Count == 0 ? null : string.Join(", ", hints);
     }
 
-    static IReadOnlyList<EventKnowledgeCandidate> LoadEventKnowledgeCandidates(string workspaceRoot, ObserverState observer, string reasoningMode)
+    internal static IReadOnlyList<EventKnowledgeCandidate> LoadEventKnowledgeCandidates(string workspaceRoot, ObserverState observer, string reasoningMode)
     {
         if (!string.Equals(reasoningMode, "semantic", StringComparison.OrdinalIgnoreCase))
         {
@@ -544,7 +538,7 @@ internal static partial class Program
             .ToArray();
     }
 
-    static IReadOnlyList<CombatCardKnowledgeHint> LoadCombatCardKnowledge(string workspaceRoot, ObserverState observer)
+    internal static IReadOnlyList<CombatCardKnowledgeHint> LoadCombatCardKnowledge(string workspaceRoot, ObserverState observer)
     {
         if (observer.CombatHand.Count == 0)
         {
@@ -592,7 +586,7 @@ internal static partial class Program
         return hints;
     }
 
-    static IReadOnlyList<string> BuildCombatKnowledgeLookupKeys(string? cardName)
+    internal static IReadOnlyList<string> BuildCombatKnowledgeLookupKeys(string? cardName)
     {
         if (string.IsNullOrWhiteSpace(cardName))
         {
@@ -636,10 +630,9 @@ internal static partial class Program
         return keys;
     }
 
-    static void AddCombatKnowledgeLookupKey(List<string> keys, string? candidate)
+    internal static void AddCombatKnowledgeLookupKey(List<string> keys, string? candidate)
     {
-        if (string.IsNullOrWhiteSpace(candidate)
-            || keys.Contains(candidate, StringComparer.Ordinal))
+        if (string.IsNullOrWhiteSpace(candidate) || keys.Contains(candidate, StringComparer.Ordinal))
         {
             return;
         }
@@ -647,12 +640,12 @@ internal static partial class Program
         keys.Add(candidate);
     }
 
-    static bool IsCombatClassSuffix(string value)
+    internal static bool IsCombatClassSuffix(string value)
     {
         return value is "ironclad" or "silent" or "defect" or "watcher" or "colorless" or "status" or "curse";
     }
 
-    static string NormalizeKnowledgeKey(string? value)
+    internal static string NormalizeKnowledgeKey(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

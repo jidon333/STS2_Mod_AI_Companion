@@ -204,7 +204,7 @@ sealed partial class AutoDecisionProvider : IGuiDecisionProvider
         GuiSmokeStepDecision? actualDecision = null,
         GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        var context = analysisContext ?? Program.CreateRequestAnalysisContext(request);
+        var context = analysisContext ?? GuiSmokeStepRequestFactory.CreateRequestAnalysisContext(request);
         var phase = Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true);
         return phase switch
         {

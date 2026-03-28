@@ -33,7 +33,7 @@ internal static partial class Program
         return current;
     }
 
-    static string ComputeFileFingerprint(string path)
+    internal static string ComputeFileFingerprint(string path)
     {
         return GuiSmokeScreenshotAnalysisCache.GetOrCreate("file-fingerprint", path, () =>
         {
