@@ -741,7 +741,7 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryFindFirstReachableMapNodeDecision(GuiSmokeStepRequest request)
     {
-        if (HasContradictoryForegroundOwnerAgainstMapFallback(request)
+        if (IsMapFallbackBlockedByForegroundAuthority(request)
             || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click first reachable node"))
         {
             return null;
@@ -770,7 +770,7 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateExportedReachableMapPointDecision(GuiSmokeStepRequest request)
     {
-        if (HasContradictoryForegroundOwnerAgainstMapFallback(request)
+        if (IsMapFallbackBlockedByForegroundAuthority(request)
             || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click exported reachable node"))
         {
             return null;
@@ -808,7 +808,7 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateMapBackNavigationDecision(GuiSmokeStepRequest request)
     {
-        if (HasContradictoryForegroundOwnerAgainstMapFallback(request)
+        if (IsMapFallbackBlockedByForegroundAuthority(request)
             || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click map back"))
         {
             return null;
@@ -1217,23 +1217,23 @@ sealed partial class AutoDecisionProvider
         };
     }
 
-    private static bool HasContradictoryForegroundOwnerAgainstMapFallback(GuiSmokeStepRequest request)
+    private static bool IsMapFallbackBlockedByForegroundAuthority(GuiSmokeStepRequest request)
     {
-        var canonicalScene = TryBuildCanonicalNonCombatSceneState(
-            request.Observer,
-            request.WindowBounds,
-            request.History,
-            request.ScreenshotPath);
-        return RewardObserverSignals.IsTerminalRunBoundary(request.Observer)
-               || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)
-               || CardSelectionObserverSignals.TryGetState(request.Observer) is not null
-               || HasExplicitRestSiteChoiceAuthority(request)
-               || canonicalScene is { CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown and not NonCombatCanonicalForegroundOwner.Map };
+        if (RewardObserverSignals.IsTerminalRunBoundary(request.Observer)
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)
+            || CardSelectionObserverSignals.TryGetState(request.Observer) is not null)
+        {
+            return true;
+        }
+
+        return NonCombatForegroundOwnership.Resolve(request.Observer) is
+            not NonCombatForegroundOwner.Unknown
+            and not NonCombatForegroundOwner.Map;
     }
 
     private static GuiSmokeStepDecision? TryFindVisibleMapAdvanceDecision(GuiSmokeStepRequest request)
     {
-        if (HasContradictoryForegroundOwnerAgainstMapFallback(request)
+        if (IsMapFallbackBlockedByForegroundAuthority(request)
             || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click visible map advance"))
         {
             return null;
@@ -1447,7 +1447,7 @@ sealed partial class AutoDecisionProvider
 
     private static bool LooksLikeMapTransitionState(GuiSmokeStepRequest request)
     {
-        if (HasContradictoryForegroundOwnerAgainstMapFallback(request))
+        if (IsMapFallbackBlockedByForegroundAuthority(request))
         {
             return false;
         }
