@@ -108,8 +108,11 @@ internal sealed class InventoryPublisher
             Nodes: nodes)
         {
             RawSceneType = rawSceneType,
+            RawCurrentScreen = rawSceneType,
             CompatibilitySceneType = compatibilitySceneType,
+            CompatibilityCurrentScreen = compatibilitySceneType,
             CompatibilityVisibleScene = compatibilityVisibleScene,
+            CompatibilityVisibleScreen = compatibilityVisibleScene,
             CompatibilitySceneReady = compatibilitySceneReady,
             CompatibilitySceneAuthority = compatibilitySceneAuthority,
             CompatibilitySceneStability = compatibilitySceneStability,

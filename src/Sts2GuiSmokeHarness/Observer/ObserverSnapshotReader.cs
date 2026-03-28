@@ -35,23 +35,26 @@ sealed class ObserverSnapshotReader
         var eventLines = TryReadTail(_liveLayout.EventsPath, 10);
 
         var inventorySceneType = TryReadString(inventoryDocument?.RootElement, "sceneType");
-        var inventoryRawSceneType = TryReadString(inventoryDocument?.RootElement, "rawSceneType")
+        var inventoryRawCurrentScreen = TryReadString(inventoryDocument?.RootElement, "rawCurrentScreen")
+                                        ?? TryReadString(inventoryDocument?.RootElement, "rawSceneType")
                                     ?? inventorySceneType;
-        var inventoryCompatibilitySceneType = TryReadString(inventoryDocument?.RootElement, "compatibilitySceneType")
+        var inventoryCompatibilityCurrentScreen = TryReadString(inventoryDocument?.RootElement, "compatibilityCurrentScreen")
+                                                  ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneType")
                                               ?? inventorySceneType;
         var compatibilityCurrentScreen = TryReadString(stateDocument?.RootElement, "currentScreen")
                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatLogicalScreen")
-                                         ?? inventoryCompatibilitySceneType;
-        var rawCurrentScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "rawObservedScreen")
+                                         ?? inventoryCompatibilityCurrentScreen;
+        var rawObservedScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "rawObservedScreen")
                                ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen")
-                               ?? inventoryRawSceneType
+                               ?? inventoryRawCurrentScreen
                                ?? compatibilityCurrentScreen;
         var currentScreen = compatibilityCurrentScreen;
         var snapshotVersion = TryReadInt64(stateDocument?.RootElement, "version");
-        var compatibilityVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatVisibleScreen")
+        var compatibilityVisibleScreen = TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScreen")
+                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatVisibleScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScene")
                                          ?? currentScreen
-                                         ?? inventoryCompatibilitySceneType;
+                                         ?? inventoryCompatibilityCurrentScreen;
         var visibleScreen = compatibilityVisibleScreen;
         var inCombat = TryReadBool(stateDocument?.RootElement, "encounter", "inCombat");
         var capturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt")
@@ -86,7 +89,7 @@ sealed class ObserverSnapshotReader
             new ObserverSummary(currentScreen, visibleScreen, inCombat, capturedAt, inventoryId, sceneReady, sceneAuthority, sceneStability, sceneEpisodeId, encounterKind, choiceExtractorPath, playerCurrentHp, playerMaxHp, playerEnergy, currentChoices, eventLines ?? Array.Empty<string>(), ReadActionNodes(inventoryDocument), ReadChoices(stateDocument), combatHand)
             {
                 SnapshotVersion = snapshotVersion,
-                RawCurrentScreen = rawCurrentScreen,
+                RawCurrentScreen = rawObservedScreen,
                 CompatibilityCurrentScreen = compatibilityCurrentScreen,
                 CompatibilityVisibleScreen = compatibilityVisibleScreen,
                 CompatibilitySceneReady = compatibilitySceneReady,

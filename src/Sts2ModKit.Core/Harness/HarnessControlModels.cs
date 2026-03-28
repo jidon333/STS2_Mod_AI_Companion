@@ -21,9 +21,15 @@ public sealed record HarnessNodeInventory(
 {
     public string? RawSceneType { get; init; }
 
+    public string? RawCurrentScreen { get; init; }
+
     public string? CompatibilitySceneType { get; init; }
 
+    public string? CompatibilityCurrentScreen { get; init; }
+
     public string? CompatibilityVisibleScene { get; init; }
+
+    public string? CompatibilityVisibleScreen { get; init; }
 
     public bool? CompatibilitySceneReady { get; init; }
 

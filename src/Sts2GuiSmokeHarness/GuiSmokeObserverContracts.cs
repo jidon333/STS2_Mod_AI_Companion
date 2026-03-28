@@ -25,9 +25,15 @@ sealed record ObserverSummary(
 
     public string? RawCurrentScreen { get; init; }
 
+    public string? RawObservedScreen => RawCurrentScreen;
+
     public string? CompatibilityCurrentScreen { get; init; }
 
+    public string? CompatibilityLogicalScreen => CompatibilityCurrentScreen;
+
     public string? CompatibilityVisibleScreen { get; init; }
+
+    public string? CompatibilityVisibleObservedScreen => CompatibilityVisibleScreen;
 
     public bool? CompatibilitySceneReady { get; init; }
 
@@ -176,8 +182,11 @@ sealed record ObserverState(
     public string? CurrentScreen => Summary.CurrentScreen;
     public string? VisibleScreen => Summary.VisibleScreen;
     public string? RawCurrentScreen => Summary.RawCurrentScreen ?? Summary.CurrentScreen;
+    public string? RawObservedScreen => Summary.RawObservedScreen ?? Summary.RawCurrentScreen ?? Summary.CurrentScreen;
     public string? CompatibilityCurrentScreen => Summary.CompatibilityCurrentScreen ?? Summary.CurrentScreen;
+    public string? CompatibilityLogicalScreen => Summary.CompatibilityLogicalScreen ?? Summary.CompatibilityCurrentScreen ?? Summary.CurrentScreen;
     public string? CompatibilityVisibleScreen => Summary.CompatibilityVisibleScreen ?? Summary.VisibleScreen;
+    public string? CompatibilityVisibleObservedScreen => Summary.CompatibilityVisibleObservedScreen ?? Summary.CompatibilityVisibleScreen ?? Summary.VisibleScreen;
     public bool? InCombat => Summary.InCombat;
     public string? InventoryId => Summary.InventoryId;
     public bool? SceneReady => Summary.SceneReady;

@@ -2217,9 +2217,12 @@ static void TestTrackerAndInventoryPreserveScreenProvenance()
     var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
     Assert(inventory is not null, "Expected inventory publisher to build an inventory from the tracker snapshot.");
     Assert(string.Equals(inventory!.RawSceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should preserve raw scene type separately from compatibility scene type.");
+    Assert(string.Equals(inventory.RawCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose raw current screen explicitly instead of forcing consumers to overload rawSceneType.");
     Assert(string.Equals(inventory.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory legacy scene type should remain the compatibility scene type.");
     Assert(string.Equals(inventory.CompatibilitySceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility scene type explicitly.");
+    Assert(string.Equals(inventory.CompatibilityCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility current screen explicitly instead of overloading sceneType.");
     Assert(string.Equals(inventory.CompatibilityVisibleScene, "map", StringComparison.OrdinalIgnoreCase), "Inventory should preserve compatibility visible scene for downstream diagnostics.");
+    Assert(string.Equals(inventory.CompatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility visible screen explicitly for downstream consumers.");
     Assert(inventory.CompatibilitySceneReady == false, "Inventory should preserve compatibility scene-ready instead of recomputing raw winner truth.");
 }
 
