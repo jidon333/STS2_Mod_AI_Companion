@@ -154,6 +154,9 @@ internal static partial class Program
 
         bool NeedsScreenshotForStep(GuiSmokeStepAnalysisContext stepAnalysisContext)
         {
+            var currentObserver = stepAnalysisContext.Observer;
+            var cardSelectionState = CardSelectionObserverSignals.TryGetState(currentObserver.Summary);
+
             if (stepIndex == 1 && isAuthoritativeFirstAttempt)
             {
                 return true;
@@ -176,6 +179,49 @@ internal static partial class Program
             if (phase == GuiSmokePhase.HandleRewards && stepAnalysisContext.UseRewardFastPath)
             {
                 return false;
+            }
+
+            if (phase == GuiSmokePhase.HandleShop
+                && cardSelectionState is null
+                && ShopObserverSignals.IsShopAuthorityActive(currentObserver.Summary))
+            {
+                return false;
+            }
+
+            if (phase == GuiSmokePhase.HandleEvent
+                && cardSelectionState is null
+                && !LooksLikeInspectOverlayState(currentObserver))
+            {
+                var eventScene = stepAnalysisContext.EventScene;
+                if (eventScene.RewardSubstateActive
+                    || (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)
+                    || (eventScene.EventForegroundOwned && eventScene.HasExplicitProgression)
+                    || AncientEventObserverSignals.IsDialogueActive(currentObserver.Summary)
+                    || AncientEventObserverSignals.HasExplicitCompletionAction(currentObserver.Summary)
+                    || AncientEventObserverSignals.HasExplicitOptionSelection(currentObserver.Summary)
+                    || TreasureRoomObserverSignals.IsTreasureAuthorityActive(currentObserver.Summary)
+                    || EventProceedObserverSignals.HasExplicitEventProceedAuthority(currentObserver.Summary, stepAnalysisContext.WindowBounds))
+                {
+                    return false;
+                }
+            }
+
+            if (phase == GuiSmokePhase.ChooseFirstNode)
+            {
+                if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(currentObserver, stepAnalysisContext.ScreenshotPath)
+                    || GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(currentObserver.Summary)
+                    || TreasureRoomObserverSignals.IsTreasureAuthorityActive(currentObserver.Summary)
+                    || ShopObserverSignals.IsShopAuthorityActive(currentObserver.Summary))
+                {
+                    return false;
+                }
+
+                var mapOverlayState = stepAnalysisContext.MapOverlayState;
+                if (mapOverlayState.ExportedReachableNodeCandidatePresent
+                    || (!mapOverlayState.ReachableNodeCandidatePresent && mapOverlayState.MapBackNavigationAvailable))
+                {
+                    return false;
+                }
             }
 
             if (phase == GuiSmokePhase.HandleCombat && stepAnalysisContext.UseCombatFastPath)
@@ -776,6 +822,7 @@ internal static partial class Program
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "scene-not-ready", observer.CurrentScreen, observer.InCombat, null));
             }
 
+            var sceneReasoningMode = stepAnalysisContext.ScreenshotPath is null ? "observer-only" : "enriched";
             var request = CreateStepRequest(
                 runId,
                 scenarioId,
@@ -794,7 +841,7 @@ internal static partial class Program
             var requestPath = stepPrefix + ".request.json";
             var decisionPath = stepPrefix + ".decision.json";
             logger.WriteRequest(requestPath, request);
-            LogHarness($"step={stepIndex} request={requestPath} captureMode={captureMode}");
+            LogHarness($"step={stepIndex} request={requestPath} captureMode={captureMode} sceneReasoningMode={sceneReasoningMode}");
             var requestReadyElapsedMs = stepStopwatch.ElapsedMilliseconds;
             GuiSmokeReplayEvaluation replayEvaluation;
             GuiSmokeStepDecision decision;
@@ -825,7 +872,7 @@ internal static partial class Program
             }
             logger.WriteDecision(decisionPath, decision);
             LogHarness($"step={stepIndex} decision status={decision.Status} action={decision.ActionKind ?? "null"} target={decision.TargetLabel ?? "null"} confidence={decision.Confidence?.ToString("0.00") ?? "null"} reason={decision.Reason ?? "null"}");
-            LogHarness($"step={stepIndex} timing preflight->request={requestReadyElapsedMs}ms request->decision={Math.Max(0, decisionReadyElapsedMs - requestReadyElapsedMs)}ms captureMode={captureMode}");
+            LogHarness($"step={stepIndex} timing preflight->request={requestReadyElapsedMs}ms request->decision={Math.Max(0, decisionReadyElapsedMs - requestReadyElapsedMs)}ms captureMode={captureMode} sceneReasoningMode={sceneReasoningMode}");
             if (isLongRun)
             {
                 LongRunArtifacts.MaybeRecordUnknownScene(sessionRoot, request, decision);

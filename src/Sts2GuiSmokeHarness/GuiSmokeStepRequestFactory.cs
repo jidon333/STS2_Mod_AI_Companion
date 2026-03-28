@@ -229,9 +229,10 @@ static class GuiSmokeStepRequestFactory
         GuiSmokeStepAnalysisContext? analysisContext = null,
         GuiSmokeSceneRequestContext? sceneContext = null)
     {
+        var effectiveScreenshotPath = analysisContext?.ScreenshotPath;
         var serializedHistory = analysisContext?.History ?? BuildSerializedStepHistory(phase, history);
         var combatCardKnowledge = analysisContext?.CombatCardKnowledge ?? GuiSmokeSceneReasoningSupport.LoadCombatCardKnowledge(workspaceRoot, observer);
-        var sceneSignature = sceneContext?.SceneSignature ?? GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(analysisContext?.ScreenshotPath ?? screenshotPath, observer, phase, analysisContext);
+        var sceneSignature = sceneContext?.SceneSignature ?? GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(effectiveScreenshotPath ?? screenshotPath, observer, phase, analysisContext);
         var useAuthorityFastPath = analysisContext?.UseAuthorityFastPath == true;
         var firstSeenScene = sceneContext?.FirstSeenScene ?? !GuiSmokeSceneReasoningSupport.HasSceneSignatureHistory(sessionRoot, sceneSignature);
         var reasoningMode = sceneContext?.ReasoningMode ?? GuiSmokeSceneReasoningSupport.DetermineReasoningMode(phase, observer, firstSeenScene);
@@ -262,9 +263,9 @@ static class GuiSmokeStepRequestFactory
             knownRecipes,
             eventKnowledgeCandidates,
             combatCardKnowledge,
-            Program.BuildAllowedActionsCore(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory, analysisContext),
+            Program.BuildAllowedActionsCore(phase, observer, combatCardKnowledge, effectiveScreenshotPath, serializedHistory, analysisContext),
             serializedHistory,
-            GuiSmokePromptContractSupport.BuildFailureModeHintCoreWithContext(phase, observer, combatCardKnowledge, screenshotPath, serializedHistory, analysisContext),
+            GuiSmokePromptContractSupport.BuildFailureModeHintCoreWithContext(phase, observer, combatCardKnowledge, effectiveScreenshotPath, serializedHistory, analysisContext),
             GuiSmokeSceneReasoningSupport.BuildDecisionRiskHint(phase, observer, firstSeenScene, reasoningMode));
     }
 }
