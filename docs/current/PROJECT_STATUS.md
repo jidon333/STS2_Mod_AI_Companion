@@ -10,10 +10,11 @@
 
 ## 현재 마일스톤 위치
 
-- 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` 평가
+- 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` 평가 + `M9 observer-first speed recovery` 완료 확인
 - 현재 engineering focus:
   1. `Sts2GuiSmokeHarness` 구조 정리 완료 상태를 문서와 current pointer에 반영
-  2. 그 위에서 남아 있는 semantic gap을 새 owner 구조 안에서 좁게 다루기
+  2. explicit event / common combat hot path를 `observer-first, screenshot-on-demand`로 되돌린 현재 speed baseline 고정
+  3. 그 위에서 남아 있는 semantic gap과 coverage frontier를 새 owner 구조 안에서 좁게 다루기
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
 중요한 현재 해석:
@@ -65,6 +66,18 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 현재 남은 건 blocker라기보다 combat post-wait recapture / capture-boundary coverage frontier다"
 ```
 
+### 3. current speed baseline
+
+- speed recovery program의 핵심 목표였던 `capture-first -> observer-first, screenshot-on-demand` 전환은 common hot path 기준으로 현재 `main`에 반영됐다
+- speed proof root:
+  - [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
+- 해석:
+  - explicit event recovery chain `step=8~9`는 `captureMode=skipped`, `sceneReasoningMode=observer-only`
+  - common combat chain `step=11~17`도 `captureMode=skipped`, `sceneReasoningMode=observer-only`
+  - representative `preflight->request`는 `1155~1466ms` band로 내려왔다
+  - same root의 attempt는 `step=19`에서 `returned-main-menu` terminal로 끝났지만, speed proof 관점에서는 captured hot path가 0건이라는 점이 핵심이다
+  - 이 root는 semantic blocker root가 아니라 speed/capture baseline evidence로만 본다
+
 ## 진행 스냅샷
 
 | Rail | Status | Notes |
@@ -77,6 +90,7 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 | Replay Parity Suite | green | `reward-aftermath-map-handoff` 포함 current parity fixtures green |
 | Non-Combat Stability | green | reward aftermath map-node continuity closure, fresh live root confirms post-reward progression |
 | Combat Stability | green | latest fresh live root에서 repeated EndTurn barrier acknowledgement/reopen이 유지되고 run이 `max-steps-reached:60`까지 진행 |
+| Live-Run Speed Recovery | green | explicit event / common combat hot path가 observer-first로 복귀했고 representative speed root에서 captured step가 0건 |
 | Strict Lifecycle Chain | partial | terminal -> restart -> next-attempt first-screen evidence는 여전히 appendix/work item |
 
 ## 현재 바로 믿을 수 있는 것
@@ -85,6 +99,8 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - replay parity는 current `main` 기준 green이다
 - `WaitRunLoad -> HandleRewards` resumed room handoff fix는 current `main`에 반영되어 있다
 - reward aftermath `ChooseFirstNode` exported-node closure는 current `main`에 반영되어 있다
+- explicit event recovery와 common combat lane은 current `main`에서 screenshot 기본 경로가 아니다
+- representative speed proof root에서 explicit event/combat chain의 `captureMode`는 전부 `skipped`다
 - 하네스 구조 refactor는 current `main` 기준 문서화 가능한 수준까지 정리됐다
 
 ## 현재 대표 evidence
@@ -112,6 +128,14 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
   - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/session-summary.json)
 - latest live run log:
   - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/attempts/0001/run.log)
+- speed recovery proof root:
+  - [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
+- speed proof startup summary:
+  - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/startup-summary.json)
+- speed proof run log:
+  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/attempts/0001/run.log)
+- speed proof terminal summary:
+  - [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/attempts/0001/failure-summary.json)
 - parity fixture now green:
   - `tests/replay-fixtures/m6-parity/reward-map-handoff.request.json`
 
@@ -126,6 +150,8 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - mixed-state local guard residue that duplicated canonical owner truth
 - combat EndTurn pre-actuation observer-drift cancellation
 - combat EndTurn barrier arming from `observer-drift` history instead of actual sent actions
+- screenshot-first explicit event recovery
+- screenshot-first common combat attack / target / non-enemy confirm / end-turn chain
 - monolithic `Program.cs` 중심 구조
 - large self-test hotspot 1차 분해
 
@@ -133,6 +159,7 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 
 - combat post-wait recapture / capture-boundary live proof gap
 - combat broader parity/live coverage
+- full raw-vs-compat observer cleanup workstream
 - strict lifecycle chain appendix
 - some lower-priority noncombat coverage rows (`reward back`, `post-node destination continuity`) remain partial
 
@@ -145,8 +172,10 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
    - [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
    - [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
    - [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
-3. semantic blocker와 evidence gap을 구분한다
-   - noncombat mixed-state와 combat EndTurn barrier family는 닫혔고, 현재 남은 것은 coverage frontier다
+3. semantic blocker, speed evidence, coverage gap을 구분한다
+   - noncombat mixed-state와 combat EndTurn barrier family는 닫혔다
+   - explicit event/common combat speed baseline도 현재 `main`에서 회복됐다
+   - 현재 남은 것은 coverage frontier와 observer provenance cleanup이다
 
 ## 한 줄 요약
 
@@ -154,5 +183,6 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 current main의 smoke harness architecture refactor는 완료됐다.
 reward aftermath live/parity gap도 current main에서 닫혔다.
 combat EndTurn pre-actuation drift / false barrier arm도 current main에서 닫혔다.
-다음 follow-up은 combat / lifecycle coverage를 current owner 구조 안에서 보강하는 쪽이다.
+explicit event / common combat hot path의 observer-first speed recovery도 current main에서 반영됐다.
+다음 follow-up은 combat / lifecycle coverage와 observer provenance cleanup을 current owner 구조 안에서 보강하는 쪽이다.
 ```

@@ -53,8 +53,8 @@ coverage status 의미:
 | State ID | Canonical Phase | Owner / Lane | Coverage | Representative Evidence | Notes |
 |---|---|---|---|---|---|
 | `COMBAT-01` | `WaitCombat` | combat acceptance | green | `Program.SelfTests.CombatContracts.*.cs`의 WaitCombat acceptance assertions (`ready`, `stable`, `inCombat`) | strong acceptance gate |
-| `COMBAT-02` | `HandleCombat` | card select | green | combat opener self-test (`combat select attack slot 1`) | select-before-target preserved |
-| `COMBAT-03` | `HandleCombat` | target lane | partial | `Analysis/CombatTargetabilitySupport.cs`와 `Program.SelfTests.CombatContracts.TargetSelection.cs` | lane exists, broader parity matrix thin |
+| `COMBAT-02` | `HandleCombat` | card select | green | combat opener self-test (`combat select attack slot 1`) + speed proof root [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9) | common combat opener is now observer-first (`captureMode=skipped`) |
+| `COMBAT-03` | `HandleCombat` | target lane | partial | `Analysis/CombatTargetabilitySupport.cs`, `Program.SelfTests.CombatContracts.TargetSelection.cs`, speed proof root [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9) | explicit target lane has fresh observer-first live proof, but broader target parity matrix is still thin |
 | `COMBAT-04` | `HandleCombat` | cancel blocked selection | green | old blocker replay `0167.request.json` family, commit-era closure evidence referenced in current conversation | explicit cancel lane is required contract |
 | `COMBAT-05` | `HandleCombat` | end-turn pre-ack | green | current code barriers + self-tests + fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) | `auto-end turn` now survives pre-actuation drift and sends `key=E` |
 | `COMBAT-06` | `HandleCombat` | acknowledged transit wait | green | fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) plus `Program.SelfTests.CombatContracts.ParityAndBarriers.cs` | barrier reason now reaches acknowledged transit and waits until next-round reopen |
@@ -67,8 +67,8 @@ coverage status 의미:
 
 | State ID | Canonical Phase | Owner / Lane | Coverage | Representative Evidence | Notes |
 |---|---|---|---|---|---|
-| `EVENT-01` | `HandleEvent` | explicit event option | green | `Program.SelfTests.EventRewardSubstates.cs` event foreground signature/assertions | explicit event owner keeps the room lane over background map residue |
-| `EVENT-02` | `HandleEvent` | explicit event proceed | green | `Program.SelfTests.EventRewardSubstates.cs` explicit `EventOption.IsProceed` assertions | proceed lane tactical + fast wait |
+| `EVENT-01` | `HandleEvent` | explicit event option | green | `Program.SelfTests.EventRewardSubstates.cs` event foreground signature/assertions + speed proof root [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9) | explicit event owner keeps the room lane over background map residue and now runs observer-first |
+| `EVENT-02` | `HandleEvent` | explicit event proceed | green | `Program.SelfTests.EventRewardSubstates.cs` explicit `EventOption.IsProceed` assertions + `Program.SelfTests.NonCombatForegroundOwnership.cs` event recovery assertions | proceed lane tactical + fast wait |
 | `EVENT-03` | `HandleEvent` | ancient dialogue | green | `Program.SelfTests.EventRewardSubstates.cs` ancient dialogue/completion assertions | explicit ancient lane covered |
 | `EVENT-04` | `HandleEvent` / `WaitEventRelease` | ancient dialogue / completion | green | `Program.SelfTests.EventRewardSubstates.cs` ancient allowlist, post-phase, release assertions | ancient lane split strong |
 | `EVENT-05` | `HandleEvent` | event reward substate | partial | `Program.SelfTests.EventRewardSubstates.cs` canonical `EventSceneState` assertions delegate colorless/reward follow-up into reward lane; reward/event mixed tests still exist | owner/action/release now route through canonical event state, but fresh current-main live evidence is still thin |
@@ -120,6 +120,8 @@ coverage status 의미:
   - green
 - latest valid live root:
   - [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
+- latest speed proof root:
+  - [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
 
 ### Current-Main Self-Test Families
 

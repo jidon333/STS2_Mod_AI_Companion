@@ -68,7 +68,8 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `Program.cs` monolith 단계는 끝났다
 - old wave 1-8 refactor program은 완료됐다
 - 남은 구조 작업은 `GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md`의 cleanup program 기준으로 본다
-- 다음 작업은 구조 분리보다 semantic follow-up이다
+- explicit event / common combat hot path speed recovery도 current `main`에 반영됐다
+- 다음 작업은 구조 분리보다 semantic follow-up과 observer provenance cleanup이다
 
 ## current architecture state
 
@@ -128,13 +129,28 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - old `combat-barrier-wait-plateau`는 재현되지 않는다
 - run은 `max-steps-reached:60`까지 진행했고 current first blocker는 없다
 
+### 3. latest speed proof root
+
+- root: [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
+- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/startup-summary.json)
+- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/attempts/0001/run.log)
+- terminal summary: [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/attempts/0001/failure-summary.json)
+
+확정 사실:
+
+- 이 root는 semantic blocker root가 아니라 speed/capture baseline proof다
+- explicit event lane `step=8~9`는 `captureMode=skipped`, `sceneReasoningMode=observer-only`
+- common combat chain `step=11~17`도 `captureMode=skipped`, `sceneReasoningMode=observer-only`
+- representative `preflight->request`는 `1155~1466ms` band다
+- attempt는 `returned-main-menu`로 끝났지만, speed 관점에서는 captured hot path가 0건이라는 점이 핵심이다
+
 ## 다음 세션의 기본 목표
 
 다음 semantic work unit이 있다면 목표는 이 하나다.
 
 ```text
-combat post-wait recapture / capture-boundary / lifecycle frontier를
-새 owner 구조 안에서 좁게 다룬다
+combat post-wait recapture / capture-boundary / lifecycle frontier나
+observer provenance cleanup을 새 owner 구조 안에서 좁게 다룬다
 ```
 
 우선 열 파일:
@@ -143,7 +159,8 @@ combat post-wait recapture / capture-boundary / lifecycle frontier를
 2. [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
 3. [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
 4. [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
-5. [LongRunArtifacts.Startup.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
+5. [Observer/ObserverScreenProvenance.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/ObserverScreenProvenance.cs)
+6. [LongRunArtifacts.Startup.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
 
 ## validation baseline
 
@@ -175,7 +192,7 @@ live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
 ## 한 줄 요약
 
 ```text
-current main의 하네스 구조 정리와 reward aftermath closure는 끝났다.
-새 세션은 old Program.cs monolith를 다시 전제로 두지 말고,
-combat / lifecycle coverage frontier를 새 owner 파일에서 보강하라.
+current main의 하네스 구조 정리, reward aftermath closure, common hot path speed recovery는 끝났다.
+새 세션은 old Program.cs monolith나 screenshot-first 전제를 다시 가져오지 말고,
+combat/lifecycle coverage frontier와 observer provenance cleanup을 새 owner 파일에서 보강하라.
 ```
