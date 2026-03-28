@@ -111,24 +111,26 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ### 2. latest valid fresh live root
 
-- root: [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
-- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1/startup-summary.json)
-- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1/attempts/0001/run.log)
+- root: [mixed-state-guard-cleanup-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1)
+- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/startup-summary.json)
+- failure: [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/attempts/0001/failure-summary.json)
+- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/attempts/0001/run.log)
 
 확정 사실:
 
 - root는 valid다
 - `WaitRunLoad -> HandleRewards`는 이미 정상 handoff된다
-- reward aftermath `step=15`는 `exported reachable map node`로 진행한다
-- fresh live에는 failure-summary가 없고 run은 `max-steps-reached`로 끝났다
+- reward aftermath `step=15`는 여전히 `exported reachable map node`로 진행한다
+- mixed-state noncombat cleanup은 regression 없이 유지됐다
+- current first blocker는 `HandleCombat` `combat-barrier-wait-plateau`다
 
 ## 다음 세션의 기본 목표
 
 다음 semantic work unit이 있다면 목표는 이 하나다.
 
 ```text
-combat post-wait / lifecycle evidence 같은 current-main coverage frontier를
-새 owner 구조 안에서 보강한다
+combat barrier / post-wait / lifecycle frontier를
+새 owner 구조 안에서 좁게 다룬다
 ```
 
 우선 열 파일:

@@ -54,6 +54,14 @@ WaitMap / ChooseFirstNode / map-node routing family는
 current main에서 닫혔다
 ```
 
+최신 fresh live root는 [mixed-state-guard-cleanup-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1) 입니다.
+
+- 이 root는 valid입니다.
+- reward/map mixed-state cleanup은 regression 없이 통과했습니다.
+- 현재 first blocker는 `HandleCombat`의 `combat-barrier-wait-plateau` 입니다.
+
+즉 지금 남은 핵심은 noncombat mixed-state가 아니라 combat barrier family입니다.
+
 ## 지금 작업할 때의 원칙
 
 ### 1. 큰 리팩터링은 다시 열지 않는다
@@ -77,14 +85,14 @@ current main에서 닫혔다
 - [AutoDecisionProvider.NonCombatSceneState.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
 - [AutoDecisionProvider.NonCombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
 
-### 3. replay red와 live blocker를 같이 본다
+### 3. replay와 live family를 같이 본다
 
-parity에서 붉은 장면 하나가 있고 live에서도 비슷한 family가 보이면, 그 둘이 같은 원인인지 먼저 확인해야 합니다.
+replay fixture와 live blocker가 비슷한 family를 가리키면, 둘이 같은 owner/action/release contract를 공유하는지 먼저 확인해야 합니다.
 
 ## 한 줄 요약
 
 ```text
-하네스 구조 정리와 reward aftermath closure는 끝났고,
-이제 남은 건 combat / lifecycle coverage를
+하네스 구조 정리와 reward aftermath mixed-state cleanup은 끝났고,
+이제 남은 건 combat barrier / lifecycle coverage를
 새 owner 구조 안에서 current-main 기준으로 보강하는 것이다.
 ```

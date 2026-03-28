@@ -34,15 +34,16 @@ repo root:
 - build / `Sts2ModKit.SelfTest` / `Sts2GuiSmokeHarness -- self-test` / `replay-test`는 green
 - `replay-parity-test`는 current `main` 기준 green
 - `WaitRunLoad` resumed reward/map mixed handoff bug는 이미 닫힘
-- latest valid fresh live root는 [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)이고 failure-summary 없이 `max-steps-reached`로 끝남
+- latest valid fresh live root는 [mixed-state-guard-cleanup-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1)이고 reward aftermath mixed-state closure는 유지된 채 first blocker가 `combat-barrier-wait-plateau`로 이동해 있음
 
 이번 세션 목표
 
 1. old `Program.cs` monolith 전제를 버리고 current owner 파일 기준으로 시작
 2. 구조 refactor reopen 금지
 3. semantic follow-up이 필요하면 combat / lifecycle coverage frontier만 좁게 다룰 것
-4. new parallel heuristic family 추가 금지
-5. acceptance 통과 시 바로 커밋
+4. noncombat mixed-state guard cleanup은 reopen 금지
+5. new parallel heuristic family 추가 금지
+6. acceptance 통과 시 바로 커밋
 
 우선 열 파일
 
@@ -63,9 +64,9 @@ repo root:
 canonical current signal
 
 - latest valid live root:
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1/startup-summary.json
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1/attempts/0001/failure-summary.json
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1/attempts/0001/run.log
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/startup-summary.json
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/attempts/0001/failure-summary.json
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/attempts/0001/run.log
 
 시작 보고 요구
 

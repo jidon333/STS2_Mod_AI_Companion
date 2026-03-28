@@ -45,7 +45,7 @@ coverage status 의미:
 |---|---|---|---|---|---|
 | `MAP-01` | `ChooseFirstNode` | map-node | green | replay parity fixtures expecting `foregroundOwner=map`, exported map-node self-tests | explicit map node routing strong |
 | `MAP-02` | `ChooseFirstNode` / `HandleEvent` | map-overlay foreground | green | `Program.SelfTests.NonCombatForegroundOwnership.cs` map-overlay foreground assertions, `Program.SelfTests.StallSentinel.cs` `map-overlay-noop-loop` sentinel | stale event residue suppression covered |
-| `MAP-03` | `WaitMap` | room reopen | green | `Program.SelfTests.NonCombatForegroundOwnership.cs`의 `WaitMap` reopen reward/event/treasure assertions | mixed modal reopen stays green while reward/event routing now reads canonical scene wrappers |
+| `MAP-03` | `WaitMap` | room reopen | green | `Program.SelfTests.NonCombatForegroundOwnership.cs`의 `WaitMap` reopen reward/event/treasure assertions | mixed modal reopen now follows canonical owner/release handoff directly |
 | `MAP-04` | `WaitPostMapNodeRoom` | destination room handoff | partial | goal text + phase reconciliation helpers + self-tests around event/combat reopen | reward aftermath continuity와 함께 fresh live closure 필요 |
 
 ## Combat
@@ -56,23 +56,23 @@ coverage status 의미:
 | `COMBAT-02` | `HandleCombat` | card select | green | combat opener self-test (`combat select attack slot 1`) | select-before-target preserved |
 | `COMBAT-03` | `HandleCombat` | target lane | partial | `Analysis/CombatTargetabilitySupport.cs`와 `Program.SelfTests.CombatContracts.TargetSelection.cs` | lane exists, broader parity matrix thin |
 | `COMBAT-04` | `HandleCombat` | cancel blocked selection | green | old blocker replay `0167.request.json` family, commit-era closure evidence referenced in current conversation | explicit cancel lane is required contract |
-| `COMBAT-05` | `HandleCombat` | end-turn pre-ack | partial | current code barriers + self-tests from prior workstream; current `main` doc status only indirectly references this | barrier semantics exist but matrix is not yet fully replay-backed on current `main` |
+| `COMBAT-05` | `HandleCombat` | end-turn pre-ack | partial | current code barriers + self-tests from prior workstream + fresh live root [mixed-state-guard-cleanup-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1) | current main fresh live still stops at `combat-barrier-wait-plateau`, so barrier acknowledgement proof remains open |
 | `COMBAT-06` | `HandleCombat` | acknowledged transit wait | partial | safe-transit plateau fix lives outside current `main` baseline as high-signal branch evidence | canonical main coverage incomplete |
 | `COMBAT-07` | `HandleCombat` | enemy-turn closed play phase | partial | legitimate wait semantics exist in current code and self-tests, but current-main replay/live evidence is thin | keep wait semantics explicit |
 | `COMBAT-08` | `HandleCombat` | next-round reopen | partial | prior replay/live closure referenced in conversation, not yet promoted to current `main` docs | needs current-main replay/live row |
-| `COMBAT-09` | post-wait recapture | capture/request continuity | partial | `Program.SelfTests.CaptureReplay.cs` bounded capture assertions now cover timeout/exception/unusable-frame paths; fresh current-main combat wait root still missing | live proof of legitimate wait -> next capture/failure still needed |
+| `COMBAT-09` | post-wait recapture | capture/request continuity | partial | `Program.SelfTests.CaptureReplay.cs` bounded capture assertions now cover timeout/exception/unusable-frame paths; fresh current-main combat wait root is still thin beyond the EndTurn barrier case | live proof of legitimate wait -> next capture/failure still needed |
 | `COMBAT-10` | combat -> rewards | room handoff | green | [PROJECT_STATUS.md](./PROJECT_STATUS.md) long-run continuity roots, repeated combat/reward continuity | strong long-run evidence in status doc |
 
 ## Event / Ancient / Treasure / Rest
 
 | State ID | Canonical Phase | Owner / Lane | Coverage | Representative Evidence | Notes |
 |---|---|---|---|---|---|
-| `EVENT-01` | `HandleEvent` | explicit event option | green | `Program.SelfTests.EventRewardSubstates.cs` event foreground signature/assertions | explicit options beat map fallback |
+| `EVENT-01` | `HandleEvent` | explicit event option | green | `Program.SelfTests.EventRewardSubstates.cs` event foreground signature/assertions | explicit event owner keeps the room lane over background map residue |
 | `EVENT-02` | `HandleEvent` | explicit event proceed | green | `Program.SelfTests.EventRewardSubstates.cs` explicit `EventOption.IsProceed` assertions | proceed lane tactical + fast wait |
 | `EVENT-03` | `HandleEvent` | ancient dialogue | green | `Program.SelfTests.EventRewardSubstates.cs` ancient dialogue/completion assertions | explicit ancient lane covered |
 | `EVENT-04` | `HandleEvent` / `WaitEventRelease` | ancient dialogue / completion | green | `Program.SelfTests.EventRewardSubstates.cs` ancient allowlist, post-phase, release assertions | ancient lane split strong |
 | `EVENT-05` | `HandleEvent` | event reward substate | partial | `Program.SelfTests.EventRewardSubstates.cs` canonical `EventSceneState` assertions delegate colorless/reward follow-up into reward lane; reward/event mixed tests still exist | owner/action/release now route through canonical event state, but fresh current-main live evidence is still thin |
-| `EVENT-06` | `HandleEvent` / `ChooseFirstNode` | event/map mixed aftermath | green | `Program.SelfTests.NonCombatForegroundOwnership.cs` event/map mixed foreground assertions | current green event/map behavior is preserved while mixed routing now goes through canonical event wrappers |
+| `EVENT-06` | `HandleEvent` / `ChooseFirstNode` | event/map mixed aftermath | green | `Program.SelfTests.NonCombatForegroundOwnership.cs` event/map mixed foreground assertions | event/map mixed aftermath now reads canonical owner truth end-to-end |
 | `TREASURE-01` | `ChooseFirstNode` / `HandleEvent` | treasure room | green | treasure room self-tests, WaitMap reopen to treasure, status doc continuity roots | explicit treasure room state strong |
 | `REST-01` | `ChooseFirstNode` | rest-site explicit choice | green | rest-site metadata-first self-tests | authoritative metadata contract strong |
 | `REST-02` | `ChooseFirstNode` | rest-site post-click release | green | grace / noop / selection-failed self-tests | explicit release/no-op guard present |
@@ -81,7 +81,7 @@ coverage status 의미:
 
 | State ID | Canonical Phase | Owner / Lane | Coverage | Representative Evidence | Notes |
 |---|---|---|---|---|---|
-| `REWARD-01` | `HandleRewards` | claim lane | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` reward fast-path signature and `claim reward item` assertions | claim outranks skip/map |
+| `REWARD-01` | `HandleRewards` | claim lane | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` reward fast-path signature and `claim reward item` assertions | claim keeps the reward lane ahead of skip/proceed and map routing |
 | `REWARD-02` | `HandleRewards` | reward card / colorless | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` colorless and reward choice assertions | inspect overlay + card choice covered |
 | `REWARD-03` | `HandleRewards` | reward skip / proceed | green | canonical reward release contract + current self-tests | same-click reissue suppression and release-pending are covered |
 | `REWARD-04` | `HandleRewards` | reward back | partial | allowlist + analysis candidate path exist; canonical replay/live evidence thin | lower priority but incomplete |
@@ -119,7 +119,7 @@ coverage status 의미:
 - latest parity baseline:
   - green
 - latest valid live root:
-  - [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
+  - [mixed-state-guard-cleanup-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1)
 
 ### Current-Main Self-Test Families
 
