@@ -422,7 +422,7 @@ internal static partial class Program
                     HandoffTarget: NonCombatHandoffTarget.HandleShop,
                     AllowsFastForegroundWait: true,
                 },
-                "Shop wrapper should preserve shop ownership, HandleShop handoff, and fast-wait eligibility.");
+                "Shop scene state should preserve shop ownership, HandleShop handoff, and fast-wait eligibility.");
 
             var shopRelicObserver = CreateShopObserver(
                 inventoryOpen: true,

@@ -302,7 +302,7 @@ internal static partial class Program
                 HandoffTarget: NonCombatHandoffTarget.ChooseFirstNode,
                 AllowsFastForegroundWait: false,
             },
-            "Treasure wrapper should preserve ChooseFirstNode handoff without enabling fast foreground waits.");
+            "Treasure scene state should preserve ChooseFirstNode handoff without enabling fast foreground waits.");
         Assert(
             !GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(treasureRequest.Observer, null, null, null)).Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
             "Treasure room authority should suppress generic exported reachable-node routing.");
@@ -352,7 +352,7 @@ internal static partial class Program
             GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(treasureRelicRequest.Observer, null, null, null)).Contains("click treasure relic holder", StringComparer.OrdinalIgnoreCase),
             "Open treasure rooms with visible holders should expose the explicit relic-holder lane.");
         var treasureRelicDecision = AutoDecisionProvider.Decide(treasureRelicRequest);
-        Assert(treasureRelicDecision.TargetLabel == "treasure relic holder", "Treasure relic-holder lane should outrank top-left inventory relic icons.");
+        Assert(treasureRelicDecision.TargetLabel == "treasure relic holder", "Treasure relic-holder lane should preserve the treasure room action lane over top-left inventory relic icons.");
 
         var treasureProceedRequest = treasureRequest with
         {

@@ -200,7 +200,7 @@ internal static partial class Program
                 Array.Empty<CombatCardKnowledgeHint>(),
                 GetAllowedActions(GuiSmokePhase.HandleEvent, eventObserverState),
                 Array.Empty<GuiSmokeHistoryEntry>(),
-                "Explicit event options must outrank background map contamination.",
+                "Explicit event owner should preserve the room lane over background map contamination.",
                 null));
             Assert(eventDecision.TargetLabel is not null && eventDecision.TargetLabel.Contains("event", StringComparison.OrdinalIgnoreCase), "Event decisioning should click an explicit event option instead of a map fallback when NEventRoom authority is present.");
             Assert(string.Equals(DetermineReasoningMode(GuiSmokePhase.HandleEvent, eventObserverState, firstSeenScene: true), "semantic", StringComparison.OrdinalIgnoreCase), "Ambiguous event scenes should stay in semantic reasoning mode until ownership becomes explicit.");
@@ -705,7 +705,7 @@ internal static partial class Program
                 "Visible smith upgrade state should disable explicit rest-site choice authority and expose smith card actions.");
             var smithUpgradeDecision = AutoDecisionProvider.Decide(smithUpgradeRequest);
             Assert(string.Equals(smithUpgradeDecision.TargetLabel, "rest site: smith confirm", StringComparison.OrdinalIgnoreCase),
-                "Observer-exported smith confirm should outrank screenshot fallback once the confirm button is visible.");
+                "Observer-exported smith confirm should preserve the rest-site lane once the confirm button is visible.");
 
             var disabledConfirmSmithUpgradeSummary = smithUpgradeSummary with
             {
@@ -772,7 +772,7 @@ internal static partial class Program
                     HandoffTarget: NonCombatHandoffTarget.ChooseFirstNode,
                     AllowsFastForegroundWait: true,
                 },
-                "Rest-site wrapper should preserve ChooseFirstNode handoff and fast foreground waits.");
+                "Rest-site scene state should preserve ChooseFirstNode handoff and fast foreground waits.");
             var restSiteProceedDecision = AutoDecisionProvider.Decide(restSiteProceedRequest);
             Assert(string.Equals(restSiteProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
                 "Observer-visible rest-site proceed choice should create a visible proceed decision without waiting for screenshot arrows.");

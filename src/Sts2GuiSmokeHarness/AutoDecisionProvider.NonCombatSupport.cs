@@ -154,12 +154,6 @@ sealed partial class AutoDecisionProvider
                    || label.Contains("Hatch", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool HasStrongForegroundEventChoice(GuiSmokeStepRequest request)
-    {
-        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
-        return eventScene.StrongForegroundChoice;
-    }
-
     private static bool HasExplicitEventProceedAuthority(ObserverState observer, WindowBounds? windowBounds)
     {
         return EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer, windowBounds);
@@ -198,18 +192,6 @@ sealed partial class AutoDecisionProvider
         return semanticHints.Any(static hint =>
             string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase)
             || string.Equals(hint, "event-proceed", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool ShouldPrioritizeExplicitEventProgressionAfterCardSelection(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry> history)
-    {
-        return HasRecentCardSelectionSubtypeAftermath(history)
-               && HasExplicitEventProgressionChoiceVisible(observer, null);
-    }
-
-    private static bool ShouldPrioritizeExplicitEventProgressionAfterCardSelection(GuiSmokeStepRequest request)
-    {
-        return HasRecentCardSelectionSubtypeAftermath(request.History)
-               && HasExplicitEventProgressionChoiceVisible(request.Observer, request.WindowBounds);
     }
 
     private static bool HasRecentCardSelectionSubtypeAftermath(IReadOnlyList<GuiSmokeHistoryEntry> history)
@@ -839,19 +821,6 @@ sealed partial class AutoDecisionProvider
             1200,
             true,
             null);
-    }
-
-    private static GuiSmokeStepDecision? TryCreateMapOverlayForegroundDecision(GuiSmokeStepRequest request)
-    {
-        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        if (!mapOverlayState.ForegroundVisible)
-        {
-            return null;
-        }
-
-        return TryCreateExportedReachableMapPointDecision(request)
-               ?? TryCreateMapBackNavigationDecision(request)
-               ?? TryFindFirstReachableMapNodeDecision(request);
     }
 
     private static GuiSmokeStepDecision? TryCreateSemanticEventDecision(GuiSmokeStepRequest request)

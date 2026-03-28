@@ -20,18 +20,16 @@ static class MapForegroundReconciliation
             return false;
         }
 
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history);
         var mapVisible = GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
                          || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
                          || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase);
         return mapVisible
-               && !HasStrongerForegroundModalAuthority(observer, history, eventScene);
+               && !HasStrongerForegroundModalAuthority(observer, history);
     }
 
     private static bool HasStrongerForegroundModalAuthority(
         ObserverState observer,
-        IReadOnlyList<GuiSmokeHistoryEntry> history,
-        EventSceneState eventScene)
+        IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
         if (CardSelectionObserverSignals.TryGetState(observer.Summary) is not null)
         {
@@ -48,28 +46,30 @@ static class MapForegroundReconciliation
             return true;
         }
 
-        if (LooksLikeRewardForeground(observer))
+        if (AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, history) is
+            {
+                CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown
+                    and not NonCombatCanonicalForegroundOwner.Map,
+            })
         {
             return true;
         }
 
-        if (HasExplicitEventProgressionForeground(observer)
-            || eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active)
-        {
-            return true;
-        }
-
-        return HasRecentMapOpenAftermath(history) && !IsMapOnlyForegroundState(observer, eventScene);
+        return HasRecentMapOpenAftermath(history) && !IsMapOnlyForegroundState(observer, history);
     }
 
-    private static bool IsMapOnlyForegroundState(ObserverState observer, EventSceneState eventScene)
+    private static bool IsMapOnlyForegroundState(
+        ObserverState observer,
+        IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
         return CardSelectionObserverSignals.TryGetState(observer.Summary) is null
                && !TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
                && !LooksLikeInspectOverlayForeground(observer)
-               && !LooksLikeRewardForeground(observer)
-               && !HasExplicitEventProgressionForeground(observer)
-               && !(eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active);
+               && AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, history) is not
+                   {
+                       CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown
+                           and not NonCombatCanonicalForegroundOwner.Map,
+                   };
     }
 
     private static bool LooksLikeInspectOverlayForeground(ObserverState observer)
@@ -83,38 +83,6 @@ static class MapForegroundReconciliation
                    || node.Kind.Contains("overlay", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool LooksLikeRewardForeground(ObserverState observer)
-    {
-        return RewardObserverSignals.IsRewardAuthorityActive(observer.Summary);
-    }
-
-    private static bool HasExplicitEventProgressionForeground(ObserverState observer)
-    {
-        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
-        {
-            return false;
-        }
-
-        var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
-        if (!eventAuthority)
-        {
-            return false;
-        }
-
-        return observer.ActionNodes.Any(static node =>
-                   node.Actionable
-                   && (IsProceedLikeText(node.Label)
-                       || node.Kind.Contains("proceed", StringComparison.OrdinalIgnoreCase)
-                       || node.Kind.Contains("continue", StringComparison.OrdinalIgnoreCase)))
-               || observer.Choices.Any(static choice =>
-                   IsProceedLikeText(choice.Label)
-                   && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
-                   && !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase));
-    }
-
     private static bool IsOverlayLikeLabel(string? label)
     {
         return !string.IsNullOrWhiteSpace(label)
@@ -123,15 +91,6 @@ static class MapForegroundReconciliation
                    || label.Contains("닫기", StringComparison.OrdinalIgnoreCase)
                    || label.Contains("취소", StringComparison.OrdinalIgnoreCase)
                    || label.Contains("Cancel", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool IsProceedLikeText(string? label)
-    {
-        return !string.IsNullOrWhiteSpace(label)
-               && (label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("진행", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("계속", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasRecentMapOpenAftermath(IReadOnlyList<GuiSmokeHistoryEntry> history)

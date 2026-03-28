@@ -83,7 +83,7 @@ internal static partial class Program
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 "Reward panel is authoritative over any background map contamination.",
                 null));
-            Assert(string.Equals(rewardDecision.TargetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase), "Explicit reward items should outrank screenshot-derived map fallback on NRewardsScreen.");
+            Assert(string.Equals(rewardDecision.TargetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase), "Explicit reward items should preserve the reward lane over screenshot-derived map routing on NRewardsScreen.");
             Assert(TryClassifyRewardMapLoop(
                 GuiSmokePhase.HandleRewards,
                 new GuiSmokeStepRequest(
@@ -338,7 +338,7 @@ internal static partial class Program
                 Array.Empty<CombatCardKnowledgeHint>(),
                 GetAllowedActions(GuiSmokePhase.ChooseFirstNode, rewardAftermathObserver),
                 Array.Empty<GuiSmokeHistoryEntry>(),
-                "Released-to-map reward aftermath should route to exported map nodes, not stay blocked behind stale reward wrappers.",
+                "Released-to-map reward aftermath should route to exported map nodes, not stay blocked behind stale reward scene-state residue.",
                 null);
             var rewardAftermathMapNodeDecision = AutoDecisionProvider.Decide(rewardAftermathChooseFirstNodeRequest);
             Assert(string.Equals(rewardAftermathMapNodeDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase), "ChooseFirstNode should click the exported travelable map node once reward ownership has released to map.");

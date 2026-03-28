@@ -77,8 +77,8 @@ sealed partial class AutoDecisionProvider
         }
         else
         {
-            builder.AddSuppressed("click first reachable node", "reward-foreground-keeps-map-fallback-suppressed");
-            builder.AddSuppressed("click visible map advance", "reward-foreground-keeps-map-fallback-suppressed");
+            builder.AddSuppressed("click first reachable node", "reward-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click visible map advance", "reward-owner-active-preserves-room-lane");
         }
 
         return builder.Build(CreateWaitDecision("waiting for reward actions", request.Observer.CurrentScreen), actualDecision);
@@ -92,8 +92,8 @@ sealed partial class AutoDecisionProvider
 
         if (HasExplicitRestSiteChoiceAuthority(request))
         {
-            builder.AddSuppressed("click exported reachable node", "rest-site-explicit-choices-outrank-exported-map-routing");
-            builder.AddSuppressed("click first reachable node", "rest-site-explicit-choices-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "rest-site-owner-active-preserves-room-lane");
             builder.AddSuppressed("click visible map advance", "rest-site-explicit-choices-suppress-current-node-arrow");
             builder.AddSuppressed("click map back", "rest-site-explicit-choices-are-the-progression-lane");
             foreach (var restSiteCandidate in BuildRestSiteDecisionCandidates(request))
@@ -121,8 +121,8 @@ sealed partial class AutoDecisionProvider
         if (LooksLikeRestSiteState(request.Observer)
             && TryCreateRestSiteUpgradeDecision(request) is { } observerUpgradeDecision)
         {
-            builder.AddSuppressed("click exported reachable node", "rest-site-upgrade-outranks-exported-map-routing");
-            builder.AddSuppressed("click first reachable node", "rest-site-upgrade-outranks-screenshot-map-routing");
+            builder.AddSuppressed("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "rest-site-owner-active-preserves-room-lane");
             builder.AddSuppressed("click visible map advance", "rest-site-upgrade-suppresses-current-node-arrow");
             builder.AddSuppressed("click map back", "rest-site-upgrade-remains-foreground-authority");
             builder.Consider(
@@ -166,10 +166,10 @@ sealed partial class AutoDecisionProvider
                 SmithUpgradeActive: false,
             })
         {
-            builder.AddSuppressed("click exported reachable node", "rest-site-proceed-outranks-map-routing");
-            builder.AddSuppressed("click first reachable node", "rest-site-proceed-outranks-screenshot-map-routing");
-            builder.AddSuppressed("click visible map advance", "rest-site-proceed-suppresses-current-node-arrow");
-            builder.AddSuppressed("click map back", "rest-site-proceed-is-the-room-progression-lane");
+            builder.AddSuppressed("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "rest-site-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click visible map advance", "rest-site-owner-active-suppresses-map-arrow-contamination");
+            builder.AddSuppressed("click map back", "rest-site-owner-active-preserves-room-lane");
             builder.Consider(
                 "click proceed",
                 "rest-site-proceed",
@@ -183,8 +183,8 @@ sealed partial class AutoDecisionProvider
 
         if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
         {
-            builder.AddSuppressed("click exported reachable node", "treasure-room-explicit-affordances-outrank-map-routing");
-            builder.AddSuppressed("click first reachable node", "treasure-room-explicit-affordances-outrank-screenshot-map-routing");
+            builder.AddSuppressed("click exported reachable node", "treasure-room-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "treasure-room-owner-active-preserves-room-lane");
             builder.AddSuppressed("click visible map advance", "treasure-room-explicit-affordances-suppress-current-node-arrow");
             builder.AddSuppressed("click map back", "treasure-room-progression-is-chest-holder-proceed");
             var treasureDecision = TryCreateTreasureRoomDecision(request);
@@ -275,7 +275,7 @@ sealed partial class AutoDecisionProvider
         }
 
         var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
-        var preferEventForeground = eventScene.EventForegroundOwned
+        var eventForegroundActive = eventScene.EventForegroundOwned
                                     && eventScene.ReleaseStage == EventReleaseStage.Active;
         var mapOverlayState = eventScene.MapOverlayState;
         var strongEventForegroundChoice = eventScene.StrongForegroundChoice || forceEventProgressionAfterCardSelection;
@@ -310,10 +310,10 @@ sealed partial class AutoDecisionProvider
             "no-treasure-room-actionable-affordance");
         if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
         {
-            builder.AddSuppressed("click exported reachable node", "treasure-room-explicit-affordances-outrank-map-routing");
-            builder.AddSuppressed("click first reachable node", "treasure-room-explicit-affordances-outrank-screenshot-map-routing");
-            builder.AddSuppressed("click visible map advance", "treasure-room-explicit-affordances-suppress-current-node-arrow");
-            builder.AddSuppressed("click event choice", "treasure-room-explicit-affordances-outrank-generic-event-choice");
+            builder.AddSuppressed("click exported reachable node", "treasure-room-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "treasure-room-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click visible map advance", "treasure-room-owner-active-suppresses-map-arrow-contamination");
+            builder.AddSuppressed("click event choice", "treasure-room-owner-active-preserves-room-lane");
             builder.AddSuppressed("click proceed", "treasure-room-explicit-proceed-is-handled-by-treasure-state-machine");
             return builder.Build(CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen), actualDecision);
         }
@@ -344,9 +344,9 @@ sealed partial class AutoDecisionProvider
         {
             builder.AddSuppressed("click event choice", "ancient-dialogue-must-finish-before-option-selection");
             builder.AddSuppressed("click proceed", "ancient-dialogue-does-not-use-generic-proceed");
-            builder.AddSuppressed("click exported reachable node", "ancient-event-dialogue-outranks-map-routing");
-            builder.AddSuppressed("click first reachable node", "ancient-event-dialogue-outranks-screenshot-map-routing");
-            builder.AddSuppressed("click visible map advance", "ancient-event-dialogue-suppresses-map-arrow-fallback");
+            builder.AddSuppressed("click exported reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
             return builder.Build(CreateWaitDecision("waiting for explicit ancient dialogue hitbox", request.Observer.CurrentScreen), actualDecision);
         }
 
@@ -362,9 +362,9 @@ sealed partial class AutoDecisionProvider
         if (AncientEventObserverSignals.HasExplicitCompletionAction(request.Observer))
         {
             builder.AddSuppressed("click proceed", "ancient-completion-remains-event-owned-through-explicit-proceed-button");
-            builder.AddSuppressed("click exported reachable node", "ancient-event-completion-outranks-map-routing");
-            builder.AddSuppressed("click first reachable node", "ancient-event-completion-outranks-screenshot-map-routing");
-            builder.AddSuppressed("click visible map advance", "ancient-event-completion-suppresses-map-arrow-fallback");
+            builder.AddSuppressed("click exported reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
             return builder.Build(CreateWaitDecision("waiting for explicit ancient event completion", request.Observer.CurrentScreen), actualDecision);
         }
 
@@ -390,9 +390,9 @@ sealed partial class AutoDecisionProvider
         if (AncientEventObserverSignals.HasExplicitOptionSelection(request.Observer))
         {
             builder.AddSuppressed("click proceed", "ancient-event-options-should-use-explicit-option-buttons");
-            builder.AddSuppressed("click exported reachable node", "ancient-event-options-outrank-map-routing");
-            builder.AddSuppressed("click first reachable node", "ancient-event-options-outrank-screenshot-map-routing");
-            builder.AddSuppressed("click visible map advance", "ancient-event-options-suppress-map-arrow-fallback");
+            builder.AddSuppressed("click exported reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
             return builder.Build(CreateWaitDecision("waiting for explicit ancient event option buttons", request.Observer.CurrentScreen), actualDecision);
         }
 
@@ -416,24 +416,24 @@ sealed partial class AutoDecisionProvider
 
         if (forceEventProgressionAfterCardSelection)
         {
-            builder.AddSuppressed("click exported reachable node", "post-card-selection-event-explicit-progression-outranks-map-routing");
-            builder.AddSuppressed("click first reachable node", "post-card-selection-event-explicit-progression-outranks-map-routing");
-            builder.AddSuppressed("click visible map advance", "post-card-selection-event-explicit-progression-outranks-map-routing");
+            builder.AddSuppressed("click exported reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
         }
 
-        if (preferEventForeground
+        if (eventForegroundActive
             && (request.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase)
                 || request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase)
                 || request.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)))
         {
-            builder.AddSuppressed("click visible map advance", "event-foreground-suppresses-background-map-contamination");
+            builder.AddSuppressed("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
         }
 
         var semanticDecision = TryCreateSemanticEventDecision(request);
-        builder.Consider("click event choice", "semantic-event", preferEventForeground ? 0.98d : 0.72d, () => semanticDecision, "no-semantic-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");
+        builder.Consider("click event choice", "semantic-event", eventForegroundActive ? 0.98d : 0.72d, () => semanticDecision, "no-semantic-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");
 
         var explicitEventChoice = TryCreateEventProgressChoiceDecision(request);
-        builder.Consider("click event choice", "observer:event-choice", preferEventForeground ? 0.94d : 0.68d, () => explicitEventChoice, "no-explicit-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");
+        builder.Consider("click event choice", "observer:event-choice", eventForegroundActive ? 0.94d : 0.68d, () => explicitEventChoice, "no-explicit-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");
 
         if (LooksLikeMapTransitionState(request))
         {
@@ -441,7 +441,7 @@ sealed partial class AutoDecisionProvider
         }
         else
         {
-            builder.AddSuppressed("click first reachable node", "event-foreground-keeps-map-transition-branch-suppressed");
+            builder.AddSuppressed("click first reachable node", "event-owner-active-suppresses-map-transition-branch");
         }
 
         return builder.Build(CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen), actualDecision);

@@ -55,17 +55,12 @@ internal static partial class Program
 
         var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
         var treasureState = TreasureRoomObserverSignals.TryGetState(observer.Summary);
-        var rewardMapLayer = context.RewardMapLayerState;
-        var claimableRewardPresent = context.ClaimableRewardPresent;
         var mapOverlayState = context.MapOverlayState;
         var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history, screenshotPath);
         var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
         var explicitEventProceedAuthority = eventScene.ExplicitProceedVisible;
-        var preferRewardProgressionOverMapFallback = eventScene.RewardScene.RewardForegroundOwned
-                                                     && eventScene.RewardScene.ReleaseStage == RewardReleaseStage.Active
-                                                     && eventScene.RewardScene.ExplicitProceedVisible;
-        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
-                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
+        var eventOwnerActive = eventScene.EventForegroundOwned
+                               && eventScene.ReleaseStage == EventReleaseStage.Active;
         var mapForegroundOwnership = MapForegroundReconciliation.HasMapForegroundOwnership(observer, history);
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
         var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
@@ -120,12 +115,6 @@ internal static partial class Program
                 => BuildRewardAllowedActionsFromState(observer, eventScene.RewardScene),
             GuiSmokePhase.HandleEvent when eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending
                 => new[] { "wait" },
-            GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && (claimableRewardPresent || GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(observer))
-                => new[] { "click colorless card choice", "click reward skip", "click proceed", "press escape", "wait" },
-            GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && (claimableRewardPresent || GuiSmokeRewardSceneSignals.LooksLikeRewardChoiceState(observer))
-                => new[] { "click reward card choice", "click reward choice", "click reward skip", "click proceed", context.RewardBackNavigationAvailable ? "click reward back" : "press escape", "wait" },
-            GuiSmokePhase.HandleEvent when rewardMapLayer.RewardPanelVisible && preferRewardProgressionOverMapFallback
-                => new[] { "click reward", "click reward skip", "click proceed", "wait" },
             GuiSmokePhase.HandleEvent when ancientMapOwner && ancientMapSurfacePending
                 => new[] { "wait" },
             GuiSmokePhase.HandleEvent when AncientEventObserverSignals.IsDialogueActive(observer.Summary)
@@ -144,7 +133,7 @@ internal static partial class Program
                     : new[] { "click exported reachable node", "click first reachable node", "wait" },
             GuiSmokePhase.HandleEvent when HasStrongMapTransitionEvidence(observer)
                                             && !forceEventProgressionAfterCardSelection
-                                            && !preferEventProgressionOverMapFallback
+                                            && !eventOwnerActive
                 => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
             GuiSmokePhase.HandleEvent => new[] { "click event choice", "click proceed", "wait" },
             GuiSmokePhase.WaitEventRelease => new[] { "wait" },

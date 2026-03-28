@@ -73,11 +73,12 @@ internal static partial class Program
         var mapOverlayState = context.MapOverlayState;
         var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null);
         var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
-        var preferRewardProgressionOverMapFallback = rewardScene.RewardForegroundOwned
-                                                     && rewardScene.ReleaseStage == RewardReleaseStage.Active
-                                                     && rewardScene.ExplicitProceedVisible;
-        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
-                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
+        var canonicalScene = AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, null, screenshotPath);
+        var suppressMapTransitionByForegroundAuthority = canonicalScene is
+            {
+                CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown
+                    and not NonCombatCanonicalForegroundOwner.Map,
+            };
         var tags = new List<string>(capacity: 10)
         {
             $"phase:{phase.ToString().ToLowerInvariant()}",
@@ -212,8 +213,7 @@ internal static partial class Program
             if (!mapOverlayState.ForegroundVisible
                 && HasStrongMapTransitionEvidence(observer)
                 && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                && !preferRewardProgressionOverMapFallback
-                && !preferEventProgressionOverMapFallback)
+                && !suppressMapTransitionByForegroundAuthority)
             {
                 tags.Add("substate:map-transition");
             }
@@ -223,15 +223,13 @@ internal static partial class Program
             {
                 if (!mapOverlayState.ForegroundVisible)
                 {
-                    tags.Add(rewardMapLayer.RewardPanelVisible && preferRewardProgressionOverMapFallback
+                    tags.Add(suppressMapTransitionByForegroundAuthority
                         ? "contamination:map-arrow"
-                        : preferEventProgressionOverMapFallback
-                            ? "contamination:map-arrow"
-                            : "visible:map-arrow");
+                        : "visible:map-arrow");
                 }
             }
 
-            if (preferEventProgressionOverMapFallback)
+            if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active)
             {
                 tags.Add("layer:event-foreground");
             }

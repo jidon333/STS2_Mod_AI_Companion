@@ -629,27 +629,11 @@ internal static partial class Program
                 return true;
             }
 
-            if (ShouldRouteToHandleRewards(observer, history))
+            if (TryGetCanonicalForegroundModalBranch(observer, history, out var branchKind, out var canonicalForegroundPhase))
             {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleRewards;
-                return true;
-            }
-
-            if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site-upgrade", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site-upgrade", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.ChooseFirstNode;
-                return true;
-            }
-
-            if (LooksLikeRestSiteProceedState(observer.Summary))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site-proceed", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site-proceed", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.ChooseFirstNode;
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = canonicalForegroundPhase;
                 return true;
             }
 
@@ -669,13 +653,6 @@ internal static partial class Program
                 return true;
             }
 
-            if (ShouldRouteToHandleEvent(observer, history))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleEvent;
-                return true;
-            }
         }
 
         if (phase == GuiSmokePhase.WaitMap)
@@ -685,35 +662,11 @@ internal static partial class Program
                 return true;
             }
 
-            if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
+            if (TryGetCanonicalForegroundModalBranch(observer, history, out var branchKind, out var canonicalForegroundPhase))
             {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleShop;
-                return true;
-            }
-
-            if (ShouldRouteToHandleRewards(observer, history))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleRewards;
-                return true;
-            }
-
-            if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site-upgrade", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site-upgrade", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.ChooseFirstNode;
-                return true;
-            }
-
-            if (LooksLikeRestSiteProceedState(observer.Summary))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site-proceed", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site-proceed", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.ChooseFirstNode;
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = canonicalForegroundPhase;
                 return true;
             }
 
@@ -733,13 +686,6 @@ internal static partial class Program
                 return true;
             }
 
-            if (ShouldRouteToHandleEvent(observer, history))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleEvent;
-                return true;
-            }
         }
 
         if (phase is GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitPostMapNodeRoom or GuiSmokePhase.WaitCombat)
@@ -780,7 +726,7 @@ internal static partial class Program
             if (phase == GuiSmokePhase.WaitPostMapNodeRoom
                 && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(observer, out var postMapNodePhase))
             {
-                var branchKind = postMapNodePhase switch
+                var postMapNodeBranchKind = postMapNodePhase switch
                 {
                     GuiSmokePhase.HandleRewards => "branch-rewards",
                     GuiSmokePhase.HandleCombat => "branch-combat",
@@ -791,64 +737,22 @@ internal static partial class Program
                     GuiSmokePhase.ChooseFirstNode => "branch-map",
                     _ => "branch-room",
                 };
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), postMapNodeBranchKind, null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), postMapNodeBranchKind, observer.CurrentScreen, observer.InCombat, null));
                 nextPhase = postMapNodePhase;
                 return true;
             }
 
-            if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
+            if (TryGetCanonicalForegroundModalBranch(observer, history, out var branchKind, out var canonicalForegroundPhase))
             {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-shop", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-shop", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleShop;
-                return true;
-            }
-
-            if (ShouldRouteToHandleRewards(observer, history))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rewards", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleRewards;
-                return true;
-            }
-
-            if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary))
-            {
-                if (phase == GuiSmokePhase.ChooseFirstNode)
+                if (phase == GuiSmokePhase.ChooseFirstNode && canonicalForegroundPhase == GuiSmokePhase.ChooseFirstNode)
                 {
                     return false;
                 }
 
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site-upgrade", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site-upgrade", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.ChooseFirstNode;
-                return true;
-            }
-
-            if (LooksLikeRestSiteState(observer.Summary))
-            {
-                if (phase == GuiSmokePhase.ChooseFirstNode)
-                {
-                    return false;
-                }
-
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-rest-site", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-rest-site", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.ChooseFirstNode;
-                return true;
-            }
-
-            if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary))
-            {
-                if (phase == GuiSmokePhase.ChooseFirstNode)
-                {
-                    return false;
-                }
-
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-treasure", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-treasure", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.ChooseFirstNode;
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = canonicalForegroundPhase;
                 return true;
             }
 
@@ -860,13 +764,6 @@ internal static partial class Program
                 return true;
             }
 
-            if (ShouldRouteToHandleEvent(observer, history))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleEvent;
-                return true;
-            }
         }
 
         if (phase == GuiSmokePhase.HandleShop)
@@ -893,27 +790,11 @@ internal static partial class Program
                 return true;
             }
 
-            if (ShouldRouteToHandleRewards(observer, history))
+            if (TryGetCanonicalForegroundModalBranch(observer, history, out var branchKind, out var canonicalForegroundPhase))
             {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-resolved-rewards", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleRewards;
-                return true;
-            }
-
-            if (LooksLikeRestSiteState(observer.Summary))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-resolved-rest-site", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-resolved-rest-site", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.ChooseFirstNode;
-                return true;
-            }
-
-            if (ShouldRouteToHandleEvent(observer, history))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "shop-resolved-event", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "shop-resolved-event", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleEvent;
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), $"shop-resolved-{branchKind["branch-".Length..]}", null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), $"shop-resolved-{branchKind["branch-".Length..]}", observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = canonicalForegroundPhase;
                 return true;
             }
 
@@ -959,7 +840,7 @@ internal static partial class Program
                 return true;
             }
 
-            if (ShouldRouteToHandleRewards(observer, history))
+            if (AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, history) is RewardSceneState { RewardForegroundOwned: true, ReleaseStage: RewardReleaseStage.Active })
             {
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "event-resolved-rewards", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "event-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
@@ -981,7 +862,7 @@ internal static partial class Program
 
         if (phase == GuiSmokePhase.HandleCombat)
         {
-            if (ShouldRouteToHandleRewards(observer, history))
+            if (AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, history) is RewardSceneState { RewardForegroundOwned: true, ReleaseStage: RewardReleaseStage.Active })
             {
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-resolved-rewards", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
@@ -1020,8 +901,9 @@ internal static partial class Program
             branchKind = "branch-card-selection";
             nextPhase = GuiSmokePhase.ChooseFirstNode;
         }
-        else if (TryGetCanonicalWaitMapReopenBranch(observer, history, out branchKind, out nextPhase))
+        else if (TryGetCanonicalForegroundModalBranch(observer, history, out var canonicalBranchKind, out nextPhase))
         {
+            branchKind = canonicalBranchKind;
         }
 
         if (branchKind is null)
@@ -1034,93 +916,44 @@ internal static partial class Program
         return true;
     }
 
-    static bool ShouldRouteToHandleRewards(
+    static bool TryGetCanonicalForegroundModalBranch(
         ObserverState observer,
         IReadOnlyList<GuiSmokeHistoryEntry>? history,
-        string? screenshotPath = null)
-    {
-        if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary)
-            || LooksLikeRestSiteProceedState(observer.Summary)
-            || LooksLikeRestSiteState(observer.Summary)
-            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
-            || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
-            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
-        {
-            return false;
-        }
-
-        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null, history, screenshotPath);
-        return rewardScene.RewardForegroundOwned
-               && rewardScene.ReleaseStage == RewardReleaseStage.Active;
-    }
-
-    static bool ShouldRouteToHandleEvent(
-        ObserverState observer,
-        IReadOnlyList<GuiSmokeHistoryEntry>? history,
-        string? screenshotPath = null)
-    {
-        if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
-            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
-            || LooksLikeRestSiteState(observer.Summary)
-            || LooksLikeRestSiteProceedState(observer.Summary)
-            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary)
-            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
-        {
-            return false;
-        }
-
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history, screenshotPath);
-        return eventScene.EventForegroundOwned
-               && eventScene.ReleaseStage == EventReleaseStage.Active;
-    }
-
-    static bool TryGetCanonicalWaitMapReopenBranch(
-        ObserverState observer,
-        IReadOnlyList<GuiSmokeHistoryEntry>? history,
-        out string? branchKind,
+        out string branchKind,
         out GuiSmokePhase nextPhase)
     {
-        branchKind = null;
+        branchKind = string.Empty;
         nextPhase = GuiSmokePhase.WaitMap;
-
-        if (AutoDecisionProvider.BuildTreasureSceneState(observer) is not null)
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
         {
-            branchKind = "branch-treasure";
-            nextPhase = GuiSmokePhase.ChooseFirstNode;
-            return true;
+            return false;
         }
 
-        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null, history);
-        if (rewardScene.RewardForegroundOwned && rewardScene.ReleaseStage == RewardReleaseStage.Active)
+        return AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, history) switch
         {
-            branchKind = "branch-rewards";
-            nextPhase = GuiSmokePhase.HandleRewards;
-            return true;
-        }
+            RewardSceneState { RewardForegroundOwned: true, ReleaseStage: RewardReleaseStage.Active }
+                => SetCanonicalForegroundModalBranch("branch-rewards", GuiSmokePhase.HandleRewards, out branchKind, out nextPhase),
+            ShopSceneState { ReleaseStage: NonCombatReleaseStage.Active }
+                => SetCanonicalForegroundModalBranch("branch-shop", GuiSmokePhase.HandleShop, out branchKind, out nextPhase),
+            RestSiteSceneState { ReleaseStage: NonCombatReleaseStage.Active }
+                => SetCanonicalForegroundModalBranch("branch-rest-site", GuiSmokePhase.ChooseFirstNode, out branchKind, out nextPhase),
+            TreasureSceneState
+                => SetCanonicalForegroundModalBranch("branch-treasure", GuiSmokePhase.ChooseFirstNode, out branchKind, out nextPhase),
+            EventSceneState { EventForegroundOwned: true, ReleaseStage: EventReleaseStage.Active }
+                => SetCanonicalForegroundModalBranch("branch-event", GuiSmokePhase.HandleEvent, out branchKind, out nextPhase),
+            _ => false,
+        };
+    }
 
-        if (AutoDecisionProvider.BuildShopSceneState(observer, history) is { ReleaseStage: NonCombatReleaseStage.Active })
-        {
-            branchKind = "branch-shop";
-            nextPhase = GuiSmokePhase.HandleShop;
-            return true;
-        }
-
-        if (AutoDecisionProvider.BuildRestSiteSceneState(observer) is { ReleaseStage: NonCombatReleaseStage.Active })
-        {
-            branchKind = "branch-rest-site";
-            nextPhase = GuiSmokePhase.ChooseFirstNode;
-            return true;
-        }
-
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history);
-        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active)
-        {
-            branchKind = "branch-event";
-            nextPhase = GuiSmokePhase.HandleEvent;
-            return true;
-        }
-
-        return false;
+    static bool SetCanonicalForegroundModalBranch(
+        string resolvedBranchKind,
+        GuiSmokePhase resolvedPhase,
+        out string branchKind,
+        out GuiSmokePhase nextPhase)
+    {
+        branchKind = resolvedBranchKind;
+        nextPhase = resolvedPhase;
+        return true;
     }
 
 }

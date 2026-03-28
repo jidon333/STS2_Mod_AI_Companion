@@ -182,7 +182,7 @@ internal static partial class Program
                 Array.Empty<CombatCardKnowledgeHint>(),
                 postTransformAllowedActions,
                 postTransformHistory,
-                "Post-transform explicit event continue should outrank map fallback.",
+                "Post-transform explicit event continue should preserve the event lane over map routing.",
                 null));
             Assert(postTransformEventDecision.TargetLabel is not null
                    && (postTransformEventDecision.TargetLabel.Contains("event", StringComparison.OrdinalIgnoreCase)
@@ -190,7 +190,7 @@ internal static partial class Program
                        || postTransformEventDecision.TargetLabel.Contains("continue", StringComparison.OrdinalIgnoreCase))
                    && !postTransformEventDecision.TargetLabel.Contains("reachable node", StringComparison.OrdinalIgnoreCase)
                    && !postTransformEventDecision.TargetLabel.Contains("map", StringComparison.OrdinalIgnoreCase),
-                "Post-transform explicit event continue should outrank mixed-state map contamination.");
+                "Post-transform explicit event continue should preserve the event lane over mixed-state map contamination.");
 
             var ancientDialogueObserver = new ObserverState(
                 new ObserverSummary(

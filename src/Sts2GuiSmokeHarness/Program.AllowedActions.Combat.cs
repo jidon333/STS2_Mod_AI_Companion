@@ -395,45 +395,35 @@ internal static partial class Program
 
     static bool HasStrongMapTransitionEvidence(ObserverState observer)
     {
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
-        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
-                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
+        var canonicalScene = AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null);
         if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
             || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)
             || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
             || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
-            || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
-            || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
-            || preferEventProgressionOverMapFallback)
+            || canonicalScene is { CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown and not NonCombatCanonicalForegroundOwner.Map })
+        {
+            return false;
+        }
+
+        return GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer);
+    }
+
+    static bool HasStrongMapTransitionEvidenceFromScene(ObserverSummary observer, string? sceneSignature)
+    {
+        var canonicalScene = AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null);
+        if (RewardObserverSignals.IsTerminalRunBoundary(observer)
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
+            || CardSelectionObserverSignals.TryGetState(observer) is not null
+            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer)
+            || canonicalScene is { CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown and not NonCombatCanonicalForegroundOwner.Map })
         {
             return false;
         }
 
         return GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
-               && !preferEventProgressionOverMapFallback;
-    }
-
-    static bool HasStrongMapTransitionEvidenceFromScene(ObserverSummary observer, string? sceneSignature)
-    {
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
-        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
-                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
-        if (RewardObserverSignals.IsTerminalRunBoundary(observer)
-            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
-            || CardSelectionObserverSignals.TryGetState(observer) is not null
-            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer)
-            || ShopObserverSignals.IsShopAuthorityActive(observer)
-            || RewardObserverSignals.IsRewardAuthorityActive(observer)
-            || preferEventProgressionOverMapFallback)
-        {
-            return false;
-        }
-
-        return !preferEventProgressionOverMapFallback
-               && (GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
                || (!string.IsNullOrWhiteSpace(sceneSignature)
                    && (sceneSignature.Contains("substate:map-transition", StringComparison.OrdinalIgnoreCase)
-                       || sceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase))));
+                       || sceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)));
     }
 
     static RewardMapLayerState BuildRewardMapLayerStateForObserver(ObserverSummary observer, WindowBounds? windowBounds)

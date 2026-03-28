@@ -102,10 +102,12 @@ internal static partial class Program
     {
         var observerSignals = new List<string>();
         var suppressRoomSubstateHeuristics = ShouldSuppressRoomSubstateHeuristics(phase, observer);
-        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null);
-        var preferRewardProgressionOverMapFallback = rewardScene.RewardForegroundOwned
-                                                     && rewardScene.ReleaseStage == RewardReleaseStage.Active
-                                                     && rewardScene.ExplicitProceedVisible;
+        var canonicalScene = AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null);
+        var suppressMapTransitionByForegroundAuthority = canonicalScene is
+            {
+                CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown
+                    and not NonCombatCanonicalForegroundOwner.Map,
+            };
         if (observer.SceneReady is not null)
         {
             observerSignals.Add(observer.SceneReady == true ? "scene-ready-true" : "scene-ready-false");
@@ -218,7 +220,7 @@ internal static partial class Program
 
             if (HasStrongMapTransitionEvidence(observer)
                 && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                && !preferRewardProgressionOverMapFallback)
+                && !suppressMapTransitionByForegroundAuthority)
             {
                 observerSignals.Add("map-transition-evidence");
             }

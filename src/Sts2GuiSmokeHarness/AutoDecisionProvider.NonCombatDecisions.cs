@@ -58,10 +58,10 @@ sealed partial class AutoDecisionProvider
         {
             GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(BuildExplicitRestSiteCandidateLabels(request.Observer));
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site explicit choices outrank exported map routing");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site explicit choices outrank screenshot map routing");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site explicit choices suppress current-node-arrow fallback");
-            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site explicit choices are the progression lane");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site-owner-active-suppresses-map-arrow-contamination");
+            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site-owner-active-preserves-room-lane");
             return GuiSmokeDecisionDebug.TraceCandidate(
                        "rest site explicit choice",
                        "rest-site-choice",
@@ -86,10 +86,10 @@ sealed partial class AutoDecisionProvider
         {
             GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "click proceed", "wait" });
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site proceed lane outranks map routing");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site proceed lane outranks screenshot map routing");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site proceed lane suppresses current-node-arrow fallback");
-            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site proceed lane is the room progression path");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site-owner-active-suppresses-map-arrow-contamination");
+            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site-owner-active-preserves-room-lane");
             return GuiSmokeDecisionDebug.TraceCandidate(
                        "visible proceed",
                        "rest-site-proceed",
@@ -104,10 +104,10 @@ sealed partial class AutoDecisionProvider
         {
             GuiSmokeDecisionDebug.SetSceneModel("treasure-room", "room-context");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(TreasureRoomObserverSignals.BuildAllowedActions(TreasureRoomObserverSignals.TryGetState(request.Observer)!).Append("wait").Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "treasure-room explicit affordances outrank map routing");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room explicit affordances outrank screenshot map routing");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room explicit affordances suppress map-arrow fallback");
-            GuiSmokeDecisionDebug.Suppress("click map back", "treasure-room progression is chest-holder-proceed, not map back");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "treasure-room-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room-owner-active-suppresses-map-arrow-contamination");
+            GuiSmokeDecisionDebug.Suppress("click map back", "treasure-room-owner-active-preserves-room-lane");
             return treasureDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for treasure room progression");
         }
 
@@ -116,10 +116,10 @@ sealed partial class AutoDecisionProvider
             GuiSmokeDecisionDebug.SetSceneModel("shop", "room-context");
             var shopState = ShopObserverSignals.TryGetState(request.Observer)!;
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(ShopObserverSignals.BuildAllowedActions(request.Observer, shopState, ShopObserverSignals.HasRecentPurchase(request.History)));
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "shop foreground outranks map routing");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "shop foreground outranks screenshot map routing");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "shop foreground suppresses current-node-arrow fallback");
-            GuiSmokeDecisionDebug.Suppress("click map back", "shop foreground uses merchant/back/proceed affordances instead of map overlay cleanup");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "shop-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "shop-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "shop-owner-active-suppresses-map-arrow-contamination");
+            GuiSmokeDecisionDebug.Suppress("click map back", "shop-owner-active-preserves-room-lane");
             var shopDecision = DecideHandleShop(request);
             return string.Equals(shopDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
                 ? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit shop room progression")
@@ -344,8 +344,8 @@ sealed partial class AutoDecisionProvider
         }
 
         var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
-        var preferEventForeground = eventScene.EventForegroundOwned
-                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
+        var eventOwnerActive = eventScene.EventForegroundOwned
+                               && eventScene.ReleaseStage == EventReleaseStage.Active;
         var mapOverlayState = eventScene.MapOverlayState;
         var strongEventForegroundChoice = eventScene.StrongForegroundChoice || forceEventProgressionAfterCardSelection;
         if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
@@ -379,10 +379,10 @@ sealed partial class AutoDecisionProvider
                    ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for map-overlay foreground resolution");
         }
 
-        if (preferEventForeground)
+        if (eventOwnerActive)
         {
             GuiSmokeDecisionDebug.SetSceneModel("event", request.SceneSignature.Contains("contamination:map-arrow", StringComparison.OrdinalIgnoreCase) ? "map-context" : null);
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "event foreground keeps map-arrow evidence in the background only");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
         }
 
         var overlayDecision = GuiSmokeDecisionDebug.TraceCandidate(
@@ -416,10 +416,10 @@ sealed partial class AutoDecisionProvider
         if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
         {
             GuiSmokeDecisionDebug.SetSceneModel("treasure-room", "room-context");
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "treasure-room explicit affordances outrank map routing");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room explicit affordances outrank screenshot map routing");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room explicit affordances suppress map-arrow fallback");
-            GuiSmokeDecisionDebug.Suppress("click event choice", "treasure-room explicit affordances outrank generic event choices");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "treasure-room-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room-owner-active-suppresses-map-arrow-contamination");
+            GuiSmokeDecisionDebug.Suppress("click event choice", "treasure-room-owner-active-preserves-room-lane");
             return treasureDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for treasure room progression");
         }
 
@@ -456,9 +456,9 @@ sealed partial class AutoDecisionProvider
             GuiSmokeDecisionDebug.SetSceneModel("ancient-event-dialogue", "event-context");
             GuiSmokeDecisionDebug.Suppress("click event choice", "ancient dialogue must finish before option selection");
             GuiSmokeDecisionDebug.Suppress("click proceed", "ancient dialogue does not use generic proceed");
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "ancient event foreground outranks map routing");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event foreground outranks screenshot map routing");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event foreground suppresses map-arrow fallback");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "event-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "event-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
             return ancientDialogueDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient dialogue hitbox");
         }
 
@@ -472,9 +472,9 @@ sealed partial class AutoDecisionProvider
         {
             GuiSmokeDecisionDebug.SetSceneModel("ancient-event-completion", "event-context");
             GuiSmokeDecisionDebug.Suppress("click proceed", "ancient completion remains event-owned through the explicit NEventOptionButton proceed lane");
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "ancient event completion outranks map routing");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event completion outranks screenshot map routing");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event completion suppresses map-arrow fallback");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "event-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "event-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
             return ancientCompletionDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient event completion");
         }
 
@@ -499,13 +499,13 @@ sealed partial class AutoDecisionProvider
         {
             GuiSmokeDecisionDebug.SetSceneModel("ancient-event-options", "event-context");
             GuiSmokeDecisionDebug.Suppress("click proceed", "ancient options should be selected from explicit option buttons");
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "ancient event option selection outranks map routing");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "ancient event option selection outranks screenshot map routing");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "ancient event option selection suppresses map-arrow fallback");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "event-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "event-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
             return ancientOptionDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient event option buttons");
         }
 
-        if (preferEventForeground)
+        if (eventOwnerActive)
         {
             var semanticDecision = GuiSmokeDecisionDebug.TraceCandidate(
                 "semantic event option",
@@ -535,7 +535,7 @@ sealed partial class AutoDecisionProvider
             return DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() });
         }
 
-        if (!preferEventForeground)
+        if (!eventOwnerActive)
         {
             var semanticDecision = GuiSmokeDecisionDebug.TraceCandidate(
                 "semantic event option",
