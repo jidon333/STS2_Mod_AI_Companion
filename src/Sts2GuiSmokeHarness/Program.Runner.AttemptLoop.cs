@@ -37,6 +37,8 @@ internal static partial class Program
         string stepsRoot,
         GuiSmokeSessionSceneHistoryIndex sceneHistoryIndex,
         ArtifactRecorder logger,
+        bool isAuthoritativeFirstAttempt,
+        Action<string, string, string?>? recordAttemptStartupStage,
         Action<string>? recordAttemptStartupFailure,
         Func<int, int, string, string, bool, string?, string?, GuiSmokeAttemptResult> completeAttempt)
     {
@@ -53,6 +55,11 @@ internal static partial class Program
         void RecordAttemptStartupFailure(string reason)
         {
             recordAttemptStartupFailure?.Invoke(reason);
+        }
+
+        void RecordAttemptStartupStage(string stage, string status, string? detail = null)
+        {
+            recordAttemptStartupStage?.Invoke(stage, status, detail);
         }
 
         GuiSmokeAttemptResult CompleteAttempt(

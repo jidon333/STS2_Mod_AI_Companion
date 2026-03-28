@@ -234,6 +234,8 @@ internal static partial class Program
                 stepsRoot,
                 sceneHistoryIndex,
                 logger,
+                isAuthoritativeFirstAttempt,
+                (stage, status, detail) => RecordAttemptStartupStage(stage, status, detail),
                 reason => RecordAttemptStartupFailure(reason),
                 (currentStepIndex, exitCode, status, message, launchFailed, terminalCause, failureClass) =>
                 {
