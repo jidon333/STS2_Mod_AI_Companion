@@ -185,6 +185,22 @@ static class GuiSmokeStepRequestFactory
             GetCombatBarrierEvaluation);
     }
 
+    internal static GuiSmokeStepAnalysisContext CreateObserverOnlyAnalysisContext(
+        GuiSmokePhase phase,
+        ObserverState observer,
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        WindowBounds? windowBounds = null)
+    {
+        return CreateStepAnalysisContext(
+            phase,
+            observer,
+            null,
+            history,
+            combatCardKnowledge,
+            windowBounds);
+    }
+
     internal static GuiSmokeStepAnalysisContext CreateRequestAnalysisContext(GuiSmokeStepRequest request)
     {
         var stateDocument = GuiSmokeReplayArtifactLoader.TryLoadObserverStateSidecar(request.ScreenshotPath);
@@ -215,7 +231,7 @@ static class GuiSmokeStepRequestFactory
     {
         var serializedHistory = analysisContext?.History ?? BuildSerializedStepHistory(phase, history);
         var combatCardKnowledge = analysisContext?.CombatCardKnowledge ?? GuiSmokeSceneReasoningSupport.LoadCombatCardKnowledge(workspaceRoot, observer);
-        var sceneSignature = sceneContext?.SceneSignature ?? GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(screenshotPath, observer, phase, analysisContext);
+        var sceneSignature = sceneContext?.SceneSignature ?? GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(analysisContext?.ScreenshotPath ?? screenshotPath, observer, phase, analysisContext);
         var useAuthorityFastPath = analysisContext?.UseAuthorityFastPath == true;
         var firstSeenScene = sceneContext?.FirstSeenScene ?? !GuiSmokeSceneReasoningSupport.HasSceneSignatureHistory(sessionRoot, sceneSignature);
         var reasoningMode = sceneContext?.ReasoningMode ?? GuiSmokeSceneReasoningSupport.DetermineReasoningMode(phase, observer, firstSeenScene);

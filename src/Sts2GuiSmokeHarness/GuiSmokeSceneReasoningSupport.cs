@@ -21,12 +21,12 @@ using static ObserverScreenProvenance;
 
 static class GuiSmokeSceneReasoningSupport
 {
-    internal static string ComputeSceneSignature(string screenshotPath, ObserverState observer, GuiSmokePhase phase)
+    internal static string ComputeSceneSignature(string? screenshotPath, ObserverState observer, GuiSmokePhase phase)
     {
         return ComputeSceneSignatureCore(screenshotPath, observer, phase, null);
     }
 
-    internal static string ComputeSceneSignatureCore(string screenshotPath, ObserverState observer, GuiSmokePhase phase, GuiSmokeStepAnalysisContext? analysisContext)
+    internal static string ComputeSceneSignatureCore(string? screenshotPath, ObserverState observer, GuiSmokePhase phase, GuiSmokeStepAnalysisContext? analysisContext)
     {
         var context = analysisContext ?? GuiSmokeStepRequestFactory.CreateStepAnalysisContext(phase, observer, screenshotPath, Array.Empty<GuiSmokeHistoryEntry>(), Array.Empty<CombatCardKnowledgeHint>());
         if (context.UseCombatFastPath)
@@ -225,7 +225,9 @@ static class GuiSmokeSceneReasoningSupport
                 tags.Add("substate:map-transition");
             }
 
-            var mapAnalysis = AutoMapAnalyzer.Analyze(screenshotPath);
+            var mapAnalysis = string.IsNullOrWhiteSpace(screenshotPath)
+                ? AutoMapAnalysis.None
+                : AutoMapAnalyzer.Analyze(screenshotPath);
             if (mapAnalysis.HasCurrentArrow && !mapOverlayState.ForegroundVisible)
             {
                 tags.Add(suppressMapTransitionByForegroundAuthority
@@ -244,8 +246,12 @@ static class GuiSmokeSceneReasoningSupport
             tags.Add("terminal-run-boundary");
         }
 
-        var screenshotFingerprint = Program.ComputeFileFingerprint(screenshotPath);
-        tags.Add($"shot:{screenshotFingerprint[..Math.Min(12, screenshotFingerprint.Length)]}");
+        if (!string.IsNullOrWhiteSpace(screenshotPath) && File.Exists(screenshotPath))
+        {
+            var screenshotFingerprint = Program.ComputeFileFingerprint(screenshotPath);
+            tags.Add($"shot:{screenshotFingerprint[..Math.Min(12, screenshotFingerprint.Length)]}");
+        }
+
         return string.Join("|", tags);
     }
 

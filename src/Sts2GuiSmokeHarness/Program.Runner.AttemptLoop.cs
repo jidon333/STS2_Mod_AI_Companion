@@ -20,6 +20,7 @@ using static GuiSmokeNonCombatAllowedActionSupport;
 using static GuiSmokePostActionPhaseSupport;
 using static GuiSmokeSceneReasoningSupport;
 using static GuiSmokeStepRequestFactory;
+using static ObserverScreenProvenance;
 
 internal static partial class Program
 {
@@ -121,6 +122,118 @@ internal static partial class Program
             consecutiveOverlayLoopCount = 0;
         }
 
+        (
+            IReadOnlyList<GuiSmokeHistoryEntry> SerializedHistory,
+            IReadOnlyList<CombatCardKnowledgeHint> CombatCardKnowledge,
+            GuiSmokeStepAnalysisContext AnalysisContext,
+            GuiSmokeSceneRequestContext SceneContext)
+            BuildIterationContext(ObserverState currentObserver, WindowCaptureTarget currentWindow, string? analysisScreenshotPath)
+        {
+            var serializedHistory = BuildSerializedStepHistory(phase, history);
+            var combatCardKnowledge = LoadCombatCardKnowledge(workspaceRoot, currentObserver);
+            var windowBounds = new WindowBounds(currentWindow.Bounds.X, currentWindow.Bounds.Y, currentWindow.Bounds.Width, currentWindow.Bounds.Height);
+            var stepAnalysisContext = string.IsNullOrWhiteSpace(analysisScreenshotPath)
+                ? CreateObserverOnlyAnalysisContext(phase, currentObserver, serializedHistory, combatCardKnowledge, windowBounds)
+                : CreateStepAnalysisContext(phase, currentObserver, analysisScreenshotPath, serializedHistory, combatCardKnowledge, windowBounds);
+            var iterationSceneSignature = ComputeSceneSignatureCore(analysisScreenshotPath, currentObserver, phase, stepAnalysisContext);
+            var iterationFirstSeenScene = isLongRun && !sceneHistoryIndex.HasSeen(iterationSceneSignature);
+            var iterationReasoningMode = DetermineReasoningMode(phase, currentObserver, iterationFirstSeenScene);
+            var iterationKnownRecipes = stepAnalysisContext.UseAuthorityFastPath
+                ? Array.Empty<KnownRecipeHint>()
+                : sceneHistoryIndex.GetKnownRecipes(iterationSceneSignature, phase.ToString());
+            return (
+                serializedHistory,
+                combatCardKnowledge,
+                stepAnalysisContext,
+                new GuiSmokeSceneRequestContext(
+                    iterationSceneSignature,
+                    iterationFirstSeenScene,
+                    iterationReasoningMode,
+                    iterationKnownRecipes));
+        }
+
+        bool NeedsScreenshotForStep(GuiSmokeStepAnalysisContext stepAnalysisContext)
+        {
+            if (stepIndex == 1 && isAuthoritativeFirstAttempt)
+            {
+                return true;
+            }
+
+            if (phase is GuiSmokePhase.WaitMainMenu
+                or GuiSmokePhase.WaitRunLoad
+                or GuiSmokePhase.WaitCharacterSelect
+                or GuiSmokePhase.WaitMap
+                or GuiSmokePhase.WaitPostMapNodeRoom
+                or GuiSmokePhase.WaitCombat
+                or GuiSmokePhase.WaitEventRelease
+                or GuiSmokePhase.EnterRun
+                or GuiSmokePhase.ChooseCharacter
+                or GuiSmokePhase.Embark)
+            {
+                return false;
+            }
+
+            if (phase == GuiSmokePhase.HandleRewards && stepAnalysisContext.UseRewardFastPath)
+            {
+                return false;
+            }
+
+            if (phase == GuiSmokePhase.HandleCombat && stepAnalysisContext.UseCombatFastPath)
+            {
+                if (stepAnalysisContext.CombatPlayerActionWindowClosed)
+                {
+                    return false;
+                }
+
+                var combatBarrier = stepAnalysisContext.CombatBarrierEvaluation;
+                if (combatBarrier.IsActive && combatBarrier.IsHardWaitBarrier)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        bool HasWaitWakeDelta(ObserverState baselineObserver, ObserverState latestObserver)
+        {
+            return HasMeaningfulObserverDelta(baselineObserver, latestObserver)
+                   || !string.Equals(baselineObserver.CurrentScreen, latestObserver.CurrentScreen, StringComparison.OrdinalIgnoreCase)
+                   || !string.Equals(baselineObserver.VisibleScreen, latestObserver.VisibleScreen, StringComparison.OrdinalIgnoreCase)
+                   || CompatibilitySceneReady(baselineObserver) != CompatibilitySceneReady(latestObserver)
+                   || !string.Equals(baselineObserver.ChoiceExtractorPath, latestObserver.ChoiceExtractorPath, StringComparison.OrdinalIgnoreCase)
+                   || baselineObserver.SnapshotVersion != latestObserver.SnapshotVersion;
+        }
+
+        async Task<(ObserverState Observer, string? WakeReason)> WaitWithObserverPollingAsync(
+            int totalBudgetMs,
+            int sliceMs,
+            ObserverState baselineObserver,
+            Func<ObserverState, string?> wakeEvaluator)
+        {
+            if (totalBudgetMs <= 0)
+            {
+                return (baselineObserver, null);
+            }
+
+            var remainingBudgetMs = totalBudgetMs;
+            var latestObserver = baselineObserver;
+            while (remainingBudgetMs > 0)
+            {
+                var delayMs = Math.Min(sliceMs, remainingBudgetMs);
+                await Task.Delay(delayMs).ConfigureAwait(false);
+                remainingBudgetMs -= delayMs;
+                latestObserver = observerReader.Read();
+                var wakeReason = wakeEvaluator(latestObserver);
+                if (!string.IsNullOrWhiteSpace(wakeReason))
+                {
+                    return (latestObserver, wakeReason);
+                }
+            }
+
+            return (latestObserver, null);
+        }
+
         while (DateTimeOffset.UtcNow < waitDeadline)
         {
             if (maxSteps is int stepLimit && stepIndex >= stepLimit)
@@ -148,148 +261,6 @@ internal static partial class Program
             LogHarness($"step={stepIndex} phase={phase} window={DescribeWindow(window)}");
             var stepPrefix = Path.Combine(stepsRoot, stepIndex.ToString("0000"));
             var screenshotPath = stepPrefix + ".screen.png";
-            var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
-            if (!captureResult.Succeeded)
-            {
-                var captureFailureObserver = observerReader.Read();
-                if (captureResult.FailureKind is CaptureBoundaryFailureKind.TimedOut or CaptureBoundaryFailureKind.Exception)
-                {
-                    ResetDecisionWaitTracking();
-                    var captureTerminalSignal = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
-                        ? "capture-timeout"
-                        : "capture-exception";
-                    var captureFailureMessage = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
-                        ? "capture-timeout"
-                        : $"capture-exception: {captureResult.Detail ?? captureResult.Exception?.GetType().Name ?? "unknown"}";
-                    LogHarness($"step={stepIndex} {captureTerminalSignal} detail={captureResult.Detail ?? "none"}");
-                    logger.AppendTrace(new GuiSmokeTraceEntry(
-                        DateTimeOffset.UtcNow,
-                        stepIndex,
-                        phase.ToString(),
-                        captureTerminalSignal,
-                        captureFailureObserver.CurrentScreen,
-                        captureFailureObserver.InCombat,
-                        null));
-                    AppendProgressIfLongRun(
-                        isLongRun,
-                        logger,
-                        EvaluateStepProgress(
-                            stepIndex,
-                            phase,
-                            "capture-boundary-failure",
-                            captureFailureObserver,
-                            null,
-                            null,
-                            false,
-                            "capture-boundary",
-                            false,
-                            sameActionStallCount,
-                            captureTerminalSignal));
-                    logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                        phase.ToString(),
-                        captureFailureMessage,
-                        captureFailureObserver.CurrentScreen,
-                        captureFailureObserver.InCombat,
-                        screenshotPath));
-                    return CompleteAttempt(
-                        1,
-                        "failed",
-                        captureFailureMessage,
-                        terminalCause: captureTerminalSignal,
-                        failureClass: ClassifyFailureForAttempt(phase, captureFailureObserver, captureTerminalSignal, launchFailed: false));
-                }
-
-                if (WindowLocator.IsHungWindow(window))
-                {
-                    ResetDecisionWaitTracking();
-                    LogHarness($"step={stepIndex} window not responding; aborting capture-driven wait");
-                    logger.AppendTrace(new GuiSmokeTraceEntry(
-                        DateTimeOffset.UtcNow,
-                        stepIndex,
-                        phase.ToString(),
-                        "window-not-responding",
-                        captureFailureObserver.CurrentScreen,
-                        captureFailureObserver.InCombat,
-                        null));
-                    logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                        phase.ToString(),
-                        "game-window-not-responding",
-                        captureFailureObserver.CurrentScreen,
-                        captureFailureObserver.InCombat,
-                        screenshotPath));
-                    return CompleteAttempt(
-                        1,
-                        "failed",
-                        "game-window-not-responding",
-                        terminalCause: "game-window-not-responding",
-                        failureClass: "launch-runtime-noise");
-                }
-
-                ResetDecisionWaitTracking();
-                consecutiveBlackFrames += 1;
-                var transitionBlackFrame = RootSceneTransitionObserverSignals.ShouldTreatCaptureAsTransitionWait(phase, captureFailureObserver.Summary);
-                var captureFailureSignal = transitionBlackFrame ? "transition-black-frame" : "capture-unusable";
-                LogHarness(transitionBlackFrame
-                    ? $"step={stepIndex} capture unusable during explicit transition/loading boundary; waiting for scene readiness"
-                    : $"step={stepIndex} capture unusable; waiting for a valid process frame");
-                logger.AppendTrace(new GuiSmokeTraceEntry(
-                    DateTimeOffset.UtcNow,
-                    stepIndex,
-                    phase.ToString(),
-                    captureFailureSignal,
-                    captureFailureObserver.CurrentScreen,
-                    captureFailureObserver.InCombat,
-                    null));
-                if (window.IsFallback && !HasLiveGameProcess())
-                {
-                    consecutiveFallbackCapturesWithoutProcess += 1;
-                    if (consecutiveFallbackCapturesWithoutProcess >= 3)
-                    {
-                        RecordAttemptStartupFailure("process-lost");
-                        logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                            phase.ToString(),
-                            "process-lost",
-                            null,
-                            null,
-                            screenshotPath));
-                        return CompleteAttempt(
-                            1,
-                            "failed",
-                            "process-lost",
-                            terminalCause: "process-lost",
-                            failureClass: "launch-runtime-noise");
-                    }
-                }
-                else
-                {
-                    consecutiveFallbackCapturesWithoutProcess = 0;
-                }
-                if (!transitionBlackFrame
-                    && !window.IsFallback
-                    && consecutiveBlackFrames >= 3)
-                {
-                    var focusWindow = WindowLocator.EnsureInteractive(window);
-                    LogHarness($"step={stepIndex} black-frame streak={consecutiveBlackFrames}; sending center nudge");
-                    inputDriver.Click(focusWindow, 0.5, 0.5);
-                    history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "black-frame-nudge", "center", DateTimeOffset.UtcNow));
-                    logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "black-frame-nudge", null, null, "center"));
-                    consecutiveBlackFrames = 0;
-                }
-                await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
-                continue;
-            }
-            consecutiveBlackFrames = 0;
-            consecutiveFallbackCapturesWithoutProcess = 0;
-            if (isAuthoritativeFirstAttempt && stepIndex == 1)
-            {
-                RecordAttemptStartupStage("authoritative-first-screenshot-captured", "finished", screenshotPath);
-            }
-            if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
-            {
-                LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
-                attemptStartedRecorded = true;
-            }
-            LogHarness($"step={stepIndex} captured={screenshotPath}");
             var stepStopwatch = Stopwatch.StartNew();
 
             var observer = observerReader.Read();
@@ -307,39 +278,18 @@ internal static partial class Program
                     .ConfigureAwait(false);
             }
 
-            logger.WriteObserverCopies(stepPrefix, observer);
-            LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
-            var serializedHistory = BuildSerializedStepHistory(phase, history);
-            var combatCardKnowledge = LoadCombatCardKnowledge(workspaceRoot, observer);
-            var stepAnalysisContext = CreateStepAnalysisContext(
-                phase,
-                observer,
-                screenshotPath,
-                serializedHistory,
-                combatCardKnowledge,
-                new WindowBounds(window.Bounds.X, window.Bounds.Y, window.Bounds.Width, window.Bounds.Height));
-            var iterationSceneSignature = ComputeSceneSignatureCore(screenshotPath, observer, phase, stepAnalysisContext);
-            var iterationFirstSeenScene = isLongRun && !sceneHistoryIndex.HasSeen(iterationSceneSignature);
-            var iterationReasoningMode = DetermineReasoningMode(phase, observer, iterationFirstSeenScene);
-            var iterationKnownRecipes = stepAnalysisContext.UseAuthorityFastPath
-                ? Array.Empty<KnownRecipeHint>()
-                : sceneHistoryIndex.GetKnownRecipes(iterationSceneSignature, phase.ToString());
-            var iterationSceneContext = new GuiSmokeSceneRequestContext(
-                iterationSceneSignature,
-                iterationFirstSeenScene,
-                iterationReasoningMode,
-                iterationKnownRecipes);
-
-            if (observer.SceneReady == false)
-            {
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "scene-not-ready", observer.CurrentScreen, observer.InCombat, null));
-            }
+            var (serializedHistory, combatCardKnowledge, stepAnalysisContext, iterationSceneContext) = BuildIterationContext(observer, window, null);
+            var iterationSceneSignature = iterationSceneContext.SceneSignature;
+            var iterationFirstSeenScene = iterationSceneContext.FirstSeenScene;
+            var iterationReasoningMode = iterationSceneContext.ReasoningMode;
 
             if (isLongRun
                 && history.Count > 0
                 && phase is not GuiSmokePhase.WaitMainMenu and not GuiSmokePhase.EnterRun and not GuiSmokePhase.WaitRunLoad and not GuiSmokePhase.WaitCharacterSelect
                 && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase))
             {
+                logger.WriteObserverCopies(stepPrefix, observer);
+                LogHarness($"step={stepIndex} capture skipped reason=terminal-current-screen");
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "terminal-detected", observer.CurrentScreen, observer.InCombat, "returned-main-menu"));
                 logger.WriteFailureSummary(new GuiSmokeFailureSummary(
                     phase.ToString(),
@@ -374,6 +324,8 @@ internal static partial class Program
                 && phase is not GuiSmokePhase.WaitMainMenu and not GuiSmokePhase.EnterRun and not GuiSmokePhase.WaitRunLoad and not GuiSmokePhase.WaitCharacterSelect
                 && observer.Summary.PlayerCurrentHp is <= 0)
             {
+                logger.WriteObserverCopies(stepPrefix, observer);
+                LogHarness($"step={stepIndex} capture skipped reason=terminal-player-defeated");
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "terminal-detected", observer.CurrentScreen, observer.InCombat, "player-defeated"));
                 logger.WriteFailureSummary(new GuiSmokeFailureSummary(
                     phase.ToString(),
@@ -405,6 +357,7 @@ internal static partial class Program
 
             if (!observer.IsFreshSince(freshnessFloor))
             {
+                logger.WriteObserverCopies(stepPrefix, observer);
                 ResetDecisionWaitTracking();
                 LogHarness($"step={stepIndex} stale observer snapshot ignored freshnessFloor={freshnessFloor:O}");
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "stale-observer", observer.CurrentScreen, observer.InCombat, null));
@@ -423,12 +376,26 @@ internal static partial class Program
                         false,
                         sameActionStallCount,
                         "observer-stale"));
-                await Task.Delay(PassiveWaitMs).ConfigureAwait(false);
+                var staleObserverWait = await WaitWithObserverPollingAsync(
+                        PassiveWaitMs,
+                        75,
+                        observer,
+                        latestObserver => latestObserver.IsFreshSince(freshnessFloor)
+                            ? "observer-fresh"
+                            : HasWaitWakeDelta(observer, latestObserver)
+                                ? "observer-delta"
+                                : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(staleObserverWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} stale observer wait woke early reason={staleObserverWait.WakeReason}");
+                }
                 continue;
             }
 
             if (evaluator.IsPhaseSatisfied(phase, observer, history))
             {
+                logger.WriteObserverCopies(stepPrefix, observer);
                 ResetDecisionWaitTracking();
                 LogHarness($"step={stepIndex} observer accepted phase={phase}");
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "observer-accepted", null, DateTimeOffset.UtcNow));
@@ -469,12 +436,26 @@ internal static partial class Program
                         terminalCause: "combat-flow-accepted");
                 }
 
-                await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
+                var acceptedSettleWait = await WaitWithObserverPollingAsync(
+                        TransitionSettleMs,
+                        75,
+                        observer,
+                        latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                            ? "observer-delta"
+                            : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                ? "phase-satisfied"
+                                : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(acceptedSettleWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} observer accepted settle woke early reason={acceptedSettleWait.WakeReason}");
+                }
                 continue;
             }
 
             if (TryAdvanceAlternateBranch(phase, observer, history, logger, stepIndex, isLongRun, out var alternatePhase))
             {
+                logger.WriteObserverCopies(stepPrefix, observer);
                 ResetDecisionWaitTracking();
                 LogHarness($"step={stepIndex} alternate branch {phase} -> {alternatePhase} from screen={observer.CurrentScreen ?? "null"}");
                 AppendProgressIfLongRun(
@@ -503,12 +484,26 @@ internal static partial class Program
                         terminalCause: "combat-flow-accepted");
                 }
 
-                await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
+                var alternateBranchWait = await WaitWithObserverPollingAsync(
+                        TransitionSettleMs,
+                        75,
+                        observer,
+                        latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                            ? "observer-delta"
+                            : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                ? "phase-satisfied"
+                                : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(alternateBranchWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} alternate branch settle woke early reason={alternateBranchWait.WakeReason}");
+                }
                 continue;
             }
 
             if (IsPassiveWaitPhase(phase))
             {
+                logger.WriteObserverCopies(stepPrefix, observer);
                 ResetDecisionWaitTracking();
                 var waitAttempt = IncrementAttempt(attemptsByPhase, phase);
                 if (phase == GuiSmokePhase.WaitCharacterSelect
@@ -520,7 +515,20 @@ internal static partial class Program
                     history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "retry-enter-run", observer.CurrentScreen, DateTimeOffset.UtcNow));
                     logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "retry-enter-run", observer.CurrentScreen, observer.InCombat, null));
                     phase = GuiSmokePhase.EnterRun;
-                    await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
+                    var retryEnterRunWait = await WaitWithObserverPollingAsync(
+                            TransitionSettleMs,
+                            75,
+                            observer,
+                            latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                                ? "observer-delta"
+                                : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                    ? "phase-satisfied"
+                                    : null)
+                        .ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(retryEnterRunWait.WakeReason))
+                    {
+                        LogHarness($"step={stepIndex} retry enter-run settle woke early reason={retryEnterRunWait.WakeReason}");
+                    }
                     continue;
                 }
 
@@ -558,8 +566,214 @@ internal static partial class Program
                         false,
                         sameActionStallCount,
                         "passive-wait"));
-                await Task.Delay(PassiveWaitMs).ConfigureAwait(false);
+                var passiveWait = await WaitWithObserverPollingAsync(
+                        PassiveWaitMs,
+                        75,
+                        observer,
+                        latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                            ? "observer-delta"
+                            : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                ? "phase-satisfied"
+                                : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(passiveWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} passive wait woke early reason={passiveWait.WakeReason}");
+                }
                 continue;
+            }
+
+            var captureMode = "skipped";
+            var captureSkipReason = "observer-first";
+            if (NeedsScreenshotForStep(stepAnalysisContext))
+            {
+                var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
+                if (!captureResult.Succeeded)
+                {
+                    var captureFailureObserver = observerReader.Read();
+                    if (captureResult.FailureKind is CaptureBoundaryFailureKind.TimedOut or CaptureBoundaryFailureKind.Exception)
+                    {
+                        ResetDecisionWaitTracking();
+                        var captureTerminalSignal = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
+                            ? "capture-timeout"
+                            : "capture-exception";
+                        var captureFailureMessage = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
+                            ? "capture-timeout"
+                            : $"capture-exception: {captureResult.Detail ?? captureResult.Exception?.GetType().Name ?? "unknown"}";
+                        LogHarness($"step={stepIndex} {captureTerminalSignal} detail={captureResult.Detail ?? "none"}");
+                        logger.AppendTrace(new GuiSmokeTraceEntry(
+                            DateTimeOffset.UtcNow,
+                            stepIndex,
+                            phase.ToString(),
+                            captureTerminalSignal,
+                            captureFailureObserver.CurrentScreen,
+                            captureFailureObserver.InCombat,
+                            null));
+                        AppendProgressIfLongRun(
+                            isLongRun,
+                            logger,
+                            EvaluateStepProgress(
+                                stepIndex,
+                                phase,
+                                "capture-boundary-failure",
+                                captureFailureObserver,
+                                null,
+                                null,
+                                false,
+                                "capture-boundary",
+                                false,
+                                sameActionStallCount,
+                                captureTerminalSignal));
+                        logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                            phase.ToString(),
+                            captureFailureMessage,
+                            captureFailureObserver.CurrentScreen,
+                            captureFailureObserver.InCombat,
+                            screenshotPath));
+                        return CompleteAttempt(
+                            1,
+                            "failed",
+                            captureFailureMessage,
+                            terminalCause: captureTerminalSignal,
+                            failureClass: ClassifyFailureForAttempt(phase, captureFailureObserver, captureTerminalSignal, launchFailed: false));
+                    }
+
+                    if (WindowLocator.IsHungWindow(window))
+                    {
+                        ResetDecisionWaitTracking();
+                        LogHarness($"step={stepIndex} window not responding; aborting capture-driven wait");
+                        logger.AppendTrace(new GuiSmokeTraceEntry(
+                            DateTimeOffset.UtcNow,
+                            stepIndex,
+                            phase.ToString(),
+                            "window-not-responding",
+                            captureFailureObserver.CurrentScreen,
+                            captureFailureObserver.InCombat,
+                            null));
+                        logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                            phase.ToString(),
+                            "game-window-not-responding",
+                            captureFailureObserver.CurrentScreen,
+                            captureFailureObserver.InCombat,
+                            screenshotPath));
+                        return CompleteAttempt(
+                            1,
+                            "failed",
+                            "game-window-not-responding",
+                            terminalCause: "game-window-not-responding",
+                            failureClass: "launch-runtime-noise");
+                    }
+
+                    ResetDecisionWaitTracking();
+                    consecutiveBlackFrames += 1;
+                    var transitionBlackFrame = RootSceneTransitionObserverSignals.ShouldTreatCaptureAsTransitionWait(phase, captureFailureObserver.Summary);
+                    var captureFailureSignal = transitionBlackFrame ? "transition-black-frame" : "capture-unusable";
+                    LogHarness(transitionBlackFrame
+                        ? $"step={stepIndex} capture unusable during explicit transition/loading boundary; waiting for scene readiness"
+                        : $"step={stepIndex} capture unusable; waiting for a valid process frame");
+                    logger.AppendTrace(new GuiSmokeTraceEntry(
+                        DateTimeOffset.UtcNow,
+                        stepIndex,
+                        phase.ToString(),
+                        captureFailureSignal,
+                        captureFailureObserver.CurrentScreen,
+                        captureFailureObserver.InCombat,
+                        null));
+                    if (window.IsFallback && !HasLiveGameProcess())
+                    {
+                        consecutiveFallbackCapturesWithoutProcess += 1;
+                        if (consecutiveFallbackCapturesWithoutProcess >= 3)
+                        {
+                            RecordAttemptStartupFailure("process-lost");
+                            logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                                phase.ToString(),
+                                "process-lost",
+                                null,
+                                null,
+                                screenshotPath));
+                            return CompleteAttempt(
+                                1,
+                                "failed",
+                                "process-lost",
+                                terminalCause: "process-lost",
+                                failureClass: "launch-runtime-noise");
+                        }
+                    }
+                    else
+                    {
+                        consecutiveFallbackCapturesWithoutProcess = 0;
+                    }
+
+                    if (!transitionBlackFrame
+                        && !window.IsFallback
+                        && consecutiveBlackFrames >= 3)
+                    {
+                        var focusWindow = WindowLocator.EnsureInteractive(window);
+                        LogHarness($"step={stepIndex} black-frame streak={consecutiveBlackFrames}; sending center nudge");
+                        inputDriver.Click(focusWindow, 0.5, 0.5);
+                        history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "black-frame-nudge", "center", DateTimeOffset.UtcNow));
+                        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "black-frame-nudge", null, null, "center"));
+                        consecutiveBlackFrames = 0;
+                    }
+
+                    var captureFailureWait = await WaitWithObserverPollingAsync(
+                            TransitionSettleMs,
+                            75,
+                            captureFailureObserver,
+                            latestObserver => HasWaitWakeDelta(captureFailureObserver, latestObserver)
+                                ? "observer-delta"
+                                : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                    ? "phase-satisfied"
+                                    : null)
+                        .ConfigureAwait(false);
+                    if (!string.IsNullOrWhiteSpace(captureFailureWait.WakeReason))
+                    {
+                        LogHarness($"step={stepIndex} capture backoff woke early reason={captureFailureWait.WakeReason}");
+                    }
+
+                    continue;
+                }
+
+                consecutiveBlackFrames = 0;
+                consecutiveFallbackCapturesWithoutProcess = 0;
+                if (isAuthoritativeFirstAttempt && stepIndex == 1)
+                {
+                    RecordAttemptStartupStage("authoritative-first-screenshot-captured", "finished", screenshotPath);
+                }
+
+                if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
+                {
+                    LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
+                    attemptStartedRecorded = true;
+                }
+
+                captureMode = "captured";
+                captureSkipReason = "screenshot-required";
+                observer = observerReader.Read();
+                logger.WriteObserverCopies(stepPrefix, observer);
+                LogHarness($"step={stepIndex} captured={screenshotPath}");
+                LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
+                (serializedHistory, combatCardKnowledge, stepAnalysisContext, iterationSceneContext) = BuildIterationContext(observer, window, screenshotPath);
+                iterationSceneSignature = iterationSceneContext.SceneSignature;
+                iterationFirstSeenScene = iterationSceneContext.FirstSeenScene;
+                iterationReasoningMode = iterationSceneContext.ReasoningMode;
+            }
+            else
+            {
+                if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
+                {
+                    LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
+                    attemptStartedRecorded = true;
+                }
+
+                logger.WriteObserverCopies(stepPrefix, observer);
+                LogHarness($"step={stepIndex} capture skipped reason={captureSkipReason}");
+                LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
+            }
+
+            if (observer.SceneReady == false)
+            {
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "scene-not-ready", observer.CurrentScreen, observer.InCombat, null));
             }
 
             var request = CreateStepRequest(
@@ -580,7 +794,7 @@ internal static partial class Program
             var requestPath = stepPrefix + ".request.json";
             var decisionPath = stepPrefix + ".decision.json";
             logger.WriteRequest(requestPath, request);
-            LogHarness($"step={stepIndex} request={requestPath}");
+            LogHarness($"step={stepIndex} request={requestPath} captureMode={captureMode}");
             var requestReadyElapsedMs = stepStopwatch.ElapsedMilliseconds;
             GuiSmokeReplayEvaluation replayEvaluation;
             GuiSmokeStepDecision decision;
@@ -611,7 +825,7 @@ internal static partial class Program
             }
             logger.WriteDecision(decisionPath, decision);
             LogHarness($"step={stepIndex} decision status={decision.Status} action={decision.ActionKind ?? "null"} target={decision.TargetLabel ?? "null"} confidence={decision.Confidence?.ToString("0.00") ?? "null"} reason={decision.Reason ?? "null"}");
-            LogHarness($"step={stepIndex} timing captured->request={requestReadyElapsedMs}ms request->decision={Math.Max(0, decisionReadyElapsedMs - requestReadyElapsedMs)}ms");
+            LogHarness($"step={stepIndex} timing preflight->request={requestReadyElapsedMs}ms request->decision={Math.Max(0, decisionReadyElapsedMs - requestReadyElapsedMs)}ms captureMode={captureMode}");
             if (isLongRun)
             {
                 LongRunArtifacts.MaybeRecordUnknownScene(sessionRoot, request, decision);
@@ -770,7 +984,8 @@ internal static partial class Program
                 }
 
                 var waitMinimumMs = GetDecisionWaitMinimumMs(phase);
-                LogHarness($"step={stepIndex} wait requested ms={Math.Max(250, decision.WaitMs ?? waitMinimumMs)}");
+                var waitBudgetMs = Math.Max(waitMinimumMs, decision.WaitMs ?? waitMinimumMs);
+                LogHarness($"step={stepIndex} wait requested ms={waitBudgetMs}");
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "wait", decision.TargetLabel, DateTimeOffset.UtcNow)
                 {
                     Metadata = AutoDecisionProvider.BuildHistoryMetadataForDecision(request, decision),
@@ -791,7 +1006,20 @@ internal static partial class Program
                         false,
                         sameActionStallCount,
                         "decision-wait"));
-                await Task.Delay(Math.Max(waitMinimumMs, decision.WaitMs ?? waitMinimumMs)).ConfigureAwait(false);
+                var decisionWait = await WaitWithObserverPollingAsync(
+                        waitBudgetMs,
+                        75,
+                        observer,
+                        latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                            ? "observer-delta"
+                            : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                ? "phase-satisfied"
+                                : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(decisionWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} decision wait woke early reason={decisionWait.WakeReason}");
+                }
                 LogHarness($"step={stepIndex} timing decision->after={Math.Max(0, stepStopwatch.ElapsedMilliseconds - decisionReadyElapsedMs)}ms total={stepStopwatch.ElapsedMilliseconds}ms");
                 continue;
             }
@@ -874,7 +1102,20 @@ internal static partial class Program
                         false,
                         sameActionStallCount,
                         "decision-stale"));
-                await Task.Delay(GetDecisionWaitMinimumMs(phase)).ConfigureAwait(false);
+                var staleDecisionWait = await WaitWithObserverPollingAsync(
+                        GetDecisionWaitMinimumMs(phase),
+                        75,
+                        observer,
+                        latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                            ? "observer-delta"
+                            : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                ? "phase-satisfied"
+                                : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(staleDecisionWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} stale decision backoff woke early reason={staleDecisionWait.WakeReason}");
+                }
                 continue;
             }
 
@@ -899,7 +1140,20 @@ internal static partial class Program
                         false,
                         sameActionStallCount,
                         "observer-drift"));
-                await Task.Delay(GetDecisionWaitMinimumMs(phase)).ConfigureAwait(false);
+                var observerDriftWait = await WaitWithObserverPollingAsync(
+                        GetDecisionWaitMinimumMs(phase),
+                        75,
+                        latestObserver,
+                        currentObserver => HasWaitWakeDelta(latestObserver, currentObserver)
+                            ? "observer-delta"
+                            : evaluator.IsPhaseSatisfied(phase, currentObserver, history)
+                                ? "phase-satisfied"
+                                : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(observerDriftWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} observer drift backoff woke early reason={observerDriftWait.WakeReason}");
+                }
                 continue;
             }
 
@@ -1119,7 +1373,20 @@ internal static partial class Program
                         false,
                         sameActionStallCount,
                         "window-drift"));
-                await Task.Delay(TransitionSettleMs).ConfigureAwait(false);
+                var windowDriftWait = await WaitWithObserverPollingAsync(
+                        TransitionSettleMs,
+                        75,
+                        latestObserver,
+                        currentObserver => HasWaitWakeDelta(latestObserver, currentObserver)
+                            ? "observer-delta"
+                            : evaluator.IsPhaseSatisfied(phase, currentObserver, history)
+                                ? "phase-satisfied"
+                                : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(windowDriftWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} window drift backoff woke early reason={windowDriftWait.WakeReason}");
+                }
                 continue;
             }
 
@@ -1213,9 +1480,20 @@ internal static partial class Program
 
             var settleDelayMs = GetActionSettleDelayMs(completedPhase, decision, ActionSettleMinimumMs, CombatActionSettleMinimumMs);
             var progressProbeDelayMs = Math.Min(settleDelayMs, completedPhase == GuiSmokePhase.HandleCombat ? 80 : 180);
+            ObserverState? probedPostActionObserver = null;
             if (progressProbeDelayMs > 0)
             {
-                await Task.Delay(progressProbeDelayMs).ConfigureAwait(false);
+                var progressProbeWait = await WaitWithObserverPollingAsync(
+                        progressProbeDelayMs,
+                        75,
+                        observer,
+                        latestObserver => HasWaitWakeDelta(observer, latestObserver) ? "observer-delta" : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(progressProbeWait.WakeReason))
+                {
+                    probedPostActionObserver = progressProbeWait.Observer;
+                    LogHarness($"step={stepIndex} progress probe woke early reason={progressProbeWait.WakeReason}");
+                }
             }
 
             var extraProgressSignals = new List<string>();
@@ -1224,15 +1502,26 @@ internal static partial class Program
                 extraProgressSignals.Add("reward-map-recovery-attempt");
             }
 
-            var postActionObserver = observerReader.Read();
+            var postActionObserver = probedPostActionObserver ?? observerReader.Read();
             var additionalProbeDelayMs = 0;
             if (ShouldGrantCombatNoOpProbeGrace(completedPhase, observer, postActionObserver, decision))
             {
                 additionalProbeDelayMs = CombatNoOpProbeGraceMs;
                 extraProgressSignals.Add("combat-noop-probe-grace");
                 LogHarness($"step={stepIndex} combat noop probe grace target={decision.TargetLabel ?? "null"} delayMs={additionalProbeDelayMs}");
-                await Task.Delay(additionalProbeDelayMs).ConfigureAwait(false);
-                postActionObserver = observerReader.Read();
+                var noOpGraceWait = await WaitWithObserverPollingAsync(
+                        additionalProbeDelayMs,
+                        75,
+                        postActionObserver,
+                        latestObserver => !ShouldGrantCombatNoOpProbeGrace(completedPhase, observer, latestObserver, decision)
+                            ? "observer-delta"
+                            : null)
+                    .ConfigureAwait(false);
+                postActionObserver = noOpGraceWait.Observer;
+                if (!string.IsNullOrWhiteSpace(noOpGraceWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} combat noop probe grace woke early reason={noOpGraceWait.WakeReason}");
+                }
                 if (!ShouldGrantCombatNoOpProbeGrace(completedPhase, observer, postActionObserver, decision))
                 {
                     extraProgressSignals.Add("combat-noop-probe-recovered");
@@ -1321,7 +1610,20 @@ internal static partial class Program
             var remainingSettleDelayMs = Math.Max(0, settleDelayMs - progressProbeDelayMs - additionalProbeDelayMs);
             if (remainingSettleDelayMs > 0)
             {
-                await Task.Delay(remainingSettleDelayMs).ConfigureAwait(false);
+                var trailingSettleWait = await WaitWithObserverPollingAsync(
+                        remainingSettleDelayMs,
+                        75,
+                        postActionObserver,
+                        latestObserver => HasWaitWakeDelta(postActionObserver, latestObserver)
+                            ? "observer-delta"
+                            : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                ? "phase-satisfied"
+                                : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(trailingSettleWait.WakeReason))
+                {
+                    LogHarness($"step={stepIndex} trailing settle woke early reason={trailingSettleWait.WakeReason}");
+                }
             }
         }
 
