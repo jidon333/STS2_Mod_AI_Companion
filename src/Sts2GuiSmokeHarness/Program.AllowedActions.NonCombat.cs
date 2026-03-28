@@ -64,7 +64,7 @@ internal static partial class Program
         var mapForegroundOwnership = MapForegroundReconciliation.HasMapForegroundOwnership(observer, history);
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
         var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
-        var explicitRestSiteChoiceAuthority = HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
+        var explicitRestSiteChoiceAuthority = GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
         if (phase == GuiSmokePhase.WaitRunLoad && GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(observer, out var postRunLoadPhase))
         {
             return BuildAllowedActionsCore(postRunLoadPhase, observer, combatCardKnowledge, screenshotPath, history, context);
@@ -93,7 +93,7 @@ internal static partial class Program
             GuiSmokePhase.ChooseFirstNode when ancientMapOwner
                 => new[] { "click exported reachable node", "click visible map advance", "wait" },
             GuiSmokePhase.ChooseFirstNode when explicitRestSiteChoiceAuthority
-                => BuildExplicitRestSiteAllowedActions(observer.Summary),
+                => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
             GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteProceedState(observer.Summary)
                 => new[] { "click proceed", "wait" },
             GuiSmokePhase.ChooseFirstNode when treasureState is { RoomDetected: true }
@@ -131,7 +131,7 @@ internal static partial class Program
                 => mapOverlayState.MapBackNavigationAvailable
                     ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
                     : new[] { "click exported reachable node", "click first reachable node", "wait" },
-            GuiSmokePhase.HandleEvent when HasStrongMapTransitionEvidence(observer)
+            GuiSmokePhase.HandleEvent when GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                                             && !forceEventProgressionAfterCardSelection
                                             && !eventOwnerActive
                 => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
@@ -258,115 +258,4 @@ internal static partial class Program
                || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary);
     }
 
-    static bool HasExplicitRewardProgressionAffordance(ObserverSummary observer)
-    {
-        return observer.Choices.Any(IsExplicitRewardProgressionChoice)
-               || observer.ActionNodes.Any(IsExplicitRewardProgressionNode);
-    }
-
-    static bool IsExplicitRewardProgressionChoice(ObserverChoice choice)
-    {
-        if (!TryParseNodeBounds(choice.ScreenBounds, out _)
-            || IsOverlayChoiceLabel(choice.Label)
-            || IsInspectPreviewChoice(choice)
-            || IsDismissLikeLabel(choice.Label))
-        {
-            return false;
-        }
-
-        return IsRewardCardChoice(choice)
-               || IsPotionRewardChoice(choice)
-               || IsGoldRewardChoice(choice)
-               || IsRelicRewardChoice(choice)
-               || IsSkipOrProceedLabel(choice.Label)
-               || choice.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
-               || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true
-               || HasLargeChoiceBounds(choice.ScreenBounds);
-    }
-
-    static bool IsExplicitRewardProgressionNode(ObserverActionNode node)
-    {
-        if (!node.Actionable
-            || !TryParseNodeBounds(node.ScreenBounds, out _)
-            || IsOverlayChoiceLabel(node.Label)
-            || IsInspectPreviewBounds(node.ScreenBounds)
-            || IsDismissLikeLabel(node.Label)
-            || IsMapNode(node)
-            || IsBackNode(node))
-        {
-            return false;
-        }
-
-        return IsProceedNode(node)
-               || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase)
-               || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
-               || HasLargeChoiceBounds(node.ScreenBounds);
-    }
-
-    static bool IsRewardCardChoice(ObserverChoice choice)
-    {
-        return (string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(choice.Kind, "reward-card", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
-                   && string.Equals(choice.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase)
-                || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
-                                                           || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase)))
-               && !IsSkipOrProceedLabel(choice.Label)
-               && !IsConfirmLikeLabel(choice.Label)
-               && !IsDismissLikeLabel(choice.Label)
-               && !IsOverlayChoiceLabel(choice.Label)
-               && HasRewardCardLikeBounds(choice.ScreenBounds);
-    }
-
-    static bool HasRewardCardLikeBounds(string? screenBounds)
-    {
-        if (!TryParseNodeBounds(screenBounds, out var bounds))
-        {
-            return true;
-        }
-
-        return bounds.Width >= 120f || bounds.Height >= 150f;
-    }
-
-    static bool IsGoldRewardChoice(ObserverChoice choice)
-    {
-        return ContainsAny(choice.Label, "골드", "gold")
-               || ContainsAny(choice.Description, "골드", "gold")
-               || ContainsAny(choice.Value, "GOLD.")
-               || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
-                  && string.Equals(choice.BindingId, "GoldReward", StringComparison.OrdinalIgnoreCase)
-               || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-gold", StringComparison.OrdinalIgnoreCase)
-                                                          || string.Equals(hint, "reward-type:GoldReward", StringComparison.OrdinalIgnoreCase));
-    }
-
-    static bool IsPotionRewardChoice(ObserverChoice choice)
-    {
-        return string.Equals(choice.Kind, "potion", StringComparison.OrdinalIgnoreCase)
-               || ContainsAny(choice.Label, "포션", "potion")
-               || ContainsAny(choice.Description, "포션", "potion")
-               || choice.Value?.StartsWith("POTION.", StringComparison.OrdinalIgnoreCase) == true
-               || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
-                  && string.Equals(choice.BindingId, "PotionReward", StringComparison.OrdinalIgnoreCase)
-               || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-potion", StringComparison.OrdinalIgnoreCase)
-                                                          || string.Equals(hint, "reward-type:PotionReward", StringComparison.OrdinalIgnoreCase));
-    }
-
-    static bool IsRelicRewardChoice(ObserverChoice choice)
-    {
-        return string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
-               || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true
-               || ContainsAny(choice.Description, "relic", "유물")
-               || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
-                  && string.Equals(choice.BindingId, "RelicReward", StringComparison.OrdinalIgnoreCase)
-               || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-relic", StringComparison.OrdinalIgnoreCase)
-                                                          || string.Equals(hint, "reward-type:RelicReward", StringComparison.OrdinalIgnoreCase));
-    }
-
-    static bool IsInspectPreviewChoice(ObserverChoice choice)
-    {
-        return IsOverlayChoiceLabel(choice.Label)
-               || string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
-               || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true
-               || IsInspectPreviewBounds(choice.ScreenBounds);
-    }
 }

@@ -347,85 +347,6 @@ internal static partial class Program
                || node.Kind.Contains("proceed", StringComparison.OrdinalIgnoreCase);
     }
 
-    static bool IsBackNode(ObserverActionNode node)
-    {
-        return node.Label.Contains("Back", StringComparison.OrdinalIgnoreCase)
-               || node.Label.Contains("뒤", StringComparison.OrdinalIgnoreCase)
-               || node.Kind.Contains("back", StringComparison.OrdinalIgnoreCase);
-    }
-
-    static bool IsMapNode(ObserverActionNode node)
-    {
-        return node.NodeId.Contains("map", StringComparison.OrdinalIgnoreCase)
-               || node.Kind.Contains("map", StringComparison.OrdinalIgnoreCase)
-               || node.Label.Contains("Map", StringComparison.OrdinalIgnoreCase)
-               || node.Label.Contains("지도", StringComparison.OrdinalIgnoreCase);
-    }
-
-    static bool TryParseNodeBounds(string? raw, out RectangleF bounds)
-    {
-        bounds = default;
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return false;
-        }
-
-        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length != 4)
-        {
-            return false;
-        }
-
-        if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
-            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
-            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
-            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
-        {
-            return false;
-        }
-
-        if (width <= 0 || height <= 0)
-        {
-            return false;
-        }
-
-        bounds = new RectangleF(x, y, width, height);
-        return true;
-    }
-
-    static bool HasStrongMapTransitionEvidence(ObserverState observer)
-    {
-        var canonicalScene = AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null);
-        if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
-            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)
-            || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
-            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
-            || canonicalScene is { CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown and not NonCombatCanonicalForegroundOwner.Map })
-        {
-            return false;
-        }
-
-        return GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer);
-    }
-
-    static bool HasStrongMapTransitionEvidenceFromScene(ObserverSummary observer, string? sceneSignature)
-    {
-        var canonicalScene = AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null);
-        if (RewardObserverSignals.IsTerminalRunBoundary(observer)
-            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
-            || CardSelectionObserverSignals.TryGetState(observer) is not null
-            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer)
-            || canonicalScene is { CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown and not NonCombatCanonicalForegroundOwner.Map })
-        {
-            return false;
-        }
-
-        return GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
-               || (!string.IsNullOrWhiteSpace(sceneSignature)
-                   && (sceneSignature.Contains("substate:map-transition", StringComparison.OrdinalIgnoreCase)
-                       || sceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)));
-    }
-
     static RewardMapLayerState BuildRewardMapLayerStateForObserver(ObserverSummary observer, WindowBounds? windowBounds)
     {
         return AutoDecisionProvider.BuildRewardSceneState(observer, windowBounds).LayerState;
@@ -637,14 +558,6 @@ internal static partial class Program
         return GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer);
     }
 
-    static bool HasExplicitRestSiteChoiceAuthority(ObserverState observer, string? screenshotPath)
-    {
-        return HasRestSiteAuthority(observer.Summary)
-               && HasExplicitRestSiteChoiceAffordance(observer.Summary)
-               && !RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary)
-               && !AutoRestSiteCardGridAnalyzer.Analyze(screenshotPath ?? string.Empty).HasSelectableCard;
-    }
-
     static bool HasRestSiteAuthority(ObserverSummary observer)
     {
         return string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
@@ -655,11 +568,6 @@ internal static partial class Program
     static bool HasExplicitRestSiteChoiceAffordance(ObserverSummary observer)
     {
         return RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
-    }
-
-    static string[] BuildExplicitRestSiteAllowedActions(ObserverSummary observer)
-    {
-        return RestSiteChoiceSupport.BuildAllowedActions(observer).ToArray();
     }
 
     static bool LooksLikeSingleplayerSubmenuState(ObserverSummary observer)

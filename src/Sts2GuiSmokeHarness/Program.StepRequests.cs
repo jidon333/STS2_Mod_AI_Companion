@@ -199,7 +199,7 @@ internal static partial class Program
             return rewardState is { ForegroundOwned: true }
                    || rewardState is { TeardownInProgress: true }
                    || rewardState is { MapIsCurrentActiveScreen: true }
-                   || HasExplicitRewardProgressionAffordance(observer.Summary);
+                   || GuiSmokeNonCombatContractSupport.HasExplicitRewardProgressionAffordance(observer.Summary);
         }
 
         return new GuiSmokeStepAnalysisContext(

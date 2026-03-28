@@ -242,7 +242,7 @@ internal static partial class Program
             return false;
         }
 
-        if (!HasStrongMapTransitionEvidenceFromScene(request.Observer, request.SceneSignature))
+        if (!GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidenceFromScene(request.Observer, request.SceneSignature))
         {
             return false;
         }
@@ -454,20 +454,12 @@ internal static partial class Program
 
     static bool ShouldAllowRewardMapRecovery(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
     {
-        if (!IsRewardMapRecoveryTarget(decision.TargetLabel))
+        if (!GuiSmokeNonCombatContractSupport.IsRewardMapRecoveryTarget(decision.TargetLabel))
         {
             return false;
         }
 
         return CountRecentRewardMapRecoveryAttempts(request.History) < 2;
-    }
-
-    static bool IsRewardMapRecoveryTarget(string? targetLabel)
-    {
-        return string.Equals(targetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "reward back", StringComparison.OrdinalIgnoreCase);
     }
 
     static int CountRecentRewardMapRecoveryAttempts(IReadOnlyList<GuiSmokeHistoryEntry> history)

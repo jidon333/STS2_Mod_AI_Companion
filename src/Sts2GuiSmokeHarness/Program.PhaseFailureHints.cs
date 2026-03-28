@@ -131,12 +131,12 @@ internal static partial class Program
                 => "Reward follow-up is active. Prefer reward cards or skip/proceed over inspect, preview, or detail affordances.",
             GuiSmokePhase.HandleRewards when preferRewardProgressionOverMapFallback
                 => "Reward screen authority is stronger than the background map. Claim the visible reward or use skip/proceed first, and ignore any contaminated map arrow until the reward panel disappears.",
-            GuiSmokePhase.HandleRewards when HasStrongMapTransitionEvidence(observer)
+            GuiSmokePhase.HandleRewards when GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                 => "Map authority is already stronger than the lingering event label. Prefer a reachable node or screenshot-derived map advance instead of repeating proceed/event clicks.",
             GuiSmokePhase.HandleRewards when string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
                 => "AI first: use the screenshot as the primary source. If the map is clearly visible, you may click the first reachable node instead of forcing another reward proceed click.",
             GuiSmokePhase.HandleRewards => "Prefer the proceed arrow when the reward can be skipped; otherwise pick a valid reward card.",
-            GuiSmokePhase.ChooseFirstNode when HasExplicitRestSiteChoiceAuthority(observer, screenshotPath)
+            GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, screenshotPath)
                 => "Rest-site explicit choices are foreground-authoritative here. Prefer 휴식/재련/부화 over any map overlay candidate or current-node arrow. If the smith card grid appears afterward, select a card and then confirm.",
             GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
                 => "Rest site is screenshot-first. If the explicit rest options are visible, choose one of them before any map candidate. If the smith card grid is visible, click one card first and then click the right-side confirm button.",
@@ -152,7 +152,7 @@ internal static partial class Program
                 => "The event has entered a reward substate. Prefer reward cards, reward choices, or skip/proceed over inspect affordances.",
             GuiSmokePhase.HandleEvent when preferRewardProgressionOverMapFallback
                 => "Reward screen authority is stronger than the background map. Resolve the visible reward, skip, or proceed affordance before considering any map fallback.",
-            GuiSmokePhase.HandleEvent when HasStrongMapTransitionEvidence(observer)
+            GuiSmokePhase.HandleEvent when GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                 => "Map evidence is stronger than the stale event label. Prefer reachable map-node or visible-map-advance actions over repeating event progression.",
             GuiSmokePhase.HandleEvent when LooksLikeTreasureState(observer.Summary)
                 => "Treasure authority can linger on the event phase. Prefer explicit treasure chest, treasure relic holder, or treasure proceed over generic event or map routing.",

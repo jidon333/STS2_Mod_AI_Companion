@@ -121,7 +121,7 @@ internal static partial class Program
 
         if (!ShouldSuppressRoomSubstateHeuristics(phase, observer))
         {
-            if (HasExplicitRestSiteChoiceAuthority(observer, screenshotPath))
+            if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, screenshotPath))
             {
                 tags.Add("layer:rest-site-foreground");
             }
@@ -211,7 +211,7 @@ internal static partial class Program
             }
 
             if (!mapOverlayState.ForegroundVisible
-                && HasStrongMapTransitionEvidence(observer)
+                && GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                 && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
                 && !suppressMapTransitionByForegroundAuthority)
             {
@@ -294,7 +294,7 @@ internal static partial class Program
             }
         }
 
-        if (HasExplicitRewardProgressionAffordance(observer.Summary))
+        if (GuiSmokeNonCombatContractSupport.HasExplicitRewardProgressionAffordance(observer.Summary))
         {
             rewardTags.Add("reward-explicit-progression");
         }

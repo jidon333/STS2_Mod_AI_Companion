@@ -201,7 +201,7 @@ internal static partial class Program
                 null));
             Assert(logicalBoundsTargetDecision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) == true, "Explicit target-manager nodes with usable logical bounds should produce combat enemy target decisions.");
             Assert(logicalBoundsTargetDecision.TargetLabel?.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase) != true, "Explicit target-manager nodes should suppress the old fixed auto-target fallback.");
-            Assert(TryParseNodeBounds("1389.943,674.675,72,88", out var logicalBoundsRect), "Expected valid logical target bounds.");
+            Assert(TryParseCombatTargetBounds("1389.943,674.675,72,88", out var logicalBoundsRect), "Expected valid logical target bounds.");
             var logicalClickX = logicalBoundsTargetDecision.NormalizedX.GetValueOrDefault() * 1920d;
             var logicalClickY = logicalBoundsTargetDecision.NormalizedY.GetValueOrDefault() * 1080d;
             Assert(logicalClickX >= logicalBoundsRect.Left && logicalClickX <= logicalBoundsRect.Right && logicalClickY >= logicalBoundsRect.Top && logicalClickY <= logicalBoundsRect.Bottom, "Explicit combat enemy target click should stay inside the chosen target-manager node bounds.");
@@ -507,5 +507,36 @@ internal static partial class Program
                 && string.Equals(blockedOpenAttackSelectionSemantic, "right-click cancel selected card", StringComparison.OrdinalIgnoreCase),
                 "Blocked open attack selections should cancel the lingering card instead of falling straight to end turn.");
 
+    }
+
+    private static bool TryParseCombatTargetBounds(string? raw, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4)
+        {
+            return false;
+        }
+
+        if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+        {
+            return false;
+        }
+
+        if (width <= 0 || height <= 0)
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return true;
     }
 }

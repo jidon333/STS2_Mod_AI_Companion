@@ -427,12 +427,6 @@ sealed partial class AutoDecisionProvider
                || observer.ActionNodes.Any(static node => IsOverlayChoiceLabel(node.Label));
     }
 
-    private static bool HasExplicitRewardProgressionAffordance(ObserverSummary observer)
-    {
-        return observer.Choices.Any(choice => IsCurrentRewardProgressionChoice(choice, null))
-               || observer.ActionNodes.Any(node => IsCurrentRewardProgressionNode(node, null));
-    }
-
     private static bool IsCurrentRewardProgressionChoice(ObserverChoice choice, WindowBounds? windowBounds)
     {
         return IsExplicitRewardProgressionChoice(choice)

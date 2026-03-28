@@ -213,12 +213,12 @@ internal static partial class Program
                 observerSignals.Add("reward-screen-authority");
             }
 
-            if (HasExplicitRewardProgressionAffordance(observer.Summary))
+            if (GuiSmokeNonCombatContractSupport.HasExplicitRewardProgressionAffordance(observer.Summary))
             {
                 observerSignals.Add("reward-explicit-progression");
             }
 
-            if (HasStrongMapTransitionEvidence(observer)
+            if (GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                 && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
                 && !suppressMapTransitionByForegroundAuthority)
             {
@@ -248,7 +248,7 @@ internal static partial class Program
                 actuatorSignals.Add($"target:{decision.TargetLabel}");
             }
 
-            if (IsRewardMapRecoveryTarget(decision.TargetLabel))
+            if (GuiSmokeNonCombatContractSupport.IsRewardMapRecoveryTarget(decision.TargetLabel))
             {
                 actuatorSignals.Add("map-node-candidate-chosen");
             }
@@ -266,7 +266,7 @@ internal static partial class Program
             if (postActionObserver is not null && HasMeaningfulObserverDelta(observer, postActionObserver))
             {
                 actuatorSignals.Add("post-action-delta");
-                if (IsRewardMapRecoveryTarget(decision.TargetLabel))
+                if (GuiSmokeNonCombatContractSupport.IsRewardMapRecoveryTarget(decision.TargetLabel))
                 {
                     actuatorSignals.Add("post-click-recapture-observed");
                 }

@@ -700,7 +700,7 @@ internal static partial class Program
                 Observer = smithUpgradeSummary,
                 AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, smithUpgradeObserver),
             };
-            Assert(!HasExplicitRestSiteChoiceAuthority(smithUpgradeObserver, restSiteMetadataScreenshotPath)
+            Assert(!GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(smithUpgradeObserver, restSiteMetadataScreenshotPath)
                    && smithUpgradeRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase),
                 "Visible smith upgrade state should disable explicit rest-site choice authority and expose smith card actions.");
             var smithUpgradeDecision = AutoDecisionProvider.Decide(smithUpgradeRequest);
