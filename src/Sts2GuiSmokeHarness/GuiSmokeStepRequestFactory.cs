@@ -77,15 +77,39 @@ static class GuiSmokeStepRequestFactory
         AutoCombatHandAnalysis GetCombatHandAnalysis()
             => combatHandAnalysis ??= string.IsNullOrWhiteSpace(screenshotPath) ? EmptyCombatHandAnalysis() : AutoCombatHandAnalyzer.Analyze(screenshotPath);
 
+        bool HasSelectedNonEnemyConfirmEvidence()
+        {
+            var pendingSelection = GetPendingSelection();
+            if (CombatRuntimeStateSupport.HasRuntimeSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, pendingSelection))
+            {
+                return true;
+            }
+
+            return !string.IsNullOrWhiteSpace(screenshotPath)
+                   && CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), pendingSelection);
+        }
+
+        bool CanResolveCombatEnemyTarget()
+        {
+            var pendingSelection = GetPendingSelection();
+            if (CombatRuntimeStateSupport.CanResolveEnemyTargetWithoutScreenshot(observer.Summary, combatCardKnowledge, pendingSelection))
+            {
+                return true;
+            }
+
+            return !string.IsNullOrWhiteSpace(screenshotPath)
+                   && Program.CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), pendingSelection);
+        }
+
         CombatBarrierEvaluation GetCombatBarrierEvaluation()
             => combatBarrierEvaluation ??= CombatBarrierSupport.Evaluate(
                 history,
                 observer,
                 GetCombatContext(),
                 GetRuntimeCombatState(),
-                GetCombatAnalysis(),
-                CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
-                Program.CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
+                string.IsNullOrWhiteSpace(screenshotPath) ? EmptyCombatAnalysis() : GetCombatAnalysis(),
+                HasSelectedNonEnemyConfirmEvidence(),
+                CanResolveCombatEnemyTarget(),
                 CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary));
 
         RewardSceneState GetRewardScene()
@@ -180,8 +204,8 @@ static class GuiSmokeStepRequestFactory
             GetCombatAnalysis,
             GetCombatHandAnalysis,
             () => CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary),
-            () => CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
-            () => Program.CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
+            HasSelectedNonEnemyConfirmEvidence,
+            CanResolveCombatEnemyTarget,
             GetCombatBarrierEvaluation);
     }
 
@@ -233,7 +257,7 @@ static class GuiSmokeStepRequestFactory
         var requestScreenshotPath = effectiveScreenshotPath ?? string.Empty;
         var serializedHistory = analysisContext?.History ?? BuildSerializedStepHistory(phase, history);
         var combatCardKnowledge = analysisContext?.CombatCardKnowledge ?? GuiSmokeSceneReasoningSupport.LoadCombatCardKnowledge(workspaceRoot, observer);
-        var sceneSignature = sceneContext?.SceneSignature ?? GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(effectiveScreenshotPath ?? screenshotPath, observer, phase, analysisContext);
+        var sceneSignature = sceneContext?.SceneSignature ?? GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(requestScreenshotPath, observer, phase, analysisContext);
         var useAuthorityFastPath = analysisContext?.UseAuthorityFastPath == true;
         var firstSeenScene = sceneContext?.FirstSeenScene ?? !GuiSmokeSceneReasoningSupport.HasSceneSignatureHistory(sessionRoot, sceneSignature);
         var reasoningMode = sceneContext?.ReasoningMode ?? GuiSmokeSceneReasoningSupport.DetermineReasoningMode(phase, observer, firstSeenScene);

@@ -11,6 +11,13 @@ static class GuiSmokeNonCombatContractSupport
 {
     public static bool HasExplicitRewardProgressionAffordance(ObserverSummary observer)
     {
+        if (NonCombatForegroundOwnership.HasExplicitRestSiteForegroundAuthority(observer)
+            || ShopObserverSignals.IsShopAuthorityActive(observer)
+            || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer))
+        {
+            return false;
+        }
+
         return observer.Choices.Any(IsExplicitRewardProgressionChoice)
                || observer.ActionNodes.Any(IsExplicitRewardProgressionNode);
     }
@@ -206,9 +213,9 @@ static class GuiSmokeNonCombatContractSupport
                            || label.Contains("first reachable node", StringComparison.OrdinalIgnoreCase) => "click first reachable node",
             { } label when label.Contains("visible map advance", StringComparison.OrdinalIgnoreCase) => "click visible map advance",
             { } label when label.Contains("map back", StringComparison.OrdinalIgnoreCase) => "click map back",
-            { } label when label.Contains("rest site:", StringComparison.OrdinalIgnoreCase) => "click rest site choice",
             { } label when label.Contains("smith card", StringComparison.OrdinalIgnoreCase) => "click smith card",
             { } label when label.Contains("smith confirm", StringComparison.OrdinalIgnoreCase) => "click smith confirm",
+            { } label when label.Contains("rest site:", StringComparison.OrdinalIgnoreCase) => "click rest site choice",
             { } label when label.Contains("treasure chest", StringComparison.OrdinalIgnoreCase) => "click treasure chest",
             { } label when label.Contains("treasure relic holder", StringComparison.OrdinalIgnoreCase) => "click treasure relic holder",
             { } label when label.Contains("treasure proceed", StringComparison.OrdinalIgnoreCase) => "click treasure proceed",

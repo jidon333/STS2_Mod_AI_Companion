@@ -66,6 +66,7 @@ internal static partial class Program
         var mapForegroundOwnership = MapForegroundReconciliation.HasMapForegroundOwnership(observer, history);
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
         var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
+        var restSiteScene = AutoDecisionProvider.BuildRestSiteSceneState(observer.Summary);
         var explicitRestSiteChoiceAuthority = GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
         if (phase == GuiSmokePhase.WaitRunLoad && GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(observer, out var postRunLoadPhase))
         {
@@ -88,6 +89,12 @@ internal static partial class Program
             GuiSmokePhase.WaitRunLoad => new[] { "wait" },
             GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "click character confirm", "wait" },
             GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
+            GuiSmokePhase.HandleRewards when explicitRestSiteChoiceAuthority
+                => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
+            GuiSmokePhase.HandleRewards when restSiteScene is { SmithUpgradeActive: true }
+                => new[] { "click smith card", "click smith confirm", "wait" },
+            GuiSmokePhase.HandleRewards when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary)
+                => new[] { "click proceed", "wait" },
             GuiSmokePhase.HandleRewards
                 => BuildRewardAllowedActions(observer, context),
             GuiSmokePhase.ChooseFirstNode when ancientMapOwner && ancientMapSurfacePending
@@ -96,6 +103,11 @@ internal static partial class Program
                 => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.ChooseFirstNode when explicitRestSiteChoiceAuthority
                 => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
+            GuiSmokePhase.ChooseFirstNode when CardSelectionObserverSignals.IsUpgradeState(observer.Summary)
+                                            && string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+                => new[] { "click smith card", "click smith confirm", "wait" },
+            GuiSmokePhase.ChooseFirstNode when restSiteScene is { SmithUpgradeActive: true }
+                => new[] { "click smith card", "click smith confirm", "wait" },
             GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary)
                 => new[] { "click proceed", "wait" },
             GuiSmokePhase.ChooseFirstNode when treasureState is { RoomDetected: true }

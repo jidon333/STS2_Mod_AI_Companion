@@ -21,6 +21,9 @@ sealed partial class AutoDecisionProvider
         IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
         string? screenshotPath = null)
     {
+        var strongerRoomForegroundAuthority = NonCombatForegroundOwnership.HasExplicitRestSiteForegroundAuthority(observer)
+                                             || ShopObserverSignals.IsShopAuthorityActive(observer)
+                                             || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer);
         var rewardState = RewardObserverSignals.TryGetState(observer);
         var mapContextVisible = rewardState?.MapIsCurrentActiveScreen == true
                                 || GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
@@ -39,7 +42,8 @@ sealed partial class AutoDecisionProvider
                                    || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
                                    || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase);
         var intrinsicRewardCardAuthority = observer.Choices.Any(IsRewardCardChoice);
-        var fallbackRewardChoiceAuthority = !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
+        var fallbackRewardChoiceAuthority = !strongerRoomForegroundAuthority
+                                            && !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
                                             && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
                                             && (intrinsicRewardCardAuthority
                                                 || (rewardContextVisible
@@ -47,7 +51,8 @@ sealed partial class AutoDecisionProvider
                                                     && observer.Choices.Any(static choice => IsSkipOrProceedLabel(choice.Label))));
         var rewardScreenHint = rewardContextVisible || fallbackRewardChoiceAuthority;
         var rewardForegroundOwned = rewardState?.ForegroundOwned == true
-                                    || (rewardScreenHint
+                                    || (!strongerRoomForegroundAuthority
+                                        && rewardScreenHint
                                         && rewardState?.MapIsCurrentActiveScreen != true
                                         && (explicitRewardChoicesPresent || fallbackRewardChoiceAuthority));
         var staleRewardChoicePresent = !rewardForegroundOwned && (staleRewardChoices.Length > 0 || staleRewardNodes.Length > 0);
@@ -66,24 +71,29 @@ sealed partial class AutoDecisionProvider
             MapCurrentActiveScreen: rewardState?.MapIsCurrentActiveScreen == true,
             TerminalRunBoundary: rewardState?.TerminalRunBoundary == true);
 
-        var rewardChoiceVisible = !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
+        var rewardChoiceVisible = !strongerRoomForegroundAuthority
+                                  && !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
                                   && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
                                   && rewardScreenHint
                                   && (observer.Choices.Count(IsRewardCardChoice) > 0
                                       || (observer.Choices.Count(IsInspectPreviewChoice) > 0
                                           && observer.Choices.Any(static choice => IsSkipOrProceedLabel(choice.Label))));
-        var colorlessChoiceVisible = !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
+        var colorlessChoiceVisible = !strongerRoomForegroundAuthority
+                                     && !CardSelectionObserverSignals.IsNonRewardCountConfirmFamily(observer)
                                      && !GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer)
                                      && rewardScreenHint
                                      && observer.Choices.Any(IsRewardCardChoice)
                                      && observer.Choices.Any(IsInspectPreviewChoice);
         var explicitProceedVisible = rewardState?.ProceedVisible == true
                                      || rewardState?.ProceedEnabled == true
-                                     || activeRewardChoices.Any(choice => IsSkipOrProceedLabel(choice.Label))
-                                     || activeRewardNodes.Any(IsProceedNode);
-        var claimableRewardPresent = activeRewardChoices.Any(choice => !IsSkipOrProceedLabel(choice.Label))
-                                     || activeRewardNodes.Any(node => !IsProceedNode(node))
-                                     || (!string.IsNullOrWhiteSpace(screenshotPath)
+                                     || (!strongerRoomForegroundAuthority
+                                         && (activeRewardChoices.Any(choice => IsSkipOrProceedLabel(choice.Label))
+                                             || activeRewardNodes.Any(IsProceedNode)));
+        var claimableRewardPresent = (!strongerRoomForegroundAuthority
+                                      && (activeRewardChoices.Any(choice => !IsSkipOrProceedLabel(choice.Label))
+                                          || activeRewardNodes.Any(node => !IsProceedNode(node))))
+                                     || (!strongerRoomForegroundAuthority
+                                         && !string.IsNullOrWhiteSpace(screenshotPath)
                                          && HasScreenshotClaimableRewardEvidenceInScreenshot(observer, screenshotPath));
         var suppressSameSkipReissue = rewardForegroundOwned
                                       && explicitProceedVisible

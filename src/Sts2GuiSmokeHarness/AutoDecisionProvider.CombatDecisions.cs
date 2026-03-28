@@ -8,8 +8,10 @@ sealed partial class AutoDecisionProvider
     private static GuiSmokeStepDecision DecideHandleCombat(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         var context = analysisContext ?? GuiSmokeStepAnalysisContext.CreateForHandleCombatRequest(request);
-        var analysis = context.CombatAnalysis;
-        var handAnalysis = context.CombatHandAnalysis;
+        AutoCombatAnalysis? analysis = null;
+        AutoCombatHandAnalysis? handAnalysis = null;
+        AutoCombatAnalysis GetCombatAnalysis() => analysis ??= context.CombatAnalysis;
+        AutoCombatHandAnalysis GetCombatHandAnalysis() => handAnalysis ??= context.CombatHandAnalysis;
         var combatContext = context.CombatContext;
         var pendingSelection = context.PendingCombatSelection;
         var runtimeCombatState = context.RuntimeCombatState;
@@ -100,7 +102,7 @@ sealed partial class AutoDecisionProvider
             var fallbackDecision = CreateCombatPressKeyDecision(
                 "E",
                 "auto-end turn",
-                "No clear playable card remains in the screenshot. End the turn.",
+                "No clear playable combat action remains in observer/runtime truth. End the turn.",
                 0.88,
                 200);
             if (TryUseCombatDecision(fallbackDecision, out var allowedFallback))
@@ -109,15 +111,6 @@ sealed partial class AutoDecisionProvider
             }
 
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for legal combat action", request.Observer.CurrentScreen);
-        }
-
-        if (analysis.HasTargetArrow)
-        {
-            if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision)
-                && TryUseCombatDecision(targetDecision, out var allowedTargetDecision))
-            {
-                return allowedTargetDecision;
-            }
         }
 
         if (request.Observer.PlayerEnergy is <= 0)
@@ -169,18 +162,6 @@ sealed partial class AutoDecisionProvider
             }
         }
 
-        if (analysis.HasSelectedCard
-            && analysis.SelectedCardKind == AutoCombatCardKind.AttackLike
-            && pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-            && enemyTargetOpportunity)
-        {
-            if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision)
-                && TryUseCombatDecision(targetDecision, out var allowedTargetDecision))
-            {
-                return allowedTargetDecision;
-            }
-        }
-
         if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
             && enemyTargetOpportunity)
         {
@@ -192,7 +173,8 @@ sealed partial class AutoDecisionProvider
         }
 
         if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-            && analysis.HasSelectedCard
+            && context.HasScreenshotEvidence
+            && GetCombatAnalysis().HasSelectedCard
             && !enemyTargetOpportunity)
         {
             if (TryUseCombatDecision(new GuiSmokeStepDecision(
@@ -271,17 +253,19 @@ sealed partial class AutoDecisionProvider
                 0)
                 : attackFallbackBlockedByObserver
                     ? null
-                    : handAnalysis.Slots
-                    .Where(slot =>
-                        slot.IsVisible
-                        && slot.Kind == AutoCombatCardKind.AttackLike
-                        && IsCompatibleScreenshotCombatSlot(slot, request.Observer, request.CombatCardKnowledge, expectEnemyTarget: true)
-                        && !hardBlockedAttackSlots.Contains(slot.SlotIndex)
-                        && !CombatBarrierSupport.SuppressesAttackSlot(combatBarrier, slot.SlotIndex)
-                        && (pendingSelectionNoOpCount <= 0 || !softBlockedAttackSlots.Contains(slot.SlotIndex) || slot.SlotIndex != pendingSelection?.SlotIndex))
-                    .OrderByDescending(static slot => slot.RedBlueDelta)
-                    .ThenByDescending(static slot => slot.Brightness)
-                    .FirstOrDefault();
+                    : context.HasScreenshotEvidence
+                        ? GetCombatHandAnalysis().Slots
+                            .Where(slot =>
+                                slot.IsVisible
+                                && slot.Kind == AutoCombatCardKind.AttackLike
+                                && IsCompatibleScreenshotCombatSlot(slot, request.Observer, request.CombatCardKnowledge, expectEnemyTarget: true)
+                                && !hardBlockedAttackSlots.Contains(slot.SlotIndex)
+                                && !CombatBarrierSupport.SuppressesAttackSlot(combatBarrier, slot.SlotIndex)
+                                && (pendingSelectionNoOpCount <= 0 || !softBlockedAttackSlots.Contains(slot.SlotIndex) || slot.SlotIndex != pendingSelection?.SlotIndex))
+                            .OrderByDescending(static slot => slot.RedBlueDelta)
+                            .ThenByDescending(static slot => slot.Brightness)
+                            .FirstOrDefault()
+                        : null;
         if (attackSlot is not null)
         {
             if (TryUseCombatDecision(new GuiSmokeStepDecision(
@@ -336,16 +320,18 @@ sealed partial class AutoDecisionProvider
                 double.MaxValue,
                 0,
                 0)
-                : handAnalysis.Slots
-                .Where(slot =>
-                    slot.IsVisible
-                    && slot.Kind == AutoCombatCardKind.DefendLike
-                    && IsCompatibleScreenshotCombatSlot(slot, request.Observer, request.CombatCardKnowledge, expectEnemyTarget: false)
-                    && !CombatBarrierSupport.SuppressesNonEnemySlot(combatBarrier, slot.SlotIndex)
-                    && !ShouldSuppressPendingNonEnemyReselect(slot.SlotIndex))
-                .OrderBy(static slot => slot.RedBlueDelta)
-                .ThenByDescending(static slot => slot.Brightness)
-                .FirstOrDefault();
+                : context.HasScreenshotEvidence
+                    ? GetCombatHandAnalysis().Slots
+                        .Where(slot =>
+                            slot.IsVisible
+                            && slot.Kind == AutoCombatCardKind.DefendLike
+                            && IsCompatibleScreenshotCombatSlot(slot, request.Observer, request.CombatCardKnowledge, expectEnemyTarget: false)
+                            && !CombatBarrierSupport.SuppressesNonEnemySlot(combatBarrier, slot.SlotIndex)
+                            && !ShouldSuppressPendingNonEnemyReselect(slot.SlotIndex))
+                        .OrderBy(static slot => slot.RedBlueDelta)
+                        .ThenByDescending(static slot => slot.Brightness)
+                        .FirstOrDefault()
+                    : null;
         if (nonEnemySlot is not null)
         {
             if (TryUseCombatDecision(new GuiSmokeStepDecision(
@@ -395,7 +381,7 @@ sealed partial class AutoDecisionProvider
                                          request.Observer,
                                          request.CombatCardKnowledge);
 
-        if (analysis.HasSelectedCard && HasRecentCombatCardSelection(request.History))
+        if (context.HasScreenshotEvidence && GetCombatAnalysis().HasSelectedCard && HasRecentCombatCardSelection(request.History))
         {
             if (TryUseCombatDecision(new GuiSmokeStepDecision(
                 "act",

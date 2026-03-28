@@ -225,6 +225,28 @@ static class CombatRuntimeStateSupport
         PendingCombatSelection? pendingSelection,
         AutoCombatAnalysis analysis)
     {
+        if (HasRuntimeSelectedNonEnemyConfirmEvidence(observer, combatCardKnowledge, pendingSelection))
+        {
+            return true;
+        }
+
+        var runtime = Read(observer, combatCardKnowledge);
+        if (runtime.RequiresHandCardSelection)
+        {
+            return false;
+        }
+
+        return pendingSelection?.Kind == AutoCombatCardKind.DefendLike
+               && pendingSelection.SlotIndex is >= 1 and <= 5
+               && ((analysis.HasSelectedCard && analysis.SelectedCardKind == AutoCombatCardKind.DefendLike)
+                   || analysis.HasSelfTargetBrackets);
+    }
+
+    public static bool HasRuntimeSelectedNonEnemyConfirmEvidence(
+        ObserverSummary observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        PendingCombatSelection? pendingSelection)
+    {
         var runtime = Read(observer, combatCardKnowledge);
         if (runtime.RequiresHandCardSelection)
         {
@@ -238,10 +260,7 @@ static class CombatRuntimeStateSupport
             return true;
         }
 
-        return pendingSelection?.Kind == AutoCombatCardKind.DefendLike
-               && pendingSelection.SlotIndex is >= 1 and <= 5
-               && ((analysis.HasSelectedCard && analysis.SelectedCardKind == AutoCombatCardKind.DefendLike)
-                   || analysis.HasSelfTargetBrackets);
+        return false;
     }
 
     public static bool CanResolveEnemyTarget(
@@ -250,10 +269,70 @@ static class CombatRuntimeStateSupport
         PendingCombatSelection? pendingSelection,
         AutoCombatAnalysis analysis)
     {
+        if (CanResolveEnemyTargetWithoutScreenshot(observer, combatCardKnowledge, pendingSelection))
+        {
+            return true;
+        }
+
         var runtime = Read(observer, combatCardKnowledge);
-        return runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-               && runtime.HasExplicitEnemyTargetingEvidence
-               && (!runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitHittableEnemy);
+        if (runtime.HasExplicitHittableEnemyAuthority)
+        {
+            return false;
+        }
+
+        return analysis.HasTargetArrow
+               || (analysis.HasSelectedCard
+                   && analysis.SelectedCardKind == AutoCombatCardKind.AttackLike
+                   && (GetPlayableAttackSlots(observer, combatCardKnowledge).Any()
+                       || (observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0)));
+    }
+
+    public static bool CanResolveEnemyTargetWithoutScreenshot(
+        ObserverSummary observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        PendingCombatSelection? pendingSelection)
+    {
+        var runtime = Read(observer, combatCardKnowledge);
+        if (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+            && runtime.HasExplicitEnemyTargetingEvidence
+            && (!runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitHittableEnemy))
+        {
+            return true;
+        }
+
+        if (runtime.HasExplicitHittableEnemyAuthority)
+        {
+            return false;
+        }
+
+        if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer).Count > 0)
+        {
+            return true;
+        }
+
+        if (RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge))
+        {
+            return false;
+        }
+
+        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike)
+        {
+            var pendingCard = observer.CombatHand.FirstOrDefault(card => card.SlotIndex == pendingSelection.SlotIndex);
+            if (pendingCard is not null)
+            {
+                return IsObservedAttackCard(pendingCard)
+                       && IsObservedPlayableAtEnergy(pendingCard, observer.PlayerEnergy, combatCardKnowledge);
+            }
+
+            var pendingKnowledge = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == pendingSelection.SlotIndex);
+            if (pendingKnowledge is not null)
+            {
+                return IsKnowledgeEnemyTargetCard(pendingKnowledge)
+                       && IsKnowledgePlayableAtEnergy(pendingKnowledge, observer.PlayerEnergy);
+            }
+        }
+
+        return false;
     }
 
     public static bool RequiresExplicitTargetingBeforeEnemyClick(
@@ -387,4 +466,53 @@ static class CombatRuntimeStateSupport
             .ToArray();
     }
 
+    private static IEnumerable<int> GetPlayableAttackSlots(
+        ObserverSummary observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+    {
+        var knowledgeSlots = combatCardKnowledge
+            .Where(card => card.SlotIndex is >= 1 and <= 5)
+            .Where(card => IsKnowledgeEnemyTargetCard(card) && IsKnowledgePlayableAtEnergy(card, observer.PlayerEnergy))
+            .Select(static card => card.SlotIndex);
+        var observerSlots = observer.CombatHand
+            .Where(card => card.SlotIndex is >= 1 and <= 5)
+            .Where(card => IsObservedAttackCard(card) && IsObservedPlayableAtEnergy(card, observer.PlayerEnergy, combatCardKnowledge))
+            .Select(static card => card.SlotIndex);
+        return knowledgeSlots.Concat(observerSlots).Distinct().OrderBy(static slotIndex => slotIndex);
+    }
+
+    private static bool IsKnowledgePlayableAtEnergy(CombatCardKnowledgeHint card, int? energy)
+    {
+        if (energy is null || card.Cost is null)
+        {
+            return true;
+        }
+
+        if (card.Cost < 0)
+        {
+            return energy > 0;
+        }
+
+        return card.Cost <= energy;
+    }
+
+    private static bool IsObservedPlayableAtEnergy(
+        ObservedCombatHandCard card,
+        int? energy,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+    {
+        var resolvedCost = card.Cost
+                           ?? combatCardKnowledge.FirstOrDefault(candidate => candidate.SlotIndex == card.SlotIndex)?.Cost;
+        if (energy is null || resolvedCost is null)
+        {
+            return true;
+        }
+
+        if (resolvedCost < 0)
+        {
+            return energy > 0;
+        }
+
+        return resolvedCost <= energy;
+    }
 }

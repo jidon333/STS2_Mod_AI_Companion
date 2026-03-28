@@ -45,7 +45,6 @@ internal static partial class Program
         var combatContext = context.CombatContext;
         var blockedCombatNoOpCounts = combatContext.CombatNoOpCountsBySlot;
         var pendingSelection = context.PendingCombatSelection;
-        var analysis = context.CombatAnalysis;
         var runtimeCombatState = context.RuntimeCombatState;
         var hasSelectedNonEnemyConfirmEvidence = context.HasSelectedNonEnemyConfirmEvidence;
         if (runtimeCombatState.RequiresHandCardSelection)
@@ -127,6 +126,9 @@ internal static partial class Program
 
         actions.Add("click end turn");
 
+        var analysis = context.HasScreenshotEvidence
+            ? context.CombatAnalysis
+            : new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown);
         if (HasCombatSelectionToCancelFromAnalysis(observer, combatCardKnowledge, analysis, pendingSelection, combatContext))
         {
             actions.Add("right-click cancel selected card");

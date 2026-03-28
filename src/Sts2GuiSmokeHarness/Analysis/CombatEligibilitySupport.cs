@@ -92,12 +92,22 @@ static class CombatEligibilitySupport
         AutoCombatAnalysis analysis,
         PendingCombatSelection? pendingSelection)
     {
+        if (CombatRuntimeStateSupport.HasRuntimeSelectedNonEnemyConfirmEvidence(observer, combatCardKnowledge, pendingSelection))
+        {
+            return true;
+        }
+
         return CombatRuntimeStateSupport.HasNonEnemyConfirmEvidence(observer, combatCardKnowledge, pendingSelection, analysis);
     }
 
     public static bool HasSelectedNonEnemyConfirmEvidence(GuiSmokeStepRequest request)
     {
         var pendingSelection = CombatRuntimeStateSupport.ResolvePendingSelection(request.Observer, request.CombatCardKnowledge, CombatHistorySupport.TryGetPendingCombatSelection(request.History));
+        if (CombatRuntimeStateSupport.HasRuntimeSelectedNonEnemyConfirmEvidence(request.Observer, request.CombatCardKnowledge, pendingSelection))
+        {
+            return true;
+        }
+
         var analysis = string.IsNullOrWhiteSpace(request.ScreenshotPath)
             ? new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown)
             : AutoCombatAnalyzer.Analyze(request.ScreenshotPath);

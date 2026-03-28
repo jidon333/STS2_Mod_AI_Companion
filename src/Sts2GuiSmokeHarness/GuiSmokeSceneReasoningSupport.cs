@@ -32,7 +32,10 @@ static class GuiSmokeSceneReasoningSupport
         if (context.UseCombatFastPath)
         {
             var combatRuntimeState = context.RuntimeCombatState;
-            var combatAnalysis = context.CombatAnalysis;
+            var hasCombatScreenshotEvidence = context.HasScreenshotEvidence;
+            var combatAnalysis = hasCombatScreenshotEvidence
+                ? context.CombatAnalysis
+                : new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown);
             var combatCompatibilityCurrentScreen = CompatibilityCurrentScreen(observer) ?? "unknown";
             var combatCompatibilityVisibleScreen = CompatibilityVisibleScreen(observer) ?? "unknown";
             var combatTags = new List<string>(capacity: 10)
@@ -44,7 +47,7 @@ static class GuiSmokeSceneReasoningSupport
                 $"ready:{(CompatibilitySceneReady(observer)?.ToString() ?? "unknown").ToLowerInvariant()}",
                 $"stability:{(CompatibilitySceneStability(observer) ?? "unknown").Trim().ToLowerInvariant()}",
                 "combat:fast-path",
-                $"combat-targeting:{((combatRuntimeState.TargetingInProgress == true || combatAnalysis.HasTargetArrow) ? "active" : "inactive")}",
+                $"combat-targeting:{((combatRuntimeState.TargetingInProgress == true || (hasCombatScreenshotEvidence && combatAnalysis.HasTargetArrow)) ? "active" : "inactive")}",
                 $"combat-hittable:{(combatRuntimeState.HittableEnemyCount?.ToString(CultureInfo.InvariantCulture) ?? "unknown")}",
             };
 
@@ -53,7 +56,7 @@ static class GuiSmokeSceneReasoningSupport
                 combatTags.Add($"combat-selection:{pendingSelection.Kind.ToString().ToLowerInvariant()}");
                 combatTags.Add($"combat-slot:{pendingSelection.SlotIndex.ToString(CultureInfo.InvariantCulture)}");
             }
-            else if (combatAnalysis.HasSelectedCard)
+            else if (hasCombatScreenshotEvidence && combatAnalysis.HasSelectedCard)
             {
                 combatTags.Add($"combat-selection:{combatAnalysis.SelectedCardKind.ToString().ToLowerInvariant()}");
             }

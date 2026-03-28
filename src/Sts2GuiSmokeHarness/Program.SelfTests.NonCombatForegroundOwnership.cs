@@ -738,6 +738,9 @@ internal static partial class Program
             var disabledConfirmSmithUpgradeDecision = AutoDecisionProvider.Decide(disabledConfirmSmithUpgradeRequest);
             Assert(string.Equals(disabledConfirmSmithUpgradeDecision.TargetLabel, "rest site: smith card", StringComparison.OrdinalIgnoreCase),
                 "Disabled smith confirm should not be clicked while exported smith card choices remain actionable.");
+            Assert(GuiSmokeNonCombatContractSupport.TryMapNonCombatAllowedAction(disabledConfirmSmithUpgradeDecision, out var disabledConfirmSmithUpgradeAction)
+                   && string.Equals(disabledConfirmSmithUpgradeAction, "click smith card", StringComparison.OrdinalIgnoreCase),
+                $"Smith-grid selection should map to click smith card instead of the broader rest-site choice lane. actual={disabledConfirmSmithUpgradeAction ?? "null"}");
 
             var restSiteProceedSummary = restSiteMetadataSummary with
             {
@@ -777,6 +780,29 @@ internal static partial class Program
             var restSiteProceedDecision = AutoDecisionProvider.Decide(restSiteProceedRequest);
             Assert(string.Equals(restSiteProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
                 "Observer-visible rest-site proceed choice should create a visible proceed decision without waiting for screenshot arrows.");
+            var restSiteProceedRewardContext = GuiSmokeStepRequestFactory.CreateObserverOnlyAnalysisContext(
+                GuiSmokePhase.HandleRewards,
+                restSiteProceedObserver,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                Array.Empty<CombatCardKnowledgeHint>());
+            Assert(!restSiteProceedRewardContext.UseRewardFastPath,
+                "Rest-site proceed aftermath should not reopen the reward fast path just because proceed/relic affordances are visible.");
+            var restSiteProceedHandleRewardsActions = BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                restSiteProceedObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(restSiteProceedHandleRewardsActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
+                   && !restSiteProceedHandleRewardsActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                "HandleRewards fallback should recover to the rest-site proceed lane instead of collapsing to wait on post-confirm rest-site surfaces.");
+            var restSiteProceedHandleRewardsDecision = AutoDecisionProvider.Decide(restSiteProceedRequest with
+            {
+                Phase = GuiSmokePhase.HandleRewards.ToString(),
+                AllowedActions = restSiteProceedHandleRewardsActions,
+            });
+            Assert(string.Equals(restSiteProceedHandleRewardsDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
+                "HandleRewards compatibility routing should delegate back to the rest-site proceed lane when reward authority is absent.");
 
             var restSiteProceedLabelOnlySummary = restSiteProceedSummary with
             {
@@ -832,6 +858,35 @@ internal static partial class Program
                 Assert(string.Equals(legacyReplayArtifact.FinalDecision.TargetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase),
                     "Legacy replay artifact without binding metadata should still choose rest site: smith.");
             }
+
+            var mixedSmithGridSummary = disabledConfirmSmithUpgradeSummary with
+            {
+                CurrentScreen = "upgrade",
+                VisibleScreen = "upgrade",
+                EncounterKind = "RestSite",
+                ChoiceExtractorPath = "card-selection-upgrade",
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("map:8:3", "map-node", "RestSite (8,3)", "642,425,56,56", true)
+                    {
+                        TypeName = "map-node",
+                    },
+                },
+                Meta = new Dictionary<string, string?>(disabledConfirmSmithUpgradeSummary.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                    ["cardSelectionScreenType"] = "upgrade",
+                    ["cardSelectionSelectedCount"] = "0",
+                    ["restSiteUpgradeScreenVisible"] = "true",
+                    ["restSiteUpgradeCardCount"] = "2",
+                    ["restSiteViewKind"] = "smith-grid",
+                },
+            };
+            var mixedSmithGridObserver = new ObserverState(mixedSmithGridSummary, null, null, null);
+            var mixedSmithGridAllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mixedSmithGridObserver);
+            Assert(mixedSmithGridAllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase)
+                   && !mixedSmithGridAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
+                $"Rest-site smith grid should keep smith-card allowlists ahead of stale map-overlay routing. allowed=[{string.Join(", ", mixedSmithGridAllowedActions)}]");
 
             var mixedRestAftermathSummary = restSiteMetadataSummary with
             {

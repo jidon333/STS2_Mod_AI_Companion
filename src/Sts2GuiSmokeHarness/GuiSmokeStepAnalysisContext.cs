@@ -242,14 +242,28 @@ sealed class GuiSmokeStepAnalysisContext
                 ? new AutoCombatHandAnalysis(Array.Empty<AutoCombatHandSlotAnalysis>())
                 : AutoCombatHandAnalyzer.Analyze(screenshotPath);
 
+        bool HasSelectedNonEnemyConfirmEvidence()
+        {
+            var pendingSelection = GetPendingSelection();
+            if (CombatRuntimeStateSupport.HasRuntimeSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, pendingSelection))
+            {
+                return true;
+            }
+
+            return !string.IsNullOrWhiteSpace(screenshotPath)
+                   && CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), pendingSelection);
+        }
+
         CombatBarrierEvaluation GetCombatBarrierEvaluation()
             => combatBarrierEvaluation ??= CombatBarrierSupport.Evaluate(
                 history,
                 observer,
                 GetCombatContext(),
                 GetRuntimeCombatState(),
-                GetCombatAnalysis(),
-                CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
+                string.IsNullOrWhiteSpace(screenshotPath)
+                    ? new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown)
+                    : GetCombatAnalysis(),
+                HasSelectedNonEnemyConfirmEvidence(),
                 CanResolveCombatEnemyTarget(),
                 CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary));
 
@@ -272,120 +286,14 @@ sealed class GuiSmokeStepAnalysisContext
 
         bool CanResolveCombatEnemyTarget()
         {
-            var analysis = GetCombatAnalysis();
             var pending = GetPendingSelection();
-            var runtime = GetRuntimeCombatState();
-            static bool IsAttackHandCard(ObservedCombatHandCard card)
-            {
-                return string.Equals(card.Type, "Attack", StringComparison.OrdinalIgnoreCase)
-                       || card.Name.Contains("STRIKE", StringComparison.OrdinalIgnoreCase)
-                       || card.Name.Contains("BASH", StringComparison.OrdinalIgnoreCase);
-            }
-
-            static bool IsEnemyTargetKnowledgeCard(CombatCardKnowledgeHint card)
-            {
-                return string.Equals(card.Type, "Attack", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(card.Target, "AnyEnemy", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(card.Target, "RandomEnemy", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(card.Target, "AllEnemies", StringComparison.OrdinalIgnoreCase);
-            }
-
-            static bool IsKnowledgePlayableAtEnergy(CombatCardKnowledgeHint card, int? energy)
-            {
-                if (energy is null || card.Cost is null)
-                {
-                    return true;
-                }
-
-                if (card.Cost < 0)
-                {
-                    return energy > 0;
-                }
-
-                return card.Cost <= energy;
-            }
-
-            static bool IsObservedPlayableAtEnergy(
-                ObservedCombatHandCard card,
-                int? energy,
-                IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
-            {
-                var resolvedCost = card.Cost
-                                   ?? combatCardKnowledge.FirstOrDefault(candidate => candidate.SlotIndex == card.SlotIndex)?.Cost;
-                if (energy is null || resolvedCost is null)
-                {
-                    return true;
-                }
-
-                if (resolvedCost < 0)
-                {
-                    return energy > 0;
-                }
-
-                return resolvedCost <= energy;
-            }
-
-            static IEnumerable<int> GetPlayableAttackSlots(
-                ObserverState observer,
-                IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
-            {
-                var knowledgeSlots = combatCardKnowledge
-                    .Where(card => card.SlotIndex is >= 1 and <= 5)
-                    .Where(card => IsEnemyTargetKnowledgeCard(card) && IsKnowledgePlayableAtEnergy(card, observer.PlayerEnergy))
-                    .Select(static card => card.SlotIndex);
-                var observerSlots = observer.CombatHand
-                    .Where(card => card.SlotIndex is >= 1 and <= 5)
-                    .Where(card => IsAttackHandCard(card) && IsObservedPlayableAtEnergy(card, observer.PlayerEnergy, combatCardKnowledge))
-                    .Select(static card => card.SlotIndex);
-                return knowledgeSlots.Concat(observerSlots).Distinct().OrderBy(static slotIndex => slotIndex);
-            }
-
-            if (CombatRuntimeStateSupport.CanResolveEnemyTarget(observer.Summary, combatCardKnowledge, pending, analysis))
+            if (CombatRuntimeStateSupport.CanResolveEnemyTargetWithoutScreenshot(observer.Summary, combatCardKnowledge, pending))
             {
                 return true;
             }
 
-            if (runtime.HasExplicitHittableEnemyAuthority)
-            {
-                return false;
-            }
-
-            if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer.Summary).Count > 0)
-            {
-                return true;
-            }
-
-            if (analysis.HasTargetArrow)
-            {
-                return true;
-            }
-
-            if (CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer.Summary, combatCardKnowledge))
-            {
-                return false;
-            }
-
-            if (pending?.Kind == AutoCombatCardKind.AttackLike)
-            {
-                var pendingCard = observer.CombatHand.FirstOrDefault(card => card.SlotIndex == pending.SlotIndex);
-                if (pendingCard is not null)
-                {
-                    return IsAttackHandCard(pendingCard)
-                           && IsObservedPlayableAtEnergy(pendingCard, observer.PlayerEnergy, combatCardKnowledge);
-                }
-
-                var pendingKnowledge = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == pending.SlotIndex);
-                if (pendingKnowledge is not null)
-                {
-                    return IsEnemyTargetKnowledgeCard(pendingKnowledge)
-                           && IsKnowledgePlayableAtEnergy(pendingKnowledge, observer.PlayerEnergy);
-                }
-            }
-
-            return analysis.HasSelectedCard
-                   && analysis.SelectedCardKind == AutoCombatCardKind.AttackLike
-                   && (GetPlayableAttackSlots(observer, combatCardKnowledge).Any()
-                       || (observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0));
+            return !string.IsNullOrWhiteSpace(screenshotPath)
+                   && CombatRuntimeStateSupport.CanResolveEnemyTarget(observer.Summary, combatCardKnowledge, pending, GetCombatAnalysis());
         }
 
         static bool LooksLikeInspectOverlayForeground(ObserverSummary summary)
@@ -460,7 +368,7 @@ sealed class GuiSmokeStepAnalysisContext
             GetCombatAnalysis,
             GetCombatHandAnalysis,
             () => CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary),
-            () => CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
+            HasSelectedNonEnemyConfirmEvidence,
             CanResolveCombatEnemyTarget,
             GetCombatBarrierEvaluation);
     }

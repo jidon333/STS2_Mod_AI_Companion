@@ -159,6 +159,149 @@ internal static partial class Program
             Assert(CombatDecisionContract.TryMapSemanticAction(parityRequest, parityContextAnalysis.FinalDecision, out var parityContextSemantic), "Context-backed combat analysis should still map to a legal combat semantic action.");
             Assert(string.Equals(parityContextSemantic, "click end turn", StringComparison.OrdinalIgnoreCase), "Context-backed combat analysis should preserve the same HandleCombat parity outcome.");
 
+            WindowCaptureTarget BuildObserverOnlyCombatWindow()
+            {
+                return new WindowCaptureTarget(IntPtr.Zero, "self-test-combat", new Rectangle(1, 32, 1280, 720), false, false);
+            }
+
+            GuiSmokeStepRequest BuildObserverOnlyCombatRequest(
+                string attemptId,
+                int stepNumber,
+                ObserverSummary observerSummary,
+                IReadOnlyList<CombatCardKnowledgeHint> combatKnowledge,
+                IReadOnlyList<GuiSmokeHistoryEntry> combatHistory)
+            {
+                var observerState = new ObserverState(observerSummary, null, null, null);
+                var analysisContext = CreateObserverOnlyAnalysisContext(
+                    GuiSmokePhase.HandleCombat,
+                    observerState,
+                    combatHistory,
+                    combatKnowledge,
+                    new WindowBounds(1, 32, 1280, 720));
+                return CreateStepRequest(
+                    "run",
+                    "boot-to-long-run",
+                    stepNumber,
+                    GuiSmokePhase.HandleCombat,
+                    Path.Combine(Path.GetTempPath(), $"{attemptId}.screen.png"),
+                    BuildObserverOnlyCombatWindow(),
+                    observerState,
+                    combatHistory,
+                    Directory.GetCurrentDirectory(),
+                    Path.GetTempPath(),
+                    attemptId,
+                    1,
+                    analysisContext,
+                    null);
+            }
+
+            var observerOnlyAttackObserver = parityCombatObserver with
+            {
+                InventoryId = "inv-handle-combat-observer-attack",
+                CurrentChoices = new[] { "2턴 종료" },
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("end-turn", "button", "2턴 종료", "1604,846,220,90", true),
+                },
+                Choices = Array.Empty<ObserverChoice>(),
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                    new ObservedCombatHandCard(2, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                },
+            };
+            var observerOnlyAttackKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            };
+            var observerOnlyAttackContext = CreateObserverOnlyAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(observerOnlyAttackObserver, null, null, null),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                observerOnlyAttackKnowledge,
+                new WindowBounds(1, 32, 1280, 720));
+            var observerOnlyAttackPolicy = GuiSmokeStepScreenshotPolicy.Evaluate(2, false, observerOnlyAttackContext);
+            Assert(!observerOnlyAttackPolicy.NeedsScreenshot
+                   && string.Equals(observerOnlyAttackPolicy.SkipReason, "combat-observer-attack-slot", StringComparison.OrdinalIgnoreCase),
+                "Combat screenshot policy should skip capture when observer/knowledge already expose a playable attack slot.");
+            var observerOnlyAttackRequest = BuildObserverOnlyCombatRequest(
+                "observer-only-attack",
+                2,
+                observerOnlyAttackObserver,
+                observerOnlyAttackKnowledge,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(string.IsNullOrWhiteSpace(observerOnlyAttackRequest.ScreenshotPath), "Observer-only combat requests should leave screenshot path empty.");
+            var observerOnlyAttackDecision = AutoDecisionProvider.Analyze(
+                observerOnlyAttackRequest,
+                analysisContext: CreateRequestAnalysisContext(observerOnlyAttackRequest)).FinalDecision;
+            Assert(CombatDecisionContract.TryMapSemanticAction(observerOnlyAttackRequest, observerOnlyAttackDecision, out var observerOnlyAttackSemantic)
+                   && string.Equals(observerOnlyAttackSemantic, "select attack slot 1", StringComparison.OrdinalIgnoreCase),
+                "Observer-only combat fast path should still select a playable attack slot without screenshot analysis.");
+
+            var observerOnlyTargetHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            };
+            var observerOnlyTargetObserver = observerOnlyAttackObserver with
+            {
+                InventoryId = "inv-handle-combat-observer-target",
+                ChoiceExtractorPath = "combat-targets",
+                CurrentChoices = new[] { "Jaw Worm" },
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("enemy-target:1", "enemy-target", "Jaw Worm", "967,433,84,88", true),
+                    new ObserverActionNode("end-turn", "button", "2턴 종료", "1604,846,220,90", true),
+                },
+                Choices = new[]
+                {
+                    new ObserverChoice("enemy-target", "Jaw Worm", "967,433,84,88", "Jaw Worm", "target-source:vfx-spawn-hitbox")
+                    {
+                        NodeId = "enemy-target:1",
+                    },
+                },
+                Meta = new Dictionary<string, string?>(observerOnlyAttackObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCardPlayPending"] = "true",
+                    ["combatSelectedCardSlot"] = "1",
+                    ["combatSelectedCardType"] = "Attack",
+                    ["combatSelectedCardTargetType"] = "AnyEnemy",
+                    ["combatTargetingInProgress"] = "true",
+                    ["combatTargetableEnemyCount"] = "1",
+                    ["combatTargetableEnemyIds"] = "enemy-target:1",
+                    ["combatHittableEnemyCount"] = "1",
+                    ["combatHittableEnemyIds"] = "enemy-target:1",
+                },
+            };
+            var observerOnlyTargetContext = CreateObserverOnlyAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(observerOnlyTargetObserver, null, null, null),
+                observerOnlyTargetHistory,
+                observerOnlyAttackKnowledge,
+                new WindowBounds(1, 32, 1280, 720));
+            var observerOnlyTargetPolicy = GuiSmokeStepScreenshotPolicy.Evaluate(3, false, observerOnlyTargetContext);
+            Assert(!observerOnlyTargetPolicy.NeedsScreenshot
+                   && string.Equals(observerOnlyTargetPolicy.SkipReason, "combat-explicit-target-runtime", StringComparison.OrdinalIgnoreCase),
+                "Combat screenshot policy should skip capture when runtime/observer already expose an explicit enemy target.");
+            var observerOnlyTargetRequest = BuildObserverOnlyCombatRequest(
+                "observer-only-target",
+                3,
+                observerOnlyTargetObserver,
+                observerOnlyAttackKnowledge,
+                observerOnlyTargetHistory);
+            Assert(observerOnlyTargetRequest.AllowedActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                $"Observer-only combat request should still open click enemy in the allowlist. allowed=[{string.Join(", ", observerOnlyTargetRequest.AllowedActions)}]");
+            var observerOnlyTargetReplayContext = CreateRequestAnalysisContext(observerOnlyTargetRequest);
+            Assert(observerOnlyTargetReplayContext.PendingCombatSelection?.Kind == AutoCombatCardKind.AttackLike,
+                $"Observer-only combat replay context should preserve the pending attack selection. pending={observerOnlyTargetReplayContext.PendingCombatSelection?.Kind.ToString() ?? "null"}");
+            var observerOnlyTargetDecision = AutoDecisionProvider.Analyze(
+                observerOnlyTargetRequest,
+                analysisContext: observerOnlyTargetReplayContext).FinalDecision;
+            var observerOnlyTargetMapped = CombatDecisionContract.TryMapSemanticAction(observerOnlyTargetRequest, observerOnlyTargetDecision, out var observerOnlyTargetSemantic);
+            Assert(observerOnlyTargetMapped
+                   && string.Equals(observerOnlyTargetSemantic, "click enemy", StringComparison.OrdinalIgnoreCase),
+                $"Observer-only combat fast path should still click the explicit enemy target without screenshot analysis. actual={observerOnlyTargetDecision.TargetLabel ?? observerOnlyTargetDecision.ActionKind ?? observerOnlyTargetDecision.Status} semantic={observerOnlyTargetSemantic ?? "null"}");
+
             GuiSmokeStepRequest BuildBarrierRequest(
                 string stepId,
                 int stepNumber,

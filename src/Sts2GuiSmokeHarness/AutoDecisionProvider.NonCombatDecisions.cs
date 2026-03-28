@@ -7,6 +7,14 @@ sealed partial class AutoDecisionProvider
 {
     private static GuiSmokeStepDecision DecideHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
+        if (!RewardObserverSignals.IsRewardAuthorityActive(request.Observer)
+            && BuildRestSiteSceneState(request.Observer) is not null)
+        {
+            return DecideChooseFirstNode(
+                request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() },
+                analysisContext);
+        }
+
         var rewardScene = analysisContext?.RewardScene ?? BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
         var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
         if (overlayDecision is not null)
