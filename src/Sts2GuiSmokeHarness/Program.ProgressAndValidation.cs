@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 internal static partial class Program
 {
@@ -58,11 +59,11 @@ internal static partial class Program
 
     static string DescribeObserverHuman(ObserverState observer)
     {
-        var logical = observer.CurrentScreen ?? "null";
-        var visible = observer.VisibleScreen ?? "null";
+        var logical = CompatibilityCurrentScreen(observer) ?? "null";
+        var visible = CompatibilityVisibleScreen(observer) ?? "null";
         var inCombat = observer.InCombat?.ToString() ?? "null";
-        var sceneReady = observer.SceneReady?.ToString() ?? "null";
-        var sceneStability = observer.SceneStability ?? "null";
+        var sceneReady = CompatibilitySceneReady(observer)?.ToString() ?? "null";
+        var sceneStability = CompatibilitySceneStability(observer) ?? "null";
         var hp = observer.Summary.PlayerCurrentHp is not null && observer.Summary.PlayerMaxHp is not null
             ? $"{observer.Summary.PlayerCurrentHp}/{observer.Summary.PlayerMaxHp}"
             : "null";
@@ -108,14 +109,14 @@ internal static partial class Program
                 CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown
                     and not NonCombatCanonicalForegroundOwner.Map,
             };
-        if (observer.SceneReady is not null)
+        if (CompatibilitySceneReady(observer) is not null)
         {
-            observerSignals.Add(observer.SceneReady == true ? "scene-ready-true" : "scene-ready-false");
+            observerSignals.Add(CompatibilitySceneReady(observer) == true ? "scene-ready-true" : "scene-ready-false");
         }
 
-        if (!string.IsNullOrWhiteSpace(observer.SceneAuthority))
+        if (!string.IsNullOrWhiteSpace(CompatibilitySceneAuthority(observer)))
         {
-            observerSignals.Add($"scene-authority:{observer.SceneAuthority}");
+            observerSignals.Add($"scene-authority:{CompatibilitySceneAuthority(observer)}");
         }
 
         if (phase == GuiSmokePhase.HandleCombat)
@@ -219,7 +220,7 @@ internal static partial class Program
             }
 
             if (GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
-                && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+                && !MatchesCompatibilityScreen(observer, "map")
                 && !suppressMapTransitionByForegroundAuthority)
             {
                 observerSignals.Add("map-transition-evidence");
@@ -258,7 +259,7 @@ internal static partial class Program
                 actuatorSignals.Add("no-repeat-stall");
             }
 
-            if (observer.SceneReady != false)
+            if (CompatibilitySceneReady(observer) != false)
             {
                 actuatorSignals.Add("scene-safe");
             }
@@ -300,8 +301,8 @@ internal static partial class Program
             stepIndex,
             phase.ToString(),
             sceneSignature,
-            observer.CurrentScreen,
-            postActionObserver?.CurrentScreen,
+            CompatibilityCurrentScreen(observer),
+            postActionObserver is null ? null : CompatibilityCurrentScreen(postActionObserver),
             decision?.TargetLabel,
             observerProgress,
             actuatorProgress,
@@ -328,7 +329,7 @@ internal static partial class Program
         return before.InCombat == true
                && after.InCombat == true
                && !HasMeaningfulObserverDelta(before, after)
-               && string.Equals(after.CurrentScreen ?? after.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase);
+               && string.Equals(DisplayScreen(after), "combat", StringComparison.OrdinalIgnoreCase);
     }
 
     static bool IsSpecificExtractorPath(string? choiceExtractorPath)
@@ -346,8 +347,7 @@ internal static partial class Program
     {
         var beforeRuntime = CombatRuntimeStateSupport.Read(before.Summary, Array.Empty<CombatCardKnowledgeHint>());
         var afterRuntime = CombatRuntimeStateSupport.Read(after.Summary, Array.Empty<CombatCardKnowledgeHint>());
-        return !string.Equals(before.CurrentScreen, after.CurrentScreen, StringComparison.OrdinalIgnoreCase)
-               || !string.Equals(before.VisibleScreen, after.VisibleScreen, StringComparison.OrdinalIgnoreCase)
+        return !string.Equals(DisplayScreen(before), DisplayScreen(after), StringComparison.OrdinalIgnoreCase)
                || before.InCombat != after.InCombat
                || !string.Equals(before.Summary.SceneEpisodeId, after.Summary.SceneEpisodeId, StringComparison.Ordinal)
                || before.PlayerEnergy != after.PlayerEnergy
@@ -379,18 +379,18 @@ internal static partial class Program
         if (before.InCombat != true
             || after.InCombat != true
             || HasMeaningfulObserverDelta(before, after)
-            || !string.Equals(after.CurrentScreen ?? after.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase))
+            || !string.Equals(DisplayScreen(after), "combat", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         var laneLabel = AutoDecisionProvider.ResolveCombatLaneLabel(decision.TargetLabel, history) ?? decision.TargetLabel ?? "combat";
         history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-noop", laneLabel, DateTimeOffset.UtcNow));
-        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-noop", after.CurrentScreen, after.InCombat, laneLabel));
+        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-noop", DisplayScreen(after), after.InCombat, laneLabel));
         signal = laneLabel.StartsWith("combat lane slot ", StringComparison.OrdinalIgnoreCase)
             ? $"combat-noop-observed:{laneLabel}"
             : "combat-noop-observed";
-        LogHarness($"step={stepIndex} observed combat-noop target={decision.TargetLabel ?? "null"} lane={laneLabel} screen={after.CurrentScreen ?? after.VisibleScreen ?? "null"}");
+        LogHarness($"step={stepIndex} observed combat-noop target={decision.TargetLabel ?? "null"} lane={laneLabel} screen={DisplayScreen(after) ?? "null"}");
         return true;
     }
 

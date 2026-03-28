@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class AncientEventObserverSignals
 {
@@ -128,8 +129,7 @@ static class AncientEventObserverSignals
             return false;
         }
 
-        if (string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase))
+        if (MatchesCompatibilityScreen(observer, "map"))
         {
             return true;
         }

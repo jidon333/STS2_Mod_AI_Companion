@@ -15,6 +15,7 @@ using Sts2ModAiCompanion.Mod;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
+using static ObserverScreenProvenance;
 using static GuiSmokeChoicePrimitiveSupport;
 
 internal static partial class Program
@@ -544,8 +545,7 @@ internal static partial class Program
 
     static bool ShouldRecordUnknownScene(GuiSmokeStepRequest request)
     {
-        return string.Equals(request.Observer.CurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(request.Observer.VisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(DisplayScreen(request.Observer), "unknown", StringComparison.OrdinalIgnoreCase);
     }
 
     static string BuildSuppressedCandidateSummary(GuiSmokeDecisionDebugSummary debugSummary)

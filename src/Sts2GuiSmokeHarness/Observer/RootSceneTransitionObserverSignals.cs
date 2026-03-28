@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class RootSceneTransitionObserverSignals
 {
@@ -73,12 +74,9 @@ static class RootSceneTransitionObserverSignals
             return true;
         }
 
-        return string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.CurrentScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase);
+        return MatchesCompatibilityScreen(observer, "main-menu")
+               || MatchesCompatibilityScreen(observer, "character-select")
+               || MatchesCompatibilityScreen(observer, "singleplayer-submenu");
     }
 
     public static bool ShouldTreatCaptureAsTransitionWait(GuiSmokePhase phase, ObserverSummary observer)

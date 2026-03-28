@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class EventProceedObserverSignals
 {
@@ -46,8 +47,7 @@ static class EventProceedObserverSignals
 
     public static bool HasEventChoiceAuthority(ObserverSummary observer)
     {
-        return string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+        return MatchesCompatibilityScreen(observer, "event")
                || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
                || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
     }

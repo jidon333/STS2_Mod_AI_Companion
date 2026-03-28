@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class CardSelectionObserverSignals
 {
@@ -152,7 +153,7 @@ static class CardSelectionObserverSignals
             : null;
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-transform", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.CurrentScreen, "transform", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(CompatibilityCurrentScreen(observer), "transform", StringComparison.OrdinalIgnoreCase)
             || rootTypeSummary?.Contains("NDeckTransformSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "transform";
@@ -171,7 +172,7 @@ static class CardSelectionObserverSignals
         }
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-reward-pick", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.CurrentScreen, "card-choice", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(CompatibilityCurrentScreen(observer), "card-choice", StringComparison.OrdinalIgnoreCase)
             || rootTypeSummary?.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "reward-pick";

@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 internal static partial class Program
 {
@@ -377,8 +378,8 @@ internal static partial class Program
         var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(screenshotPath);
         return overlayAnalysis.HasBottomLeftBackArrow
                && !overlayAnalysis.HasCentralOverlayPanel
-               && (string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+               && (string.Equals(CompatibilityVisibleScreen(observer), "map", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(CompatibilityCurrentScreen(observer), "rewards", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -389,8 +390,7 @@ internal static partial class Program
             return false;
         }
 
-        if (!string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+        if (!MatchesCompatibilityScreen(observer, "rewards")
             && !string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase))
         {
@@ -572,7 +572,6 @@ internal static partial class Program
 
     static bool LooksLikeSingleplayerSubmenuState(ObserverSummary observer)
     {
-        return string.Equals(observer.CurrentScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase);
+        return MatchesCompatibilityScreen(observer, "singleplayer-submenu");
     }
 }

@@ -106,9 +106,9 @@ internal sealed class HarnessBridgeHost
                 rawSceneType = inventoryAttempt.RawSceneType,
                 sceneType = inventoryAttempt.Inventory.SceneType,
                 reason = inventoryAttempt.SuppressionReason,
-                sceneReady = inventoryAttempt.Inventory.SceneReady,
-                sceneAuthority = inventoryAttempt.Inventory.SceneAuthority,
-                sceneStability = inventoryAttempt.Inventory.SceneStability,
+                sceneReady = ResolveGuardSceneReady(inventoryAttempt.Inventory),
+                sceneAuthority = ResolveGuardSceneAuthority(inventoryAttempt.Inventory),
+                sceneStability = ResolveGuardSceneStability(inventoryAttempt.Inventory),
                 mode,
             });
         }
@@ -121,9 +121,9 @@ internal sealed class HarnessBridgeHost
                 rawSceneType = inventoryAttempt.RawSceneType,
                 sceneType = inventoryAttempt.Inventory.SceneType,
                 nodeCount = inventoryAttempt.Inventory.Nodes.Count,
-                sceneReady = inventoryAttempt.Inventory.SceneReady,
-                sceneAuthority = inventoryAttempt.Inventory.SceneAuthority,
-                sceneStability = inventoryAttempt.Inventory.SceneStability,
+                sceneReady = ResolveGuardSceneReady(inventoryAttempt.Inventory),
+                sceneAuthority = ResolveGuardSceneAuthority(inventoryAttempt.Inventory),
+                sceneStability = ResolveGuardSceneStability(inventoryAttempt.Inventory),
                 mode = inventoryAttempt.Inventory.Mode,
             });
         }
@@ -210,17 +210,18 @@ internal sealed class HarnessBridgeHost
             return;
         }
 
-        if (inventory.SceneReady != true)
+        if (ResolveGuardSceneReady(inventory) != true)
         {
             _lastGuardState = "armed-but-unsafe";
             _lastGuardReason = "scene-not-ready";
             return;
         }
 
-        if (!string.Equals(inventory.SceneStability, "stable", StringComparison.OrdinalIgnoreCase))
+        var sceneStability = ResolveGuardSceneStability(inventory);
+        if (!string.Equals(sceneStability, "stable", StringComparison.OrdinalIgnoreCase))
         {
             _lastGuardState = "armed-but-unsafe";
-            _lastGuardReason = $"scene-not-stable:{inventory.SceneStability ?? "unknown"}";
+            _lastGuardReason = $"scene-not-stable:{sceneStability ?? "unknown"}";
             return;
         }
 
@@ -257,14 +258,15 @@ internal sealed class HarnessBridgeHost
             return new GuardEvaluation("armed-but-unsafe", "inventory-mismatch");
         }
 
-        if (inventory.SceneReady != true)
+        if (ResolveGuardSceneReady(inventory) != true)
         {
             return new GuardEvaluation("armed-but-unsafe", "scene-not-ready");
         }
 
-        if (!string.Equals(inventory.SceneStability, "stable", StringComparison.OrdinalIgnoreCase))
+        var sceneStability = ResolveGuardSceneStability(inventory);
+        if (!string.Equals(sceneStability, "stable", StringComparison.OrdinalIgnoreCase))
         {
-            return new GuardEvaluation("armed-but-unsafe", $"scene-not-stable:{inventory.SceneStability ?? "unknown"}");
+            return new GuardEvaluation("armed-but-unsafe", $"scene-not-stable:{sceneStability ?? "unknown"}");
         }
 
         if (!string.IsNullOrWhiteSpace(inventory.BlockingModal))
@@ -279,6 +281,21 @@ internal sealed class HarnessBridgeHost
         }
 
         return new GuardEvaluation("armed-safe-for-future-dispatch", "actuator-disabled-until-post-clean-boot");
+    }
+
+    private static bool? ResolveGuardSceneReady(HarnessNodeInventory inventory)
+    {
+        return inventory.CompatibilitySceneReady ?? inventory.SceneReady;
+    }
+
+    private static string? ResolveGuardSceneAuthority(HarnessNodeInventory inventory)
+    {
+        return inventory.CompatibilitySceneAuthority ?? inventory.SceneAuthority;
+    }
+
+    private static string? ResolveGuardSceneStability(HarnessNodeInventory inventory)
+    {
+        return inventory.CompatibilitySceneStability ?? inventory.SceneStability;
     }
 
     private sealed record GuardEvaluation(string GuardState, string Reason);

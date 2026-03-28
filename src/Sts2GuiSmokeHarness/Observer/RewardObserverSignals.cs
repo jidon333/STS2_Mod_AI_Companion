@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class RewardObserverSignals
 {
@@ -21,8 +22,7 @@ static class RewardObserverSignals
         var screenDetected = explicitDetected
                              ?? rewardIsCurrentActiveScreen
                              || rewardIsTopOverlay
-                             || string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-                             || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+                             || MatchesCompatibilityScreen(observer, "rewards")
                              || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
                              || observer.Choices.Any(static choice =>
@@ -57,8 +57,7 @@ static class RewardObserverSignals
                             || rewardIsTopOverlay
                             || proceedVisible
                             || visibleButtonCount > 0
-                            || string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+                            || MatchesCompatibilityScreen(observer, "rewards")
                             || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
                             || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
                             || explicitRewardProgressionPresent;
@@ -83,8 +82,7 @@ static class RewardObserverSignals
                                      && (staleTopOverlayTeardown
                                          || (!foregroundOwned
                                              && (mapIsCurrentActiveScreen
-                                                 || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                                                 || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)))));
+                                                 || MatchesCompatibilityScreen(observer, "map")))));
         if (staleTopOverlayTeardown)
         {
             teardownInProgress = true;

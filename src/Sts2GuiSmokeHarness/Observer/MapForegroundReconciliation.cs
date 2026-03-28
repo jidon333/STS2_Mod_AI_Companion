@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class MapForegroundReconciliation
 {
@@ -21,8 +22,7 @@ static class MapForegroundReconciliation
         }
 
         var mapVisible = GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
-                         || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                         || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase);
+                         || MatchesCompatibilityScreen(observer, "map");
         return mapVisible
                && !HasStrongerForegroundModalAuthority(observer, history);
     }

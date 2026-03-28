@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class GuiSmokeMapOverlayHeuristics
 {
@@ -38,8 +39,7 @@ static class GuiSmokeMapOverlayHeuristics
                                                       && MapNodeSourceSupport.IsExplicitMapPointNode(node)
                                                       && HasActiveBounds(node.ScreenBounds, windowBounds));
         var staleEventChoicePresent = HasEventChoiceEvidence(observer, windowBounds);
-        var eventBackgroundPresent = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-                                     || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+        var eventBackgroundPresent = MatchesCompatibilityScreen(observer, "event")
                                      || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
                                      || staleEventChoicePresent;
         var mapBackNavigationAvailable = overlayAnalysis.HasBottomLeftBackArrow

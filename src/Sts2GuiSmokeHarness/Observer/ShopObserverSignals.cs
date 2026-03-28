@@ -5,14 +5,14 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class ShopObserverSignals
 {
     public static ShopRoomState? TryGetState(ObserverSummary observer)
     {
         var roomDetected = TryGetMetaBool(observer, "shopRoomDetected")
-                           ?? (string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-                               || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase)
+                           ?? (MatchesCompatibilityScreen(observer, "shop")
                                || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
                                || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase));
         if (!roomDetected)
@@ -31,8 +31,7 @@ static class ShopObserverSignals
                               || merchantButtonVisible
                               || backVisible
                               || proceedEnabled
-                              || string.Equals(observer.CurrentScreen, "shop", StringComparison.OrdinalIgnoreCase)
-                              || string.Equals(observer.VisibleScreen, "shop", StringComparison.OrdinalIgnoreCase));
+                              || MatchesCompatibilityScreen(observer, "shop"));
         var foregroundOwned = TryGetMetaBool(observer, "shopForegroundOwned")
                               ?? (inventoryOpen
                                   || merchantButtonEnabled

@@ -136,9 +136,7 @@ static partial class LongRunArtifacts
 
     private static string? ResolveObservedScreen(ObserverState observer)
     {
-        return IsUnknownObservedScreen(observer.CurrentScreen)
-            ? observer.VisibleScreen
-            : observer.CurrentScreen;
+        return ObserverScreenProvenance.DisplayScreen(observer);
     }
 
     private static bool IsUnknownObservedScreen(string? screen)

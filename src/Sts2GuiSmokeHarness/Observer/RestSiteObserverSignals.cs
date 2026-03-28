@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class RestSiteObserverSignals
 {
@@ -20,8 +21,7 @@ static class RestSiteObserverSignals
 
     public static bool HasSmithUpgradeScreenVisible(ObserverSummary observer)
     {
-        return string.Equals(observer.CurrentScreen, "upgrade", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "upgrade", StringComparison.OrdinalIgnoreCase)
+        return MatchesCompatibilityScreen(observer, "upgrade")
                || string.Equals(TryGetMetaValue(observer, "restSiteUpgradeScreenVisible"), "true", StringComparison.OrdinalIgnoreCase)
                || string.Equals(TryGetMetaValue(observer, "restSiteViewKind"), "smith-grid-observer-miss", StringComparison.OrdinalIgnoreCase);
     }
