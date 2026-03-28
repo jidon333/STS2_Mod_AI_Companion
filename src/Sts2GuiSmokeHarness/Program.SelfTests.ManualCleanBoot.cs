@@ -352,6 +352,91 @@ internal static partial class Program
             }
         }
 
+        var observerAliasPrecedenceRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-observer-alias-precedence-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(observerAliasPrecedenceRoot);
+            var harnessRoot = Path.Combine(observerAliasPrecedenceRoot, "harness");
+            var inboxRoot = Path.Combine(harnessRoot, "inbox");
+            var outboxRoot = Path.Combine(harnessRoot, "outbox");
+            var liveRoot = Path.Combine(observerAliasPrecedenceRoot, "live");
+            Directory.CreateDirectory(inboxRoot);
+            Directory.CreateDirectory(outboxRoot);
+            Directory.CreateDirectory(liveRoot);
+            var harnessLayout = new HarnessQueueLayout(
+                observerAliasPrecedenceRoot,
+                harnessRoot,
+                inboxRoot,
+                Path.Combine(inboxRoot, "actions.ndjson"),
+                outboxRoot,
+                Path.Combine(outboxRoot, "results.ndjson"),
+                Path.Combine(harnessRoot, "status.json"),
+                Path.Combine(outboxRoot, "trace.ndjson"),
+                Path.Combine(harnessRoot, "arm.json"),
+                Path.Combine(outboxRoot, "inventory.latest.json"));
+            var liveLayout = new LiveExportLayout(
+                observerAliasPrecedenceRoot,
+                liveRoot,
+                Path.Combine(liveRoot, "events.ndjson"),
+                Path.Combine(liveRoot, "state.latest.json"),
+                Path.Combine(liveRoot, "state.latest.txt"),
+                Path.Combine(liveRoot, "session.json"));
+
+            var capturedAt = DateTimeOffset.UtcNow;
+            File.WriteAllText(
+                liveLayout.SnapshotPath,
+                """
+                {
+                  "version": 7,
+                  "currentScreen": "legacy-event",
+                  "capturedAt": "REPLACE_CAPTURED_AT",
+                  "meta": {
+                    "rawCurrentScreen": "rewards",
+                    "rawObservedScreen": "legacy-raw",
+                    "compatibilityCurrentScreen": "map",
+                    "compatLogicalScreen": "legacy-compat",
+                    "compatibilityVisibleScreen": "map",
+                    "compatVisibleScreen": "legacy-visible"
+                  },
+                  "player": {},
+                  "choices": []
+                }
+                """.Replace("REPLACE_CAPTURED_AT", capturedAt.ToString("O"), StringComparison.Ordinal));
+            File.WriteAllText(
+                harnessLayout.InventoryPath,
+                JsonSerializer.Serialize(
+                    new HarnessNodeInventory(
+                        "inventory-alias-precedence",
+                        capturedAt,
+                        null,
+                        "inventory-legacy",
+                        "episode-alias-precedence",
+                        "dormant",
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
+                        Array.Empty<HarnessNodeInventoryItem>())
+                    {
+                        RawCurrentScreen = "inventory-raw",
+                        CompatibilityCurrentScreen = "inventory-compat",
+                        CompatibilityVisibleScreen = "inventory-visible",
+                    },
+                    GuiSmokeShared.JsonOptions));
+
+            var aliasObserver = new ObserverSnapshotReader(liveLayout, harnessLayout).Read();
+            Assert(string.Equals(aliasObserver.RawObservedScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive rawCurrentScreen over legacy rawObservedScreen and inventory fallback.");
+            Assert(string.Equals(aliasObserver.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive compatibilityCurrentScreen over legacy currentScreen and compatLogicalScreen.");
+            Assert(string.Equals(aliasObserver.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive compatibilityVisibleScreen over legacy compatVisibleScreen and inventory fallback.");
+        }
+        finally
+        {
+            if (Directory.Exists(observerAliasPrecedenceRoot))
+            {
+                Directory.Delete(observerAliasPrecedenceRoot, recursive: true);
+            }
+        }
+
         var manualCleanBootObserverNotReadyRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-clean-boot-observer-not-ready-self-test-{Guid.NewGuid():N}");
         try
         {

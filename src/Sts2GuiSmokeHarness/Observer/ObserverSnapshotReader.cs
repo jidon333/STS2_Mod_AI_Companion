@@ -41,16 +41,19 @@ sealed class ObserverSnapshotReader
         var inventoryCompatibilityCurrentScreen = TryReadString(inventoryDocument?.RootElement, "compatibilityCurrentScreen")
                                                   ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneType")
                                               ?? inventorySceneType;
-        var compatibilityCurrentScreen = TryReadString(stateDocument?.RootElement, "currentScreen")
+        var compatibilityCurrentScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatibilityCurrentScreen")
+                                         ?? TryReadString(stateDocument?.RootElement, "currentScreen")
                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatLogicalScreen")
                                          ?? inventoryCompatibilityCurrentScreen;
-        var rawObservedScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "rawObservedScreen")
+        var rawObservedScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "rawCurrentScreen")
+                               ?? TryReadNestedString(stateDocument?.RootElement, "meta", "rawObservedScreen")
                                ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen")
                                ?? inventoryRawCurrentScreen
                                ?? compatibilityCurrentScreen;
         var currentScreen = compatibilityCurrentScreen;
         var snapshotVersion = TryReadInt64(stateDocument?.RootElement, "version");
-        var compatibilityVisibleScreen = TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScreen")
+        var compatibilityVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatibilityVisibleScreen")
+                                         ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScreen")
                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatVisibleScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScene")
                                          ?? currentScreen
