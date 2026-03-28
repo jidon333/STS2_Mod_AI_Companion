@@ -19,6 +19,18 @@ using static GuiSmokeChoicePrimitiveSupport;
 
 internal static partial class Program
 {
+    static string[] BuildMapOverlayRoutingAllowedActions(MapOverlayState mapOverlayState)
+    {
+        return mapOverlayState.MapBackNavigationAvailable
+            ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
+            : new[] { "click exported reachable node", "click first reachable node", "wait" };
+    }
+
+    static string[] BuildMapForegroundRoutingAllowedActions()
+    {
+        return new[] { "click exported reachable node", "click visible map advance", "wait" };
+    }
+
     static string[] GetAllowedActions(GuiSmokePhase phase, ObserverState observer)
     {
         return BuildAllowedActions(phase, observer, Array.Empty<CombatCardKnowledgeHint>(), null, Array.Empty<GuiSmokeHistoryEntry>());
@@ -91,7 +103,7 @@ internal static partial class Program
             GuiSmokePhase.ChooseFirstNode when ancientMapOwner && ancientMapSurfacePending
                 => new[] { "wait" },
             GuiSmokePhase.ChooseFirstNode when ancientMapOwner
-                => new[] { "click exported reachable node", "click visible map advance", "wait" },
+                => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.ChooseFirstNode when explicitRestSiteChoiceAuthority
                 => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
             GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteProceedState(observer.Summary)
@@ -99,14 +111,12 @@ internal static partial class Program
             GuiSmokePhase.ChooseFirstNode when treasureState is { RoomDetected: true }
                 => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
             GuiSmokePhase.ChooseFirstNode when mapOverlayState.ForegroundVisible
-                => mapOverlayState.MapBackNavigationAvailable
-                    ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
-                    : new[] { "click exported reachable node", "click first reachable node", "wait" },
+                => BuildMapOverlayRoutingAllowedActions(mapOverlayState),
             GuiSmokePhase.ChooseFirstNode when mapForegroundOwnership
-                => new[] { "click exported reachable node", "click visible map advance", "wait" },
+                => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.ChooseFirstNode when LooksLikeRestSiteState(observer.Summary)
                 => new[] { "click smith card", "click smith confirm", "wait" },
-            GuiSmokePhase.ChooseFirstNode => new[] { "click exported reachable node", "click visible map advance", "wait" },
+            GuiSmokePhase.ChooseFirstNode => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
                 => new[] { "press escape", "click inspect overlay close", "wait" },
             GuiSmokePhase.HandleEvent when cardSelectionState is not null
@@ -128,9 +138,7 @@ internal static partial class Program
             GuiSmokePhase.HandleEvent when treasureState is { RoomDetected: true }
                 => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
             GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !eventScene.StrongForegroundChoice && !explicitEventProceedAuthority
-                => mapOverlayState.MapBackNavigationAvailable
-                    ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
-                    : new[] { "click exported reachable node", "click first reachable node", "wait" },
+                => BuildMapOverlayRoutingAllowedActions(mapOverlayState),
             GuiSmokePhase.HandleEvent when GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                                             && !forceEventProgressionAfterCardSelection
                                             && !eventOwnerActive

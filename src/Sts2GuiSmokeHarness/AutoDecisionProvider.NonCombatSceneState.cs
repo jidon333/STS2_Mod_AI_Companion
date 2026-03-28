@@ -77,7 +77,9 @@ sealed partial class AutoDecisionProvider
                                      && rewardScreenHint
                                      && observer.Choices.Any(IsRewardCardChoice)
                                      && observer.Choices.Any(IsInspectPreviewChoice);
-        var explicitProceedVisible = activeRewardChoices.Any(choice => IsSkipOrProceedLabel(choice.Label))
+        var explicitProceedVisible = rewardState?.ProceedVisible == true
+                                     || rewardState?.ProceedEnabled == true
+                                     || activeRewardChoices.Any(choice => IsSkipOrProceedLabel(choice.Label))
                                      || activeRewardNodes.Any(IsProceedNode);
         var claimableRewardPresent = activeRewardChoices.Any(choice => !IsSkipOrProceedLabel(choice.Label))
                                      || activeRewardNodes.Any(node => !IsProceedNode(node))

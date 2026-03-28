@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 sealed class GuiSmokeStepAnalysisContext
 {
@@ -404,31 +405,6 @@ sealed class GuiSmokeStepAnalysisContext
                    || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(summary);
         }
 
-        static bool HasExplicitEventForegroundForCombat(ObserverSummary summary)
-        {
-            var eventAuthority = string.Equals(summary.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-                                 || string.Equals(summary.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-                                 || string.Equals(summary.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
-                                 || string.Equals(summary.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
-            if (!eventAuthority)
-            {
-                return false;
-            }
-
-            return summary.ActionNodes.Any(static node =>
-                       node.Actionable
-                       && !string.IsNullOrWhiteSpace(node.ScreenBounds)
-                       && (node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
-                           || node.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
-                           || node.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
-                           || node.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)
-                           || node.Label.Contains("계속", StringComparison.OrdinalIgnoreCase)))
-                   || summary.Choices.Any(static choice =>
-                       !string.IsNullOrWhiteSpace(choice.ScreenBounds)
-                       && (string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
-                           || string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)));
-        }
-
         bool ComputeUseCombatFastPath()
         {
             if (!string.Equals(request.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
@@ -437,8 +413,7 @@ sealed class GuiSmokeStepAnalysisContext
                 return false;
             }
 
-            var combatScreenVisible = string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
-                                      || string.Equals(observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase);
+            var combatScreenVisible = MatchesCompatibilityScreen(observer, "combat");
             if (!combatScreenVisible)
             {
                 return false;
@@ -452,7 +427,7 @@ sealed class GuiSmokeStepAnalysisContext
                 || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
                 || HasRestSiteAuthorityForCombat(observer.Summary)
                 || eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active
-                || HasExplicitEventForegroundForCombat(observer.Summary)
+                || eventScene.EventForegroundOwned && eventScene.HasExplicitProgression
                 || LooksLikeInspectOverlayForeground(observer.Summary))
             {
                 return false;

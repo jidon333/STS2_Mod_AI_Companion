@@ -141,32 +141,7 @@ sealed partial class AutoDecisionProvider
             }
 
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "map overlay foreground suppresses current-node-arrow fallback");
-            if (!GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request))
-            {
-                return GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
-                    request,
-                    "map overlay is visible but request allowlist does not permit map routing; waiting for exporter/phase reconciliation");
-            }
-
-            return GuiSmokeDecisionDebug.TraceCandidate(
-                       "exported reachable map node",
-                       "observer-map-node",
-                       0.95,
-                       TryCreateExportedReachableMapPointDecision(request),
-                       "no exported reachable map node bounds available")
-                   ?? GuiSmokeDecisionDebug.TraceCandidate(
-                       "map back",
-                       "map-overlay-back-nav",
-                       0.86,
-                       TryCreateMapBackNavigationDecision(request),
-                       "map overlay back navigation is not available")
-                   ?? GuiSmokeDecisionDebug.TraceCandidate(
-                       "visible reachable node",
-                       "screenshot-reachable-node",
-                       0.90,
-                       TryFindFirstReachableMapNodeDecision(request),
-                       "no screenshot-reachable next node was detected")
-                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for exported or screenshot-reachable map node");
+            return TryCreateMapOverlayRoutingDecision(request, "waiting for exported or screenshot-reachable map node");
         }
 
         return GuiSmokeDecisionDebug.TraceCandidate(
@@ -358,25 +333,7 @@ sealed partial class AutoDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click event choice", "map overlay foreground suppresses stale event choices");
             GuiSmokeDecisionDebug.Suppress("click proceed", "map overlay foreground suppresses stale event proceed choices");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "map overlay foreground suppresses current-node-arrow fallback");
-            return GuiSmokeDecisionDebug.TraceCandidate(
-                       "exported reachable map node",
-                       "observer-map-node",
-                       0.95,
-                       TryCreateExportedReachableMapPointDecision(request),
-                       "no exported reachable map node bounds available")
-                   ?? GuiSmokeDecisionDebug.TraceCandidate(
-                       "map back",
-                       "map-overlay-back-nav",
-                       0.86,
-                       TryCreateMapBackNavigationDecision(request),
-                       "map overlay back navigation is not available")
-                   ?? GuiSmokeDecisionDebug.TraceCandidate(
-                       "visible reachable node",
-                       "screenshot-reachable-node",
-                       0.90,
-                       TryFindFirstReachableMapNodeDecision(request),
-                       "no screenshot-reachable next node was detected")
-                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for map-overlay foreground resolution");
+            return TryCreateMapOverlayRoutingDecision(request, "waiting for map-overlay foreground resolution");
         }
 
         if (eventOwnerActive)
@@ -846,6 +803,24 @@ sealed partial class AutoDecisionProvider
         if (proceedNode is not null)
         {
             return CreateClickDecisionFromNode(request, proceedNode, "proceed after resolving rewards");
+        }
+
+        if (rewardScene.ScreenState is { ProceedVisible: true, ProceedEnabled: true }
+            && !rewardScene.ClaimableRewardPresent)
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                0.895,
+                0.757,
+                "proceed after resolving rewards",
+                "Reward runtime metadata reports an enabled proceed button even though no explicit reward hitbox was exported. Use the standard bottom-right reward proceed anchor before any map fallback.",
+                0.88,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                1400,
+                true,
+                null);
         }
 
         var screenshotClaimableDecision = TryCreateScreenshotClaimableRewardDecision(request);

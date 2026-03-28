@@ -130,30 +130,6 @@ internal static partial class Program
 
         bool ComputeUseCombatFastPath()
         {
-            bool HasExplicitEventForeground()
-            {
-                var eventAuthority = MatchesCompatibilityScreen(observer, "event")
-                                     || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
-                                     || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
-                if (!eventAuthority)
-                {
-                    return false;
-                }
-
-                return observer.ActionNodes.Any(static node =>
-                           node.Actionable
-                           && !string.IsNullOrWhiteSpace(node.ScreenBounds)
-                           && (node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
-                               || node.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
-                               || node.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
-                               || node.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)
-                               || node.Label.Contains("계속", StringComparison.OrdinalIgnoreCase)))
-                       || observer.Choices.Any(static choice =>
-                           !string.IsNullOrWhiteSpace(choice.ScreenBounds)
-                           && (string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
-                               || string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)));
-            }
-
             if (phase != GuiSmokePhase.HandleCombat || observer.InCombat != true)
             {
                 return false;
@@ -173,7 +149,7 @@ internal static partial class Program
                 || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
                 || HasRestSiteAuthority(observer.Summary)
                 || eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active
-                || HasExplicitEventForeground()
+                || eventScene.EventForegroundOwned && eventScene.HasExplicitProgression
                 || LooksLikeInspectOverlayState(observer))
             {
                 return false;

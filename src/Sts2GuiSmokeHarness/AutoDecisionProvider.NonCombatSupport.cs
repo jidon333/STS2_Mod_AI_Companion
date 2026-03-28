@@ -149,14 +149,6 @@ sealed partial class AutoDecisionProvider
         return EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer, windowBounds);
     }
 
-    private static bool HasEventChoiceAuthority(ObserverSummary observer)
-    {
-        return string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static bool IsExplicitEventProceedNode(ObserverActionNode node)
     {
         return node.Actionable
@@ -760,6 +752,36 @@ sealed partial class AutoDecisionProvider
             1200,
             true,
             null);
+    }
+
+    private static GuiSmokeStepDecision TryCreateMapOverlayRoutingDecision(GuiSmokeStepRequest request, string waitReason)
+    {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request))
+        {
+            return GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
+                request,
+                "map overlay is visible but request allowlist does not permit map routing; waiting for exporter/phase reconciliation");
+        }
+
+        return GuiSmokeDecisionDebug.TraceCandidate(
+                   "exported reachable map node",
+                   "observer-map-node",
+                   0.95,
+                   TryCreateExportedReachableMapPointDecision(request),
+                   "no exported reachable map node bounds available")
+               ?? GuiSmokeDecisionDebug.TraceCandidate(
+                   "map back",
+                   "map-overlay-back-nav",
+                   0.86,
+                   TryCreateMapBackNavigationDecision(request),
+                   "map overlay back navigation is not available")
+               ?? GuiSmokeDecisionDebug.TraceCandidate(
+                   "visible reachable node",
+                   "screenshot-reachable-node",
+                   0.90,
+                   TryFindFirstReachableMapNodeDecision(request),
+                   "no screenshot-reachable next node was detected")
+               ?? CreateForegroundAwareNonCombatWaitDecision(request, waitReason);
     }
 
     private static GuiSmokeStepDecision? TryCreateSemanticEventDecision(GuiSmokeStepRequest request)

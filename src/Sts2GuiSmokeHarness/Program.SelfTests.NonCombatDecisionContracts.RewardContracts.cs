@@ -432,6 +432,88 @@ internal static partial class Program
                 null));
             Assert(string.Equals(rewardReleasePendingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "Reward release-pending should wait instead of clicking reward skip again.");
 
+            var rewardProceedMetaOnlyScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-reward-proceed-meta-{Guid.NewGuid():N}.png");
+            var rewardProceedMetaOnlyObserver = new ObserverState(
+                new ObserverSummary(
+                    "rewards",
+                    "rewards",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-reward-proceed-meta-only",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-reward-proceed-meta-only",
+                    "None",
+                    "reward",
+                    80,
+                    80,
+                    null,
+                    new[] { "진행" },
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    Array.Empty<ObserverChoice>(),
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "true",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "true",
+                        ["rewardVisibleButtonCount"] = "1",
+                        ["rewardEnabledButtonCount"] = "1",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            var rewardProceedMetaOnlyState = AutoDecisionProvider.BuildRewardSceneState(
+                rewardProceedMetaOnlyObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardProceedMetaOnlyScreenshotPath);
+            Assert(rewardProceedMetaOnlyState.ExplicitProceedVisible, "Reward scene truth should promote runtime proceed visibility even when no explicit reward hitbox is exported.");
+            Assert(rewardProceedMetaOnlyState.ExplicitAction == RewardExplicitActionKind.SkipProceed, "Proceed-only reward aftermath should normalize to the skip/proceed lane.");
+            var rewardProceedMetaOnlyAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                rewardProceedMetaOnlyObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardProceedMetaOnlyScreenshotPath,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(rewardProceedMetaOnlyAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase), "Proceed-only reward runtime metadata should open the reward proceed lane in HandleRewards.");
+            var rewardProceedMetaOnlyDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                46,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "Proceed-only reward runtime metadata should still advance the reward screen.",
+                DateTimeOffset.UtcNow,
+                rewardProceedMetaOnlyScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                ComputeSceneSignature(rewardProceedMetaOnlyScreenshotPath, rewardProceedMetaOnlyObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                rewardProceedMetaOnlyObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardProceedMetaOnlyAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Proceed-only reward runtime metadata should click the proceed anchor instead of waiting indefinitely.",
+                null));
+            Assert(string.Equals(rewardProceedMetaOnlyDecision.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase), "Proceed-only reward runtime metadata should still click reward proceed without requiring an exported hitbox.");
+
             var postShopRewardMixedObserver = new ObserverState(
                 new ObserverSummary(
                     "shop",
