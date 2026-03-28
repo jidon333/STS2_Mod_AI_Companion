@@ -36,176 +36,72 @@ internal static partial class Program
         string trustStateAtStart,
         int? maxSteps)
     {
-        var runId = isLongRun
-            ? $"{sessionId}-attempt-{attemptId}"
-            : sessionId;
-        var keepVideoOnSuccess = options.ContainsKey("--keep-video-on-success");
-        var runRoot = isLongRun
-            ? Path.Combine(sessionRoot, "attempts", attemptId)
-            : sessionRoot;
-
-        if (Directory.Exists(runRoot))
-        {
-            Directory.Delete(runRoot, recursive: true);
-        }
-
-        Directory.CreateDirectory(runRoot);
-        var stepsRoot = Path.Combine(runRoot, "steps");
-        Directory.CreateDirectory(stepsRoot);
-
-        var logger = new ArtifactRecorder(runRoot);
-        SetHarnessLogSink(logger.AppendHumanLog);
-        using var attemptVideo = GuiSmokeVideoRecorder.Create(
+        var attemptRun = InitializeAttemptRun(
+            configuration,
             workspaceRoot,
             options,
-            sessionId,
-            runId,
-            runRoot,
-            sessionRoot,
-            attemptId,
-            "attempt");
-        logger.WriteRunManifest(new GuiSmokeRunManifest(
-            runId,
             scenarioId,
             providerKind,
-            DateTimeOffset.UtcNow,
-            workspaceRoot,
-            liveLayout.LiveRoot,
-            harnessLayout.HarnessRoot,
-            configuration.GamePaths.GameDirectory));
-        var sceneHistoryIndex = GuiSmokeSessionSceneHistoryIndex.Load(sessionRoot);
+            liveLayout,
+            harnessLayout,
+            sessionId,
+            sessionRoot,
+            isLongRun,
+            attemptId,
+            attemptOrdinal);
+        using var attemptVideo = attemptRun.AttemptVideo;
         var stepIndex = 0;
         var startupStage = "authoritative-attempt-started";
-        var isAuthoritativeFirstAttempt = isLongRun && attemptOrdinal == 1;
 
-        void RecordAttemptStartupStage(
-            string stage,
-            string status,
-            string? detail = null,
-            IReadOnlyDictionary<string, string?>? metadata = null)
+        if (attemptRun.IsAuthoritativeFirstAttempt)
         {
-            if (!isAuthoritativeFirstAttempt)
-            {
-                return;
-            }
-
-            startupStage = stage;
-            LongRunArtifacts.RecordStartupStage(sessionRoot, stage, status, detail, metadata);
-        }
-
-        void RecordAttemptStartupFailure(
-            string reason,
-            IReadOnlyDictionary<string, string?>? metadata = null)
-        {
-            if (!isAuthoritativeFirstAttempt)
-            {
-                return;
-            }
-
-            LongRunArtifacts.RecordStartupFailure(sessionRoot, startupStage, reason, metadata);
-        }
-
-        if (isAuthoritativeFirstAttempt)
-        {
-            RecordAttemptStartupStage("authoritative-attempt-started", "finished", runRoot);
-        }
-
-        GuiSmokeAttemptResult CompleteAttempt(
-            int exitCode,
-            string status,
-            string message,
-            bool launchFailed = false,
-            string? terminalCause = null,
-            string? failureClass = null)
-        {
-            logger.CompleteRun(status, message);
-            logger.WriteValidationSummary(runId);
-            var keepVideo = true;
-            attemptVideo.Complete(
-                keepVideo,
-                $"attempt-{status}:{terminalCause ?? failureClass ?? message}");
-            if (isLongRun)
-            {
-                LongRunArtifacts.RecordAttemptTerminal(
-                    sessionRoot,
-                    attemptId,
-                    attemptOrdinal,
-                    runId,
-                    terminalCause,
-                    launchFailed,
-                    failureClass,
-                    trustStateAtStart);
-                var selfMetaReview = LongRunArtifacts.WriteAttemptMetaReview(sessionRoot, attemptId, attemptOrdinal, runId, status, message, failureClass);
-                logger.WriteSelfMetaReview(selfMetaReview);
-                LongRunArtifacts.WriteSessionArtifacts(
-                    sessionRoot,
-                    logger,
-                    runId,
-                    scenarioId,
-                    providerKind,
-                    attemptId,
-                    attemptOrdinal,
-                    stepIndex,
-                    status,
-                    message,
-                    terminalCause,
-                    launchFailed,
-                    failureClass,
-                    trustStateAtStart);
-            }
-
-            return new GuiSmokeAttemptResult(
-                attemptId,
-                attemptOrdinal,
-                runId,
-                runRoot,
-                exitCode,
-                status,
-                message,
-                stepIndex,
-                launchFailed,
-                terminalCause,
-                failureClass,
-                trustStateAtStart);
+            RecordAttemptStartupStage(
+                sessionRoot,
+                attemptRun.IsAuthoritativeFirstAttempt,
+                ref startupStage,
+                "authoritative-attempt-started",
+                "finished",
+                attemptRun.RunRoot);
         }
 
         try
         {
-            if (!options.ContainsKey("--skip-launch"))
-            {
-                await StopGameProcessesAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
-                EnsureGameNotRunning();
-                var launchIssuedAt = DateTimeOffset.UtcNow;
-                EnsureStartupRuntimeConfig(configuration, sessionId, runId, launchIssuedAt);
-                startupStage = "authoritative-attempt-launch-issued";
-                await GuiSmokeShared.RunProcessAsync(
-                    Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
-                    "/c start \"\" \"steam://rungameid/2868840\"",
-                    workspaceRoot,
-                    TimeSpan.FromSeconds(10),
-                    waitForExit: false).ConfigureAwait(false);
-                if (isLongRun)
-                {
-                    LongRunArtifacts.RecordRunnerLaunchIssued(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart);
-                }
-
-                startupStage = "authoritative-attempt-window-detected";
-                await WaitForLiveGameWindowAsync(launchIssuedAt, TimeSpan.FromMinutes(2)).ConfigureAwait(false);
-                await MaintainLaunchFocusAsync(TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(2)).ConfigureAwait(false);
-                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false);
-                attemptVideo.TryStart(WindowLocator.TryFindSts2Window());
-            }
+            startupStage = await LaunchAttemptWindowAndStartVideoAsync(
+                configuration,
+                workspaceRoot,
+                options,
+                sessionId,
+                attemptRun.RunId,
+                sessionRoot,
+                attemptId,
+                attemptOrdinal,
+                trustStateAtStart,
+                attemptRun,
+                startupStage).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            RecordAttemptStartupFailure($"{exception.GetType().Name}: {exception.Message}");
-            logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+            RecordAttemptStartupFailure(
+                sessionRoot,
+                attemptRun.IsAuthoritativeFirstAttempt,
+                startupStage,
+                $"{exception.GetType().Name}: {exception.Message}");
+            attemptRun.Logger.WriteFailureSummary(new GuiSmokeFailureSummary(
                 GuiSmokePhase.WaitMainMenu.ToString(),
                 $"launch-failed: {exception.Message}",
                 null,
                 null,
                 null));
-            return CompleteAttempt(
+            return CompleteAttemptRun(
+                scenarioId,
+                providerKind,
+                sessionRoot,
+                isLongRun,
+                attemptId,
+                attemptOrdinal,
+                trustStateAtStart,
+                attemptRun,
+                stepIndex,
                 1,
                 "failed",
                 $"launch-failed: {exception.Message}",
@@ -230,28 +126,52 @@ internal static partial class Program
                 sessionDeadline,
                 trustStateAtStart,
                 maxSteps,
-                runId,
-                stepsRoot,
-                sceneHistoryIndex,
-                logger,
-                isAuthoritativeFirstAttempt,
-                (stage, status, detail) => RecordAttemptStartupStage(stage, status, detail),
-                reason => RecordAttemptStartupFailure(reason),
+                attemptRun.RunId,
+                attemptRun.StepsRoot,
+                attemptRun.SceneHistoryIndex,
+                attemptRun.Logger,
+                attemptRun.IsAuthoritativeFirstAttempt,
+                (stage, status, detail) => RecordAttemptStartupStage(sessionRoot, attemptRun.IsAuthoritativeFirstAttempt, ref startupStage, stage, status, detail),
+                reason => RecordAttemptStartupFailure(sessionRoot, attemptRun.IsAuthoritativeFirstAttempt, startupStage, reason),
                 (currentStepIndex, exitCode, status, message, launchFailed, terminalCause, failureClass) =>
                 {
                     stepIndex = currentStepIndex;
-                    return CompleteAttempt(exitCode, status, message, launchFailed, terminalCause, failureClass);
+                    return CompleteAttemptRun(
+                        scenarioId,
+                        providerKind,
+                        sessionRoot,
+                        isLongRun,
+                        attemptId,
+                        attemptOrdinal,
+                        trustStateAtStart,
+                        attemptRun,
+                        stepIndex,
+                        exitCode,
+                        status,
+                        message,
+                        launchFailed,
+                        terminalCause,
+                        failureClass);
                 }).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
-            logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+            attemptRun.Logger.WriteFailureSummary(new GuiSmokeFailureSummary(
                 "runner",
                 $"unexpected-exception: {exception.Message}",
                 null,
                 null,
                 null));
-            return CompleteAttempt(
+            return CompleteAttemptRun(
+                scenarioId,
+                providerKind,
+                sessionRoot,
+                isLongRun,
+                attemptId,
+                attemptOrdinal,
+                trustStateAtStart,
+                attemptRun,
+                stepIndex,
                 1,
                 "failed",
                 $"unexpected-exception: {exception.Message}",
