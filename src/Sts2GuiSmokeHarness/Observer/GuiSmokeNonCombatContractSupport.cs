@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class GuiSmokeNonCombatContractSupport
 {
@@ -116,8 +117,7 @@ static class GuiSmokeNonCombatContractSupport
             return false;
         }
 
-        var onRestSiteScreen = string.Equals(observer.CurrentScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
-                               || string.Equals(observer.VisibleScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
+        var onRestSiteScreen = MatchesCompatibilityScreen(observer, "rest-site")
                                || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase);
         if (!onRestSiteScreen)
         {
@@ -178,7 +178,7 @@ static class GuiSmokeNonCombatContractSupport
             null,
             reason,
             0.60,
-            request.Observer.CurrentScreen,
+            DisplayScreen(request.Observer),
             2000,
             true,
             null,
@@ -286,8 +286,7 @@ static class GuiSmokeNonCombatContractSupport
     private static bool MapAuthorityOutranksStaleRestSiteResidue(ObserverSummary observer)
     {
         var mapAuthorityVisible = HasMapCurrentActiveScreen(observer)
-                                  || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                                  || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                  || MatchesCompatibilityScreen(observer, "map")
                                   || HasExplicitMapNodeAuthority(observer);
         if (!mapAuthorityVisible)
         {

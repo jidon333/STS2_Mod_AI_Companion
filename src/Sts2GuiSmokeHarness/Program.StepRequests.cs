@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 internal static partial class Program
 {
@@ -131,8 +132,7 @@ internal static partial class Program
         {
             bool HasExplicitEventForeground()
             {
-                var eventAuthority = string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-                                     || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+                var eventAuthority = MatchesCompatibilityScreen(observer, "event")
                                      || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
                                      || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
                 if (!eventAuthority)
@@ -159,14 +159,13 @@ internal static partial class Program
                 return false;
             }
 
-            var combatScreenVisible = string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
-                                      || string.Equals(observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase);
+            var combatScreenVisible = MatchesCompatibilityScreen(observer, "combat");
             if (!combatScreenVisible)
             {
                 return false;
             }
 
-            var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+            var eventScene = GetEventScene();
             if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
                 || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
                 || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)

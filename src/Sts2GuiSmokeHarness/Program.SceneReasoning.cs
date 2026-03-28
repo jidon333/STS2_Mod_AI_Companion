@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 internal static partial class Program
 {
@@ -31,14 +32,16 @@ internal static partial class Program
         {
             var combatRuntimeState = context.RuntimeCombatState;
             var combatAnalysis = context.CombatAnalysis;
+            var combatCompatibilityCurrentScreen = CompatibilityCurrentScreen(observer) ?? "unknown";
+            var combatCompatibilityVisibleScreen = CompatibilityVisibleScreen(observer) ?? "unknown";
             var combatTags = new List<string>(capacity: 10)
             {
                 $"phase:{phase.ToString().ToLowerInvariant()}",
-                $"screen:{(observer.CurrentScreen ?? "unknown").Trim().ToLowerInvariant()}",
-                $"visible:{(observer.VisibleScreen ?? "unknown").Trim().ToLowerInvariant()}",
+                $"screen:{combatCompatibilityCurrentScreen.Trim().ToLowerInvariant()}",
+                $"visible:{combatCompatibilityVisibleScreen.Trim().ToLowerInvariant()}",
                 $"encounter:{(observer.EncounterKind ?? "none").Trim().ToLowerInvariant()}",
-                $"ready:{(observer.SceneReady?.ToString() ?? "unknown").ToLowerInvariant()}",
-                $"stability:{(observer.SceneStability ?? "unknown").Trim().ToLowerInvariant()}",
+                $"ready:{(CompatibilitySceneReady(observer)?.ToString() ?? "unknown").ToLowerInvariant()}",
+                $"stability:{(CompatibilitySceneStability(observer) ?? "unknown").Trim().ToLowerInvariant()}",
                 "combat:fast-path",
                 $"combat-targeting:{((combatRuntimeState.TargetingInProgress == true || combatAnalysis.HasTargetArrow) ? "active" : "inactive")}",
                 $"combat-hittable:{(combatRuntimeState.HittableEnemyCount?.ToString(CultureInfo.InvariantCulture) ?? "unknown")}",
@@ -71,9 +74,11 @@ internal static partial class Program
         var rewardBackNavigationAvailable = context.RewardBackNavigationAvailable;
         var claimableRewardPresent = context.ClaimableRewardPresent;
         var mapOverlayState = context.MapOverlayState;
-        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null);
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
-        var canonicalScene = AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, null, screenshotPath);
+        var rewardScene = context.RewardScene;
+        var eventScene = context.EventScene;
+        var canonicalScene = context.CanonicalNonCombatScene;
+        var compatibilityCurrentScreen = CompatibilityCurrentScreen(observer) ?? "unknown";
+        var compatibilityVisibleScreen = CompatibilityVisibleScreen(observer) ?? "unknown";
         var suppressMapTransitionByForegroundAuthority = canonicalScene is
             {
                 CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown
@@ -82,11 +87,11 @@ internal static partial class Program
         var tags = new List<string>(capacity: 10)
         {
             $"phase:{phase.ToString().ToLowerInvariant()}",
-            $"screen:{(observer.CurrentScreen ?? "unknown").Trim().ToLowerInvariant()}",
-            $"visible:{(observer.VisibleScreen ?? "unknown").Trim().ToLowerInvariant()}",
+            $"screen:{compatibilityCurrentScreen.Trim().ToLowerInvariant()}",
+            $"visible:{compatibilityVisibleScreen.Trim().ToLowerInvariant()}",
             $"encounter:{(observer.EncounterKind ?? "none").Trim().ToLowerInvariant()}",
-            $"ready:{(observer.SceneReady?.ToString() ?? "unknown").ToLowerInvariant()}",
-            $"stability:{(observer.SceneStability ?? "unknown").Trim().ToLowerInvariant()}",
+            $"ready:{(CompatibilitySceneReady(observer)?.ToString() ?? "unknown").ToLowerInvariant()}",
+            $"stability:{(CompatibilitySceneStability(observer) ?? "unknown").Trim().ToLowerInvariant()}",
         };
 
         if (cardSelectionState is not null)
@@ -212,7 +217,7 @@ internal static partial class Program
 
             if (!mapOverlayState.ForegroundVisible
                 && GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
-                && !string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+                && !MatchesCompatibilityScreen(observer, "map")
                 && !suppressMapTransitionByForegroundAuthority)
             {
                 tags.Add("substate:map-transition");
@@ -249,14 +254,16 @@ internal static partial class Program
     {
         var rewardState = RewardObserverSignals.TryGetState(observer.Summary);
         var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
+        var compatibilityCurrentScreen = CompatibilityCurrentScreen(observer) ?? "unknown";
+        var compatibilityVisibleScreen = CompatibilityVisibleScreen(observer) ?? "unknown";
         var rewardTags = new List<string>(capacity: 12)
         {
             "phase:handlerewards",
-            $"screen:{(observer.CurrentScreen ?? "unknown").Trim().ToLowerInvariant()}",
-            $"visible:{(observer.VisibleScreen ?? "unknown").Trim().ToLowerInvariant()}",
+            $"screen:{compatibilityCurrentScreen.Trim().ToLowerInvariant()}",
+            $"visible:{compatibilityVisibleScreen.Trim().ToLowerInvariant()}",
             $"encounter:{(observer.EncounterKind ?? "none").Trim().ToLowerInvariant()}",
-            $"ready:{(observer.SceneReady?.ToString() ?? "unknown").ToLowerInvariant()}",
-            $"stability:{(observer.SceneStability ?? "unknown").Trim().ToLowerInvariant()}",
+            $"ready:{(CompatibilitySceneReady(observer)?.ToString() ?? "unknown").ToLowerInvariant()}",
+            $"stability:{(CompatibilitySceneStability(observer) ?? "unknown").Trim().ToLowerInvariant()}",
             "reward:fast-path",
         };
 
@@ -399,11 +406,13 @@ internal static partial class Program
         }
 
         var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+        var compatibilityCurrentScreen = CompatibilityCurrentScreen(observer);
+        var compatibilityVisibleScreen = CompatibilityVisibleScreen(observer);
         if (eventScene.EventForegroundOwned && eventScene.ExplicitAction == EventExplicitActionKind.EventChoice)
         {
             return (firstSeenScene
-                    || string.Equals(observer.CurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(observer.VisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(compatibilityCurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(compatibilityVisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase)
                     || observer.Summary.CurrentChoices.Count > 0)
                 ? "semantic"
                 : "tactical";
@@ -416,8 +425,8 @@ internal static partial class Program
         }
 
         if (firstSeenScene
-            || string.Equals(observer.CurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(compatibilityCurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(compatibilityVisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase)
             || observer.Summary.CurrentChoices.Count > 0)
         {
             return "semantic";
@@ -446,14 +455,14 @@ internal static partial class Program
     static string? BuildDecisionRiskHint(GuiSmokePhase phase, ObserverState observer, bool firstSeenScene, string reasoningMode)
     {
         var hints = new List<string>();
-        if (observer.SceneReady == false)
+        if (CompatibilitySceneReady(observer) == false)
         {
             hints.Add("scene-not-ready");
         }
 
-        if (!string.Equals(observer.SceneStability, "stable", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(CompatibilitySceneStability(observer), "stable", StringComparison.OrdinalIgnoreCase))
         {
-            hints.Add($"scene-stability:{observer.SceneStability ?? "unknown"}");
+            hints.Add($"scene-stability:{CompatibilitySceneStability(observer) ?? "unknown"}");
         }
 
         if (firstSeenScene)

@@ -286,8 +286,7 @@ static class GuiSmokeObserverPhaseHeuristics
         var mapCurrentActiveScreen = observer.Meta.TryGetValue("mapCurrentActiveScreen", out var mapCurrentActiveScreenValue)
                                      ? mapCurrentActiveScreenValue
                                      : null;
-        return string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+        return MatchesCompatibilityScreen(observer, "map")
                || string.Equals(mapCurrentActiveScreen, "true", StringComparison.OrdinalIgnoreCase)
                || IsMapScreenType(declaringType)
                || IsMapScreenType(instanceType)
@@ -296,8 +295,7 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool LooksLikeCombatState(ObserverSummary observer)
     {
-        var combatScreen = string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
-                           || string.Equals(observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase);
+        var combatScreen = MatchesCompatibilityScreen(observer, "combat");
         var combatRoomAuthority = IsCombatRoomType(TryGetMetaValue(observer, "activeScreenType"))
                                   || IsCombatRoomType(TryGetMetaValue(observer, "currentRunRoomSceneType"))
                                   || IsCombatRoomType(TryGetMetaValue(observer, "currentRunRoomType"));
@@ -328,8 +326,7 @@ static class GuiSmokeObserverPhaseHeuristics
             return false;
         }
 
-        if (string.Equals(observer.CurrentScreen, "event", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "event", StringComparison.OrdinalIgnoreCase)
+        if (MatchesCompatibilityScreen(observer, "event")
             || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase))
         {
             return true;

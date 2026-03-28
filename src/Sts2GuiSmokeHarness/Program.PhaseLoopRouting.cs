@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 internal static partial class Program
 {
@@ -613,7 +614,7 @@ internal static partial class Program
                 return true;
             }
 
-            if (string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+            if (MatchesCompatibilityScreen(observer, "character-select"))
             {
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-character-select", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-character-select", observer.CurrentScreen, observer.InCombat, null));
@@ -864,7 +865,7 @@ internal static partial class Program
                 return true;
             }
 
-            if (string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase) && observer.InCombat != true)
+            if (MatchesCompatibilityScreen(observer, "map") && observer.InCombat != true)
             {
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-resolved-map", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-resolved-map", observer.CurrentScreen, observer.InCombat, null));

@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Globalization;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 sealed partial class AutoDecisionProvider
 {
@@ -23,8 +24,7 @@ sealed partial class AutoDecisionProvider
         var rewardState = RewardObserverSignals.TryGetState(observer);
         var mapContextVisible = rewardState?.MapIsCurrentActiveScreen == true
                                 || GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
-                                || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
-                                || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase);
+                                || MatchesCompatibilityScreen(observer, "map");
         var rewardBackNavigationAvailable = HasOverlayChoiceState(observer)
                                             || observer.ActionNodes.Any(static node => node.Actionable && IsBackNode(node));
         var activeRewardChoices = observer.Choices.Where(choice => IsCurrentRewardProgressionChoice(choice, windowBounds)).ToArray();
@@ -35,8 +35,7 @@ sealed partial class AutoDecisionProvider
         var rewardContextVisible = rewardState?.ScreenVisible == true
                                    || RewardObserverSignals.IsRewardAuthorityActive(observer)
                                    || GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer)
-                                   || string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-                                   || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+                                   || MatchesCompatibilityScreen(observer, "rewards")
                                    || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
                                    || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase);
         var intrinsicRewardCardAuthority = observer.Choices.Any(IsRewardCardChoice);
@@ -179,8 +178,7 @@ sealed partial class AutoDecisionProvider
                                                 && (explicitProceedVisible || activeEventChoiceVisible || genericEventProgressVisible);
         var rewardSubstateActive = rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage == RewardReleaseStage.ReleasePending;
         var mapContextVisible = mapOverlayState.ForegroundVisible
-                                || string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                                || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                || MatchesCompatibilityScreen(observer, "map")
                                 || rewardScene.LayerState.MapContextVisible
                                 || mapExplicitOwner;
         var hasExplicitProgression = ancientDialogueActive
@@ -265,8 +263,7 @@ sealed partial class AutoDecisionProvider
 
     internal static RestSiteSceneState? BuildRestSiteSceneState(ObserverState observer)
     {
-        var explicitScreenAuthority = string.Equals(observer.CurrentScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
-                                      || string.Equals(observer.VisibleScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
+        var explicitScreenAuthority = MatchesCompatibilityScreen(observer, "rest-site")
                                       || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
                                       || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase);
         var smithUpgradeActive = RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary);
@@ -281,8 +278,7 @@ sealed partial class AutoDecisionProvider
             return null;
         }
 
-        var mapContextVisible = string.Equals(observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                                || string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+        var mapContextVisible = MatchesCompatibilityScreen(observer, "map")
                                 || NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer.Summary);
         return new RestSiteSceneState(
             explicitChoiceVisible,
