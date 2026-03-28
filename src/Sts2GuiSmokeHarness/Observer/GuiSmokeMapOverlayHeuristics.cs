@@ -22,8 +22,12 @@ static class GuiSmokeMapOverlayHeuristics
 
     private static MapOverlayState BuildStateCore(ObserverSummary observer, JsonDocument? stateDocument, WindowBounds? windowBounds, string? screenshotPath)
     {
-        var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(screenshotPath ?? string.Empty);
-        var mapAnalysis = AutoMapAnalyzer.Analyze(screenshotPath ?? string.Empty);
+        var overlayAnalysis = string.IsNullOrWhiteSpace(screenshotPath)
+            ? new AutoOverlayUiAnalysis(false, false, false, null, null)
+            : AutoOverlayUiAnalyzer.Analyze(screenshotPath);
+        var mapAnalysis = string.IsNullOrWhiteSpace(screenshotPath)
+            ? AutoMapAnalysis.None
+            : AutoMapAnalyzer.Analyze(screenshotPath);
         var declaringType = TryReadMetaString(stateDocument, "declaringType");
         var instanceType = TryReadMetaString(stateDocument, "instanceType");
         var rootTypeSummary = TryReadMetaString(stateDocument, "rootTypeSummary");

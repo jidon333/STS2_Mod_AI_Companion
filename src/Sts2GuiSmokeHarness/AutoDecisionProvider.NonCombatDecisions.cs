@@ -134,6 +134,13 @@ sealed partial class AutoDecisionProvider
                 : shopDecision;
         }
 
+        var eventScene = analysisContext?.EventScene ?? BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        if (!LooksLikeInspectOverlayState(request.Observer)
+            && HasExplicitEventRecoveryAuthority(request.Observer, request.WindowBounds, request.History, eventScene))
+        {
+            return DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, analysisContext);
+        }
+
         var mapOverlayState = analysisContext?.MapOverlayState ?? GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (mapOverlayState.ForegroundVisible)
         {
@@ -330,7 +337,10 @@ sealed partial class AutoDecisionProvider
         var eventOwnerActive = eventScene.EventForegroundOwned
                                && eventScene.ReleaseStage == EventReleaseStage.Active;
         var mapOverlayState = eventScene.MapOverlayState;
-        var strongEventForegroundChoice = eventScene.StrongForegroundChoice || forceEventProgressionAfterCardSelection;
+        var explicitEventRecoveryAuthority = HasExplicitEventRecoveryAuthority(request.Observer, request.WindowBounds, request.History, eventScene);
+        var strongEventForegroundChoice = eventScene.StrongForegroundChoice
+                                         || forceEventProgressionAfterCardSelection
+                                         || explicitEventRecoveryAuthority;
         if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
         {
             GuiSmokeDecisionDebug.SetSceneModel("map-overlay", mapOverlayState.EventBackgroundPresent ? "event-context" : "map-context");
@@ -468,6 +478,17 @@ sealed partial class AutoDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click first reachable node", "event-owner-active-preserves-room-lane");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
             return ancientOptionDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient event option buttons");
+        }
+
+        var explicitProceedDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "explicit event proceed",
+            "event-proceed-explicit",
+            0.95,
+            TryCreateExplicitEventProceedDecision(request),
+            "no explicit event proceed affordance has usable bounds");
+        if (explicitProceedDecision is not null)
+        {
+            return explicitProceedDecision;
         }
 
         if (eventOwnerActive)

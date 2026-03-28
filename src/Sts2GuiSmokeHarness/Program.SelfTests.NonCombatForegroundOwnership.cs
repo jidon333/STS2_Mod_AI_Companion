@@ -17,6 +17,7 @@ using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokeSceneReasoningSupport;
+using static GuiSmokeStepRequestFactory;
 
 internal static partial class Program
 {
@@ -296,6 +297,79 @@ internal static partial class Program
                 && string.Equals(explicitProceedDecision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(explicitProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
                 "HandleEvent should click the explicit event proceed lane instead of waiting when EventOption.IsProceed is exported.");
+            var chooseFirstNodeEventRecoveryContext = CreateObserverOnlyAnalysisContext(
+                GuiSmokePhase.ChooseFirstNode,
+                explicitProceedObserverState,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                new WindowBounds(0, 0, 1280, 720));
+            var chooseFirstNodeEventRecoveryPolicy = GuiSmokeStepScreenshotPolicy.Evaluate(45, false, chooseFirstNodeEventRecoveryContext);
+            Assert(!chooseFirstNodeEventRecoveryPolicy.NeedsScreenshot
+                   && string.Equals(chooseFirstNodeEventRecoveryPolicy.SkipReason, "event-explicit-authority", StringComparison.OrdinalIgnoreCase),
+                "ChooseFirstNode should stay observer-only when explicit event proceed authority is already exported.");
+            var chooseFirstNodeEventRecoveryActions = BuildAllowedActions(
+                GuiSmokePhase.ChooseFirstNode,
+                explicitProceedObserverState,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(chooseFirstNodeEventRecoveryActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
+                   && !chooseFirstNodeEventRecoveryActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
+                "ChooseFirstNode should reopen the event lane instead of map routing when explicit event authority is still foreground-owned.");
+            var chooseFirstNodeEventRecoveryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                45,
+                GuiSmokePhase.ChooseFirstNode.ToString(),
+                "Recover explicit event authority from a lagging ChooseFirstNode phase.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:choosefirstnode|screen:event|visible:event|encounter:none|ready:true|stability:stable|layer:event-foreground",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                explicitProceedObserverState.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                chooseFirstNodeEventRecoveryActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "ChooseFirstNode should recover the explicit event lane without screenshot enrichment.",
+                null));
+            Assert(string.Equals(chooseFirstNodeEventRecoveryDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
+                $"ChooseFirstNode event recovery should click the explicit event proceed affordance instead of waiting for map routing. Actual status={chooseFirstNodeEventRecoveryDecision.Status}, action={chooseFirstNodeEventRecoveryDecision.ActionKind}, target={chooseFirstNodeEventRecoveryDecision.TargetLabel ?? "<null>"}.");
+            var chooseFirstNodeEventRecoveryBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-event-recovery-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(chooseFirstNodeEventRecoveryBranchRoot);
+            try
+            {
+                var chooseFirstNodeEventRecoveryLogger = new ArtifactRecorder(chooseFirstNodeEventRecoveryBranchRoot);
+                var chooseFirstNodeEventRecoveryHistory = new List<GuiSmokeHistoryEntry>();
+                Assert(
+                    TryAdvanceAlternateBranch(
+                        GuiSmokePhase.ChooseFirstNode,
+                        explicitProceedObserverState,
+                        chooseFirstNodeEventRecoveryHistory,
+                        chooseFirstNodeEventRecoveryLogger,
+                        45,
+                        true,
+                        out var chooseFirstNodeEventRecoveryPhase)
+                    && chooseFirstNodeEventRecoveryPhase == GuiSmokePhase.HandleEvent,
+                    "ChooseFirstNode should preflight-branch back to HandleEvent when explicit event authority is still active.");
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(chooseFirstNodeEventRecoveryBranchRoot, true);
+                }
+                catch
+                {
+                }
+            }
             var explicitProceedWaitDecision = InvokeForegroundAwareNonCombatWaitDecision(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
@@ -704,6 +778,16 @@ internal static partial class Program
             Assert(!GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(smithUpgradeObserver, restSiteMetadataScreenshotPath)
                    && smithUpgradeRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase),
                 "Visible smith upgrade state should disable explicit rest-site choice authority and expose smith card actions.");
+            var smithUpgradeObserverOnlyContext = CreateObserverOnlyAnalysisContext(
+                GuiSmokePhase.ChooseFirstNode,
+                smithUpgradeObserver,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                new WindowBounds(0, 0, 1280, 720));
+            var smithUpgradeObserverOnlyPolicy = GuiSmokeStepScreenshotPolicy.Evaluate(10, false, smithUpgradeObserverOnlyContext);
+            Assert(!smithUpgradeObserverOnlyPolicy.NeedsScreenshot
+                   && string.Equals(smithUpgradeObserverOnlyPolicy.SkipReason, "rest-site-upgrade-runtime", StringComparison.OrdinalIgnoreCase),
+                "Observer-exported smith grid/confirm truth should keep ChooseFirstNode on the observer-only rest-site upgrade lane.");
             var smithUpgradeDecision = AutoDecisionProvider.Decide(smithUpgradeRequest);
             Assert(string.Equals(smithUpgradeDecision.TargetLabel, "rest site: smith confirm", StringComparison.OrdinalIgnoreCase),
                 "Observer-exported smith confirm should preserve the rest-site lane once the confirm button is visible.");
@@ -937,9 +1021,10 @@ internal static partial class Program
                     $"Mixed rest-site aftermath replay {replayStep} must not recreate the old request/decision mismatch.");
 
                 var rebuiltReplayRequest = LoadReplayRequest(replayRequestPath, fullRequestRebuild: true).Request;
-                Assert(rebuiltReplayRequest.AllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
-                       && !rebuiltReplayRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase),
-                    $"Mixed rest-site aftermath replay rebuild {replayStep} should reopen the legal map-routing lane instead of stale smith/wait actions.");
+                Assert(GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(rebuiltReplayRequest)
+                       && !rebuiltReplayRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase)
+                       && !rebuiltReplayRequest.AllowedActions.Contains("click smith confirm", StringComparer.OrdinalIgnoreCase),
+                    $"Mixed rest-site aftermath replay rebuild {replayStep} should reopen the legal map-routing lane instead of stale smith/wait actions. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
             }
         }
         finally
@@ -1109,7 +1194,7 @@ internal static partial class Program
             var mixedAftermathAllowedActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, live5bMixedAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>());
             Assert(mixedAftermathAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
                    && !mixedAftermathAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
-                "HandleEvent should reopen the map lane instead of the stale event-proceed lane when map owns the foreground.");
+                $"HandleEvent should reopen the map lane instead of the stale event-proceed lane when map owns the foreground. Actual allowlist=[{string.Join(", ", mixedAftermathAllowedActions)}].");
             var mixedAftermathChooseFirstNodeDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",

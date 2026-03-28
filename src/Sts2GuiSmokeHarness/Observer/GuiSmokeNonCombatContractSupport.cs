@@ -29,10 +29,20 @@ static class GuiSmokeNonCombatContractSupport
 
     public static bool HasExplicitRestSiteChoiceAuthority(ObserverSummary observer, string? screenshotPath)
     {
-        return HasRestSiteAuthority(observer)
-               && RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
-               && !RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
-               && !AutoRestSiteCardGridAnalyzer.Analyze(screenshotPath ?? string.Empty).HasSelectableCard;
+        if (MapAuthorityOutranksStaleRestSiteResidue(observer)
+            || !HasRestSiteAuthority(observer)
+            || !RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
+            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(screenshotPath))
+        {
+            return true;
+        }
+
+        return !AutoRestSiteCardGridAnalyzer.Analyze(screenshotPath).HasSelectableCard;
     }
 
     public static bool HasExplicitRestSiteChoiceAuthority(ObserverState observer, string? screenshotPath)
@@ -300,8 +310,13 @@ static class GuiSmokeNonCombatContractSupport
             return false;
         }
 
+        var explicitRestSiteChoiceAffordance = RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
+        var buttonsExplicitlyHidden = string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteButtonsVisible"), "false", StringComparison.OrdinalIgnoreCase);
+        var optionsExplicitlyDisabled = string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteOptionsInteractive"), "false", StringComparison.OrdinalIgnoreCase);
+        var staleExplicitRestSiteResidue = explicitRestSiteChoiceAffordance && buttonsExplicitlyHidden && optionsExplicitlyDisabled;
+
         return !RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
-               && !RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
+               && (!explicitRestSiteChoiceAffordance || staleExplicitRestSiteResidue);
     }
 
     private static bool IsProceedNode(ObserverActionNode node)

@@ -716,6 +716,16 @@ internal static partial class Program
                 return true;
             }
 
+            if (phase is GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitPostMapNodeRoom
+                && !GuiSmokeNonCombatAllowedActionSupport.LooksLikeInspectOverlayState(observer)
+                && AutoDecisionProvider.HasExplicitEventRecoveryAuthority(observer, null, history))
+            {
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = GuiSmokePhase.HandleEvent;
+                return true;
+            }
+
             if (phase == GuiSmokePhase.WaitPostMapNodeRoom
                 && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(observer, out var postMapNodePhase))
             {

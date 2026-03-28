@@ -61,9 +61,11 @@ internal static partial class Program
         var eventScene = context.EventScene;
         var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
         var explicitEventProceedAuthority = eventScene.ExplicitProceedVisible;
+        var explicitEventRecoveryAuthority = AutoDecisionProvider.HasExplicitEventRecoveryAuthority(observer, context.WindowBounds, history, eventScene);
         var eventOwnerActive = eventScene.EventForegroundOwned
                                && eventScene.ReleaseStage == EventReleaseStage.Active;
         var mapForegroundOwnership = MapForegroundReconciliation.HasMapForegroundOwnership(observer, history);
+        var explicitMapForegroundOwnership = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer);
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
         var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
         var restSiteScene = AutoDecisionProvider.BuildRestSiteSceneState(observer.Summary);
@@ -112,6 +114,9 @@ internal static partial class Program
                 => new[] { "click proceed", "wait" },
             GuiSmokePhase.ChooseFirstNode when treasureState is { RoomDetected: true }
                 => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
+            GuiSmokePhase.ChooseFirstNode when !LooksLikeInspectOverlayState(observer)
+                                            && explicitEventRecoveryAuthority
+                => BuildAllowedActionsCore(GuiSmokePhase.HandleEvent, observer, combatCardKnowledge, screenshotPath, history, context),
             GuiSmokePhase.ChooseFirstNode when mapOverlayState.ForegroundVisible
                 => BuildMapOverlayRoutingAllowedActions(mapOverlayState),
             GuiSmokePhase.ChooseFirstNode when mapForegroundOwnership
@@ -139,8 +144,14 @@ internal static partial class Program
                 => new[] { "click event choice", "click proceed", "wait" },
             GuiSmokePhase.HandleEvent when treasureState is { RoomDetected: true }
                 => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
-            GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !eventScene.StrongForegroundChoice && !explicitEventProceedAuthority
+            GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !eventScene.StrongForegroundChoice && !explicitEventProceedAuthority && !explicitEventRecoveryAuthority
                 => BuildMapOverlayRoutingAllowedActions(mapOverlayState),
+            GuiSmokePhase.HandleEvent when (mapForegroundOwnership || explicitMapForegroundOwnership)
+                                            && !forceEventProgressionAfterCardSelection
+                                            && !eventOwnerActive
+                                            && !explicitEventProceedAuthority
+                                            && !explicitEventRecoveryAuthority
+                => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.HandleEvent when GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                                             && !forceEventProgressionAfterCardSelection
                                             && !eventOwnerActive

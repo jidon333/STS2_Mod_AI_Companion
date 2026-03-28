@@ -251,6 +251,74 @@ sealed partial class AutoDecisionProvider
                    && ScoreProgressionChoice(choice) > 0);
     }
 
+    internal static bool HasObserverOnlyRestSiteUpgradeAuthority(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        if (!GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer))
+        {
+            return false;
+        }
+
+        var confirmChoice = RestSiteObserverSignals.TryGetSmithConfirmChoice(observer);
+        if (confirmChoice is not null
+            && confirmChoice.Enabled != false
+            && HasActiveNodeBounds(confirmChoice.ScreenBounds, windowBounds))
+        {
+            return true;
+        }
+
+        var smithCardChoice = RestSiteObserverSignals.TryGetFirstSmithCardChoice(observer);
+        if (smithCardChoice is not null
+            && smithCardChoice.Enabled != false
+            && HasActiveNodeBounds(smithCardChoice.ScreenBounds, windowBounds))
+        {
+            return true;
+        }
+
+        return CardSelectionObserverSignals.TryGetState(observer) is { ScreenType: "upgrade" } cardSelectionState
+               && CardSelectionObserverSignals.IsConfirmReady(cardSelectionState);
+    }
+
+    internal static bool HasExplicitEventRecoveryAuthority(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        EventSceneState? eventScene = null)
+    {
+        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
+        {
+            return false;
+        }
+
+        eventScene ??= BuildEventSceneState(observer, windowBounds, history);
+        if (AncientEventObserverSignals.IsDialogueActive(observer)
+            || AncientEventObserverSignals.HasExplicitCompletionAction(observer)
+            || AncientEventObserverSignals.HasExplicitOptionSelection(observer))
+        {
+            return true;
+        }
+
+        if (eventScene.EventForegroundOwned
+            && eventScene.ReleaseStage == EventReleaseStage.Active
+            && (eventScene.HasExplicitProgression
+                || eventScene.ExplicitProceedVisible
+                || eventScene.ForceProgressionAfterCardSelection))
+        {
+            return true;
+        }
+
+        return HasRawExplicitEventChoiceVisible(observer, windowBounds)
+               || HasExplicitEventProceedAuthority(observer, windowBounds);
+    }
+
+    internal static bool HasExplicitEventRecoveryAuthority(
+        ObserverState observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        EventSceneState? eventScene = null)
+    {
+        return HasExplicitEventRecoveryAuthority(observer.Summary, windowBounds, history, eventScene);
+    }
+
     private static bool MatchesRestSiteTarget(string? label, string targetLabel)
     {
         return RestSiteChoiceSupport.MapOptionIdToTargetLabel(RestSiteChoiceSupport.MapLabelToOptionId(label) ?? string.Empty)
@@ -1117,6 +1185,47 @@ sealed partial class AutoDecisionProvider
                 "Rest-site post-selection proceed is runtime-visible. Advance the room flow before attempting any map routing.",
                 0.96,
                 request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rest-site",
+                1400);
+        }
+
+        return null;
+    }
+
+    private static GuiSmokeStepDecision? TryCreateExplicitEventProceedDecision(GuiSmokeStepRequest request)
+    {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click proceed"))
+        {
+            return null;
+        }
+
+        var proceedNode = request.Observer.ActionNodes.FirstOrDefault(node =>
+            node.Actionable
+            && IsExplicitEventProceedNode(node)
+            && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds));
+        if (proceedNode is not null)
+        {
+            return CreateClickDecisionFromNode(
+                request,
+                proceedNode,
+                "visible proceed",
+                "Explicit event proceed is exported from EventOption.IsProceed authority. Advance the event before any map fallback.",
+                0.95,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                1400);
+        }
+
+        var proceedChoice = request.Observer.Choices.FirstOrDefault(choice =>
+            IsExplicitEventProceedChoice(choice)
+            && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds));
+        if (proceedChoice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                proceedChoice,
+                "visible proceed",
+                "Explicit event proceed is exported from EventOption.IsProceed authority. Advance the event before any map fallback.",
+                0.95,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
                 1400);
         }
 

@@ -2,6 +2,18 @@ using System;
 
 static class ObserverScreenProvenance
 {
+    public static string? DirectCurrentScreen(ObserverSummary observer)
+        => observer.RawCurrentScreen ?? observer.CurrentScreen;
+
+    public static string? DirectCurrentScreen(ObserverState observer)
+        => observer.RawCurrentScreen ?? observer.CurrentScreen;
+
+    public static string? DirectObservedScreen(ObserverSummary observer)
+        => observer.RawObservedScreen ?? observer.RawCurrentScreen ?? observer.CurrentScreen;
+
+    public static string? DirectObservedScreen(ObserverState observer)
+        => observer.RawObservedScreen ?? observer.RawCurrentScreen ?? observer.CurrentScreen;
+
     public static string? PublishedCurrentScreen(ObserverSummary observer)
         => observer.PublishedCurrentScreen ?? observer.CurrentScreen;
 
@@ -72,6 +84,18 @@ static class ObserverScreenProvenance
     {
         return string.Equals(CompatibilityCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
                || string.Equals(CompatibilityVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool MatchesDirectScreen(ObserverSummary observer, string screen)
+    {
+        return string.Equals(DirectCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(DirectObservedScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool MatchesDirectScreen(ObserverState observer, string screen)
+    {
+        return string.Equals(DirectCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(DirectObservedScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool MatchesPublishedScreen(ObserverSummary observer, string screen)

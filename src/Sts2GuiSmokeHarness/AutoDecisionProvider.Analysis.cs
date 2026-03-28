@@ -24,6 +24,12 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeDecisionAnalysis AnalyzeHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision, GuiSmokeStepAnalysisContext analysisContext)
     {
+        if (!RewardObserverSignals.IsRewardAuthorityActive(request.Observer)
+            && BuildRestSiteSceneState(request.Observer) is not null)
+        {
+            return AnalyzeChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, actualDecision, analysisContext);
+        }
+
         var rewardScene = analysisContext.RewardScene;
         var rewardMapLayer = rewardScene.LayerState;
         var rewardState = rewardScene.ScreenState;
@@ -195,6 +201,12 @@ sealed partial class AutoDecisionProvider
                 () => treasureDecision,
                 "no-treasure-room-actionable-affordance");
             return builder.Build(CreateWaitDecision("waiting for treasure room progression", request.Observer.CurrentScreen), actualDecision);
+        }
+
+        if (!LooksLikeInspectOverlayState(request.Observer)
+            && HasExplicitEventRecoveryAuthority(request.Observer, analysisContext.WindowBounds, request.History, analysisContext.EventScene))
+        {
+            return AnalyzeHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, actualDecision, analysisContext);
         }
 
         if (mapOverlayState.ForegroundVisible)

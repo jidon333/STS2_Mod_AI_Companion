@@ -61,12 +61,27 @@ static class GuiSmokeStepScreenshotPolicy
 
         if (analysisContext.Phase == GuiSmokePhase.ChooseFirstNode)
         {
+            if (AutoDecisionProvider.HasObserverOnlyRestSiteUpgradeAuthority(observer.Summary, analysisContext.WindowBounds))
+            {
+                return (false, "rest-site-upgrade-runtime");
+            }
+
             if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, analysisContext.ScreenshotPath)
                 || GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary)
                 || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
                 || ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
             {
                 return (false, "room-explicit-authority");
+            }
+
+            if (!LooksLikeInspectOverlayState(observer)
+                && AutoDecisionProvider.HasExplicitEventRecoveryAuthority(
+                    observer,
+                    analysisContext.WindowBounds,
+                    analysisContext.History,
+                    analysisContext.EventScene))
+            {
+                return (false, "event-explicit-authority");
             }
 
             var mapOverlayState = analysisContext.MapOverlayState;
