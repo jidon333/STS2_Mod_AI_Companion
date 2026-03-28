@@ -133,6 +133,22 @@ sealed partial class AutoDecisionProvider
             }
         }
 
+        if (runtimeCombatState.RequiresHandCardSelection)
+        {
+            if (runtimeCombatState.HasSelectedHandCardForConfirmation
+                && TryUseCombatDecision(CreateCombatHandSelectionConfirmDecision(), out var allowedHandSelectionConfirmDecision))
+            {
+                return allowedHandSelectionConfirmDecision;
+            }
+
+            if (TryUseCombatDecision(TryCreateCombatHandSelectionDecision(request), out var allowedHandSelectionDecision))
+            {
+                return allowedHandSelectionDecision;
+            }
+
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for selectable combat hand card", request.Observer.CurrentScreen);
+        }
+
         if (hasSelectedNonEnemyConfirmEvidence)
         {
             if (TryUseCombatDecision(new GuiSmokeStepDecision(
@@ -496,6 +512,76 @@ sealed partial class AutoDecisionProvider
         }
 
         return observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0;
+    }
+
+    private static GuiSmokeStepDecision? TryCreateCombatHandSelectionDecision(GuiSmokeStepRequest request)
+    {
+        var handSelectionCard = request.Observer.CombatHand
+            .Where(card => card.SlotIndex is >= 1 and <= 5)
+            .OrderBy(card => GetCombatHandSelectionPriority(card))
+            .ThenBy(card => card.SlotIndex)
+            .FirstOrDefault();
+        if (handSelectionCard is null)
+        {
+            return null;
+        }
+
+        return new GuiSmokeStepDecision(
+            "act",
+            "press-key",
+            GetCombatSlotHotkey(handSelectionCard.SlotIndex),
+            null,
+            null,
+            $"combat select hand slot {handSelectionCard.SlotIndex}",
+            "Combat runtime is waiting for a follow-up hand-card selection. Choose a card from the current hand instead of confirming or ending the turn.",
+            0.84,
+            "combat",
+            120,
+            true,
+            null);
+    }
+
+    private static GuiSmokeStepDecision CreateCombatHandSelectionConfirmDecision()
+    {
+        return new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            GuiSmokeCombatConstants.HandSelectionConfirmNormalizedX,
+            GuiSmokeCombatConstants.HandSelectionConfirmNormalizedY,
+            "confirm selected hand card",
+            "Combat runtime is waiting for the selected follow-up hand card to be confirmed. Click the explicit confirm button instead of reselecting the hand slot or ending the turn.",
+            0.88,
+            "combat",
+            180,
+            true,
+            null);
+    }
+
+    private static int GetCombatHandSelectionPriority(ObservedCombatHandCard card)
+    {
+        if (string.Equals(card.Type, "Curse", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(card.Type, "Status", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        if (string.Equals(card.Type, "Skill", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1;
+        }
+
+        if (string.Equals(card.Type, "Power", StringComparison.OrdinalIgnoreCase))
+        {
+            return 2;
+        }
+
+        if (string.Equals(card.Type, "Attack", StringComparison.OrdinalIgnoreCase))
+        {
+            return 3;
+        }
+
+        return 4;
     }
 
     private static bool TryCreateCombatEnemyTargetDecision(

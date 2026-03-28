@@ -51,9 +51,23 @@ sealed record CombatRuntimeState(
 
     public string? ScreenEpisodeId { get; init; }
 
-    public bool KeepsCardPlayOpen => CardPlayPending == true || TargetingInProgress == true;
+    public int HandSelectionSelectedCount { get; init; }
 
-    public bool ExplicitlyClearedSelection => CardPlayPending == false && TargetingInProgress != true;
+    public bool? HandSelectionConfirmEnabled { get; init; }
+
+    public IReadOnlyList<string> HandSelectionSelectedCardIds { get; init; } = Array.Empty<string>();
+
+    public bool RequiresHandCardSelection =>
+        string.Equals(PlayMode, "SimpleSelect", StringComparison.OrdinalIgnoreCase);
+
+    public bool HasSelectedHandCardForConfirmation =>
+        RequiresHandCardSelection
+        && HandSelectionSelectedCount > 0
+        && HandSelectionConfirmEnabled == true;
+
+    public bool KeepsCardPlayOpen => CardPlayPending == true || TargetingInProgress == true || RequiresHandCardSelection;
+
+    public bool ExplicitlyClearedSelection => !RequiresHandCardSelection && CardPlayPending == false && TargetingInProgress != true;
 
     public bool HasCardSelectionEvidence => PendingSelection is not null || KeepsCardPlayOpen;
 
@@ -180,6 +194,9 @@ static class CombatRuntimeStateSupport
             HistoryFinishedCount = CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatHistoryFinishedCount", "combatHistoryFinishedCount"),
             InteractionRevision = CombatAuthoritySupport.TryGetMetaValue(observer, "combatInteractionRevision"),
             ScreenEpisodeId = observer.SceneEpisodeId,
+            HandSelectionSelectedCount = CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatHandSelectionSelectedCount", "combatHandSelectionSelectedCount") ?? 0,
+            HandSelectionConfirmEnabled = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatHandSelectionConfirmEnabled", "combatHandSelectionConfirmEnabled"),
+            HandSelectionSelectedCardIds = ParseIdList(CombatAuthoritySupport.TryGetMetaValue(observer, "combatHandSelectionSelectedCardIds")),
         };
     }
 
@@ -209,6 +226,11 @@ static class CombatRuntimeStateSupport
         AutoCombatAnalysis analysis)
     {
         var runtime = Read(observer, combatCardKnowledge);
+        if (runtime.RequiresHandCardSelection)
+        {
+            return false;
+        }
+
         if (runtime.PendingSelection?.Kind == AutoCombatCardKind.DefendLike
             && runtime.PendingSelection.SlotIndex is >= 1 and <= 5
             && runtime.TargetingInProgress != true)

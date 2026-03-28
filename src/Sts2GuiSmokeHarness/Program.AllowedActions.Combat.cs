@@ -43,7 +43,25 @@ internal static partial class Program
         var blockedCombatNoOpCounts = combatContext.CombatNoOpCountsBySlot;
         var pendingSelection = context.PendingCombatSelection;
         var analysis = context.CombatAnalysis;
+        var runtimeCombatState = context.RuntimeCombatState;
         var hasSelectedNonEnemyConfirmEvidence = context.HasSelectedNonEnemyConfirmEvidence;
+        if (runtimeCombatState.RequiresHandCardSelection)
+        {
+            if (runtimeCombatState.HasSelectedHandCardForConfirmation)
+            {
+                actions.Add("confirm selected hand card");
+            }
+            else if (observer.CombatHand.Any(card => card.SlotIndex is >= 1 and <= 5))
+            {
+                actions.Add("select card from hand");
+            }
+
+            actions.Add("wait");
+            return actions
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         var keepNonEnemySelectionClosed = pendingSelection?.Kind == AutoCombatCardKind.DefendLike && hasSelectedNonEnemyConfirmEvidence;
         bool ShouldSuppressNonEnemyReselect(int slotIndex)
         {

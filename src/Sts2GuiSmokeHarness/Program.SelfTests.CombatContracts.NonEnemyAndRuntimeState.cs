@@ -417,6 +417,169 @@ internal static partial class Program
                 && string.Equals(confirmSemanticAction, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase),
                 "Dedicated non-enemy confirm action should map to explicit confirm semantics.");
 
+            var runtimeSimpleSelectObserver = runtimePendingNonEnemyObserver with
+            {
+                InventoryId = "inv-runtime-simple-select",
+                SceneEpisodeId = "episode-runtime-simple-select",
+                PlayerEnergy = 2,
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.DEFEND_IRONCLAD", "Skill", null),
+                    new ObservedCombatHandCard(2, "CARD.MANGLE", "Attack", null),
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+                    ["combatCardPlayPending"] = "false",
+                    ["combatPlayMode"] = "SimpleSelect",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatLastCardPlayStartedCardId"] = "CARD.BRAND",
+                    ["combatLastCardPlayStartedCardName"] = "낙인",
+                    ["combatLastCardPlayFinishedCardId"] = "CARD.ANGER",
+                },
+            };
+            var runtimeSimpleSelectKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.MANGLE", "Attack", "AnyEnemy", 1, "self-test"),
+            };
+            var runtimeSimpleSelectActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(runtimeSimpleSelectObserver, null, null, null),
+                runtimeSimpleSelectKnowledge,
+                combatNoOpScreenshotPath,
+                pendingNonEnemySlot3History);
+            Assert(runtimeSimpleSelectActions.Contains("select card from hand", StringComparer.OrdinalIgnoreCase), "Combat SimpleSelect runtime should expose a follow-up hand-card selection action.");
+            Assert(!runtimeSimpleSelectActions.Contains("confirm selected non-enemy card", StringComparer.OrdinalIgnoreCase), "Combat SimpleSelect runtime should not masquerade as a generic non-enemy confirm.");
+            Assert(!runtimeSimpleSelectActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "Combat SimpleSelect runtime should keep end turn closed until the follow-up hand-card choice resolves.");
+            var runtimeSimpleSelectDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                25,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Resolve combat SimpleSelect by choosing a card from hand.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|combat-selection:unknown",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                runtimeSimpleSelectObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                runtimeSimpleSelectKnowledge,
+                runtimeSimpleSelectActions,
+                pendingNonEnemySlot3History,
+                "Choose a hand card for the follow-up combat selection.",
+                null));
+            Assert(string.Equals(runtimeSimpleSelectDecision.TargetLabel, "combat select hand slot 1", StringComparison.OrdinalIgnoreCase), "Combat SimpleSelect runtime should choose a deterministic hand-card slot instead of confirming or ending the turn.");
+            Assert(string.Equals(runtimeSimpleSelectDecision.ActionKind, "press-key", StringComparison.OrdinalIgnoreCase), "Combat SimpleSelect runtime should use a hand-slot hotkey for the follow-up choice.");
+            Assert(CombatDecisionContract.IsAllowed(
+                    new GuiSmokeStepRequest(
+                        "run",
+                        "boot-to-long-run",
+                        25,
+                        GuiSmokePhase.HandleCombat.ToString(),
+                        "Resolve combat SimpleSelect by choosing a card from hand.",
+                        DateTimeOffset.UtcNow,
+                        combatNoOpScreenshotPath,
+                        new WindowBounds(1, 32, 1280, 720),
+                        "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|combat-selection:unknown",
+                        "0001",
+                        1,
+                        3,
+                        false,
+                        "tactical",
+                        null,
+                        runtimeSimpleSelectObserver,
+                        Array.Empty<KnownRecipeHint>(),
+                        Array.Empty<EventKnowledgeCandidate>(),
+                        runtimeSimpleSelectKnowledge,
+                        new[] { "select card from hand", "wait" },
+                        pendingNonEnemySlot3History,
+                        "Choose a hand card for the follow-up combat selection.",
+                        null),
+                    new GuiSmokeStepDecision("act", "press-key", "1", null, null, "combat select hand slot 1", "test", 0.5, "combat", 0, true, null),
+                    out var handSelectSemanticAction)
+                    && string.Equals(handSelectSemanticAction, "select card from hand", StringComparison.OrdinalIgnoreCase),
+                "Combat hand-selection lane should map to explicit select-card semantics.");
+
+            var runtimeSimpleSelectConfirmObserver = runtimeSimpleSelectObserver with
+            {
+                Meta = new Dictionary<string, string?>(runtimeSimpleSelectObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatHandSelectionSelectedCount"] = "1",
+                    ["combatHandSelectionSelectedCardIds"] = "CARD.DEFEND_IRONCLAD",
+                    ["combatHandSelectionConfirmEnabled"] = "true",
+                }
+            };
+            var runtimeSimpleSelectConfirmActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(runtimeSimpleSelectConfirmObserver, null, null, null),
+                runtimeSimpleSelectKnowledge,
+                combatNoOpScreenshotPath,
+                pendingNonEnemySlot3History);
+            Assert(runtimeSimpleSelectConfirmActions.Contains("confirm selected hand card", StringComparer.OrdinalIgnoreCase), "Combat SimpleSelect with runtime-selected hand state should expose an explicit confirm action.");
+            Assert(!runtimeSimpleSelectConfirmActions.Contains("select card from hand", StringComparer.OrdinalIgnoreCase), "Combat SimpleSelect confirm stage should not reopen raw hand selection while runtime state still tracks a selected card.");
+            var runtimeSimpleSelectConfirmDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                25,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Confirm the selected combat hand card.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|combat-selection:unknown|combat-play-open",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                runtimeSimpleSelectConfirmObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                runtimeSimpleSelectKnowledge,
+                runtimeSimpleSelectConfirmActions,
+                pendingNonEnemySlot3History,
+                "Confirm the selected combat hand card.",
+                null));
+            Assert(string.Equals(runtimeSimpleSelectConfirmDecision.TargetLabel, "confirm selected hand card", StringComparison.OrdinalIgnoreCase), "Combat SimpleSelect confirm stage should follow runtime hand-selection truth instead of image heuristics.");
+            Assert(CombatDecisionContract.IsAllowed(
+                    new GuiSmokeStepRequest(
+                        "run",
+                        "boot-to-long-run",
+                        25,
+                        GuiSmokePhase.HandleCombat.ToString(),
+                        "Confirm the selected combat hand card.",
+                        DateTimeOffset.UtcNow,
+                        combatNoOpScreenshotPath,
+                        new WindowBounds(1, 32, 1280, 720),
+                        "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|combat-selection:unknown|combat-play-open",
+                        "0001",
+                        1,
+                        3,
+                        false,
+                        "tactical",
+                        null,
+                        runtimeSimpleSelectConfirmObserver,
+                        Array.Empty<KnownRecipeHint>(),
+                        Array.Empty<EventKnowledgeCandidate>(),
+                        runtimeSimpleSelectKnowledge,
+                        new[] { "confirm selected hand card", "wait" },
+                        pendingNonEnemySlot3History,
+                        "Confirm the selected combat hand card.",
+                        null),
+                    runtimeSimpleSelectConfirmDecision,
+                    out var handConfirmSemanticAction)
+                && string.Equals(handConfirmSemanticAction, "confirm selected hand card", StringComparison.OrdinalIgnoreCase),
+                "Combat hand-selection confirm should map to explicit confirm semantics.");
+
             var staleConfirmAfterObserver = runtimePendingNonEnemyObserver with
             {
                 InventoryId = "inv-runtime-pending-non-enemy-stale-clear",

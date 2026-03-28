@@ -1629,13 +1629,27 @@ internal static class RuntimeSnapshotReflectionExtractor
         var playMode = TryReadString(handRoot, "CurrentMode");
         var currentCardPlay = TryGetMemberValue(handRoot!, "_currentCardPlay")
                               ?? TryGetMemberValue(handRoot!, "CurrentCardPlay");
-        var selectedCard = TryExtractCombatCardFromPlay(currentCardPlay);
+        var selectedHandCards = ExpandEnumerable(TryGetMemberValue(handRoot!, "_selectedCards")).ToArray();
+        var selectedCard = TryExtractCombatCardFromPlay(currentCardPlay)
+                           ?? (selectedHandCards.Length > 0 ? selectedHandCards[^1] : null);
         var selectedCardId = TryReadString(selectedCard, "Id", "CardId", "Name", "Title");
         var selectedCardName = TryReadString(selectedCard, "Title", "DisplayName", "Name", "Id", "CardId");
         var selectedCardType = TryReadString(selectedCard, "Type", "CardType");
         var selectedCardTargetType = TryReadString(selectedCard, "TargetType", "Target");
         var awaitingSlots = ExtractAwaitingPlaySlots(TryGetMemberValue(handRoot!, "_holdersAwaitingQueue"));
         var selectedCardSlot = ResolveCurrentCardPlaySlot(handRoot, awaitingSlots);
+        var handSelectionSelectedCardIds = selectedHandCards
+            .Select(static card => FirstNonEmpty(
+                TryReadString(card, "Id", "CardId", "Name", "Title"),
+                TryReadString(card, "Title", "DisplayName", "Name", "Id", "CardId")))
+            .Where(static cardId => !string.IsNullOrWhiteSpace(cardId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray()!;
+        var handSelectionConfirmButton = TryGetMemberValue(handRoot!, "_selectModeConfirmButton");
+        var handSelectionConfirmEnabled = handSelectionConfirmButton is null
+            ? null
+            : (TryResolveInteractiveEnabled(handSelectionConfirmButton)
+               ?? TryResolveControlEnabled(handSelectionConfirmButton));
 
         var targetingInProgress = TryReadBool(targetManagerRoot, "IsInSelection");
         var validTargetsType = TryConvertToDisplayString(

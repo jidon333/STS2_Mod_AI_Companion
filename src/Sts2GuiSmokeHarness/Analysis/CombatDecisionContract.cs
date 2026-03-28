@@ -101,6 +101,19 @@ static class CombatDecisionContract
             return true;
         }
 
+        if (!string.IsNullOrWhiteSpace(decision.TargetLabel)
+            && decision.TargetLabel.StartsWith("combat select hand slot ", StringComparison.OrdinalIgnoreCase))
+        {
+            semanticAction = "select card from hand";
+            return true;
+        }
+
+        if (string.Equals(decision.TargetLabel, "confirm selected hand card", StringComparison.OrdinalIgnoreCase))
+        {
+            semanticAction = "confirm selected hand card";
+            return true;
+        }
+
         if (CombatHistorySupport.IsCombatEnemyTargetLabel(decision.TargetLabel))
         {
             semanticAction = "click enemy";
