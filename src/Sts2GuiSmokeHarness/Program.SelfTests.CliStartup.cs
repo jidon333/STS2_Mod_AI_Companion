@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static GuiSmokeStepRequestFactory;
 
 internal static partial class Program
 {
@@ -72,6 +73,51 @@ internal static partial class Program
         var json = JsonSerializer.Serialize(request, GuiSmokeShared.JsonOptions);
         var roundTrip = JsonSerializer.Deserialize<GuiSmokeStepRequest>(json, GuiSmokeShared.JsonOptions);
         Assert(roundTrip?.Phase == GuiSmokePhase.EnterRun.ToString(), "Request should round-trip.");
+
+        var observerOnlyWindow = new WindowCaptureTarget(IntPtr.Zero, "observer-only", new Rectangle(100, 200, 1000, 800), false, false);
+        var observerOnlySummary = new ObserverSummary(
+            "event",
+            "event",
+            false,
+            DateTimeOffset.UtcNow,
+            "observer-only",
+            true,
+            "hook",
+            "stable",
+            null,
+            null,
+            "runtime",
+            null,
+            null,
+            null,
+            new[] { "Proceed" },
+            Array.Empty<string>(),
+            Array.Empty<ObserverActionNode>(),
+            Array.Empty<ObserverChoice>(),
+            Array.Empty<ObservedCombatHandCard>());
+        var observerOnlyState = new ObserverState(observerOnlySummary, null, null, null);
+        var observerOnlyContext = CreateObserverOnlyAnalysisContext(
+            GuiSmokePhase.HandleEvent,
+            observerOnlyState,
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            new WindowBounds(observerOnlyWindow.Bounds.X, observerOnlyWindow.Bounds.Y, observerOnlyWindow.Bounds.Width, observerOnlyWindow.Bounds.Height));
+        var observerOnlyRequest = CreateStepRequest(
+            "run",
+            "boot-to-combat",
+            4,
+            GuiSmokePhase.HandleEvent,
+            "/tmp/observer-only.screen.png",
+            observerOnlyWindow,
+            observerOnlyState,
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            Directory.GetCurrentDirectory(),
+            Path.GetTempPath(),
+            "0001",
+            1,
+            observerOnlyContext,
+            null);
+        Assert(string.IsNullOrWhiteSpace(observerOnlyRequest.ScreenshotPath), "Observer-only request should leave screenshot path empty instead of implying a captured frame.");
 
         var decision = CreateBaseSelfTestDecision();
         var replayOutputPath = ResolveCliPath($"/tmp/gui-smoke-replay-self-test-{Guid.NewGuid():N}.json", Directory.GetCurrentDirectory());

@@ -50,7 +50,14 @@ sealed class ObserverSnapshotReader
                                ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen")
                                ?? inventoryRawCurrentScreen
                                ?? compatibilityCurrentScreen;
+        var publishedCurrentScreen = TryReadString(stateDocument?.RootElement, "currentScreen")
+                                     ?? TryReadNestedString(stateDocument?.RootElement, "meta", "logicalScreen")
+                                     ?? inventorySceneType
+                                     ?? compatibilityCurrentScreen;
         var currentScreen = compatibilityCurrentScreen;
+        var publishedVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "visibleScreen")
+                                     ?? TryReadString(inventoryDocument?.RootElement, "visibleScreen")
+                                     ?? publishedCurrentScreen;
         var snapshotVersion = TryReadInt64(stateDocument?.RootElement, "version");
         var compatibilityVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatibilityVisibleScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScreen")
@@ -68,14 +75,23 @@ sealed class ObserverSnapshotReader
         var compatibilitySceneReady = TryReadNestedBool(stateDocument?.RootElement, "meta", "compatSceneReady")
                                       ?? TryReadBool(inventoryDocument?.RootElement, "compatibilitySceneReady")
                                       ?? TryReadBool(inventoryDocument?.RootElement, "sceneReady");
+        var publishedSceneReady = TryReadNestedBool(stateDocument?.RootElement, "meta", "sceneReady")
+                                  ?? TryReadBool(inventoryDocument?.RootElement, "sceneReady")
+                                  ?? compatibilitySceneReady;
         var sceneReady = compatibilitySceneReady;
         var compatibilitySceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneAuthority")
                                           ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneAuthority")
                                           ?? TryReadString(inventoryDocument?.RootElement, "sceneAuthority");
+        var publishedSceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "sceneAuthority")
+                                      ?? TryReadString(inventoryDocument?.RootElement, "sceneAuthority")
+                                      ?? compatibilitySceneAuthority;
         var sceneAuthority = compatibilitySceneAuthority;
         var compatibilitySceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneStability")
                                           ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneStability")
                                           ?? TryReadString(inventoryDocument?.RootElement, "sceneStability");
+        var publishedSceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "sceneStability")
+                                      ?? TryReadString(inventoryDocument?.RootElement, "sceneStability")
+                                      ?? compatibilitySceneStability;
         var sceneStability = compatibilitySceneStability;
         var sceneEpisodeId = TryReadString(inventoryDocument?.RootElement, "sceneEpisodeId")
                              ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen-episode");
@@ -93,6 +109,11 @@ sealed class ObserverSnapshotReader
             {
                 SnapshotVersion = snapshotVersion,
                 RawCurrentScreen = rawObservedScreen,
+                PublishedCurrentScreen = publishedCurrentScreen,
+                PublishedVisibleScreen = publishedVisibleScreen,
+                PublishedSceneReady = publishedSceneReady,
+                PublishedSceneAuthority = publishedSceneAuthority,
+                PublishedSceneStability = publishedSceneStability,
                 CompatibilityCurrentScreen = compatibilityCurrentScreen,
                 CompatibilityVisibleScreen = compatibilityVisibleScreen,
                 CompatibilitySceneReady = compatibilitySceneReady,

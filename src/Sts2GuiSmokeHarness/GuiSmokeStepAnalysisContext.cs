@@ -129,6 +129,8 @@ sealed class GuiSmokeStepAnalysisContext
 
     public string? ScreenshotPath => _screenshotPath;
 
+    public bool HasScreenshotEvidence => !string.IsNullOrWhiteSpace(_screenshotPath);
+
     public IReadOnlyList<GuiSmokeHistoryEntry> History => _history;
 
     public IReadOnlyList<CombatCardKnowledgeHint> CombatCardKnowledge => _combatCardKnowledge;

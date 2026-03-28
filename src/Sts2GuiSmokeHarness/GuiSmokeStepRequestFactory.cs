@@ -230,6 +230,7 @@ static class GuiSmokeStepRequestFactory
         GuiSmokeSceneRequestContext? sceneContext = null)
     {
         var effectiveScreenshotPath = analysisContext?.ScreenshotPath;
+        var requestScreenshotPath = effectiveScreenshotPath ?? string.Empty;
         var serializedHistory = analysisContext?.History ?? BuildSerializedStepHistory(phase, history);
         var combatCardKnowledge = analysisContext?.CombatCardKnowledge ?? GuiSmokeSceneReasoningSupport.LoadCombatCardKnowledge(workspaceRoot, observer);
         var sceneSignature = sceneContext?.SceneSignature ?? GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(effectiveScreenshotPath ?? screenshotPath, observer, phase, analysisContext);
@@ -250,7 +251,7 @@ static class GuiSmokeStepRequestFactory
             phase.ToString(),
             GuiSmokePromptContractSupport.BuildGoal(phase),
             DateTimeOffset.UtcNow,
-            screenshotPath,
+            requestScreenshotPath,
             new WindowBounds(window.Bounds.X, window.Bounds.Y, window.Bounds.Width, window.Bounds.Height),
             sceneSignature,
             attemptId,

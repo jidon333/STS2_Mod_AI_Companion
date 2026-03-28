@@ -20,6 +20,7 @@ using static GuiSmokeNonCombatAllowedActionSupport;
 using static GuiSmokePostActionPhaseSupport;
 using static GuiSmokeSceneReasoningSupport;
 using static GuiSmokeStepRequestFactory;
+using static GuiSmokeStepScreenshotPolicy;
 using static ObserverScreenProvenance;
 
 internal static partial class Program
@@ -152,101 +153,14 @@ internal static partial class Program
                     iterationKnownRecipes));
         }
 
-        bool NeedsScreenshotForStep(GuiSmokeStepAnalysisContext stepAnalysisContext)
-        {
-            var currentObserver = stepAnalysisContext.Observer;
-            var cardSelectionState = CardSelectionObserverSignals.TryGetState(currentObserver.Summary);
-
-            if (stepIndex == 1 && isAuthoritativeFirstAttempt)
-            {
-                return true;
-            }
-
-            if (phase is GuiSmokePhase.WaitMainMenu
-                or GuiSmokePhase.WaitRunLoad
-                or GuiSmokePhase.WaitCharacterSelect
-                or GuiSmokePhase.WaitMap
-                or GuiSmokePhase.WaitPostMapNodeRoom
-                or GuiSmokePhase.WaitCombat
-                or GuiSmokePhase.WaitEventRelease
-                or GuiSmokePhase.EnterRun
-                or GuiSmokePhase.ChooseCharacter
-                or GuiSmokePhase.Embark)
-            {
-                return false;
-            }
-
-            if (phase == GuiSmokePhase.HandleRewards && stepAnalysisContext.UseRewardFastPath)
-            {
-                return false;
-            }
-
-            if (phase == GuiSmokePhase.HandleShop
-                && cardSelectionState is null
-                && ShopObserverSignals.IsShopAuthorityActive(currentObserver.Summary))
-            {
-                return false;
-            }
-
-            if (phase == GuiSmokePhase.HandleEvent
-                && cardSelectionState is null
-                && !LooksLikeInspectOverlayState(currentObserver))
-            {
-                var eventScene = stepAnalysisContext.EventScene;
-                if (eventScene.RewardSubstateActive
-                    || (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)
-                    || (eventScene.EventForegroundOwned && eventScene.HasExplicitProgression)
-                    || AncientEventObserverSignals.IsDialogueActive(currentObserver.Summary)
-                    || AncientEventObserverSignals.HasExplicitCompletionAction(currentObserver.Summary)
-                    || AncientEventObserverSignals.HasExplicitOptionSelection(currentObserver.Summary)
-                    || TreasureRoomObserverSignals.IsTreasureAuthorityActive(currentObserver.Summary)
-                    || EventProceedObserverSignals.HasExplicitEventProceedAuthority(currentObserver.Summary, stepAnalysisContext.WindowBounds))
-                {
-                    return false;
-                }
-            }
-
-            if (phase == GuiSmokePhase.ChooseFirstNode)
-            {
-                if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(currentObserver, stepAnalysisContext.ScreenshotPath)
-                    || GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(currentObserver.Summary)
-                    || TreasureRoomObserverSignals.IsTreasureAuthorityActive(currentObserver.Summary)
-                    || ShopObserverSignals.IsShopAuthorityActive(currentObserver.Summary))
-                {
-                    return false;
-                }
-
-                var mapOverlayState = stepAnalysisContext.MapOverlayState;
-                if (mapOverlayState.ExportedReachableNodeCandidatePresent
-                    || (!mapOverlayState.ReachableNodeCandidatePresent && mapOverlayState.MapBackNavigationAvailable))
-                {
-                    return false;
-                }
-            }
-
-            if (phase == GuiSmokePhase.HandleCombat && stepAnalysisContext.UseCombatFastPath)
-            {
-                if (stepAnalysisContext.CombatPlayerActionWindowClosed)
-                {
-                    return false;
-                }
-
-                var combatBarrier = stepAnalysisContext.CombatBarrierEvaluation;
-                if (combatBarrier.IsActive && combatBarrier.IsHardWaitBarrier)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
         bool HasWaitWakeDelta(ObserverState baselineObserver, ObserverState latestObserver)
         {
             return HasMeaningfulObserverDelta(baselineObserver, latestObserver)
-                   || !string.Equals(baselineObserver.CurrentScreen, latestObserver.CurrentScreen, StringComparison.OrdinalIgnoreCase)
-                   || !string.Equals(baselineObserver.VisibleScreen, latestObserver.VisibleScreen, StringComparison.OrdinalIgnoreCase)
-                   || CompatibilitySceneReady(baselineObserver) != CompatibilitySceneReady(latestObserver)
+                   || !string.Equals(PublishedCurrentScreen(baselineObserver), PublishedCurrentScreen(latestObserver), StringComparison.OrdinalIgnoreCase)
+                   || !string.Equals(PublishedVisibleScreen(baselineObserver), PublishedVisibleScreen(latestObserver), StringComparison.OrdinalIgnoreCase)
+                   || PublishedSceneReady(baselineObserver) != PublishedSceneReady(latestObserver)
+                   || !string.Equals(PublishedSceneAuthority(baselineObserver), PublishedSceneAuthority(latestObserver), StringComparison.OrdinalIgnoreCase)
+                   || !string.Equals(PublishedSceneStability(baselineObserver), PublishedSceneStability(latestObserver), StringComparison.OrdinalIgnoreCase)
                    || !string.Equals(baselineObserver.ChoiceExtractorPath, latestObserver.ChoiceExtractorPath, StringComparison.OrdinalIgnoreCase)
                    || baselineObserver.SnapshotVersion != latestObserver.SnapshotVersion;
         }
@@ -630,8 +544,9 @@ internal static partial class Program
             }
 
             var captureMode = "skipped";
-            var captureSkipReason = "observer-first";
-            if (NeedsScreenshotForStep(stepAnalysisContext))
+            var capturePolicy = Evaluate(stepIndex, isAuthoritativeFirstAttempt, stepAnalysisContext);
+            var captureSkipReason = capturePolicy.SkipReason;
+            if (capturePolicy.NeedsScreenshot)
             {
                 var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
                 if (!captureResult.Succeeded)
@@ -822,7 +737,7 @@ internal static partial class Program
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "scene-not-ready", observer.CurrentScreen, observer.InCombat, null));
             }
 
-            var sceneReasoningMode = stepAnalysisContext.ScreenshotPath is null ? "observer-only" : "enriched";
+            var sceneReasoningMode = stepAnalysisContext.HasScreenshotEvidence ? "enriched" : "observer-only";
             var request = CreateStepRequest(
                 runId,
                 scenarioId,

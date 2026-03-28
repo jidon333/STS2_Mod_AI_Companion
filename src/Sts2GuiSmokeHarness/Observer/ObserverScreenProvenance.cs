@@ -2,6 +2,36 @@ using System;
 
 static class ObserverScreenProvenance
 {
+    public static string? PublishedCurrentScreen(ObserverSummary observer)
+        => observer.PublishedCurrentScreen ?? observer.CurrentScreen;
+
+    public static string? PublishedCurrentScreen(ObserverState observer)
+        => observer.PublishedCurrentScreen ?? observer.CurrentScreen;
+
+    public static string? PublishedVisibleScreen(ObserverSummary observer)
+        => observer.PublishedVisibleScreen ?? observer.VisibleScreen;
+
+    public static string? PublishedVisibleScreen(ObserverState observer)
+        => observer.PublishedVisibleScreen ?? observer.VisibleScreen;
+
+    public static bool? PublishedSceneReady(ObserverSummary observer)
+        => observer.PublishedSceneReady ?? observer.SceneReady;
+
+    public static bool? PublishedSceneReady(ObserverState observer)
+        => observer.PublishedSceneReady ?? observer.SceneReady;
+
+    public static string? PublishedSceneAuthority(ObserverSummary observer)
+        => observer.PublishedSceneAuthority ?? observer.SceneAuthority;
+
+    public static string? PublishedSceneAuthority(ObserverState observer)
+        => observer.PublishedSceneAuthority ?? observer.SceneAuthority;
+
+    public static string? PublishedSceneStability(ObserverSummary observer)
+        => observer.PublishedSceneStability ?? observer.SceneStability;
+
+    public static string? PublishedSceneStability(ObserverState observer)
+        => observer.PublishedSceneStability ?? observer.SceneStability;
+
     public static string? CompatibilityCurrentScreen(ObserverSummary observer)
         => observer.CompatibilityCurrentScreen ?? observer.CurrentScreen;
 
@@ -44,9 +74,27 @@ static class ObserverScreenProvenance
                || string.Equals(CompatibilityVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
     }
 
+    public static bool MatchesPublishedScreen(ObserverSummary observer, string screen)
+    {
+        return string.Equals(PublishedCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(PublishedVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool MatchesPublishedScreen(ObserverState observer, string screen)
+    {
+        return string.Equals(PublishedCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(PublishedVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string? DisplayScreen(ObserverSummary observer)
         => CompatibilityCurrentScreen(observer) ?? CompatibilityVisibleScreen(observer);
 
     public static string? DisplayScreen(ObserverState observer)
         => CompatibilityCurrentScreen(observer) ?? CompatibilityVisibleScreen(observer);
+
+    public static string? DisplayPublishedScreen(ObserverSummary observer)
+        => PublishedCurrentScreen(observer) ?? PublishedVisibleScreen(observer);
+
+    public static string? DisplayPublishedScreen(ObserverState observer)
+        => PublishedCurrentScreen(observer) ?? PublishedVisibleScreen(observer);
 }

@@ -27,6 +27,16 @@ sealed record ObserverSummary(
 
     public string? RawObservedScreen => RawCurrentScreen;
 
+    public string? PublishedCurrentScreen { get; init; }
+
+    public string? PublishedVisibleScreen { get; init; }
+
+    public bool? PublishedSceneReady { get; init; }
+
+    public string? PublishedSceneAuthority { get; init; }
+
+    public string? PublishedSceneStability { get; init; }
+
     public string? CompatibilityCurrentScreen { get; init; }
 
     public string? CompatibilityLogicalScreen => CompatibilityCurrentScreen;
@@ -183,6 +193,11 @@ sealed record ObserverState(
     public string? VisibleScreen => Summary.VisibleScreen;
     public string? RawCurrentScreen => Summary.RawCurrentScreen ?? Summary.CurrentScreen;
     public string? RawObservedScreen => Summary.RawObservedScreen ?? Summary.RawCurrentScreen ?? Summary.CurrentScreen;
+    public string? PublishedCurrentScreen => Summary.PublishedCurrentScreen ?? Summary.CurrentScreen;
+    public string? PublishedVisibleScreen => Summary.PublishedVisibleScreen ?? Summary.VisibleScreen;
+    public bool? PublishedSceneReady => Summary.PublishedSceneReady ?? Summary.SceneReady;
+    public string? PublishedSceneAuthority => Summary.PublishedSceneAuthority ?? Summary.SceneAuthority;
+    public string? PublishedSceneStability => Summary.PublishedSceneStability ?? Summary.SceneStability;
     public string? CompatibilityCurrentScreen => Summary.CompatibilityCurrentScreen ?? Summary.CurrentScreen;
     public string? CompatibilityLogicalScreen => Summary.CompatibilityLogicalScreen ?? Summary.CompatibilityCurrentScreen ?? Summary.CurrentScreen;
     public string? CompatibilityVisibleScreen => Summary.CompatibilityVisibleScreen ?? Summary.VisibleScreen;

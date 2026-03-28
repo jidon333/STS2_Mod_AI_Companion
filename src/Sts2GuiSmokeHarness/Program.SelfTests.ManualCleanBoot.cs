@@ -391,6 +391,10 @@ internal static partial class Program
                   "currentScreen": "legacy-event",
                   "capturedAt": "REPLACE_CAPTURED_AT",
                   "meta": {
+                    "visibleScreen": "legacy-direct-visible",
+                    "sceneReady": "true",
+                    "sceneAuthority": "hook",
+                    "sceneStability": "stable",
                     "rawCurrentScreen": "rewards",
                     "rawObservedScreen": "legacy-raw",
                     "compatibilityCurrentScreen": "map",
@@ -426,6 +430,11 @@ internal static partial class Program
 
             var aliasObserver = new ObserverSnapshotReader(liveLayout, harnessLayout).Read();
             Assert(string.Equals(aliasObserver.RawObservedScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive rawCurrentScreen over legacy rawObservedScreen and inventory fallback.");
+            Assert(string.Equals(aliasObserver.PublishedCurrentScreen, "legacy-event", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve the direct published current screen before compatibility fallback.");
+            Assert(string.Equals(aliasObserver.PublishedVisibleScreen, "legacy-direct-visible", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve the direct published visible screen before compatibility fallback.");
+            Assert(aliasObserver.PublishedSceneReady == true
+                   && string.Equals(aliasObserver.PublishedSceneAuthority, "hook", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(aliasObserver.PublishedSceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve direct published scene readiness and authority before compatibility fallback.");
             Assert(string.Equals(aliasObserver.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive compatibilityCurrentScreen over legacy currentScreen and compatLogicalScreen.");
             Assert(string.Equals(aliasObserver.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive compatibilityVisibleScreen over legacy compatVisibleScreen and inventory fallback.");
         }
