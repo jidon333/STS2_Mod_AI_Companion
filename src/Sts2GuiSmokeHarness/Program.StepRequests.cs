@@ -58,7 +58,8 @@ internal static partial class Program
         ObserverState observer,
         string? screenshotPath,
         IReadOnlyList<GuiSmokeHistoryEntry> history,
-        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        WindowBounds? windowBounds = null)
     {
         static AutoCombatAnalysis EmptyCombatAnalysis() => new(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown);
         static AutoCombatHandAnalysis EmptyCombatHandAnalysis() => new(Array.Empty<AutoCombatHandSlotAnalysis>());
@@ -70,6 +71,10 @@ internal static partial class Program
         AutoCombatAnalysis? combatAnalysis = null;
         AutoCombatHandAnalysis? combatHandAnalysis = null;
         CombatBarrierEvaluation? combatBarrierEvaluation = null;
+        RewardSceneState? rewardScene = null;
+        EventSceneState? eventScene = null;
+        ICanonicalNonCombatSceneState? canonicalNonCombatScene = null;
+        var canonicalNonCombatSceneComputed = false;
 
         ReconstructedHandleCombatContext GetCombatContext()
             => combatContext ??= HandleCombatContextSupport.Reconstruct(history);
@@ -104,6 +109,23 @@ internal static partial class Program
                 CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
                 CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
                 CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary));
+
+        RewardSceneState GetRewardScene()
+            => rewardScene ??= AutoDecisionProvider.BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
+
+        EventSceneState GetEventScene()
+            => eventScene ??= AutoDecisionProvider.BuildEventSceneState(observer, windowBounds, history, screenshotPath);
+
+        ICanonicalNonCombatSceneState? GetCanonicalNonCombatScene()
+        {
+            if (!canonicalNonCombatSceneComputed)
+            {
+                canonicalNonCombatScene = AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, windowBounds, history, screenshotPath);
+                canonicalNonCombatSceneComputed = true;
+            }
+
+            return canonicalNonCombatScene;
+        }
 
         bool ComputeUseCombatFastPath()
         {
@@ -183,19 +205,23 @@ internal static partial class Program
         return new GuiSmokeStepAnalysisContext(
             phase,
             observer,
+            windowBounds,
             screenshotPath,
             history,
             combatCardKnowledge,
             ComputeUseCombatFastPath,
             ComputeUseRewardFastPath,
-            () => BuildRewardMapLayerStateForObserver(observer.Summary, null),
+            () => BuildRewardMapLayerStateForObserver(observer.Summary, windowBounds),
             () =>
             {
-                var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, null);
+                var rewardMapLayer = BuildRewardMapLayerStateForObserver(observer.Summary, windowBounds);
                 return rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
             },
             () => HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath),
-            () => GuiSmokeMapOverlayHeuristics.BuildState(observer, null, screenshotPath),
+            () => GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath),
+            GetRewardScene,
+            GetEventScene,
+            GetCanonicalNonCombatScene,
             GetCombatContext,
             GetPendingSelection,
             GetRuntimeCombatState,
@@ -207,14 +233,16 @@ internal static partial class Program
             GetCombatBarrierEvaluation);
     }
 
-    static GuiSmokeStepAnalysisContext CreateRequestAnalysisContext(GuiSmokeStepRequest request)
+    internal static GuiSmokeStepAnalysisContext CreateRequestAnalysisContext(GuiSmokeStepRequest request)
     {
+        var stateDocument = GuiSmokeReplayArtifactLoader.TryLoadObserverStateSidecar(request.ScreenshotPath);
         return CreateStepAnalysisContext(
             Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true),
-            new ObserverState(request.Observer, null, null, request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>()),
+            new ObserverState(request.Observer, stateDocument, null, request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>()),
             request.ScreenshotPath,
             request.History,
-            request.CombatCardKnowledge);
+            request.CombatCardKnowledge,
+            request.WindowBounds);
     }
 
     static GuiSmokeStepRequest CreateStepRequest(

@@ -22,9 +22,9 @@ sealed partial class AutoDecisionProvider
         return builder.Build(CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen), actualDecision);
     }
 
-    private static GuiSmokeDecisionAnalysis AnalyzeHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
+    private static GuiSmokeDecisionAnalysis AnalyzeHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision, GuiSmokeStepAnalysisContext analysisContext)
     {
-        var rewardScene = BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        var rewardScene = analysisContext.RewardScene;
         var rewardMapLayer = rewardScene.LayerState;
         var rewardState = rewardScene.ScreenState;
         var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
@@ -84,9 +84,9 @@ sealed partial class AutoDecisionProvider
         return builder.Build(CreateWaitDecision("waiting for reward actions", request.Observer.CurrentScreen), actualDecision);
     }
 
-    private static GuiSmokeDecisionAnalysis AnalyzeChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
+    private static GuiSmokeDecisionAnalysis AnalyzeChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision, GuiSmokeStepAnalysisContext analysisContext)
     {
-        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        var mapOverlayState = analysisContext.MapOverlayState;
         var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
         var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
 
@@ -266,12 +266,12 @@ sealed partial class AutoDecisionProvider
         return builder.Build(CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen), actualDecision);
     }
 
-    private static GuiSmokeDecisionAnalysis AnalyzeHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision)
+    private static GuiSmokeDecisionAnalysis AnalyzeHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision, GuiSmokeStepAnalysisContext analysisContext)
     {
-        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        var eventScene = analysisContext.EventScene;
         if (eventScene.RewardSubstateActive)
         {
-            return AnalyzeHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, actualDecision);
+            return AnalyzeHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, actualDecision, analysisContext);
         }
 
         var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
@@ -437,7 +437,7 @@ sealed partial class AutoDecisionProvider
 
         if (LooksLikeMapTransitionState(request))
         {
-            builder.Consider("click first reachable node", "branch:choose-first-node", 0.66d, () => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }), "no-map-transition-candidate", boundsSource: "branch-choose-first-node");
+            builder.Consider("click first reachable node", "branch:choose-first-node", 0.66d, () => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, analysisContext), "no-map-transition-candidate", boundsSource: "branch-choose-first-node");
         }
         else
         {

@@ -204,19 +204,19 @@ sealed partial class AutoDecisionProvider : IGuiDecisionProvider
         GuiSmokeStepDecision? actualDecision = null,
         GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        var context = analysisContext ?? GuiSmokeStepAnalysisContext.CreateForHandleCombatRequest(request);
+        var context = analysisContext ?? Program.CreateRequestAnalysisContext(request);
         var phase = Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true);
         return phase switch
         {
-            GuiSmokePhase.HandleEvent => AnalyzeHandleEvent(request, actualDecision),
-            GuiSmokePhase.HandleRewards => AnalyzeHandleRewards(request, actualDecision),
-            GuiSmokePhase.ChooseFirstNode => AnalyzeChooseFirstNode(request, actualDecision),
+            GuiSmokePhase.HandleEvent => AnalyzeHandleEvent(request, actualDecision, context),
+            GuiSmokePhase.HandleRewards => AnalyzeHandleRewards(request, actualDecision, context),
+            GuiSmokePhase.ChooseFirstNode => AnalyzeChooseFirstNode(request, actualDecision, context),
             GuiSmokePhase.HandleShop => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleShop(request), "shop", null),
             GuiSmokePhase.HandleCombat => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request, context), "combat", null),
             GuiSmokePhase.EnterRun => AnalyzeGenericPhase(request, actualDecision, () => DecideEnterRun(request), "main-menu", null),
-            GuiSmokePhase.WaitRunLoad => AnalyzeGenericPhase(request, actualDecision, () => DecideWaitRunLoad(request), request.Observer.CurrentScreen, null),
+            GuiSmokePhase.WaitRunLoad => AnalyzeGenericPhase(request, actualDecision, () => DecideWaitRunLoad(request, context), request.Observer.CurrentScreen, null),
             GuiSmokePhase.ChooseCharacter => AnalyzeGenericPhase(request, actualDecision, () => DecideChooseCharacter(request), "character-select", null),
-            GuiSmokePhase.Embark => AnalyzeGenericPhase(request, actualDecision, () => DecideEmbark(request), "embark", null),
+            GuiSmokePhase.Embark => AnalyzeGenericPhase(request, actualDecision, () => DecideEmbark(request, context), "embark", null),
             _ => AnalyzeGenericPhase(request, actualDecision, () => CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen), request.Observer.CurrentScreen, null),
         };
     }

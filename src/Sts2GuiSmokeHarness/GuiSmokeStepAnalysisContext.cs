@@ -24,6 +24,7 @@ sealed class GuiSmokeStepAnalysisContext
 
     private readonly GuiSmokePhase _phase;
     private readonly ObserverState _observer;
+    private readonly WindowBounds? _windowBounds;
     private readonly string? _screenshotPath;
     private readonly IReadOnlyList<GuiSmokeHistoryEntry> _history;
     private readonly IReadOnlyList<CombatCardKnowledgeHint> _combatCardKnowledge;
@@ -33,6 +34,9 @@ sealed class GuiSmokeStepAnalysisContext
     private readonly Func<bool> _rewardBackNavigationAvailableFactory;
     private readonly Func<bool> _claimableRewardPresentFactory;
     private readonly Func<MapOverlayState> _mapOverlayStateFactory;
+    private readonly Func<RewardSceneState> _rewardSceneFactory;
+    private readonly Func<EventSceneState> _eventSceneFactory;
+    private readonly Func<ICanonicalNonCombatSceneState?> _canonicalNonCombatSceneFactory;
     private readonly Func<ReconstructedHandleCombatContext> _combatContextFactory;
     private readonly Func<PendingCombatSelection?> _pendingCombatSelectionFactory;
     private readonly Func<CombatRuntimeState> _runtimeCombatStateFactory;
@@ -49,6 +53,10 @@ sealed class GuiSmokeStepAnalysisContext
     private bool? _rewardBackNavigationAvailable;
     private bool? _claimableRewardPresent;
     private MapOverlayState? _mapOverlayState;
+    private RewardSceneState? _rewardScene;
+    private EventSceneState? _eventScene;
+    private ICanonicalNonCombatSceneState? _canonicalNonCombatScene;
+    private bool _canonicalNonCombatSceneComputed;
     private ReconstructedHandleCombatContext? _combatContext;
     private PendingCombatSelection? _pendingCombatSelection;
     private bool _pendingCombatSelectionComputed;
@@ -63,6 +71,7 @@ sealed class GuiSmokeStepAnalysisContext
     public GuiSmokeStepAnalysisContext(
         GuiSmokePhase phase,
         ObserverState observer,
+        WindowBounds? windowBounds,
         string? screenshotPath,
         IReadOnlyList<GuiSmokeHistoryEntry> history,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
@@ -72,6 +81,9 @@ sealed class GuiSmokeStepAnalysisContext
         Func<bool> rewardBackNavigationAvailableFactory,
         Func<bool> claimableRewardPresentFactory,
         Func<MapOverlayState> mapOverlayStateFactory,
+        Func<RewardSceneState> rewardSceneFactory,
+        Func<EventSceneState> eventSceneFactory,
+        Func<ICanonicalNonCombatSceneState?> canonicalNonCombatSceneFactory,
         Func<ReconstructedHandleCombatContext> combatContextFactory,
         Func<PendingCombatSelection?> pendingCombatSelectionFactory,
         Func<CombatRuntimeState> runtimeCombatStateFactory,
@@ -84,6 +96,7 @@ sealed class GuiSmokeStepAnalysisContext
     {
         _phase = phase;
         _observer = observer;
+        _windowBounds = windowBounds;
         _screenshotPath = screenshotPath;
         _history = history;
         _combatCardKnowledge = combatCardKnowledge;
@@ -93,6 +106,9 @@ sealed class GuiSmokeStepAnalysisContext
         _rewardBackNavigationAvailableFactory = rewardBackNavigationAvailableFactory;
         _claimableRewardPresentFactory = claimableRewardPresentFactory;
         _mapOverlayStateFactory = mapOverlayStateFactory;
+        _rewardSceneFactory = rewardSceneFactory;
+        _eventSceneFactory = eventSceneFactory;
+        _canonicalNonCombatSceneFactory = canonicalNonCombatSceneFactory;
         _combatContextFactory = combatContextFactory;
         _pendingCombatSelectionFactory = pendingCombatSelectionFactory;
         _runtimeCombatStateFactory = runtimeCombatStateFactory;
@@ -107,6 +123,8 @@ sealed class GuiSmokeStepAnalysisContext
     public GuiSmokePhase Phase => _phase;
 
     public ObserverState Observer => _observer;
+
+    public WindowBounds? WindowBounds => _windowBounds;
 
     public string? ScreenshotPath => _screenshotPath;
 
@@ -127,6 +145,24 @@ sealed class GuiSmokeStepAnalysisContext
     public bool ClaimableRewardPresent => _claimableRewardPresent ??= _claimableRewardPresentFactory();
 
     public MapOverlayState MapOverlayState => _mapOverlayState ??= _mapOverlayStateFactory();
+
+    public RewardSceneState RewardScene => _rewardScene ??= _rewardSceneFactory();
+
+    public EventSceneState EventScene => _eventScene ??= _eventSceneFactory();
+
+    public ICanonicalNonCombatSceneState? CanonicalNonCombatScene
+    {
+        get
+        {
+            if (!_canonicalNonCombatSceneComputed)
+            {
+                _canonicalNonCombatScene = _canonicalNonCombatSceneFactory();
+                _canonicalNonCombatSceneComputed = true;
+            }
+
+            return _canonicalNonCombatScene;
+        }
+    }
 
     public ReconstructedHandleCombatContext CombatContext => _combatContext ??= _combatContextFactory();
 
@@ -171,6 +207,10 @@ sealed class GuiSmokeStepAnalysisContext
         AutoCombatAnalysis? combatAnalysis = null;
         AutoCombatHandAnalysis? combatHandAnalysis = null;
         CombatBarrierEvaluation? combatBarrierEvaluation = null;
+        RewardSceneState? rewardScene = null;
+        EventSceneState? eventScene = null;
+        ICanonicalNonCombatSceneState? canonicalNonCombatScene = null;
+        var canonicalNonCombatSceneComputed = false;
 
         ReconstructedHandleCombatContext GetCombatContext()
             => combatContext ??= HandleCombatContextSupport.Reconstruct(history);
@@ -209,6 +249,23 @@ sealed class GuiSmokeStepAnalysisContext
                 CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), GetPendingSelection()),
                 CanResolveCombatEnemyTarget(),
                 CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer.Summary));
+
+        RewardSceneState GetRewardScene()
+            => rewardScene ??= AutoDecisionProvider.BuildRewardSceneState(observer, request.WindowBounds, history, screenshotPath);
+
+        EventSceneState GetEventScene()
+            => eventScene ??= AutoDecisionProvider.BuildEventSceneState(observer, request.WindowBounds, history, screenshotPath);
+
+        ICanonicalNonCombatSceneState? GetCanonicalNonCombatScene()
+        {
+            if (!canonicalNonCombatSceneComputed)
+            {
+                canonicalNonCombatScene = AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, request.WindowBounds, history, screenshotPath);
+                canonicalNonCombatSceneComputed = true;
+            }
+
+            return canonicalNonCombatScene;
+        }
 
         bool CanResolveCombatEnemyTarget()
         {
@@ -407,6 +464,7 @@ sealed class GuiSmokeStepAnalysisContext
         return new GuiSmokeStepAnalysisContext(
             GuiSmokePhase.HandleCombat,
             observer,
+            request.WindowBounds,
             screenshotPath,
             history,
             combatCardKnowledge,
@@ -416,6 +474,9 @@ sealed class GuiSmokeStepAnalysisContext
             () => false,
             () => false,
             () => EmptyMapOverlayState,
+            GetRewardScene,
+            GetEventScene,
+            GetCanonicalNonCombatScene,
             GetCombatContext,
             GetPendingSelection,
             GetRuntimeCombatState,

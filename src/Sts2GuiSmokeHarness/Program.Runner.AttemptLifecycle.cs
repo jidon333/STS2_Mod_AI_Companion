@@ -463,7 +463,8 @@ internal static partial class Program
                 observer,
                 screenshotPath,
                 serializedHistory,
-                combatCardKnowledge);
+                combatCardKnowledge,
+                new WindowBounds(window.Bounds.X, window.Bounds.Y, window.Bounds.Width, window.Bounds.Height));
             var iterationSceneSignature = ComputeSceneSignatureCore(screenshotPath, observer, phase, stepAnalysisContext);
             var iterationFirstSeenScene = isLongRun && !sceneHistoryIndex.HasSeen(iterationSceneSignature);
             var iterationReasoningMode = DetermineReasoningMode(phase, observer, iterationFirstSeenScene);

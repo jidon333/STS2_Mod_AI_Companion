@@ -56,7 +56,7 @@ internal static partial class Program
         var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
         var treasureState = TreasureRoomObserverSignals.TryGetState(observer.Summary);
         var mapOverlayState = context.MapOverlayState;
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history, screenshotPath);
+        var eventScene = context.EventScene;
         var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
         var explicitEventProceedAuthority = eventScene.ExplicitProceedVisible;
         var eventOwnerActive = eventScene.EventForegroundOwned
@@ -67,17 +67,17 @@ internal static partial class Program
         var explicitRestSiteChoiceAuthority = HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
         if (phase == GuiSmokePhase.WaitRunLoad && GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(observer, out var postRunLoadPhase))
         {
-            return BuildAllowedActions(postRunLoadPhase, observer, combatCardKnowledge, screenshotPath, history);
+            return BuildAllowedActionsCore(postRunLoadPhase, observer, combatCardKnowledge, screenshotPath, history, context);
         }
 
         if (phase == GuiSmokePhase.WaitRunLoad && WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(observer.Summary))
         {
-            return BuildAllowedActions(GuiSmokePhase.EnterRun, observer, combatCardKnowledge, screenshotPath, history);
+            return BuildAllowedActionsCore(GuiSmokePhase.EnterRun, observer, combatCardKnowledge, screenshotPath, history, context);
         }
 
         if (phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out var observedPhase))
         {
-            return BuildAllowedActions(observedPhase, observer, combatCardKnowledge, screenshotPath, history);
+            return BuildAllowedActionsCore(observedPhase, observer, combatCardKnowledge, screenshotPath, history, context);
         }
 
         return phase switch
@@ -182,7 +182,7 @@ internal static partial class Program
             return BuildCardSelectionAllowedActions(cardSelectionState);
         }
 
-        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null, context.History, context.ScreenshotPath);
+        var rewardScene = context.RewardScene;
         return BuildRewardAllowedActionsFromState(observer, rewardScene);
     }
 

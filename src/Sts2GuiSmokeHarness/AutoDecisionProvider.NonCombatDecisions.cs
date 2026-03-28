@@ -5,9 +5,9 @@ using static GuiSmokeChoicePrimitiveSupport;
 
 sealed partial class AutoDecisionProvider
 {
-    private static GuiSmokeStepDecision DecideHandleRewards(GuiSmokeStepRequest request)
+    private static GuiSmokeStepDecision DecideHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        var rewardScene = BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        var rewardScene = analysisContext?.RewardScene ?? BuildRewardSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
         var overlayDecision = TryCreateRoomOverlayCleanupDecision(request);
         if (overlayDecision is not null)
         {
@@ -52,7 +52,7 @@ sealed partial class AutoDecisionProvider
         return CreateWaitDecision("waiting for reward ownership release to map/post-room reconciliation", request.Observer.CurrentScreen);
     }
 
-    private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request)
+    private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         if (HasExplicitRestSiteChoiceAuthority(request))
         {
@@ -126,7 +126,7 @@ sealed partial class AutoDecisionProvider
                 : shopDecision;
         }
 
-        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
+        var mapOverlayState = analysisContext?.MapOverlayState ?? GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         if (mapOverlayState.ForegroundVisible)
         {
             GuiSmokeDecisionDebug.SetSceneModel("map-overlay", mapOverlayState.EventBackgroundPresent ? "event-context" : "map-context");
@@ -335,12 +335,12 @@ sealed partial class AutoDecisionProvider
         return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit shop inventory/proceed affordances");
     }
 
-    private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request)
+    private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        var eventScene = analysisContext?.EventScene ?? BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
         if (eventScene.RewardSubstateActive)
         {
-            return DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() });
+            return DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, analysisContext);
         }
 
         var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
@@ -532,7 +532,7 @@ sealed partial class AutoDecisionProvider
 
         if (LooksLikeMapTransitionState(request))
         {
-            return DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() });
+            return DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, analysisContext);
         }
 
         if (!eventOwnerActive)

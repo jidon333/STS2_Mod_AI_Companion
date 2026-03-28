@@ -316,6 +316,10 @@ internal static partial class Program
             var rewardAftermathDecision = AutoDecisionProvider.Decide(rewardAftermathRequest);
             Assert(string.Equals(rewardAftermathDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "HandleRewards should wait/release instead of opening map fallback directly during reward teardown aftermath.");
             Assert(GetPostRewardPhase(rewardAftermathDecision) == GuiSmokePhase.WaitMap, "Reward teardown aftermath should hand off through WaitMap, not keep HandleRewards ownership.");
+            var rewardAftermathAnalysisContext = CreateRequestAnalysisContext(rewardAftermathRequest);
+            Assert(ReferenceEquals(rewardAftermathAnalysisContext.RewardScene, rewardAftermathAnalysisContext.RewardScene), "Request analysis context should cache reward scene truth within the same request.");
+            Assert(ReferenceEquals(rewardAftermathAnalysisContext.EventScene, rewardAftermathAnalysisContext.EventScene), "Request analysis context should cache event scene truth within the same request.");
+            Assert(ReferenceEquals(rewardAftermathAnalysisContext.CanonicalNonCombatScene, rewardAftermathAnalysisContext.CanonicalNonCombatScene), "Request analysis context should cache canonical noncombat scene truth within the same request.");
             var rewardAftermathChooseFirstNodeRequest = new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
@@ -342,6 +346,9 @@ internal static partial class Program
                 null);
             var rewardAftermathMapNodeDecision = AutoDecisionProvider.Decide(rewardAftermathChooseFirstNodeRequest);
             Assert(string.Equals(rewardAftermathMapNodeDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase), "ChooseFirstNode should click the exported travelable map node once reward ownership has released to map.");
+            var rewardAftermathChooseFirstNodeAnalysisContext = CreateRequestAnalysisContext(rewardAftermathChooseFirstNodeRequest);
+            var rewardAftermathChooseFirstNodeAnalysis = AutoDecisionProvider.Analyze(rewardAftermathChooseFirstNodeRequest, analysisContext: rewardAftermathChooseFirstNodeAnalysisContext);
+            Assert(string.Equals(rewardAftermathChooseFirstNodeAnalysis.FinalDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase), "Request-scoped cached noncombat scene truth should preserve ChooseFirstNode exported map-node routing.");
 
             var rewardReleasePendingHistory = new[]
             {

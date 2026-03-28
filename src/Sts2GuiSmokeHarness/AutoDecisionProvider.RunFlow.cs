@@ -51,17 +51,17 @@ sealed partial class AutoDecisionProvider
                ?? CreateWaitDecision("waiting for ironclad node", request.Observer.CurrentScreen);
     }
 
-    private static GuiSmokeStepDecision DecideWaitRunLoad(GuiSmokeStepRequest request)
+    private static GuiSmokeStepDecision DecideWaitRunLoad(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         if (GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(request.Observer, out var postRunLoadPhase))
         {
             return postRunLoadPhase switch
             {
-                GuiSmokePhase.HandleRewards => DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }),
-                GuiSmokePhase.HandleEvent => DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }),
+                GuiSmokePhase.HandleRewards => DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, analysisContext),
+                GuiSmokePhase.HandleEvent => DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, analysisContext),
                 GuiSmokePhase.HandleShop => DecideHandleShop(request with { Phase = GuiSmokePhase.HandleShop.ToString() }),
                 GuiSmokePhase.HandleCombat => DecideHandleCombat(request with { Phase = GuiSmokePhase.HandleCombat.ToString() }),
-                GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }),
+                GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, analysisContext),
                 GuiSmokePhase.ChooseCharacter => DecideChooseCharacter(request with { Phase = GuiSmokePhase.ChooseCharacter.ToString() }),
                 _ => CreateWaitDecision("waiting for post-run-load room state", request.Observer.CurrentScreen),
             };
@@ -75,7 +75,7 @@ sealed partial class AutoDecisionProvider
         return CreateWaitDecision("waiting for root-scene transition and run load readiness", request.Observer.CurrentScreen);
     }
 
-    private static GuiSmokeStepDecision DecideEmbark(GuiSmokeStepRequest request)
+    private static GuiSmokeStepDecision DecideEmbark(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         if (string.Equals(request.Observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
             || string.Equals(request.Observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
@@ -99,11 +99,11 @@ sealed partial class AutoDecisionProvider
         {
             return postEmbarkPhase switch
             {
-                GuiSmokePhase.HandleRewards => DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }),
-                GuiSmokePhase.HandleEvent => DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }),
+                GuiSmokePhase.HandleRewards => DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, analysisContext),
+                GuiSmokePhase.HandleEvent => DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, analysisContext),
                 GuiSmokePhase.HandleShop => DecideHandleShop(request with { Phase = GuiSmokePhase.HandleShop.ToString() }),
                 GuiSmokePhase.HandleCombat => DecideHandleCombat(request with { Phase = GuiSmokePhase.HandleCombat.ToString() }),
-                GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }),
+                GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, analysisContext),
                 _ => CreateWaitDecision("waiting for post-embark room state", request.Observer.CurrentScreen),
             };
         }

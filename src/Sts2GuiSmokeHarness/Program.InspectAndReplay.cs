@@ -421,7 +421,8 @@ internal static partial class Program
             observer,
             request.ScreenshotPath,
             request.History,
-            request.CombatCardKnowledge);
+            request.CombatCardKnowledge,
+            request.WindowBounds);
         var sceneSignature = tracer.Measure(
             "scene-signature",
             () => ComputeSceneSignatureCore(request.ScreenshotPath, observer, phase, analysisContext),

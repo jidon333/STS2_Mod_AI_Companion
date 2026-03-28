@@ -61,7 +61,7 @@ internal static partial class Program
         GuiSmokeStepAnalysisContext? analysisContext)
     {
         var context = analysisContext ?? CreateStepAnalysisContext(phase, observer, screenshotPath, history, combatCardKnowledge);
-        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null, history, screenshotPath);
+        var rewardScene = context.RewardScene;
         var preferRewardProgressionOverMapFallback = rewardScene.RewardForegroundOwned
                                                      && rewardScene.ReleaseStage == RewardReleaseStage.Active
                                                      && rewardScene.ExplicitProceedVisible;
@@ -106,7 +106,7 @@ internal static partial class Program
 
         if (phase == GuiSmokePhase.HandleEvent)
         {
-            var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null, history, screenshotPath);
+            var eventScene = context.EventScene;
             if (eventScene.RewardSubstateActive)
             {
                 return "AI first: this event is currently in a reward substate. Reuse the canonical reward lane, finish reward claim/skip/proceed, and do not fall back to generic event or map routing until reward ownership releases.";
