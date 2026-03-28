@@ -230,4 +230,98 @@ static partial class LongRunArtifacts
             WriteJsonAtomicWithRetry(GetStartupSummaryPath(sessionRoot), updatedSummary, GuiSmokeShared.JsonOptions);
         }
     }
+    private static GuiSmokeGoalContract LoadOrCreateGoalContract(string sessionRoot)
+    {
+        var existing = TryReadJson<GuiSmokeGoalContract>(GetGoalContractPath(sessionRoot));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var fallback = new GuiSmokeGoalContract(
+            Path.GetFileName(sessionRoot),
+            "unknown",
+            "unknown",
+            sessionRoot,
+            now,
+            now,
+            GuiSmokeContractStates.TrustInvalid,
+            GuiSmokeContractStates.MilestoneInProgress,
+            GuiSmokeContractStates.SessionStarting,
+            CreateRunnerOwner(now),
+            now,
+            null,
+            null,
+            GoalCompletionCriteria,
+            GoalOperationalRules);
+        WriteJsonAtomicWithRetry(GetGoalContractPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
+        return fallback;
+    }
+
+    private static GuiSmokePrevalidation LoadOrCreatePrevalidation(string sessionRoot)
+    {
+        var existing = TryReadJson<GuiSmokePrevalidation>(GetPrevalidationPath(sessionRoot));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var fallback = new GuiSmokePrevalidation(
+            Path.GetFileName(sessionRoot),
+            now,
+            now,
+            GameStoppedBeforeDeploy: false,
+            ModsPayloadReconciled: false,
+            DeployIdentityVerified: false,
+            ManualCleanBootVerified: false,
+            GameStopEvidence: null,
+            DeployEvidence: null,
+            ManualCleanBootEvidence: null,
+            Notes: Array.Empty<string>());
+        WriteJsonAtomicWithRetry(GetPrevalidationPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
+        return fallback;
+    }
+
+    private static GuiSmokeStartupSummary LoadOrCreateStartupSummary(string sessionRoot)
+    {
+        var existing = TryReadJson<GuiSmokeStartupSummary>(GetStartupSummaryPath(sessionRoot));
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var fallback = new GuiSmokeStartupSummary(
+            Path.GetFileName(sessionRoot),
+            now,
+            now,
+            LatestStage: null,
+            LatestStatus: null,
+            GameStoppedBeforeDeployRecorded: false,
+            DeployCommandSelected: false,
+            DeployMode: null,
+            SelectedDeployToolPath: null,
+            SelectedDeployReason: null,
+            DeployCommandStarted: false,
+            DeployCommandFinished: false,
+            DeployCommandExitCode: null,
+            DeployCommandTimedOut: false,
+            DeployCommandDurationMs: null,
+            DeployCommandFailureReason: null,
+            DeployVerificationStarted: false,
+            DeployVerificationFinished: false,
+            LaunchIssued: false,
+            WindowDetected: false,
+            ManualCleanBootEvaluationStarted: false,
+            ManualCleanBootEvaluationFinished: false,
+            FirstAttemptCreated: false,
+            FirstScreenshotCaptured: false,
+            FailureStage: null,
+            FailureReason: null);
+        WriteJsonAtomicWithRetry(GetStartupSummaryPath(sessionRoot), fallback, GuiSmokeShared.JsonOptions);
+        return fallback;
+    }
+
 }
