@@ -54,7 +54,7 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        if (HasExplicitRestSiteChoiceAuthority(request))
+        if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(request))
         {
             GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(BuildExplicitRestSiteCandidateLabels(request.Observer));

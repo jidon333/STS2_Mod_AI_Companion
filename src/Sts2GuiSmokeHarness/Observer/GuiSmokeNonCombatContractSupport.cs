@@ -8,6 +8,59 @@ using static GuiSmokeChoicePrimitiveSupport;
 
 static class GuiSmokeNonCombatContractSupport
 {
+    public static bool HasExplicitRestSiteChoiceAuthority(GuiSmokeStepRequest request)
+    {
+        return HasRestSiteAuthority(request.Observer)
+               && RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(request.Observer)
+               && !RestSiteObserverSignals.IsRestSiteSmithUpgradeState(request.Observer)
+               && !AutoRestSiteCardGridAnalyzer.Analyze(request.ScreenshotPath).HasSelectableCard;
+    }
+
+    public static bool HasRecentRestSiteExplicitClick(IReadOnlyList<GuiSmokeHistoryEntry> history, string? targetLabel)
+    {
+        if (!IsExplicitRestSiteOptionTarget(targetLabel))
+        {
+            return false;
+        }
+
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (!TryParseRestSiteActionMetadata(entry.Metadata, out var metadata))
+            {
+                continue;
+            }
+
+            return string.Equals(metadata.Kind, "explicit-click", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(metadata.TargetLabel, targetLabel, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    public static bool IsExplicitRestSiteOptionTarget(string? targetLabel)
+    {
+        return string.Equals(targetLabel, "rest site: rest", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(targetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(targetLabel, "rest site: hatch", StringComparison.OrdinalIgnoreCase)
+               || (!string.IsNullOrWhiteSpace(targetLabel)
+                   && targetLabel.StartsWith("rest site: option:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsMapFallbackBlockedByForegroundAuthority(GuiSmokeStepRequest request)
+    {
+        if (RewardObserverSignals.IsTerminalRunBoundary(request.Observer)
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)
+            || CardSelectionObserverSignals.TryGetState(request.Observer) is not null)
+        {
+            return true;
+        }
+
+        return NonCombatForegroundOwnership.Resolve(request.Observer) is
+            not NonCombatForegroundOwner.Unknown
+            and not NonCombatForegroundOwner.Map;
+    }
+
     public static bool LooksLikeRestSiteState(ObserverSummary observer)
     {
         if (MapAuthorityOutranksStaleRestSiteResidue(observer))
@@ -147,6 +200,13 @@ static class GuiSmokeNonCombatContractSupport
         return allowedAction.Length > 0;
     }
 
+    private static bool HasRestSiteAuthority(ObserverSummary observer)
+    {
+        return string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
+               || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer);
+    }
+
     private static bool HasMapCurrentActiveScreen(ObserverSummary observer)
     {
         return observer.Meta.TryGetValue("mapCurrentActiveScreen", out var value)
@@ -211,5 +271,27 @@ static class GuiSmokeNonCombatContractSupport
 
         bounds = new RectangleF(x, y, width, height);
         return true;
+    }
+
+    private static bool TryParseRestSiteActionMetadata(string? metadata, out RestSiteActionMetadata parsed)
+    {
+        parsed = default!;
+        if (string.IsNullOrWhiteSpace(metadata))
+        {
+            return false;
+        }
+
+        try
+        {
+            parsed = JsonSerializer.Deserialize<RestSiteActionMetadata>(metadata, GuiSmokeShared.JsonOptions)!;
+            return parsed is not null
+                   && !string.IsNullOrWhiteSpace(parsed.Kind)
+                   && !string.IsNullOrWhiteSpace(parsed.TargetLabel)
+                   && !string.IsNullOrWhiteSpace(parsed.Fingerprint);
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

@@ -90,7 +90,7 @@ sealed partial class AutoDecisionProvider
         var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
         var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
 
-        if (HasExplicitRestSiteChoiceAuthority(request))
+        if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(request))
         {
             builder.AddSuppressed("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
             builder.AddSuppressed("click first reachable node", "rest-site-owner-active-preserves-room-lane");
@@ -118,7 +118,7 @@ sealed partial class AutoDecisionProvider
             return builder.Build(CreateWaitDecision("waiting for an explicit rest-site choice", request.Observer.CurrentScreen), actualDecision);
         }
 
-        if (LooksLikeRestSiteState(request.Observer)
+        if (GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(request.Observer)
             && TryCreateRestSiteUpgradeDecision(request) is { } observerUpgradeDecision)
         {
             builder.AddSuppressed("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
@@ -137,7 +137,7 @@ sealed partial class AutoDecisionProvider
         }
 
         if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(request.Observer)
-            && HasRecentRestSiteExplicitClick(request, "rest site: smith"))
+            && GuiSmokeNonCombatContractSupport.HasRecentRestSiteExplicitClick(request.History, "rest site: smith"))
         {
             builder.AddSuppressed("click exported reachable node", "rest-site-upgrade-observer-state-suppresses-map-routing");
             builder.AddSuppressed("click first reachable node", "rest-site-upgrade-observer-state-suppresses-map-routing");

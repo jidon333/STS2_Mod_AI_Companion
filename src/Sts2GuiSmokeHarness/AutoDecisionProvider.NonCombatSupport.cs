@@ -7,7 +7,7 @@ sealed partial class AutoDecisionProvider
 {
     private static (string? ForegroundKind, string? BackgroundKind) DescribeForegroundBackground(GuiSmokeStepRequest request)
     {
-        if (HasExplicitRestSiteChoiceAuthority(request))
+        if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(request))
         {
             return ("rest-site", "map");
         }
@@ -68,7 +68,7 @@ sealed partial class AutoDecisionProvider
             return (treasureScene.ForegroundDebugKind, treasureScene.BackgroundDebugKind);
         }
 
-        if (LooksLikeRestSiteState(request.Observer))
+        if (GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(request.Observer))
         {
             return ("rest-site", request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase) ? "map" : null);
         }
@@ -84,21 +84,6 @@ sealed partial class AutoDecisionProvider
         }
 
         return (request.Observer.CurrentScreen, request.Observer.VisibleScreen);
-    }
-
-    private static bool HasExplicitRestSiteChoiceAuthority(GuiSmokeStepRequest request)
-    {
-        return HasRestSiteAuthority(request.Observer)
-               && HasExplicitRestSiteChoiceAffordance(request.Observer)
-               && !RestSiteObserverSignals.IsRestSiteSmithUpgradeState(request.Observer)
-               && !AutoRestSiteCardGridAnalyzer.Analyze(request.ScreenshotPath).HasSelectableCard;
-    }
-
-    private static bool HasRestSiteAuthority(ObserverSummary observer)
-    {
-        return string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
-               || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer);
     }
 
     private static string[] BuildExplicitRestSiteCandidateLabels(ObserverSummary observer)
@@ -493,8 +478,8 @@ sealed partial class AutoDecisionProvider
 
     private static RestSiteExplicitChoiceRepeatState GetRestSiteExplicitChoiceRepeatState(GuiSmokeStepRequest request, string targetLabel)
     {
-        if (!HasExplicitRestSiteChoiceAuthority(request)
-            || !IsExplicitRestSiteOptionTarget(targetLabel))
+        if (!GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(request)
+            || !GuiSmokeNonCombatContractSupport.IsExplicitRestSiteOptionTarget(targetLabel))
         {
             return RestSiteExplicitChoiceRepeatState.None;
         }
@@ -527,41 +512,10 @@ sealed partial class AutoDecisionProvider
         return RestSiteExplicitChoiceRepeatState.None;
     }
 
-    private static bool HasRecentRestSiteExplicitClick(GuiSmokeStepRequest request, string? targetLabel)
-    {
-        if (!IsExplicitRestSiteOptionTarget(targetLabel))
-        {
-            return false;
-        }
-
-        for (var index = request.History.Count - 1; index >= 0; index -= 1)
-        {
-            var entry = request.History[index];
-            if (!TryParseRestSiteActionMetadata(entry.Metadata, out var metadata))
-            {
-                continue;
-            }
-
-            return string.Equals(metadata.Kind, "explicit-click", StringComparison.OrdinalIgnoreCase)
-                   && string.Equals(metadata.TargetLabel, targetLabel, StringComparison.OrdinalIgnoreCase);
-        }
-
-        return false;
-    }
-
-    private static bool IsExplicitRestSiteOptionTarget(string? targetLabel)
-    {
-        return string.Equals(targetLabel, "rest site: rest", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "rest site: hatch", StringComparison.OrdinalIgnoreCase)
-               || (!string.IsNullOrWhiteSpace(targetLabel)
-                   && targetLabel.StartsWith("rest site: option:", StringComparison.OrdinalIgnoreCase));
-    }
-
     private static string? BuildRestSiteHistoryMetadata(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
     {
-        if (!HasExplicitRestSiteChoiceAuthority(request)
-            || !IsExplicitRestSiteOptionTarget(decision.TargetLabel))
+        if (!GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(request)
+            || !GuiSmokeNonCombatContractSupport.IsExplicitRestSiteOptionTarget(decision.TargetLabel))
         {
             return null;
         }
@@ -611,21 +565,6 @@ sealed partial class AutoDecisionProvider
     public static string? BuildRestSiteHistoryMetadataForDecision(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
     {
         return BuildRestSiteHistoryMetadata(request, decision);
-    }
-
-    public static bool HasRecentRestSiteExplicitClickForRequest(GuiSmokeStepRequest request, string? targetLabel)
-    {
-        return HasRecentRestSiteExplicitClick(request, targetLabel);
-    }
-
-    public static bool HasExplicitRestSiteChoiceAuthorityForRequest(GuiSmokeStepRequest request)
-    {
-        return HasExplicitRestSiteChoiceAuthority(request);
-    }
-
-    public static bool IsExplicitRestSiteOptionTargetLabel(string? targetLabel)
-    {
-        return IsExplicitRestSiteOptionTarget(targetLabel);
     }
 
     private static string ToCandidateLabel(GuiSmokeStepDecision? decision, string fallback)
@@ -723,7 +662,7 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryFindFirstReachableMapNodeDecision(GuiSmokeStepRequest request)
     {
-        if (IsMapFallbackBlockedByForegroundAuthority(request)
+        if (GuiSmokeNonCombatContractSupport.IsMapFallbackBlockedByForegroundAuthority(request)
             || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click first reachable node"))
         {
             return null;
@@ -752,7 +691,7 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateExportedReachableMapPointDecision(GuiSmokeStepRequest request)
     {
-        if (IsMapFallbackBlockedByForegroundAuthority(request)
+        if (GuiSmokeNonCombatContractSupport.IsMapFallbackBlockedByForegroundAuthority(request)
             || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click exported reachable node"))
         {
             return null;
@@ -790,7 +729,7 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateMapBackNavigationDecision(GuiSmokeStepRequest request)
     {
-        if (IsMapFallbackBlockedByForegroundAuthority(request)
+        if (GuiSmokeNonCombatContractSupport.IsMapFallbackBlockedByForegroundAuthority(request)
             || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click map back"))
         {
             return null;
@@ -1032,7 +971,7 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateRestSiteUpgradeDecision(GuiSmokeStepRequest request)
     {
-        if (!LooksLikeRestSiteState(request.Observer))
+        if (!GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(request.Observer))
         {
             return null;
         }
@@ -1186,23 +1125,9 @@ sealed partial class AutoDecisionProvider
         };
     }
 
-    private static bool IsMapFallbackBlockedByForegroundAuthority(GuiSmokeStepRequest request)
-    {
-        if (RewardObserverSignals.IsTerminalRunBoundary(request.Observer)
-            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(request.Observer)
-            || CardSelectionObserverSignals.TryGetState(request.Observer) is not null)
-        {
-            return true;
-        }
-
-        return NonCombatForegroundOwnership.Resolve(request.Observer) is
-            not NonCombatForegroundOwner.Unknown
-            and not NonCombatForegroundOwner.Map;
-    }
-
     private static GuiSmokeStepDecision? TryFindVisibleMapAdvanceDecision(GuiSmokeStepRequest request)
     {
-        if (IsMapFallbackBlockedByForegroundAuthority(request)
+        if (GuiSmokeNonCombatContractSupport.IsMapFallbackBlockedByForegroundAuthority(request)
             || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click visible map advance"))
         {
             return null;
@@ -1409,14 +1334,9 @@ sealed partial class AutoDecisionProvider
                || node.Label.Contains("Map", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool LooksLikeRestSiteState(ObserverSummary observer)
-    {
-        return GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer);
-    }
-
     private static bool LooksLikeMapTransitionState(GuiSmokeStepRequest request)
     {
-        if (IsMapFallbackBlockedByForegroundAuthority(request))
+        if (GuiSmokeNonCombatContractSupport.IsMapFallbackBlockedByForegroundAuthority(request))
         {
             return false;
         }

@@ -402,9 +402,9 @@ internal static partial class Program
 
         if (!string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase)
             || !IsRestSitePostClickDecisionRisk(decision.DecisionRisk)
-            || !AutoDecisionProvider.IsExplicitRestSiteOptionTargetLabel(decision.TargetLabel)
-            || (!AutoDecisionProvider.HasExplicitRestSiteChoiceAuthorityForRequest(request)
-                && !AutoDecisionProvider.HasRecentRestSiteExplicitClickForRequest(request, decision.TargetLabel)))
+            || !GuiSmokeNonCombatContractSupport.IsExplicitRestSiteOptionTarget(decision.TargetLabel)
+            || (!GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(request)
+                && !GuiSmokeNonCombatContractSupport.HasRecentRestSiteExplicitClick(request.History, decision.TargetLabel)))
         {
             return false;
         }
