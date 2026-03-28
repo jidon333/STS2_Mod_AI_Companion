@@ -34,7 +34,7 @@ repo root:
 - build / `Sts2ModKit.SelfTest` / `Sts2GuiSmokeHarness -- self-test` / `replay-test`는 green
 - `replay-parity-test`는 current `main` 기준 green
 - `WaitRunLoad` resumed reward/map mixed handoff bug는 이미 닫힘
-- latest valid fresh live root는 [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1)이고 reward aftermath mixed-state closure와 combat EndTurn pre-actuation drift closure가 유지된 채 representative run은 `max-steps-reached:60`까지 진행함
+- latest valid fresh live root는 [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)이고 request-scoped noncombat scene cache work unit이 reward aftermath mixed-state closure와 combat EndTurn continuity를 흔들지 않은 채 representative run은 `max-steps-reached:60`까지 진행함
 
 이번 세션 목표
 
@@ -64,9 +64,9 @@ repo root:
 canonical current signal
 
 - latest valid live root:
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/startup-summary.json
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/session-summary.json
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/attempts/0001/run.log
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/startup-summary.json
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/session-summary.json
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/attempts/0001/run.log
 
 시작 보고 요구
 

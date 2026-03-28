@@ -56,11 +56,11 @@ coverage status 의미:
 | `COMBAT-02` | `HandleCombat` | card select | green | combat opener self-test (`combat select attack slot 1`) | select-before-target preserved |
 | `COMBAT-03` | `HandleCombat` | target lane | partial | `Analysis/CombatTargetabilitySupport.cs`와 `Program.SelfTests.CombatContracts.TargetSelection.cs` | lane exists, broader parity matrix thin |
 | `COMBAT-04` | `HandleCombat` | cancel blocked selection | green | old blocker replay `0167.request.json` family, commit-era closure evidence referenced in current conversation | explicit cancel lane is required contract |
-| `COMBAT-05` | `HandleCombat` | end-turn pre-ack | green | current code barriers + self-tests + fresh live root [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1) | `auto-end turn` now survives pre-actuation drift and sends `key=E` |
-| `COMBAT-06` | `HandleCombat` | acknowledged transit wait | green | fresh live root [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1) plus `Program.SelfTests.CombatContracts.ParityAndBarriers.cs` | barrier reason now reaches acknowledged transit and waits until next-round reopen |
+| `COMBAT-05` | `HandleCombat` | end-turn pre-ack | green | current code barriers + self-tests + fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) | `auto-end turn` now survives pre-actuation drift and sends `key=E` |
+| `COMBAT-06` | `HandleCombat` | acknowledged transit wait | green | fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) plus `Program.SelfTests.CombatContracts.ParityAndBarriers.cs` | barrier reason now reaches acknowledged transit and waits until next-round reopen |
 | `COMBAT-07` | `HandleCombat` | enemy-turn closed play phase | partial | legitimate wait semantics exist in current code and self-tests, but current-main replay/live evidence is thin | keep wait semantics explicit |
-| `COMBAT-08` | `HandleCombat` | next-round reopen | green | fresh live root [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1) | repeated `EndTurn` acknowledged transit reopens into new player-turn actions (`2턴 종료` -> `3턴 종료` -> `4턴 종료` ...) |
-| `COMBAT-09` | post-wait recapture | capture/request continuity | partial | `Program.SelfTests.CaptureReplay.cs` bounded capture assertions + fresh current-main root [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1) | blocker는 아니지만 legitimate wait -> next capture/failure live proof를 더 두껍게 만들 필요가 있음 |
+| `COMBAT-08` | `HandleCombat` | next-round reopen | green | fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) | repeated `EndTurn` acknowledged transit reopens into new player-turn actions (`2턴 종료` -> `3턴 종료` -> `4턴 종료` -> `5턴 종료` ...) |
+| `COMBAT-09` | post-wait recapture | capture/request continuity | partial | `Program.SelfTests.CaptureReplay.cs` bounded capture assertions + fresh current-main root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) | blocker는 아니지만 legitimate wait -> next capture/failure live proof를 더 두껍게 만들 필요가 있음 |
 | `COMBAT-10` | combat -> rewards | room handoff | green | [PROJECT_STATUS.md](./PROJECT_STATUS.md) long-run continuity roots, repeated combat/reward continuity | strong long-run evidence in status doc |
 
 ## Event / Ancient / Treasure / Rest
@@ -119,7 +119,7 @@ coverage status 의미:
 - latest parity baseline:
   - green
 - latest valid live root:
-  - [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1)
+  - [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
 
 ### Current-Main Self-Test Families
 

@@ -46,9 +46,9 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
    - status: green
    - 해석: old `reward-aftermath-map-handoff` known red는 current `main`에서 닫혔다
 2. latest valid fresh live root
-   - root: [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1)
-   - result: valid root, reward aftermath closure 유지, `HandleCombat` `step=17`의 `auto-end turn`이 실제 `key sent key=E`로 전송되고 run은 `max-steps-reached:60`까지 진행했다
-   - shape: old `combat-barrier-wait-plateau`는 재현되지 않았고, barrier reason은 `end turn acknowledged; waiting for the next round reopen`으로 바뀐 뒤 다음 player-turn reopen으로 정상 복귀했다
+   - root: [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
+   - result: valid root, request-scoped noncombat scene cache가 reward aftermath / mixed-overlay / combat continuity를 흔들지 않은 채 run은 `max-steps-reached:60`까지 진행했다
+   - shape: old `combat-barrier-wait-plateau`는 재현되지 않았고, barrier reason은 계속 `end turn acknowledged; waiting for the next round reopen`으로 유지된 뒤 다음 player-turn reopen으로 정상 복귀했다
 
 즉 현재 질문은 더 이상
 
@@ -105,13 +105,13 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - fresh reward/map closure root:
   - [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
 - latest valid live root:
-  - [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1)
+  - [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
 - latest live startup summary:
-  - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/startup-summary.json)
+  - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/startup-summary.json)
 - latest live session summary:
-  - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/session-summary.json)
+  - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/session-summary.json)
 - latest live run log:
-  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/attempts/0001/run.log)
+  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/attempts/0001/run.log)
 - parity fixture now green:
   - `tests/replay-fixtures/m6-parity/reward-map-handoff.request.json`
 

@@ -112,14 +112,15 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ### 2. latest valid fresh live root
 
-- root: [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1)
-- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/startup-summary.json)
-- session summary: [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/session-summary.json)
-- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/attempts/0001/run.log)
+- root: [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
+- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/startup-summary.json)
+- session summary: [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/session-summary.json)
+- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/attempts/0001/run.log)
 
 확정 사실:
 
 - root는 valid다
+- request-scoped noncombat scene cache work unit은 reward/event/map mixed-state routing을 흔들지 않았다
 - `WaitRunLoad -> HandleRewards`는 이미 정상 handoff된다
 - reward aftermath `step=15`는 여전히 `exported reachable map node`로 진행한다
 - mixed-state noncombat cleanup은 regression 없이 유지됐다

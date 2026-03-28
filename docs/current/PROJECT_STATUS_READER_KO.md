@@ -54,9 +54,10 @@ WaitMap / ChooseFirstNode / map-node routing family는
 current main에서 닫혔다
 ```
 
-최신 fresh live root는 [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1) 입니다.
+최신 fresh live root는 [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) 입니다.
 
 - 이 root는 valid입니다.
+- request-scoped noncombat scene cache work unit이 reward aftermath / mixed-overlay / combat continuity를 흔들지 않았습니다.
 - reward/map mixed-state cleanup은 regression 없이 통과했습니다.
 - `HandleCombat` `step=17`의 `auto-end turn`은 실제 `key sent key=E`로 전송됐고, old `combat-barrier-wait-plateau`는 재현되지 않았습니다.
 - run은 `max-steps-reached:60`까지 진행했습니다.
