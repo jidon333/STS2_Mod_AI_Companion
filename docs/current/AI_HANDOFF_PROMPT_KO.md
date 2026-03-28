@@ -34,13 +34,13 @@ repo root:
 - build / `Sts2ModKit.SelfTest` / `Sts2GuiSmokeHarness -- self-test` / `replay-test`는 green
 - `replay-parity-test`는 current `main` 기준 green
 - `WaitRunLoad` resumed reward/map mixed handoff bug는 이미 닫힘
-- latest valid fresh live root는 [mixed-state-guard-cleanup-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1)이고 reward aftermath mixed-state closure는 유지된 채 first blocker가 `combat-barrier-wait-plateau`로 이동해 있음
+- latest valid fresh live root는 [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1)이고 reward aftermath mixed-state closure와 combat EndTurn pre-actuation drift closure가 유지된 채 representative run은 `max-steps-reached:60`까지 진행함
 
 이번 세션 목표
 
 1. old `Program.cs` monolith 전제를 버리고 current owner 파일 기준으로 시작
 2. 구조 refactor reopen 금지
-3. semantic follow-up이 필요하면 combat / lifecycle coverage frontier만 좁게 다룰 것
+3. semantic follow-up이 필요하면 combat post-wait recapture / capture-boundary / lifecycle coverage frontier만 좁게 다룰 것
 4. noncombat mixed-state guard cleanup은 reopen 금지
 5. new parallel heuristic family 추가 금지
 6. acceptance 통과 시 바로 커밋
@@ -64,9 +64,9 @@ repo root:
 canonical current signal
 
 - latest valid live root:
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/startup-summary.json
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/attempts/0001/failure-summary.json
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/attempts/0001/run.log
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/startup-summary.json
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/session-summary.json
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/attempts/0001/run.log
 
 시작 보고 요구
 

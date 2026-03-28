@@ -111,10 +111,10 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ### 2. latest valid fresh live root
 
-- root: [mixed-state-guard-cleanup-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1)
-- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/startup-summary.json)
-- failure: [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/attempts/0001/failure-summary.json)
-- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/mixed-state-guard-cleanup-20260328-live1/attempts/0001/run.log)
+- root: [endturn-observer-drift-fix-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1)
+- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/startup-summary.json)
+- session summary: [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/session-summary.json)
+- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endturn-observer-drift-fix-20260328-live1/attempts/0001/run.log)
 
 확정 사실:
 
@@ -122,14 +122,16 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `WaitRunLoad -> HandleRewards`는 이미 정상 handoff된다
 - reward aftermath `step=15`는 여전히 `exported reachable map node`로 진행한다
 - mixed-state noncombat cleanup은 regression 없이 유지됐다
-- current first blocker는 `HandleCombat` `combat-barrier-wait-plateau`다
+- `HandleCombat` `step=17`의 `auto-end turn`은 실제 `key sent key=E`로 전송된다
+- old `combat-barrier-wait-plateau`는 재현되지 않는다
+- run은 `max-steps-reached:60`까지 진행했고 current first blocker는 없다
 
 ## 다음 세션의 기본 목표
 
 다음 semantic work unit이 있다면 목표는 이 하나다.
 
 ```text
-combat barrier / post-wait / lifecycle frontier를
+combat post-wait recapture / capture-boundary / lifecycle frontier를
 새 owner 구조 안에서 좁게 다룬다
 ```
 
