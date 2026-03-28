@@ -189,6 +189,22 @@ public sealed class LiveExportStateTracker
             warnings = MergeWarnings(warnings, new[] { $"state-regression: combat-conflict-with-screen:{screen}" });
         }
         var meta = ApplyScreenMeta(MergeMeta(previous.Meta, observation.Meta), previous.Meta, observation, screen);
+        var rawObservedScreen = ReadMetaValue(meta, "rawObservedScreen")
+                                ?? ReadMetaValue(observation.Meta, "rawObservedScreen")
+                                ?? observation.Screen
+                                ?? screen;
+        var compatibilityLogicalScreen = ReadMetaValue(meta, "compatLogicalScreen")
+                                         ?? ReadMetaValue(meta, "logicalScreen")
+                                         ?? screen;
+        var compatibilityVisibleScreen = ReadMetaValue(meta, "compatVisibleScreen")
+                                         ?? ReadMetaValue(meta, "visibleScreen")
+                                         ?? compatibilityLogicalScreen;
+        var compatibilitySceneReady = ReadMetaBool(meta, "compatSceneReady")
+                                      ?? ReadMetaBool(meta, "sceneReady");
+        var compatibilitySceneAuthority = ReadMetaValue(meta, "compatSceneAuthority")
+                                          ?? ReadMetaValue(meta, "sceneAuthority");
+        var compatibilitySceneStability = ReadMetaValue(meta, "compatSceneStability")
+                                          ?? ReadMetaValue(meta, "sceneStability");
 
         var recentChanges = previous.RecentChanges
             .Concat(DescribeDiff(previous, screen, player, deck, relics, potions, choices, observation.TriggerKind))
@@ -213,6 +229,12 @@ public sealed class LiveExportStateTracker
             Warnings = warnings,
             Encounter = encounter,
             Meta = meta,
+            RawObservedScreen = rawObservedScreen,
+            CompatibilityLogicalScreen = compatibilityLogicalScreen,
+            CompatibilityVisibleScreen = compatibilityVisibleScreen,
+            CompatibilitySceneReady = compatibilitySceneReady,
+            CompatibilitySceneAuthority = compatibilitySceneAuthority,
+            CompatibilitySceneStability = compatibilitySceneStability,
         };
     }
 
@@ -478,13 +500,17 @@ public sealed class LiveExportStateTracker
         LiveExportObservation observation,
         string logicalScreen)
     {
+        var rawObservedScreen = ReadMetaValue(mergedMeta, "rawObservedScreen")
+                                ?? ReadMetaValue(mergedMeta, "screen")
+                                ?? observation.Screen
+                                ?? logicalScreen;
         var visibleScreen = ResolveVisibleScreen(previousMeta, mergedMeta, observation, logicalScreen);
         var sceneReady = ResolveSceneReady(logicalScreen, visibleScreen, observation, mergedMeta);
         var sceneAuthority = ResolveSceneAuthority(observation, mergedMeta);
         var sceneStability = ResolveSceneStability(logicalScreen, sceneReady, mergedMeta);
         var updated = new Dictionary<string, string?>(mergedMeta, StringComparer.OrdinalIgnoreCase)
         {
-            ["screen"] = logicalScreen,
+            ["screen"] = rawObservedScreen,
             ["logicalScreen"] = logicalScreen,
             ["flowScreen"] = logicalScreen,
             ["visibleScreen"] = visibleScreen,
@@ -492,14 +518,14 @@ public sealed class LiveExportStateTracker
             ["sceneReady"] = sceneReady ? "true" : "false",
             ["sceneAuthority"] = sceneAuthority,
             ["sceneStability"] = sceneStability,
+            ["compatLogicalScreen"] = logicalScreen,
+            ["compatVisibleScreen"] = visibleScreen,
+            ["compatSceneReady"] = sceneReady ? "true" : "false",
+            ["compatSceneAuthority"] = sceneAuthority,
+            ["compatSceneStability"] = sceneStability,
             ["readyMarker"] = sceneReady ? observation.TriggerKind : "waiting-for-stable-scene",
+            ["rawObservedScreen"] = rawObservedScreen,
         };
-
-        if (mergedMeta.TryGetValue("screen", out var rawObservedScreen)
-            && !string.IsNullOrWhiteSpace(rawObservedScreen))
-        {
-            updated["rawObservedScreen"] = rawObservedScreen;
-        }
 
         return updated;
     }
@@ -660,6 +686,20 @@ public sealed class LiveExportStateTracker
     private static string Coalesce(params string?[] values)
     {
         return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
+    }
+
+    private static string? ReadMetaValue(IReadOnlyDictionary<string, string?> meta, string key)
+    {
+        return meta.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null;
+    }
+
+    private static bool? ReadMetaBool(IReadOnlyDictionary<string, string?> meta, string key)
+    {
+        return meta.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed)
+            ? parsed
+            : null;
     }
 
     private string MergeScreen(LiveExportSnapshot previous, LiveExportObservation observation)

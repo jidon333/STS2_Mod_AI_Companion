@@ -35,27 +35,48 @@ sealed class ObserverSnapshotReader
         var eventLines = TryReadTail(_liveLayout.EventsPath, 10);
 
         var inventorySceneType = TryReadString(inventoryDocument?.RootElement, "sceneType");
-        var currentScreen = TryReadString(stateDocument?.RootElement, "currentScreen")
-                            ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen")
-                            ?? TryReadNestedString(stateDocument?.RootElement, "meta", "logicalScreen")
-                            ?? TryReadNestedString(stateDocument?.RootElement, "meta", "flowScreen")
-                            ?? inventorySceneType;
+        var inventoryRawSceneType = TryReadString(inventoryDocument?.RootElement, "rawSceneType")
+                                    ?? inventorySceneType;
+        var inventoryCompatibilitySceneType = TryReadString(inventoryDocument?.RootElement, "compatibilitySceneType")
+                                              ?? inventorySceneType;
+        var compatibilityCurrentScreen = TryReadString(stateDocument?.RootElement, "currentScreen")
+                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatLogicalScreen")
+                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "logicalScreen")
+                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "flowScreen")
+                                         ?? inventoryCompatibilitySceneType;
+        var rawCurrentScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "rawObservedScreen")
+                               ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen")
+                               ?? inventoryRawSceneType
+                               ?? compatibilityCurrentScreen;
+        var currentScreen = compatibilityCurrentScreen;
         var snapshotVersion = TryReadInt64(stateDocument?.RootElement, "version");
-        var visibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "visibleScreen")
-                            ?? currentScreen
-                            ?? inventorySceneType;
+        var compatibilityVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatVisibleScreen")
+                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "visibleScreen")
+                                         ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScene")
+                                         ?? currentScreen
+                                         ?? inventoryCompatibilitySceneType;
+        var visibleScreen = compatibilityVisibleScreen;
         var inCombat = TryReadBool(stateDocument?.RootElement, "encounter", "inCombat");
         var capturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt")
                          ?? TryReadDateTimeOffset(inventoryDocument?.RootElement, "capturedAt");
         var inventoryId = inventoryDocument is null
             ? null
             : TryReadString(inventoryDocument.RootElement, "inventoryId");
-        var sceneReady = TryReadNestedBool(stateDocument?.RootElement, "meta", "sceneReady")
-                         ?? TryReadBool(inventoryDocument?.RootElement, "sceneReady");
-        var sceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "sceneAuthority")
-                             ?? TryReadString(inventoryDocument?.RootElement, "sceneAuthority");
-        var sceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "sceneStability")
-                             ?? TryReadString(inventoryDocument?.RootElement, "sceneStability");
+        var compatibilitySceneReady = TryReadNestedBool(stateDocument?.RootElement, "meta", "compatSceneReady")
+                                      ?? TryReadNestedBool(stateDocument?.RootElement, "meta", "sceneReady")
+                                      ?? TryReadBool(inventoryDocument?.RootElement, "compatibilitySceneReady")
+                                      ?? TryReadBool(inventoryDocument?.RootElement, "sceneReady");
+        var sceneReady = compatibilitySceneReady;
+        var compatibilitySceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneAuthority")
+                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "sceneAuthority")
+                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneAuthority")
+                                          ?? TryReadString(inventoryDocument?.RootElement, "sceneAuthority");
+        var sceneAuthority = compatibilitySceneAuthority;
+        var compatibilitySceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneStability")
+                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "sceneStability")
+                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneStability")
+                                          ?? TryReadString(inventoryDocument?.RootElement, "sceneStability");
+        var sceneStability = compatibilitySceneStability;
         var sceneEpisodeId = TryReadString(inventoryDocument?.RootElement, "sceneEpisodeId")
                              ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen-episode");
         var encounterKind = TryReadNestedString(stateDocument?.RootElement, "encounter", "kind");
@@ -71,6 +92,12 @@ sealed class ObserverSnapshotReader
             new ObserverSummary(currentScreen, visibleScreen, inCombat, capturedAt, inventoryId, sceneReady, sceneAuthority, sceneStability, sceneEpisodeId, encounterKind, choiceExtractorPath, playerCurrentHp, playerMaxHp, playerEnergy, currentChoices, eventLines ?? Array.Empty<string>(), ReadActionNodes(inventoryDocument), ReadChoices(stateDocument), combatHand)
             {
                 SnapshotVersion = snapshotVersion,
+                RawCurrentScreen = rawCurrentScreen,
+                CompatibilityCurrentScreen = compatibilityCurrentScreen,
+                CompatibilityVisibleScreen = compatibilityVisibleScreen,
+                CompatibilitySceneReady = compatibilitySceneReady,
+                CompatibilitySceneAuthority = compatibilitySceneAuthority,
+                CompatibilitySceneStability = compatibilitySceneStability,
                 Meta = meta,
             },
             stateDocument,

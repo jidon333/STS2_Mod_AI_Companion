@@ -109,6 +109,18 @@ public sealed record LiveExportSnapshot(
     LiveExportEncounterSummary? Encounter,
     IReadOnlyDictionary<string, string?> Meta)
 {
+    public string? RawObservedScreen { get; init; }
+
+    public string? CompatibilityLogicalScreen { get; init; }
+
+    public string? CompatibilityVisibleScreen { get; init; }
+
+    public bool? CompatibilitySceneReady { get; init; }
+
+    public string? CompatibilitySceneAuthority { get; init; }
+
+    public string? CompatibilitySceneStability { get; init; }
+
     public static LiveExportSnapshot CreateEmpty(string runId)
     {
         return new LiveExportSnapshot(

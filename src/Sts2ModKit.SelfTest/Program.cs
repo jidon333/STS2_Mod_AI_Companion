@@ -54,9 +54,11 @@ Run("runtime reflection reports filtered mixed-aftermath map-point diagnostics",
 Run("runtime reflection exports explicit ancient dialogue advance before Neow options", TestRuntimeReflectionAncientEventDialogueExport, failures);
 Run("runtime reflection exports explicit ancient option buttons and suppresses pseudo-choice duplicates", TestRuntimeReflectionAncientEventOptionExport, failures);
 Run("runtime reflection marks ancient post-choice completion buttons explicitly", TestRuntimeReflectionAncientEventCompletionExport, failures);
+Run("runtime reflection exports generic event proceed semantics from EventOption.IsProceed", TestRuntimeReflectionGenericEventProceedExport, failures);
 Run("runtime reflection normalizes ancient mixed post-proceed ownership to map lane", TestRuntimeReflectionAncientMixedPostProceedOwnershipNormalization, failures);
 Run("runtime reflection keeps map owner when post-proceed map surface is pending", TestRuntimeReflectionAncientMixedPostProceedMapPending, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
+Run("tracker and inventory preserve raw and compatibility screen provenance", TestTrackerAndInventoryPreserveScreenProvenance, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
@@ -1941,6 +1943,58 @@ static void TestRuntimeReflectionAncientEventCompletionExport()
         "Ancient post-choice proceed should preserve the canonical Option.IsProceed role.");
 }
 
+static void TestRuntimeReflectionGenericEventProceedExport()
+{
+    var proceedButton = new FakeNEventOptionButton(
+        0,
+        "계속",
+        "[gold][b]계속[/b][/gold]",
+        460,
+        942,
+        enabled: true,
+        isProceed: true);
+    var eventRoom = new FakeNEventRoom
+    {
+        Visible = true,
+        Children = new object[] { proceedButton },
+    };
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = eventRoom,
+            },
+            eventRoom,
+            proceedButton,
+        },
+        "event");
+
+    Assert(observation.Meta.TryGetValue("choiceExtractorPath", out var extractorPath)
+           && string.Equals(extractorPath, "event", StringComparison.OrdinalIgnoreCase),
+        "Generic event proceed should remain on the explicit event extractor path.");
+    Assert(observation.Meta.TryGetValue("eventProceedOptionVisible", out var proceedVisible)
+           && string.Equals(proceedVisible, "true", StringComparison.OrdinalIgnoreCase),
+        "Generic event proceed should export visible proceed authority.");
+    Assert(observation.Meta.TryGetValue("eventProceedOptionEnabled", out var proceedEnabled)
+           && string.Equals(proceedEnabled, "true", StringComparison.OrdinalIgnoreCase),
+        "Generic event proceed should export enabled proceed authority.");
+    Assert(observation.Meta.TryGetValue("eventProceedOptionCount", out var proceedCount)
+           && string.Equals(proceedCount, "1", StringComparison.OrdinalIgnoreCase),
+        "Generic event proceed should export proceed option count.");
+
+    var proceedChoice = observation.Choices.First(choice => choice.SemanticHints.Contains("option-role:proceed", StringComparer.OrdinalIgnoreCase));
+    Assert(string.Equals(proceedChoice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+           && string.Equals(proceedChoice.NodeId, "event-option:0", StringComparison.OrdinalIgnoreCase)
+           && string.Equals(proceedChoice.BindingKind, "event-option", StringComparison.OrdinalIgnoreCase)
+           && string.Equals(proceedChoice.BindingId, "option-0", StringComparison.OrdinalIgnoreCase)
+           && proceedChoice.Enabled == true,
+        "Generic event proceed should export stable event-option identity and enabled metadata.");
+    Assert(proceedChoice.SemanticHints.Contains("source:event-option-button", StringComparer.OrdinalIgnoreCase)
+           && proceedChoice.SemanticHints.Contains("event-proceed", StringComparer.OrdinalIgnoreCase),
+        "Generic event proceed should preserve explicit EventOption.IsProceed semantic hints.");
+}
+
 static void TestRuntimeReflectionAncientMixedPostProceedOwnershipNormalization()
 {
     var proceedButton = new FakeNEventOptionButton(
@@ -2112,6 +2166,60 @@ static void TestInventoryPublisherMapNodeSourceCorrection()
     Assert(string.Equals(restNode.Kind, "map-node", StringComparison.OrdinalIgnoreCase), "Real map points must remain map-node inventory entries.");
     Assert(restNode.SemanticHints.Contains("coord:1,2", StringComparer.OrdinalIgnoreCase), "Real map points should preserve coordinate evidence in inventory semantic hints.");
     Assert(restNode.SemanticHints.Contains("source:map-choice", StringComparer.OrdinalIgnoreCase), "Real map points should retain explicit map-choice source hints.");
+}
+
+static void TestTrackerAndInventoryPreserveScreenProvenance()
+{
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
+    var observation = new LiveExportObservation(
+        "runtime-poll",
+        DateTimeOffset.UtcNow,
+        "run-provenance-self-test",
+        "active",
+        "rewards",
+        null,
+        null,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        Array.Empty<LiveExportChoiceSummary>(),
+        Array.Empty<string>(),
+        null,
+        new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["screen"] = "rewards",
+            ["rawObservedScreen"] = "rewards",
+            ["instanceType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+        });
+
+    var snapshot = tracker.Apply(observation).Snapshot;
+    Assert(string.Equals(snapshot.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker legacy current screen should stay on the compatibility logical screen.");
+    Assert(string.Equals(snapshot.RawObservedScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should preserve the raw observed screen separately from compatibility logical screen.");
+    Assert(string.Equals(snapshot.CompatibilityLogicalScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should expose the compatibility logical screen explicitly.");
+    Assert(string.Equals(snapshot.CompatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should expose compatibility visible-screen shaping separately.");
+    Assert(snapshot.CompatibilitySceneReady == false, "Reward/map mixed aftermath should demote compatibility scene-ready while leaving raw screen intact.");
+    Assert(snapshot.Meta.TryGetValue("screen", out var rawScreenMeta)
+           && string.Equals(rawScreenMeta, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker meta 'screen' should now preserve raw observed screen.");
+    Assert(snapshot.Meta.TryGetValue("compatLogicalScreen", out var compatLogicalScreen)
+           && string.Equals(compatLogicalScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should write compatibility logical screen into dedicated meta.");
+    Assert(snapshot.Meta.TryGetValue("compatVisibleScreen", out var compatVisibleScreen)
+           && string.Equals(compatVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should write compatibility visible screen into dedicated meta.");
+
+    var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
+        ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(buildInventoryMethod is not null, "Expected private InventoryPublisher.BuildInventory helper.");
+    var normalizedScene = new CompanionNormalizedScene("map", "map", 1.0, "test");
+    var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
+    Assert(inventory is not null, "Expected inventory publisher to build an inventory from the tracker snapshot.");
+    Assert(string.Equals(inventory!.RawSceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should preserve raw scene type separately from compatibility scene type.");
+    Assert(string.Equals(inventory.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory legacy scene type should remain the compatibility scene type.");
+    Assert(string.Equals(inventory.CompatibilitySceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility scene type explicitly.");
+    Assert(string.Equals(inventory.CompatibilityVisibleScene, "map", StringComparison.OrdinalIgnoreCase), "Inventory should preserve compatibility visible scene for downstream diagnostics.");
+    Assert(inventory.CompatibilitySceneReady == false, "Inventory should preserve compatibility scene-ready instead of recomputing raw winner truth.");
 }
 
 static void TestRuntimeReflectionRejectsOverlayLikePlayerRoots()

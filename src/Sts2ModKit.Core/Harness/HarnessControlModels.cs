@@ -17,7 +17,20 @@ public sealed record HarnessNodeInventory(
     bool? SceneReady,
     string? SceneAuthority,
     string? SceneStability,
-    IReadOnlyList<HarnessNodeInventoryItem> Nodes);
+    IReadOnlyList<HarnessNodeInventoryItem> Nodes)
+{
+    public string? RawSceneType { get; init; }
+
+    public string? CompatibilitySceneType { get; init; }
+
+    public string? CompatibilityVisibleScene { get; init; }
+
+    public bool? CompatibilitySceneReady { get; init; }
+
+    public string? CompatibilitySceneAuthority { get; init; }
+
+    public string? CompatibilitySceneStability { get; init; }
+}
 
 public sealed record HarnessNodeInventoryItem(
     string NodeId,

@@ -421,6 +421,8 @@ internal static class RuntimeSnapshotReflectionExtractor
         var combatHand = encounter?.InCombat == true
             ? ExtractCombatHand(roots, config.LiveExport.MaxChoiceEntries)
             : Array.Empty<LiveExportCardSummary>();
+        var rawCurrentScreenValue = TryReadString(roots, "CurrentScreen", "Screen", "ScreenName");
+        var rawRoomTypeValue = TryReadString(roots, "RoomType");
         var rootTypeSummary = string.Join(
             " ",
             roots
@@ -447,7 +449,9 @@ internal static class RuntimeSnapshotReflectionExtractor
 
             var extractorPath = GetCardSelectionExtractorPath(cardSelectionObservation.ScreenType);
             meta["choiceExtractorPath"] = extractorPath;
+            meta["rawChoiceExtractorPath"] = extractorPath;
             payload["choiceExtractorPath"] = extractorPath;
+            payload["rawChoiceExtractorPath"] = extractorPath;
         }
 
         var treasureRoomObservation = ObserveTreasureRoom(roots, screen);
@@ -483,7 +487,9 @@ internal static class RuntimeSnapshotReflectionExtractor
             choices.AddRange(mergedChoices);
 
             meta["choiceExtractorPath"] = "shop";
+            meta["rawChoiceExtractorPath"] = "shop";
             payload["choiceExtractorPath"] = "shop";
+            payload["rawChoiceExtractorPath"] = "shop";
         }
         AppendShopRuntimeMetadata(shopObservation, meta, payload);
 
@@ -492,20 +498,42 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (rewardObservation.ForegroundOwned)
         {
             meta["choiceExtractorPath"] = "reward";
+            meta["rawChoiceExtractorPath"] = "reward";
             payload["choiceExtractorPath"] = "reward";
+            payload["rawChoiceExtractorPath"] = "reward";
         }
+
+        AppendEventProceedRuntimeMetadata(choices, screen, meta, payload);
 
         var warnings = BuildWarnings(player, deck, relics, potions, choices);
 
         AppendChoiceExtractionMetadata(choiceResult, meta, payload);
 
         meta["screen"] = screen;
+        meta["rawObservedScreen"] = screen;
         meta["rootTypeSummary"] = rootTypeSummary;
+        meta["rawRootTypeSummary"] = rootTypeSummary;
+        payload["rawObservedScreen"] = screen;
+        payload["rawRootTypeSummary"] = rootTypeSummary;
+        if (!string.IsNullOrWhiteSpace(rawCurrentScreenValue))
+        {
+            meta["rawCurrentScreenValue"] = rawCurrentScreenValue;
+            payload["rawCurrentScreenValue"] = rawCurrentScreenValue;
+        }
+
+        if (!string.IsNullOrWhiteSpace(rawRoomTypeValue))
+        {
+            meta["rawRoomTypeValue"] = rawRoomTypeValue;
+            payload["rawRoomTypeValue"] = rawRoomTypeValue;
+        }
+
         if (!string.IsNullOrWhiteSpace(choiceResult.Decision.ExtractorPath)
             && !cardSelectionObservation.ScreenVisible)
         {
             meta["choiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
+            meta["rawChoiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
             payload["choiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
+            payload["rawChoiceExtractorPath"] = choiceResult.Decision.ExtractorPath;
         }
 
         if (combatHand.Count > 0)
@@ -1725,6 +1753,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         meta["combatAwaitingPlaySlots"] = awaitingSlots.Count == 0
             ? null
             : string.Join(",", awaitingSlots.Select(slot => slot.ToString(CultureInfo.InvariantCulture)));
+        meta["combatHandSelectionSelectedCount"] = selectedHandCards.Length.ToString(CultureInfo.InvariantCulture);
+        meta["combatHandSelectionSelectedCardIds"] = handSelectionSelectedCardIds.Length == 0
+            ? null
+            : string.Join(",", handSelectionSelectedCardIds);
+        meta["combatHandSelectionConfirmEnabled"] = handSelectionConfirmEnabled?.ToString().ToLowerInvariant();
         meta["combatTargetingInProgress"] = targetingInProgress?.ToString().ToLowerInvariant();
         meta["combatValidTargetsType"] = validTargetsType;
         meta["combatTargetableEnemyCount"] = targetManagerRoot is null
@@ -1831,6 +1864,18 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (awaitingSlots.Count > 0)
         {
             payload["combatAwaitingPlaySlots"] = awaitingSlots.ToArray();
+        }
+
+        payload["combatHandSelectionSelectedCount"] = selectedHandCards.Length;
+
+        if (handSelectionSelectedCardIds.Length > 0)
+        {
+            payload["combatHandSelectionSelectedCardIds"] = handSelectionSelectedCardIds;
+        }
+
+        if (handSelectionConfirmEnabled is not null)
+        {
+            payload["combatHandSelectionConfirmEnabled"] = handSelectionConfirmEnabled.Value;
         }
 
         if (targetingInProgress is not null)
@@ -7137,16 +7182,36 @@ internal static class RuntimeSnapshotReflectionExtractor
             return null;
         }
 
+        var eventOptionBindingId = TryResolveEventOptionBindingId(item);
+        var eventOptionChoice = !string.IsNullOrWhiteSpace(eventOptionBindingId);
+        var eventOptionEnabled = eventOptionChoice
+            ? TryResolveEventOptionEnabled(item)
+            : null;
+        var choiceKind = eventOptionChoice
+            ? "event-option"
+            : InferChoiceKind(item.GetType().FullName, rewardTypeName);
+        var bindingKind = eventOptionChoice
+            ? "event-option"
+            : rewardTypeName is null ? null : "reward-type";
+        var bindingId = eventOptionChoice
+            ? eventOptionBindingId
+            : rewardTypeName is null ? null : GetRewardTypeId(rewardTypeName);
+        var nodeId = eventOptionChoice
+            ? TryResolveEventOptionNodeId(item, eventOptionBindingId!, label)
+            : null;
+
         return new LiveExportChoiceSummary(
-            InferChoiceKind(item.GetType().FullName, rewardTypeName),
+            choiceKind,
             label,
             TryResolveChoiceValue(item, rewardTypeName),
             TryResolveChoiceDescription(item))
         {
+            NodeId = nodeId,
             ScreenBounds = TryResolveScreenBounds(item),
-            BindingKind = rewardTypeName is null ? null : "reward-type",
-            BindingId = rewardTypeName is null ? null : GetRewardTypeId(rewardTypeName),
-            SemanticHints = BuildChoiceSemanticHints(rewardTypeName),
+            BindingKind = bindingKind,
+            BindingId = bindingId,
+            Enabled = eventOptionEnabled,
+            SemanticHints = BuildChoiceSemanticHints(item, rewardTypeName),
         };
     }
 
@@ -8150,34 +8215,135 @@ internal static class RuntimeSnapshotReflectionExtractor
                && string.Equals(summary.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static IReadOnlyList<string> BuildChoiceSemanticHints(string? rewardTypeName)
+    private static IReadOnlyList<string> BuildChoiceSemanticHints(object item, string? rewardTypeName)
     {
-        if (string.IsNullOrWhiteSpace(rewardTypeName))
+        var hints = new List<string>();
+        if (!string.IsNullOrWhiteSpace(rewardTypeName))
         {
-            return Array.Empty<string>();
+            var rewardTypeId = GetRewardTypeId(rewardTypeName);
+            hints.Add("reward");
+            if (rewardTypeName.Contains("CardReward", StringComparison.OrdinalIgnoreCase))
+            {
+                hints.Add("reward-card");
+            }
+            else if (rewardTypeName.Contains("PotionReward", StringComparison.OrdinalIgnoreCase))
+            {
+                hints.Add("reward-potion");
+            }
+            else if (rewardTypeName.Contains("GoldReward", StringComparison.OrdinalIgnoreCase))
+            {
+                hints.Add("reward-gold");
+            }
+            else if (rewardTypeName.Contains("RelicReward", StringComparison.OrdinalIgnoreCase))
+            {
+                hints.Add("reward-relic");
+            }
+
+            hints.Add($"reward-type:{rewardTypeId}");
         }
 
-        var rewardTypeId = GetRewardTypeId(rewardTypeName);
-        var hints = new List<string> { "reward" };
-        if (rewardTypeName.Contains("CardReward", StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(TryResolveEventOptionBindingId(item)))
         {
-            hints.Add("reward-card");
-        }
-        else if (rewardTypeName.Contains("PotionReward", StringComparison.OrdinalIgnoreCase))
-        {
-            hints.Add("reward-potion");
-        }
-        else if (rewardTypeName.Contains("GoldReward", StringComparison.OrdinalIgnoreCase))
-        {
-            hints.Add("reward-gold");
-        }
-        else if (rewardTypeName.Contains("RelicReward", StringComparison.OrdinalIgnoreCase))
-        {
-            hints.Add("reward-relic");
+            hints.Add("scene:event");
+            hints.Add("kind:event-option");
+            hints.Add(IsEventOptionButtonType(item.GetType().FullName ?? item.GetType().Name)
+                ? "source:event-option-button"
+                : "source:event-option");
+            hints.Add(TryReadBool(TryGetMemberValue(item, "Option") ?? item, "IsProceed") == true
+                ? "option-role:proceed"
+                : "option-role:choice");
+            if (TryReadBool(TryGetMemberValue(item, "Option") ?? item, "IsProceed") == true)
+            {
+                hints.Add("event-proceed");
+            }
         }
 
-        hints.Add($"reward-type:{rewardTypeId}");
-        return hints;
+        return hints.Count == 0
+            ? Array.Empty<string>()
+            : hints;
+    }
+
+    private static void AppendEventProceedRuntimeMetadata(
+        IReadOnlyList<LiveExportChoiceSummary> choices,
+        string screen,
+        IDictionary<string, string?> meta,
+        IDictionary<string, object?> payload)
+    {
+        var eventAuthority = string.Equals(screen, "event", StringComparison.OrdinalIgnoreCase)
+                             || choices.Any(static choice =>
+                                 string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+                                 || choice.SemanticHints.Any(static hint =>
+                                     string.Equals(hint, "scene:event", StringComparison.OrdinalIgnoreCase)));
+        var proceedChoices = eventAuthority
+            ? choices
+                .Where(static choice => choice.SemanticHints.Any(static hint =>
+                    string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(hint, "event-proceed", StringComparison.OrdinalIgnoreCase)))
+                .GroupBy(static choice => choice.BindingId
+                                          ?? choice.NodeId
+                                          ?? choice.Label,
+                    StringComparer.OrdinalIgnoreCase)
+                .Select(static group => group.First())
+                .ToArray()
+            : Array.Empty<LiveExportChoiceSummary>();
+        var enabledProceedChoices = proceedChoices.Count(static choice => choice.Enabled != false);
+
+        meta["eventProceedOptionVisible"] = proceedChoices.Length > 0 ? "true" : "false";
+        meta["eventProceedOptionEnabled"] = enabledProceedChoices > 0 ? "true" : "false";
+        meta["eventProceedOptionCount"] = proceedChoices.Length.ToString(CultureInfo.InvariantCulture);
+        payload["eventProceedOptionVisible"] = proceedChoices.Length > 0;
+        payload["eventProceedOptionEnabled"] = enabledProceedChoices > 0;
+        payload["eventProceedOptionCount"] = proceedChoices.Length;
+    }
+
+    private static string? TryResolveEventOptionBindingId(object item)
+    {
+        var option = TryGetMemberValue(item, "Option");
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        if (option is null
+            && !typeName.Contains("EventOption", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return FirstNonEmpty(
+            TryReadString(option ?? item, "TextKey", "Id", "Name"),
+            TryReadString(item, "Index"),
+            TryReadString(option, "Title"));
+    }
+
+    private static bool? TryResolveEventOptionEnabled(object item)
+    {
+        var option = TryGetMemberValue(item, "Option") ?? item;
+        if (TryReadBool(option, "IsLocked") == true)
+        {
+            return false;
+        }
+
+        return TryResolveInteractiveEnabled(item)
+               ?? TryResolveControlEnabled(item)
+               ?? TryReadBool(item, "IsEnabled", "Enabled")
+               ?? true;
+    }
+
+    private static string TryResolveEventOptionNodeId(object item, string bindingId, string label)
+    {
+        var index = TryReadInt(item, "Index");
+        if (index is not null)
+        {
+            return $"event-option:{index.Value}";
+        }
+
+        var key = !string.IsNullOrWhiteSpace(bindingId)
+            ? bindingId
+            : label;
+        return $"event-option:{SanitizeNodeKey(key)}";
+    }
+
+    private static bool IsEventOptionButtonType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NEventOptionButton", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetRewardTypeId(string typeName)

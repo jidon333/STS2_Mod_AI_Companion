@@ -83,29 +83,53 @@ internal sealed class InventoryPublisher
 
     private static HarnessNodeInventory BuildInventory(LiveExportSnapshot snapshot, string mode, CompanionNormalizedScene normalizedScene)
     {
-        var sceneType = ResolveInventorySceneType(snapshot, normalizedScene);
+        var rawSceneType = ResolveRawSceneType(snapshot, normalizedScene);
+        var compatibilitySceneType = ResolveInventorySceneType(snapshot, normalizedScene);
         var blockingModal = ResolveBlockingModal(snapshot, normalizedScene);
+        var compatibilityVisibleScene = ResolveCompatibilityVisibleScene(snapshot, normalizedScene);
+        var compatibilitySceneReady = ResolveSceneReady(snapshot, normalizedScene, blockingModal);
+        var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
+        var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
         var nodes = snapshot.CurrentChoices
-            .Select((choice, index) => BuildNode(sceneType, choice, index))
+            .Select((choice, index) => BuildNode(compatibilitySceneType, choice, index))
             .ToArray();
 
         return new HarnessNodeInventory(
-            InventoryId: BuildInventoryId(snapshot, sceneType, nodes),
+            InventoryId: BuildInventoryId(snapshot, compatibilitySceneType, nodes),
             CapturedAt: snapshot.CapturedAt,
             RunId: string.IsNullOrWhiteSpace(snapshot.RunId) ? null : snapshot.RunId,
-            SceneType: sceneType,
+            SceneType: compatibilitySceneType,
             SceneEpisodeId: TryGetMeta(snapshot.Meta, "screen-episode"),
             Mode: mode,
             BlockingModal: blockingModal,
-            SceneReady: ResolveSceneReady(snapshot, normalizedScene, blockingModal),
-            SceneAuthority: ResolveSceneAuthority(snapshot, normalizedScene),
-            SceneStability: ResolveSceneStability(snapshot, normalizedScene, blockingModal),
-            Nodes: nodes);
+            SceneReady: compatibilitySceneReady,
+            SceneAuthority: compatibilitySceneAuthority,
+            SceneStability: compatibilitySceneStability,
+            Nodes: nodes)
+        {
+            RawSceneType = rawSceneType,
+            CompatibilitySceneType = compatibilitySceneType,
+            CompatibilityVisibleScene = compatibilityVisibleScene,
+            CompatibilitySceneReady = compatibilitySceneReady,
+            CompatibilitySceneAuthority = compatibilitySceneAuthority,
+            CompatibilitySceneStability = compatibilitySceneStability,
+        };
+    }
+
+    private static string ResolveRawSceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
+    {
+        return NormalizeSceneToken(snapshot.RawObservedScreen)
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "rawObservedScreen"))
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "screen"))
+               ?? NormalizeSceneToken(snapshot.CurrentScreen)
+               ?? normalizedScene.SceneType;
     }
 
     private static string ResolveInventorySceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
     {
-        var logicalScreen = NormalizeSceneToken(snapshot.CurrentScreen)
+        var logicalScreen = NormalizeSceneToken(snapshot.CompatibilityLogicalScreen)
+            ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatLogicalScreen"))
+            ?? NormalizeSceneToken(snapshot.CurrentScreen)
             ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "logicalScreen"))
             ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "flowScreen"));
 
@@ -154,7 +178,7 @@ internal sealed class InventoryPublisher
             "map" => IsExplicitMapPointChoice(choice) ? "map-node" : NormalizeChoiceKind(choice.Kind),
             "rewards" => IsProceedLabel(label) ? "proceed" : "reward-item",
             "event" => "event-option",
-            "shop" => "shop-option",
+            "shop" => ResolveShopKind(choice),
             "rest-site" => "rest-option",
             _ => NormalizeChoiceKind(choice.Kind),
         };
@@ -239,6 +263,18 @@ internal sealed class InventoryPublisher
                 || string.Equals(hint, "source:map-choice", StringComparison.OrdinalIgnoreCase)));
     }
 
+    private static string ResolveShopKind(LiveExportChoiceSummary choice)
+    {
+        var rawKind = NormalizeChoiceKind(choice.Kind);
+        if (rawKind.StartsWith("shop-", StringComparison.OrdinalIgnoreCase)
+            || rawKind.StartsWith("shop-option:", StringComparison.OrdinalIgnoreCase))
+        {
+            return rawKind;
+        }
+
+        return rawKind;
+    }
+
     private static string? TryExtractCoordHint(string? description)
     {
         if (string.IsNullOrWhiteSpace(description))
@@ -307,6 +343,16 @@ internal sealed class InventoryPublisher
         CompanionNormalizedScene normalizedScene,
         string? blockingModal)
     {
+        if (snapshot.CompatibilitySceneReady is { } compatibilitySceneReady)
+        {
+            return compatibilitySceneReady;
+        }
+
+        if (bool.TryParse(TryGetMeta(snapshot.Meta, "compatSceneReady"), out compatibilitySceneReady))
+        {
+            return compatibilitySceneReady;
+        }
+
         if (bool.TryParse(TryGetMeta(snapshot.Meta, "sceneReady"), out var sceneReady))
         {
             return sceneReady;
@@ -338,6 +384,17 @@ internal sealed class InventoryPublisher
 
     private static string? ResolveSceneAuthority(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
     {
+        if (!string.IsNullOrWhiteSpace(snapshot.CompatibilitySceneAuthority))
+        {
+            return snapshot.CompatibilitySceneAuthority;
+        }
+
+        var compatibilityAuthority = TryGetMeta(snapshot.Meta, "compatSceneAuthority");
+        if (!string.IsNullOrWhiteSpace(compatibilityAuthority))
+        {
+            return compatibilityAuthority;
+        }
+
         var explicitAuthority = TryGetMeta(snapshot.Meta, "sceneAuthority");
         if (!string.IsNullOrWhiteSpace(explicitAuthority))
         {
@@ -360,6 +417,17 @@ internal sealed class InventoryPublisher
         CompanionNormalizedScene normalizedScene,
         string? blockingModal)
     {
+        if (!string.IsNullOrWhiteSpace(snapshot.CompatibilitySceneStability))
+        {
+            return snapshot.CompatibilitySceneStability;
+        }
+
+        var compatibilityStability = TryGetMeta(snapshot.Meta, "compatSceneStability");
+        if (!string.IsNullOrWhiteSpace(compatibilityStability))
+        {
+            return compatibilityStability;
+        }
+
         var explicitStability = TryGetMeta(snapshot.Meta, "sceneStability");
         if (!string.IsNullOrWhiteSpace(explicitStability))
         {
@@ -382,6 +450,14 @@ internal sealed class InventoryPublisher
         }
 
         return "stabilizing";
+    }
+
+    private static string? ResolveCompatibilityVisibleScene(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
+    {
+        return NormalizeSceneToken(snapshot.CompatibilityVisibleScreen)
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatVisibleScreen"))
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"))
+               ?? normalizedScene.SceneType;
     }
 
     private static string? TryGetMeta(IReadOnlyDictionary<string, string?> meta, string key)

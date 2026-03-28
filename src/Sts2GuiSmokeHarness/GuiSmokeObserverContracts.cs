@@ -23,6 +23,18 @@ sealed record ObserverSummary(
 {
     public long? SnapshotVersion { get; init; }
 
+    public string? RawCurrentScreen { get; init; }
+
+    public string? CompatibilityCurrentScreen { get; init; }
+
+    public string? CompatibilityVisibleScreen { get; init; }
+
+    public bool? CompatibilitySceneReady { get; init; }
+
+    public string? CompatibilitySceneAuthority { get; init; }
+
+    public string? CompatibilitySceneStability { get; init; }
+
     public IReadOnlyDictionary<string, string?> Meta { get; init; } = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -163,11 +175,17 @@ sealed record ObserverState(
 {
     public string? CurrentScreen => Summary.CurrentScreen;
     public string? VisibleScreen => Summary.VisibleScreen;
+    public string? RawCurrentScreen => Summary.RawCurrentScreen ?? Summary.CurrentScreen;
+    public string? CompatibilityCurrentScreen => Summary.CompatibilityCurrentScreen ?? Summary.CurrentScreen;
+    public string? CompatibilityVisibleScreen => Summary.CompatibilityVisibleScreen ?? Summary.VisibleScreen;
     public bool? InCombat => Summary.InCombat;
     public string? InventoryId => Summary.InventoryId;
     public bool? SceneReady => Summary.SceneReady;
     public string? SceneAuthority => Summary.SceneAuthority;
     public string? SceneStability => Summary.SceneStability;
+    public bool? CompatibilitySceneReady => Summary.CompatibilitySceneReady ?? Summary.SceneReady;
+    public string? CompatibilitySceneAuthority => Summary.CompatibilitySceneAuthority ?? Summary.SceneAuthority;
+    public string? CompatibilitySceneStability => Summary.CompatibilitySceneStability ?? Summary.SceneStability;
     public int? PlayerEnergy => Summary.PlayerEnergy;
     public IReadOnlyList<string> CurrentChoices => Summary.CurrentChoices;
     public IReadOnlyList<ObserverActionNode> ActionNodes => Summary.ActionNodes;
