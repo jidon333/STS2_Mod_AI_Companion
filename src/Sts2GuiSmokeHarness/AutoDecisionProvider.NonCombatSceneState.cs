@@ -408,12 +408,6 @@ sealed partial class AutoDecisionProvider
                || observer.ActionNodes.Any(static node => IsOverlayChoiceLabel(node.Label));
     }
 
-    private static bool ShouldSuppressRoomSubstateHeuristics(GuiSmokePhase phase, ObserverSummary observer)
-    {
-        return phase == GuiSmokePhase.HandleCombat
-               || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer);
-    }
-
     private static bool HasExplicitRewardProgressionAffordance(ObserverSummary observer)
     {
         return observer.Choices.Any(choice => IsCurrentRewardProgressionChoice(choice, null))

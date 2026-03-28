@@ -42,26 +42,25 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 
 현재 가장 중요한 두 signal은 아래다.
 
-1. replay parity known red
-   - fixture: `reward-aftermath-map-handoff`
-   - 현재 baseline: single known red
-   - 해석: architecture regression이 아니라 existing semantic gap으로 고정
-2. latest valid fresh live first blocker
-   - root: [longrun-artifacts-split-20260327-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1)
-   - blocker: `ChooseFirstNode` `decision-wait-plateau`
-   - shape: resumed reward aftermath 이후 map authority는 잡았지만 reachable node click으로 진전하지 못함
+1. replay parity suite
+   - status: green
+   - 해석: old `reward-aftermath-map-handoff` known red는 current `main`에서 닫혔다
+2. latest valid fresh live root
+   - root: [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
+   - result: no failure summary, attempt completed with `max-steps-reached`
+   - shape: reward aftermath `step=15`에서 exported reachable map node를 실제로 클릭했고, 그 뒤 event/combat까지 이어졌다
 
 즉 현재 질문은 더 이상
 
 ```text
-"WaitRunLoad가 reward/map mixed state에서 room handoff를 못 한다"
+"reward aftermath 이후 ChooseFirstNode / WaitMap / map-node routing이 막힌다"
 ```
 
 가 아니라
 
 ```text
-"reward aftermath 이후 ChooseFirstNode / WaitMap / map-node routing을
-새 owner 구조 안에서 어떻게 닫을 것인가"
+"current main에서 남은 semantic follow-up을
+failure closure가 아니라 coverage / proof 관점에서 어떻게 정리할 것인가"
 ```
 
 다.
@@ -75,16 +74,17 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 | Build / Shared Self-Test | green | current `main` 기준 통과 |
 | Harness Self-Test | green | current `main` 기준 통과 |
 | Replay Golden Suite | green | `replay-test` 통과 |
-| Replay Parity Suite | partial | single known red `reward-aftermath-map-handoff` 유지 |
-| Non-Combat Stability | partial | `WaitRunLoad` handoff는 닫혔고, reward aftermath map-node continuity가 남음 |
+| Replay Parity Suite | green | `reward-aftermath-map-handoff` 포함 current parity fixtures green |
+| Non-Combat Stability | green | reward aftermath map-node continuity closure, fresh live root confirms post-reward progression |
 | Combat Stability | partial | architecture는 정리됐지만 broader live/parity follow-up이 남음 |
 | Strict Lifecycle Chain | partial | terminal -> restart -> next-attempt first-screen evidence는 여전히 appendix/work item |
 
 ## 현재 바로 믿을 수 있는 것
 
 - `build`, `Sts2ModKit.SelfTest`, `Sts2GuiSmokeHarness -- self-test`, `replay-test`는 current `main`에서 green이다
-- replay parity는 현재 **한 개의 known red만 유지하는 baseline**으로 관리한다
+- replay parity는 current `main` 기준 green이다
 - `WaitRunLoad -> HandleRewards` resumed room handoff fix는 current `main`에 반영되어 있다
+- reward aftermath `ChooseFirstNode` exported-node closure는 current `main`에 반영되어 있다
 - 하네스 구조 refactor는 current `main` 기준 문서화 가능한 수준까지 정리됐다
 
 ## 현재 대표 evidence
@@ -100,15 +100,15 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - runner/supervisor chronology:
   - [RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)
 
-### current semantic blocker evidence
+### current semantic closure evidence
 
 - latest valid live root:
-  - [longrun-artifacts-split-20260327-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1)
-- fresh live failure summary:
-  - [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1/attempts/0001/failure-summary.json)
+  - [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
+- fresh live startup summary:
+  - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1/startup-summary.json)
 - fresh live run log:
-  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1/attempts/0001/run.log)
-- known parity red fixture family:
+  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1/attempts/0001/run.log)
+- parity fixture now green:
   - `tests/replay-fixtures/m6-parity/reward-map-handoff.request.json`
 
 ## 현재 engineering 해석
@@ -117,33 +117,33 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 
 - deploy / trust / manual clean boot / authoritative attempt creation
 - `WaitRunLoad` resumed room authority handoff
+- reward aftermath `ChooseFirstNode` exported reachable map-node handoff
+- `reward-aftermath-map-handoff` replay parity known red
 - monolithic `Program.cs` 중심 구조
 - large self-test hotspot 1차 분해
 
 ### 아직 열려 있는 것
 
-- reward aftermath 이후 `ChooseFirstNode`가 exported reachable node로 진행하지 못하는 gap
-- `reward-aftermath-map-handoff` parity known red
 - combat broader parity/live coverage
 - strict lifecycle chain appendix
+- some lower-priority noncombat coverage rows (`reward back`, `post-node destination continuity`) remain partial
 
 ## 다음 작업 원칙
 
 1. 새 semantic fix는 좁게 한다
    - refactor wave는 현재 완료 상태를 reopen하지 않는다
-2. 새 blocker는 현재 owner 파일에서만 본다
-   - [Observer/GuiSmokeObserverPhaseHeuristics.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/GuiSmokeObserverPhaseHeuristics.cs)
-   - [Program.PhaseLoopRouting.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
-   - [Program.AllowedActions.NonCombat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.NonCombat.cs)
-   - [AutoDecisionProvider.NonCombatSceneState.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
-   - [AutoDecisionProvider.NonCombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
-3. replay known red와 fresh live blocker를 함께 본다
-   - 둘이 같은 family인지 먼저 확인하고, 아니면 source-of-truth를 분리한다
+2. 다음 coverage follow-up은 current owner 파일에서만 본다
+   - [Program.AllowedActions.Combat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs)
+   - [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
+   - [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
+   - [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
+3. semantic gap보다 evidence gap을 우선 구분한다
+   - failure-summary가 없는 fresh live root는 blocker보다 coverage frontier로 본다
 
 ## 한 줄 요약
 
 ```text
 current main의 smoke harness architecture refactor는 완료됐다.
-지금은 WaitRunLoad가 아니라 reward aftermath 이후 ChooseFirstNode / parity gap이 남아 있으며,
-다음 semantic fix는 새 owner 구조 안에서 좁게 진행해야 한다.
+reward aftermath live/parity gap도 current main에서 닫혔다.
+다음 follow-up은 combat / lifecycle coverage를 current owner 구조 안에서 보강하는 쪽이다.
 ```

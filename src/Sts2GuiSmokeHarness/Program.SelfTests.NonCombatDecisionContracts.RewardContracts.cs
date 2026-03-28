@@ -248,10 +248,19 @@ internal static partial class Program
                     new[]
                     {
                         new ObserverActionNode("proceed:0", "proceed", "넘기기", "1583,764,269,108", true),
+                        new ObserverActionNode("map:2:4", "map-node", "Unknown (2,4)", "1060.739,503.598,56,56", true)
+                        {
+                            TypeName = "map-node",
+                        },
                     },
                     new[]
                     {
                         new ObserverChoice("choice", "넘기기", "1583,764,269,108"),
+                        new ObserverChoice("map-node", "Unknown (2,4)", "1060.739,503.598,56,56", "2,4", "type:Unknown;state:Travelable;coord:2,4")
+                        {
+                            NodeId = "map:2:4",
+                            Enabled = true,
+                        },
                     },
                     Array.Empty<ObservedCombatHandCard>())
                 {
@@ -270,8 +279,16 @@ internal static partial class Program
                 null,
                 null);
             var rewardAftermathState = BuildRewardMapLayerStateForObserver(rewardAftermathObserver.Summary, new WindowBounds(0, 0, 1280, 720));
+            var rewardAftermathScene = AutoDecisionProvider.BuildRewardSceneState(
+                rewardAftermathObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardRankingScreenshotPath);
             Assert(!rewardAftermathState.RewardForegroundOwned, "Reward proceed aftermath should drop reward foreground ownership once map becomes current.");
             Assert(rewardAftermathState.RewardTeardownInProgress, "Reward proceed aftermath should export teardown-in-progress while stale reward visuals linger.");
+            Assert(rewardAftermathScene.CanonicalForegroundOwner == NonCombatForegroundOwner.Map, "Reward proceed aftermath should compute map as the current reward-scene owner once map becomes current.");
+            Assert(((ICanonicalNonCombatSceneState)rewardAftermathScene).CanonicalForegroundOwner == NonCombatCanonicalForegroundOwner.Map, "Canonical reward contract should surface map ownership for released-to-map reward aftermath.");
+            Assert(((ICanonicalNonCombatSceneState)rewardAftermathScene).HandoffTarget == NonCombatHandoffTarget.WaitMap, "Released-to-map reward aftermath should hand off through WaitMap under the canonical contract.");
             var rewardAftermathRequest = new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
@@ -299,6 +316,36 @@ internal static partial class Program
             var rewardAftermathDecision = AutoDecisionProvider.Decide(rewardAftermathRequest);
             Assert(string.Equals(rewardAftermathDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "HandleRewards should wait/release instead of opening map fallback directly during reward teardown aftermath.");
             Assert(GetPostRewardPhase(rewardAftermathDecision) == GuiSmokePhase.WaitMap, "Reward teardown aftermath should hand off through WaitMap, not keep HandleRewards ownership.");
+            var rewardAftermathChooseFirstNodeRequest = new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                45,
+                GuiSmokePhase.ChooseFirstNode.ToString(),
+                "Click the first reachable map node after reward release.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                ComputeSceneSignature(rewardRankingScreenshotPath, rewardAftermathObserver, GuiSmokePhase.ChooseFirstNode),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                rewardAftermathObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                GetAllowedActions(GuiSmokePhase.ChooseFirstNode, rewardAftermathObserver),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Released-to-map reward aftermath should route to exported map nodes, not stay blocked behind stale reward wrappers.",
+                null);
+            var rewardAftermathContradictoryMapFallbackMethod = typeof(AutoDecisionProvider).GetMethod("HasContradictoryForegroundOwnerAgainstMapFallback", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert(rewardAftermathContradictoryMapFallbackMethod is not null
+                   && !(bool)(rewardAftermathContradictoryMapFallbackMethod.Invoke(null, new object?[] { rewardAftermathChooseFirstNodeRequest })! ?? false),
+                "Released-to-map reward aftermath should not be blocked by contradictory foreground-owner map-fallback guards.");
+            var rewardAftermathMapNodeDecision = AutoDecisionProvider.Decide(rewardAftermathChooseFirstNodeRequest);
+            Assert(string.Equals(rewardAftermathMapNodeDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase), "ChooseFirstNode should click the exported travelable map node once reward ownership has released to map.");
 
             var rewardReleasePendingHistory = new[]
             {
@@ -341,6 +388,7 @@ internal static partial class Program
                 rewardRankingScreenshotPath);
             Assert(rewardReleasePendingState.ReleaseStage == RewardReleaseStage.ReleasePending, "A fresh reward skip on the same mixed reward/map authority band should enter reward release-pending.");
             Assert(rewardReleasePendingState.SuppressSameSkipReissue, "Reward release-pending should suppress same reward skip reissue until ownership changes.");
+            Assert(((ICanonicalNonCombatSceneState)rewardReleasePendingState).CanonicalForegroundOwner == NonCombatCanonicalForegroundOwner.Reward, "Reward release-pending should still report reward as the canonical owner until the release finishes.");
             Assert(((ICanonicalNonCombatSceneState)rewardReleasePendingState).HandoffTarget == NonCombatHandoffTarget.WaitMap,
                 "Canonical reward contract should expose WaitMap while reward skip release is pending.");
             Assert(BuildAllowedActions(
@@ -426,6 +474,13 @@ internal static partial class Program
             Directory.CreateDirectory(postShopMixedBranchRoot);
             try
             {
+                Assert(AutoDecisionProvider.BuildShopSceneState(postShopRewardMixedObserver, Array.Empty<GuiSmokeHistoryEntry>()) is
+                    {
+                        CanonicalForegroundOwner: NonCombatCanonicalForegroundOwner.Map,
+                        ReleaseStage: NonCombatReleaseStage.Released,
+                        HandoffTarget: NonCombatHandoffTarget.WaitMap,
+                    },
+                    "Released-to-map shop aftermath should report map as the canonical owner while preserving WaitMap handoff.");
                 var postShopMixedLogger = new ArtifactRecorder(postShopMixedBranchRoot);
                 Assert(
                     TryAdvanceAlternateBranch(

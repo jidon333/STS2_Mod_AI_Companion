@@ -104,41 +104,40 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 현재 source-of-truth signal은 두 개다.
 
-### 1. replay parity known red
+### 1. replay parity suite
 
-- fixture family: `reward-aftermath-map-handoff`
-- current baseline: single known red
-- 해석: refactor regression이 아니라 current semantic gap으로 유지
+- current baseline: green
+- old `reward-aftermath-map-handoff` known red는 current `main`에서 닫혔다
 
-### 2. latest valid live first blocker
+### 2. latest valid fresh live root
 
-- root: [longrun-artifacts-split-20260327-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1)
-- failure: [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1/attempts/0001/failure-summary.json)
-- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1/attempts/0001/run.log)
+- root: [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
+- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1/startup-summary.json)
+- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1/attempts/0001/run.log)
 
 확정 사실:
 
 - root는 valid다
 - `WaitRunLoad -> HandleRewards`는 이미 정상 handoff된다
-- 그 다음 first blocker는 `ChooseFirstNode` `decision-wait-plateau`다
-- shape는 resumed reward aftermath 이후 map authority는 잡았지만, exported/screenshot-reachable node click으로 진전하지 못하는 쪽이다
+- reward aftermath `step=15`는 `exported reachable map node`로 진행한다
+- fresh live에는 failure-summary가 없고 run은 `max-steps-reached`로 끝났다
 
 ## 다음 세션의 기본 목표
 
 다음 semantic work unit이 있다면 목표는 이 하나다.
 
 ```text
-reward aftermath 이후 ChooseFirstNode / WaitMap / map-node handoff gap을
-새 owner 구조 안에서 좁게 수정한다
+combat post-wait / lifecycle evidence 같은 current-main coverage frontier를
+새 owner 구조 안에서 보강한다
 ```
 
 우선 열 파일:
 
-1. [Program.PhaseLoopRouting.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
-2. [Program.AllowedActions.NonCombat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.NonCombat.cs)
-3. [Observer/GuiSmokeObserverPhaseHeuristics.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/GuiSmokeObserverPhaseHeuristics.cs)
-4. [AutoDecisionProvider.NonCombatSceneState.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
-5. [AutoDecisionProvider.NonCombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
+1. [Program.AllowedActions.Combat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs)
+2. [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
+3. [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
+4. [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
+5. [LongRunArtifacts.Startup.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
 
 ## validation baseline
 
@@ -154,7 +153,7 @@ cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.cspr
 
 replay parity acceptance:
 
-- `reward-aftermath-map-handoff` single known red만 유지
+- green 유지
 - 새 failing fixture 추가 금지
 
 live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
@@ -170,7 +169,7 @@ live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
 ## 한 줄 요약
 
 ```text
-current main의 하네스 구조 정리는 끝났다.
+current main의 하네스 구조 정리와 reward aftermath closure는 끝났다.
 새 세션은 old Program.cs monolith를 다시 전제로 두지 말고,
-reward aftermath 이후 ChooseFirstNode / parity gap만 새 owner 파일에서 좁게 다뤄라.
+combat / lifecycle coverage frontier를 새 owner 파일에서 보강하라.
 ```

@@ -24,7 +24,7 @@ coverage status 의미:
 |---|---|---|
 | `VAL-CAPTURE-BOUNDARY` | phase log 이후 capture/request/failure emission을 bounded contract로 고정 | partial |
 | `COMBAT-POSTWAIT-RECAPTURE` | legitimate combat wait 후 recapture/re-request continuity | partial |
-| `REWARD-AFTERMATH-MAP-HANDOFF` | reward aftermath 이후 map-node continuity, `ChooseFirstNode` / parity alignment | partial |
+| `REWARD-AFTERMATH-MAP-HANDOFF` | reward aftermath 이후 map-node continuity, `ChooseFirstNode` / parity alignment | green |
 
 ## Validation / Boot / Menu
 
@@ -86,8 +86,8 @@ coverage status 의미:
 | `REWARD-03` | `HandleRewards` | reward skip / proceed | green | canonical reward release contract + current self-tests | same-click reissue suppression and release-pending are covered |
 | `REWARD-04` | `HandleRewards` | reward back | partial | allowlist + analysis candidate path exist; canonical replay/live evidence thin | lower priority but incomplete |
 | `REWARD-05` | `HandleRewards` | reward teardown / release wait | green | stale reward cleanup self-tests, layered reward state assertions, canonical reward release contract | teardown/release semantics are covered |
-| `REWARD-06` | `HandleRewards` / `WaitMap` | reward/map mixed aftermath | partial | layered reward state, stale cleanup, `reward-map-loop` sentinel self-tests, known parity red `reward-aftermath-map-handoff` | current risk는 owner release보다 aftermath map-node continuity 쪽 |
-| `REWARD-07` | `WaitMap` | reward -> map handoff | partial | reward teardown self-tests, WaitMap reopen assertions, live WaitRunLoad -> HandleRewards closure | post-reward map-node continuity까지는 아직 partial |
+| `REWARD-06` | `HandleRewards` / `WaitMap` | reward/map mixed aftermath | green | layered reward state self-tests, released-to-map canonical owner assertions, parity fixture `reward-aftermath-map-handoff`, fresh live root [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1) | map owner truth now reaches exported reachable node selection |
+| `REWARD-07` | `WaitMap` | reward -> map handoff | green | reward teardown self-tests, WaitMap reopen assertions, fresh live `step=15` exported map-node click in [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1) | post-reward map-node continuity closed on current `main` |
 | `REWARD-09` | `HandleRewards` | same skip reissue suppression | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` reward release-pending assertions now prove same-band skip suppression, wait-only allowlist, and shared `WaitMap` handoff under the canonical reward contract | canonical reward release now owns reissue suppression instead of leaving it to the loop sentinel |
 | `REWARD-10` | `HandleRewards` / `WaitMap` | reward-map loop sentinel | partial | `Program.SelfTests.StallSentinel.cs` `reward-map-loop` sentinel assertions | sentinel exists, but it should remain fallback not primary flow |
 
@@ -116,10 +116,10 @@ coverage status 의미:
   - [verify-bootstrap-first-attempt-20260320-0044](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-bootstrap-first-attempt-20260320-0044)
 - quartet/accounting:
   - [verify-phase1-quartet-20260320-123409](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/verify-phase1-quartet-20260320-123409)
-- latest known parity baseline:
-  - `reward-aftermath-map-handoff` single known red
+- latest parity baseline:
+  - green
 - latest valid live root:
-  - [longrun-artifacts-split-20260327-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/longrun-artifacts-split-20260327-live1)
+  - [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
 
 ### Current-Main Self-Test Families
 
@@ -135,17 +135,14 @@ coverage status 의미:
 
 | Priority | Work Item | Why |
 |---|---|---|
-| P0 | reward aftermath map handoff | `REWARD-06` / `REWARD-07` are now about aftermath map-node continuity, not old reward release gating |
-| P1 | combat post-wait recapture canonical coverage | `COMBAT-09` is code-covered and self-test-covered, but still partial until fresh current-main live evidence exists |
-| P1 | current-main live evidence refresh for mixed aftermath | latest valid live first blocker is `ChooseFirstNode` plateau after reward aftermath |
+| P0 | combat post-wait recapture canonical coverage | `COMBAT-09` is code-covered and self-test-covered, but still partial until fresh current-main live evidence exists |
+| P1 | capture boundary fresh live proof | `VAL-03` remains partial even though bounded failure emission and self-tests exist |
 | P2 | strict lifecycle chain evidence | `TERM-02` remains intentionally open |
 
 ## Non-Canonical Appendix
 
 아래는 current `main` source-of-truth는 아니지만, 다음 구현 우선순위를 정할 때 참고할 수 있는 recent high-signal branch evidence다.
 
-- `reward-aftermath-map-handoff` parity known red
-- latest valid live의 `ChooseFirstNode` plateau root
 - combat post-wait recapture fresh live gap
 
 이 appendix는 priority signal일 뿐, canonical coverage status는 위 표의 current `main` evidence만으로 판정한다.

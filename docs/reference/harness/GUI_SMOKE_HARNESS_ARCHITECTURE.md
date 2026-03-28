@@ -182,18 +182,17 @@ flowchart TD
 - replay parity suite
   - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-parity-test`
 
-2026-03-28 기준 known parity baseline은 `reward-aftermath-map-handoff` 단일 red다.
+2026-03-28 기준 parity baseline은 green이며, old `reward-aftermath-map-handoff` red는 닫혔다.
 
 ## 6. Current semantic follow-up pointers
 
 현재 architecture work는 정리됐고, semantic follow-up은 아래 파일들부터 보는 것이 맞다.
 
-- reward/map aftermath, WaitMap / ChooseFirstNode
-  - [Program.PhaseLoopRouting.cs](../../../src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
-  - [Program.AllowedActions.NonCombat.cs](../../../src/Sts2GuiSmokeHarness/Program.AllowedActions.NonCombat.cs)
-  - [AutoDecisionProvider.NonCombatSceneState.cs](../../../src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
-  - [AutoDecisionProvider.NonCombatDecisions.cs](../../../src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
-  - [Observer/GuiSmokeObserverPhaseHeuristics.cs](../../../src/Sts2GuiSmokeHarness/Observer/GuiSmokeObserverPhaseHeuristics.cs)
+- combat post-wait / barrier / targetability coverage
+  - [Program.AllowedActions.Combat.cs](../../../src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs)
+  - [AutoDecisionProvider.CombatDecisions.cs](../../../src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
+  - [Analysis/CombatBarrierSupport.cs](../../../src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
+  - [Analysis/CombatTargetabilitySupport.cs](../../../src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
 - startup / trust / restart chronology
   - [Program.Runner.Bootstrap.cs](../../../src/Sts2GuiSmokeHarness/Program.Runner.Bootstrap.cs)
   - [Program.Runner.Deploy.cs](../../../src/Sts2GuiSmokeHarness/Program.Runner.Deploy.cs)

@@ -120,7 +120,7 @@
 | `REWARD-05` Reward teardown aftermath | reward foreground dropped, map current or teardown flag active | WaitMap / passive release | wait only | reopening reward claim/skip, direct map fallback before release completes | handoff through `WaitMap` | stale reward bounds are residue and must be hard-rejected | `AutoDecisionProvider.NonCombatSceneState.cs`, `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` |
 | `REWARD-06` Reward/map mixed foreground | reward explicit affordance present, map context visible underneath | Rewards / reward lane | claim reward item or skip/proceed; map actions suppressed | visible map advance, first reachable node while reward affordance remains | release only after reward affordance disappears or reward owner drops | background map is contamination, not owner | `AutoDecisionProvider.NonCombatSceneState.cs`, `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs`, `Program.SelfTests.NonCombatForegroundOwnership.cs` |
 | `REWARD-07` Reward -> map handoff | reward affordance gone, map current or teardown explicit | WaitMap / map reconcile | wait, then map reopen | repeated reward skip or direct node click before release settles | `WaitMap` -> map routing | stale off-window reward only does not keep reward owner | `Program.PhaseLoopRouting.cs`, `Program.SelfTests.NonCombatForegroundOwnership.cs` |
-| `REWARD-09` Same reward skip reissue suppression | prior reward skip fired and same reward authority band lingers | Rewards / release-pending | wait/release only until new authority appears | same reward skip click reissue | release to map or explicit new reward affordance | same-action reissue without new authority forbidden | currently gap; sentinel exists but state machine is incomplete |
+| `REWARD-09` Same reward skip reissue suppression | prior reward skip fired and same reward authority band lingers | Rewards / release-pending | wait/release only until new authority appears | same reward skip click reissue | release to map or explicit new reward affordance | same-action reissue without new authority forbidden | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` reward release-pending assertions |
 | `REWARD-10` Reward-map loop detection | repeated reward/map loop targets on reward-authoritative screen | Sentinel / bounded failure | classify reward-map-loop after bounded repeats | infinite click loop | bounded failure summary or recovery branch | reward explicit choices + map contamination must be recorded | `Program.PhaseFailureHints.cs`, `Program.SelfTests.StallSentinel.cs` |
 
 ## Shop
@@ -144,8 +144,8 @@
 
 | Priority | Family | Current contract status | Main risk | Required follow-up |
 |---|---|---|---|---|
-| P0 | Reward aftermath map handoff | reward handoff는 닫혔지만 aftermath map-node continuity가 partial | `ChooseFirstNode` plateau, parity red `reward-aftermath-map-handoff` | 좁은 reward aftermath / WaitMap / map-node semantic fix |
-| P1 | Combat post-wait recapture coverage | code/self-test는 strong, live/parity coverage는 partial | legitimate wait 이후 fresh current-main coverage 부족 | current-main live/parity evidence 보강 |
+| P0 | Combat post-wait recapture coverage | code/self-test는 strong, live/parity coverage는 partial | legitimate wait 이후 fresh current-main coverage 부족 | current-main live/parity evidence 보강 |
+| P1 | Capture boundary fresh live proof | bounded failure contract는 있으나 fresh live proof가 partial | silent-hang hardening live evidence 부족 | capture boundary live root 추가 |
 | P1 | Lifecycle restart evidence | product path separate from gameplay | terminal -> restart -> next-attempt first-screen chain remains appendix | validation/lifecycle appendix로 유지하며 별도 추적 |
 
 ## 문서 사용 규칙
@@ -159,6 +159,4 @@
 
 current `main` 바깥의 clean validation branch/worktree에서 드러난 최근 regression families는 source of truth가 아니므로 본문 기준선에는 넣지 않는다. 다만 아래 family는 이후 current `main`에 같은 shape가 들어오는지 감시 대상으로 유지한다.
 
-- `reward-aftermath-map-handoff` parity known red
-- latest valid live의 `ChooseFirstNode` `decision-wait-plateau`
 - combat post-wait recapture fresh live coverage gap

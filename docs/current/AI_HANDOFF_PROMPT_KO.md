@@ -32,25 +32,25 @@ repo root:
 - current `main`의 smoke harness refactor wave 1-8은 완료됨
 - `Program.cs`는 shell-only임
 - build / `Sts2ModKit.SelfTest` / `Sts2GuiSmokeHarness -- self-test` / `replay-test`는 green
-- `replay-parity-test`는 single known red `reward-aftermath-map-handoff` baseline을 유지 중
+- `replay-parity-test`는 current `main` 기준 green
 - `WaitRunLoad` resumed reward/map mixed handoff bug는 이미 닫힘
-- latest valid live first blocker는 reward aftermath 이후 `ChooseFirstNode` `decision-wait-plateau`
+- latest valid fresh live root는 [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)이고 failure-summary 없이 `max-steps-reached`로 끝남
 
 이번 세션 목표
 
 1. old `Program.cs` monolith 전제를 버리고 current owner 파일 기준으로 시작
 2. 구조 refactor reopen 금지
-3. semantic fix가 필요하면 reward aftermath 이후 `ChooseFirstNode / WaitMap / map-node` gap만 좁게 수정
+3. semantic follow-up이 필요하면 combat / lifecycle coverage frontier만 좁게 다룰 것
 4. new parallel heuristic family 추가 금지
 5. acceptance 통과 시 바로 커밋
 
 우선 열 파일
 
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.NonCombat.cs
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Observer/GuiSmokeObserverPhaseHeuristics.cs
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs
 
 핵심 원칙
 
@@ -90,7 +90,7 @@ acceptance
 - 구조 refactor를 reopen하지 않음
 - touched owner files만 수정함
 - build/self-test/replay-test green 유지
-- replay parity는 `reward-aftermath-map-handoff` single known red만 유지
+- replay parity는 green 유지
 - fresh live를 돌렸다면 새 first authoritative blocker 1개만 보고
 - acceptance 통과 시 묻지 말고 즉시 커밋
 ```

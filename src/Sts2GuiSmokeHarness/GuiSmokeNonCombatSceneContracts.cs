@@ -90,9 +90,15 @@ sealed record RewardSceneState(
     bool SuppressSameSkipReissue) : ICanonicalNonCombatSceneState
 {
     public bool RewardForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Reward;
+    public bool MapForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Map;
     public bool ReleaseToMapPending => ReleaseStage is RewardReleaseStage.ReleasePending or RewardReleaseStage.Released;
 
-    NonCombatCanonicalForegroundOwner ICanonicalNonCombatSceneState.CanonicalForegroundOwner => NonCombatCanonicalForegroundOwner.Reward;
+    NonCombatCanonicalForegroundOwner ICanonicalNonCombatSceneState.CanonicalForegroundOwner => CanonicalForegroundOwner switch
+    {
+        NonCombatForegroundOwner.Reward => NonCombatCanonicalForegroundOwner.Reward,
+        NonCombatForegroundOwner.Map => NonCombatCanonicalForegroundOwner.Map,
+        _ => NonCombatCanonicalForegroundOwner.Unknown,
+    };
 
     NonCombatReleaseStage ICanonicalNonCombatSceneState.ReleaseStage => ReleaseStage switch
     {
@@ -113,13 +119,17 @@ sealed record RewardSceneState(
     bool ICanonicalNonCombatSceneState.AllowsFastForegroundWait => RewardForegroundOwned
                                                                    && ReleaseStage == RewardReleaseStage.Active;
 
-    string? ICanonicalNonCombatSceneState.ForegroundDebugKind => ReleaseToMapPending
-        ? "reward-release-pending"
-        : RewardForegroundOwned
-            ? "reward"
+    string? ICanonicalNonCombatSceneState.ForegroundDebugKind => RewardForegroundOwned
+        ? ReleaseStage == RewardReleaseStage.ReleasePending ? "reward-release-pending" : "reward"
+        : MapForegroundOwned
+            ? "map"
             : null;
 
-    string? ICanonicalNonCombatSceneState.BackgroundDebugKind => LayerState.MapContextVisible ? "map" : null;
+    string? ICanonicalNonCombatSceneState.BackgroundDebugKind => RewardForegroundOwned
+        ? LayerState.MapContextVisible ? "map" : null
+        : MapForegroundOwned && LayerState.RewardPanelVisible
+            ? "reward"
+            : null;
 }
 
 enum EventReleaseStage
@@ -218,7 +228,11 @@ sealed record ShopSceneState(
     ShopRoomState ShopState,
     bool AlreadyPurchased) : ICanonicalNonCombatSceneState
 {
-    public NonCombatCanonicalForegroundOwner CanonicalForegroundOwner => NonCombatCanonicalForegroundOwner.Shop;
+    public NonCombatCanonicalForegroundOwner CanonicalForegroundOwner => ShopState.ForegroundOwned
+        ? NonCombatCanonicalForegroundOwner.Shop
+        : ShopState.TeardownInProgress || ShopState.MapIsCurrentActiveScreen
+            ? NonCombatCanonicalForegroundOwner.Map
+            : NonCombatCanonicalForegroundOwner.Unknown;
 
     public NonCombatReleaseStage ReleaseStage => ShopState.ForegroundOwned
         ? NonCombatReleaseStage.Active
@@ -236,9 +250,13 @@ sealed record ShopSceneState(
 
     public bool AllowsFastForegroundWait => ShopState.ForegroundOwned;
 
-    public string? ForegroundDebugKind => ShopState.InventoryOpen ? "shop-inventory" : "shop";
+    public string? ForegroundDebugKind => CanonicalForegroundOwner == NonCombatCanonicalForegroundOwner.Map
+        ? "map"
+        : ShopState.InventoryOpen ? "shop-inventory" : "shop";
 
-    public string? BackgroundDebugKind => ShopState.MapIsCurrentActiveScreen ? "map" : null;
+    public string? BackgroundDebugKind => CanonicalForegroundOwner == NonCombatCanonicalForegroundOwner.Map
+        ? ShopState.RoomVisible ? "shop" : null
+        : ShopState.MapIsCurrentActiveScreen ? "map" : null;
 }
 
 sealed record RestSiteSceneState(
