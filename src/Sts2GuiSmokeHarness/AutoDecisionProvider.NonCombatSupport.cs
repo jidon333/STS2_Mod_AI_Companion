@@ -709,6 +709,17 @@ sealed partial class AutoDecisionProvider
                    && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds;
     }
 
+    private static string? TryFindProceedBounds(GuiSmokeStepRequest request)
+    {
+        return request.Observer.ActionNodes.FirstOrDefault(node =>
+                   node.Actionable
+                   && IsProceedNode(node)
+                   && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))?.ScreenBounds
+               ?? request.Observer.Choices.FirstOrDefault(choice =>
+                   IsProceedChoice(choice)
+                   && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds;
+    }
+
     private static string? TryFindRewardBounds(GuiSmokeStepRequest request)
     {
         return request.Observer.ActionNodes.FirstOrDefault(node =>
@@ -909,101 +920,6 @@ sealed partial class AutoDecisionProvider
         }
 
         return score;
-    }
-
-    private static GuiSmokeStepDecision? TryCreateScreenshotFirstRoomDecision(GuiSmokeStepRequest request)
-    {
-        var rewardMapLayer = BuildRewardMapLayerState(request.Observer, request.WindowBounds);
-        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
-        var preferEventProgressionOverMapFallback = eventScene.EventForegroundOwned
-                                                    && eventScene.ReleaseStage == EventReleaseStage.Active;
-        if (!rewardMapLayer.RewardPanelVisible
-            && !preferEventProgressionOverMapFallback
-            && !mapOverlayState.ForegroundVisible)
-        {
-            var visibleMapNodeDecision = GuiSmokeDecisionDebug.TraceCandidate(
-                "visible reachable node",
-                "screenshot-reachable-node",
-                0.90,
-                TryFindFirstReachableMapNodeDecision(request),
-                "no screenshot-reachable map node was detected");
-            if (visibleMapNodeDecision is not null)
-            {
-                return visibleMapNodeDecision;
-            }
-
-            var visibleMapAdvanceDecision = GuiSmokeDecisionDebug.TraceCandidate(
-                "visible map advance",
-                "screenshot-current-arrow",
-                0.78,
-                TryFindVisibleMapAdvanceDecision(request),
-                "no current-node-arrow fallback was permitted");
-            if (visibleMapAdvanceDecision is not null)
-            {
-                return visibleMapAdvanceDecision;
-            }
-        }
-
-        if (LooksLikeRestSiteState(request.Observer))
-        {
-            GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map-context");
-        }
-
-        var restSiteUpgradeDecision = GuiSmokeDecisionDebug.TraceCandidate(
-            "rest site upgrade",
-            "rest-site-upgrade",
-            0.91,
-            TryCreateRestSiteUpgradeDecision(request),
-            "rest-site upgrade grid is not currently actionable");
-        if (restSiteUpgradeDecision is not null)
-        {
-            return restSiteUpgradeDecision;
-        }
-
-        var treasureDecision = GuiSmokeDecisionDebug.TraceCandidate(
-            "treasure room",
-            "treasure-room",
-            0.90,
-            TryCreateTreasureRoomDecision(request),
-            "treasure room affordance is not visible");
-        if (treasureDecision is not null)
-        {
-            return treasureDecision;
-        }
-
-        if (LooksLikeShopState(request.Observer))
-        {
-            var shopDecision = DecideHandleShop(request);
-            return string.Equals(shopDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
-                ? null
-                : shopDecision;
-        }
-
-        return GuiSmokeDecisionDebug.TraceCandidate(
-                   "rest site explicit choice",
-                   "rest-site-choice",
-                   0.89,
-                   TryCreateRestSiteDecision(request),
-                   "rest-site explicit choices are not visible")
-               ?? GuiSmokeDecisionDebug.TraceCandidate(
-                   "hidden overlay cleanup",
-                   "overlay-cleanup",
-                   0.70,
-                   TryCreateHiddenOverlayCleanupDecision(request),
-                   "no hidden overlay cleanup affordance is available")
-               ?? GuiSmokeDecisionDebug.TraceCandidate(
-                   "overlay advance",
-                   "overlay-advance",
-                   0.68,
-                   TryCreateOverlayAdvanceDecision(request),
-                   "no overlay advance affordance is available")
-               ?? GuiSmokeDecisionDebug.TraceCandidate(
-                   "visible proceed",
-                   "visible-proceed",
-                   0.67,
-                   TryCreateVisibleProceedDecision(request),
-                   "no visible proceed button is available");
     }
 
     private static GuiSmokeStepDecision? TryCreateTreasureRoomDecision(GuiSmokeStepRequest request)
@@ -1233,6 +1149,50 @@ sealed partial class AutoDecisionProvider
             null);
     }
 
+    private static GuiSmokeStepDecision? TryCreateRestSiteProceedDecision(GuiSmokeStepRequest request)
+    {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click proceed"))
+        {
+            return null;
+        }
+
+        if (BuildRestSiteSceneState(request.Observer) is not
+            {
+                ProceedVisible: true,
+                ExplicitChoiceVisible: false,
+                SmithUpgradeActive: false,
+            })
+        {
+            return null;
+        }
+
+        var proceedNode = request.Observer.ActionNodes.FirstOrDefault(node =>
+            node.Actionable
+            && IsProceedNode(node)
+            && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds));
+        if (proceedNode is not null)
+        {
+            return CreateClickDecisionFromNode(request, proceedNode, "visible proceed");
+        }
+
+        var proceedChoice = request.Observer.Choices.FirstOrDefault(choice =>
+            IsProceedChoice(choice)
+            && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds));
+        if (proceedChoice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                proceedChoice,
+                "visible proceed",
+                "Rest-site post-selection proceed is runtime-visible. Advance the room flow before attempting any map routing.",
+                0.96,
+                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rest-site",
+                1400);
+        }
+
+        return null;
+    }
+
     private static string? TryFindRestSiteUpgradeBounds(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
     {
         return decision.TargetLabel switch
@@ -1330,77 +1290,6 @@ sealed partial class AutoDecisionProvider
         return BuildRestSiteDecisionCandidates(request)
             .Select(static candidate => candidate.Decision)
             .FirstOrDefault(static decision => decision is not null);
-    }
-
-    private static GuiSmokeStepDecision? TryCreateVisibleProceedDecision(GuiSmokeStepRequest request)
-    {
-        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click proceed"))
-        {
-            return null;
-        }
-
-        var proceedNode = request.Observer.ActionNodes.FirstOrDefault(node =>
-            node.Actionable
-            && IsProceedNode(node)
-            && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds));
-        if (proceedNode is not null)
-        {
-            return CreateClickDecisionFromNode(request, proceedNode, "visible proceed");
-        }
-
-        var proceedChoice = request.Observer.Choices.FirstOrDefault(choice =>
-            !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
-            && IsProceedLikeLabel(choice.Label)
-            && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds));
-        if (proceedChoice is not null)
-        {
-            return CreateClickDecisionFromChoice(
-                request,
-                proceedChoice,
-                "visible proceed",
-                "Observer-exported proceed choice is visible. Advance the room flow before attempting any map click.",
-                0.96,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
-                1400);
-        }
-
-        var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(request.ScreenshotPath);
-        if (!overlayAnalysis.HasRightProceedArrow || overlayAnalysis.HasBottomLeftBackArrow || overlayAnalysis.HasCentralOverlayPanel)
-        {
-            return null;
-        }
-
-        if (overlayAnalysis.RightProceedNormalizedX is not null && overlayAnalysis.RightProceedNormalizedY is not null)
-        {
-            return new GuiSmokeStepDecision(
-                "act",
-                "click",
-                null,
-                overlayAnalysis.RightProceedNormalizedX,
-                overlayAnalysis.RightProceedNormalizedY,
-                "visible proceed",
-                "The screenshot shows a right-side proceed arrow cluster without an active overlay back arrow. Advance the room flow before attempting any map click.",
-                0.95,
-                "map",
-                1400,
-                true,
-                null);
-        }
-
-        return new GuiSmokeStepDecision(
-            "act",
-            "click",
-            null,
-            0.885,
-            0.835,
-            "visible proceed",
-            "The screenshot shows the large right-side proceed arrow without an active overlay back arrow. Advance the room flow before attempting any map click.",
-            0.95,
-            "map",
-            1400,
-            true,
-            null);
     }
 
     private static GuiSmokeStepDecision? TryCreateHiddenOverlayCleanupDecision(GuiSmokeStepRequest request)
@@ -1531,6 +1420,13 @@ sealed partial class AutoDecisionProvider
                || node.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsProceedChoice(ObserverChoice choice)
+    {
+        return !string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
+               && IsProceedLikeLabel(choice.Label);
+    }
+
     private static bool IsBackNode(ObserverActionNode node)
     {
         return node.Label.Contains("\uB4A4\uB85C", StringComparison.OrdinalIgnoreCase)
@@ -1544,32 +1440,9 @@ sealed partial class AutoDecisionProvider
                || node.Label.Contains("Map", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool LooksLikeTreasureState(ObserverSummary observer)
-    {
-        if (string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return observer.CurrentChoices.Any(static label =>
-            label.Contains("Chest", StringComparison.OrdinalIgnoreCase)
-            || label.Contains("\uC0C1\uC790", StringComparison.OrdinalIgnoreCase));
-    }
-
     private static bool LooksLikeRestSiteState(ObserverSummary observer)
     {
         return GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer);
-    }
-
-    private static bool LooksLikeScreenshotFirstRoomState(GuiSmokeStepRequest request)
-    {
-        return LooksLikeRestSiteState(request.Observer)
-               || LooksLikeTreasureState(request.Observer)
-               || LooksLikeShopState(request.Observer)
-               || (string.Equals(request.Observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                   && request.Observer.Choices.Any(choice =>
-                       string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool LooksLikeMapTransitionState(GuiSmokeStepRequest request)

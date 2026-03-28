@@ -159,6 +159,28 @@ sealed partial class AutoDecisionProvider
             return builder.Build(observerMissDecision, actualDecision);
         }
 
+        if (BuildRestSiteSceneState(request.Observer) is
+            {
+                ProceedVisible: true,
+                ExplicitChoiceVisible: false,
+                SmithUpgradeActive: false,
+            })
+        {
+            builder.AddSuppressed("click exported reachable node", "rest-site-proceed-outranks-map-routing");
+            builder.AddSuppressed("click first reachable node", "rest-site-proceed-outranks-screenshot-map-routing");
+            builder.AddSuppressed("click visible map advance", "rest-site-proceed-suppresses-current-node-arrow");
+            builder.AddSuppressed("click map back", "rest-site-proceed-is-the-room-progression-lane");
+            builder.Consider(
+                "click proceed",
+                "rest-site-proceed",
+                0.96d,
+                () => TryCreateRestSiteProceedDecision(request),
+                "rest-site-proceed-not-visible",
+                rawBounds: TryFindProceedBounds(request),
+                boundsSource: "observer-proceed");
+            return builder.Build(CreateWaitDecision("waiting for explicit rest-site proceed", request.Observer.CurrentScreen), actualDecision);
+        }
+
         if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
         {
             builder.AddSuppressed("click exported reachable node", "treasure-room-explicit-affordances-outrank-map-routing");
@@ -226,23 +248,6 @@ sealed partial class AutoDecisionProvider
             return builder.Build(CreateWaitDecision("waiting for exported or screenshot-reachable map node", request.Observer.CurrentScreen), actualDecision);
         }
 
-        if (LooksLikeScreenshotFirstRoomState(request))
-        {
-            if (AutoMapAnalyzer.Analyze(request.ScreenshotPath).HasCurrentArrow)
-            {
-                builder.AddSuppressed("click visible map advance", "room-explicit-choice-takes-priority-over-current-node-arrow");
-            }
-
-            var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
-            builder.Consider(
-                ToCandidateLabel(roomDecision, "click room explicit choice"),
-                "screenshot-room-explicit",
-                0.96d,
-                () => roomDecision,
-                "no-room-explicit-choice");
-            return builder.Build(CreateWaitDecision("waiting for reachable map node", request.Observer.CurrentScreen), actualDecision);
-        }
-
         builder.Consider(
             "click exported reachable node",
             "observer-export:map-node",
@@ -293,7 +298,6 @@ sealed partial class AutoDecisionProvider
             builder.AddSuppressed("click reward back", "card-selection-subtype-foreground-suppresses-reward-back-nav");
             builder.AddSuppressed("click event choice", "card-selection-subtype-foreground-suppresses-generic-event-choice");
             builder.AddSuppressed("click first reachable node", "card-selection-subtype-foreground-suppresses-map-fallback");
-            builder.AddSuppressed("click room fallback", "card-selection-subtype-foreground-suppresses-room-fallback");
             return builder.Build(CreateWaitDecision("waiting for card-selection subtype progression", request.Observer.CurrentScreen), actualDecision);
         }
 
@@ -343,7 +347,6 @@ sealed partial class AutoDecisionProvider
             builder.AddSuppressed("click exported reachable node", "ancient-event-dialogue-outranks-map-routing");
             builder.AddSuppressed("click first reachable node", "ancient-event-dialogue-outranks-screenshot-map-routing");
             builder.AddSuppressed("click visible map advance", "ancient-event-dialogue-suppresses-map-arrow-fallback");
-            builder.AddSuppressed("click room fallback", "ancient-event-dialogue-suppresses-room-fallback");
             return builder.Build(CreateWaitDecision("waiting for explicit ancient dialogue hitbox", request.Observer.CurrentScreen), actualDecision);
         }
 
@@ -362,7 +365,6 @@ sealed partial class AutoDecisionProvider
             builder.AddSuppressed("click exported reachable node", "ancient-event-completion-outranks-map-routing");
             builder.AddSuppressed("click first reachable node", "ancient-event-completion-outranks-screenshot-map-routing");
             builder.AddSuppressed("click visible map advance", "ancient-event-completion-suppresses-map-arrow-fallback");
-            builder.AddSuppressed("click room fallback", "ancient-event-completion-suppresses-room-fallback");
             return builder.Build(CreateWaitDecision("waiting for explicit ancient event completion", request.Observer.CurrentScreen), actualDecision);
         }
 
@@ -373,7 +375,6 @@ sealed partial class AutoDecisionProvider
             builder.AddSuppressed("click exported reachable node", "event-release-pending-waits-for-explicit-release-before-map-routing");
             builder.AddSuppressed("click first reachable node", "event-release-pending-waits-for-explicit-release-before-map-routing");
             builder.AddSuppressed("click visible map advance", "event-release-pending-suppresses-map-contamination");
-            builder.AddSuppressed("click room fallback", "event-release-pending-suppresses-room-fallback");
             return builder.Build(CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit event release"), actualDecision);
         }
 
@@ -392,7 +393,6 @@ sealed partial class AutoDecisionProvider
             builder.AddSuppressed("click exported reachable node", "ancient-event-options-outrank-map-routing");
             builder.AddSuppressed("click first reachable node", "ancient-event-options-outrank-screenshot-map-routing");
             builder.AddSuppressed("click visible map advance", "ancient-event-options-suppress-map-arrow-fallback");
-            builder.AddSuppressed("click room fallback", "ancient-event-options-suppress-room-fallback");
             return builder.Build(CreateWaitDecision("waiting for explicit ancient event option buttons", request.Observer.CurrentScreen), actualDecision);
         }
 
@@ -443,9 +443,6 @@ sealed partial class AutoDecisionProvider
         {
             builder.AddSuppressed("click first reachable node", "event-foreground-keeps-map-transition-branch-suppressed");
         }
-
-        var roomDecision = TryCreateScreenshotFirstRoomDecision(request);
-        builder.Consider(ToCandidateLabel(roomDecision, "click room fallback"), "screenshot-room-fallback", 0.60d, () => roomDecision, "no-room-fallback-available", boundsSource: "screenshot-room");
 
         return builder.Build(CreateWaitDecision("waiting for an explicit event progression choice", request.Observer.CurrentScreen), actualDecision);
     }

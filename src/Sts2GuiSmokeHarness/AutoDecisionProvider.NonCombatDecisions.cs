@@ -77,6 +77,28 @@ sealed partial class AutoDecisionProvider
                    ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for an explicit rest-site choice");
         }
 
+        if (BuildRestSiteSceneState(request.Observer) is
+            {
+                ProceedVisible: true,
+                ExplicitChoiceVisible: false,
+                SmithUpgradeActive: false,
+            })
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "click proceed", "wait" });
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site proceed lane outranks map routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site proceed lane outranks screenshot map routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site proceed lane suppresses current-node-arrow fallback");
+            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site proceed lane is the room progression path");
+            return GuiSmokeDecisionDebug.TraceCandidate(
+                       "visible proceed",
+                       "rest-site-proceed",
+                       0.96,
+                       TryCreateRestSiteProceedDecision(request),
+                       "rest-site proceed affordance is not currently actionable")
+                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit rest-site proceed");
+        }
+
         var treasureDecision = TryCreateTreasureRoomDecision(request);
         if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
         {
@@ -145,20 +167,6 @@ sealed partial class AutoDecisionProvider
                        TryFindFirstReachableMapNodeDecision(request),
                        "no screenshot-reachable next node was detected")
                    ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for exported or screenshot-reachable map node");
-        }
-
-        if (LooksLikeScreenshotFirstRoomState(request))
-        {
-            var roomDecision = GuiSmokeDecisionDebug.TraceCandidate(
-                "screenshot first room",
-                "room-screenshot-fallback",
-                0.75,
-                TryCreateScreenshotFirstRoomDecision(request),
-                "no explicit screenshot-first room action was available");
-            if (roomDecision is not null)
-            {
-                return roomDecision;
-            }
         }
 
         return GuiSmokeDecisionDebug.TraceCandidate(
@@ -525,17 +533,6 @@ sealed partial class AutoDecisionProvider
         if (LooksLikeMapTransitionState(request))
         {
             return DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() });
-        }
-
-        var roomDecision = GuiSmokeDecisionDebug.TraceCandidate(
-            "screenshot first room",
-            "room-screenshot-fallback",
-            0.75,
-            TryCreateScreenshotFirstRoomDecision(request),
-            "no screenshot-first room action was available");
-        if (roomDecision is not null)
-        {
-            return roomDecision;
         }
 
         if (!preferEventForeground)
