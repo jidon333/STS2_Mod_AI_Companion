@@ -586,6 +586,19 @@ static void TestLiveExportAtomicWriter()
 
         Assert(File.ReadAllText(path) == "second", "Expected atomic writer to replace the previous contents.");
         Assert(!File.Exists(path + ".tmp"), "Expected atomic writer temp file to be cleaned up.");
+
+        var holdStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var releaseTask = Task.Run(() =>
+        {
+            Thread.Sleep(120);
+            holdStream.Dispose();
+        });
+
+        LiveExportAtomicFileWriter.WriteAllTextAtomic(path, "third");
+        releaseTask.GetAwaiter().GetResult();
+
+        Assert(File.ReadAllText(path) == "third", "Expected atomic writer to retry and replace the previous contents after a transient destination lock.");
+        Assert(!File.Exists(path + ".tmp"), "Expected atomic writer retry path to clean up the temp file.");
     }
     finally
     {

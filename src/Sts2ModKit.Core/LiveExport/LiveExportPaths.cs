@@ -100,12 +100,39 @@ public sealed class LiveExportDeduplicator
 
 public static class LiveExportAtomicFileWriter
 {
-    public static void WriteAllTextAtomic(string path, string contents)
+    public static void WriteAllTextAtomic(string path, string contents, int maxAttempts = 6, int retryDelayMs = 25)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var tempPath = path + ".tmp";
-        File.WriteAllText(tempPath, contents);
 
+        for (var attempt = 1; attempt <= Math.Max(1, maxAttempts); attempt += 1)
+        {
+            try
+            {
+                File.WriteAllText(tempPath, contents);
+
+                if (File.Exists(path))
+                {
+                    File.Replace(tempPath, path, destinationBackupFileName: null, ignoreMetadataErrors: true);
+                    return;
+                }
+
+                File.Move(tempPath, path);
+                return;
+            }
+            catch (IOException) when (attempt < maxAttempts)
+            {
+                TryDeleteTemp(tempPath);
+                Thread.Sleep(retryDelayMs * attempt);
+            }
+            catch (UnauthorizedAccessException) when (attempt < maxAttempts)
+            {
+                TryDeleteTemp(tempPath);
+                Thread.Sleep(retryDelayMs * attempt);
+            }
+        }
+
+        File.WriteAllText(tempPath, contents);
         if (File.Exists(path))
         {
             File.Replace(tempPath, path, destinationBackupFileName: null, ignoreMetadataErrors: true);
@@ -160,5 +187,19 @@ public static class LiveExportAtomicFileWriter
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var sha256 = SHA256.Create();
         return Convert.ToHexString(sha256.ComputeHash(stream));
+    }
+
+    private static void TryDeleteTemp(string tempPath)
+    {
+        try
+        {
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+        catch
+        {
+        }
     }
 }
