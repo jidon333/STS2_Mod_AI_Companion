@@ -461,9 +461,9 @@ internal static partial class Program
 
     static bool IsSceneAuthorityInvalidFailure(GuiSmokePhase phase, ObserverState? observer)
     {
-        var currentScreen = observer?.CurrentScreen;
-        var visibleScreen = observer?.VisibleScreen;
-        var sceneAuthority = observer?.SceneAuthority;
+        var currentScreen = observer is null ? null : ObserverScreenProvenance.CompatibilityCurrentScreen(observer);
+        var visibleScreen = observer is null ? null : ObserverScreenProvenance.CompatibilityVisibleScreen(observer);
+        var sceneAuthority = observer is null ? null : ObserverScreenProvenance.CompatibilitySceneAuthority(observer);
         return string.Equals(currentScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
                || string.Equals(visibleScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
                || string.Equals(currentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
@@ -536,12 +536,18 @@ internal static partial class Program
             return false;
         }
 
-        if (!string.Equals(requestObserver.CurrentScreen, latestObserver.CurrentScreen, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(
+                ObserverScreenProvenance.CompatibilityCurrentScreen(requestObserver),
+                ObserverScreenProvenance.CompatibilityCurrentScreen(latestObserver),
+                StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        if (!string.Equals(requestObserver.VisibleScreen, latestObserver.VisibleScreen, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(
+                ObserverScreenProvenance.CompatibilityVisibleScreen(requestObserver),
+                ObserverScreenProvenance.CompatibilityVisibleScreen(latestObserver),
+                StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

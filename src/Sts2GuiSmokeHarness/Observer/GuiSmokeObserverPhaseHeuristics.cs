@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class GuiSmokeObserverPhaseHeuristics
 {
@@ -35,15 +36,13 @@ static class GuiSmokeObserverPhaseHeuristics
             return false;
         }
 
-        if (observer.SceneReady == false
-            && !string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        if (CompatibilitySceneReady(observer) == false
+            && !MatchesCompatibilityScreen(observer, "character-select"))
         {
             return TryGetPostRunLoadNonReadyRoomPhase(observer, out nextPhase);
         }
 
-        if (string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        if (MatchesCompatibilityScreen(observer, "character-select"))
         {
             nextPhase = GuiSmokePhase.ChooseCharacter;
             return true;
@@ -96,8 +95,7 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool TryGetPostCharacterSelectPhase(ObserverState observer, out GuiSmokePhase nextPhase)
     {
-        if (string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        if (MatchesCompatibilityScreen(observer, "character-select"))
         {
             nextPhase = GuiSmokePhase.ChooseCharacter;
             return true;
@@ -252,8 +250,7 @@ static class GuiSmokeObserverPhaseHeuristics
             return rewardState.ForegroundOwned;
         }
 
-        return string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+        return MatchesCompatibilityScreen(observer, "rewards")
                || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
                || observer.ActionNodes.Any(static node =>
                    node.Actionable

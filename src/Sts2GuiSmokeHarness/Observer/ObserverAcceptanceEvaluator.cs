@@ -16,17 +16,18 @@ using Sts2AiCompanion.Foundation.Contracts;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
+using static ObserverScreenProvenance;
 
 sealed class ObserverAcceptanceEvaluator
 {
     public bool IsPhaseSatisfied(GuiSmokePhase phase, ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
     {
-        var sceneReady = observer.SceneReady != false;
+        var sceneReady = CompatibilitySceneReady(observer) != false;
         return phase switch
         {
-            GuiSmokePhase.WaitMainMenu => sceneReady && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase),
+            GuiSmokePhase.WaitMainMenu => sceneReady && MatchesCompatibilityScreen(observer, "main-menu"),
             GuiSmokePhase.WaitRunLoad => false,
-            GuiSmokePhase.WaitCharacterSelect => sceneReady && string.Equals(observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase),
+            GuiSmokePhase.WaitCharacterSelect => sceneReady && MatchesCompatibilityScreen(observer, "character-select"),
             GuiSmokePhase.WaitMap => sceneReady && MapForegroundReconciliation.HasMapForegroundOwnership(observer, history ?? Array.Empty<GuiSmokeHistoryEntry>()),
             GuiSmokePhase.WaitPostMapNodeRoom => false,
             GuiSmokePhase.WaitCombat => CombatBarrierPolicy.IsStableCombatEntryObserver(observer),

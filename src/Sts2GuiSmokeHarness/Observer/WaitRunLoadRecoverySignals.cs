@@ -5,13 +5,14 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class WaitRunLoadRecoverySignals
 {
     public static bool ShouldRetryEnterRunFromWaitRunLoad(ObserverSummary observer)
     {
-        if (observer.SceneReady == false
-            || !string.Equals(observer.SceneStability, "stable", StringComparison.OrdinalIgnoreCase))
+        if (CompatibilitySceneReady(observer) == false
+            || !string.Equals(CompatibilitySceneStability(observer), "stable", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -24,8 +25,7 @@ static class WaitRunLoadRecoverySignals
             return false;
         }
 
-        var mainMenuSurfaceVisible = string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
-                                     || string.Equals(observer.VisibleScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
+        var mainMenuSurfaceVisible = MatchesCompatibilityScreen(observer, "main-menu")
                                      || string.Equals(observer.ChoiceExtractorPath, "main-menu", StringComparison.OrdinalIgnoreCase)
                                      || transitionState?.RootSceneIsMainMenu == true;
         if (!mainMenuSurfaceVisible)
