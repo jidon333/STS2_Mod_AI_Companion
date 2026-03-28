@@ -205,7 +205,7 @@ flowchart TD
 
 ## 7. Related docs
 
-- module boundary contract:
+- cleanup program:
   - [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)
 - startup/deploy sequencing:
   - [STARTUP_DEPLOY_CONTROL_LAYER.md](../../contracts/STARTUP_DEPLOY_CONTROL_LAYER.md)

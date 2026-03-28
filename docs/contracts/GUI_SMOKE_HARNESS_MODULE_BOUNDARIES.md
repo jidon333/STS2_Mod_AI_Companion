@@ -1,261 +1,301 @@
-# GuiSmokeHarness Module Boundaries
+# GuiSmokeHarness Cleanup Program
 
 > Status: Live Contract
 > Source of truth: Yes
-> Update when: target module ownership, extraction order, or shell/file boundaries change.
+> Update when: cleanup priority, workstream order, observer fact/export contract, or validation cadence changes.
 
 ## 0. 먼저 읽을 요약
 
-이 문서는 `Sts2GuiSmokeHarness`의 장기 리팩터링 방향을 고정하는 구조 계약이다.
+이 문서는 completed refactor 이후 `GuiSmokeHarness`에 남아 있는 구조 부채와 observer/export/bridge 부채를 순차적으로 정리하기 위한 장기 cleanup program이다.
 
-핵심은 네 가지다.
+이 문서가 고정하는 것은 네 가지다.
 
-- 하네스 production code를 일반적인 C# 프로젝트 수준으로 읽히게 만든다.
-- 같은 개념은 production owner를 정확히 하나만 가진다.
-- 구조화와 중복 제거는 `No behavior change` 원칙으로 진행한다.
-- current blocker 추적과 long-term 구조 계획을 한 문서에 섞지 않는다.
+1. 리팩터링 이후에도 남아 있는 핵심 문제의 우선순위
+2. harness와 observer stack을 어떤 원칙으로 정리할지
+3. 순차적인 workstream order
+4. 각 workstream의 validation / cleanup 규칙
 
-이 문서는 현재 어떤 blocker를 고치고 있는지 설명하는 handoff 문서가 아니다.
-또한 reward/event/combat 규칙 자체를 세세하게 기술하는 semantics 문서도 아니다.
+이 문서는 current blocker source of truth가 아니다.
+current blocker, latest live root, current handoff는 `docs/current/*`에서 관리한다.
 
-이 문서가 고정하려는 것은 아래 세 가지다.
+현재 file owner map과 현재 구조 설명은 아래 문서를 본다.
 
-1. `GuiSmokeHarness` 내부의 canonical module boundary
-2. 그 경계를 안전하게 만드는 extraction wave 순서
-3. dead/stale/duplicate code를 언제 제거할지에 대한 cleanup 규칙
+- [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)
 
-## 0-1. Current state pointer
-
-current blocker, latest authoritative root, active session handoff는 이 문서가 아니라 `docs/current/`에서 관리한다.
+## 0-1. 현재 상태 포인터
 
 - 현재 상태: [PROJECT_STATUS.md](../current/PROJECT_STATUS.md)
 - 세션 handoff: [AI_SESSION_HANDOFF_KO.md](../current/AI_SESSION_HANDOFF_KO.md)
 - regression checklist: [HARNESS_REGRESSION_CHECKLIST_KO.md](../current/HARNESS_REGRESSION_CHECKLIST_KO.md)
+- fixture matrix: [HARNESS_FIXTURE_MATRIX_KO.md](../current/HARNESS_FIXTURE_MATRIX_KO.md)
 
-이 문서는 current snapshot이 아니라 long-lived structure contract다.
-
-## 1. 문서 목적
+## 1. 이 문서의 역할
 
-이 문서의 목적은 `Sts2GuiSmokeHarness`를 다음 상태로 수렴시키는 것이다.
-
-- [`Program.cs`](../../src/Sts2GuiSmokeHarness/Program.cs)는 shell-only
-- runner는 읽히는 orchestrator만 남는다
-- observer는 scene authority와 phase routing의 canonical owner가 된다
-- decision layer는 noncombat / map / combat vertical로 나뉜다
-- artifacts layer는 startup / supervision / diagnostics / storage / review responsibility를 분리한다
-- self-test는 production owner를 따라가는 검증 계층으로 읽힌다
-
-이 문서는 아래 독자를 대상으로 한다.
+이 문서는 예전의 extraction-wave blueprint를 대체한다.
 
-- 하네스 코드를 수정하려는 개발자
-- current blocker를 좁게 보고 싶은 리뷰어
-- artifact와 code owner를 빠르게 매칭해야 하는 세션 구현자
+즉 지금부터는 아래를 더 이상 목표로 두지 않는다.
 
-## 2. Refactor Principles
+- `Program.cs` shell-only 달성
+- observer / analysis / decisions / artifacts / testing의 1차 물리 분리
+- large self-test 1차 split
 
-장기 리팩터링은 아래 원칙으로 고정한다.
+위 작업은 current `main`에서 이미 끝났기 때문이다.
 
-- `No behavior change`
-  - 구조화와 중복 제거는 blocker fix와 분리한다.
-  - heuristic 변경이나 acceptance 변경은 별도 work unit으로 분리한다.
-- `One concept = one owner`
-  - 같은 의미를 두 군데 이상에서 해석하지 않는다.
-  - `Build*`, `Resolve*`, `Decide*`의 책임을 섞지 않는다.
-- `Same-project refactor only`
-  - `Sts2GuiSmokeHarness` 프로젝트 내부에서만 구조를 정리한다.
-  - 새 assembly나 project는 만들지 않는다.
-- `No permanent forwarder`
-  - call site를 옮긴 뒤 old body나 thin wrapper를 남기지 않는다.
-  - redirect와 old owner 삭제는 같은 wave 안에서 끝낸다.
-- `No misc dump file`
-  - `Shared`, `Misc`, `TempRefactor`, `Helpers2` 같은 dumping ground를 만들지 않는다.
-- `Small work units`
-  - 한 commit에는 하나의 owner family만 넣는다.
-  - 구조화 중인 파일과 blocker fix를 같은 commit에 섞지 않는다.
+대신 지금부터의 목표는 아래다.
 
-파일 크기 목표는 아래로 둔다.
+- runtime hot path를 다시 읽히는 구조로 줄인다
+- canonical owner truth를 request-scoped로 재사용하게 만든다
+- stale adapter / duplicated helper / partial `Program` leakage를 제거한다
+- observer/export/bridge를 fact-only 방향으로 되돌린다
+- harness만 owner / release / handoff를 결정하게 만든다
 
-- `Program.cs`: 목표 `<= 500`, hard cap `800`
-- production file: 목표 `<= 900`, hard cap `1200`
-- self-test file: 목표 `<= 1200`
+## 2. 공통 원칙
 
-## 3. Current Structure Snapshot
+### 2.1 역할 분리
 
-현재 구조는 production owner가 대부분 분리된 상태로 읽는다. 남은 작업은 대형 monolith 해체라기보다 localized maintenance와 follow-up cleanup에 가깝다.
+observer / export / bridge는 fact only다.
+harness는 owner / release / handoff / action selection owner다.
 
-이미 canonical owner 방향으로 분리된 영역:
+즉 아래처럼 고정한다.
 
-- `Observer/`
-- `Interop/`
-- `Analysis/`
-- `Artifacts/`
-- `GuiSmokeRuntimeContracts.cs`
-- `GuiSmokeReplayContracts.cs`
-- `GuiSmokeObserverContracts.cs`
-- `GuiSmokeDecisionContracts.cs`
-- `LongRunArtifacts.Review.cs`
-- `LongRunArtifacts.Startup.cs`
-- `LongRunArtifacts.Supervision.cs`
-- `LongRunArtifacts.PlateauDiagnostics.cs`
-- `LongRunArtifacts.Storage.cs`
-- `AutoDecisionProvider.*`
-- `Program.StepRequests.cs`
-- `Program.SceneReasoning.cs`
-- `Program.AllowedActions.*.cs`
-- `Program.PhaseFailureHints.cs`
-- `Program.PhaseLoopRouting.cs`
-- `Program.ProgressAndValidation.cs`
+```text
+observer/export/bridge
+  = raw runtime fact, conflicting fact, source tag, timestamp
 
-현재 남은 주요 hotspot:
+harness
+  = canonical foreground owner
+  = release stage
+  = handoff target
+  = action lane / same-action suppression
+```
 
-- [`Program.cs`](../../src/Sts2GuiSmokeHarness/Program.cs) `56` lines
-- [`Program.Runner.AttemptLifecycle.cs`](../../src/Sts2GuiSmokeHarness/Program.Runner.AttemptLifecycle.cs)
-- [`Program.PhaseLoopRouting.cs`](../../src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
-- [`Program.SelfTests.StartupRuntimeEvidence.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.StartupRuntimeEvidence.cs)
-- [`Program.SelfTests.NonCombatForegroundOwnership.cs`](../../src/Sts2GuiSmokeHarness/Program.SelfTests.NonCombatForegroundOwnership.cs)
+### 2.2 우선순위 규칙
 
-구조적으로 가장 큰 남은 포인트는 아래 둘이다.
+- per-step runtime hot path가 low-frequency startup code보다 우선이다
+- additive fact export가 destructive cleanup보다 우선이다
+- request-scoped truth reuse가 local heuristic cleanup보다 우선이다
+- redirect + old body delete는 같은 work unit에서 끝낸다
+- blocker fix와 cleanup work unit은 섞지 않는다
 
-- `Program.cs` shell-only는 달성했지만, phase/loop routing helper가 아직 큰 단일 file band로 남아 있다
-- `RunAttemptAsync` seam은 분리됐지만 runner/loop helper band와 일부 self-test hotspot이 여전히 크게 남아 있다
+### 2.3 금지 규칙
 
-최근 완료된 큰 분해:
+- observer/export/bridge가 winner를 고르는 새 semantic field를 추가하지 않는다
+- tracker/bridge가 `sceneReady`, `sceneStability`, `visibleScreen`, `SceneType`를 canonical owner처럼 재정의하지 않는다
+- harness가 old synthetic field에만 의존하는 새 code path를 만들지 않는다
+- completed refactor wave를 reopen하는 broad rewrite를 하지 않는다
 
-- `CombatContracts` self-test는 band별 sibling files로 분리됐다
-- `PhaseRouting` self-test는 mixed-state / enter-run / run-load / embark band로 분리됐다
-- `NonCombatDecisionContracts` self-test는 reward / subtype-event band로 분리됐다
+## 3. 현재 남은 문제의 우선순위
 
-## 4. Target Module Boundaries
+### 3.1 Harness Priority Ladder
 
-### 4.1 Shell
+```text
+H0. RunAttemptAsync runtime hot path
+H1. request-scoped canonical scene truth 재사용 부족
+H2. noncombat action-selection residue
+H3. partial Program owner leakage
+H4. startup/prevalidation artifact hotspot
+H5. large self-test hotspot residuals
+```
 
-- [`Program.cs`](../../src/Sts2GuiSmokeHarness/Program.cs)는 `Main`, command dispatch, top-level exception boundary만 가진다.
-- CLI parse와 replay/inspect entrypoint는 shell이 아니라 dedicated owner를 가진다.
-- `Program.cs`는 contract, heuristic, long-run artifact owner가 아니다.
+### 3.2 Observer Priority Ladder
 
-### 4.2 Core Contracts
+```text
+O0. LiveExportStateTracker semantic shaping
+O1. InventoryPublisher bridge re-normalization
+O2. RuntimeSnapshotReflectionExtractor semantic winner export
+O3. harness observer contracts의 provenance 혼합
+O4. legacy synthetic field retirement
+```
 
-- phase, request/decision/evaluation DTO, observer summary, room-state record, run/session/replay record는 dedicated contract files로 분리한다.
-- contract layer는 behavior를 결정하지 않는다.
-- contract는 `Observer`, `Decisions`, `Runner`, `Testing`이 공통으로 읽는 기반 타입만 가진다.
+## 4. Priority Detail
 
-### 4.3 Runner
+### P0. Request-scoped canonical scene truth
 
-- runner의 owner는 launch, attempt lifecycle orchestration, step loop, terminal classification이다.
-- bootstrap/deploy는 runner support owner가 가진다.
-- `RunAttemptAsync`는 coordinator만 남고, 내부 단계는 seam별 partial file로 분해한다.
-- runner는 scene authority를 재해석하지 않는다.
+먼저 해결해야 할 이유:
 
-### 4.4 Observer
+- 같은 step에서 reward/event/canonical scene state를 여러 층이 다시 계산하고 있다
+- 이 중복이 mixed-state와 allowlist, reasoning, validation drift를 다시 만든다
+- observer cleanup을 하더라도 harness 내부 truth reuse가 먼저 정리되어야 blast radius가 줄어든다
 
-- observer layer는 scene authority, foreground ownership, phase routing, transition boundary의 canonical owner다.
-- `TryGetPostRunLoadPhase`, `TryGetPostEmbarkPhase`, `ShouldHoldRunLoadBoundary`, room-specific foreground signals는 observer에서만 해석한다.
-- decision layer는 observer-derived state를 소비만 한다.
+핵심 대상:
 
-### 4.5 Decisions
+- [GuiSmokeStepAnalysisContext.cs](../../src/Sts2GuiSmokeHarness/GuiSmokeStepAnalysisContext.cs)
+- [AutoDecisionProvider.NonCombatSceneState.cs](../../src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
+- [Program.SceneReasoning.cs](../../src/Sts2GuiSmokeHarness/Program.SceneReasoning.cs)
+- [Program.AllowedActions.NonCombat.cs](../../src/Sts2GuiSmokeHarness/Program.AllowedActions.NonCombat.cs)
+- [Program.PhaseLoopRouting.cs](../../src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
 
-- decision layer는 action selection만 담당한다.
-- `AutoDecisionProvider`는 coordinator이고, 실제 판단은 noncombat / map / combat vertical owner로 분해한다.
-- reward/event/shop/rest-site/treasure canonical scene build는 noncombat owner만 가진다.
-- combat target resolution은 combat support owner만 가진다.
+목표:
 
-### 4.6 Artifacts
+- 같은 request에서 canonical noncombat scene을 한 번만 만들고 재사용
+- repeated `BuildRewardSceneState`, `BuildEventSceneState`, `TryBuildCanonicalNonCombatSceneState` 호출을 request context owner로 모음
 
-- `LongRunArtifacts`는 startup, supervision, diagnostics, storage, review owner로 나뉜다.
-- artifact schema, filename, JSON/NDJSON surface는 유지한다.
-- `LongRunArtifacts`와 runner는 서로의 internal helper owner가 되지 않는다.
+### P1. Runner hot path seam extraction
 
-### 4.7 Testing
+먼저 해결해야 할 이유:
 
-- self-test는 production owner를 따라가는 verification layer다.
-- category file은 assertion과 fixture orchestration만 남기고, production semantics의 canonical owner가 되지 않는다.
+- live blocker와 actuation/capture/debug 질문의 대부분이 아직 [Program.Runner.AttemptLifecycle.cs](../../src/Sts2GuiSmokeHarness/Program.Runner.AttemptLifecycle.cs)에 모인다
+- capture acceptance, drift recapture, actuation, probe grace, barrier follow-up, post-action phase reconciliation이 한 method body 안에 있다
 
-## 5. Ordered Extraction Waves
+핵심 대상:
 
-아래 8개 canonical wave는 현재 `main`에서 모두 완료됐다. 이 섹션은 앞으로의 todo list가 아니라, 현재 구조를 만든 extraction order와 cleanup 기준을 기록하는 완료 이력으로 유지한다.
+- [Program.Runner.AttemptLifecycle.cs](../../src/Sts2GuiSmokeHarness/Program.Runner.AttemptLifecycle.cs)
+- [Program.ProgressAndValidation.cs](../../src/Sts2GuiSmokeHarness/Program.ProgressAndValidation.cs)
+- [Program.PhaseLoopRouting.cs](../../src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
 
-아래 순서가 `GuiSmokeHarness` 장기 리팩터링의 canonical order다.
+목표 seams:
 
-### Wave 1. Runtime/session/replay core contracts extraction
+- request acceptance
+- pre-actuation drift and window reconciliation
+- action actuation
+- post-action probe / progress
+- phase reconciliation
+- terminal / bounded failure exit
 
-- phase, history/window bounds, session/run/deploy/trace/replay fixture DTO를 `Program.cs` 밖으로 이동한다.
-- 타입 이동만 하고 behavior는 바꾸지 않는다.
-- 이 wave가 끝나면 runner/artifact/replay review에서 필요한 pure contracts는 `Program.cs` 밖에서 찾을 수 있어야 한다.
+### P2. Noncombat action-selection residue cleanup
 
-### Wave 2. Observer/decision-facing contracts extraction
+먼저 해결해야 할 이유:
 
-- request/decision/evaluation records, observer summary family, room-state records, `IGuiDecisionProvider`를 `Program.cs` 밖으로 이동한다.
-- 타입 이동만 하고 behavior는 바꾸지 않는다.
-- 이 wave가 끝나면 구조 review 시 `Program.cs`를 열지 않고도 decision/observer contract 소유권을 찾을 수 있어야 한다.
+- canonical owner/release/handoff는 정리됐지만, 마지막 action candidate materialization은 여전히 rest-site/event/map overlay subtype별 residue가 많다
+- 다음 mixed-state edge case는 여기서 다시 새기 쉽다
 
-### Wave 3. `AutoDecisionProvider` noncombat vertical split
+핵심 대상:
 
-- reward / event / shop / rest-site / treasure / map-aftermath decision과 scene-state build를 noncombat owner로 모은다.
-- observer contract를 다시 구현하지 않고 소비만 하게 만든다.
-- noncombat stale wrapper와 duplicate helper는 같은 wave에서 삭제한다.
+- [AutoDecisionProvider.NonCombatSupport.cs](../../src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSupport.cs)
+- [AutoDecisionProvider.NonCombatDecisions.cs](../../src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
+- [AutoDecisionProvider.DecisionFactories.cs](../../src/Sts2GuiSmokeHarness/AutoDecisionProvider.DecisionFactories.cs)
 
-### Wave 4. `AutoDecisionProvider` combat vertical split
+목표:
 
-- combat action selection, target resolution, barrier/eligibility support를 combat owner로 모은다.
-- combat duplicate helper는 canonical combat support owner만 남긴다.
+- room lane별 helper band로 축소
+- raw fallback / stale wrapper / local preference helper를 canonical scene owner 기반으로 정리
 
-### Wave 5. Runner seam extraction
+### P3. Observer fact export first
 
-- [`Program.Runner.cs`](../../src/Sts2GuiSmokeHarness/Program.Runner.cs)의 `RunAttemptAsync`를 단계별 seam으로 분해한다.
-- target seams:
-  - attempt setup
-  - capture / observer acceptance
-  - request + decision
-  - actuation
-  - post-action / terminal classification
-  - artifact flush
-- 이 wave가 끝나면 runner는 읽히는 orchestrator여야 한다.
+먼저 해결해야 할 이유:
 
-### Wave 6. Shared helper owner 정리
+- tracker와 bridge가 이미 `logicalScreen`, `visibleScreen`, `sceneReady`, `sceneStability`, `SceneType`를 계산한다
+- harness가 synthetic truth를 소비하고 있어, consumer cleanup만으로는 재발 방지가 안 된다
 
-- top-level에 남은 scene signature, plateau fingerprint, bounds normalization, action factory, replay support helper를 의미별 owner로 이동한다.
-- 이 wave가 끝나면 `Program.cs`는 shell 외의 helper owner 역할을 하지 않는다.
+핵심 대상:
 
-### Wave 7. Large self-test split
+- [RuntimeSnapshotReflectionExtractor.cs](../../src/Sts2ModAiCompanion.Mod/Runtime/RuntimeSnapshotReflectionExtractor.cs)
+- [LiveExportStateTracker.cs](../../src/Sts2ModKit.Core/LiveExport/LiveExportStateTracker.cs)
+- [InventoryPublisher.cs](../../src/Sts2ModAiCompanion.HarnessBridge/InventoryPublisher.cs)
+- [GuiSmokeObserverContracts.cs](../../src/Sts2GuiSmokeHarness/GuiSmokeObserverContracts.cs)
 
-- `CombatContracts`, `PhaseRouting`, `NonCombatDecisionContracts`, `StartupRuntimeEvidence` 같은 large self-test file을 더 세분화한다.
-- 공용 fixture builder는 shared test support로 분리한다.
+목표:
 
-### Wave 8. Final cleanup
+- raw fact를 additive하게 export
+- shaped compatibility field는 유지하되 primary truth에서 내림
 
-- permanent shim, stale wrapper, compiler-proven dead code, temporary partial-file seam을 제거한다.
-- 최종 목표는 blocker 추적 시 `Observer 1개 + Decision 1개 + Runner/Artifacts 1개` 정도만 열면 원인을 따라갈 수 있는 구조다.
+### P4. Partial Program owner shedding
 
-## 6. Cleanup Rules
+먼저 해결해야 할 이유:
 
-dead/stale/duplicate code 제거 시점은 아래 규칙으로 고정한다.
+- `Program.cs`는 shell-only지만 production helper owner는 여전히 `internal static partial class Program`에 남아 있다
+- 결과적으로 cross-file helper leakage가 계속 쉬운 구조다
 
-### 6.1 Compiler-proven dead code
+핵심 대상:
 
-- compiler warning이나 search로 증명되는 unused helper는 발견 즉시 제거한다.
-- “나중에 한 번에 sweep”하지 않는다.
+- [Program.StepRequests.cs](../../src/Sts2GuiSmokeHarness/Program.StepRequests.cs)
+- [Program.SceneReasoning.cs](../../src/Sts2GuiSmokeHarness/Program.SceneReasoning.cs)
+- [Program.AllowedActions.NonCombat.cs](../../src/Sts2GuiSmokeHarness/Program.AllowedActions.NonCombat.cs)
+- [Program.AllowedActions.Combat.cs](../../src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs)
+- [Program.PhaseLoopRouting.cs](../../src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
 
-### 6.2 Stale wrapper / thin adapter
+목표:
 
-- call site를 새 owner로 옮겼으면 old wrapper는 같은 wave에서 삭제한다.
-- redirect만 하고 old body를 남기는 commit은 만들지 않는다.
+- partial `Program`이 helper namespace처럼 쓰이는 상태를 줄인다
+- thin adapter / duplicated owner를 제거하고 dedicated owner로 이동한다
 
-### 6.3 Semantic duplicate
+### P5. Startup / prevalidation governance cleanup
 
-- semantic duplicate는 canonical owner가 고정된 wave에서만 삭제한다.
-- 예:
-  - reward/event/shop/rest-site scene-state helper
-  - combat target resolution helper
-  - room authority 판정 helper
+핵심 대상:
 
-### 6.4 Temporary partial-file shim
+- [LongRunArtifacts.Startup.cs](../../src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
+- [LongRunArtifacts.Supervision.cs](../../src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs)
+- [LongRunArtifacts.Storage.cs](../../src/Sts2GuiSmokeHarness/LongRunArtifacts.Storage.cs)
 
-- partial split을 위한 임시 seam은 목적 wave가 끝나면 바로 제거한다.
-- `partial`은 과도기 수단이지 최종 구조 목표가 아니다.
+목표:
 
-## 7. Validation And Acceptance
+- startup stage, deploy identity, runtime evidence, manual clean boot, attempt chronology를 band별로 더 분리
+- low-frequency governance code가 one-file hotspot으로 남지 않게 한다
 
-모든 wave는 아래 검증을 유지해야 한다.
+## 5. Ordered Workstreams
+
+아래 순서가 post-refactor cleanup의 canonical order다.
+
+### Workstream 1. Canonical scene cache consolidation
+
+- request-scoped canonical noncombat scene cache를 추가한다
+- `Program.SceneReasoning`, `Program.AllowedActions.NonCombat`, `Program.PhaseLoopRouting`, `Observer/NonCombatForegroundOwnership`, decision layer가 같은 cached truth를 읽게 한다
+- old local recomputation helper는 같은 workstream에서 정리한다
+
+### Workstream 2. Runner lifecycle seam extraction
+
+- `RunAttemptAsync`를 acceptance / actuation / post-action / reconciliation seam으로 분해한다
+- `Program.Runner.AttemptLifecycle.cs`의 method body를 줄이고, semantic helper를 local nested blocks가 아닌 dedicated runner band로 옮긴다
+
+### Workstream 3. Noncombat residue reduction
+
+- `AutoDecisionProvider.NonCombatSupport`를 lane-based support로 줄인다
+- raw fallback, stale event/rest/map overlay residue helper를 canonical owner-based helper로 대체한다
+- duplicated rest-site/event adapter를 같은 wave에서 삭제한다
+
+### Workstream 4. Additive raw-fact export in runtime extractor
+
+- runtime extractor에 raw screen / raw active screen type / raw overlay / raw modal / raw explicit choice surfaces / raw room facts를 additive하게 export한다
+- current shaped fields는 compatibility로 유지한다
+
+### Workstream 5. Tracker compatibility demotion
+
+- `LiveExportStateTracker`는 raw facts를 보존하고, `logicalScreen`, `visibleScreen`, `sceneReady`, `sceneAuthority`, `sceneStability`를 compatibility meta로 내린다
+- reward/map mixed-state special-case 같은 winner logic을 새 truth source로 쓰지 않게 한다
+
+### Workstream 6. Bridge passthrough migration
+
+- `InventoryPublisher`가 `SceneType`, `SceneReady`, `SceneStability`를 다시 계산하지 않게 줄인다
+- snapshot raw/shaped meta를 provenance 보존 상태로 넘기고, bridge는 publish envelope owner만 유지한다
+
+### Workstream 7. Harness observer contract split
+
+- `ObserverSummary`와 room-state contracts에 raw fact fields와 compatibility fields를 같이 두되 provenance를 명확히 한다
+- harness는 dual-read migration을 시작한다
+- current synthetic field만 읽는 code path를 줄인다
+
+### Workstream 8. Partial Program owner shedding
+
+- `Program.*` helper band를 purpose-named owner로 더 이동한다
+- dedicated owner가 생긴 helper는 same wave에서 partial `Program` wrapper를 삭제한다
+
+### Workstream 9. Startup/prevalidation band cleanup
+
+- `LongRunArtifacts.Startup` 안의 stage update / deploy verification / runtime evidence / lifecycle projection helper를 더 분리한다
+- deploy hygiene와 startup chronology를 reviewer가 한두 file에서 찾게 만든다
+
+### Workstream 10. Legacy synthetic field retirement
+
+- dual-read가 안정되면 legacy shaped fields를 family 단위로 내린다
+- retire order:
+  1. `sceneReady` / `sceneStability`
+  2. bridge `SceneType`
+  3. tracker `visibleScreen` compatibility rules
+  4. winner-shaped lane hints
+
+## 6. Work Unit Rules
+
+- `1 work unit = 1 commit`
+- code + doc + deploy/environment change는 한 commit에 섞지 않는다
+- additive migration work unit에서는 old compatibility field를 바로 삭제하지 않는다
+- redirect-only commit 금지
+- new owner 도입 시 old wrapper/delete를 같은 wave 안에서 끝낸다
+
+## 7. Validation
+
+### 7.1 기본 검증
+
+모든 code work unit 공통:
 
 - `cmd.exe /c dotnet build STS2_Mod_AI_Companion.sln`
 - `cmd.exe /c dotnet run --project src/Sts2ModKit.SelfTest/Sts2ModKit.SelfTest.csproj --no-build`
@@ -263,33 +303,70 @@ dead/stale/duplicate code 제거 시점은 아래 규칙으로 고정한다.
 - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-test`
 - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-parity-test`
 
-replay parity baseline은 `docs/current/PROJECT_STATUS.md`와 `docs/current/AI_SESSION_HANDOFF_KO.md`에 기록된 current baseline을 유지한다.
+### 7.2 Live-required workstreams
 
-- failing fixture 수 증가 금지
-- documented failing fixture의 failure shape drift 금지
+fresh live 1회가 필요한 workstream:
 
-추가 live validation 규칙:
+- Workstream 1
+- Workstream 2
+- Workstream 3
+- Workstream 5
+- Workstream 6
+- Workstream 7
+- Workstream 10
 
-- `LongRunArtifacts`, runner, decision layer를 건드린 wave는 fresh live run 1회를 추가한다.
-- pure contract move나 doc-only wave는 live run 없이 끝낼 수 있다.
+### 7.3 Observer migration acceptance
 
-최종 acceptance는 아래를 만족해야 한다.
+observer cleanup 계열은 아래를 만족해야 한다.
 
-- `Program.cs` shell-only
-- canonical owner가 파일 구조와 일치
-- blocker review 시 열어야 하는 파일 수가 급격히 줄어든 상태
-- stale wrapper와 duplicate semantic family가 장기적으로 다시 쌓이지 않는 구조
+- conflicting facts가 있으면 one-winner collapse 대신 둘 다 남는다
+- raw fact 없이 compatibility field만 남는 새 path를 만들지 않는다
+- harness consumer가 old shaped field와 new raw fact를 비교 가능한 상태를 유지한다
+- current parity green이 깨지지 않는다
 
-## 8. Related Sources
+## 8. Cleanup Rules
 
-이 문서는 아래 문서들과 함께 읽는다.
+### 8.1 stale wrapper / thin adapter
 
-- 상위 구조 배경: [ARCHITECTURE.md](../ARCHITECTURE.md)
-- 상위 milestone 배경: [ROADMAP.md](../ROADMAP.md)
-- runner/supervisor semantics: [RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](./RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)
-- startup/deploy control layer: [STARTUP_DEPLOY_CONTROL_LAYER.md](./STARTUP_DEPLOY_CONTROL_LAYER.md)
+- call site redirect가 끝난 same work unit에서 삭제한다
 
-역할 분리는 아래처럼 읽는다.
+### 8.2 semantic duplicate
 
-- `docs/contracts/*`: 장기 구조 계약
-- `docs/current/*`: current blocker, current handoff, bounded next step
+- request-scoped canonical scene cache가 들어간 뒤 삭제한다
+- observer dual-read migration 중에는 old/new truth source를 temporary로 공존시킬 수 있다
+
+### 8.3 compatibility field
+
+- additive migration 단계에서는 유지
+- harness consumer migration과 self-test parity가 끝나기 전까지 삭제 금지
+
+### 8.4 docs
+
+- current blocker / current live root는 `docs/current/*`
+- current structure / file owner map은 [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)
+- 이 문서는 long-term cleanup priority와 ordered workstreams만 관리한다
+
+## 9. 완료 기준
+
+아래가 모두 만족되면 post-refactor cleanup program이 끝난 것으로 본다.
+
+- `RunAttemptAsync`가 step-loop coordinator 수준으로 줄어든다
+- canonical noncombat scene truth가 request-scoped로 재사용된다
+- `AutoDecisionProvider.NonCombatSupport`의 room/subtype residue가 대폭 줄어든다
+- tracker/bridge가 winner를 고르는 primary owner가 아니다
+- harness observer contracts가 raw fact와 compatibility field provenance를 분리한다
+- partial `Program` production owner leakage가 localized helper 수준으로 축소된다
+- startup/prevalidation governance hotspot이 reviewer-friendly band로 정리된다
+
+## 10. Related Docs
+
+- current structure map:
+  - [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)
+- current status:
+  - [PROJECT_STATUS.md](../current/PROJECT_STATUS.md)
+- current session handoff:
+  - [AI_SESSION_HANDOFF_KO.md](../current/AI_SESSION_HANDOFF_KO.md)
+- startup/deploy sequencing:
+  - [STARTUP_DEPLOY_CONTROL_LAYER.md](./STARTUP_DEPLOY_CONTROL_LAYER.md)
+- runner/supervisor chronology:
+  - [RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](./RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)

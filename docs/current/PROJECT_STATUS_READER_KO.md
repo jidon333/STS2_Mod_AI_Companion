@@ -20,7 +20,7 @@
 
 - `Program.cs`는 이제 거의 shell만 남았습니다.
 - startup/deploy, step loop, observer, decision, artifact, self-test가 분리됐습니다.
-- 관련 문서도 [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md), [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md) 기준으로 읽으면 됩니다.
+- 관련 문서는 [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)로 현재 구조를 읽고, [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)로 남은 cleanup 우선순위를 읽으면 됩니다.
 
 ### 2. 기본 검증 세트
 

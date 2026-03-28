@@ -180,7 +180,7 @@ harness mode는 test-only action-enabled 검증 경로입니다.
 
 - current smoke harness module map:
   - [GUI_SMOKE_HARNESS_ARCHITECTURE.md](./reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)
-- module boundary / refactor contract:
+- post-refactor cleanup program:
   - [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](./contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)
 - startup/deploy sequencing:
   - [STARTUP_DEPLOY_CONTROL_LAYER.md](./contracts/STARTUP_DEPLOY_CONTROL_LAYER.md)

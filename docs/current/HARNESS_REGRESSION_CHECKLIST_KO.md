@@ -20,7 +20,7 @@
 
 - 이 문서의 state row는 authoritative다.
 - 본문 아래의 `Current evidence`는 current owner file 또는 current self-test family를 가리킨다.
-- current owner file map은 [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)와 [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)를 기준으로 본다.
+- current owner file map은 [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)를 기준으로 보고, cleanup/deletion 우선순위는 [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)를 따른다.
 
 ## 공통 계약
 
