@@ -332,10 +332,13 @@ internal static partial class Program
     static async Task StopGameProcessesAsync(TimeSpan timeout)
     {
         var relevantNames = GetRelevantGameProcessNames();
+        var gracefulShutdownRequestedAt = new Dictionary<int, DateTimeOffset>();
+        var gracefulShutdownGracePeriod = TimeSpan.FromSeconds(5);
 
         var deadline = DateTimeOffset.UtcNow.Add(timeout);
         while (DateTimeOffset.UtcNow < deadline)
         {
+            var now = DateTimeOffset.UtcNow;
             var processes = Process.GetProcesses()
                 .Where(process => relevantNames.Contains(process.ProcessName))
                 .ToArray();
@@ -353,6 +356,22 @@ internal static partial class Program
                         continue;
                     }
 
+                    if (ShouldRequestGracefulGameShutdown(process, gracefulShutdownRequestedAt))
+                    {
+                        LogHarness($"requesting graceful shutdown name={process.ProcessName} pid={process.Id}");
+                        if (process.CloseMainWindow())
+                        {
+                            gracefulShutdownRequestedAt[process.Id] = now;
+                            continue;
+                        }
+                    }
+
+                    if (gracefulShutdownRequestedAt.TryGetValue(process.Id, out var requestedAt)
+                        && now - requestedAt < gracefulShutdownGracePeriod)
+                    {
+                        continue;
+                    }
+
                     LogHarness($"stopping process name={process.ProcessName} pid={process.Id}");
                     process.Kill(entireProcessTree: true);
                 }
@@ -363,6 +382,15 @@ internal static partial class Program
 
             await Task.Delay(500).ConfigureAwait(false);
         }
+    }
+
+    static bool ShouldRequestGracefulGameShutdown(
+        Process process,
+        IReadOnlyDictionary<int, DateTimeOffset> gracefulShutdownRequestedAt)
+    {
+        return string.Equals(process.ProcessName, "SlayTheSpire2", StringComparison.OrdinalIgnoreCase)
+               && process.MainWindowHandle != IntPtr.Zero
+               && !gracefulShutdownRequestedAt.ContainsKey(process.Id);
     }
 
     static bool HasLiveGameProcess()
