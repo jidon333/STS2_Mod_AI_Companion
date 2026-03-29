@@ -40,9 +40,37 @@ static class HandleCombatContextSupport
 
     public static IReadOnlyList<GuiSmokeHistoryEntry> BuildSerializedHistoryWindow(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
-        return history
+        var combatHistory = history
             .Where(entry => string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (combatHistory.Length <= SerializedHistoryWindow)
+        {
+            return combatHistory;
+        }
+
+        var serializedWindow = combatHistory
             .TakeLast(SerializedHistoryWindow)
+            .ToArray();
+        if (serializedWindow.Any(static entry => CombatBarrierSupport.IsMeaningfulCombatHistoryAction(entry.Action)))
+        {
+            return serializedWindow;
+        }
+
+        var latestMeaningfulIndex = Array.FindLastIndex(
+            combatHistory,
+            static entry => CombatBarrierSupport.IsMeaningfulCombatHistoryAction(entry.Action));
+        if (latestMeaningfulIndex < 0)
+        {
+            return serializedWindow;
+        }
+
+        // Preserve the last meaningful combat actuation so trailing waits cannot erase the barrier seed.
+        var trailingWaitTail = combatHistory
+            .Skip(latestMeaningfulIndex + 1)
+            .TakeLast(SerializedHistoryWindow - 1)
+            .ToArray();
+        return new[] { combatHistory[latestMeaningfulIndex] }
+            .Concat(trailingWaitTail)
             .ToArray();
     }
 

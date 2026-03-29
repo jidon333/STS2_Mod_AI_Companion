@@ -1194,6 +1194,44 @@ internal static partial class Program
                     .CombatBarrierEvaluation.IsActive == false,
                 "EndTurn sticky release should keep the same auto-end-turn source from re-arming after a reopened player turn.");
 
+            var longEndTurnWaitTailHistory = new[] { endTurnBarrierHistory[0] }
+                .Concat(Enumerable.Range(1, HandleCombatContextSupport.SerializedHistoryWindow + 1)
+                    .Select(waitIndex => new GuiSmokeHistoryEntry(
+                        GuiSmokePhase.HandleCombat.ToString(),
+                        "wait",
+                        null,
+                        DateTimeOffset.UtcNow.AddMilliseconds(waitIndex * 100))))
+                .ToArray();
+            var serializedEndTurnWaitTailHistory = BuildSerializedStepHistory(GuiSmokePhase.HandleCombat, longEndTurnWaitTailHistory);
+            Assert(serializedEndTurnWaitTailHistory.Count == HandleCombatContextSupport.SerializedHistoryWindow, "HandleCombat serialization should still respect the fixed combat history window size.");
+            Assert(serializedEndTurnWaitTailHistory.Count(entry => string.Equals(entry.TargetLabel, "auto-end turn", StringComparison.OrdinalIgnoreCase)) == 1, "Trailing wait-only combat history should keep the most recent end-turn barrier seed in the serialized request.");
+            Assert(serializedEndTurnWaitTailHistory[0].Metadata is not null, "Preserved end-turn barrier seed should retain its barrier metadata.");
+            Assert(serializedEndTurnWaitTailHistory.Skip(1).All(entry => string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)), "Trailing wait-only combat history should otherwise preserve the latest wait tail.");
+            Assert(CreateStepAnalysisContext(
+                    GuiSmokePhase.HandleCombat,
+                    new ObserverState(frozenEndTurnTransitObserver, null, null, null),
+                    runtimeStateOnlyScreenshotPath,
+                    serializedEndTurnWaitTailHistory,
+                    endTurnBarrierKnowledge)
+                    .CombatBarrierEvaluation.Kind == CombatBarrierKind.EndTurn,
+                "Long acknowledged end-turn transit should rebuild the same hard EndTurn barrier after request serialization.");
+            Assert(CreateStepAnalysisContext(
+                    GuiSmokePhase.HandleCombat,
+                    new ObserverState(frozenEndTurnTransitObserver, null, null, null),
+                    runtimeStateOnlyScreenshotPath,
+                    serializedEndTurnWaitTailHistory,
+                    endTurnBarrierKnowledge)
+                    .CombatBarrierEvaluation.IsActive,
+                "Long acknowledged end-turn transit should stay active instead of collapsing to generic closed-phase wait after serialization.");
+            Assert(CreateStepAnalysisContext(
+                    GuiSmokePhase.HandleCombat,
+                    new ObserverState(endTurnBarrierReopenedObserver, null, null, null),
+                    runtimeStateOnlyScreenshotPath,
+                    serializedEndTurnWaitTailHistory,
+                    endTurnBarrierKnowledge)
+                    .CombatBarrierEvaluation.IsActive == false,
+                "Preserving the end-turn seed across long wait tails must still release once the reopened player turn is observed.");
+
             var slotAlignmentObserver = new ObserverState(
                 new ObserverSummary(
                     "combat",

@@ -453,7 +453,7 @@ static class CombatBarrierSupport
                 continue;
             }
 
-            if (IsMeaningfulCombatAction(entry.Action)
+            if (IsMeaningfulCombatHistoryAction(entry.Action)
                 && TryResolveBarrierKind(entry.TargetLabel, entry.Action, out var kind))
             {
                 var slotIndex = CombatHistorySupport.TryParsePendingCombatSelection(entry.TargetLabel, out var selection)
@@ -462,7 +462,7 @@ static class CombatBarrierSupport
                 return new BarrierSource(kind, entry, slotIndex, TryParseHistoryMetadata(entry.Metadata));
             }
 
-            if (IsMeaningfulCombatAction(entry.Action))
+            if (IsMeaningfulCombatHistoryAction(entry.Action))
             {
                 return null;
             }
@@ -556,7 +556,7 @@ static class CombatBarrierSupport
         return false;
     }
 
-    private static bool IsMeaningfulCombatAction(string action)
+    internal static bool IsMeaningfulCombatHistoryAction(string action)
     {
         return string.Equals(action, "click", StringComparison.OrdinalIgnoreCase)
                || string.Equals(action, "click-current", StringComparison.OrdinalIgnoreCase)
