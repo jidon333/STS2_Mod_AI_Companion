@@ -72,7 +72,8 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug도 current `main`에서 닫혔다
 - published-first observer provenance migration도 current `main`에 반영됐다
 - `compatibility retirement` 1단계도 current `main`에 반영됐다
-- 다음 작업은 `capture-boundary` fresh live proof다
+- `COMBAT-03`, `COMBAT-07`, `REWARD-04`, `MAP-04` coverage row도 current `main`에서 green으로 올라갔다
+- 현재 active semantic blocker는 없다
 
 ## current architecture state
 
@@ -107,7 +108,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ## 현재 semantic follow-up
 
-현재 source-of-truth signal은 두 개다.
+현재 source-of-truth signal은 세 개다.
 
 ### 1. replay parity suite
 
@@ -161,23 +162,37 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - representative `preflight->request`는 `1155~1466ms` band다
 - attempt는 `returned-main-menu`로 끝났지만, speed 관점에서는 captured hot path가 0건이라는 점이 핵심이다
 
+### 4. latest post-node continuity coverage proof
+
+- commit: `c85b75f` `Strengthen post-node reward handoff coverage`
+- self-test owner:
+  - [Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs)
+- representative current-main live roots:
+  - [observer-first-combat-speed-20260328-live6](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-combat-speed-20260328-live6)
+  - [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
+
+확정 사실:
+
+- `WaitPostMapNodeRoom`는 current `main`에서 reward/event/combat/rest/shop destination handoff를 모두 self-test로 고정한다
+- representative current-main live roots에서도 `WaitPostMapNodeRoom -> ChooseFirstNode` 뒤 reward/event/rest/combat continuity가 남아 있다
+- `MAP-04`는 current matrix 기준 `green`이다
+
 ## 다음 세션의 기본 목표
 
-지금 세션은 메모리 증설 전 pause 상태로 멈췄다. 재개 시 다음 semantic work unit 목표는 이 하나다.
+현재 기준으로 active blocker는 없다. 새 세션이 잡을 기본 목표는 아래 둘 중 하나다.
 
 ```text
-capture-boundary fresh live proof를 current baseline 위에서 닫는다
+1. low-priority coverage frontier (`EVENT-05`, `REWARD-10`) 보강
+2. 새 live issue가 실제로 재현될 때 current owner 파일에서 좁게 수정
 ```
 
 우선 열 파일:
 
-1. [Interop/ScreenCaptureService.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Interop/ScreenCaptureService.cs)
-2. [GuiSmokeCaptureContracts.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/GuiSmokeCaptureContracts.cs)
-3. [Program.Runner.AttemptPreflight.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.Runner.AttemptPreflight.cs)
-4. [Program.SelfTests.CaptureReplay.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.CaptureReplay.cs)
-5. [LongRunArtifacts.Startup.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
-6. [LongRunArtifacts.Supervision.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs)
-7. [Program.Cli.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.Cli.cs)
+1. [AutoDecisionProvider.NonCombatSceneState.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
+2. [Program.PhaseLoopRouting.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
+3. [Observer/GuiSmokeObserverPhaseHeuristics.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/GuiSmokeObserverPhaseHeuristics.cs)
+4. [Program.SelfTests.EventRewardSubstates.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.EventRewardSubstates.cs)
+5. [Program.SelfTests.StallSentinel.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.StallSentinel.cs)
 
 ## validation baseline
 
@@ -212,5 +227,6 @@ live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
 current main의 하네스 구조 정리, reward aftermath closure, common hot path speed recovery, WaitMainMenu startup boundary closure,
 published-first observer provenance migration, post-refactor cleanup program은 끝났다.
 새 세션은 old Program.cs monolith나 screenshot-first 전제를 다시 가져오지 말고,
-partial evidence row를 새 owner 파일에서 보강하라.
+low-priority coverage frontier만 새 owner 파일에서 좁게 다루고,
+새 blocker가 재현되면 그때만 semantic fix를 열어라.
 ```

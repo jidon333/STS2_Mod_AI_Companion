@@ -46,7 +46,7 @@ coverage status 의미:
 | `MAP-01` | `ChooseFirstNode` | map-node | green | replay parity fixtures expecting `foregroundOwner=map`, exported map-node self-tests | explicit map node routing strong |
 | `MAP-02` | `ChooseFirstNode` / `HandleEvent` | map-overlay foreground | green | `Program.SelfTests.NonCombatForegroundOwnership.cs` map-overlay foreground assertions, `Program.SelfTests.StallSentinel.cs` `map-overlay-noop-loop` sentinel | stale event residue suppression covered |
 | `MAP-03` | `WaitMap` | room reopen | green | `Program.SelfTests.NonCombatForegroundOwnership.cs`의 `WaitMap` reopen reward/event/treasure assertions | mixed modal reopen now follows canonical owner/release handoff directly |
-| `MAP-04` | `WaitPostMapNodeRoom` | destination room handoff | partial | goal text + phase reconciliation helpers + self-tests around event/combat reopen | reward aftermath continuity와 함께 fresh live closure 필요 |
+| `MAP-04` | `WaitPostMapNodeRoom` | destination room handoff | green | `Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs`의 reward/event/combat/rest/shop reopen assertions, live roots [observer-first-combat-speed-20260328-live6](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-combat-speed-20260328-live6) (`step=16`) + [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1) (`step=15`, `25`) | post-node room continuity가 reward/event/rest/combat/shop family 전반에서 current `main` 기준으로 고정됨 |
 
 ## Combat
 
@@ -54,11 +54,11 @@ coverage status 의미:
 |---|---|---|---|---|---|
 | `COMBAT-01` | `WaitCombat` | combat acceptance | green | `Program.SelfTests.CombatContracts.*.cs`의 WaitCombat acceptance assertions (`ready`, `stable`, `inCombat`) | strong acceptance gate |
 | `COMBAT-02` | `HandleCombat` | card select | green | combat opener self-test (`combat select attack slot 1`) + speed proof root [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9) | common combat opener is now observer-first (`captureMode=skipped`) |
-| `COMBAT-03` | `HandleCombat` | target lane | partial | `Analysis/CombatTargetabilitySupport.cs`, `Program.SelfTests.CombatContracts.TargetSelection.cs`, speed proof root [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9) | explicit target lane has fresh observer-first live proof, but broader target parity matrix is still thin |
+| `COMBAT-03` | `HandleCombat` | target lane | green | `Analysis/CombatTargetabilitySupport.cs`, `Program.SelfTests.CombatContracts.TargetSelection.cs`, parity fixtures `combat-target-wait.request.json` / `combat-target-click.request.json`, speed proof root [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9) | explicit target lane는 wait/click parity와 observer-first live evidence가 모두 current `main`에서 고정됨 |
 | `COMBAT-04` | `HandleCombat` | cancel blocked selection | green | old blocker replay `0167.request.json` family, commit-era closure evidence referenced in current conversation | explicit cancel lane is required contract |
 | `COMBAT-05` | `HandleCombat` | end-turn pre-ack | green | current code barriers + self-tests + fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) | `auto-end turn` now survives pre-actuation drift and sends `key=E` |
 | `COMBAT-06` | `HandleCombat` | acknowledged transit wait | green | fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) plus `Program.SelfTests.CombatContracts.ParityAndBarriers.cs` | barrier reason now reaches acknowledged transit and waits until next-round reopen |
-| `COMBAT-07` | `HandleCombat` | enemy-turn closed play phase | partial | legitimate wait semantics exist in current code and self-tests, but current-main replay/live evidence is thin | keep wait semantics explicit |
+| `COMBAT-07` | `HandleCombat` | enemy-turn closed play phase | green | parity fixtures `combat-enemy-turn-wait.request.json` / `combat-player-turn-reopen.request.json`, cleanup proof root [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run) | enemy turn wait-only와 다음 player-turn reopen이 current `main` replay/live evidence로 고정됨 |
 | `COMBAT-08` | `HandleCombat` | next-round reopen | green | fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) | repeated `EndTurn` acknowledged transit reopens into new player-turn actions (`2턴 종료` -> `3턴 종료` -> `4턴 종료` -> `5턴 종료` ...) |
 | `COMBAT-09` | post-wait recapture | capture/request continuity | green | `Program.SelfTests.CaptureReplay.cs` bounded capture assertions + fresh cleanup proof root [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run) (`step=23 -> 24`, `45 -> 46`, `57 -> 58`) | legitimate combat wait now has fresh current-main live continuity evidence |
 | `COMBAT-10` | combat -> rewards | room handoff | green | [PROJECT_STATUS.md](./PROJECT_STATUS.md) long-run continuity roots, repeated combat/reward continuity | strong long-run evidence in status doc |
@@ -84,7 +84,7 @@ coverage status 의미:
 | `REWARD-01` | `HandleRewards` | claim lane | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` reward fast-path signature and `claim reward item` assertions | claim keeps the reward lane ahead of skip/proceed and map routing |
 | `REWARD-02` | `HandleRewards` | reward card / colorless | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` colorless and reward choice assertions | inspect overlay + card choice covered |
 | `REWARD-03` | `HandleRewards` | reward skip / proceed | green | canonical reward release contract + current self-tests | same-click reissue suppression and release-pending are covered |
-| `REWARD-04` | `HandleRewards` | reward back | partial | allowlist + analysis candidate path exist; canonical replay/live evidence thin | lower priority but incomplete |
+| `REWARD-04` | `HandleRewards` | reward back | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs`, parity fixture `reward-back.request.json` | stale reward residue 위의 explicit back navigation이 current `main`에서 canonical reward lane으로 고정됨 |
 | `REWARD-05` | `HandleRewards` | reward teardown / release wait | green | stale reward cleanup self-tests, layered reward state assertions, canonical reward release contract | teardown/release semantics are covered |
 | `REWARD-06` | `HandleRewards` / `WaitMap` | reward/map mixed aftermath | green | layered reward state self-tests, released-to-map canonical owner assertions, parity fixture `reward-aftermath-map-handoff`, fresh live root [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1) | map owner truth now reaches exported reachable node selection |
 | `REWARD-07` | `WaitMap` | reward -> map handoff | green | reward teardown self-tests, WaitMap reopen assertions, fresh live `step=15` exported map-node click in [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1) | post-reward map-node continuity closed on current `main` |
@@ -139,14 +139,13 @@ coverage status 의미:
 
 | Priority | Work Item | Why |
 |---|---|---|
-| P0 | combat broader target parity/live proof | `COMBAT-03` remains partial |
-| P1 | enemy-turn closed play-phase proof | `COMBAT-07` remains partial |
-| P1 | reward back / post-node continuity proof | `REWARD-04`, `MAP-04` remain partial |
+| P1 | event reward substate live evidence | `EVENT-05` remains partial |
+| P1 | reward-map loop sentinel evidence | `REWARD-10` remains partial |
 
 ## Non-Canonical Appendix
 
 아래는 current `main` source-of-truth는 아니지만, 다음 구현 우선순위를 정할 때 참고할 수 있는 recent high-signal branch evidence다.
 
-- combat target / enemy-turn / noncombat continuity partial coverage
+- low-priority event reward / reward-map sentinel partial coverage
 
 이 appendix는 priority signal일 뿐, canonical coverage status는 위 표의 current `main` evidence만으로 판정한다.

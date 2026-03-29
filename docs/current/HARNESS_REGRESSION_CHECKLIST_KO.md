@@ -144,7 +144,8 @@
 
 | Priority | Family | Current contract status | Main risk | Required follow-up |
 |---|---|---|---|---|
-| P0 | Lifecycle restart evidence | product path separate from gameplay | terminal -> restart -> next-attempt first-screen chain remains appendix | validation/lifecycle appendix로 유지하며 별도 추적 |
+| P1 | Event reward substate evidence | low-priority noncombat coverage frontier | event -> reward delegated lane의 fresh live evidence가 아직 얇다 | reward/event mixed live root를 current matrix에 추가 |
+| P1 | Reward-map loop sentinel evidence | fallback sentinel evidence only | sentinel exists but current-main evidence가 얇다 | sentinel을 primary flow로 승격하지 말고 evidence만 보강 |
 
 ## 문서 사용 규칙
 
@@ -157,4 +158,4 @@
 
 current `main` 바깥의 clean validation branch/worktree에서 드러난 최근 regression families는 source of truth가 아니므로 본문 기준선에는 넣지 않는다. 다만 아래 family는 이후 current `main`에 같은 shape가 들어오는지 감시 대상으로 유지한다.
 
-- combat target / enemy-turn / noncombat continuity partial coverage
+- low-priority event reward / reward-map sentinel partial coverage

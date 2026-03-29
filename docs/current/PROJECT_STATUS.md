@@ -71,7 +71,7 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 ```text
 "mixed-state noncombat guard cleanup, combat EndTurn pre-actuation drift, combat post-wait recapture continuity는 current main에서 닫혔고,
 capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
-현재 남은 건 blocker라기보다 일부 partial coverage row다"
+현재 남은 건 blocker라기보다 low-priority coverage frontier다"
 ```
 
 ### 3. current speed baseline
@@ -207,11 +207,14 @@ capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
 - runner residual / noncombat residue / partial `Program` helper owner / supervision health band hotspot extraction
 - fresh live capture-boundary bounded failure proof
 - fresh live strict lifecycle restart chronology proof
+- combat broader target parity/live proof
+- enemy-turn closed play-phase replay/live proof
+- reward back canonical replay proof
+- post-node destination continuity handoff coverage
 
 ### 아직 열려 있는 것
 
-- combat broader parity/live coverage
-- some lower-priority noncombat coverage rows (`reward back`, `post-node destination continuity`) remain partial
+- some low-priority coverage rows (`event reward substate`, `reward-map loop sentinel`) remain partial
 
 ## 다음 작업 원칙
 
@@ -226,7 +229,7 @@ capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
    - noncombat mixed-state와 combat EndTurn barrier family는 닫혔다
    - explicit event/common combat speed baseline도 현재 `main`에서 회복됐다
    - post-refactor cleanup program도 완료됐다
-   - 현재 남은 것은 coverage frontier와 일부 partial evidence row뿐이다
+   - 현재 남은 것은 coverage frontier와 일부 low-priority partial row뿐이다
 
 ## 한 줄 요약
 
@@ -237,5 +240,5 @@ combat EndTurn pre-actuation drift / false barrier arm도 current main에서 닫
 explicit event / common combat hot path의 observer-first speed recovery도 current main에서 반영됐다.
 published-first observer provenance migration도 current main에 반영됐다.
 post-refactor cleanup program도 current main에서 완료됐다.
-다음 follow-up은 일부 partial coverage row를 current owner 구조 안에서 보강하는 쪽이다.
+다음 follow-up은 low-priority coverage frontier를 current owner 구조 안에서 보강하는 쪽이다.
 ```
