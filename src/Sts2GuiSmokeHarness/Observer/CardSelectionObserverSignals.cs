@@ -135,6 +135,18 @@ static class CardSelectionObserverSignals
             .FirstOrDefault();
     }
 
+    public static bool HasActionableDecisionSurface(ObserverSummary observer, CardSelectionSubtypeState state)
+    {
+        if (IsConfirmReady(state)
+            && TryGetConfirmChoice(observer, state) is { Enabled: not false, ScreenBounds.Length: > 0 })
+        {
+            return true;
+        }
+
+        return GetCardChoices(observer, state)
+            .Any(choice => choice.Enabled != false && !string.IsNullOrWhiteSpace(choice.ScreenBounds));
+    }
+
     public static bool IsSubtypeCardChoice(ObserverChoice choice, string screenType)
     {
         var expectedKind = screenType switch

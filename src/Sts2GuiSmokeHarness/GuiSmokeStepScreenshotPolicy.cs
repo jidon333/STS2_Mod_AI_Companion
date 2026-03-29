@@ -31,6 +31,12 @@ static class GuiSmokeStepScreenshotPolicy
 
         if (analysisContext.Phase == GuiSmokePhase.HandleRewards && analysisContext.UseRewardFastPath)
         {
+            if (cardSelectionState is not null
+                && !CardSelectionObserverSignals.HasActionableDecisionSurface(observer.Summary, cardSelectionState))
+            {
+                return (true, "reward-card-selection-screenshot-fallback");
+            }
+
             return (false, "reward-fast-path");
         }
 

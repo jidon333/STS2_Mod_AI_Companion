@@ -488,6 +488,85 @@ internal static partial class Program
             Assert(rewardFastPathSignature.Contains("reward:fast-path", StringComparison.OrdinalIgnoreCase), "Reward fast path scene signatures should mark the fast-path contract explicitly.");
             Assert(!rewardFastPathSignature.Contains("shot:", StringComparison.OrdinalIgnoreCase), "Reward fast path scene signatures should not pay screenshot fingerprint overhead.");
 
+            var rewardPickScreenshotFallbackPath = Path.GetFullPath(Path.Combine("tests", "replay-fixtures", "m6-parity", "reward-pick-card.screen.png"));
+            var rewardPickNoBoundsObserver = new ObserverState(
+                rewardPickObserver.Summary with
+                {
+                    CurrentScreen = "rewards",
+                    VisibleScreen = "rewards",
+                    EncounterKind = "Reward",
+                    ChoiceExtractorPath = "reward",
+                    CurrentChoices = new[] { "포악함", "흘려보내기", "사혈", "넘기기" },
+                    ActionNodes = Array.Empty<ObserverActionNode>(),
+                    Choices = new[]
+                    {
+                        new ObserverChoice("card", "포악함", null, "CARD.VICIOUS"),
+                        new ObserverChoice("card", "흘려보내기", null, "CARD.SHRUG_IT_OFF"),
+                        new ObserverChoice("card", "사혈", null, "CARD.BLOODLETTING"),
+                        new ObserverChoice("card", "넘기기", null, "ui_cancel"),
+                    },
+                    Meta = new Dictionary<string, string?>(rewardPickObserver.Summary.Meta, StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["cardSelectionScreenType"] = "reward-pick",
+                        ["cardSelectionSelectedCount"] = "0",
+                        ["cardSelectionVisibleCardCount"] = "3",
+                        ["cardSelectionRootType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "false",
+                        ["rewardIsTopOverlay"] = "false",
+                    },
+                },
+                null,
+                null,
+                null);
+            var rewardPickNoBoundsContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleRewards,
+                rewardPickNoBoundsObserver,
+                rewardPickScreenshotFallbackPath,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                Array.Empty<CombatCardKnowledgeHint>());
+            var (rewardPickNeedsScreenshot, rewardPickFallbackReason) = GuiSmokeStepScreenshotPolicy.Evaluate(42, false, rewardPickNoBoundsContext);
+            Assert(rewardPickNeedsScreenshot && string.Equals(rewardPickFallbackReason, "reward-card-selection-screenshot-fallback", StringComparison.OrdinalIgnoreCase),
+                "Reward-pick subtype without exported card bounds should reopen screenshot fallback instead of staying in reward fast-path skip.");
+            var rewardPickNoBoundsAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                rewardPickNoBoundsObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardPickScreenshotFallbackPath,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(rewardPickNoBoundsAllowedActions.Contains("reward pick card", StringComparer.OrdinalIgnoreCase),
+                "Reward-pick subtype without bounds should keep the reward pick lane open for screenshot fallback.");
+            var rewardPickNoBoundsDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                49,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "A reward-pick subtype with no exported card bounds should still choose a card via screenshot fallback.",
+                DateTimeOffset.UtcNow,
+                rewardPickScreenshotFallbackPath,
+                new WindowBounds(0, 0, 1920, 1080),
+                ComputeSceneSignature(rewardPickScreenshotFallbackPath, rewardPickNoBoundsObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                rewardPickNoBoundsObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardPickNoBoundsAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Reward-pick subtype is explicit, but card bounds are absent. Use the subtype screenshot fallback instead of waiting.",
+                null));
+            Assert(rewardPickNoBoundsDecision.TargetLabel?.StartsWith("reward pick card", StringComparison.OrdinalIgnoreCase) == true,
+                "Reward-pick subtype without exported bounds should still resolve to a screenshot-backed reward pick decision instead of wait.");
+
             var simpleSelectObserver = new ObserverState(
                 new ObserverSummary(
                     "event",
