@@ -205,6 +205,8 @@ flowchart TD
 
 ## 7. Related docs
 
+- glossary:
+  - [GUI_SMOKE_HARNESS_GLOSSARY_KO.md](./GUI_SMOKE_HARNESS_GLOSSARY_KO.md)
 - human-readable before/after comparison:
   - [GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md](./GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md)
 - cleanup baseline contract:

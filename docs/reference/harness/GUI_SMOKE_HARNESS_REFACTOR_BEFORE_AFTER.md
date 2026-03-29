@@ -11,6 +11,7 @@
 관련 문서:
 
 - 현재 구조 기준선: [GUI_SMOKE_HARNESS_ARCHITECTURE.md](./GUI_SMOKE_HARNESS_ARCHITECTURE.md)
+- 용어집: [GUI_SMOKE_HARNESS_GLOSSARY_KO.md](./GUI_SMOKE_HARNESS_GLOSSARY_KO.md)
 - current status: [../../current/PROJECT_STATUS.md](../../current/PROJECT_STATUS.md)
 - cleanup 완료 기준 계약: [../../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)
 

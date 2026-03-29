@@ -31,6 +31,8 @@
    - cleanup-complete baseline contract and maintenance guardrails
 3. [reference/harness/GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md](./reference/harness/GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md)
    - 사람이 빠르게 읽는 harness refactor before/after comparison
+4. [reference/harness/GUI_SMOKE_HARNESS_GLOSSARY_KO.md](./reference/harness/GUI_SMOKE_HARNESS_GLOSSARY_KO.md)
+   - 하네스 / observer / validation 용어집
 
 ## Source Of Truth Rules
 
@@ -64,6 +66,7 @@
 | live-charter | [BOUNDARIES.md](./BOUNDARIES.md) | 범위/경계 | product boundary가 바뀔 때 |
 | live-reference | [reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md](./reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md) | current smoke harness module/file architecture | harness internal file ownership or runtime layering이 바뀔 때 |
 | live-reference | [reference/harness/GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md](./reference/harness/GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md) | human-readable harness refactor before/after summary | 큰 구조 refactor 결과나 비교 설명을 갱신해야 할 때 |
+| live-reference | [reference/harness/GUI_SMOKE_HARNESS_GLOSSARY_KO.md](./reference/harness/GUI_SMOKE_HARNESS_GLOSSARY_KO.md) | harness / observer / validation glossary | 용어 규칙이나 대표 shorthand 설명이 바뀔 때 |
 | live-contract | [contracts/LIVE_EXPORT_SEMANTICS.md](./contracts/LIVE_EXPORT_SEMANTICS.md) | live export 파일 의미 | export semantics가 바뀔 때 |
 | live-contract | [contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](./contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md) | cleanup-complete harness / observer baseline contract | maintenance contract나 observer fact/export contract가 바뀔 때 |
 | live-contract | [contracts/STARTUP_DEPLOY_CONTROL_LAYER.md](./contracts/STARTUP_DEPLOY_CONTROL_LAYER.md) | startup/deploy/bootstrap sequencing contract | sequencing/deploy/trust contract가 바뀔 때 |
@@ -131,9 +134,11 @@
    - 구조 cleanup 세션이면 추가로 읽을 것
 4. [reference/harness/GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md](./reference/harness/GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md)
    - 전/후 비교가 먼저 필요할 때 추가로 읽을 것
-5. [contracts/STARTUP_DEPLOY_CONTROL_LAYER.md](./contracts/STARTUP_DEPLOY_CONTROL_LAYER.md)
-6. [contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](./contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)
-7. [runbooks/SMOKE_TEST_CHECKLIST.md](./runbooks/SMOKE_TEST_CHECKLIST.md)
+5. [reference/harness/GUI_SMOKE_HARNESS_GLOSSARY_KO.md](./reference/harness/GUI_SMOKE_HARNESS_GLOSSARY_KO.md)
+   - 용어가 헷갈릴 때 추가로 읽을 것
+6. [contracts/STARTUP_DEPLOY_CONTROL_LAYER.md](./contracts/STARTUP_DEPLOY_CONTROL_LAYER.md)
+7. [contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](./contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md)
+8. [runbooks/SMOKE_TEST_CHECKLIST.md](./runbooks/SMOKE_TEST_CHECKLIST.md)
 
 ### 자세한 배경이 필요할 때만
 
