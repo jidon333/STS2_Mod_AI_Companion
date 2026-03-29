@@ -66,7 +66,7 @@ static class CombatMicroStageSupport
             return CombatMicroStageKind.HandSelectRequired;
         }
 
-        if (barrier.Kind == CombatBarrierKind.EndTurn
+        if (effectiveBarrierKind == CombatBarrierKind.EndTurn
             || runtime.PlayerActionsDisabled == true
             || runtime.EndingPlayerTurnPhaseOne == true
             || runtime.EndingPlayerTurnPhaseTwo == true)

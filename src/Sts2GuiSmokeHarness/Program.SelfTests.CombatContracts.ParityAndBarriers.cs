@@ -1091,21 +1091,25 @@ internal static partial class Program
                     ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false",
                 },
             };
-            var endTurnBarrierReopenedActions = BuildAllowedActions(
+            var endTurnBarrierReopenedState = new ObserverState(endTurnBarrierReopenedObserver, null, null, null);
+            var endTurnBarrierReopenedContext = CreateStepAnalysisContext(
                 GuiSmokePhase.HandleCombat,
-                new ObserverState(endTurnBarrierReopenedObserver, null, null, null),
+                endTurnBarrierReopenedState,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory,
+                endTurnBarrierKnowledge);
+            var endTurnBarrierReopenedActions = BuildAllowedActionsCore(
+                GuiSmokePhase.HandleCombat,
+                endTurnBarrierReopenedState,
                 endTurnBarrierKnowledge,
                 runtimeStateOnlyScreenshotPath,
-                endTurnBarrierHistory);
+                endTurnBarrierHistory,
+                endTurnBarrierReopenedContext);
             Assert(!endTurnBarrierReopenedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase), "EndTurn barrier should release once the next player turn reopens on a higher round.");
-            Assert(CreateStepAnalysisContext(
-                    GuiSmokePhase.HandleCombat,
-                    new ObserverState(endTurnBarrierReopenedObserver, null, null, null),
-                    runtimeStateOnlyScreenshotPath,
-                    endTurnBarrierHistory,
-                    endTurnBarrierKnowledge)
-                    .CombatBarrierEvaluation.IsActive == false,
+            Assert(endTurnBarrierReopenedContext.CombatBarrierEvaluation.IsActive == false,
                 "EndTurn barrier should be inactive after round-advanced player-turn reopen.");
+            Assert(endTurnBarrierReopenedContext.CombatMicroStage.Kind == CombatMicroStageKind.PlayerActionOpen,
+                "Released EndTurn barrier should rebuild as an open player-action stage instead of staying in turn-closing.");
             var endTurnBarrierReopenedRequest = BuildBarrierRequest(
                 "0008",
                 35,
