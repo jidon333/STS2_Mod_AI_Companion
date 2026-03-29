@@ -205,6 +205,8 @@ flowchart TD
 
 ## 7. Related docs
 
+- human-readable before/after comparison:
+  - [GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md](./GUI_SMOKE_HARNESS_REFACTOR_BEFORE_AFTER.md)
 - cleanup baseline contract:
   - [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)
 - startup/deploy sequencing:
