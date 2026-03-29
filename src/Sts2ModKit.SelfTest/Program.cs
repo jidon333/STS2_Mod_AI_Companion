@@ -65,6 +65,7 @@ Run("inventory publisher separates primary and compatibility scene provenance", 
 Run("inventory publisher node hints prefer primary scene provenance", TestInventoryPublisherNodeHintsPreferPrimarySceneProvenance, failures);
 Run("inventory publisher does not promote compatibility winners into node semantics", TestInventoryPublisherDoesNotPromoteCompatibilitySceneWinnerIntoNodeSemantics, failures);
 Run("inventory publisher keeps primary scene unknown when only compatibility winner exists", TestInventoryPublisherKeepsPrimarySceneUnknownWhenOnlyCompatibilityWinnerExists, failures);
+Run("inventory publisher promotes tracker combat screen over stale published map scene", TestInventoryPublisherPromotesTrackerCombatPrimaryScene, failures);
 Run("published scene provenance ignores legacy compatibility meta", TestPublishedSceneProvenanceIgnoresLegacyCompatibilityMeta, failures);
 Run("inventory publisher suppresses immediate publish for unstable mixed provenance", TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance, failures);
 Run("inventory publisher fingerprint tracks provenance fields", TestInventoryPublisherFingerprintTracksProvenanceFields, failures);
@@ -2503,6 +2504,43 @@ static void TestInventoryPublisherKeepsPrimarySceneUnknownWhenOnlyCompatibilityW
     Assert(inventory.CompatibilitySceneReady == true
            && string.Equals(inventory.CompatibilitySceneAuthority, "legacy", StringComparison.OrdinalIgnoreCase)
            && string.Equals(inventory.CompatibilitySceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Inventory compatibility diagnostics should remain available for legacy readers.");
+}
+
+static void TestInventoryPublisherPromotesTrackerCombatPrimaryScene()
+{
+    var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
+        ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(buildInventoryMethod is not null, "Expected private InventoryPublisher.BuildInventory helper.");
+
+    var snapshot = CreateInventoryPublisherSnapshot(
+        new[]
+        {
+            new LiveExportChoiceSummary(
+                Kind: "enemy-target",
+                Label: "Jaw Worm",
+                Value: null,
+                Description: "combat target")
+            {
+                NodeId = "enemy-target:jaw-worm",
+                ScreenBounds = "720,180,180,260",
+            },
+        }) with
+    {
+        CurrentScreen = "combat",
+        PublishedCurrentScreen = "map",
+        PublishedVisibleScreen = "map",
+        RawObservedScreen = "map",
+        Encounter = new LiveExportEncounterSummary("Jaw Worm", "Combat", true, 1),
+    };
+
+    var normalizedScene = new CompanionNormalizedScene("map", "map", 1.0, "test");
+    var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
+    Assert(inventory is not null, "Expected inventory publisher to build an inventory from the combat tracker snapshot.");
+    Assert(string.Equals(inventory!.SceneType, "combat", StringComparison.OrdinalIgnoreCase), "Inventory primary scene type should promote tracker combat truth over stale published map provenance.");
+    Assert(string.Equals(inventory.PublishedSceneType, "map", StringComparison.OrdinalIgnoreCase), "Inventory should preserve published scene provenance separately while promoting tracker combat truth into the primary scene type.");
+    Assert(inventory.Nodes.Count == 1, "Expected one combat target node in the built inventory.");
+    Assert(inventory.Nodes[0].SemanticHints.Contains("scene:combat", StringComparer.OrdinalIgnoreCase), "Inventory node hints should follow the promoted combat primary scene when tracker combat truth overrides stale published map provenance.");
+    Assert(inventory.Nodes[0].SemanticHints.Contains("scene-published:map", StringComparer.OrdinalIgnoreCase), "Inventory node hints should still expose the published map provenance separately for diagnostics.");
 }
 
 static void TestInventoryPublisherNodeHintsPreferPrimarySceneProvenance()

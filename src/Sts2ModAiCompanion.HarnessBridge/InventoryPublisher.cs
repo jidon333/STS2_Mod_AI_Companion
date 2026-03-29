@@ -85,11 +85,12 @@ internal sealed class InventoryPublisher
 
     private static HarnessNodeInventory BuildInventory(LiveExportSnapshot snapshot, string mode, CompanionNormalizedScene normalizedScene)
     {
+        var trackerCombatPrimarySceneType = ResolveTrackerCombatPrimarySceneType(snapshot);
         var rawSceneType = ResolveRawSceneType(snapshot, normalizedScene);
         var publishedSceneType = ResolvePublishedSceneType(snapshot, normalizedScene);
         var compatibilitySceneType = ResolveCompatibilitySceneType(snapshot);
         var nodeRawSceneType = ResolveStrictNodeRawSceneType(snapshot);
-        var nodePrimarySceneType = publishedSceneType ?? nodeRawSceneType;
+        var nodePrimarySceneType = trackerCombatPrimarySceneType ?? publishedSceneType ?? nodeRawSceneType;
         var blockingModal = ResolveBlockingModal(snapshot, normalizedScene);
         var publishedVisibleScene = ResolvePublishedVisibleScene(snapshot, normalizedScene, publishedSceneType);
         var publishedSceneReady = ResolvePublishedSceneReady(snapshot, blockingModal);
@@ -99,7 +100,8 @@ internal sealed class InventoryPublisher
         var compatibilitySceneReady = ResolveSceneReady(snapshot, normalizedScene, blockingModal);
         var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
         var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
-        var sceneType = publishedSceneType
+        var sceneType = trackerCombatPrimarySceneType
+                        ?? publishedSceneType
                         ?? rawSceneType
                         ?? "unknown";
         var sceneReady = publishedSceneReady;
@@ -140,6 +142,14 @@ internal sealed class InventoryPublisher
             CompatibilitySceneAuthority = compatibilitySceneAuthority,
             CompatibilitySceneStability = compatibilitySceneStability,
         };
+    }
+
+    private static string? ResolveTrackerCombatPrimarySceneType(LiveExportSnapshot snapshot)
+    {
+        return snapshot.Encounter?.InCombat == true
+               && string.Equals(NormalizeSceneToken(snapshot.CurrentScreen), "combat", StringComparison.OrdinalIgnoreCase)
+            ? "combat"
+            : null;
     }
 
     private static string? ResolveStrictNodeRawSceneType(LiveExportSnapshot snapshot)

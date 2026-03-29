@@ -59,6 +59,7 @@ sealed class ObserverSnapshotReader
                                ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen")
                                ?? rawCurrentScreen
                                ?? inventoryRawCurrentScreen;
+        var trackerCurrentScreen = TryReadString(stateDocument?.RootElement, "currentScreen");
         var publishedCurrentScreen = TryReadString(stateDocument?.RootElement, "publishedCurrentScreen")
                                      ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedCurrentScreen")
                                      ?? inventoryPublishedCurrentScreen;
@@ -82,6 +83,14 @@ sealed class ObserverSnapshotReader
                             ?? rawCurrentScreen
                             ?? (stateDocument is null ? inventorySceneType : null);
         var inCombat = TryReadBool(stateDocument?.RootElement, "encounter", "inCombat");
+        var promotedTrackerCombatScreen = inCombat == true
+                                          && string.Equals(trackerCurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
+                                              ? "combat"
+                                              : null;
+        currentScreen = promotedTrackerCombatScreen
+                        ?? currentScreen;
+        visibleScreen = promotedTrackerCombatScreen
+                        ?? visibleScreen;
         var capturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt")
                          ?? TryReadDateTimeOffset(inventoryDocument?.RootElement, "capturedAt");
         var inventoryId = inventoryDocument is null

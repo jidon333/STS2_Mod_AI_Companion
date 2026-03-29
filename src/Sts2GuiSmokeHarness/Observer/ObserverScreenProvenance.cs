@@ -147,20 +147,24 @@ static class ObserverScreenProvenance
         => StrictCompatibilitySceneStability(observer);
 
     public static string? ControlFlowCurrentScreen(ObserverSummary observer)
-        => StrictPublishedCurrentScreen(observer)
+        => observer.CurrentScreen
+           ?? StrictPublishedCurrentScreen(observer)
            ?? StrictDirectCurrentScreen(observer);
 
     public static string? ControlFlowCurrentScreen(ObserverState observer)
-        => StrictPublishedCurrentScreen(observer)
+        => observer.CurrentScreen
+           ?? StrictPublishedCurrentScreen(observer)
            ?? StrictDirectCurrentScreen(observer);
 
     public static string? ControlFlowVisibleScreen(ObserverSummary observer)
-        => StrictPublishedVisibleScreen(observer)
+        => observer.VisibleScreen
+           ?? StrictPublishedVisibleScreen(observer)
            ?? StrictDirectObservedScreen(observer)
            ?? StrictDirectCurrentScreen(observer);
 
     public static string? ControlFlowVisibleScreen(ObserverState observer)
-        => StrictPublishedVisibleScreen(observer)
+        => observer.VisibleScreen
+           ?? StrictPublishedVisibleScreen(observer)
            ?? StrictDirectObservedScreen(observer)
            ?? StrictDirectCurrentScreen(observer);
 

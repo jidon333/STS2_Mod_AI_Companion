@@ -578,6 +578,32 @@ internal static partial class Program
             Assert(aliasObserverDescription.Contains("visible=legacy-direct-visible", StringComparison.OrdinalIgnoreCase), "Observer description should report control-flow visible screen, not compatibility visible screen.");
 
             File.WriteAllText(
+                liveLayout.SnapshotPath,
+                """
+                {
+                  "version": 7,
+                  "currentScreen": "combat",
+                  "publishedCurrentScreen": "map",
+                  "publishedVisibleScreen": "map",
+                  "capturedAt": "REPLACE_CAPTURED_AT",
+                  "encounter": {
+                    "inCombat": true
+                  },
+                  "meta": {
+                    "rawObservedScreen": "map"
+                  },
+                  "player": {},
+                  "choices": []
+                }
+                """.Replace("REPLACE_CAPTURED_AT", capturedAt.ToString("O"), StringComparison.Ordinal));
+
+            var combatTrackerObserver = aliasReader.Read();
+            Assert(string.Equals(combatTrackerObserver.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase), "Observer reader primary current screen should promote tracker combat screen over stale published map provenance when encounter truth says in-combat.");
+            Assert(string.Equals(combatTrackerObserver.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase), "Observer reader primary visible screen should follow the promoted tracker combat screen during in-combat observations.");
+            Assert(string.Equals(ObserverScreenProvenance.ControlFlowCurrentScreen(combatTrackerObserver), "combat", StringComparison.OrdinalIgnoreCase), "Control-flow current screen should prefer promoted tracker combat truth over stale published map provenance.");
+            Assert(string.Equals(ObserverScreenProvenance.ControlFlowVisibleScreen(combatTrackerObserver), "combat", StringComparison.OrdinalIgnoreCase), "Control-flow visible screen should prefer promoted tracker combat truth over stale published map provenance.");
+
+            File.WriteAllText(
                 harnessLayout.InventoryPath,
                 JsonSerializer.Serialize(
                     new HarnessNodeInventory(
