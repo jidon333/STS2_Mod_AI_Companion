@@ -60,17 +60,15 @@ internal static partial class Program
                 null,
                 null,
                 null,
-                new[] { "Continue", "Singleplayer" },
+                new[] { "Continue" },
                 Array.Empty<string>(),
                 new[]
                 {
                     new ObserverActionNode("continue", "action", "Continue", "620,560,420,96", true),
-                    new ObserverActionNode("singleplayer", "action", "Singleplayer", "620,680,420,96", true),
                 },
                 new[]
                 {
                     new ObserverChoice("choice", "Continue", "620,560,420,96"),
-                    new ObserverChoice("choice", "Singleplayer", "620,680,420,96"),
                 },
                 Array.Empty<ObservedCombatHandCard>()),
             Array.Empty<KnownRecipeHint>(),
@@ -86,6 +84,116 @@ internal static partial class Program
         Assert(
             GetPostEnterRunPhase(continuePreferredDecision) == GuiSmokePhase.WaitRunLoad,
             "Continue should hand off to neutral run-load waiting, not WaitCharacterSelect.");
+        var ambiguousRunStartDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            2,
+            GuiSmokePhase.EnterRun.ToString(),
+            "Wait until the main-menu run-start surface stabilizes.",
+            DateTimeOffset.UtcNow,
+            "screen.png",
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:enter-run|screen:main-menu|visible:main-menu|ready:true",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-main-menu-ambiguous",
+                true,
+                "main-menu",
+                "stable",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new[] { "Continue", "Singleplayer" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("continue", "continue-run", "Continue", "620,560,420,96", true),
+                    new ObserverActionNode("singleplayer", "singleplayer", "Singleplayer", "620,680,420,96", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("continue-run", "Continue", "620,560,420,96"),
+                    new ObserverChoice("singleplayer", "Singleplayer", "620,680,420,96"),
+                },
+                Array.Empty<ObservedCombatHandCard>()),
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            Array.Empty<string>(),
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            string.Empty,
+            null));
+        Assert(
+            string.Equals(ambiguousRunStartDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+            "EnterRun should wait while Continue and Singleplayer are both still exported on the top-level main menu surface.");
+        var collapsedRunStartDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            2,
+            GuiSmokePhase.EnterRun.ToString(),
+            "Wait until the main-menu button layout stops exporting collapsed placeholder bounds.",
+            DateTimeOffset.UtcNow,
+            "screen.png",
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:enter-run|screen:main-menu|visible:main-menu|ready:true",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-main-menu-collapsed",
+                true,
+                "main-menu",
+                "stable",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("main-menu:continue", "continue-run", "Continue", "620,560,420,96", true),
+                    new ObserverActionNode("main-menu:multiplayer", "menu-action", "Multiplayer", "620,560,420,96", true),
+                    new ObserverActionNode("main-menu:settings", "menu-action", "Settings", "620,560,420,96", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("continue-run", "Continue", "620,560,420,96") { NodeId = "main-menu:continue" },
+                    new ObserverChoice("menu-action", "Multiplayer", "620,560,420,96") { NodeId = "main-menu:multiplayer" },
+                    new ObserverChoice("menu-action", "Settings", "620,560,420,96") { NodeId = "main-menu:settings" },
+                },
+                Array.Empty<ObservedCombatHandCard>()),
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            Array.Empty<string>(),
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            string.Empty,
+            null));
+        Assert(
+            string.Equals(collapsedRunStartDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+            "EnterRun should wait while main-menu buttons still share collapsed placeholder bounds.");
         var readyMainMenuObserver = new ObserverState(
             new ObserverSummary(
                 "main-menu",
@@ -102,17 +210,15 @@ internal static partial class Program
                 null,
                 null,
                 null,
-                new[] { "Continue", "Singleplayer" },
+                new[] { "Continue" },
                 Array.Empty<string>(),
                 new[]
                 {
                     new ObserverActionNode("continue", "action", "Continue", "620,560,420,96", true),
-                    new ObserverActionNode("singleplayer", "action", "Singleplayer", "620,680,420,96", true),
                 },
                 new[]
                 {
                     new ObserverChoice("choice", "Continue", "620,560,420,96"),
-                    new ObserverChoice("choice", "Singleplayer", "620,680,420,96"),
                 },
                 Array.Empty<ObservedCombatHandCard>()),
             null,
@@ -121,6 +227,41 @@ internal static partial class Program
         Assert(
             evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMainMenu, readyMainMenuObserver),
             "WaitMainMenu should still accept fresh exported Continue or Singleplayer run-start surfaces.");
+        var collapsedMainMenuObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-main-menu-collapsed",
+                true,
+                "main-menu",
+                "stable",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("main-menu:continue", "continue-run", "Continue", "620,560,420,96", true),
+                    new ObserverActionNode("main-menu:multiplayer", "menu-action", "Multiplayer", "620,560,420,96", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("continue-run", "Continue", "620,560,420,96") { NodeId = "main-menu:continue" },
+                    new ObserverChoice("menu-action", "Multiplayer", "620,560,420,96") { NodeId = "main-menu:multiplayer" },
+                },
+                Array.Empty<ObservedCombatHandCard>()),
+            null,
+            null,
+            null);
+        Assert(
+            !evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMainMenu, collapsedMainMenuObserver),
+            "WaitMainMenu should reject collapsed main-menu action layouts until distinct clickable bounds are exported.");
 
         var publishedCharacterSelectObserver = new ObserverState(
             new ObserverSummary(
@@ -205,6 +346,57 @@ internal static partial class Program
         Assert(
             !evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMainMenu, logoAnimationMainMenuObserver),
             "WaitMainMenu must not accept a logo-animation-only main-menu state before run-start actions exist.");
+
+        var bootstrapVisibleRunStartObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-bootstrap-visible-run-start",
+                true,
+                "mixed",
+                "stable",
+                "episode-bootstrap-visible-run-start",
+                null,
+                "main-menu",
+                null,
+                null,
+                null,
+                new[] { "Continue" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("main-menu:continue", "continue-run", "Continue", "620,560,420,96", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("continue-run", "Continue", "620,560,420,96", "main-menu:continue")
+                    {
+                        NodeId = "main-menu:continue",
+                        BindingKind = "continue-run",
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedVisibleScreen = "bootstrap",
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    ["choiceExtractorPath"] = "main-menu",
+                    ["publishedVisibleScreen"] = "bootstrap",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            !MainMenuRunStartObserverSignals.IsRunStartSurfaceReady(bootstrapVisibleRunStartObserver),
+            "Main-menu readiness helper should reject run-start surfaces while published visibility still reports bootstrap foreground.");
+        Assert(
+            !evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMainMenu, bootstrapVisibleRunStartObserver),
+            "WaitMainMenu must not accept run-start actions while published visibility still reports bootstrap foreground.");
 
         var reachableNodeDecision = new GuiSmokeStepDecision("act", "click", null, null, null, "visible reachable node", "Map node selected.", 0.9, null, null, null, null);
         Assert(
@@ -360,6 +552,75 @@ internal static partial class Program
                     out var chooseFirstNodeCombatBranchPhase)
                 && chooseFirstNodeCombatBranchPhase == GuiSmokePhase.HandleCombat,
                 "ChooseFirstNode should recover directly to combat handling if phase bookkeeping drifts after a real map-node click.");
+
+            var chooseFirstNodeCombatWithStaleMapObserver = new ObserverState(
+                new ObserverSummary(
+                    "map",
+                    "map",
+                    true,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    "Boss",
+                    "combat",
+                    65,
+                    80,
+                    3,
+                    new[] { "DrawPile", "DiscardPile", "ExhaustPile", "1턴 종료" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("map:0:3", "map-node", "Ancient (0,3)", "880,1260,208,208", true)
+                        {
+                            TypeName = "map-node",
+                            SemanticHints = new[] { "scene:map", "kind:map-node", "source:map-choice" },
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("choice", "DrawPile", "15,985,80,80", null, "DrawPile"),
+                        new ObserverChoice("choice", "DiscardPile", "1826,985,80,80", null, "DiscardPile"),
+                        new ObserverChoice("choice", "ExhaustPile", "1830,800,80,80", null, "ExhaustPile"),
+                        new ObserverChoice("choice", "1턴 종료", "1604,1096,220,90", null, "1턴 종료"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "map",
+                    PublishedVisibleScreen = "map",
+                    CompatibilityCurrentScreen = "combat",
+                    CompatibilityVisibleScreen = "bootstrap",
+                    CompatibilitySceneReady = false,
+                    CompatibilitySceneAuthority = "hook",
+                    CompatibilitySceneStability = "transient",
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NCombatRoom",
+                        ["combatPrimaryValue"] = "true",
+                    },
+                },
+                null,
+                null,
+                null);
+            Assert(
+                !AutoDecisionProvider.HasExplicitEventRecoveryAuthority(
+                    chooseFirstNodeCombatWithStaleMapObserver,
+                    null,
+                    Array.Empty<GuiSmokeHistoryEntry>()),
+                "Combat observers with stale map-node surfaces must not reopen the explicit event recovery lane.");
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.ChooseFirstNode,
+                    chooseFirstNodeCombatWithStaleMapObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitPostMapNodeLogger,
+                    12,
+                    true,
+                    out var chooseFirstNodeCombatWithStaleMapPhase)
+                && chooseFirstNodeCombatWithStaleMapPhase == GuiSmokePhase.HandleCombat,
+                "ChooseFirstNode should still recover to HandleCombat when combat truth outranks stale map-node and generic choice surfaces.");
 
             Assert(
                 TryAdvanceAlternateBranch(

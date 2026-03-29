@@ -181,7 +181,7 @@ internal static partial class Program
                 window,
                 screenshotPath,
                 ScreenCaptureService.CaptureTimeout,
-                faultContext: new CaptureFaultInjectionContext("bootstrap", phase.ToString(), captureIndex));
+                faultContext: new CaptureFaultInjectionContext("bootstrap", phase.ToString(), captureIndex, null));
             if (!captureResult.Succeeded)
             {
                 if (captureResult.FailureKind is CaptureBoundaryFailureKind.TimedOut or CaptureBoundaryFailureKind.Exception)
@@ -555,6 +555,6 @@ internal static partial class Program
     static bool IsManualCleanBootObserverReady(ObserverState observer, DateTimeOffset freshnessFloor)
     {
         return observer.IsFreshSince(freshnessFloor)
-               && MainMenuRunStartObserverSignals.HasMainMenuRunStartSurface(observer);
+               && MainMenuRunStartObserverSignals.IsRunStartSurfaceReady(observer);
     }
 }

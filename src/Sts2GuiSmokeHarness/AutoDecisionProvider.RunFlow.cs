@@ -21,6 +21,11 @@ sealed partial class AutoDecisionProvider
                 null);
         }
 
+        if (MainMenuRunStartObserverSignals.ShouldWaitForStableRunStartSurface(request.Observer))
+        {
+            return CreateWaitDecision("waiting for a stable main-menu run-start surface", ControlFlowCurrentScreen(request.Observer));
+        }
+
         return TryFindActionNodeDecision(request, "Continue", "continue")
                ?? TryFindActionNodeDecision(request, "계속", "continue")
                ?? TryFindActionNodeDecision(request, "Singleplayer", "singleplayer")

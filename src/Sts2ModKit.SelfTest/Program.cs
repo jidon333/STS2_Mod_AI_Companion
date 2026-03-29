@@ -2603,13 +2603,10 @@ static void TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance()
 
     var snapshot = CreateInventoryPublisherSnapshot(Array.Empty<LiveExportChoiceSummary>()) with
     {
-        CurrentScreen = "rewards",
+        CurrentScreen = "map",
+        PublishedCurrentScreen = "map",
+        PublishedVisibleScreen = "map",
         RawObservedScreen = "rewards",
-        CompatibilityLogicalScreen = "rewards",
-        CompatibilityVisibleScreen = "map",
-        CompatibilitySceneReady = false,
-        CompatibilitySceneAuthority = "mixed",
-        CompatibilitySceneStability = "stabilizing",
     };
 
     var normalizedScene = new CompanionNormalizedScene("map", "map", 1.0, "test");
@@ -2617,7 +2614,7 @@ static void TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance()
     Assert(inventory is not null, "Expected inventory publisher to build an inventory.");
 
     var shouldSuppress = shouldSuppressMethod!.Invoke(publisher, new object?[] { inventory! });
-    Assert(shouldSuppress is bool suppressed && suppressed, "Inventory publisher should suppress the first publish when compatibility truth is explicitly unstable or raw/visible provenance still disagrees.");
+    Assert(shouldSuppress is bool suppressed && suppressed, "Inventory publisher should suppress the first publish when published/raw screen provenance still disagrees even without compatibility instability.");
 }
 
 static void TestInventoryPublisherFingerprintTracksProvenanceFields()

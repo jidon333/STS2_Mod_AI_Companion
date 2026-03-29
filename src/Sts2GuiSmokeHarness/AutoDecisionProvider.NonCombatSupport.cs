@@ -165,6 +165,11 @@ sealed partial class AutoDecisionProvider
 
     internal static bool HasRawExplicitEventChoiceVisible(ObserverSummary observer, WindowBounds? windowBounds)
     {
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
+        {
+            return false;
+        }
+
         static bool IsGenericContinueLabel(string? label)
         {
             return !string.IsNullOrWhiteSpace(label)
@@ -237,6 +242,11 @@ sealed partial class AutoDecisionProvider
         IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
         EventSceneState? eventScene = null)
     {
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
+        {
+            return false;
+        }
+
         if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
         {
             return false;

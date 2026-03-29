@@ -355,6 +355,50 @@ internal static partial class Program
                         true,
                         "mixed",
                         "stable",
+                        "episode-main-menu-bootstrap-surface",
+                        null,
+                        "main-menu",
+                        null,
+                        null,
+                        null,
+                        new[] { "Singleplayer" },
+                        Array.Empty<string>(),
+                        new[]
+                        {
+                            new ObserverActionNode("main-menu:singleplayer", "singleplayer", "Singleplayer", "620,680,420,96", true),
+                        },
+                        new[]
+                        {
+                            new ObserverChoice("singleplayer", "Singleplayer", "620,680,420,96", "main-menu:singleplayer")
+                            {
+                                NodeId = "main-menu:singleplayer",
+                                BindingKind = "singleplayer",
+                            },
+                        },
+                        Array.Empty<ObservedCombatHandCard>())
+                    {
+                        PublishedVisibleScreen = "bootstrap",
+                        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                            ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                            ["choiceExtractorPath"] = "main-menu",
+                            ["publishedVisibleScreen"] = "bootstrap",
+                        },
+                    },
+                    null,
+                    null,
+                    null),
+                new ObserverState(
+                    new ObserverSummary(
+                        "main-menu",
+                        "main-menu",
+                        false,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
                         "episode-main-menu-bootstrap-ready",
                         null,
                         "main-menu",
@@ -385,7 +429,10 @@ internal static partial class Program
                 !IsManualCleanBootObserverReady(bootstrapStates[1], DateTimeOffset.UtcNow.AddSeconds(-5)),
                 "Bootstrap polling should keep ignoring fresh logo-animation main-menu states that still lack Continue or Singleplayer authority.");
             Assert(
-                IsManualCleanBootObserverReady(bootstrapStates[2], DateTimeOffset.UtcNow.AddSeconds(-5)),
+                !IsManualCleanBootObserverReady(bootstrapStates[2], DateTimeOffset.UtcNow.AddSeconds(-5)),
+                "Bootstrap polling should keep ignoring run-start labels while published visibility still reports bootstrap foreground.");
+            Assert(
+                IsManualCleanBootObserverReady(bootstrapStates[3], DateTimeOffset.UtcNow.AddSeconds(-5)),
                 "Bootstrap polling should treat exported Continue or Singleplayer authority as the actual run-start readiness signal.");
             var bootstrappedObserver = BootstrapManualCleanBootObserverAsync(
                     bootstrapStates[bootstrapIndex],
@@ -396,11 +443,11 @@ internal static partial class Program
                     static _ => Task.CompletedTask)
                 .GetAwaiter()
                 .GetResult();
-            Assert(bootstrapIndex == 2, "Manual clean boot bootstrap should keep polling past the fresh logo-animation main menu until a concrete run-start surface appears.");
+            Assert(bootstrapIndex == 3, "Manual clean boot bootstrap should keep polling past bootstrap-visible main-menu surfaces until a concrete run-start surface appears.");
             Assert(string.Equals(bootstrappedObserver.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Manual clean boot bootstrap should keep polling until a fresh main-menu observer arrives.");
             Assert(
                 bootstrappedObserver.ActionNodes.Any(node => string.Equals(node.Label, "Singleplayer", StringComparison.OrdinalIgnoreCase)),
-                "Manual clean boot bootstrap should ignore logo-animation-only main-menu states and wait for an actual run-start surface.");
+                "Manual clean boot bootstrap should ignore bootstrap-visible main-menu states and wait for an actual run-start surface.");
         }
         finally
         {
@@ -565,8 +612,8 @@ internal static partial class Program
                 """.Replace("REPLACE_CAPTURED_AT", capturedAt.ToString("O"), StringComparison.Ordinal));
 
             var legacyCompatibilityLeakObserver = aliasReader.Read();
-            Assert(string.Equals(legacyCompatibilityLeakObserver.CurrentScreen, "legacy-collapsed", StringComparison.OrdinalIgnoreCase), "Observer reader should keep the legacy top-level currentScreen when additive published/raw/compatibility screens are absent.");
-            Assert(string.Equals(legacyCompatibilityLeakObserver.VisibleScreen, "legacy-collapsed", StringComparison.OrdinalIgnoreCase), "Observer reader visibleScreen should fall back to the primary current screen instead of rehydrating legacy meta.visibleScreen.");
+            Assert(string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.CurrentScreen), "Observer reader top-level currentScreen should stay empty when only legacy collapsed screen aliases exist.");
+            Assert(string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.VisibleScreen), "Observer reader visibleScreen should stay empty instead of rehydrating legacy current/visible screen aliases.");
             Assert(legacyCompatibilityLeakObserver.SceneReady is null
                    && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.SceneAuthority)
                    && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.SceneStability), "Observer reader control-flow scene fields should stay empty when only legacy meta scene fields are present.");
@@ -583,7 +630,7 @@ internal static partial class Program
                    && string.IsNullOrWhiteSpace(ObserverScreenProvenance.ControlFlowSceneAuthority(legacyCompatibilityLeakObserver))
                    && string.IsNullOrWhiteSpace(ObserverScreenProvenance.ControlFlowSceneStability(legacyCompatibilityLeakObserver)), "Control-flow scene helpers should stay empty when only legacy meta diagnostics exist.");
             Assert(!ObserverScreenProvenance.MatchesControlFlowScreen(legacyCompatibilityLeakObserver, "legacy-collapsed"), "Control-flow screen matching should not treat legacy top-level currentScreen as published/direct/compat provenance.");
-            Assert(string.Equals(ObserverScreenProvenance.DisplayScreen(legacyCompatibilityLeakObserver), "legacy-collapsed", StringComparison.OrdinalIgnoreCase), "Display screen may still fall back to the legacy collapsed current screen for diagnostics.");
+            Assert(string.IsNullOrWhiteSpace(ObserverScreenProvenance.DisplayScreen(legacyCompatibilityLeakObserver)), "Display screen should stay empty when only legacy collapsed screen aliases exist.");
 
             File.WriteAllText(
                 harnessLayout.InventoryPath,

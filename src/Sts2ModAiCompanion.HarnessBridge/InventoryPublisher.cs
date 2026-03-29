@@ -75,7 +75,6 @@ internal sealed class InventoryPublisher
         }
 
         if (CompanionSceneNormalizer.IsStableSceneForImmediateInventoryPublish(sceneType)
-            && !HasExplicitCompatibilityInstability(inventory)
             && !HasPrimaryScreenDisagreement(inventory))
         {
             return false;
@@ -88,7 +87,7 @@ internal sealed class InventoryPublisher
     {
         var rawSceneType = ResolveRawSceneType(snapshot, normalizedScene);
         var publishedSceneType = ResolvePublishedSceneType(snapshot, normalizedScene);
-        var compatibilitySceneType = ResolveCompatibilitySceneType(snapshot, normalizedScene, publishedSceneType, rawSceneType);
+        var compatibilitySceneType = ResolveCompatibilitySceneType(snapshot);
         var nodeRawSceneType = ResolveStrictNodeRawSceneType(snapshot);
         var nodePrimarySceneType = publishedSceneType ?? nodeRawSceneType;
         var blockingModal = ResolveBlockingModal(snapshot, normalizedScene);
@@ -96,7 +95,7 @@ internal sealed class InventoryPublisher
         var publishedSceneReady = ResolvePublishedSceneReady(snapshot, blockingModal);
         var publishedSceneAuthority = ResolvePublishedSceneAuthority(snapshot);
         var publishedSceneStability = ResolvePublishedSceneStability(snapshot, blockingModal);
-        var compatibilityVisibleScene = ResolveCompatibilityVisibleScene(snapshot, normalizedScene);
+        var compatibilityVisibleScene = ResolveCompatibilityVisibleScene(snapshot);
         var compatibilitySceneReady = ResolveSceneReady(snapshot, normalizedScene, blockingModal);
         var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
         var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
@@ -220,25 +219,20 @@ internal sealed class InventoryPublisher
     }
 
     private static string ResolveCompatibilitySceneType(
-        LiveExportSnapshot snapshot,
-        CompanionNormalizedScene normalizedScene,
-        string? publishedSceneType,
-        string? rawSceneType)
+        LiveExportSnapshot snapshot)
     {
         var logicalScreen = NormalizeSceneToken(snapshot.CompatibilityLogicalScreen)
             ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatLogicalScreen"))
-            ?? publishedSceneType
-            ?? rawSceneType
-            ?? normalizedScene.SceneType;
+            ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatibilityLogicalScreen"))
+            ?? NormalizeSceneToken(snapshot.CompatibilityCurrentScreen)
+            ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatibilityCurrentScreen"));
 
         if (logicalScreen is not null)
         {
             return logicalScreen;
         }
 
-        return publishedSceneType
-               ?? rawSceneType
-               ?? normalizedScene.SceneType;
+        return "unknown";
     }
 
     private static HarnessNodeInventoryItem BuildNode(
@@ -529,15 +523,16 @@ internal sealed class InventoryPublisher
         return null;
     }
 
-    private static string? ResolveCompatibilityVisibleScene(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
+    private static string? ResolveCompatibilityVisibleScene(LiveExportSnapshot snapshot)
     {
         return NormalizeSceneToken(snapshot.CompatibilityVisibleScreen)
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatVisibleScreen"))
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatibilityVisibleScreen"))
+               ?? NormalizeSceneToken(snapshot.CompatibilityCurrentScreen)
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatibilityCurrentScreen"))
                ?? NormalizeSceneToken(snapshot.CompatibilityLogicalScreen)
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatLogicalScreen"))
-               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"))
-               ?? NormalizeSceneToken(snapshot.CurrentScreen)
-               ?? normalizedScene.SceneType;
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatibilityLogicalScreen"));
     }
 
     private static string? TryGetMeta(IReadOnlyDictionary<string, string?> meta, string key)
@@ -648,25 +643,15 @@ internal sealed class InventoryPublisher
         return Convert.ToHexString(bytes);
     }
 
-    private static bool HasExplicitCompatibilityInstability(HarnessNodeInventory inventory)
-    {
-        return inventory.CompatibilitySceneReady == false
-               || (!string.IsNullOrWhiteSpace(inventory.CompatibilitySceneStability)
-                   && !string.Equals(inventory.CompatibilitySceneStability, "stable", StringComparison.OrdinalIgnoreCase));
-    }
-
     private static bool HasPrimaryScreenDisagreement(HarnessNodeInventory inventory)
     {
         var sceneType = inventory.SceneType;
         var rawSceneType = inventory.RawSceneType;
         var publishedSceneType = inventory.PublishedSceneType;
-        var compatibilityVisibleScene = inventory.CompatibilityVisibleScene;
         return !string.IsNullOrWhiteSpace(rawSceneType)
                && !string.Equals(rawSceneType, sceneType, StringComparison.OrdinalIgnoreCase)
                || !string.IsNullOrWhiteSpace(publishedSceneType)
-               && !string.Equals(publishedSceneType, sceneType, StringComparison.OrdinalIgnoreCase)
-               || !string.IsNullOrWhiteSpace(compatibilityVisibleScene)
-               && !string.Equals(compatibilityVisibleScene, sceneType, StringComparison.OrdinalIgnoreCase);
+               && !string.Equals(publishedSceneType, sceneType, StringComparison.OrdinalIgnoreCase);
     }
 }
 

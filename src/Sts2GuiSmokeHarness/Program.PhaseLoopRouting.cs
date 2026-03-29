@@ -522,7 +522,8 @@ internal static partial class Program
     static bool ShouldOpenCombatAlternateBranch(ObserverState observer)
     {
         return CombatBarrierPolicy.IsStableCombatEntryObserver(observer)
-               && GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary);
+               || (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)
+                   && observer.InCombat == true);
     }
 
     static bool TryAdvanceAlternateBranch(
