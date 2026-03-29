@@ -32,6 +32,12 @@ sealed partial class AutoDecisionProvider
                                             || observer.ActionNodes.Any(static node => node.Actionable && IsBackNode(node));
         var activeRewardChoices = observer.Choices.Where(choice => IsCurrentRewardProgressionChoice(choice, windowBounds)).ToArray();
         var activeRewardNodes = observer.ActionNodes.Where(node => IsCurrentRewardProgressionNode(node, windowBounds)).ToArray();
+        var claimableRewardChoices = activeRewardChoices
+            .Where(choice => IsClaimableRewardProgressionChoice(choice, rewardState))
+            .ToArray();
+        var claimableRewardNodes = activeRewardNodes
+            .Where(node => IsClaimableRewardProgressionNode(node, rewardState, activeRewardChoices))
+            .ToArray();
         var staleRewardChoices = observer.Choices.Where(choice => IsStaleRewardProgressionChoice(choice, windowBounds)).ToArray();
         var staleRewardNodes = observer.ActionNodes.Where(node => IsStaleRewardProgressionNode(node, windowBounds)).ToArray();
         var explicitRewardChoicesPresent = activeRewardChoices.Length > 0 || activeRewardNodes.Length > 0;
@@ -90,8 +96,8 @@ sealed partial class AutoDecisionProvider
                                          && (activeRewardChoices.Any(choice => IsSkipOrProceedLabel(choice.Label))
                                              || activeRewardNodes.Any(IsProceedNode)));
         var claimableRewardPresent = (!strongerRoomForegroundAuthority
-                                      && (activeRewardChoices.Any(choice => !IsSkipOrProceedLabel(choice.Label))
-                                          || activeRewardNodes.Any(node => !IsProceedNode(node))))
+                                      && (claimableRewardChoices.Length > 0
+                                          || claimableRewardNodes.Length > 0))
                                      || (!strongerRoomForegroundAuthority
                                          && !string.IsNullOrWhiteSpace(screenshotPath)
                                          && HasScreenshotClaimableRewardEvidenceInScreenshot(observer, screenshotPath));
@@ -443,10 +449,58 @@ sealed partial class AutoDecisionProvider
                && HasActiveRewardBounds(choice.ScreenBounds, windowBounds);
     }
 
+    private static IReadOnlyList<ObserverChoice> GetClaimableRewardProgressionChoices(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        RewardScreenState? rewardState)
+    {
+        return observer.Choices
+            .Where(choice => IsCurrentRewardProgressionChoice(choice, windowBounds))
+            .Where(choice => IsClaimableRewardProgressionChoice(choice, rewardState))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<ObserverActionNode> GetClaimableRewardProgressionNodes(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        RewardScreenState? rewardState)
+    {
+        var activeRewardChoices = observer.Choices
+            .Where(choice => IsCurrentRewardProgressionChoice(choice, windowBounds))
+            .ToArray();
+        return observer.ActionNodes
+            .Where(node => IsCurrentRewardProgressionNode(node, windowBounds))
+            .Where(node => IsClaimableRewardProgressionNode(node, rewardState, activeRewardChoices))
+            .ToArray();
+    }
+
     private static bool IsCurrentRewardProgressionNode(ObserverActionNode node, WindowBounds? windowBounds)
     {
         return IsExplicitRewardProgressionNode(node)
                && HasActiveRewardBounds(node.ScreenBounds, windowBounds);
+    }
+
+    private static bool IsClaimableRewardProgressionChoice(ObserverChoice choice, RewardScreenState? rewardState)
+    {
+        if (IsSkipOrProceedLabel(choice.Label))
+        {
+            return false;
+        }
+
+        return !IsPotionRewardChoice(choice) || rewardState?.HasOpenPotionSlots != false;
+    }
+
+    private static bool IsClaimableRewardProgressionNode(
+        ObserverActionNode node,
+        RewardScreenState? rewardState,
+        IReadOnlyList<ObserverChoice> activeRewardChoices)
+    {
+        if (IsProceedNode(node))
+        {
+            return false;
+        }
+
+        return !IsPotionRewardNode(node, activeRewardChoices) || rewardState?.HasOpenPotionSlots != false;
     }
 
     private static bool IsStaleRewardProgressionChoice(ObserverChoice choice, WindowBounds? windowBounds)
@@ -542,6 +596,37 @@ sealed partial class AutoDecisionProvider
                || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase)
                || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
                || HasLargeChoiceBounds(node.ScreenBounds);
+    }
+
+    private static bool IsPotionRewardNode(ObserverActionNode node, IReadOnlyList<ObserverChoice> activeRewardChoices)
+    {
+        if (string.Equals(node.TypeName, "potion", StringComparison.OrdinalIgnoreCase)
+            || node.Kind.Contains("potion", StringComparison.OrdinalIgnoreCase)
+            || node.SemanticHints.Any(static hint =>
+                string.Equals(hint, "reward-potion", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "reward-type:PotionReward", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "raw-kind:potion", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return activeRewardChoices.Any(choice =>
+            IsPotionRewardChoice(choice)
+            && string.Equals(choice.Label, node.Label, StringComparison.OrdinalIgnoreCase)
+            && RewardBoundsLookEquivalent(choice.ScreenBounds, node.ScreenBounds));
+    }
+
+    private static bool RewardBoundsLookEquivalent(string? firstBounds, string? secondBounds)
+    {
+        if (!TryParseNodeBounds(firstBounds, out var first) || !TryParseNodeBounds(secondBounds, out var second))
+        {
+            return string.Equals(firstBounds, secondBounds, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return Math.Abs(first.X - second.X) <= 36f
+               && Math.Abs(first.Y - second.Y) <= 36f
+               && Math.Abs(first.Width - second.Width) <= 48f
+               && Math.Abs(first.Height - second.Height) <= 48f;
     }
 
     private static bool IsRewardCardChoice(ObserverChoice choice)

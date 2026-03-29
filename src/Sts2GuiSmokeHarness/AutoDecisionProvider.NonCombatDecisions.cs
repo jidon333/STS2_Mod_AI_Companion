@@ -692,6 +692,9 @@ sealed partial class AutoDecisionProvider
             return rewardChoiceDecision;
         }
 
+        var claimableRewardChoices = GetClaimableRewardProgressionChoices(request.Observer, request.WindowBounds, rewardScene.ScreenState);
+        var claimableRewardNodes = GetClaimableRewardProgressionNodes(request.Observer, request.WindowBounds, rewardScene.ScreenState);
+
         if (!rewardScene.RewardForegroundOwned
             || rewardScene.ReleaseStage != RewardReleaseStage.Active
             || rewardScene.ExplicitAction is not RewardExplicitActionKind.SkipProceed and not RewardExplicitActionKind.Claim and not RewardExplicitActionKind.CardChoice and not RewardExplicitActionKind.ColorlessChoice)
@@ -699,9 +702,7 @@ sealed partial class AutoDecisionProvider
             return null;
         }
 
-        var rewardNode = request.Observer.ActionNodes
-            .Where(node => IsCurrentRewardProgressionNode(node, request.WindowBounds))
-            .Where(node => !IsProceedNode(node))
+        var rewardNode = claimableRewardNodes
             .OrderByDescending(ScoreExplicitRewardProgressionNode)
             .ThenBy(GetNodeSortY)
             .ThenBy(GetNodeSortX)
@@ -711,9 +712,7 @@ sealed partial class AutoDecisionProvider
             return CreateClickDecisionFromNode(request, rewardNode, "claim reward item");
         }
 
-        var rewardChoice = request.Observer.Choices
-            .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds))
-            .Where(choice => !IsSkipOrProceedLabel(choice.Label))
+        var rewardChoice = claimableRewardChoices
             .OrderByDescending(ScoreExplicitRewardProgressionChoice)
             .ThenBy(GetChoiceSortY)
             .ThenBy(GetChoiceSortX)
@@ -958,15 +957,16 @@ sealed partial class AutoDecisionProvider
             return null;
         }
 
+        var claimableRewardChoices = GetClaimableRewardProgressionChoices(request.Observer, request.WindowBounds, rewardScene.ScreenState);
+        var claimableRewardNodes = GetClaimableRewardProgressionNodes(request.Observer, request.WindowBounds, rewardScene.ScreenState);
+
         var cardChoiceDecision = TryCreateCardRewardChoiceDecision(request);
         if (cardChoiceDecision is not null)
         {
             return cardChoiceDecision;
         }
 
-        var bestChoice = request.Observer.Choices
-            .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds))
-            .Where(choice => !IsSkipOrProceedLabel(choice.Label))
+        var bestChoice = claimableRewardChoices
             .OrderByDescending(ScoreExplicitRewardProgressionChoice)
             .ThenBy(GetChoiceSortY)
             .ThenBy(GetChoiceSortX)
@@ -983,9 +983,7 @@ sealed partial class AutoDecisionProvider
                 1400);
         }
 
-        var bestNode = request.Observer.ActionNodes
-            .Where(node => node.Actionable && IsCurrentRewardProgressionNode(node, request.WindowBounds))
-            .Where(node => !IsProceedNode(node))
+        var bestNode = claimableRewardNodes
             .OrderByDescending(ScoreExplicitRewardProgressionNode)
             .ThenBy(GetNodeSortY)
             .ThenBy(GetNodeSortX)

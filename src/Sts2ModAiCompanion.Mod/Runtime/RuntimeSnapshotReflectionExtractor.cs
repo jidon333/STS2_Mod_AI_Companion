@@ -265,6 +265,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         bool ProceedEnabled,
         int VisibleButtonCount,
         int EnabledButtonCount,
+        bool? HasOpenPotionSlots,
         bool TerminalRunBoundary,
         bool GameOverScreenDetected,
         bool UnlockScreenDetected,
@@ -401,6 +402,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         var act = TryReadInt(roots, "Act", "ActNum", "CurrentAct");
         var floor = TryReadInt(roots, "Floor", "CurrentFloor", "FloorNum");
         var player = ExtractPlayerSummary(roots);
+        var hasOpenPotionSlots = TryReadHasOpenPotionSlots(roots);
         var deck = ExtractDeck(roots, config.LiveExport.MaxDeckEntries);
         var relics = ExtractStringList(roots, config.LiveExport.MaxDeckEntries, "Relics", "OwnedRelics", "InventoryRelics");
         var potions = ExtractStringList(roots, config.LiveExport.MaxChoiceEntries, "Potions", "OwnedPotions", "PotionSlots");
@@ -496,6 +498,11 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         var rewardObservation = ObserveRewardScreen(roots, screen);
         AppendRewardRuntimeMetadata(rewardObservation, meta, payload);
+        if (hasOpenPotionSlots is not null)
+        {
+            meta["hasOpenPotionSlots"] = hasOpenPotionSlots == true ? "true" : "false";
+            payload["hasOpenPotionSlots"] = hasOpenPotionSlots == true;
+        }
         if (rewardObservation.ForegroundOwned)
         {
             meta["choiceExtractorPath"] = "reward";
@@ -886,6 +893,33 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return new LiveExportPlayerSummary(name, currentHp, maxHp, gold, energy, resources);
+    }
+
+    private static bool? TryReadHasOpenPotionSlots(IEnumerable<object> roots)
+    {
+        var playerRoots = roots
+            .SelectMany(root => new[]
+            {
+                root,
+                TryGetMemberValue(root, "Player"),
+                TryGetMemberValue(root, "Character"),
+                TryGetMemberValue(root, "Hero"),
+                TryGetMemberValue(root, "Creature"),
+            })
+            .Where(root => root is not null)
+            .Cast<object>()
+            .Where(IsAuthoritativePlayerRoot)
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        if (playerRoots.Length == 0)
+        {
+            playerRoots = FindRoots(roots, "Player", "Character", "Hero", "Creature")
+                .Where(IsAuthoritativePlayerRoot)
+                .DistinctBy(RuntimeHelpers.GetHashCode)
+                .ToArray();
+        }
+
+        return TryReadBool(playerRoots, "HasOpenPotionSlots");
     }
 
     private static IReadOnlyList<LiveExportCardSummary> ExtractDeck(IEnumerable<object> roots, int maxEntries)
@@ -3572,6 +3606,7 @@ internal static class RuntimeSnapshotReflectionExtractor
                 ProceedEnabled: false,
                 VisibleButtonCount: 0,
                 EnabledButtonCount: 0,
+                HasOpenPotionSlots: TryReadHasOpenPotionSlots(roots),
                 TerminalRunBoundary: terminalRunBoundary,
                 GameOverScreenDetected: gameOverScreenDetected,
                 UnlockScreenDetected: unlockScreenDetected,
@@ -3600,6 +3635,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             !string.IsNullOrWhiteSpace(TryResolveInteractiveScreenBounds(button, out _))
             && IsVisibleNode(button)
             && (TryResolveInteractiveEnabled(button) ?? TryResolveControlEnabled(button) ?? true));
+        var hasOpenPotionSlots = TryReadHasOpenPotionSlots(roots);
         var screenDetected = rewardScreen is not null;
         var screenVisible = rewardIsCurrentActiveScreen
                             || rewardIsTopOverlay
@@ -3639,6 +3675,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             ProceedEnabled: proceedEnabled,
             VisibleButtonCount: visibleButtonCount,
             EnabledButtonCount: enabledButtonCount,
+            HasOpenPotionSlots: hasOpenPotionSlots,
             TerminalRunBoundary: terminalRunBoundary,
             GameOverScreenDetected: gameOverScreenDetected,
             UnlockScreenDetected: unlockScreenDetected,
@@ -5974,6 +6011,10 @@ internal static class RuntimeSnapshotReflectionExtractor
         meta["rewardProceedEnabled"] = observation.ProceedEnabled ? "true" : "false";
         meta["rewardVisibleButtonCount"] = observation.VisibleButtonCount.ToString(CultureInfo.InvariantCulture);
         meta["rewardEnabledButtonCount"] = observation.EnabledButtonCount.ToString(CultureInfo.InvariantCulture);
+        if (observation.HasOpenPotionSlots is not null)
+        {
+            meta["hasOpenPotionSlots"] = observation.HasOpenPotionSlots == true ? "true" : "false";
+        }
         meta["terminalRunBoundary"] = observation.TerminalRunBoundary ? "true" : "false";
         meta["gameOverScreenDetected"] = observation.GameOverScreenDetected ? "true" : "false";
         meta["unlockScreenDetected"] = observation.UnlockScreenDetected ? "true" : "false";
@@ -5995,6 +6036,10 @@ internal static class RuntimeSnapshotReflectionExtractor
         payload["rewardProceedEnabled"] = observation.ProceedEnabled;
         payload["rewardVisibleButtonCount"] = observation.VisibleButtonCount;
         payload["rewardEnabledButtonCount"] = observation.EnabledButtonCount;
+        if (observation.HasOpenPotionSlots is not null)
+        {
+            payload["hasOpenPotionSlots"] = observation.HasOpenPotionSlots == true;
+        }
         payload["terminalRunBoundary"] = observation.TerminalRunBoundary;
         payload["gameOverScreenDetected"] = observation.GameOverScreenDetected;
         payload["unlockScreenDetected"] = observation.UnlockScreenDetected;

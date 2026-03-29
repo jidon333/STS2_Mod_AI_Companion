@@ -1610,11 +1610,12 @@ static void TestRuntimeReflectionRewardOwnershipExport()
     {
         CurrentScreen = rewardScreen,
     };
-    var activeRewardObservation = observeMethod!.Invoke(null, new object?[] { new object[] { rewardScreen, rewardButton, proceedButton, activeRewardContext }, "rewards" });
+    var activeRewardObservation = observeMethod!.Invoke(null, new object?[] { new object[] { rewardScreen, rewardButton, proceedButton, activeRewardContext, new FakePlayerEntity { HasOpenPotionSlots = true } }, "rewards" });
     Assert(activeRewardObservation is not null, "Expected reward observation.");
     Assert((bool)(ReadProperty(activeRewardObservation!, "ScreenDetected") ?? false), "Expected reward screen detection.");
     Assert((bool)(ReadProperty(activeRewardObservation!, "ForegroundOwned") ?? false), "Expected reward foreground ownership while reward screen is current.");
     Assert((bool)(ReadProperty(activeRewardObservation!, "RewardIsCurrentActiveScreen") ?? false), "Expected reward current-active-screen export.");
+    Assert((bool?)(ReadProperty(activeRewardObservation!, "HasOpenPotionSlots")) == true, "Expected reward observation to export open potion slot truth from the player root.");
 
     var disabledRewardButton = new FakeClickableControl
     {
@@ -1640,12 +1641,13 @@ static void TestRuntimeReflectionRewardOwnershipExport()
     {
         CurrentScreen = new FakeNMapScreen { IsOpen = true, Visible = true },
     };
-    var rewardAftermathObservation = observeMethod.Invoke(null, new object?[] { new object[] { staleRewardScreen, disabledRewardButton, disabledProceedButton, activeMapContext }, "rewards" });
+    var rewardAftermathObservation = observeMethod.Invoke(null, new object?[] { new object[] { staleRewardScreen, disabledRewardButton, disabledProceedButton, activeMapContext, new FakePlayerEntity { HasOpenPotionSlots = false } }, "rewards" });
     Assert(rewardAftermathObservation is not null, "Expected reward aftermath observation.");
     Assert((bool)(ReadProperty(rewardAftermathObservation!, "ScreenVisible") ?? false), "Expected stale reward visibility to remain exported for diagnostics.");
     Assert((bool)(ReadProperty(rewardAftermathObservation!, "ForegroundOwned") ?? true) == false, "Expected reward foreground ownership to drop once map becomes current and reward controls are disabled.");
     Assert((bool)(ReadProperty(rewardAftermathObservation!, "TeardownInProgress") ?? false), "Expected reward teardown export once map is current and reward visuals merely linger.");
     Assert((bool)(ReadProperty(rewardAftermathObservation!, "MapIsCurrentActiveScreen") ?? false), "Expected map current active screen export during reward proceed aftermath.");
+    Assert((bool?)(ReadProperty(rewardAftermathObservation!, "HasOpenPotionSlots")) == false, "Expected reward observation to preserve a full potion belt truth during stale reward aftermath.");
 
     var terminalBoundaryContext = new FakeActiveScreenContext
     {
@@ -5553,6 +5555,8 @@ file sealed class FakeScreenState
 file sealed class FakePlayerEntity
 {
     public string Name { get; init; } = "Ironclad";
+
+    public bool HasOpenPotionSlots { get; init; }
 }
 
 file sealed class FakeOverlayPlayerContainer

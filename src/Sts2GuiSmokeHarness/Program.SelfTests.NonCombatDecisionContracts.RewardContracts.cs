@@ -627,6 +627,152 @@ internal static partial class Program
                 null));
             Assert(string.Equals(rewardProceedMetaOnlyDecision.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase), "Proceed-only reward runtime metadata should still click reward proceed without requiring an exported hitbox.");
 
+            var fullPotionSlotObserver = new ObserverState(
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-reward-potion-full",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-reward-potion-full",
+                    "Event",
+                    "reward",
+                    80,
+                    80,
+                    null,
+                    new[] { "액상 기억", "강장제", "Proceed" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("reward-potion:0", "event-option", "액상 기억", "758,364,402,86", true)
+                        {
+                            TypeName = "potion",
+                            SemanticHints = new[] { "reward", "reward-potion", "reward-type:PotionReward" },
+                        },
+                        new ObserverActionNode("reward-potion:1", "event-option", "강장제", "758,460,402,86", true)
+                        {
+                            TypeName = "potion",
+                            SemanticHints = new[] { "reward", "reward-potion", "reward-type:PotionReward" },
+                        },
+                        new ObserverActionNode("reward-proceed:2", "event-option", "Proceed", "1583,764,269,108", true),
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("potion", "액상 기억", "758,364,402,86", "PotionReward", "액상 기억")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "PotionReward",
+                            SemanticHints = new[] { "reward", "reward-potion", "reward-type:PotionReward" },
+                        },
+                        new ObserverChoice("potion", "강장제", "758,460,402,86", "PotionReward", "강장제")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "PotionReward",
+                            SemanticHints = new[] { "reward", "reward-potion", "reward-type:PotionReward" },
+                        },
+                        new ObserverChoice("choice", "Proceed", "1583,764,269,108"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "true",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "true",
+                        ["rewardVisibleButtonCount"] = "1",
+                        ["rewardEnabledButtonCount"] = "1",
+                        ["hasOpenPotionSlots"] = "false",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                        ["rewardScreenRootType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            var fullPotionSlotScene = AutoDecisionProvider.BuildRewardSceneState(
+                fullPotionSlotObserver,
+                new WindowBounds(0, 0, 1920, 1080),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardRankingScreenshotPath);
+            Assert(!fullPotionSlotScene.ClaimableRewardPresent, "Visible potion rewards should not remain claimable when runtime truth reports no open potion slots.");
+            Assert(fullPotionSlotScene.ExplicitAction == RewardExplicitActionKind.SkipProceed, "Potion-only reward residue with full slots should normalize to proceed instead of claim.");
+            var fullPotionSlotAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                fullPotionSlotObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardRankingScreenshotPath,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(!fullPotionSlotAllowedActions.Contains("click reward", StringComparer.OrdinalIgnoreCase)
+                   && !fullPotionSlotAllowedActions.Contains("click reward choice", StringComparer.OrdinalIgnoreCase),
+                "Potion-only reward residue with full slots should keep reward claim actions closed.");
+            Assert(fullPotionSlotAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
+                "Potion-only reward residue with full slots should keep proceed available.");
+            var fullPotionSlotDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                47,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "A full potion belt should force reward proceed instead of a stale potion claim loop.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1920, 1080),
+                ComputeSceneSignature(rewardRankingScreenshotPath, fullPotionSlotObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                fullPotionSlotObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                fullPotionSlotAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Visible potion rewards remain on screen, but runtime truth says there is no open potion slot. Proceed instead of looping on claim.",
+                null));
+            Assert(string.Equals(fullPotionSlotDecision.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase),
+                "Potion-only reward residue with full slots should click proceed instead of claim reward item.");
+
+            var openPotionSlotObserver = fullPotionSlotObserver with
+            {
+                Summary = fullPotionSlotObserver.Summary with
+                {
+                    Meta = new Dictionary<string, string?>(fullPotionSlotObserver.Summary.Meta, StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "true",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "true",
+                        ["rewardVisibleButtonCount"] = "1",
+                        ["rewardEnabledButtonCount"] = "1",
+                        ["hasOpenPotionSlots"] = "true",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                        ["rewardScreenRootType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                    },
+                },
+            };
+            var openPotionSlotScene = AutoDecisionProvider.BuildRewardSceneState(
+                openPotionSlotObserver,
+                new WindowBounds(0, 0, 1920, 1080),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardRankingScreenshotPath);
+            Assert(openPotionSlotScene.ClaimableRewardPresent, "Potion rewards should stay claimable when runtime truth reports an open potion slot.");
+
             var postShopRewardMixedObserver = new ObserverState(
                 new ObserverSummary(
                     "shop",

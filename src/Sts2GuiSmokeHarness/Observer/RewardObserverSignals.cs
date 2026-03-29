@@ -41,6 +41,7 @@ static class RewardObserverSignals
         var proceedEnabled = TryGetMetaBool(observer, "rewardProceedEnabled") == true;
         var visibleButtonCount = TryGetMetaInt(observer, "rewardVisibleButtonCount") ?? 0;
         var enabledButtonCount = TryGetMetaInt(observer, "rewardEnabledButtonCount") ?? 0;
+        var hasOpenPotionSlots = TryGetMetaBool(observer, "hasOpenPotionSlots");
         var explicitRewardProgressionPresent = observer.Choices.Any(static choice =>
                                                  choice.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
                                                  || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase))
@@ -101,6 +102,7 @@ static class RewardObserverSignals
             ProceedEnabled: proceedEnabled,
             VisibleButtonCount: visibleButtonCount,
             EnabledButtonCount: enabledButtonCount,
+            HasOpenPotionSlots: hasOpenPotionSlots,
             TerminalRunBoundary: terminalRunBoundary,
             GameOverScreenDetected: TryGetMetaBool(observer, "gameOverScreenDetected") == true,
             UnlockScreenDetected: TryGetMetaBool(observer, "unlockScreenDetected") == true,

@@ -151,6 +151,7 @@ sealed record RewardScreenState(
     bool ProceedEnabled,
     int VisibleButtonCount,
     int EnabledButtonCount,
+    bool? HasOpenPotionSlots,
     bool TerminalRunBoundary,
     bool GameOverScreenDetected,
     bool UnlockScreenDetected,
