@@ -55,7 +55,7 @@ sealed partial class AutoDecisionProvider
                                         && rewardScreenHint
                                         && rewardState?.MapIsCurrentActiveScreen != true
                                         && (explicitRewardChoicesPresent || fallbackRewardChoiceAuthority));
-        var staleRewardChoicePresent = !rewardForegroundOwned && (staleRewardChoices.Length > 0 || staleRewardNodes.Length > 0);
+        var staleRewardChoicePresent = staleRewardChoices.Length > 0 || staleRewardNodes.Length > 0;
         var offWindowBoundsReused = staleRewardChoices.Any(choice => IsOffWindowBounds(choice.ScreenBounds, windowBounds))
                                   || staleRewardNodes.Any(node => IsOffWindowBounds(node.ScreenBounds, windowBounds));
         var layerState = new RewardMapLayerState(

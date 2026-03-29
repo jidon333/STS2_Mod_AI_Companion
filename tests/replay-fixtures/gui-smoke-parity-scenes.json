@@ -88,5 +88,15 @@
     "expectedForegroundOwner": null,
     "expectedForegroundActionLane": null,
     "expectedChoiceExtractorPath": "combat"
+  },
+  {
+    "name": "reward-back-dismisses-stale-reward-residue",
+    "requestPath": "tests/replay-fixtures/m6-parity/reward-back.request.json",
+    "expectedStatus": "act",
+    "expectedActionKind": "click",
+    "expectedTargetContains": "reward back",
+    "expectedForegroundOwner": null,
+    "expectedForegroundActionLane": null,
+    "expectedChoiceExtractorPath": "reward"
   }
 ]

@@ -169,6 +169,98 @@ internal static partial class Program
             Assert(layeredRewardState.MapContextVisible, "Layered reward/map state should preserve background map context instead of forcing a single exclusive screen.");
             Assert(layeredRewardState.RewardBackNavigationAvailable, "Layered reward/map state should record reward back-navigation affordances.");
 
+            var rewardBackObserver = new ObserverState(
+                new ObserverSummary(
+                    "rewards",
+                    "map",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-reward-back",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-reward-back",
+                    "None",
+                    "reward",
+                    80,
+                    80,
+                    null,
+                    new[] { "Back", "Proceed" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("overlay:back", "choice", "Back", "48,620,88,88", true),
+                        new ObserverActionNode("proceed:stale", "proceed", "Proceed", "1983,764,269,108", true),
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("choice", "Back", "48,620,88,88"),
+                        new ObserverChoice("choice", "Proceed", "1983,764,269,108"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "rewards",
+                    PublishedVisibleScreen = "map",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "mixed",
+                    PublishedSceneStability = "stable",
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "true",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "false",
+                        ["rewardProceedEnabled"] = "false",
+                        ["rewardVisibleButtonCount"] = "0",
+                        ["rewardEnabledButtonCount"] = "0",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                        ["choiceExtractorPath"] = "reward",
+                    },
+                },
+                null,
+                null,
+                null);
+            var rewardBackScreenshotPath = Path.Combine(Path.GetTempPath(), $"gui-smoke-reward-back-{Guid.NewGuid():N}.png");
+            var rewardBackScene = AutoDecisionProvider.BuildRewardSceneState(
+                rewardBackObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                history: null,
+                screenshotPath: rewardBackScreenshotPath);
+            Assert(rewardBackScene.LayerState.StaleRewardChoicePresent, "Reward back states should keep stale reward progression residue visible while the reward foreground still owns the lane.");
+            Assert(rewardBackScene.ExplicitAction == RewardExplicitActionKind.Back, "Reward back states should resolve to the explicit back action when stale reward residue is the only remaining progression surface.");
+            Assert(
+                GetAllowedActions(GuiSmokePhase.HandleRewards, rewardBackObserver).SequenceEqual(new[] { "click reward back", "wait" }, StringComparer.OrdinalIgnoreCase),
+                "Reward back states should collapse the HandleRewards allowlist to reward-back navigation.");
+            var rewardBackDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                34,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "Use the visible reward back navigation to dismiss stale reward residue over the map.",
+                DateTimeOffset.UtcNow,
+                rewardBackScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:handlerewards|screen:rewards|visible:map|encounter:none|ready:true|stability:stable|layer:reward-foreground|layer:map-background|layer:reward-back-nav|stale:reward-choice",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                rewardBackObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                GetAllowedActions(GuiSmokePhase.HandleRewards, rewardBackObserver),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Reward back navigation is the only valid progression lane while stale reward residue sits over the map.",
+                null));
+            Assert(string.Equals(rewardBackDecision.TargetLabel, "reward back", StringComparison.OrdinalIgnoreCase), "Reward back states should click the explicit back node instead of waiting or reopening map fallback.");
+
             var staleRewardObserver = CreateStaleRewardObserver();
             var staleRewardState = BuildRewardMapLayerState(staleRewardObserver.Summary, new WindowBounds(1, 32, 1280, 720));
             Assert(!staleRewardState.RewardPanelVisible, "Reward foreground should clear once only stale off-window reward bounds remain.");

@@ -1,0 +1,187 @@
+{
+  "runId": "20260329-174505-boot-to-long-run-attempt-0001",
+  "scenarioId": "boot-to-long-run",
+  "stepIndex": 20,
+  "phase": "HandleRewards",
+  "goal": "Use the reward back navigation to dismiss stale reward residue over the map.",
+  "issuedAt": "2026-03-29T08:46:01.1673538+00:00",
+  "screenshotPath": "C:\\missing\\reward-back-fixture.png",
+  "windowBounds": {
+    "x": 8,
+    "y": 54,
+    "width": 1280,
+    "height": 720
+  },
+  "sceneSignature": "phase:handlerewards|screen:rewards|visible:map|encounter:none|ready:true|stability:stable|layer:reward-foreground|layer:map-background|layer:reward-back-nav|stale:reward-choice",
+  "attemptId": "0001",
+  "attemptOrdinal": 1,
+  "boundedExplorationBudget": 3,
+  "firstSeenScene": true,
+  "reasoningMode": "semantic",
+  "semanticGoal": "Interpret the event screen, infer what each visible option means, and choose a low-risk action that keeps the run progressing.",
+  "observer": {
+    "currentScreen": "rewards",
+    "visibleScreen": "map",
+    "inCombat": false,
+    "capturedAt": "2026-03-29T08:45:55.7594898+00:00",
+    "inventoryId": "df12031abf408b34",
+    "sceneEpisodeId": "rewards",
+    "encounterKind": "None",
+    "choiceExtractorPath": "reward",
+    "playerCurrentHp": 65,
+    "playerMaxHp": 80,
+    "playerEnergy": 0,
+    "currentChoices": [
+      "Back",
+      "Proceed"
+    ],
+    "lastEventsTail": [],
+    "actionNodes": [
+      {
+        "nodeId": "overlay:left",
+        "kind": "choice",
+        "label": "Back",
+        "screenBounds": "48,620,88,88",
+        "actionable": true,
+        "typeName": "choice",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:choice",
+          "raw-kind:choice"
+        ]
+      },
+      {
+        "nodeId": "proceed:stale",
+        "kind": "proceed",
+        "label": "Proceed",
+        "screenBounds": "1983,764,269,108",
+        "actionable": true,
+        "typeName": "choice",
+        "semanticHints": [
+          "scene:rewards",
+          "kind:proceed",
+          "raw-kind:choice"
+        ]
+      }
+    ],
+    "choices": [
+      {
+        "kind": "choice",
+        "label": "Back",
+        "screenBounds": "48,620,88,88",
+        "description": "Back",
+        "semanticHints": []
+      },
+      {
+        "kind": "choice",
+        "label": "Proceed",
+        "screenBounds": "1983,764,269,108",
+        "description": "Proceed",
+        "semanticHints": []
+      }
+    ],
+    "combatHand": [],
+    "snapshotVersion": 35,
+    "rawCurrentScreen": "0",
+    "rawObservedScreen": "map",
+    "publishedCurrentScreen": "rewards",
+    "publishedVisibleScreen": "map",
+    "compatibilityCurrentScreen": "rewards",
+    "compatibilityVisibleScreen": "map",
+    "compatibilitySceneReady": true,
+    "compatibilitySceneAuthority": "mixed",
+    "compatibilitySceneStability": "stable",
+    "meta": {
+      "screen": "rewards",
+      "publishedCurrentScreen": "rewards",
+      "publishedVisibleScreen": "map",
+      "publishedSceneReady": "true",
+      "publishedSceneAuthority": "mixed",
+      "publishedSceneStability": "stable",
+      "compatibilityCurrentScreen": "rewards",
+      "compatibilityVisibleScreen": "map",
+      "compatSceneReady": "true",
+      "compatSceneAuthority": "mixed",
+      "compatSceneStability": "stable",
+      "rewardScreenDetected": "true",
+      "rewardScreenVisible": "true",
+      "rewardForegroundOwned": "true",
+      "rewardTeardownInProgress": "false",
+      "rewardIsCurrentActiveScreen": "true",
+      "rewardIsTopOverlay": "true",
+      "rewardProceedVisible": "false",
+      "rewardProceedEnabled": "false",
+      "rewardVisibleButtonCount": "0",
+      "rewardEnabledButtonCount": "0",
+      "mapCurrentActiveScreen": "false",
+      "activeScreenType": "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+      "choiceExtractorPath": "reward"
+    },
+    "sceneReady": true,
+    "sceneAuthority": "mixed",
+    "sceneStability": "stable",
+    "publishedSceneReady": true,
+    "publishedSceneAuthority": "mixed",
+    "publishedSceneStability": "stable"
+  },
+  "knownRecipes": [],
+  "eventKnowledgeCandidates": [],
+  "combatCardKnowledge": [
+    {
+      "slotIndex": 1,
+      "name": "CARD.STRIKE_IRONCLAD",
+      "type": "Attack",
+      "target": "AnyEnemy",
+      "cost": 1,
+      "matchSource": "assistant/cards.json"
+    },
+    {
+      "slotIndex": 2,
+      "name": "CARD.DEFEND_IRONCLAD",
+      "type": "Skill",
+      "target": "Self",
+      "cost": 1,
+      "matchSource": "assistant/cards.json"
+    },
+    {
+      "slotIndex": 3,
+      "name": "CARD.TWIN_STRIKE",
+      "type": "Attack",
+      "target": "AnyEnemy",
+      "cost": 1,
+      "matchSource": "assistant/cards.json"
+    },
+    {
+      "slotIndex": 4,
+      "name": "CARD.DEFEND_IRONCLAD",
+      "type": "Skill",
+      "target": "Self",
+      "cost": 1,
+      "matchSource": "assistant/cards.json"
+    },
+    {
+      "slotIndex": 5,
+      "name": "CARD.DEFEND_IRONCLAD",
+      "type": "Skill",
+      "target": "Self",
+      "cost": 1,
+      "matchSource": "assistant/cards.json"
+    }
+  ],
+  "allowedActions": [
+    "click reward back",
+    "wait"
+  ],
+  "history": [],
+  "failureModeHint": "Reward back navigation is the only valid progression lane while stale reward residue sits over the map.",
+  "decisionRiskHint": "scene-stability:unknown, first-seen-scene, semantic-scene-ambiguity",
+  "rawCurrentScreen": "0",
+  "rawObservedScreen": "rewards",
+  "publishedCurrentScreen": "rewards",
+  "publishedVisibleScreen": "map",
+  "compatibilityCurrentScreen": "rewards",
+  "compatibilityVisibleScreen": "map",
+  "compatibilitySceneReady": true,
+  "compatibilitySceneAuthority": "mixed",
+  "compatibilitySceneStability": "stable"
+}
