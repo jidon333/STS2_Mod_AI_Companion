@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static GuiSmokeReplayArtifactSupport;
 using static GuiSmokeSceneReasoningSupport;
 using static GuiSmokeStepRequestFactory;
 
@@ -255,9 +256,14 @@ internal static partial class Program
                         },
                     },
                     Array.Empty<ObservedCombatHandCard>())
-                {
-                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
-                    {
+	                {
+	                    PublishedCurrentScreen = "event",
+	                    PublishedVisibleScreen = "event",
+	                    PublishedSceneReady = true,
+	                    PublishedSceneAuthority = "hook",
+	                    PublishedSceneStability = "stable",
+	                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+	                    {
                         ["choiceExtractorPath"] = "event",
                         ["eventProceedOptionVisible"] = "true",
                         ["eventProceedOptionEnabled"] = "true",
@@ -1140,7 +1146,14 @@ internal static partial class Program
                         new ObserverChoice("choice", "Back", "48,930,88,88", "Back"),
                         new ObserverChoice("map-node", "휴식 (1,2)", "897,581,124,124", "1,2", "type:Rest;coord:1,2"),
                     },
-                    Array.Empty<ObservedCombatHandCard>()),
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "map",
+                    PublishedVisibleScreen = "map",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stable",
+                },
                 mapOverlayStateDocument,
                 null,
                 null);

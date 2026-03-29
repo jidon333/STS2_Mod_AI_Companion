@@ -16,6 +16,8 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static GuiSmokeFixtureIoSupport;
+using static GuiSmokeReplayArtifactSupport;
 using static GuiSmokePostActionPhaseSupport;
 
 internal static partial class Program

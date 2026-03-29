@@ -28,4 +28,32 @@ static class GuiSmokeFixtureIoSupport
 
         return entries;
     }
+
+    internal static JsonDocument? TryLoadJsonDocument(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        return JsonDocument.Parse(stream);
+    }
+
+    internal static T? TryReadJson<T>(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return default;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(File.ReadAllText(path), GuiSmokeShared.JsonOptions);
+        }
+        catch
+        {
+            return default;
+        }
+    }
 }

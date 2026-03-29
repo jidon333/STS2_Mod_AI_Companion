@@ -17,6 +17,7 @@ using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokePromptContractSupport;
+using static GuiSmokeReplayArtifactSupport;
 using static GuiSmokeSceneReasoningSupport;
 using static GuiSmokeStepRequestFactory;
 

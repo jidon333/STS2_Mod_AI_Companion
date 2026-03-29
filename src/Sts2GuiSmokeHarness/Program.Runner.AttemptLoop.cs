@@ -18,6 +18,7 @@ using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokeNonCombatAllowedActionSupport;
 using static GuiSmokePostActionPhaseSupport;
+using static GuiSmokeReplayArtifactSupport;
 using static GuiSmokeSceneReasoningSupport;
 using static GuiSmokeStepRequestFactory;
 using static GuiSmokeStepScreenshotPolicy;

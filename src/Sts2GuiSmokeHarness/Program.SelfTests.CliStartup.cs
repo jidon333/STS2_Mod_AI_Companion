@@ -15,6 +15,7 @@ using Sts2ModAiCompanion.Mod;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
+using static GuiSmokeReplayArtifactSupport;
 using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokeStepRequestFactory;
 
