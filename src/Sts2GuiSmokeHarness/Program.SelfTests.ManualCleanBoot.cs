@@ -503,7 +503,6 @@ internal static partial class Program
             Assert(string.Equals(aliasObserver.PublishedCurrentScreen, "legacy-event", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve the direct published current screen before compatibility fallback.");
             Assert(string.Equals(aliasObserver.PublishedVisibleScreen, "legacy-direct-visible", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve the direct published visible screen before compatibility fallback.");
             Assert(string.Equals(aliasObserver.CompatibilityCurrentScreen, "map", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve the explicit compatibility current screen instead of collapsing back to the published screen.");
-            Assert(string.Equals(aliasObserver.CompatibilityLogicalScreen, "legacy-compat", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve compatibility logical screen provenance separately from compatibility current screen.");
             Assert(aliasObserver.PublishedSceneReady == true
                    && string.Equals(aliasObserver.PublishedSceneAuthority, "hook", StringComparison.OrdinalIgnoreCase)
                    && string.Equals(aliasObserver.PublishedSceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve direct published scene readiness and authority before compatibility fallback.");
@@ -516,8 +515,8 @@ internal static partial class Program
             Assert(ObserverScreenProvenance.PublishedSceneReady(aliasObserver) == true
                    && string.Equals(ObserverScreenProvenance.PublishedSceneAuthority(aliasObserver), "hook", StringComparison.OrdinalIgnoreCase)
                    && string.Equals(ObserverScreenProvenance.PublishedSceneStability(aliasObserver), "stable", StringComparison.OrdinalIgnoreCase), "Published scene helpers should only report published readiness, authority, and stability.");
-            Assert(string.Equals(ObserverScreenProvenance.CompatibilityCurrentScreen(aliasObserver), "map", StringComparison.OrdinalIgnoreCase), "Compatibility current-screen helper should stay within compatibility provenance.");
-            Assert(string.Equals(ObserverScreenProvenance.CompatibilityVisibleScreen(aliasObserver), "map", StringComparison.OrdinalIgnoreCase), "Compatibility visible-screen helper should stay within compatibility provenance.");
+            Assert(string.Equals(ObserverScreenProvenance.StrictCompatibilityCurrentScreen(aliasObserver), "map", StringComparison.OrdinalIgnoreCase), "Strict compatibility current-screen helper should stay within compatibility provenance.");
+            Assert(string.Equals(ObserverScreenProvenance.StrictCompatibilityVisibleScreen(aliasObserver), "map", StringComparison.OrdinalIgnoreCase), "Strict compatibility visible-screen helper should stay within compatibility provenance.");
             Assert(string.Equals(ObserverScreenProvenance.ControlFlowCurrentScreen(aliasObserver), "legacy-event", StringComparison.OrdinalIgnoreCase), "Control-flow screen helper should prefer published current screen before compatibility aliases.");
             Assert(string.Equals(ObserverScreenProvenance.ControlFlowVisibleScreen(aliasObserver), "legacy-direct-visible", StringComparison.OrdinalIgnoreCase), "Control-flow visible-screen helper should prefer published visible screen before compatibility aliases.");
             Assert(ObserverScreenProvenance.ControlFlowSceneReady(aliasObserver) == true
@@ -551,6 +550,8 @@ internal static partial class Program
             var inventoryPublishedFallbackObserver = aliasReader.Read();
             Assert(string.Equals(inventoryPublishedFallbackObserver.PublishedCurrentScreen, "inventory-published", StringComparison.OrdinalIgnoreCase), "Observer reader should use additive inventory published current screen when the state snapshot omits direct published screen fields.");
             Assert(string.Equals(inventoryPublishedFallbackObserver.PublishedVisibleScreen, "inventory-published-visible", StringComparison.OrdinalIgnoreCase), "Observer reader should use additive inventory published visible screen when the state snapshot omits direct published visible fields.");
+            Assert(string.Equals(inventoryPublishedFallbackObserver.CompatibilityCurrentScreen, "event", StringComparison.OrdinalIgnoreCase), "Observer reader should fold compatibility logical-screen fallback into the strict compatibility current-screen surface.");
+            Assert(string.Equals(inventoryPublishedFallbackObserver.CompatibilityVisibleScreen, "event", StringComparison.OrdinalIgnoreCase), "Observer reader should fold compatibility visible-screen fallback into the strict compatibility visible-screen surface.");
             Assert(inventoryPublishedFallbackObserver.PublishedSceneReady == false
                    && string.Equals(inventoryPublishedFallbackObserver.PublishedSceneAuthority, "inventory-published-authority", StringComparison.OrdinalIgnoreCase)
                    && string.Equals(inventoryPublishedFallbackObserver.PublishedSceneStability, "inventory-published-stability", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve additive inventory published readiness and authority without collapsing them into compatibility fields.");

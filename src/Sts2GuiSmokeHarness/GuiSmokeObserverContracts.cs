@@ -39,11 +39,7 @@ sealed record ObserverSummary(
 
     public string? CompatibilityCurrentScreen { get; init; }
 
-    public string? CompatibilityLogicalScreen { get; init; }
-
     public string? CompatibilityVisibleScreen { get; init; }
-
-    public string? CompatibilityVisibleObservedScreen { get; init; }
 
     public bool? CompatibilitySceneReady { get; init; }
 
@@ -199,9 +195,7 @@ sealed record ObserverState(
     public string? PublishedSceneAuthority => Summary.PublishedSceneAuthority;
     public string? PublishedSceneStability => Summary.PublishedSceneStability;
     public string? CompatibilityCurrentScreen => Summary.CompatibilityCurrentScreen;
-    public string? CompatibilityLogicalScreen => Summary.CompatibilityLogicalScreen;
     public string? CompatibilityVisibleScreen => Summary.CompatibilityVisibleScreen;
-    public string? CompatibilityVisibleObservedScreen => Summary.CompatibilityVisibleObservedScreen;
     public bool? InCombat => Summary.InCombat;
     public string? InventoryId => Summary.InventoryId;
     public bool? SceneReady => Summary.SceneReady;
