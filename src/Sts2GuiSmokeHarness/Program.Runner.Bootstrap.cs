@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 internal static partial class Program
 {
@@ -549,19 +550,7 @@ internal static partial class Program
 
     static bool IsManualCleanBootObserverReady(ObserverState observer, DateTimeOffset freshnessFloor)
     {
-        return observer.IsFreshSince(freshnessFloor) && !IsUnknownObserverScreen(GetObservedScreen(observer));
-    }
-
-    static string? GetObservedScreen(ObserverState observer)
-    {
-        return IsUnknownObserverScreen(observer.CurrentScreen)
-            ? observer.VisibleScreen
-            : observer.CurrentScreen;
-    }
-
-    static bool IsUnknownObserverScreen(string? screen)
-    {
-        return string.IsNullOrWhiteSpace(screen)
-               || string.Equals(screen, "unknown", StringComparison.OrdinalIgnoreCase);
+        return observer.IsFreshSince(freshnessFloor)
+               && MainMenuRunStartObserverSignals.HasMainMenuRunStartSurface(observer);
     }
 }

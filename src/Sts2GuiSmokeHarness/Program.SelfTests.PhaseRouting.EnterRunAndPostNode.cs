@@ -86,6 +86,81 @@ internal static partial class Program
         Assert(
             GetPostEnterRunPhase(continuePreferredDecision) == GuiSmokePhase.WaitRunLoad,
             "Continue should hand off to neutral run-load waiting, not WaitCharacterSelect.");
+        var readyMainMenuObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-main-menu",
+                true,
+                "main-menu",
+                "stable",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new[] { "Continue", "Singleplayer" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("continue", "action", "Continue", "620,560,420,96", true),
+                    new ObserverActionNode("singleplayer", "action", "Singleplayer", "620,680,420,96", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("choice", "Continue", "620,560,420,96"),
+                    new ObserverChoice("choice", "Singleplayer", "620,680,420,96"),
+                },
+                Array.Empty<ObservedCombatHandCard>()),
+            null,
+            null,
+            null);
+        Assert(
+            evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMainMenu, readyMainMenuObserver),
+            "WaitMainMenu should still accept fresh exported Continue or Singleplayer run-start surfaces.");
+
+        var logoAnimationMainMenuObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-logo-main-menu",
+                true,
+                "mixed",
+                "stable",
+                "episode-logo-main-menu",
+                null,
+                "generic",
+                null,
+                null,
+                null,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<ObserverActionNode>(),
+                Array.Empty<ObserverChoice>(),
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NLogoAnimation",
+                    ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NLogoAnimation",
+                    ["rootSceneIsMainMenu"] = "true",
+                    ["choiceExtractorPath"] = "generic",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            MainMenuRunStartObserverSignals.IsLogoAnimationOnlyMainMenu(logoAnimationMainMenuObserver),
+            "Main-menu readiness helper should recognize logo-animation-only bootstrap states.");
+        Assert(
+            !evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMainMenu, logoAnimationMainMenuObserver),
+            "WaitMainMenu must not accept a logo-animation-only main-menu state before run-start actions exist.");
 
         var reachableNodeDecision = new GuiSmokeStepDecision("act", "click", null, null, null, "visible reachable node", "Map node selected.", 0.9, null, null, null, null);
         Assert(

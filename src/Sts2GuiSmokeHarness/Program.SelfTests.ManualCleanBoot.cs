@@ -327,22 +327,75 @@ internal static partial class Program
                         Array.Empty<string>(),
                         Array.Empty<ObserverActionNode>(),
                         Array.Empty<ObserverChoice>(),
+                        Array.Empty<ObservedCombatHandCard>())
+                    {
+                        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NLogoAnimation",
+                            ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NLogoAnimation",
+                            ["rootSceneIsMainMenu"] = "true",
+                            ["choiceExtractorPath"] = "generic",
+                        },
+                    },
+                    null,
+                    null,
+                    null),
+                new ObserverState(
+                    new ObserverSummary(
+                        "main-menu",
+                        "main-menu",
+                        false,
+                        DateTimeOffset.UtcNow,
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
+                        "episode-main-menu-bootstrap-ready",
+                        null,
+                        "main-menu",
+                        null,
+                        null,
+                        null,
+                        new[] { "Singleplayer" },
+                        Array.Empty<string>(),
+                        new[]
+                        {
+                            new ObserverActionNode("main-menu:singleplayer", "singleplayer", "Singleplayer", "620,680,420,96", true),
+                        },
+                        new[]
+                        {
+                            new ObserverChoice("singleplayer", "Singleplayer", "620,680,420,96", "main-menu:singleplayer")
+                            {
+                                NodeId = "main-menu:singleplayer",
+                                BindingKind = "singleplayer",
+                            },
+                        },
                         Array.Empty<ObservedCombatHandCard>()),
                     null,
                     null,
                     null),
             };
             var bootstrapIndex = 0;
+            Assert(
+                !IsManualCleanBootObserverReady(bootstrapStates[1], DateTimeOffset.UtcNow.AddSeconds(-5)),
+                "Bootstrap polling should keep ignoring fresh logo-animation main-menu states that still lack Continue or Singleplayer authority.");
+            Assert(
+                IsManualCleanBootObserverReady(bootstrapStates[2], DateTimeOffset.UtcNow.AddSeconds(-5)),
+                "Bootstrap polling should treat exported Continue or Singleplayer authority as the actual run-start readiness signal.");
             var bootstrappedObserver = BootstrapManualCleanBootObserverAsync(
                     bootstrapStates[bootstrapIndex],
                     () => bootstrapStates[Math.Min(++bootstrapIndex, bootstrapStates.Length - 1)],
                     DateTimeOffset.UtcNow.AddSeconds(-5),
-                    2,
+                    3,
                     0,
                     static _ => Task.CompletedTask)
                 .GetAwaiter()
                 .GetResult();
+            Assert(bootstrapIndex == 2, "Manual clean boot bootstrap should keep polling past the fresh logo-animation main menu until a concrete run-start surface appears.");
             Assert(string.Equals(bootstrappedObserver.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Manual clean boot bootstrap should keep polling until a fresh main-menu observer arrives.");
+            Assert(
+                bootstrappedObserver.ActionNodes.Any(node => string.Equals(node.Label, "Singleplayer", StringComparison.OrdinalIgnoreCase)),
+                "Manual clean boot bootstrap should ignore logo-animation-only main-menu states and wait for an actual run-start surface.");
         }
         finally
         {

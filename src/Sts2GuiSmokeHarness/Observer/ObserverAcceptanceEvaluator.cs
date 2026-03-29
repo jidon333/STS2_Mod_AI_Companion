@@ -25,7 +25,7 @@ sealed class ObserverAcceptanceEvaluator
         var sceneReady = CompatibilitySceneReady(observer) != false;
         return phase switch
         {
-            GuiSmokePhase.WaitMainMenu => sceneReady && MatchesCompatibilityScreen(observer, "main-menu"),
+            GuiSmokePhase.WaitMainMenu => sceneReady && MainMenuRunStartObserverSignals.IsRunStartSurfaceReady(observer),
             GuiSmokePhase.WaitRunLoad => false,
             GuiSmokePhase.WaitCharacterSelect => sceneReady && MatchesCompatibilityScreen(observer, "character-select"),
             GuiSmokePhase.WaitMap => sceneReady && MapForegroundReconciliation.HasMapForegroundOwnership(observer, history ?? Array.Empty<GuiSmokeHistoryEntry>()),
