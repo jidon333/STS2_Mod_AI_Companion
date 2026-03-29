@@ -89,7 +89,8 @@ internal sealed class InventoryPublisher
         var rawSceneType = ResolveRawSceneType(snapshot, normalizedScene);
         var publishedSceneType = ResolvePublishedSceneType(snapshot, normalizedScene);
         var compatibilitySceneType = ResolveCompatibilitySceneType(snapshot, normalizedScene, publishedSceneType, rawSceneType);
-        var nodePrimarySceneType = publishedSceneType ?? rawSceneType;
+        var nodeRawSceneType = ResolveStrictNodeRawSceneType(snapshot);
+        var nodePrimarySceneType = publishedSceneType ?? nodeRawSceneType;
         var blockingModal = ResolveBlockingModal(snapshot, normalizedScene);
         var publishedVisibleScene = ResolvePublishedVisibleScene(snapshot, normalizedScene, publishedSceneType);
         var publishedSceneReady = ResolvePublishedSceneReady(snapshot, blockingModal);
@@ -104,7 +105,7 @@ internal sealed class InventoryPublisher
         var sceneAuthority = publishedSceneAuthority;
         var sceneStability = publishedSceneStability;
         var nodes = snapshot.CurrentChoices
-            .Select((choice, index) => BuildNode(nodePrimarySceneType, compatibilitySceneType, rawSceneType, publishedSceneType, choice, index))
+            .Select((choice, index) => BuildNode(nodePrimarySceneType, nodeRawSceneType, publishedSceneType, choice, index))
             .ToArray();
 
         return new HarnessNodeInventory(
@@ -138,6 +139,14 @@ internal sealed class InventoryPublisher
             CompatibilitySceneAuthority = compatibilitySceneAuthority,
             CompatibilitySceneStability = compatibilitySceneStability,
         };
+    }
+
+    private static string? ResolveStrictNodeRawSceneType(LiveExportSnapshot snapshot)
+    {
+        return NormalizeSceneToken(snapshot.RawCurrentScreen)
+               ?? NormalizeSceneToken(snapshot.RawObservedScreen)
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "rawObservedScreen"))
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "rawCurrentScreen"));
     }
 
     private static string ResolveRawSceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
@@ -235,7 +244,6 @@ internal sealed class InventoryPublisher
 
     private static HarnessNodeInventoryItem BuildNode(
         string? primarySceneType,
-        string compatibilitySceneType,
         string? rawSceneType,
         string? publishedSceneType,
         LiveExportChoiceSummary choice,
@@ -244,7 +252,7 @@ internal sealed class InventoryPublisher
         var label = choice.Label?.Trim() ?? string.Empty;
         var kind = ResolveKind(primarySceneType, choice);
         var actionable = !string.IsNullOrWhiteSpace(label) && !CompanionSceneNormalizer.IsOverlayChoice(label);
-        var hints = BuildHints(primarySceneType, compatibilitySceneType, rawSceneType, publishedSceneType, choice, kind);
+        var hints = BuildHints(primarySceneType, rawSceneType, publishedSceneType, choice, kind);
 
         return new HarnessNodeInventoryItem(
             NodeId: string.IsNullOrWhiteSpace(choice.NodeId) ? $"{kind}:{index}" : choice.NodeId,
@@ -268,12 +276,17 @@ internal sealed class InventoryPublisher
             return "overlay-dismiss";
         }
 
+        if (IsExplicitMapPointChoice(choice))
+        {
+            return "map-node";
+        }
+
         return sceneType switch
         {
             "main-menu" => ResolveMainMenuKind(label),
             "singleplayer-submenu" => "mode-option",
             "character-select" => IsEmbarkLabel(label) ? "embark" : "character",
-            "map" => IsExplicitMapPointChoice(choice) ? "map-node" : NormalizeChoiceKind(choice.Kind),
+            "map" => NormalizeChoiceKind(choice.Kind),
             "rewards" => IsProceedLabel(label) ? "proceed" : "reward-item",
             "event" => "event-option",
             "shop" => ResolveShopKind(choice),
@@ -284,7 +297,6 @@ internal sealed class InventoryPublisher
 
     private static IReadOnlyList<string> BuildHints(
         string? primarySceneType,
-        string compatibilitySceneType,
         string? rawSceneType,
         string? publishedSceneType,
         LiveExportChoiceSummary choice,
@@ -295,11 +307,6 @@ internal sealed class InventoryPublisher
         if (!string.IsNullOrWhiteSpace(primarySceneType))
         {
             hints.Add($"scene:{primarySceneType}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(compatibilitySceneType))
-        {
-            hints.Add($"scene-compat:{compatibilitySceneType}");
         }
 
         hints.Add($"kind:{resolvedKind}");

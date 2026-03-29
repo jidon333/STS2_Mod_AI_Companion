@@ -72,23 +72,16 @@ sealed class ObserverSnapshotReader
                             ?? legacyCurrentScreen;
         var publishedVisibleScreen = TryReadString(stateDocument?.RootElement, "publishedVisibleScreen")
                                      ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedVisibleScreen")
-                                     ?? inventoryPublishedVisibleScreen
-                                     ?? publishedCurrentScreen
-                                     ?? inventoryPublishedCurrentScreen;
+                                     ?? inventoryPublishedVisibleScreen;
         var snapshotVersion = TryReadInt64(stateDocument?.RootElement, "version");
         var compatibilityVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatibilityVisibleScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScreen")
                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatVisibleScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScene");
-        var compatibilityVisibleObservedScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatVisibleScreen")
-                                                 ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScene");
-        var legacyVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "visibleScreen");
         var visibleScreen = publishedVisibleScreen
                             ?? rawObservedScreen
                             ?? rawCurrentScreen
                             ?? compatibilityVisibleScreen
-                            ?? compatibilityVisibleObservedScreen
-                            ?? legacyVisibleScreen
                             ?? currentScreen
                             ?? inventorySceneType;
         var inCombat = TryReadBool(stateDocument?.RootElement, "encounter", "inCombat");
@@ -103,8 +96,6 @@ sealed class ObserverSnapshotReader
         var publishedSceneReady = TryReadBool(stateDocument?.RootElement, "publishedSceneReady")
                                   ?? TryReadNestedBool(stateDocument?.RootElement, "meta", "publishedSceneReady")
                                   ?? inventoryPublishedSceneReady;
-        var legacySceneReady = TryReadNestedBool(stateDocument?.RootElement, "meta", "sceneReady")
-                               ?? TryReadBool(inventoryDocument?.RootElement, "sceneReady");
         var sceneReady = publishedSceneReady ?? compatibilitySceneReady;
         var inventoryPublishedSceneAuthority = TryReadString(inventoryDocument?.RootElement, "publishedSceneAuthority");
         var compatibilitySceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneAuthority")
@@ -112,8 +103,6 @@ sealed class ObserverSnapshotReader
         var publishedSceneAuthority = TryReadString(stateDocument?.RootElement, "publishedSceneAuthority")
                                       ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedSceneAuthority")
                                       ?? inventoryPublishedSceneAuthority;
-        var legacySceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "sceneAuthority")
-                                   ?? TryReadString(inventoryDocument?.RootElement, "sceneAuthority");
         var sceneAuthority = publishedSceneAuthority ?? compatibilitySceneAuthority;
         var inventoryPublishedSceneStability = TryReadString(inventoryDocument?.RootElement, "publishedSceneStability");
         var compatibilitySceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneStability")
@@ -121,8 +110,6 @@ sealed class ObserverSnapshotReader
         var publishedSceneStability = TryReadString(stateDocument?.RootElement, "publishedSceneStability")
                                       ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedSceneStability")
                                       ?? inventoryPublishedSceneStability;
-        var legacySceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "sceneStability")
-                                   ?? TryReadString(inventoryDocument?.RootElement, "sceneStability");
         var sceneStability = publishedSceneStability ?? compatibilitySceneStability;
         var sceneEpisodeId = TryReadString(inventoryDocument?.RootElement, "sceneEpisodeId")
                              ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen-episode");
@@ -142,9 +129,9 @@ sealed class ObserverSnapshotReader
                 inCombat,
                 capturedAt,
                 inventoryId,
-                sceneReady ?? legacySceneReady,
-                sceneAuthority ?? legacySceneAuthority,
-                sceneStability ?? legacySceneStability,
+                sceneReady,
+                sceneAuthority,
+                sceneStability,
                 sceneEpisodeId,
                 encounterKind,
                 choiceExtractorPath,

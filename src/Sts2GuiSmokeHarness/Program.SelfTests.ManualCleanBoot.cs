@@ -531,6 +531,80 @@ internal static partial class Program
             Assert(aliasObserverDescription.Contains("visible=legacy-direct-visible", StringComparison.OrdinalIgnoreCase), "Observer description should report control-flow visible screen, not compatibility visible screen.");
 
             File.WriteAllText(
+                harnessLayout.InventoryPath,
+                JsonSerializer.Serialize(
+                    new HarnessNodeInventory(
+                        "inventory-legacy-only",
+                        capturedAt,
+                        null,
+                        "inventory-legacy",
+                        "episode-legacy-only",
+                        "dormant",
+                        null,
+                        null,
+                        null,
+                        null,
+                        Array.Empty<HarnessNodeInventoryItem>()),
+                    GuiSmokeShared.JsonOptions));
+            File.WriteAllText(
+                liveLayout.SnapshotPath,
+                """
+                {
+                  "version": 7,
+                  "currentScreen": "legacy-collapsed",
+                  "capturedAt": "REPLACE_CAPTURED_AT",
+                  "meta": {
+                    "visibleScreen": "legacy-generic-visible",
+                    "sceneReady": "false",
+                    "sceneAuthority": "legacy-generic-authority",
+                    "sceneStability": "legacy-generic-stability"
+                  },
+                  "player": {},
+                  "choices": []
+                }
+                """.Replace("REPLACE_CAPTURED_AT", capturedAt.ToString("O"), StringComparison.Ordinal));
+
+            var legacyCompatibilityLeakObserver = aliasReader.Read();
+            Assert(string.Equals(legacyCompatibilityLeakObserver.CurrentScreen, "legacy-collapsed", StringComparison.OrdinalIgnoreCase), "Observer reader should keep the legacy top-level currentScreen when additive published/raw/compatibility screens are absent.");
+            Assert(string.Equals(legacyCompatibilityLeakObserver.VisibleScreen, "legacy-collapsed", StringComparison.OrdinalIgnoreCase), "Observer reader visibleScreen should fall back to the primary current screen instead of rehydrating legacy meta.visibleScreen.");
+            Assert(legacyCompatibilityLeakObserver.SceneReady is null
+                   && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.SceneAuthority)
+                   && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.SceneStability), "Observer reader control-flow scene fields should stay empty when only legacy meta scene fields are present.");
+            Assert(legacyCompatibilityLeakObserver.PublishedSceneReady is null
+                   && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.PublishedSceneAuthority)
+                   && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.PublishedSceneStability), "Observer reader published provenance should stay empty when only legacy meta scene fields are present.");
+            Assert(string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.CompatibilityVisibleScreen), "Observer reader should not repopulate compatibility visible-screen provenance from legacy meta.visibleScreen.");
+            Assert(legacyCompatibilityLeakObserver.CompatibilitySceneReady is null
+                   && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.CompatibilitySceneAuthority)
+                   && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.CompatibilitySceneStability), "Observer reader compatibility provenance should stay empty when only legacy meta scene fields are present.");
+
+            File.WriteAllText(
+                harnessLayout.InventoryPath,
+                JsonSerializer.Serialize(
+                    new HarnessNodeInventory(
+                        "inventory-alias-precedence",
+                        capturedAt,
+                        null,
+                        "inventory-legacy",
+                        "episode-alias-precedence",
+                        "dormant",
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
+                        Array.Empty<HarnessNodeInventoryItem>())
+                    {
+                        RawCurrentScreen = "inventory-raw",
+                        PublishedCurrentScreen = "inventory-published",
+                        PublishedVisibleScreen = "inventory-published-visible",
+                        PublishedSceneReady = false,
+                        PublishedSceneAuthority = "inventory-published-authority",
+                        PublishedSceneStability = "inventory-published-stability",
+                        CompatibilityCurrentScreen = "inventory-compat",
+                        CompatibilityVisibleScreen = "inventory-visible",
+                    },
+                    GuiSmokeShared.JsonOptions));
+            File.WriteAllText(
                 liveLayout.SnapshotPath,
                 """
                 {
@@ -546,6 +620,32 @@ internal static partial class Program
                   "choices": []
                 }
                 """.Replace("REPLACE_CAPTURED_AT", capturedAt.ToString("O"), StringComparison.Ordinal));
+            File.WriteAllText(
+                harnessLayout.InventoryPath,
+                JsonSerializer.Serialize(
+                    new HarnessNodeInventory(
+                        "inventory-alias-precedence",
+                        capturedAt,
+                        null,
+                        "inventory-legacy",
+                        "episode-alias-precedence",
+                        "dormant",
+                        null,
+                        true,
+                        "mixed",
+                        "stable",
+                        Array.Empty<HarnessNodeInventoryItem>())
+                    {
+                        RawCurrentScreen = "inventory-raw",
+                        PublishedCurrentScreen = "inventory-published",
+                        PublishedVisibleScreen = "inventory-published-visible",
+                        PublishedSceneReady = false,
+                        PublishedSceneAuthority = "inventory-published-authority",
+                        PublishedSceneStability = "inventory-published-stability",
+                        CompatibilityCurrentScreen = "inventory-compat",
+                        CompatibilityVisibleScreen = "inventory-visible",
+                    },
+                    GuiSmokeShared.JsonOptions));
 
             var inventoryPublishedFallbackObserver = aliasReader.Read();
             Assert(string.Equals(inventoryPublishedFallbackObserver.PublishedCurrentScreen, "inventory-published", StringComparison.OrdinalIgnoreCase), "Observer reader should use additive inventory published current screen when the state snapshot omits direct published screen fields.");
@@ -555,6 +655,57 @@ internal static partial class Program
             Assert(inventoryPublishedFallbackObserver.PublishedSceneReady == false
                    && string.Equals(inventoryPublishedFallbackObserver.PublishedSceneAuthority, "inventory-published-authority", StringComparison.OrdinalIgnoreCase)
                    && string.Equals(inventoryPublishedFallbackObserver.PublishedSceneStability, "inventory-published-stability", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve additive inventory published readiness and authority without collapsing them into compatibility fields.");
+
+            File.WriteAllText(
+                harnessLayout.InventoryPath,
+                JsonSerializer.Serialize(
+                    new HarnessNodeInventory(
+                        "inventory-legacy-screen-only",
+                        capturedAt,
+                        null,
+                        "inventory-legacy",
+                        "episode-legacy-screen-only",
+                        "dormant",
+                        null,
+                        null,
+                        null,
+                        null,
+                        Array.Empty<HarnessNodeInventoryItem>()),
+                    GuiSmokeShared.JsonOptions));
+            File.WriteAllText(
+                liveLayout.SnapshotPath,
+                """
+                {
+                  "version": 9,
+                  "currentScreen": "legacy-collapsed",
+                  "publishedCurrentScreen": "published-only",
+                  "capturedAt": "REPLACE_CAPTURED_AT",
+                  "meta": {
+                    "rawObservedScreen": "raw-only",
+                    "visibleScreen": "legacy-visible",
+                    "sceneReady": "true",
+                    "sceneAuthority": "legacy",
+                    "sceneStability": "stable"
+                  },
+                  "player": {},
+                  "choices": []
+                }
+                """.Replace("REPLACE_CAPTURED_AT", capturedAt.ToString("O"), StringComparison.Ordinal));
+
+            var legacyBleedObserver = aliasReader.Read();
+            Assert(string.Equals(legacyBleedObserver.PublishedCurrentScreen, "published-only", StringComparison.OrdinalIgnoreCase), "Observer reader should still preserve direct published current-screen provenance.");
+            Assert(string.IsNullOrWhiteSpace(legacyBleedObserver.PublishedVisibleScreen), "Observer reader should not repopulate published visible-screen provenance from published current-screen or legacy visibleScreen.");
+            Assert(legacyBleedObserver.PublishedSceneReady is null
+                   && string.IsNullOrWhiteSpace(legacyBleedObserver.PublishedSceneAuthority)
+                   && string.IsNullOrWhiteSpace(legacyBleedObserver.PublishedSceneStability), "Observer reader should not repopulate published scene diagnostics from legacy sceneReady/sceneAuthority/sceneStability metadata.");
+            Assert(string.IsNullOrWhiteSpace(legacyBleedObserver.CompatibilityVisibleScreen), "Observer reader compatibility visible-screen should stay empty when no explicit compatibility visible-screen provenance exists.");
+            Assert(legacyBleedObserver.CompatibilitySceneReady is null
+                   && string.IsNullOrWhiteSpace(legacyBleedObserver.CompatibilitySceneAuthority)
+                   && string.IsNullOrWhiteSpace(legacyBleedObserver.CompatibilitySceneStability), "Observer reader compatibility diagnostics should stay empty when only legacy sceneReady/sceneAuthority/sceneStability metadata exists.");
+            Assert(legacyBleedObserver.SceneReady is null
+                   && string.IsNullOrWhiteSpace(legacyBleedObserver.SceneAuthority)
+                   && string.IsNullOrWhiteSpace(legacyBleedObserver.SceneStability), "Observer reader primary scene diagnostics should stay empty when only legacy compatibility metadata exists.");
+            Assert(string.Equals(legacyBleedObserver.VisibleScreen, "raw-only", StringComparison.OrdinalIgnoreCase), "Observer reader visible-screen should prefer direct raw observed screen over legacy visibleScreen metadata.");
 
             File.WriteAllLines(
                 liveLayout.EventsPath,
