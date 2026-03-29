@@ -67,6 +67,11 @@ internal static partial class Program
             var mapTransitionWaitObserver = new ObserverState(
                 mapTransitionObserver.Summary with
                 {
+                    PublishedCurrentScreen = "event",
+                    PublishedVisibleScreen = "event",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stable",
                     Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                     {
                         ["transitionInProgress"] = "true",
@@ -979,8 +984,9 @@ internal static partial class Program
             {
                 var legacyReplayRequest = LoadReplayRequest(legacyRestSiteRequestPath).Request;
                 var legacyReplayArtifact = EvaluateAutoDecisionWithDiagnostics(legacyRestSiteRequestPath, legacyReplayRequest).CandidateDump;
-                Assert(string.Equals(legacyReplayArtifact.FinalDecision.TargetLabel, "rest site: smith", StringComparison.OrdinalIgnoreCase),
-                    "Legacy replay artifact without binding metadata should still choose rest site: smith.");
+                Assert(legacyReplayArtifact.FinalDecision.Status is "wait"
+                       && string.Equals(legacyReplayArtifact.FinalDecision.Reason, "waiting for an explicit rest-site choice", StringComparison.OrdinalIgnoreCase),
+                    "Legacy replay artifact without explicit rest-site metadata should now wait instead of reconstructing rest-site semantics from bridge compatibility winners.");
             }
 
             var mixedSmithGridSummary = disabledConfirmSmithUpgradeSummary with

@@ -170,33 +170,27 @@ static class ObserverScreenProvenance
 
     public static bool? ControlFlowSceneReady(ObserverSummary observer)
         => StrictPublishedSceneReady(observer)
-           ?? StrictCompatibilitySceneReady(observer)
-           ?? observer.SceneReady;
+           ?? StrictCompatibilitySceneReady(observer);
 
     public static bool? ControlFlowSceneReady(ObserverState observer)
         => StrictPublishedSceneReady(observer)
-           ?? StrictCompatibilitySceneReady(observer)
-           ?? observer.SceneReady;
+           ?? StrictCompatibilitySceneReady(observer);
 
     public static string? ControlFlowSceneAuthority(ObserverSummary observer)
         => StrictPublishedSceneAuthority(observer)
-           ?? StrictCompatibilitySceneAuthority(observer)
-           ?? observer.SceneAuthority;
+           ?? StrictCompatibilitySceneAuthority(observer);
 
     public static string? ControlFlowSceneAuthority(ObserverState observer)
         => StrictPublishedSceneAuthority(observer)
-           ?? StrictCompatibilitySceneAuthority(observer)
-           ?? observer.SceneAuthority;
+           ?? StrictCompatibilitySceneAuthority(observer);
 
     public static string? ControlFlowSceneStability(ObserverSummary observer)
         => StrictPublishedSceneStability(observer)
-           ?? StrictCompatibilitySceneStability(observer)
-           ?? observer.SceneStability;
+           ?? StrictCompatibilitySceneStability(observer);
 
     public static string? ControlFlowSceneStability(ObserverState observer)
         => StrictPublishedSceneStability(observer)
-           ?? StrictCompatibilitySceneStability(observer)
-           ?? observer.SceneStability;
+           ?? StrictCompatibilitySceneStability(observer);
 
     public static bool MatchesControlFlowScreen(ObserverSummary observer, string screen)
     {

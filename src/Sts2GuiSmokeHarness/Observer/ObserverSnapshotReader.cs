@@ -96,21 +96,21 @@ sealed class ObserverSnapshotReader
         var publishedSceneReady = TryReadBool(stateDocument?.RootElement, "publishedSceneReady")
                                   ?? TryReadNestedBool(stateDocument?.RootElement, "meta", "publishedSceneReady")
                                   ?? inventoryPublishedSceneReady;
-        var sceneReady = publishedSceneReady ?? compatibilitySceneReady;
+        var sceneReady = compatibilitySceneReady;
         var inventoryPublishedSceneAuthority = TryReadString(inventoryDocument?.RootElement, "publishedSceneAuthority");
         var compatibilitySceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneAuthority")
                                           ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneAuthority");
         var publishedSceneAuthority = TryReadString(stateDocument?.RootElement, "publishedSceneAuthority")
                                       ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedSceneAuthority")
                                       ?? inventoryPublishedSceneAuthority;
-        var sceneAuthority = publishedSceneAuthority ?? compatibilitySceneAuthority;
+        var sceneAuthority = compatibilitySceneAuthority;
         var inventoryPublishedSceneStability = TryReadString(inventoryDocument?.RootElement, "publishedSceneStability");
         var compatibilitySceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneStability")
                                           ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneStability");
         var publishedSceneStability = TryReadString(stateDocument?.RootElement, "publishedSceneStability")
                                       ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedSceneStability")
                                       ?? inventoryPublishedSceneStability;
-        var sceneStability = publishedSceneStability ?? compatibilitySceneStability;
+        var sceneStability = compatibilitySceneStability;
         var sceneEpisodeId = TryReadString(inventoryDocument?.RootElement, "sceneEpisodeId")
                              ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen-episode");
         var encounterKind = TryReadNestedString(stateDocument?.RootElement, "encounter", "kind");

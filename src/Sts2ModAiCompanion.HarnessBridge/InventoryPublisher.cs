@@ -100,10 +100,10 @@ internal sealed class InventoryPublisher
         var compatibilitySceneReady = ResolveSceneReady(snapshot, normalizedScene, blockingModal);
         var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
         var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
-        var sceneType = publishedSceneType ?? rawSceneType ?? normalizedScene.SceneType;
-        var sceneReady = publishedSceneReady;
-        var sceneAuthority = publishedSceneAuthority;
-        var sceneStability = publishedSceneStability;
+        var sceneType = compatibilitySceneType;
+        var sceneReady = compatibilitySceneReady;
+        var sceneAuthority = compatibilitySceneAuthority;
+        var sceneStability = compatibilitySceneStability;
         var nodes = snapshot.CurrentChoices
             .Select((choice, index) => BuildNode(nodePrimarySceneType, nodeRawSceneType, publishedSceneType, choice, index))
             .ToArray();
