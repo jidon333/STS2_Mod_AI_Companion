@@ -31,7 +31,9 @@ sealed partial class AutoDecisionProvider
         var rewardBackNavigationAvailable = HasOverlayChoiceState(observer)
                                             || observer.ActionNodes.Any(static node => node.Actionable && IsBackNode(node));
         var activeRewardChoices = observer.Choices.Where(choice => IsCurrentRewardProgressionChoice(choice, windowBounds)).ToArray();
-        var activeRewardNodes = observer.ActionNodes.Where(node => IsCurrentRewardProgressionNode(node, windowBounds)).ToArray();
+        var activeRewardNodes = observer.ActionNodes
+            .Where(node => IsCurrentRewardProgressionNode(node, windowBounds, rewardState, activeRewardChoices))
+            .ToArray();
         var claimableRewardChoices = activeRewardChoices
             .Where(choice => IsClaimableRewardProgressionChoice(choice, rewardState))
             .ToArray();
@@ -475,15 +477,20 @@ sealed partial class AutoDecisionProvider
             .Where(choice => IsCurrentRewardProgressionChoice(choice, windowBounds))
             .ToArray();
         return observer.ActionNodes
-            .Where(node => IsCurrentRewardProgressionNode(node, windowBounds))
+            .Where(node => IsCurrentRewardProgressionNode(node, windowBounds, rewardState, activeRewardChoices))
             .Where(node => IsClaimableRewardProgressionNode(node, rewardState, activeRewardChoices))
             .ToArray();
     }
 
-    private static bool IsCurrentRewardProgressionNode(ObserverActionNode node, WindowBounds? windowBounds)
+    private static bool IsCurrentRewardProgressionNode(
+        ObserverActionNode node,
+        WindowBounds? windowBounds,
+        RewardScreenState? rewardState,
+        IReadOnlyList<ObserverChoice> activeRewardChoices)
     {
         return IsExplicitRewardProgressionNode(node)
-               && HasActiveRewardBounds(node.ScreenBounds, windowBounds);
+               && HasActiveRewardBounds(node.ScreenBounds, windowBounds)
+               && HasCurrentRewardNodeAuthority(node, rewardState, activeRewardChoices);
     }
 
     private static bool IsClaimableRewardProgressionChoice(ObserverChoice choice, RewardScreenState? rewardState)
@@ -493,7 +500,7 @@ sealed partial class AutoDecisionProvider
             return false;
         }
 
-        return !IsPotionRewardChoice(choice) || rewardState?.HasOpenPotionSlots != false;
+        return !IsPotionRewardChoice(choice) || AllowsPotionRewardClaim(rewardState);
     }
 
     private static bool IsClaimableRewardProgressionNode(
@@ -506,7 +513,44 @@ sealed partial class AutoDecisionProvider
             return false;
         }
 
-        return !IsPotionRewardNode(node, activeRewardChoices) || rewardState?.HasOpenPotionSlots != false;
+        return !IsPotionRewardNode(node, activeRewardChoices) || AllowsPotionRewardClaim(rewardState);
+    }
+
+    private static bool HasCurrentRewardNodeAuthority(
+        ObserverActionNode node,
+        RewardScreenState? rewardState,
+        IReadOnlyList<ObserverChoice> activeRewardChoices)
+    {
+        if (IsProceedNode(node)
+            || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase)
+            || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (activeRewardChoices.Any(choice =>
+                string.Equals(choice.Label, node.Label, StringComparison.OrdinalIgnoreCase)
+                && RewardBoundsLookEquivalent(choice.ScreenBounds, node.ScreenBounds)))
+        {
+            return true;
+        }
+
+        if (rewardState?.RewardIsCurrentActiveScreen == true || rewardState?.ForegroundOwned == true)
+        {
+            return node.SemanticHints.Any(static hint =>
+                string.Equals(hint, "scene:rewards", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "scene-published:rewards", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(hint, "scene-raw:rewards", StringComparison.OrdinalIgnoreCase));
+        }
+
+        return false;
+    }
+
+    private static bool AllowsPotionRewardClaim(RewardScreenState? rewardState)
+    {
+        // AutoSlay only treats potion rewards as claimable when player state explicitly confirms
+        // an open potion slot. Unknown slot capacity is not strong enough to reopen claim loops.
+        return rewardState?.HasOpenPotionSlots == true;
     }
 
     private static bool IsStaleRewardProgressionChoice(ObserverChoice choice, WindowBounds? windowBounds)
@@ -600,8 +644,7 @@ sealed partial class AutoDecisionProvider
 
         return IsProceedNode(node)
                || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase)
-               || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
-               || HasLargeChoiceBounds(node.ScreenBounds);
+               || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsPotionRewardNode(ObserverActionNode node, IReadOnlyList<ObserverChoice> activeRewardChoices)

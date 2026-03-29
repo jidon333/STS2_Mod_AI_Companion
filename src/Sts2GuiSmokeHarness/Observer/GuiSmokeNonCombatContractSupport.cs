@@ -361,8 +361,7 @@ static class GuiSmokeNonCombatContractSupport
 
         return IsProceedNode(node)
                || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase)
-               || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
-               || HasLargeChoiceBounds(node.ScreenBounds);
+               || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsRewardCardChoice(ObserverChoice choice)

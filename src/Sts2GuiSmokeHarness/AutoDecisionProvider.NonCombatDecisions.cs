@@ -756,7 +756,7 @@ sealed partial class AutoDecisionProvider
         }
 
         var proceedNode = request.Observer.ActionNodes
-            .Where(node => IsCurrentRewardProgressionNode(node, request.WindowBounds))
+            .Where(node => IsCurrentRewardProgressionNode(node, request.WindowBounds, rewardScene.ScreenState, activeRewardChoices))
             .Where(IsProceedNode)
             .OrderByDescending(ScoreExplicitRewardProgressionNode)
             .ThenBy(GetNodeSortY)

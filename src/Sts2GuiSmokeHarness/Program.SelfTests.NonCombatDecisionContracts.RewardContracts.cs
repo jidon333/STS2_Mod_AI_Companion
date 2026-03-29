@@ -743,6 +743,77 @@ internal static partial class Program
             Assert(string.Equals(fullPotionSlotDecision.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase),
                 "Potion-only reward residue with full slots should click proceed instead of claim reward item.");
 
+            var unknownPotionCapacityMeta = new Dictionary<string, string?>(fullPotionSlotObserver.Summary.Meta, StringComparer.OrdinalIgnoreCase)
+            {
+                ["rewardScreenDetected"] = "true",
+                ["rewardScreenVisible"] = "true",
+                ["rewardForegroundOwned"] = "true",
+                ["rewardTeardownInProgress"] = "false",
+                ["rewardIsCurrentActiveScreen"] = "true",
+                ["rewardIsTopOverlay"] = "true",
+                ["rewardProceedVisible"] = "true",
+                ["rewardProceedEnabled"] = "true",
+                ["rewardVisibleButtonCount"] = "1",
+                ["rewardEnabledButtonCount"] = "1",
+                ["mapCurrentActiveScreen"] = "false",
+                ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                ["rewardScreenRootType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+            };
+            unknownPotionCapacityMeta.Remove("hasOpenPotionSlots");
+            var unknownPotionCapacityObserver = fullPotionSlotObserver with
+            {
+                Summary = fullPotionSlotObserver.Summary with
+                {
+                    Meta = unknownPotionCapacityMeta,
+                },
+            };
+            var unknownPotionCapacityScene = AutoDecisionProvider.BuildRewardSceneState(
+                unknownPotionCapacityObserver,
+                new WindowBounds(0, 0, 1920, 1080),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardRankingScreenshotPath);
+            Assert(!unknownPotionCapacityScene.ClaimableRewardPresent,
+                "Potion rewards should stay unclaimable when slot capacity is unknown; unknown runtime truth must not reopen stale claim loops.");
+            Assert(unknownPotionCapacityScene.ExplicitAction == RewardExplicitActionKind.SkipProceed,
+                "Potion-only reward residue with unknown slot capacity should normalize to proceed instead of claim.");
+            var unknownPotionCapacityAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                unknownPotionCapacityObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardRankingScreenshotPath,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(!unknownPotionCapacityAllowedActions.Contains("click reward", StringComparer.OrdinalIgnoreCase)
+                   && !unknownPotionCapacityAllowedActions.Contains("click reward choice", StringComparer.OrdinalIgnoreCase),
+                "Unknown potion capacity should keep reward claim actions closed.");
+            Assert(unknownPotionCapacityAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
+                "Unknown potion capacity should still keep proceed available.");
+            var unknownPotionCapacityDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                47,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "Unknown potion capacity should follow AutoSlay's strict contract and prefer proceed over looping on potion claim.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1920, 1080),
+                ComputeSceneSignature(rewardRankingScreenshotPath, unknownPotionCapacityObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                unknownPotionCapacityObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                unknownPotionCapacityAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Visible potion rewards without confirmed slot capacity should not loop on claim.",
+                null));
+            Assert(string.Equals(unknownPotionCapacityDecision.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase),
+                "Unknown potion capacity should click proceed instead of claim reward item.");
+
             var openPotionSlotObserver = fullPotionSlotObserver with
             {
                 Summary = fullPotionSlotObserver.Summary with
@@ -772,6 +843,122 @@ internal static partial class Program
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 rewardRankingScreenshotPath);
             Assert(openPotionSlotScene.ClaimableRewardPresent, "Potion rewards should stay claimable when runtime truth reports an open potion slot.");
+
+            var staleMapPotionNodeObserver = new ObserverState(
+                new ObserverSummary(
+                    "rewards",
+                    "rewards",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-stale-map-potion-node",
+                    true,
+                    "rewards",
+                    "stable",
+                    "episode-reward-stale-map-node",
+                    "Monster",
+                    "reward",
+                    80,
+                    80,
+                    2,
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("potion:0", "potion", "무쇠의 심장", "758,373.299,402,86", true)
+                        {
+                            TypeName = "potion",
+                            SemanticHints = new[]
+                            {
+                                "scene:map",
+                                "kind:potion",
+                                "scene-raw:map",
+                                "scene-published:map",
+                                "value:무쇠의 심장",
+                                "raw-kind:potion",
+                                "reward",
+                                "reward-potion",
+                                "reward-type:PotionReward",
+                            },
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("card", "덱에 추가할 카드를 선택하세요.", "758,469,402,86", "CardReward", "카드 보상")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "CardReward",
+                            SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                        },
+                        new ObserverChoice("choice", "넘기기", "1583,764,269,108", null, "넘기기"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "true",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "true",
+                        ["rewardVisibleButtonCount"] = "2",
+                        ["rewardEnabledButtonCount"] = "2",
+                        ["hasOpenPotionSlots"] = "true",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                        ["rewardScreenRootType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            var staleMapPotionNodeScene = AutoDecisionProvider.BuildRewardSceneState(
+                staleMapPotionNodeObserver,
+                new WindowBounds(0, 0, 1920, 1080),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardRankingScreenshotPath);
+            Assert(!staleMapPotionNodeScene.ClaimableRewardPresent,
+                "Map-scoped stale potion nodes must not reopen reward claimability after the current reward surface has already collapsed to card choice plus proceed.");
+            Assert(staleMapPotionNodeScene.ExplicitAction == RewardExplicitActionKind.CardChoice,
+                "Current reward card choice should outrank stale map-scoped potion node residue.");
+            var staleMapPotionNodeAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                staleMapPotionNodeObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardRankingScreenshotPath,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(!staleMapPotionNodeAllowedActions.Contains("click reward", StringComparer.OrdinalIgnoreCase),
+                "Stale map-scoped potion nodes should not reopen generic reward-claim actions.");
+            Assert(staleMapPotionNodeAllowedActions.Contains("click reward card choice", StringComparer.OrdinalIgnoreCase),
+                "Current reward card choice should remain actionable.");
+            var staleMapPotionNodeDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                48,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "Stale map-scoped reward nodes should not outrank the current reward card choice.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1920, 1080),
+                ComputeSceneSignature(rewardRankingScreenshotPath, staleMapPotionNodeObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                staleMapPotionNodeObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                staleMapPotionNodeAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Current reward choices should beat stale potion node residue from the map layer.",
+                null));
+            Assert(string.Equals(staleMapPotionNodeDecision.TargetLabel, "reward card choice", StringComparison.OrdinalIgnoreCase),
+                "Reward decision should choose the current card reward instead of stale potion residue.");
 
             var postShopRewardMixedObserver = new ObserverState(
                 new ObserverSummary(
