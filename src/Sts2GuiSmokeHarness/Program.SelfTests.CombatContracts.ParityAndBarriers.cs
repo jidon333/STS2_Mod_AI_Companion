@@ -532,8 +532,9 @@ internal static partial class Program
                 runtimeStateOnlyScreenshotPath,
                 attackBarrierHistory);
             Assert(!attackBarrierActions.Contains("select attack slot 2", StringComparer.OrdinalIgnoreCase), "AttackSelect barrier should suppress same-slot attack reissue while unresolved.");
-            Assert(attackBarrierActions.Contains("select attack slot 4", StringComparer.OrdinalIgnoreCase), "AttackSelect barrier should keep alternate legal attack lanes available.");
-            Assert(attackBarrierActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "AttackSelect barrier should keep end-turn fallback available.");
+            Assert(!attackBarrierActions.Contains("select attack slot 4", StringComparer.OrdinalIgnoreCase), "AttackSelect barrier should keep alternate legal attack lanes closed until the selected lane resolves.");
+            Assert(!attackBarrierActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "AttackSelect barrier should keep end-turn closed while the selected attack lane is unresolved.");
+            Assert(attackBarrierActions.Contains("right-click cancel selected card", StringComparer.OrdinalIgnoreCase), "AttackSelect barrier should expose an explicit cancel lane while the selected attack remains unresolved.");
 
             var attackBarrierReleasedObserver = attackBarrierObserver with
             {

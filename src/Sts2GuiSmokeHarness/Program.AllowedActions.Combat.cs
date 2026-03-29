@@ -89,34 +89,6 @@ internal static partial class Program
                    && HandleCombatContextSupport.HasRecentNonEnemySelection(combatContext, slotIndex);
         }
 
-        foreach (var slotIndex in GetPlayableCombatAttackSlots(observer, combatCardKnowledge))
-        {
-            if (CombatBarrierSupport.SuppressesAttackSlot(combatBarrier, slotIndex))
-            {
-                continue;
-            }
-
-            if (!blockedCombatNoOpCounts.TryGetValue(slotIndex, out var noOpCount) || noOpCount < 2)
-            {
-                actions.Add($"select attack slot {slotIndex}");
-            }
-        }
-
-        foreach (var slotIndex in GetPlayableCombatNonEnemySlots(observer, combatCardKnowledge))
-        {
-            if (CombatBarrierSupport.SuppressesNonEnemySlot(combatBarrier, slotIndex))
-            {
-                continue;
-            }
-
-            if (ShouldSuppressNonEnemyReselect(slotIndex))
-            {
-                continue;
-            }
-
-            actions.Add($"select non-enemy slot {slotIndex}");
-        }
-
         var pendingAttackBlocked = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
                                    && blockedCombatNoOpCounts.TryGetValue(pendingSelection.SlotIndex, out var pendingNoOpCount)
                                    && pendingNoOpCount >= 2;
@@ -154,6 +126,34 @@ internal static partial class Program
             return actions
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+        }
+
+        foreach (var slotIndex in GetPlayableCombatAttackSlots(observer, combatCardKnowledge))
+        {
+            if (CombatBarrierSupport.SuppressesAttackSlot(combatBarrier, slotIndex))
+            {
+                continue;
+            }
+
+            if (!blockedCombatNoOpCounts.TryGetValue(slotIndex, out var noOpCount) || noOpCount < 2)
+            {
+                actions.Add($"select attack slot {slotIndex}");
+            }
+        }
+
+        foreach (var slotIndex in GetPlayableCombatNonEnemySlots(observer, combatCardKnowledge))
+        {
+            if (CombatBarrierSupport.SuppressesNonEnemySlot(combatBarrier, slotIndex))
+            {
+                continue;
+            }
+
+            if (ShouldSuppressNonEnemyReselect(slotIndex))
+            {
+                continue;
+            }
+
+            actions.Add($"select non-enemy slot {slotIndex}");
         }
 
         if (!pendingAttackBlocked && context.CanResolveCombatEnemyTarget)

@@ -16,6 +16,11 @@ static class CombatTargetabilitySupport
 
     public static bool HasExplicitCombatEnemyTargetNodeSource(ObserverSummary observer)
     {
+        if (TryGetRuntimeTargetSummaryNodes(observer).Count > 0)
+        {
+            return true;
+        }
+
         var runtime = CombatRuntimeStateSupport.Read(observer, Array.Empty<CombatCardKnowledgeHint>());
         var targetableIds = (runtime.HasExplicitHittableEnemyAuthority ? runtime.HittableEnemyIds : runtime.TargetableEnemyIds)
             .Where(static id => !string.IsNullOrWhiteSpace(id))
@@ -27,6 +32,21 @@ static class CombatTargetabilitySupport
 
     public static string DescribeMissingCombatEnemyTargetDecisionSource(ObserverSummary observer, WindowBounds? windowBounds)
     {
+        var summaryNodes = TryGetRuntimeTargetSummaryNodes(observer);
+        if (summaryNodes.Count > 0)
+        {
+            if (windowBounds is not null)
+            {
+                var unusableSummaryNode = summaryNodes.FirstOrDefault(node => !HasUsableCombatTargetBounds(node.ScreenBounds, windowBounds));
+                if (unusableSummaryNode is not null)
+                {
+                    return $"runtime target summary '{unusableSummaryNode.Label}' exists but its bounds are unusable for body targeting";
+                }
+            }
+
+            return "runtime target summary exists, but none survived actionable body-target filtering";
+        }
+
         var runtime = CombatRuntimeStateSupport.Read(observer, Array.Empty<CombatCardKnowledgeHint>());
         var targetableIds = (runtime.HasExplicitHittableEnemyAuthority ? runtime.HittableEnemyIds : runtime.TargetableEnemyIds)
             .Where(static id => !string.IsNullOrWhiteSpace(id))
@@ -56,6 +76,18 @@ static class CombatTargetabilitySupport
 
     public static IReadOnlyList<ObserverActionNode> GetCombatEnemyTargetNodes(ObserverSummary observer, WindowBounds? windowBounds = null)
     {
+        var summaryNodes = TryGetRuntimeTargetSummaryNodes(observer);
+        if (summaryNodes.Count > 0)
+        {
+            return summaryNodes
+                .Where(node => windowBounds is null
+                    ? TryParseBounds(node.ScreenBounds, out _)
+                    : HasUsableCombatTargetBounds(node.ScreenBounds, windowBounds))
+                .OrderBy(node => GetSortX(node))
+                .ThenBy(node => GetSortY(node))
+                .ToArray();
+        }
+
         var runtime = CombatRuntimeStateSupport.Read(observer, Array.Empty<CombatCardKnowledgeHint>());
         if (runtime.HasExplicitHittableEnemyAuthority && !runtime.HasExplicitHittableEnemy)
         {
@@ -75,6 +107,83 @@ static class CombatTargetabilitySupport
             .OrderBy(node => GetSortX(node))
             .ThenBy(node => GetSortY(node))
             .ToArray();
+    }
+
+    private static IReadOnlyList<ObserverActionNode> TryGetRuntimeTargetSummaryNodes(ObserverSummary observer)
+    {
+        if (!observer.Meta.TryGetValue("combatTargetSummary", out var rawSummary)
+            || string.IsNullOrWhiteSpace(rawSummary))
+        {
+            return Array.Empty<ObserverActionNode>();
+        }
+
+        var nodes = new List<ObserverActionNode>();
+        foreach (var segment in rawSummary.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var logicalMarker = segment.IndexOf("@logical:", StringComparison.OrdinalIgnoreCase);
+            if (logicalMarker <= 0)
+            {
+                continue;
+            }
+
+            var nodeId = segment[..logicalMarker].Trim();
+            if (string.IsNullOrWhiteSpace(nodeId))
+            {
+                continue;
+            }
+
+            var logicalStart = logicalMarker + "@logical:".Length;
+            var normalizedMarker = segment.IndexOf("@normalized:", logicalStart, StringComparison.OrdinalIgnoreCase);
+            var logicalBounds = normalizedMarker >= 0
+                ? segment[logicalStart..normalizedMarker].Trim()
+                : segment[logicalStart..].Trim();
+            if (!TryParseBounds(logicalBounds, out _))
+            {
+                continue;
+            }
+
+            var label = BuildTargetSummaryLabel(nodeId);
+            nodes.Add(new ObserverActionNode(nodeId, "enemy-target", label, logicalBounds, true)
+            {
+                TypeName = "enemy-target",
+                SemanticHints = new[]
+                {
+                    "combat-targetable",
+                    "source:runtime-target-summary",
+                    $"target-id:{nodeId}",
+                },
+            });
+        }
+
+        return nodes;
+    }
+
+    private static string BuildTargetSummaryLabel(string nodeId)
+    {
+        if (!nodeId.StartsWith("enemy-target:", StringComparison.OrdinalIgnoreCase))
+        {
+            return nodeId;
+        }
+
+        var suffix = nodeId["enemy-target:".Length..];
+        if (string.IsNullOrWhiteSpace(suffix))
+        {
+            return nodeId;
+        }
+
+        var parts = suffix.Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return suffix;
+        }
+
+        if (parts.Length >= 2
+            && int.TryParse(parts[^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+        {
+            return string.Join(":", parts[..^1]);
+        }
+
+        return suffix;
     }
 
     private static bool IsExplicitCombatEnemyTargetNode(

@@ -27,12 +27,13 @@ static class CombatMicroStageSupport
         var runtime = context.RuntimeCombatState;
         var pendingSelection = context.PendingCombatSelection;
         var barrier = context.CombatBarrierEvaluation;
-        var kind = ResolveKind(context, runtime, pendingSelection, barrier);
-        var laneLabel = ResolveLaneLabel(context.History, pendingSelection, barrier);
+        var effectiveBarrierKind = barrier.IsActive ? barrier.Kind : CombatBarrierKind.None;
+        var kind = ResolveKind(context, runtime, pendingSelection, barrier, effectiveBarrierKind);
+        var laneLabel = ResolveLaneLabel(context.History, pendingSelection, barrier, effectiveBarrierKind);
         return new CombatMicroStageSnapshot(
             kind,
             pendingSelection,
-            barrier.Kind,
+            effectiveBarrierKind,
             laneLabel,
             AllowsNewActionStart: kind == CombatMicroStageKind.PlayerActionOpen,
             AllowsEndTurn: kind == CombatMicroStageKind.PlayerActionOpen,
@@ -41,7 +42,7 @@ static class CombatMicroStageSupport
                 kind,
                 laneLabel,
                 pendingSelection,
-                barrier.Kind,
+                effectiveBarrierKind,
                 runtime,
                 context.HasSelectedNonEnemyConfirmEvidence,
                 context.CanResolveCombatEnemyTarget));
@@ -51,7 +52,8 @@ static class CombatMicroStageSupport
         GuiSmokeStepAnalysisContext context,
         CombatRuntimeState runtime,
         PendingCombatSelection? pendingSelection,
-        CombatBarrierEvaluation barrier)
+        CombatBarrierEvaluation barrier,
+        CombatBarrierKind effectiveBarrierKind)
     {
         if (context.CombatPlayerActionWindowClosed)
         {
@@ -72,14 +74,14 @@ static class CombatMicroStageSupport
         }
 
         if (pendingSelection?.Kind == AutoCombatCardKind.DefendLike
-            || barrier.Kind == CombatBarrierKind.NonEnemySelect
+            || effectiveBarrierKind == CombatBarrierKind.NonEnemySelect
             || context.HasSelectedNonEnemyConfirmEvidence)
         {
             return CombatMicroStageKind.ResolvingNonEnemy;
         }
 
         if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-            || barrier.Kind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick)
+            || effectiveBarrierKind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick)
         {
             return CombatMicroStageKind.ResolvingAttackTarget;
         }
@@ -90,19 +92,22 @@ static class CombatMicroStageSupport
     private static string? ResolveLaneLabel(
         IReadOnlyList<GuiSmokeHistoryEntry> history,
         PendingCombatSelection? pendingSelection,
-        CombatBarrierEvaluation barrier)
+        CombatBarrierEvaluation barrier,
+        CombatBarrierKind effectiveBarrierKind)
     {
         if (pendingSelection?.SlotIndex is >= 1 and <= 10)
         {
             return $"combat lane slot {pendingSelection.SlotIndex.ToString(CultureInfo.InvariantCulture)}";
         }
 
-        if (barrier.SourceSlotIndex is >= 1 and <= 10)
+        if (effectiveBarrierKind != CombatBarrierKind.None
+            && barrier.SourceSlotIndex is >= 1 and <= 10)
         {
             return $"combat lane slot {barrier.SourceSlotIndex.Value.ToString(CultureInfo.InvariantCulture)}";
         }
 
-        if (!string.IsNullOrWhiteSpace(barrier.SourceAction))
+        if (effectiveBarrierKind != CombatBarrierKind.None
+            && !string.IsNullOrWhiteSpace(barrier.SourceAction))
         {
             return CombatHistorySupport.ResolveCombatLaneLabel(barrier.SourceAction, history) ?? barrier.SourceAction;
         }

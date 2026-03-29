@@ -264,7 +264,28 @@ internal static partial class Program
             Assert(targetQuietEvaluator(unresolvedTargetObserver) is null, "First unresolved combat target snapshot should start, not finish, quiet convergence.");
             Assert(targetQuietEvaluator(unresolvedTargetObserver) is null, "Second unresolved combat target snapshot should still be within the quiet convergence window.");
             Assert(targetQuietEvaluator(unresolvedTargetObserver) is null, "Third unresolved combat target snapshot should still defer combat settle completion.");
-            Assert(string.Equals(targetQuietEvaluator(unresolvedTargetObserver), "combat-quiet-convergence:resolvingattacktarget", StringComparison.OrdinalIgnoreCase), "Stable unresolved combat target state should wake only after the configured quiet convergence window.");
+            Assert(targetQuietEvaluator(unresolvedTargetObserver) is null, "Stable unresolved combat target state should not finish settle while the selected attack lane is still unresolved.");
+
+            var resolvedTargetObserver = new ObserverState(
+                unresolvedTargetObserver.Summary with
+                {
+                    InventoryId = "inv-combat-target-resolved",
+                    SnapshotVersion = 56,
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+                        ["combatCardPlayPending"] = "false",
+                        ["combatTargetingInProgress"] = "false",
+                        ["combatHistoryStartedCount"] = "7",
+                        ["combatHistoryFinishedCount"] = "4",
+                        ["combatInteractionRevision"] = "7:4:false:false:none",
+                        ["combatLastCardPlayFinishedCardId"] = "CARD.STRIKE_IRONCLAD",
+                    },
+                },
+                null,
+                null,
+                null);
+            Assert(string.Equals(targetQuietEvaluator(resolvedTargetObserver), "combat-enemy-click-resolved", StringComparison.OrdinalIgnoreCase), "Combat enemy target settle should wake once the selected attack lane fully resolves back to an open combat state.");
 
             var staleBoundsDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",

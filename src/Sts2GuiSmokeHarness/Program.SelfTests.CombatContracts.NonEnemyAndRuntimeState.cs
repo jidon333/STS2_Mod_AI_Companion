@@ -700,6 +700,56 @@ internal static partial class Program
                    && runtimeAttackSelectionDecision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) != true,
                 "Runtime attack selection without targeting evidence should not drive an enemy-target click.");
 
+            var runtimeTargetSummaryObserver = runtimeAttackSelectionObserver with
+            {
+                InventoryId = "inv-runtime-target-summary",
+                SceneEpisodeId = "episode-runtime-target-summary",
+                Meta = new Dictionary<string, string?>(runtimeAttackSelectionObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatTargetableEnemyCount"] = "0",
+                    ["combatTargetableEnemyIds"] = null,
+                    ["combatHittableEnemyCount"] = "0",
+                    ["combatHittableEnemyIds"] = null,
+                    ["combatTargetCount"] = "1",
+                    ["combatTargetCoordinateSpace"] = "logical-render",
+                    ["combatTargetClickCoordinateSpace"] = "current-window-normalized",
+                    ["combatTargetSummary"] = "enemy-target:Jaw Worm:1@logical:720,180,180,260@normalized:0.3750,0.1667,0.0938,0.2407",
+                },
+            };
+            var runtimeTargetSummaryActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(runtimeTargetSummaryObserver, null, null, null),
+                runtimeTargetingKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                runtimeAttackSelectionHistory);
+            Assert(runtimeTargetSummaryActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Runtime target summary should open click-enemy even when aggregate hittable counts remain zero.");
+            var runtimeTargetSummaryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                26,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Prefer runtime target summary over stale zero-count target aggregates when an attack selection is still open.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                runtimeTargetSummaryObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                runtimeTargetingKnowledge,
+                runtimeTargetSummaryActions,
+                runtimeAttackSelectionHistory,
+                "Use runtime target-summary body bounds before falling back to screenshot-only targeting.",
+                null));
+            Assert(runtimeTargetSummaryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
+                "Runtime target summary should drive an explicit combat enemy-target click instead of leaving the attack lane unresolved.");
+
             var runtimeTargetingObserver = runtimeAttackSelectionObserver with
             {
                 InventoryId = "inv-runtime-targeting",

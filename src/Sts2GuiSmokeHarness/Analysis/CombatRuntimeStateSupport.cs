@@ -293,6 +293,11 @@ static class CombatRuntimeStateSupport
         PendingCombatSelection? pendingSelection)
     {
         var runtime = Read(observer, combatCardKnowledge);
+        if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer).Count > 0)
+        {
+            return true;
+        }
+
         if (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
             && runtime.HasExplicitEnemyTargetingEvidence
             && (!runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitHittableEnemy))
@@ -303,11 +308,6 @@ static class CombatRuntimeStateSupport
         if (runtime.HasExplicitHittableEnemyAuthority)
         {
             return false;
-        }
-
-        if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer).Count > 0)
-        {
-            return true;
         }
 
         if (RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge))

@@ -260,7 +260,6 @@ static class CombatPostActionObservationSupport
             if (IsEnemyTargetDecision(_decision))
             {
                 return stage.Kind is CombatMicroStageKind.PlayerActionOpen
-                    or CombatMicroStageKind.ResolvingAttackTarget
                     or CombatMicroStageKind.TurnClosing
                     or CombatMicroStageKind.EnemyTurnClosed;
             }

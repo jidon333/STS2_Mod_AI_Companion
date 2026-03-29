@@ -352,12 +352,8 @@
     }
   ],
   "allowedActions": [
-    "select attack slot 1",
-    "select non-enemy slot 2",
-    "select non-enemy slot 3",
-    "select non-enemy slot 4",
     "click enemy",
-    "click end turn",
+    "right-click cancel selected card",
     "wait"
   ],
   "history": [
