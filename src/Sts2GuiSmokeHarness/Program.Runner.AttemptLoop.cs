@@ -98,30 +98,13 @@ internal static partial class Program
             : DateTimeOffset.UtcNow.AddMinutes(10);
         var freshnessFloor = DateTimeOffset.UtcNow.AddSeconds(-5);
         var consecutiveBlackFrames = 0;
-        string? lastActionFingerprint = null;
-        var sameActionStallCount = 0;
+        var loopTracking = new GuiSmokeAttemptLoopTrackingState();
         var attemptStartedRecorded = false;
-        string? lastDecisionWaitFingerprint = null;
-        var consecutiveDecisionWaitCount = 0;
-        string? lastOverlayLoopFingerprint = null;
-        var consecutiveOverlayLoopCount = 0;
         var consecutiveFallbackCapturesWithoutProcess = 0;
         var useDecisionAgeGuard = !string.Equals(providerKind, "auto", StringComparison.OrdinalIgnoreCase);
         var decisionStaleBudget = useDecisionAgeGuard
             ? TimeSpan.FromSeconds(2)
             : TimeSpan.FromSeconds(30);
-
-        void ResetDecisionWaitTracking()
-        {
-            lastDecisionWaitFingerprint = null;
-            consecutiveDecisionWaitCount = 0;
-        }
-
-        void ResetOverlayLoopTracking()
-        {
-            lastOverlayLoopFingerprint = null;
-            consecutiveOverlayLoopCount = 0;
-        }
 
         while (DateTimeOffset.UtcNow < waitDeadline)
         {
@@ -189,7 +172,7 @@ internal static partial class Program
                     iterationFirstSeenScene,
                     iterationReasoningMode,
                     isLongRun,
-                    sameActionStallCount,
+                    loopTracking.SameActionStallCount,
                     freshnessFloor,
                     attemptsByPhase,
                     history,
@@ -214,7 +197,7 @@ internal static partial class Program
 
             if (preflight.ShouldContinueLoop)
             {
-                ResetDecisionWaitTracking();
+                loopTracking.ResetDecisionWaitTracking();
                 continue;
             }
 
@@ -236,7 +219,7 @@ internal static partial class Program
                     isLongRun,
                     isAuthoritativeFirstAttempt,
                     attemptStartedRecorded,
-                    sameActionStallCount,
+                    loopTracking.SameActionStallCount,
                     consecutiveBlackFrames,
                     consecutiveFallbackCapturesWithoutProcess,
                     history,
@@ -267,7 +250,7 @@ internal static partial class Program
             var captureMode = capturePreparation.CaptureMode;
             if (capturePreparation.CompletedAttempt is not null)
             {
-                ResetDecisionWaitTracking();
+                loopTracking.ResetDecisionWaitTracking();
                 if (string.Equals(capturePreparation.CompletedAttempt.Message, "process-lost", StringComparison.OrdinalIgnoreCase))
                 {
                     RecordAttemptStartupFailure("process-lost");
@@ -278,7 +261,7 @@ internal static partial class Program
 
             if (capturePreparation.ShouldContinueLoop)
             {
-                ResetDecisionWaitTracking();
+                loopTracking.ResetDecisionWaitTracking();
                 continue;
             }
 
@@ -345,564 +328,77 @@ internal static partial class Program
                 }
             }
 
-            if (string.Equals(decision.Status, "abort", StringComparison.OrdinalIgnoreCase))
-            {
-                ResetDecisionWaitTracking();
-                LogHarness($"step={stepIndex} aborted reason={decision.AbortReason ?? "null"}");
-                AppendProgressIfLongRun(
+            var decisionStatus = await TryHandleDecisionStatusAsync(
+                    stepIndex,
+                    screenshotPath,
+                    phase,
+                    observer,
+                    request,
+                    decision,
+                    stepAnalysisContext,
                     isLongRun,
                     logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        null,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "decision-abort"));
-                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                    phase.ToString(),
-                    decision.AbortReason ?? "decision aborted",
-                    observer.CurrentScreen,
-                    observer.InCombat,
-                    screenshotPath));
-                return CompleteAttempt(
-                    1,
-                    "failed",
-                    decision.AbortReason ?? "decision aborted",
-                    terminalCause: "decision-abort",
-                    failureClass: ClassifyFailureForAttempt(phase, observer, "decision-abort", launchFailed: false));
+                    observerReader,
+                    evaluator,
+                    history,
+                    stepStopwatch,
+                    decisionReadyElapsedMs,
+                    loopTracking,
+                    (exitCode, status, message, terminalCause, failureClass) => CompleteAttempt(
+                        exitCode,
+                        status,
+                        message,
+                        terminalCause: terminalCause,
+                        failureClass: failureClass))
+                .ConfigureAwait(false);
+            if (decisionStatus.CompletedAttempt is not null)
+            {
+                return decisionStatus.CompletedAttempt;
             }
 
-            if (string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase))
+            if (decisionStatus.ShouldContinueLoop)
             {
-                var waitFingerprint = BuildDecisionWaitFingerprint(phase, request.SceneSignature, observer, stepAnalysisContext);
-                if (string.Equals(lastDecisionWaitFingerprint, waitFingerprint, StringComparison.Ordinal))
-                {
-                    consecutiveDecisionWaitCount += 1;
-                }
-                else
-                {
-                    lastDecisionWaitFingerprint = waitFingerprint;
-                    consecutiveDecisionWaitCount = 1;
-                }
-
-                if (phase == GuiSmokePhase.HandleCombat
-                    && CombatBarrierSupport.TryClassifyWaitPlateau(request, stepAnalysisContext, consecutiveDecisionWaitCount, out var barrierPlateauCause, out var barrierPlateauMessage))
-                {
-                    LogHarness($"step={stepIndex} abort {barrierPlateauMessage}");
-                    AppendProgressIfLongRun(
-                        isLongRun,
-                        logger,
-                        EvaluateStepProgress(
-                            stepIndex,
-                            phase,
-                            request.SceneSignature,
-                            observer,
-                            null,
-                            decision,
-                            request.FirstSeenScene,
-                            request.ReasoningMode,
-                            false,
-                            sameActionStallCount,
-                            "decision-wait",
-                            "combat-barrier-wait-plateau"));
-                    logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                        phase.ToString(),
-                        barrierPlateauMessage,
-                        observer.CurrentScreen,
-                        observer.InCombat,
-                        screenshotPath));
-                    return CompleteAttempt(
-                        1,
-                        "failed",
-                        barrierPlateauMessage,
-                        terminalCause: barrierPlateauCause,
-                        failureClass: ClassifyFailureForAttempt(phase, observer, barrierPlateauCause, launchFailed: false));
-                }
-
-                if (TryClassifyDecisionWaitPlateau(phase, observer, consecutiveDecisionWaitCount, out var plateauTerminalCause, out var plateauMessage))
-                {
-                    LogHarness($"step={stepIndex} abort {plateauMessage}");
-                    AppendProgressIfLongRun(
-                        isLongRun,
-                        logger,
-                        EvaluateStepProgress(
-                            stepIndex,
-                            phase,
-                            request.SceneSignature,
-                            observer,
-                            null,
-                            decision,
-                            request.FirstSeenScene,
-                            request.ReasoningMode,
-                            false,
-                            sameActionStallCount,
-                            "decision-wait",
-                            "wait-plateau"));
-                    logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                        phase.ToString(),
-                        plateauMessage,
-                        observer.CurrentScreen,
-                        observer.InCombat,
-                        screenshotPath));
-                    return CompleteAttempt(
-                        1,
-                        "failed",
-                        plateauMessage,
-                        terminalCause: plateauTerminalCause,
-                        failureClass: ClassifyFailureForAttempt(phase, observer, plateauTerminalCause, launchFailed: false));
-                }
-
-                if (TryClassifyRestSitePostClickNoOp(phase, request, decision, out var restSitePostClickNoOpMessage))
-                {
-                    var restSiteTerminalCause = IsRestSitePostClickDecisionRisk(decision.DecisionRisk)
-                        ? decision.DecisionRisk!
-                        : "rest-site-post-click-noop";
-                    LogHarness($"step={stepIndex} abort {restSitePostClickNoOpMessage}");
-                    AppendProgressIfLongRun(
-                        isLongRun,
-                        logger,
-                        EvaluateStepProgress(
-                            stepIndex,
-                            phase,
-                            request.SceneSignature,
-                            observer,
-                            null,
-                            decision,
-                            request.FirstSeenScene,
-                            request.ReasoningMode,
-                            false,
-                            sameActionStallCount,
-                            "rest-site-post-click-noop"));
-                    logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                        phase.ToString(),
-                        restSitePostClickNoOpMessage,
-                        observer.CurrentScreen,
-                        observer.InCombat,
-                        screenshotPath));
-                    return CompleteAttempt(
-                        1,
-                        "failed",
-                        restSitePostClickNoOpMessage,
-                        terminalCause: restSiteTerminalCause,
-                        failureClass: ClassifyFailureForAttempt(phase, observer, restSiteTerminalCause, launchFailed: false));
-                }
-
-                var waitMinimumMs = GetDecisionWaitMinimumMs(phase);
-                var waitBudgetMs = Math.Max(waitMinimumMs, decision.WaitMs ?? waitMinimumMs);
-                LogHarness($"step={stepIndex} wait requested ms={waitBudgetMs}");
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "wait", decision.TargetLabel, DateTimeOffset.UtcNow)
-                {
-                    Metadata = AutoDecisionProvider.BuildHistoryMetadataForDecision(request, decision),
-                });
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "wait", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
-                AppendProgressIfLongRun(
-                    isLongRun,
-                    logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        null,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "decision-wait"));
-                var decisionWait = await WaitWithObserverPollingAsync(
-                        observerReader,
-                        waitBudgetMs,
-                        75,
-                        observer,
-                        latestObserver => HasWaitWakeDelta(observer, latestObserver)
-                            ? "observer-delta"
-                            : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
-                                ? "phase-satisfied"
-                                : null)
-                    .ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(decisionWait.WakeReason))
-                {
-                    LogHarness($"step={stepIndex} decision wait woke early reason={decisionWait.WakeReason}");
-                }
-                LogHarness($"step={stepIndex} timing decision->after={Math.Max(0, stepStopwatch.ElapsedMilliseconds - decisionReadyElapsedMs)}ms total={stepStopwatch.ElapsedMilliseconds}ms");
                 continue;
             }
 
-            if (LooksLikeInspectOverlayState(observer) && IsOverlayCleanupTarget(decision.TargetLabel))
-            {
-                var overlayFingerprint = BuildOverlayLoopFingerprint(request.SceneSignature, observer);
-                if (string.Equals(lastOverlayLoopFingerprint, overlayFingerprint, StringComparison.Ordinal))
-                {
-                    consecutiveOverlayLoopCount += 1;
-                }
-                else
-                {
-                    lastOverlayLoopFingerprint = overlayFingerprint;
-                    consecutiveOverlayLoopCount = 1;
-                }
-
-                if (consecutiveOverlayLoopCount >= 4)
-                {
-                    var overlayLoopMessage = $"inspect-overlay-loop phase={phase} screen={observer.CurrentScreen ?? "null"} overlayAttempts={consecutiveOverlayLoopCount}";
-                    LogHarness($"step={stepIndex} abort {overlayLoopMessage}");
-                    AppendProgressIfLongRun(
-                        isLongRun,
-                        logger,
-                        EvaluateStepProgress(
-                            stepIndex,
-                            phase,
-                            request.SceneSignature,
-                            observer,
-                            null,
-                            decision,
-                            request.FirstSeenScene,
-                            request.ReasoningMode,
-                            false,
-                            sameActionStallCount,
-                            "inspect-overlay-loop"));
-                    logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                        phase.ToString(),
-                        overlayLoopMessage,
-                        observer.CurrentScreen,
-                        observer.InCombat,
-                        screenshotPath));
-                    return CompleteAttempt(
-                        1,
-                        "failed",
-                        overlayLoopMessage,
-                        terminalCause: "inspect-overlay-loop",
-                        failureClass: ClassifyFailureForAttempt(phase, observer, "inspect-overlay-loop", launchFailed: false));
-                }
-            }
-            else if (!LooksLikeInspectOverlayState(observer) || !string.Equals(decision.Status, "act", StringComparison.OrdinalIgnoreCase))
-            {
-                ResetOverlayLoopTracking();
-            }
-            else if (!IsOverlayCleanupTarget(decision.TargetLabel))
-            {
-                ResetOverlayLoopTracking();
-            }
-
-            ResetDecisionWaitTracking();
-
-            var decisionAge = DateTimeOffset.UtcNow - request.IssuedAt;
-            if (useDecisionAgeGuard && decisionAge > decisionStaleBudget)
-            {
-                LogHarness($"step={stepIndex} recapture required stale-decision ageMs={(int)decisionAge.TotalMilliseconds}");
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "stale-decision", decision.TargetLabel, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "stale-decision", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
-                AppendProgressIfLongRun(
+            var actuationPreparation = await TryPrepareDecisionActuationAsync(
+                    stepIndex,
+                    screenshotPath,
+                    phase,
+                    window,
+                    observer,
+                    request,
+                    decision,
                     isLongRun,
                     logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        null,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "decision-stale"));
-                var staleDecisionWait = await WaitWithObserverPollingAsync(
-                        observerReader,
-                        GetDecisionWaitMinimumMs(phase),
-                        75,
-                        observer,
-                        latestObserver => HasWaitWakeDelta(observer, latestObserver)
-                            ? "observer-delta"
-                            : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
-                                ? "phase-satisfied"
-                                : null)
-                    .ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(staleDecisionWait.WakeReason))
-                {
-                    LogHarness($"step={stepIndex} stale decision backoff woke early reason={staleDecisionWait.WakeReason}");
-                }
+                    observerReader,
+                    evaluator,
+                    history,
+                    stepStopwatch,
+                    loopTracking,
+                    (exitCode, status, message, terminalCause, failureClass) => CompleteAttempt(
+                        exitCode,
+                        status,
+                        message,
+                        terminalCause: terminalCause,
+                        failureClass: failureClass),
+                    TransitionSettleMs,
+                    decisionStaleBudget,
+                    useDecisionAgeGuard)
+                .ConfigureAwait(false);
+            if (actuationPreparation.CompletedAttempt is not null)
+            {
+                return actuationPreparation.CompletedAttempt;
+            }
+
+            if (actuationPreparation.ShouldContinueLoop)
+            {
                 continue;
             }
 
-            var latestObserver = observerReader.Read(includeEventTail: false);
-            if (ShouldRecaptureForObserverDrift(request.Observer, latestObserver, decision))
-            {
-                LogHarness($"step={stepIndex} recapture required observer-drift requestScreen={request.Observer.CurrentScreen ?? "null"} latestScreen={latestObserver.CurrentScreen ?? "null"} requestVisible={request.Observer.VisibleScreen ?? "null"} latestVisible={latestObserver.VisibleScreen ?? "null"}");
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "observer-drift", decision.TargetLabel, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "observer-drift", latestObserver.CurrentScreen, latestObserver.InCombat, decision.TargetLabel));
-                AppendProgressIfLongRun(
-                    isLongRun,
-                    logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        latestObserver,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "observer-drift"));
-                var observerDriftWait = await WaitWithObserverPollingAsync(
-                        observerReader,
-                        GetDecisionWaitMinimumMs(phase),
-                        75,
-                        latestObserver,
-                        currentObserver => HasWaitWakeDelta(latestObserver, currentObserver)
-                            ? "observer-delta"
-                            : evaluator.IsPhaseSatisfied(phase, currentObserver, history)
-                                ? "phase-satisfied"
-                                : null)
-                    .ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(observerDriftWait.WakeReason))
-                {
-                    LogHarness($"step={stepIndex} observer drift backoff woke early reason={observerDriftWait.WakeReason}");
-                }
-                continue;
-            }
-
-            ValidateDecision(phase, request, decision);
-
-            var rewardMapRecoveryAttempt = false;
-            if (TryClassifyRewardMapLoop(phase, request, decision, out var rewardMapLoopMessage))
-            {
-                if (ShouldAllowRewardMapRecovery(request, decision))
-                {
-                    rewardMapRecoveryAttempt = true;
-                    history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "reward-map-recovery", decision.TargetLabel, DateTimeOffset.UtcNow));
-                    logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "reward-map-recovery", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
-                    LogHarness($"step={stepIndex} recovery reward-map-loop delayed target={decision.TargetLabel ?? "null"}");
-                }
-                else
-                {
-                LogHarness($"step={stepIndex} abort {rewardMapLoopMessage}");
-                AppendProgressIfLongRun(
-                    isLongRun,
-                    logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        latestObserver,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "reward-map-loop"));
-                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                    phase.ToString(),
-                    rewardMapLoopMessage,
-                    observer.CurrentScreen,
-                    observer.InCombat,
-                    screenshotPath));
-                return CompleteAttempt(
-                    1,
-                    "failed",
-                    rewardMapLoopMessage,
-                    terminalCause: "reward-map-loop",
-                    failureClass: ClassifyFailureForAttempt(phase, observer, "reward-map-loop", launchFailed: false));
-                }
-            }
-
-            if (TryClassifyMapOverlayNoOpLoop(phase, request, decision, out var mapOverlayNoOpLoopMessage))
-            {
-                LogHarness($"step={stepIndex} abort {mapOverlayNoOpLoopMessage}");
-                AppendProgressIfLongRun(
-                    isLongRun,
-                    logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        latestObserver,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "map-overlay-noop-loop"));
-                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                    phase.ToString(),
-                    mapOverlayNoOpLoopMessage,
-                    observer.CurrentScreen,
-                    observer.InCombat,
-                    screenshotPath));
-                return CompleteAttempt(
-                    1,
-                    "failed",
-                    mapOverlayNoOpLoopMessage,
-                    terminalCause: "map-overlay-noop-loop",
-                    failureClass: ClassifyFailureForAttempt(phase, observer, "map-overlay-noop-loop", launchFailed: false));
-            }
-
-            if (TryClassifyMapTransitionStall(phase, request, decision, out var mapTransitionStallMessage))
-            {
-                LogHarness($"step={stepIndex} abort {mapTransitionStallMessage}");
-                AppendProgressIfLongRun(
-                    isLongRun,
-                    logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        latestObserver,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "map-transition-stall"));
-                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                    phase.ToString(),
-                    mapTransitionStallMessage,
-                    observer.CurrentScreen,
-                    observer.InCombat,
-                    screenshotPath));
-                return CompleteAttempt(
-                    1,
-                    "failed",
-                    mapTransitionStallMessage,
-                    terminalCause: "map-transition-stall",
-                    failureClass: ClassifyFailureForAttempt(phase, observer, "map-transition-stall", launchFailed: false));
-            }
-
-            if (TryClassifyCombatNoOpLoop(phase, request, decision, out var combatNoOpLoopMessage))
-            {
-                LogHarness($"step={stepIndex} abort {combatNoOpLoopMessage}");
-                AppendProgressIfLongRun(
-                    isLongRun,
-                    logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        latestObserver,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "combat-noop-loop"));
-                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                    phase.ToString(),
-                    combatNoOpLoopMessage,
-                    observer.CurrentScreen,
-                    observer.InCombat,
-                    screenshotPath));
-                return CompleteAttempt(
-                    1,
-                    "failed",
-                    combatNoOpLoopMessage,
-                    terminalCause: "combat-noop-loop",
-                    failureClass: ClassifyFailureForAttempt(phase, observer, "combat-noop-loop", launchFailed: false));
-            }
-
-            var actionFingerprint = string.Join("|",
-                phase.ToString(),
-                request.SceneSignature,
-                decision.ActionKind ?? "null",
-                decision.TargetLabel ?? "null");
-            if (string.Equals(lastActionFingerprint, actionFingerprint, StringComparison.Ordinal))
-            {
-                sameActionStallCount += 1;
-            }
-            else
-            {
-                lastActionFingerprint = actionFingerprint;
-                sameActionStallCount = 0;
-            }
-
-            if (sameActionStallCount >= GetSameActionStallLimit(phase, decision))
-            {
-                var abortReason = $"same-action-stall phase={phase} target={decision.TargetLabel ?? "null"} screen={observer.CurrentScreen ?? "null"} inventory={observer.InventoryId ?? "null"}";
-                LogHarness($"step={stepIndex} abort {abortReason}");
-                AppendProgressIfLongRun(
-                    isLongRun,
-                    logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        latestObserver,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "same-action-stall"));
-                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                    phase.ToString(),
-                    abortReason,
-                    observer.CurrentScreen,
-                    observer.InCombat,
-                    screenshotPath));
-                return CompleteAttempt(
-                    1,
-                    "failed",
-                    abortReason,
-                    terminalCause: "same-action-stall",
-                    failureClass: ClassifyFailureForAttempt(phase, observer, "same-action-stall", launchFailed: false));
-            }
-
-            var clickWindow = WindowLocator.Refresh(window);
-            if (clickWindow.IsMinimized)
-            {
-                LogHarness($"step={stepIndex} click blocked: window minimized before action; restoring title={clickWindow.Title}");
-                clickWindow = WindowLocator.EnsureRestored(clickWindow);
-                LogHarness($"step={stepIndex} click window restored={DescribeWindow(clickWindow)}");
-            }
-            if (WindowLocator.HasMeaningfulDrift(window, clickWindow))
-            {
-                LogHarness($"step={stepIndex} recapture required captureBounds={DescribeBounds(window.Bounds)} clickBounds={DescribeBounds(clickWindow.Bounds)}");
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "recapture-required", decision.TargetLabel, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "recapture-required", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
-                AppendProgressIfLongRun(
-                    isLongRun,
-                    logger,
-                    EvaluateStepProgress(
-                        stepIndex,
-                        phase,
-                        request.SceneSignature,
-                        observer,
-                        latestObserver,
-                        decision,
-                        request.FirstSeenScene,
-                        request.ReasoningMode,
-                        false,
-                        sameActionStallCount,
-                        "window-drift"));
-                var windowDriftWait = await WaitWithObserverPollingAsync(
-                        observerReader,
-                        TransitionSettleMs,
-                        75,
-                        latestObserver,
-                        currentObserver => HasWaitWakeDelta(latestObserver, currentObserver)
-                            ? "observer-delta"
-                            : evaluator.IsPhaseSatisfied(phase, currentObserver, history)
-                                ? "phase-satisfied"
-                                : null)
-                    .ConfigureAwait(false);
-                if (!string.IsNullOrWhiteSpace(windowDriftWait.WakeReason))
-                {
-                    LogHarness($"step={stepIndex} window drift backoff woke early reason={windowDriftWait.WakeReason}");
-                }
-                continue;
-            }
+            var latestObserver = actuationPreparation.LatestObserver;
+            var clickWindow = actuationPreparation.ClickWindow ?? window;
+            var rewardMapRecoveryAttempt = actuationPreparation.RewardMapRecoveryAttempt;
 
             ExecuteDecisionActuation(
                 stepIndex,
@@ -933,7 +429,7 @@ internal static partial class Program
                     ActionSettleMinimumMs,
                     CombatActionSettleMinimumMs,
                     CombatNoOpProbeGraceMs,
-                    sameActionStallCount,
+                    loopTracking.SameActionStallCount,
                     rewardMapRecoveryAttempt)
                 .ConfigureAwait(false);
 
