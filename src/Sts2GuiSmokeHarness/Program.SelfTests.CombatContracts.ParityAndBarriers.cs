@@ -637,8 +637,34 @@ internal static partial class Program
                 runtimeStateOnlyScreenshotPath,
                 nonEnemyBarrierHistory);
             Assert(!nonEnemyBarrierActions.Contains("select non-enemy slot 1", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should suppress same-slot non-enemy reissue while unresolved.");
-            Assert(nonEnemyBarrierActions.Contains("select non-enemy slot 3", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should keep alternate non-enemy slots available.");
-            Assert(nonEnemyBarrierActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should keep end-turn fallback available.");
+            Assert(!nonEnemyBarrierActions.Contains("select non-enemy slot 3", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should keep alternate non-enemy slots closed until the selected lane resolves.");
+            Assert(!nonEnemyBarrierActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should keep end-turn closed while the selected lane is unresolved.");
+            Assert(nonEnemyBarrierActions.Contains("right-click cancel selected card", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should expose an explicit cancel lane while the selected non-enemy card remains unresolved.");
+            var nonEnemyBarrierDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                33,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Do not end turn while a non-enemy lane remains unresolved.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0006",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                nonEnemyBarrierObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                nonEnemyBarrierKnowledge,
+                nonEnemyBarrierActions,
+                nonEnemyBarrierHistory,
+                "Do not end turn while a non-enemy lane remains unresolved.",
+                null));
+            Assert(string.Equals(nonEnemyBarrierDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "Unresolved non-enemy barriers should defer with a wait decision instead of forcing end turn.");
 
             var endTurnBarrierCapturedAt = DateTimeOffset.UtcNow;
             var endTurnBarrierKnowledge = new[]

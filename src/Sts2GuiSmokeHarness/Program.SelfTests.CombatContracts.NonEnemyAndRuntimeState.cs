@@ -270,6 +270,7 @@ internal static partial class Program
                 combatNoOpScreenshotPath,
                 pendingNonEnemySlot3History);
             Assert(!pendingNonEnemySlot3Actions.Contains("select non-enemy slot 3", StringComparer.OrdinalIgnoreCase), "Pending non-enemy slot should not reopen without current selected-state evidence.");
+            Assert(!pendingNonEnemySlot3Actions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "Pending non-enemy slot should keep end turn closed until the lane resolves.");
             var pendingNonEnemySlot3Request = new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",

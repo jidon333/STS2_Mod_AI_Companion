@@ -1,0 +1,154 @@
+using System.Globalization;
+
+enum CombatMicroStageKind
+{
+    PlayerActionOpen,
+    HandSelectRequired,
+    ResolvingNonEnemy,
+    ResolvingAttackTarget,
+    TurnClosing,
+    EnemyTurnClosed,
+}
+
+sealed record CombatMicroStageSnapshot(
+    CombatMicroStageKind Kind,
+    PendingCombatSelection? PendingSelection,
+    CombatBarrierKind BarrierKind,
+    string? LaneLabel,
+    bool AllowsNewActionStart,
+    bool AllowsEndTurn,
+    bool AllowsCancel,
+    string SettledFingerprint);
+
+static class CombatMicroStageSupport
+{
+    public static CombatMicroStageSnapshot Resolve(GuiSmokeStepAnalysisContext context)
+    {
+        var runtime = context.RuntimeCombatState;
+        var pendingSelection = context.PendingCombatSelection;
+        var barrier = context.CombatBarrierEvaluation;
+        var kind = ResolveKind(context, runtime, pendingSelection, barrier);
+        var laneLabel = ResolveLaneLabel(context.History, pendingSelection, barrier);
+        return new CombatMicroStageSnapshot(
+            kind,
+            pendingSelection,
+            barrier.Kind,
+            laneLabel,
+            AllowsNewActionStart: kind == CombatMicroStageKind.PlayerActionOpen,
+            AllowsEndTurn: kind == CombatMicroStageKind.PlayerActionOpen,
+            AllowsCancel: kind is CombatMicroStageKind.ResolvingNonEnemy or CombatMicroStageKind.ResolvingAttackTarget,
+            SettledFingerprint: BuildSettledFingerprint(
+                kind,
+                laneLabel,
+                pendingSelection,
+                barrier.Kind,
+                runtime,
+                context.HasSelectedNonEnemyConfirmEvidence,
+                context.CanResolveCombatEnemyTarget));
+    }
+
+    private static CombatMicroStageKind ResolveKind(
+        GuiSmokeStepAnalysisContext context,
+        CombatRuntimeState runtime,
+        PendingCombatSelection? pendingSelection,
+        CombatBarrierEvaluation barrier)
+    {
+        if (context.CombatPlayerActionWindowClosed)
+        {
+            return CombatMicroStageKind.EnemyTurnClosed;
+        }
+
+        if (runtime.RequiresHandCardSelection)
+        {
+            return CombatMicroStageKind.HandSelectRequired;
+        }
+
+        if (barrier.Kind == CombatBarrierKind.EndTurn
+            || runtime.PlayerActionsDisabled == true
+            || runtime.EndingPlayerTurnPhaseOne == true
+            || runtime.EndingPlayerTurnPhaseTwo == true)
+        {
+            return CombatMicroStageKind.TurnClosing;
+        }
+
+        if (pendingSelection?.Kind == AutoCombatCardKind.DefendLike
+            || barrier.Kind == CombatBarrierKind.NonEnemySelect
+            || context.HasSelectedNonEnemyConfirmEvidence)
+        {
+            return CombatMicroStageKind.ResolvingNonEnemy;
+        }
+
+        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+            || barrier.Kind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick)
+        {
+            return CombatMicroStageKind.ResolvingAttackTarget;
+        }
+
+        return CombatMicroStageKind.PlayerActionOpen;
+    }
+
+    private static string? ResolveLaneLabel(
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        PendingCombatSelection? pendingSelection,
+        CombatBarrierEvaluation barrier)
+    {
+        if (pendingSelection?.SlotIndex is >= 1 and <= 10)
+        {
+            return $"combat lane slot {pendingSelection.SlotIndex.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        if (barrier.SourceSlotIndex is >= 1 and <= 10)
+        {
+            return $"combat lane slot {barrier.SourceSlotIndex.Value.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(barrier.SourceAction))
+        {
+            return CombatHistorySupport.ResolveCombatLaneLabel(barrier.SourceAction, history) ?? barrier.SourceAction;
+        }
+
+        return null;
+    }
+
+    private static string BuildSettledFingerprint(
+        CombatMicroStageKind kind,
+        string? laneLabel,
+        PendingCombatSelection? pendingSelection,
+        CombatBarrierKind barrierKind,
+        CombatRuntimeState runtime,
+        bool hasSelectedNonEnemyConfirmEvidence,
+        bool canResolveCombatEnemyTarget)
+    {
+        return string.Join("|",
+            $"stage:{kind}",
+            $"lane:{laneLabel ?? "none"}",
+            $"pending-slot:{pendingSelection?.SlotIndex.ToString(CultureInfo.InvariantCulture) ?? "none"}",
+            $"pending-kind:{pendingSelection?.Kind.ToString() ?? "none"}",
+            $"barrier:{barrierKind}",
+            $"card-play-pending:{FormatNullableBool(runtime.CardPlayPending)}",
+            $"targeting:{FormatNullableBool(runtime.TargetingInProgress)}",
+            $"hand-selected:{runtime.HandSelectionSelectedCount.ToString(CultureInfo.InvariantCulture)}",
+            $"hand-confirm:{FormatNullableBool(runtime.HandSelectionConfirmEnabled)}",
+            $"confirm-evidence:{hasSelectedNonEnemyConfirmEvidence.ToString()}",
+            $"can-resolve-enemy:{canResolveCombatEnemyTarget.ToString()}",
+            $"interaction:{runtime.InteractionRevision ?? "none"}",
+            $"history-started:{runtime.HistoryStartedCount?.ToString(CultureInfo.InvariantCulture) ?? "none"}",
+            $"history-finished:{runtime.HistoryFinishedCount?.ToString(CultureInfo.InvariantCulture) ?? "none"}",
+            $"last-started:{runtime.LastCardPlayStartedCardId ?? "none"}",
+            $"last-finished:{runtime.LastCardPlayFinishedCardId ?? "none"}",
+            $"round:{runtime.RoundNumber?.ToString(CultureInfo.InvariantCulture) ?? "none"}",
+            $"actions-disabled:{FormatNullableBool(runtime.PlayerActionsDisabled)}",
+            $"ending-p1:{FormatNullableBool(runtime.EndingPlayerTurnPhaseOne)}",
+            $"ending-p2:{FormatNullableBool(runtime.EndingPlayerTurnPhaseTwo)}");
+    }
+
+    private static string FormatNullableBool(bool? value)
+    {
+        return value switch
+        {
+            true => "true",
+            false => "false",
+            _ => "null",
+        };
+    }
+}

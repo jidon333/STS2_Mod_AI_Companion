@@ -68,6 +68,7 @@ sealed class GuiSmokeStepAnalysisContext
     private bool? _hasSelectedNonEnemyConfirmEvidence;
     private bool? _canResolveCombatEnemyTarget;
     private CombatBarrierEvaluation? _combatBarrierEvaluation;
+    private CombatMicroStageSnapshot? _combatMicroStage;
 
     public GuiSmokeStepAnalysisContext(
         GuiSmokePhase phase,
@@ -196,6 +197,8 @@ sealed class GuiSmokeStepAnalysisContext
     public bool CanResolveCombatEnemyTarget => _canResolveCombatEnemyTarget ??= _canResolveCombatEnemyTargetFactory();
 
     public CombatBarrierEvaluation CombatBarrierEvaluation => _combatBarrierEvaluation ??= _combatBarrierEvaluationFactory();
+
+    public CombatMicroStageSnapshot CombatMicroStage => _combatMicroStage ??= CombatMicroStageSupport.Resolve(this);
 
     public static GuiSmokeStepAnalysisContext CreateForHandleCombatRequest(GuiSmokeStepRequest request)
     {

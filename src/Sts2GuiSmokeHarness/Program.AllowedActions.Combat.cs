@@ -47,6 +47,7 @@ internal static partial class Program
         var pendingSelection = context.PendingCombatSelection;
         var runtimeCombatState = context.RuntimeCombatState;
         var hasSelectedNonEnemyConfirmEvidence = context.HasSelectedNonEnemyConfirmEvidence;
+        var combatMicroStage = context.CombatMicroStage;
         if (runtimeCombatState.RequiresHandCardSelection)
         {
             if (runtimeCombatState.HasSelectedHandCardForConfirmation)
@@ -62,6 +63,11 @@ internal static partial class Program
             return actions
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+        }
+
+        if (combatMicroStage.Kind is CombatMicroStageKind.TurnClosing or CombatMicroStageKind.EnemyTurnClosed)
+        {
+            return new[] { "wait" };
         }
 
         var keepNonEnemySelectionClosed = pendingSelection?.Kind == AutoCombatCardKind.DefendLike && hasSelectedNonEnemyConfirmEvidence;
@@ -114,6 +120,42 @@ internal static partial class Program
         var pendingAttackBlocked = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
                                    && blockedCombatNoOpCounts.TryGetValue(pendingSelection.SlotIndex, out var pendingNoOpCount)
                                    && pendingNoOpCount >= 2;
+        if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingNonEnemy)
+        {
+            if (hasSelectedNonEnemyConfirmEvidence)
+            {
+                actions.Add("confirm selected non-enemy card");
+            }
+
+            if (combatMicroStage.AllowsCancel)
+            {
+                actions.Add("right-click cancel selected card");
+            }
+
+            actions.Add("wait");
+            return actions
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingAttackTarget)
+        {
+            if (!pendingAttackBlocked && context.CanResolveCombatEnemyTarget)
+            {
+                actions.Add("click enemy");
+            }
+
+            if (combatMicroStage.AllowsCancel)
+            {
+                actions.Add("right-click cancel selected card");
+            }
+
+            actions.Add("wait");
+            return actions
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         if (!pendingAttackBlocked && context.CanResolveCombatEnemyTarget)
         {
             actions.Add("click enemy");
@@ -124,7 +166,10 @@ internal static partial class Program
             actions.Add("confirm selected non-enemy card");
         }
 
-        actions.Add("click end turn");
+        if (combatMicroStage.AllowsEndTurn)
+        {
+            actions.Add("click end turn");
+        }
 
         var analysis = context.HasScreenshotEvidence
             ? context.CombatAnalysis

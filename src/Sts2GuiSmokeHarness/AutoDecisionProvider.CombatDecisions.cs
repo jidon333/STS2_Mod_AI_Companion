@@ -17,6 +17,7 @@ sealed partial class AutoDecisionProvider
         var pendingSelection = context.PendingCombatSelection;
         var runtimeCombatState = context.RuntimeCombatState;
         var combatBarrier = context.CombatBarrierEvaluation;
+        var combatMicroStage = context.CombatMicroStage;
         if (context.CombatPlayerActionWindowClosed)
         {
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "observer reports enemy turn or a closed combat play phase", DisplayControlFlowScreen(request.Observer));
@@ -100,6 +101,11 @@ sealed partial class AutoDecisionProvider
 
         GuiSmokeStepDecision CloseWithLegalCombatFallback()
         {
+            if (!combatMicroStage.AllowsEndTurn)
+            {
+                return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for legal combat action", DisplayControlFlowScreen(request.Observer));
+            }
+
             var fallbackDecision = CreateCombatPressKeyDecision(
                 "E",
                 "auto-end turn",
@@ -143,77 +149,92 @@ sealed partial class AutoDecisionProvider
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for selectable combat hand card", DisplayControlFlowScreen(request.Observer));
         }
 
-        if (hasSelectedNonEnemyConfirmEvidence)
+        if (combatMicroStage.Kind is CombatMicroStageKind.TurnClosing or CombatMicroStageKind.EnemyTurnClosed)
         {
-            if (TryUseCombatDecision(new GuiSmokeStepDecision(
-                "act",
-                "confirm-non-enemy",
-                null,
-                null,
-                null,
-                "confirm selected non-enemy card",
-                "A self or non-enemy targeted card is selected. Move to the explicit confirm point, hold left mouse briefly, then release to finish the play.",
-                0.82,
-                "combat",
-                150,
-                true,
-                null), out var allowedNonEnemyConfirmDecision))
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for combat turn transition to settle", DisplayControlFlowScreen(request.Observer));
+        }
+
+        var blockedOpenAttackSelection = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                                         && pendingSelection.SlotIndex is >= 1 and <= 5
+                                         && CombatRuntimeStateSupport.HasSelectionToKeep(request.Observer, request.CombatCardKnowledge)
+                                         && HandleCombatContextSupport.GetCombatNoOpCountForSlot(combatContext, pendingSelection.SlotIndex) >= 2;
+        if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingNonEnemy)
+        {
+            if (hasSelectedNonEnemyConfirmEvidence
+                && TryUseCombatDecision(new GuiSmokeStepDecision(
+                    "act",
+                    "confirm-non-enemy",
+                    null,
+                    null,
+                    null,
+                    "confirm selected non-enemy card",
+                    "A non-enemy card is still selected. Confirm or clear that lane before starting a new combat action or ending the turn.",
+                    0.82,
+                    "combat",
+                    150,
+                    true,
+                    null), out var allowedNonEnemyConfirmDecision))
             {
                 return allowedNonEnemyConfirmDecision;
             }
+
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for selected non-enemy combat lane to resolve", DisplayControlFlowScreen(request.Observer));
         }
 
-        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-            && enemyTargetOpportunity)
+        if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingAttackTarget)
         {
-            if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision)
-                && TryUseCombatDecision(targetDecision, out var allowedTargetDecision))
+            if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                && enemyTargetOpportunity)
             {
-                return allowedTargetDecision;
+                if (TryCreateCombatEnemyTargetDecision(request, pendingSelection, pendingSelectionNoOpCount, alternatePlayableAttackSlots, out var targetDecision)
+                    && TryUseCombatDecision(targetDecision, out var allowedTargetDecision))
+                {
+                    return allowedTargetDecision;
+                }
             }
-        }
 
-        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-            && context.HasScreenshotEvidence
-            && GetCombatAnalysis().HasSelectedCard
-            && !enemyTargetOpportunity)
-        {
-            if (TryUseCombatDecision(new GuiSmokeStepDecision(
-                "act",
-                "right-click",
-                null,
-                null,
-                null,
-                "cancel unresolved selected card",
-                "A stale attack selection is still highlighted, but the observer no longer shows a matching playable attack. Cancel it before choosing a new card or ending the turn.",
-                0.80,
-                "combat",
-                250,
-                true,
-                null), out var allowedCancelDecision))
+            if (blockedOpenAttackSelection
+                && TryUseCombatDecision(new GuiSmokeStepDecision(
+                    "act",
+                    "right-click",
+                    null,
+                    null,
+                    null,
+                    "cancel unresolved selected card",
+                    $"The selected attack lane {pendingSelection!.SlotIndex} is still open after repeated no-op outcomes. Cancel it before ending the turn or choosing another lane.",
+                    0.84,
+                    "combat",
+                    250,
+                    true,
+                    null), out var allowedBlockedSelectionCancelDecision))
             {
-                return allowedCancelDecision;
+                return allowedBlockedSelectionCancelDecision;
             }
-        }
 
-        if (hasSelectedNonEnemyConfirmEvidence)
-        {
-            if (TryUseCombatDecision(new GuiSmokeStepDecision(
-                "act",
-                "confirm-non-enemy",
-                null,
-                null,
-                null,
-                "confirm selected non-enemy card",
-                "A non-enemy card overlay is still selected. Use the explicit confirm point with a brief held mouse press instead of reissuing the slot hotkey.",
-                0.78,
-                "combat",
-                150,
-                true,
-                null), out var allowedSelectedDefendDecision))
+            if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                && context.HasScreenshotEvidence
+                && GetCombatAnalysis().HasSelectedCard
+                && !enemyTargetOpportunity)
             {
-                return allowedSelectedDefendDecision;
+                if (TryUseCombatDecision(new GuiSmokeStepDecision(
+                    "act",
+                    "right-click",
+                    null,
+                    null,
+                    null,
+                    "cancel unresolved selected card",
+                    "A stale attack selection is still highlighted, but the observer no longer shows a matching playable attack. Cancel it before choosing a new card or ending the turn.",
+                    0.80,
+                    "combat",
+                    250,
+                    true,
+                    null), out var allowedCancelDecision))
+                {
+                    return allowedCancelDecision;
+                }
             }
+
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for selected combat lane to resolve", DisplayControlFlowScreen(request.Observer));
         }
 
         var knowledgeAttackSlot = request.CombatCardKnowledge
@@ -353,10 +374,6 @@ sealed partial class AutoDecisionProvider
             }
         }
 
-        var blockedOpenAttackSelection = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-                                         && pendingSelection.SlotIndex is >= 1 and <= 5
-                                         && CombatRuntimeStateSupport.HasSelectionToKeep(request.Observer, request.CombatCardKnowledge)
-                                         && HandleCombatContextSupport.GetCombatNoOpCountForSlot(combatContext, pendingSelection.SlotIndex) >= 2;
         if (blockedOpenAttackSelection)
         {
             if (TryUseCombatDecision(new GuiSmokeStepDecision(
