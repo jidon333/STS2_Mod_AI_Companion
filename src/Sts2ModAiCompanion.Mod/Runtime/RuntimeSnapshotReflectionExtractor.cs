@@ -2997,6 +2997,11 @@ internal static class RuntimeSnapshotReflectionExtractor
             return "reward-pick";
         }
 
+        if (typeName.Contains("NChooseACardSelectionScreen", StringComparison.OrdinalIgnoreCase))
+        {
+            return "reward-pick";
+        }
+
         if (typeName.Contains("NDeckTransformSelectScreen", StringComparison.OrdinalIgnoreCase))
         {
             return "transform";

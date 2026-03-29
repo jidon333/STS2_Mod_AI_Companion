@@ -237,6 +237,9 @@ static class CardSelectionObserverSignals
         var rootTypeSummary = observer.Meta.TryGetValue("rootTypeSummary", out var rawRootTypeSummary)
             ? rawRootTypeSummary
             : null;
+        var activeScreenType = TryGetMetaValue(observer, "activeScreenType");
+        var rawCurrentActiveScreenType = TryGetMetaValue(observer, "rawCurrentActiveScreenType");
+        var rawTopOverlayType = TryGetMetaValue(observer, "rawTopOverlayType");
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-transform", StringComparison.OrdinalIgnoreCase)
             || string.Equals(ControlFlowCurrentScreen(observer), "transform", StringComparison.OrdinalIgnoreCase)
@@ -258,35 +261,42 @@ static class CardSelectionObserverSignals
         }
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-reward-pick", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(ControlFlowCurrentScreen(observer), "card-choice", StringComparison.OrdinalIgnoreCase)
             || rootTypeSummary?.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "reward-pick";
+        }
+
+        if (rootTypeSummary?.Contains("NChooseACardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || activeScreenType?.Contains("NChooseACardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawCurrentActiveScreenType?.Contains("NChooseACardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawTopOverlayType?.Contains("NChooseACardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "reward-pick";
         }
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-simple-select", StringComparison.OrdinalIgnoreCase)
             || rootTypeSummary?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
-            || TryGetMetaValue(observer, "activeScreenType")?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
-            || TryGetMetaValue(observer, "rawCurrentActiveScreenType")?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
-            || TryGetMetaValue(observer, "rawTopOverlayType")?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
+            || activeScreenType?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawCurrentActiveScreenType?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawTopOverlayType?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "simple-select";
         }
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-bundle-select", StringComparison.OrdinalIgnoreCase)
             || rootTypeSummary?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
-            || TryGetMetaValue(observer, "activeScreenType")?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
-            || TryGetMetaValue(observer, "rawCurrentActiveScreenType")?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
-            || TryGetMetaValue(observer, "rawTopOverlayType")?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
+            || activeScreenType?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawCurrentActiveScreenType?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawTopOverlayType?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "bundle-select";
         }
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-relic-select", StringComparison.OrdinalIgnoreCase)
             || rootTypeSummary?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true
-            || TryGetMetaValue(observer, "activeScreenType")?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true
-            || TryGetMetaValue(observer, "rawCurrentActiveScreenType")?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true
-            || TryGetMetaValue(observer, "rawTopOverlayType")?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true)
+            || activeScreenType?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true
+            || rawCurrentActiveScreenType?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true
+            || rawTopOverlayType?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "relic-select";
         }

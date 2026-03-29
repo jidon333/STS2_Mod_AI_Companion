@@ -477,6 +477,45 @@ internal static partial class Program
                    && !rewardPickActions.Contains("deck remove confirm", StringComparer.OrdinalIgnoreCase)
                    && !rewardPickActions.Contains("upgrade confirm", StringComparer.OrdinalIgnoreCase),
                 "Reward-pick subtype should stay outside count/confirm card-selection flows.");
+
+            var chooseACardObserver = new ObserverState(
+                rewardPickObserver.Summary with
+                {
+                    ChoiceExtractorPath = "event",
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NChooseACardSelectionScreen",
+                        ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NChooseACardSelectionScreen",
+                        ["rawTopOverlayType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NChooseACardSelectionScreen",
+                        ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NChooseACardSelectionScreen",
+                        ["cardSelectionVisibleCardCount"] = "1",
+                    },
+                },
+                null,
+                null,
+                null);
+            var chooseACardActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, chooseACardObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(chooseACardActions.Contains("reward pick card", StringComparer.OrdinalIgnoreCase),
+                "NChooseACardSelectionScreen should reopen the direct reward-pick lane without relying on generic card-choice fallback.");
+
+            var unknownCardChoiceObserver = new ObserverState(
+                rewardPickObserver.Summary with
+                {
+                    ChoiceExtractorPath = "event",
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NUnrecognizedCardSelectionScreen",
+                        ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NUnrecognizedCardSelectionScreen",
+                        ["rawTopOverlayType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NUnrecognizedCardSelectionScreen",
+                        ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NUnrecognizedCardSelectionScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            var unknownCardChoiceActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, unknownCardChoiceObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(!unknownCardChoiceActions.Contains("reward pick card", StringComparer.OrdinalIgnoreCase),
+                "Generic card-choice foreground without a recognized runtime screen class should not reopen the reward-pick lane through broad fallback.");
             var rewardFastPathContext = CreateStepAnalysisContext(
                 GuiSmokePhase.HandleRewards,
                 rewardPickObserver,
