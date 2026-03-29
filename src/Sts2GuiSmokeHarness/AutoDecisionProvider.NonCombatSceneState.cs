@@ -293,7 +293,12 @@ sealed partial class AutoDecisionProvider
                                         && RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer.Summary));
         var proceedVisible = explicitScreenAuthority
                              && GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary);
-        if (!smithUpgradeActive && !explicitChoiceVisible && !proceedVisible)
+        var selectionSettling = explicitScreenAuthority
+                                && explicitChoiceVisible
+                                && !smithUpgradeActive
+                                && !proceedVisible
+                                && RestSiteObserverSignals.IsRestSiteSelectionSettlingState(observer.Summary);
+        if (!smithUpgradeActive && !explicitChoiceVisible && !proceedVisible && !selectionSettling)
         {
             return null;
         }
@@ -305,6 +310,7 @@ sealed partial class AutoDecisionProvider
             smithUpgradeActive,
             RestSiteObserverSignals.HasSmithConfirmVisible(observer.Summary),
             proceedVisible,
+            selectionSettling,
             mapContextVisible);
     }
 

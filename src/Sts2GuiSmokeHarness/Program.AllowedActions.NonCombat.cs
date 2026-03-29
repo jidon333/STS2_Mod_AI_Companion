@@ -91,6 +91,8 @@ internal static partial class Program
             GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
             GuiSmokePhase.HandleRewards when ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
                 => BuildShopAllowedActions(observer.Summary, history),
+            GuiSmokePhase.HandleRewards when restSiteScene is { SelectionSettling: true }
+                => new[] { "wait" },
             GuiSmokePhase.HandleRewards when explicitRestSiteChoiceAuthority
                 => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
             GuiSmokePhase.HandleRewards when restSiteScene is { SmithUpgradeActive: true }
@@ -155,6 +157,7 @@ internal static partial class Program
             GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
             GuiSmokeChooseFirstNodeLane.RestSiteSmithUpgrade => new[] { "click smith card", "click smith confirm", "wait" },
             GuiSmokeChooseFirstNodeLane.RestSiteProceed => new[] { "click proceed", "wait" },
+            GuiSmokeChooseFirstNodeLane.RestSiteSelectionSettling => new[] { "wait" },
             GuiSmokeChooseFirstNodeLane.TreasureRoom => TreasureRoomObserverSignals.BuildAllowedActions(TreasureRoomObserverSignals.TryGetState(observer.Summary)!),
             GuiSmokeChooseFirstNodeLane.ShopRoom => BuildShopAllowedActions(observer.Summary, history),
             GuiSmokeChooseFirstNodeLane.EventRecovery => BuildAllowedActionsCore(GuiSmokePhase.HandleEvent, observer, combatCardKnowledge, screenshotPath, history, context),

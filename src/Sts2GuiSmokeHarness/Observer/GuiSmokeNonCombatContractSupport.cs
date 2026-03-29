@@ -32,7 +32,8 @@ static class GuiSmokeNonCombatContractSupport
         if (MapAuthorityOutranksStaleRestSiteResidue(observer)
             || !HasRestSiteAuthority(observer)
             || !RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
-            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer))
+            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
+            || RestSiteObserverSignals.IsRestSiteSelectionSettlingState(observer))
         {
             return false;
         }

@@ -42,6 +42,12 @@ sealed partial class AutoDecisionProvider
                ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit rest-site proceed");
     }
 
+    private static GuiSmokeStepDecision DecideChooseFirstNodeRestSiteSelectionSettling(GuiSmokeStepRequest request)
+    {
+        ConfigureRestSiteChooseFirstNodeDebug(new[] { "wait" }, "rest-site-selection-settling-suppresses-map-arrow-contamination");
+        return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for rest-site selection to settle into smith upgrade or proceed");
+    }
+
     private static GuiSmokeStepDecision? TryCreateChooseFirstNodeTreasureRoomDecision(GuiSmokeStepRequest request)
     {
         return TryCreateTreasureRoomLaneDecision(

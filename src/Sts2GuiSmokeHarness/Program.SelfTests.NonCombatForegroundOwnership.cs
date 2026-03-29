@@ -877,6 +877,60 @@ internal static partial class Program
             Assert(string.Equals(missingConfirmAfterSmithDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
                 "Rest-site smith confirm should wait when no exported confirm/card hitbox is present instead of clicking a fixed confirm coordinate.");
 
+            var restSiteSelectionSettlingSummary = restSiteMetadataSummary with
+            {
+                CurrentScreen = "rest-site",
+                VisibleScreen = "rest-site",
+                ChoiceExtractorPath = "rest",
+                CurrentChoices = new[] { "휴식", "재련", "부화" },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastOptionId"] = "SMITH",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                    ["restSiteSelectionCurrentStatus"] = "explicit-choice",
+                    ["restSiteViewKind"] = "explicit-choice",
+                },
+            };
+            var restSiteSelectionSettlingObserver = new ObserverState(restSiteSelectionSettlingSummary, null, null, null);
+            Assert(!GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(restSiteSelectionSettlingObserver, restSiteMetadataScreenshotPath),
+                "Post-selection rest-site settle should not reopen the explicit rest-site choice lane before proceed or smith overlay truth appears.");
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(restSiteSelectionSettlingObserver) is { SelectionSettling: true },
+                "Rest-site scene state should preserve a selection-settling stage while post-smith proceed is not yet visible.");
+            var restSiteSelectionSettlingActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteSelectionSettlingObserver);
+            Assert(restSiteSelectionSettlingActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Rest-site selection-settling should wait instead of reopening explicit choices. actual=[{string.Join(", ", restSiteSelectionSettlingActions)}]");
+            var restSiteSelectionSettlingDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteSelectionSettlingSummary,
+                AllowedActions = restSiteSelectionSettlingActions,
+            });
+            Assert(string.Equals(restSiteSelectionSettlingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+                "ChooseFirstNode should wait while a completed rest-site selection is settling back to proceed.");
+
+            var restSiteSelectionInProgressSummary = restSiteMetadataSummary with
+            {
+                CurrentScreen = "rest-site",
+                VisibleScreen = "rest-site",
+                ChoiceExtractorPath = "rest",
+                CurrentChoices = new[] { "휴식", "재련", "부화" },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteSelectionLastSignal"] = "before-select",
+                    ["restSiteSelectionLastOptionId"] = "SMITH",
+                    ["restSiteSelectionCurrentStatus"] = "selecting",
+                    ["restSiteSelectionCurrentOptionId"] = "SMITH",
+                    ["restSiteSelectionOutcome"] = "in-progress",
+                    ["restSiteViewKind"] = "explicit-choice",
+                },
+            };
+            var restSiteSelectionInProgressObserver = new ObserverState(restSiteSelectionInProgressSummary, null, null, null);
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(restSiteSelectionInProgressObserver) is { SelectionSettling: true },
+                "Rest-site scene state should preserve a selection-settling stage immediately after a smith click is accepted.");
+            var restSiteSelectionInProgressActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteSelectionInProgressObserver);
+            Assert(restSiteSelectionInProgressActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Rest-site in-progress selection should wait instead of clicking smith twice. actual=[{string.Join(", ", restSiteSelectionInProgressActions)}]");
+
             var restSiteProceedSummary = restSiteMetadataSummary with
             {
                 CurrentScreen = "rest-site",

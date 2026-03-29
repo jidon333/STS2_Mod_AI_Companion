@@ -264,6 +264,7 @@ sealed record RestSiteSceneState(
     bool SmithUpgradeActive,
     bool SmithConfirmVisible,
     bool ProceedVisible,
+    bool SelectionSettling,
     bool MapContextVisible) : ICanonicalNonCombatSceneState
 {
     public NonCombatCanonicalForegroundOwner CanonicalForegroundOwner => NonCombatCanonicalForegroundOwner.RestSite;
@@ -278,6 +279,8 @@ sealed record RestSiteSceneState(
 
     public string? ForegroundDebugKind => SmithUpgradeActive
         ? SmithConfirmVisible ? "rest-site-smith-confirm" : "rest-site-smith-grid"
+        : SelectionSettling
+            ? "rest-site-selection-settling"
         : "rest-site";
 
     public string? BackgroundDebugKind => MapContextVisible ? "map" : null;

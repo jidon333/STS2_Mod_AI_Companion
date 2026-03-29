@@ -67,6 +67,7 @@ static class GuiSmokeStepScreenshotPolicy
             }
 
             if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, analysisContext.ScreenshotPath)
+                || RestSiteObserverSignals.IsRestSiteSelectionSettlingState(observer.Summary)
                 || GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary)
                 || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
                 || ShopObserverSignals.IsShopAuthorityActive(observer.Summary))

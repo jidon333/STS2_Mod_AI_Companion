@@ -188,6 +188,22 @@ sealed partial class AutoDecisionProvider
             return builder.Build(CreateWaitDecision("waiting for explicit rest-site proceed", DisplayControlFlowScreen(request.Observer)), actualDecision);
         }
 
+        if (BuildRestSiteSceneState(request.Observer) is
+            {
+                SelectionSettling: true,
+                ProceedVisible: false,
+                SmithUpgradeActive: false,
+            })
+        {
+            builder.AddSuppressed("click exported reachable node", "rest-site-selection-settling-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "rest-site-selection-settling-preserves-room-lane");
+            builder.AddSuppressed("click visible map advance", "rest-site-selection-settling-suppresses-map-arrow-contamination");
+            builder.AddSuppressed("click map back", "rest-site-selection-settling-preserves-room-lane");
+            return builder.Build(
+                CreateWaitDecision("waiting for rest-site selection to settle into smith upgrade or proceed", DisplayControlFlowScreen(request.Observer)),
+                actualDecision);
+        }
+
         if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
         {
             builder.AddSuppressed("click exported reachable node", "treasure-room-owner-active-preserves-room-lane");

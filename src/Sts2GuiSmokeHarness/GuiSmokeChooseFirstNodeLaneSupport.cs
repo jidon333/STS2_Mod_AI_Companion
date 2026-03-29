@@ -5,6 +5,7 @@ internal enum GuiSmokeChooseFirstNodeLane
     RestSiteExplicitChoice,
     RestSiteSmithUpgrade,
     RestSiteProceed,
+    RestSiteSelectionSettling,
     TreasureRoom,
     ShopRoom,
     EventRecovery,
@@ -37,6 +38,12 @@ internal static class GuiSmokeChooseFirstNodeLaneSupport
                 SmithUpgradeActive: false,
             }
             || GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary);
+        var restSiteSelectionSettling = restSiteScene is
+        {
+            SelectionSettling: true,
+            ProceedVisible: false,
+            SmithUpgradeActive: false,
+        };
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
         var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
         var explicitEventRecoveryAuthority = !GuiSmokeNonCombatAllowedActionSupport.LooksLikeInspectOverlayState(observer)
@@ -52,11 +59,6 @@ internal static class GuiSmokeChooseFirstNodeLaneSupport
             return GuiSmokeChooseFirstNodeLane.AncientMapForeground;
         }
 
-        if (explicitRestSiteChoiceAuthority)
-        {
-            return GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice;
-        }
-
         if (restSiteSmithUpgradeActive)
         {
             return GuiSmokeChooseFirstNodeLane.RestSiteSmithUpgrade;
@@ -65,6 +67,16 @@ internal static class GuiSmokeChooseFirstNodeLaneSupport
         if (restSiteProceedVisible)
         {
             return GuiSmokeChooseFirstNodeLane.RestSiteProceed;
+        }
+
+        if (restSiteSelectionSettling)
+        {
+            return GuiSmokeChooseFirstNodeLane.RestSiteSelectionSettling;
+        }
+
+        if (explicitRestSiteChoiceAuthority)
+        {
+            return GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice;
         }
 
         if (TreasureRoomObserverSignals.TryGetState(observer.Summary) is { RoomDetected: true })

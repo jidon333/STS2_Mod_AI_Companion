@@ -90,6 +90,11 @@ sealed partial class AutoDecisionProvider
             return DecideChooseFirstNodeRestSiteProceed(request);
         }
 
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteSelectionSettling)
+        {
+            return DecideChooseFirstNodeRestSiteSelectionSettling(request);
+        }
+
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.TreasureRoom)
         {
             return TryCreateChooseFirstNodeTreasureRoomDecision(request)

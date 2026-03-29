@@ -50,6 +50,41 @@ static class RestSiteObserverSignals
                || string.Equals(TryGetMetaValue(observer, "restSiteViewKind"), "smith-confirm", StringComparison.OrdinalIgnoreCase);
     }
 
+    public static bool IsRestSiteSelectionSettlingState(ObserverSummary observer)
+    {
+        if (IsRestSiteSmithUpgradeState(observer))
+        {
+            return false;
+        }
+
+        var currentStatus = TryGetMetaValue(observer, "restSiteSelectionCurrentStatus");
+        var outcome = TryGetMetaValue(observer, "restSiteSelectionOutcome");
+        var lastSignal = TryGetMetaValue(observer, "restSiteSelectionLastSignal");
+        var currentOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionCurrentOptionId"));
+        var lastOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionLastOptionId"));
+        var observedOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionObservedOptionId"));
+        var activeOptionId = currentOptionId ?? observedOptionId ?? lastOptionId;
+        if (string.IsNullOrWhiteSpace(activeOptionId))
+        {
+            return false;
+        }
+
+        if (string.Equals(currentStatus, "selection-failed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "failure", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(lastSignal, "after-select-failure", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(currentStatus, "selecting", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(currentStatus, "options-disabled", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(outcome, "in-progress", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(lastSignal, "before-select", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool HasExportedSmithUpgradeChoices(ObserverSummary observer)
     {
         return observer.Choices.Any(static choice =>
