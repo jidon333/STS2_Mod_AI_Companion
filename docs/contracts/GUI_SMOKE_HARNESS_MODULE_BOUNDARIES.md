@@ -1,19 +1,23 @@
 # GuiSmokeHarness Cleanup Program
 
-> Status: Live Contract
+> Status: Completed Baseline Contract
 > Source of truth: Yes
 > Update when: cleanup priority, workstream order, observer fact/export contract, or validation cadence changes.
 
 ## 0. 먼저 읽을 요약
 
-이 문서는 completed refactor 이후 `GuiSmokeHarness`에 남아 있는 구조 부채와 observer/export/bridge 부채를 순차적으로 정리하기 위한 장기 cleanup program이다.
+이 문서는 completed refactor 이후 `GuiSmokeHarness`에 남아 있던 구조 부채와 observer/export/bridge 부채를 순차적으로 정리하기 위한 cleanup program이었다.
+
+현재 `main`에서는 이 문서의 ordered workstreams baseline이 완료됐다.
+
+즉 active work source of truth는 이제 이 문서의 historical order가 아니라 `docs/current/*`의 coverage frontier다.
 
 이 문서가 고정하는 것은 네 가지다.
 
-1. 리팩터링 이후에도 남아 있는 핵심 문제의 우선순위
-2. harness와 observer stack을 어떤 원칙으로 정리할지
-3. 순차적인 workstream order
-4. 각 workstream의 validation / cleanup 규칙
+1. cleanup program이 어떤 원칙과 순서로 끝났는지
+2. harness와 observer stack의 분리 계약이 무엇인지
+3. completed baseline 이후 active follow-up이 어디에 기록되는지
+4. future maintenance에서 reopen하면 안 되는 방향이 무엇인지
 
 이 문서는 current blocker source of truth가 아니다.
 current blocker, latest live root, current handoff는 `docs/current/*`에서 관리한다.

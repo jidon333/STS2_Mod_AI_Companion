@@ -144,8 +144,7 @@
 
 | Priority | Family | Current contract status | Main risk | Required follow-up |
 |---|---|---|---|---|
-| P0 | Combat post-wait recapture coverage | code/self-test는 strong, live/parity coverage는 partial | legitimate wait 이후 fresh current-main coverage 부족 | current-main live/parity evidence 보강 |
-| P1 | Capture boundary fresh live proof | bounded failure contract는 있으나 fresh live proof가 partial | silent-hang hardening live evidence 부족 | capture boundary live root 추가 |
+| P0 | Capture boundary fresh live proof | bounded failure contract는 있으나 fresh live proof가 partial | silent-hang hardening live evidence 부족 | capture boundary live root 추가 |
 | P1 | Lifecycle restart evidence | product path separate from gameplay | terminal -> restart -> next-attempt first-screen chain remains appendix | validation/lifecycle appendix로 유지하며 별도 추적 |
 
 ## 문서 사용 규칙
@@ -159,4 +158,4 @@
 
 current `main` 바깥의 clean validation branch/worktree에서 드러난 최근 regression families는 source of truth가 아니므로 본문 기준선에는 넣지 않는다. 다만 아래 family는 이후 current `main`에 같은 shape가 들어오는지 감시 대상으로 유지한다.
 
-- combat post-wait recapture fresh live coverage gap
+- capture boundary fresh live proof gap

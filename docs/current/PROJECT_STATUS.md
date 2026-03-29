@@ -10,11 +10,11 @@
 
 ## 현재 마일스톤 위치
 
-- 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` 평가 + `M9 observer-first speed recovery` 완료 확인 + `startup main-menu phase-boundary` closure + `published-first observer provenance migration` 정리
+- 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` + `M9 observer-first speed recovery` + `startup main-menu phase-boundary` + `published-first observer provenance migration` + post-refactor cleanup completion
 - 현재 engineering focus:
-  1. `Sts2GuiSmokeHarness` 구조 정리 완료 상태를 문서와 current pointer에 반영
-  2. explicit event / common combat hot path를 `observer-first, screenshot-on-demand`로 되돌린 현재 speed baseline 고정
-  3. 그 위에서 남아 있는 runner / noncombat residual cleanup, legacy synthetic retirement, coverage frontier를 새 owner 구조 안에서 좁게 다루기
+  1. `Sts2GuiSmokeHarness` cleanup-complete 기준선을 문서와 current pointer에 고정
+  2. explicit event / common combat hot path를 `observer-first, screenshot-on-demand`로 되돌린 speed baseline 유지
+  3. cleanup 이후 남은 coverage frontier를 새 owner 구조 안에서 좁게 다루기
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
 중요한 현재 해석:
@@ -23,7 +23,8 @@
 - `WaitRunLoad` resumed room handoff bug는 이미 닫혔다
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug는 current `main`에서 닫혔다
 - published-first observer provenance migration은 current `main`에서 active다
-- 현재 핵심은 **architecture complete 상태에서 남은 semantic gap을 좁게 다루는 것**이다
+- post-refactor cleanup program은 current `main`에서 완료 상태다
+- 현재 핵심은 **cleanup 이후 남아 있는 coverage gap만 좁게 다루는 것**이다
 
 ## 현재 우선순위
 
@@ -41,17 +42,21 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 
 ### 2. 현재 semantic gap
 
-구조 작업 이후에도 current semantic follow-up은 남아 있다.
+cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 
 현재 가장 중요한 두 signal은 아래다.
 
 1. replay parity suite
    - status: green
    - 해석: old `reward-aftermath-map-handoff` known red는 current `main`에서 닫혔다
-2. latest valid fresh live root
-   - root: [wait-main-menu-run-start-readiness-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1)
-   - result: valid root, `WaitMainMenu`는 logo-animation bootstrap frame를 그대로 accepted 하지 않았고 actual `Continue` surface가 export된 뒤에만 `EnterRun`으로 handoff했다
-   - shape: `step=2`는 still `WaitMainMenu`, `step=3`에서 `extractor=main-menu` `choices=[계속, 멀티플레이, 종료, 설정]` 뒤 `target=continue` click이 나왔고, old `EnterRun` `main menu actions not yet visible` plateau는 재현되지 않았다
+2. latest cleanup proof root
+   - root: [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run)
+   - result: representative fresh live root, cleanup-complete `main`에서 `WaitMainMenu -> EnterRun`, `WaitRunLoad -> HandleCombat`, combat wait/re-capture continuity가 모두 비회귀였다
+   - shape:
+     - `step=3`에서 `captureMode=skipped`, `sceneReasoningMode=observer-only`, `choices=[계속, 멀티플레이, 종료, 설정]` 뒤 `target=continue`
+     - `step=16`에서 `WaitRunLoad -> HandleCombat`
+     - `step=23 -> 24`, `step=45 -> 46`, `step=57 -> 58`에서 legitimate combat wait 뒤 다음 capture/request로 이어졌고 silent stall은 없었다
+     - run은 `max-steps-reached:60`로 종료됐고 `failure-summary.json`은 생성되지 않았다
 
 즉 현재 질문은 더 이상
 
@@ -64,8 +69,8 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 현재 authoritative frontier는
 
 ```text
-"mixed-state noncombat guard cleanup과 combat EndTurn pre-actuation drift는 current main에서 닫혔고,
-현재 남은 건 blocker라기보다 combat post-wait recapture / capture-boundary coverage frontier다"
+"mixed-state noncombat guard cleanup, combat EndTurn pre-actuation drift, combat post-wait recapture continuity는 current main에서 닫혔고,
+현재 남은 건 blocker라기보다 capture-boundary / strict lifecycle coverage frontier다"
 ```
 
 ### 3. current speed baseline
@@ -91,9 +96,11 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 | Replay Golden Suite | green | `replay-test` 통과 |
 | Replay Parity Suite | green | `reward-aftermath-map-handoff` 포함 current parity fixtures green |
 | Non-Combat Stability | green | reward aftermath map-node continuity closure, fresh live root confirms post-reward progression |
-| Combat Stability | green | latest fresh live root에서 repeated EndTurn barrier acknowledgement/reopen이 유지되고 run이 `max-steps-reached:60`까지 진행 |
+| Combat Stability | green | cleanup proof root에서 combat wait/re-capture continuity와 non-enemy confirm / end-turn이 비회귀였고 run이 `max-steps-reached:60`까지 진행 |
 | Live-Run Speed Recovery | green | explicit event / common combat hot path가 observer-first로 복귀했고 representative speed root에서 captured step가 0건 |
-| Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 남은 것은 legacy retirement 성격 |
+| Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 compatibility는 legacy surface로만 남는다 |
+| Post-Refactor Cleanup Program | green | runner residual, noncombat residue, partial `Program` owner shedding, supervision health split까지 current `main`에 반영 |
+| Capture Boundary | partial | bounded failure contract와 self-test는 strong하지만 fresh live proof는 아직 얇다 |
 | Strict Lifecycle Chain | partial | terminal -> restart -> next-attempt first-screen evidence는 여전히 appendix/work item |
 
 ## 현재 바로 믿을 수 있는 것
@@ -106,7 +113,9 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - explicit event recovery와 common combat lane은 current `main`에서 screenshot 기본 경로가 아니다
 - representative speed proof root에서 explicit event/combat chain의 `captureMode`는 전부 `skipped`다
 - current `main`의 control-flow observer provenance는 published-first이고, published provenance는 legacy `visibleScreen` / `sceneReady` 계열로 다시 채워지지 않는다
+- bridge node semantics는 compatibility scene winner를 다시 먹지 않는다
 - 하네스 구조 refactor는 current `main` 기준 문서화 가능한 수준까지 정리됐다
+- post-refactor cleanup program도 current `main` 기준 완료 상태다
 
 ## 현재 대표 evidence
 
@@ -125,6 +134,14 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 
 - fresh reward/map closure root:
   - [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
+- latest cleanup proof root:
+  - [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run)
+- latest cleanup proof startup summary:
+  - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run/startup-summary.json)
+- latest cleanup proof session summary:
+  - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run/session-summary.json)
+- latest cleanup proof run log:
+  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run/attempts/0001/run.log)
 - latest valid live root:
   - [wait-main-menu-run-start-readiness-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1)
 - latest live startup summary:
@@ -164,14 +181,13 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - bridge node semantics driven by compatibility scene winner
 - monolithic `Program.cs` 중심 구조
 - large self-test hotspot 1차 분해
+- runner residual / noncombat residue / partial `Program` helper owner / supervision health band hotspot
 
 ### 아직 열려 있는 것
 
-- combat post-wait recapture / capture-boundary live proof gap
+- capture-boundary fresh live proof
+- strict lifecycle chain evidence
 - combat broader parity/live coverage
-- legacy synthetic field retirement / compatibility fallback shedding
-- runner lifecycle residual cleanup
-- noncombat action-selection residue reduction
 - strict lifecycle chain appendix
 - some lower-priority noncombat coverage rows (`reward back`, `post-node destination continuity`) remain partial
 
@@ -187,7 +203,8 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 3. semantic blocker, speed evidence, coverage gap을 구분한다
    - noncombat mixed-state와 combat EndTurn barrier family는 닫혔다
    - explicit event/common combat speed baseline도 현재 `main`에서 회복됐다
-   - 현재 남은 것은 coverage frontier와 runner / noncombat residual cleanup, legacy synthetic retirement다
+   - post-refactor cleanup program도 완료됐다
+   - 현재 남은 것은 coverage frontier와 일부 partial evidence row뿐이다
 
 ## 한 줄 요약
 
@@ -197,5 +214,6 @@ reward aftermath live/parity gap도 current main에서 닫혔다.
 combat EndTurn pre-actuation drift / false barrier arm도 current main에서 닫혔다.
 explicit event / common combat hot path의 observer-first speed recovery도 current main에서 반영됐다.
 published-first observer provenance migration도 current main에 반영됐다.
-다음 follow-up은 combat / lifecycle coverage와 runner / noncombat residual cleanup, legacy synthetic retirement를 current owner 구조 안에서 보강하는 쪽이다.
+post-refactor cleanup program도 current main에서 완료됐다.
+다음 follow-up은 capture-boundary / strict lifecycle chain / 일부 partial coverage row를 current owner 구조 안에서 보강하는 쪽이다.
 ```

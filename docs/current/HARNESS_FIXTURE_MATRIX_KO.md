@@ -23,7 +23,7 @@ coverage status 의미:
 | Gap | Meaning | Current Status |
 |---|---|---|
 | `VAL-CAPTURE-BOUNDARY` | phase log 이후 capture/request/failure emission을 bounded contract로 고정 | partial |
-| `COMBAT-POSTWAIT-RECAPTURE` | legitimate combat wait 후 recapture/re-request continuity | partial |
+| `TERM-LIFECYCLE-CHAIN` | terminal -> restart -> next-attempt first-screen evidence | partial |
 | `REWARD-AFTERMATH-MAP-HANDOFF` | reward aftermath 이후 map-node continuity, `ChooseFirstNode` / parity alignment | green |
 
 ## Validation / Boot / Menu
@@ -32,7 +32,7 @@ coverage status 의미:
 |---|---|---|---|---|---|
 | `VAL-01` | validation | deploy/runtime identity | green | [SMOKE_TEST_CHECKLIST.md](../runbooks/SMOKE_TEST_CHECKLIST.md), [PROJECT_STATUS.md](./PROJECT_STATUS.md) startup/trust roots | current `main` 운영 규칙 고정 |
 | `VAL-02` | validation | manual-clean-boot | green | [ROADMAP.md](../ROADMAP.md) M4, [PROJECT_STATUS.md](./PROJECT_STATUS.md) bootstrap/trust roots | trust gate는 current baseline에 포함 |
-| `VAL-03` | any phase post-log | capture boundary | partial | `Program.SelfTests.CaptureReplay.cs` capture boundary assertions and bounded failure emission now exist on current `main`; fresh live proof is still pending | silent-hang hardening live evidence still needed |
+| `VAL-03` | any phase post-log | capture boundary | partial | `Program.SelfTests.CaptureReplay.cs` capture boundary assertions and bounded failure emission now exist on current `main`; fresh cleanup-complete live proof is still pending | silent-hang hardening live evidence still needed |
 | `MENU-01` | `WaitMainMenu` / `EnterRun` | main menu | green | `Program.SelfTests.CliStartup.cs`, `Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs`, [wait-main-menu-run-start-readiness-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1), [SMOKE_TEST_CHECKLIST.md](../runbooks/SMOKE_TEST_CHECKLIST.md) | continue vs singleplayer contract 고정, logo-animation bootstrap frame는 accepted 금지 |
 | `MENU-02` | `EnterRun` | continue lane | green | `GetPostEnterRunPhase`, replay parity summaries, main-menu self-tests | continue preferred 유지 |
 | `MENU-03` | `WaitRunLoad` | transition wait | green | `Program.SelfTests.PhaseRouting.RunLoadRecovery.cs`의 explicit transition truth wait-only assertions | explicit transition truth wait-only |
@@ -60,7 +60,7 @@ coverage status 의미:
 | `COMBAT-06` | `HandleCombat` | acknowledged transit wait | green | fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) plus `Program.SelfTests.CombatContracts.ParityAndBarriers.cs` | barrier reason now reaches acknowledged transit and waits until next-round reopen |
 | `COMBAT-07` | `HandleCombat` | enemy-turn closed play phase | partial | legitimate wait semantics exist in current code and self-tests, but current-main replay/live evidence is thin | keep wait semantics explicit |
 | `COMBAT-08` | `HandleCombat` | next-round reopen | green | fresh live root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) | repeated `EndTurn` acknowledged transit reopens into new player-turn actions (`2턴 종료` -> `3턴 종료` -> `4턴 종료` -> `5턴 종료` ...) |
-| `COMBAT-09` | post-wait recapture | capture/request continuity | partial | `Program.SelfTests.CaptureReplay.cs` bounded capture assertions + fresh current-main root [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) | blocker는 아니지만 legitimate wait -> next capture/failure live proof를 더 두껍게 만들 필요가 있음 |
+| `COMBAT-09` | post-wait recapture | capture/request continuity | green | `Program.SelfTests.CaptureReplay.cs` bounded capture assertions + fresh cleanup proof root [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run) (`step=23 -> 24`, `45 -> 46`, `57 -> 58`) | legitimate combat wait now has fresh current-main live continuity evidence |
 | `COMBAT-10` | combat -> rewards | room handoff | green | [PROJECT_STATUS.md](./PROJECT_STATUS.md) long-run continuity roots, repeated combat/reward continuity | strong long-run evidence in status doc |
 
 ## Event / Ancient / Treasure / Rest
@@ -120,6 +120,8 @@ coverage status 의미:
   - green
 - latest valid live root:
   - [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
+- latest cleanup proof root:
+  - [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run)
 - latest speed proof root:
   - [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
 
@@ -137,14 +139,13 @@ coverage status 의미:
 
 | Priority | Work Item | Why |
 |---|---|---|
-| P0 | combat post-wait recapture canonical coverage | `COMBAT-09` is code-covered and self-test-covered, but still partial until fresh current-main live evidence exists |
-| P1 | capture boundary fresh live proof | `VAL-03` remains partial even though bounded failure emission and self-tests exist |
-| P2 | strict lifecycle chain evidence | `TERM-02` remains intentionally open |
+| P0 | capture boundary fresh live proof | `VAL-03` remains partial even though bounded failure emission and self-tests exist |
+| P1 | strict lifecycle chain evidence | `TERM-02` remains intentionally open |
 
 ## Non-Canonical Appendix
 
 아래는 current `main` source-of-truth는 아니지만, 다음 구현 우선순위를 정할 때 참고할 수 있는 recent high-signal branch evidence다.
 
-- combat post-wait recapture fresh live gap
+- capture boundary fresh live proof gap
 
 이 appendix는 priority signal일 뿐, canonical coverage status는 위 표의 current `main` evidence만으로 판정한다.
