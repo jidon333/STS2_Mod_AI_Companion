@@ -98,12 +98,12 @@ internal sealed class InventoryPublisher
         var compatibilitySceneReady = ResolveSceneReady(snapshot, normalizedScene, blockingModal);
         var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
         var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
-        var sceneType = publishedSceneType ?? compatibilitySceneType;
-        var sceneReady = publishedSceneReady ?? compatibilitySceneReady;
-        var sceneAuthority = publishedSceneAuthority ?? compatibilitySceneAuthority;
-        var sceneStability = publishedSceneStability ?? compatibilitySceneStability;
+        var sceneType = publishedSceneType ?? rawSceneType ?? normalizedScene.SceneType;
+        var sceneReady = publishedSceneReady;
+        var sceneAuthority = publishedSceneAuthority;
+        var sceneStability = publishedSceneStability;
         var nodes = snapshot.CurrentChoices
-            .Select((choice, index) => BuildNode(compatibilitySceneType, rawSceneType, publishedSceneType, choice, index))
+            .Select((choice, index) => BuildNode(compatibilitySceneType, rawSceneType ?? "unknown", publishedSceneType, choice, index))
             .ToArray();
 
         return new HarnessNodeInventory(

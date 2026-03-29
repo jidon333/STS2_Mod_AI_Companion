@@ -2381,6 +2381,9 @@ static void TestInventoryPublisherSeparatesPrimaryAndCompatibilitySceneProvenanc
     var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
     Assert(inventory is not null, "Expected inventory publisher to build an inventory.");
     Assert(string.Equals(inventory!.SceneType, "event", StringComparison.OrdinalIgnoreCase), "Inventory primary scene type should now follow explicit published scene provenance instead of collapsing back to compatibility logical screen.");
+    Assert(inventory.SceneReady == true, "Inventory primary scene-ready should stay on explicit published provenance instead of collapsing back to compatibility readiness.");
+    Assert(string.Equals(inventory.SceneAuthority, "polling", StringComparison.OrdinalIgnoreCase), "Inventory primary scene authority should stay on explicit published provenance instead of collapsing back to compatibility authority.");
+    Assert(string.Equals(inventory.SceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Inventory primary scene stability should stay on explicit published provenance instead of collapsing back to compatibility stability.");
     Assert(string.Equals(inventory.PublishedSceneType, "event", StringComparison.OrdinalIgnoreCase), "Inventory published scene type should preserve explicit published provenance even when compatibility scene type disagrees.");
     Assert(string.Equals(inventory.PublishedVisibleScene, "event", StringComparison.OrdinalIgnoreCase), "Inventory published visible scene should preserve explicit published provenance even when compatibility visible scene disagrees.");
     Assert(inventory.PublishedSceneReady == true, "Inventory published scene-ready should preserve explicit published provenance.");
@@ -2442,6 +2445,9 @@ static void TestPublishedSceneProvenanceIgnoresLegacyCompatibilityMeta()
     var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
     Assert(inventory is not null, "Expected inventory publisher to build an inventory from the strict published snapshot.");
     Assert(string.Equals(inventory!.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory primary scene type should stay on published/direct screen truth instead of compatibility logicalScreen.");
+    Assert(inventory.SceneReady is null, "Inventory primary scene-ready should stay null when only compatibility readiness exists.");
+    Assert(string.IsNullOrWhiteSpace(inventory.SceneAuthority), "Inventory primary scene authority should stay null when only compatibility authority exists.");
+    Assert(string.IsNullOrWhiteSpace(inventory.SceneStability), "Inventory primary scene stability should stay null when only compatibility stability exists.");
     Assert(string.Equals(inventory.PublishedSceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory published scene type should stay on published/direct screen truth.");
     Assert(string.Equals(inventory.PublishedVisibleScene, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory published visible scene should stay on published/direct screen truth.");
     Assert(inventory.PublishedSceneReady is null, "Inventory published scene-ready should ignore legacy compatibility sceneReady meta.");

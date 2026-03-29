@@ -65,7 +65,8 @@ sealed class ObserverSnapshotReader
                             ?? rawCurrentScreen
                             ?? rawObservedScreen
                             ?? compatibilityCurrentScreen
-                            ?? compatibilityLogicalScreen;
+                            ?? compatibilityLogicalScreen
+                            ?? inventorySceneType;
         var publishedVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "visibleScreen")
                                      ?? inventoryPublishedVisibleScreen
                                      ?? publishedCurrentScreen
