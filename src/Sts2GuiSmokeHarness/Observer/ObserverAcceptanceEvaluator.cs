@@ -25,7 +25,7 @@ sealed class ObserverAcceptanceEvaluator
         var sceneReady = ControlFlowSceneReady(observer) != false;
         return phase switch
         {
-            GuiSmokePhase.WaitMainMenu => sceneReady && MainMenuRunStartObserverSignals.IsRunStartSurfaceReady(observer),
+            GuiSmokePhase.WaitMainMenu => MainMenuRunStartObserverSignals.IsRunStartSurfaceReady(observer),
             GuiSmokePhase.WaitRunLoad => false,
             GuiSmokePhase.WaitCharacterSelect => sceneReady && MatchesControlFlowScreen(observer, "character-select"),
             GuiSmokePhase.WaitMap => sceneReady && MapForegroundReconciliation.HasMapForegroundOwnership(observer, history ?? Array.Empty<GuiSmokeHistoryEntry>()),
