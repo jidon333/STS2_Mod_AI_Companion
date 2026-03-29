@@ -104,7 +104,9 @@ internal sealed class HarnessBridgeHost
             _traceWriter.Write("inventory-suppressed", null, new
             {
                 rawSceneType = inventoryAttempt.RawSceneType,
+                publishedSceneType = inventoryAttempt.Inventory.PublishedSceneType,
                 sceneType = inventoryAttempt.Inventory.SceneType,
+                compatibilitySceneType = inventoryAttempt.Inventory.CompatibilitySceneType,
                 reason = inventoryAttempt.SuppressionReason,
                 sceneReady = ResolveGuardSceneReady(inventoryAttempt.Inventory),
                 sceneAuthority = ResolveGuardSceneAuthority(inventoryAttempt.Inventory),
@@ -119,7 +121,9 @@ internal sealed class HarnessBridgeHost
             {
                 inventoryId = inventoryAttempt.Inventory.InventoryId,
                 rawSceneType = inventoryAttempt.RawSceneType,
+                publishedSceneType = inventoryAttempt.Inventory.PublishedSceneType,
                 sceneType = inventoryAttempt.Inventory.SceneType,
+                compatibilitySceneType = inventoryAttempt.Inventory.CompatibilitySceneType,
                 nodeCount = inventoryAttempt.Inventory.Nodes.Count,
                 sceneReady = ResolveGuardSceneReady(inventoryAttempt.Inventory),
                 sceneAuthority = ResolveGuardSceneAuthority(inventoryAttempt.Inventory),

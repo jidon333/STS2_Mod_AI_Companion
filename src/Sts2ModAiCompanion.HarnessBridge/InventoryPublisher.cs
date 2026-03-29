@@ -87,14 +87,19 @@ internal sealed class InventoryPublisher
     private static HarnessNodeInventory BuildInventory(LiveExportSnapshot snapshot, string mode, CompanionNormalizedScene normalizedScene)
     {
         var rawSceneType = ResolveRawSceneType(snapshot, normalizedScene);
-        var compatibilitySceneType = ResolveInventorySceneType(snapshot, normalizedScene);
+        var publishedSceneType = ResolvePublishedSceneType(snapshot, normalizedScene);
+        var compatibilitySceneType = ResolveCompatibilitySceneType(snapshot, normalizedScene, publishedSceneType, rawSceneType);
         var blockingModal = ResolveBlockingModal(snapshot, normalizedScene);
+        var publishedVisibleScene = ResolvePublishedVisibleScene(snapshot, normalizedScene, publishedSceneType);
+        var publishedSceneReady = ResolvePublishedSceneReady(snapshot, blockingModal);
+        var publishedSceneAuthority = ResolvePublishedSceneAuthority(snapshot);
+        var publishedSceneStability = ResolvePublishedSceneStability(snapshot, blockingModal);
         var compatibilityVisibleScene = ResolveCompatibilityVisibleScene(snapshot, normalizedScene);
         var compatibilitySceneReady = ResolveSceneReady(snapshot, normalizedScene, blockingModal);
         var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
         var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
         var nodes = snapshot.CurrentChoices
-            .Select((choice, index) => BuildNode(compatibilitySceneType, rawSceneType, choice, index))
+            .Select((choice, index) => BuildNode(compatibilitySceneType, rawSceneType, publishedSceneType, choice, index))
             .ToArray();
 
         return new HarnessNodeInventory(
@@ -112,6 +117,13 @@ internal sealed class InventoryPublisher
         {
             RawSceneType = rawSceneType,
             RawCurrentScreen = rawSceneType,
+            PublishedSceneType = publishedSceneType,
+            PublishedCurrentScreen = publishedSceneType,
+            PublishedVisibleScene = publishedVisibleScene,
+            PublishedVisibleScreen = publishedVisibleScene,
+            PublishedSceneReady = publishedSceneReady,
+            PublishedSceneAuthority = publishedSceneAuthority,
+            PublishedSceneStability = publishedSceneStability,
             CompatibilitySceneType = compatibilitySceneType,
             CompatibilityLogicalScreen = compatibilitySceneType,
             CompatibilityCurrentScreen = compatibilitySceneType,
@@ -132,11 +144,71 @@ internal sealed class InventoryPublisher
                ?? normalizedScene.SceneType;
     }
 
-    private static string ResolveInventorySceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
+    private static string ResolvePublishedSceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
+    {
+        return NormalizeSceneToken(snapshot.CurrentScreen)
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "logicalScreen"))
+               ?? normalizedScene.SceneType;
+    }
+
+    private static string ResolvePublishedVisibleScene(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene, string publishedSceneType)
+    {
+        return NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"))
+               ?? publishedSceneType
+               ?? NormalizeSceneToken(snapshot.CurrentScreen)
+               ?? normalizedScene.SceneType;
+    }
+
+    private static bool? ResolvePublishedSceneReady(
+        LiveExportSnapshot snapshot,
+        string? blockingModal)
+    {
+        if (bool.TryParse(TryGetMeta(snapshot.Meta, "sceneReady"), out var publishedSceneReady))
+        {
+            return publishedSceneReady;
+        }
+
+        if (!string.IsNullOrWhiteSpace(blockingModal))
+        {
+            return false;
+        }
+
+        return null;
+    }
+
+    private static string? ResolvePublishedSceneAuthority(LiveExportSnapshot snapshot)
+    {
+        return TryGetMeta(snapshot.Meta, "sceneAuthority");
+    }
+
+    private static string? ResolvePublishedSceneStability(
+        LiveExportSnapshot snapshot,
+        string? blockingModal)
+    {
+        var publishedSceneStability = TryGetMeta(snapshot.Meta, "sceneStability");
+        if (!string.IsNullOrWhiteSpace(publishedSceneStability))
+        {
+            return publishedSceneStability;
+        }
+
+        if (!string.IsNullOrWhiteSpace(blockingModal))
+        {
+            return "blocked";
+        }
+
+        return null;
+    }
+
+    private static string ResolveCompatibilitySceneType(
+        LiveExportSnapshot snapshot,
+        CompanionNormalizedScene normalizedScene,
+        string publishedSceneType,
+        string rawSceneType)
     {
         var logicalScreen = NormalizeSceneToken(snapshot.CompatibilityLogicalScreen)
             ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatLogicalScreen"))
-            ?? NormalizeSceneToken(snapshot.CurrentScreen)
+            ?? publishedSceneType
+            ?? rawSceneType
             ?? normalizedScene.SceneType;
 
         if (logicalScreen is not null)
@@ -144,15 +216,17 @@ internal sealed class InventoryPublisher
             return logicalScreen;
         }
 
-        return normalizedScene.SceneType;
+        return publishedSceneType
+               ?? rawSceneType
+               ?? normalizedScene.SceneType;
     }
 
-    private static HarnessNodeInventoryItem BuildNode(string compatibilitySceneType, string rawSceneType, LiveExportChoiceSummary choice, int index)
+    private static HarnessNodeInventoryItem BuildNode(string compatibilitySceneType, string rawSceneType, string publishedSceneType, LiveExportChoiceSummary choice, int index)
     {
         var label = choice.Label?.Trim() ?? string.Empty;
         var kind = ResolveKind(compatibilitySceneType, choice);
         var actionable = !string.IsNullOrWhiteSpace(label) && !CompanionSceneNormalizer.IsOverlayChoice(label);
-        var hints = BuildHints(compatibilitySceneType, rawSceneType, choice, kind);
+        var hints = BuildHints(compatibilitySceneType, rawSceneType, publishedSceneType, choice, kind);
 
         return new HarnessNodeInventoryItem(
             NodeId: string.IsNullOrWhiteSpace(choice.NodeId) ? $"{kind}:{index}" : choice.NodeId,
@@ -190,7 +264,7 @@ internal sealed class InventoryPublisher
         };
     }
 
-    private static IReadOnlyList<string> BuildHints(string compatibilitySceneType, string rawSceneType, LiveExportChoiceSummary choice, string resolvedKind)
+    private static IReadOnlyList<string> BuildHints(string compatibilitySceneType, string rawSceneType, string publishedSceneType, LiveExportChoiceSummary choice, string resolvedKind)
     {
         var hints = new List<string>(capacity: 8)
         {
@@ -202,6 +276,11 @@ internal sealed class InventoryPublisher
         if (!string.IsNullOrWhiteSpace(rawSceneType))
         {
             hints.Add($"scene-raw:{rawSceneType}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(publishedSceneType))
+        {
+            hints.Add($"scene-published:{publishedSceneType}");
         }
 
         if (!string.IsNullOrWhiteSpace(choice.Value))
@@ -419,6 +498,7 @@ internal sealed class InventoryPublisher
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatVisibleScreen"))
                ?? NormalizeSceneToken(snapshot.CompatibilityLogicalScreen)
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatLogicalScreen"))
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"))
                ?? NormalizeSceneToken(snapshot.CurrentScreen)
                ?? normalizedScene.SceneType;
     }
@@ -488,6 +568,16 @@ internal sealed class InventoryPublisher
         builder.Append('|');
         builder.Append(inventory.RawSceneType);
         builder.Append('|');
+        builder.Append(inventory.PublishedSceneType);
+        builder.Append('|');
+        builder.Append(inventory.PublishedVisibleScene);
+        builder.Append('|');
+        builder.Append(inventory.PublishedSceneReady);
+        builder.Append('|');
+        builder.Append(inventory.PublishedSceneAuthority);
+        builder.Append('|');
+        builder.Append(inventory.PublishedSceneStability);
+        builder.Append('|');
         builder.Append(inventory.CompatibilityLogicalScreen);
         builder.Append('|');
         builder.Append(inventory.CompatibilityVisibleScene);
@@ -532,9 +622,12 @@ internal sealed class InventoryPublisher
     {
         var sceneType = inventory.SceneType;
         var rawSceneType = inventory.RawSceneType;
+        var publishedSceneType = inventory.PublishedSceneType;
         var compatibilityVisibleScene = inventory.CompatibilityVisibleScene;
         return !string.IsNullOrWhiteSpace(rawSceneType)
                && !string.Equals(rawSceneType, sceneType, StringComparison.OrdinalIgnoreCase)
+               || !string.IsNullOrWhiteSpace(publishedSceneType)
+               && !string.Equals(publishedSceneType, sceneType, StringComparison.OrdinalIgnoreCase)
                || !string.IsNullOrWhiteSpace(compatibilityVisibleScene)
                && !string.Equals(compatibilityVisibleScene, sceneType, StringComparison.OrdinalIgnoreCase);
     }
