@@ -16,6 +16,11 @@ public sealed record AiCompanionStartupSentinelConfig
     public string? SentinelRelativePath { get; init; }
 }
 
+public sealed record AiCompanionStartupOptions
+{
+    public bool ForceSkipIntroLogoWhenHarnessEnabled { get; init; } = true;
+}
+
 public sealed record AiCompanionRuntimeConfig
 {
     public bool Enabled { get; init; } = true;
@@ -27,6 +32,8 @@ public sealed record AiCompanionRuntimeConfig
     public HarnessOptions Harness { get; init; } = HarnessOptions.Defaults;
 
     public AiCompanionStartupSentinelConfig StartupSentinel { get; init; } = new();
+
+    public AiCompanionStartupOptions Startup { get; init; } = new();
 
     public static AiCompanionRuntimeConfig Defaults { get; } = new();
 }
