@@ -82,7 +82,7 @@
   {
     "name": "combat-player-turn-reopens-after-enemy-turn-wait",
     "requestPath": "tests/replay-fixtures/m6-parity/combat-player-turn-reopen.request.json",
-    "expectedStatus": "wait",
+    "expectedStatus": "act",
     "expectedActionKind": null,
     "expectedTargetContains": null,
     "expectedForegroundOwner": null,
