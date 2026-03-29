@@ -810,6 +810,124 @@ internal static partial class Program
             Assert(runtimeTargetSummaryHistoryCarryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
                 "Runtime target summary plus recent attack-lane history should drive enemy targeting instead of reopening the same attack slot.");
 
+            var staleCombatLaneCarryMetadata = JsonSerializer.Serialize(
+                new CombatBarrierHistoryMetadata(
+                    82,
+                    DateTimeOffset.UtcNow.AddSeconds(-2),
+                    "episode-runtime-target-summary-history-carry",
+                    "6:6:false:false:none",
+                    6,
+                    6,
+                    "CARD.STRIKE_IRONCLAD")
+                {
+                    RoundNumber = 3,
+                    PlayerActionsDisabled = false,
+                    EndingPlayerTurnPhaseOne = false,
+                    EndingPlayerTurnPhaseTwo = false,
+                },
+                GuiSmokeShared.JsonOptions);
+            var freshCombatTargetSummaryObserver = runtimeTargetSummaryObserver with
+            {
+                InventoryId = "inv-runtime-target-summary-fresh-combat",
+                SceneEpisodeId = "episode-runtime-target-summary-fresh-combat",
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(3, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                    new ObservedCombatHandCard(4, "CARD.BASH", "Attack", 2),
+                },
+                Meta = new Dictionary<string, string?>(runtimeTargetSummaryObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCardPlayPending"] = "false",
+                    ["combatSelectedCardSlot"] = null,
+                    ["combatSelectedCardType"] = null,
+                    ["combatSelectedCardTargetType"] = null,
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatTargetableEnemyCount"] = "0",
+                    ["combatTargetableEnemyIds"] = null,
+                    ["combatHittableEnemyCount"] = "0",
+                    ["combatHittableEnemyIds"] = null,
+                    ["combatHistoryStartedCount"] = null,
+                    ["combatHistoryFinishedCount"] = null,
+                    ["combatLastCardPlayFinishedCardId"] = null,
+                    ["combatRoundNumber"] = "1",
+                    ["combatInteractionRevision"] = CombatRuntimeStateSupport.DefaultInteractionRevision,
+                    ["combatTargetSummary"] = "enemy-target:Slaver:2@logical:840,210,180,260@normalized:0.4375,0.1944,0.0938,0.2407",
+                },
+            };
+            var freshCombatHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 2", DateTimeOffset.UtcNow.AddSeconds(-2))
+                {
+                    Metadata = staleCombatLaneCarryMetadata,
+                },
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-noop", "combat lane slot 2", DateTimeOffset.UtcNow.AddSeconds(-1)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-resolved-map", null, DateTimeOffset.UtcNow),
+            };
+            var freshCombatTargetSummaryContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(freshCombatTargetSummaryObserver, null, null, null),
+                runtimeStateOnlyScreenshotPath,
+                freshCombatHistory,
+                new[]
+                {
+                    new CombatCardKnowledgeHint(3, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+                    new CombatCardKnowledgeHint(4, "CARD.BASH", "Attack", "AnyEnemy", 2, "self-test"),
+                });
+            Assert(freshCombatTargetSummaryContext.CombatContext.PendingSelection is null,
+                "Fresh combat start should discard the previous combat's selected attack lane instead of carrying slot 2 forward.");
+            Assert(freshCombatTargetSummaryContext.CombatContext.CombatNoOpCountsBySlot.Count == 0,
+                "Fresh combat start should also clear stale combat-noop counts from the previous encounter.");
+            Assert(freshCombatTargetSummaryContext.PendingCombatSelection is null
+                   && freshCombatTargetSummaryContext.CombatMicroStage.Kind == CombatMicroStageKind.PlayerActionOpen,
+                "Fresh combat target summary should rebuild as a new open player-action stage, not as an unresolved carried attack lane.");
+            Assert(!GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(
+                    runtimeStateOnlyScreenshotPath,
+                    new ObserverState(freshCombatTargetSummaryObserver, null, null, null),
+                    GuiSmokePhase.HandleCombat,
+                    freshCombatTargetSummaryContext)
+                    .Contains("combat-slot:2", StringComparison.OrdinalIgnoreCase),
+                "Fresh combat scene signature should not leak the previous encounter's combat slot tag.");
+            var freshCombatTargetSummaryActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(freshCombatTargetSummaryObserver, null, null, null),
+                new[]
+                {
+                    new CombatCardKnowledgeHint(3, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+                    new CombatCardKnowledgeHint(4, "CARD.BASH", "Attack", "AnyEnemy", 2, "self-test"),
+                },
+                runtimeStateOnlyScreenshotPath,
+                freshCombatHistory);
+            var freshCombatTargetSummaryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                27,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Fresh combat must start from the current hand instead of clicking an enemy from the previous encounter's stale lane.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                freshCombatTargetSummaryObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                new[]
+                {
+                    new CombatCardKnowledgeHint(3, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+                    new CombatCardKnowledgeHint(4, "CARD.BASH", "Attack", "AnyEnemy", 2, "self-test"),
+                },
+                freshCombatTargetSummaryActions,
+                freshCombatHistory,
+                "Drop stale combat lane carry when a brand-new combat opens after reward/map handoff.",
+                null));
+            Assert(freshCombatTargetSummaryDecision.TargetLabel?.StartsWith("combat select attack slot 3", StringComparison.OrdinalIgnoreCase) == true,
+                "Fresh combat should select a current playable attack slot before any enemy-target click is considered.");
+
             var runtimeTargetingObserver = runtimeAttackSelectionObserver with
             {
                 InventoryId = "inv-runtime-targeting",

@@ -102,7 +102,8 @@ static class CombatEligibilitySupport
 
     public static bool HasSelectedNonEnemyConfirmEvidence(GuiSmokeStepRequest request)
     {
-        var pendingSelection = CombatRuntimeStateSupport.ResolvePendingSelection(request.Observer, request.CombatCardKnowledge, CombatHistorySupport.TryGetPendingCombatSelection(request.History));
+        var combatContext = HandleCombatContextSupport.Reconstruct(request.History, request.Observer, request.CombatCardKnowledge);
+        var pendingSelection = CombatRuntimeStateSupport.ResolvePendingSelection(request.Observer, request.CombatCardKnowledge, combatContext.PendingSelection);
         if (CombatRuntimeStateSupport.HasRuntimeSelectedNonEnemyConfirmEvidence(request.Observer, request.CombatCardKnowledge, pendingSelection))
         {
             return true;

@@ -55,7 +55,7 @@ static class GuiSmokeStepRequestFactory
         var canonicalNonCombatSceneComputed = false;
 
         ReconstructedHandleCombatContext GetCombatContext()
-            => combatContext ??= HandleCombatContextSupport.Reconstruct(history);
+            => combatContext ??= HandleCombatContextSupport.Reconstruct(history, observer.Summary, combatCardKnowledge);
 
         PendingCombatSelection? GetPendingSelection()
         {

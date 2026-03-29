@@ -499,7 +499,7 @@ static class CombatBarrierSupport
         return observer.CapturedAt is not null && observer.CapturedAt > entry.RecordedAt;
     }
 
-    private static CombatBarrierHistoryMetadata? TryParseHistoryMetadata(string? metadata)
+    internal static CombatBarrierHistoryMetadata? TryParseHistoryMetadata(string? metadata)
     {
         if (string.IsNullOrWhiteSpace(metadata))
         {

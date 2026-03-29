@@ -160,6 +160,8 @@ static class CombatAuthoritySupport
 
 static class CombatRuntimeStateSupport
 {
+    public const string DefaultInteractionRevision = "none:none:false:false:none";
+
     public static CombatRuntimeState Read(ObserverSummary observer, IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
     {
         var selectedCardSlot = CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatSelectedCardSlot", "combatSelectedCardSlot");
@@ -365,6 +367,29 @@ static class CombatRuntimeStateSupport
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
     {
         return Read(observer, combatCardKnowledge).KeepsCardPlayOpen;
+    }
+
+    public static bool LooksLikeFreshCombatEncounterStart(CombatRuntimeState runtime)
+    {
+        return runtime.RoundNumber == 1
+               && runtime.PendingSelection is null
+               && runtime.CardPlayPending != true
+               && runtime.TargetingInProgress != true
+               && !runtime.RequiresHandCardSelection
+               && !runtime.HasInFlightPlayerDrivenAction
+               && runtime.PlayerActionsDisabled != true
+               && runtime.EndingPlayerTurnPhaseOne != true
+               && runtime.EndingPlayerTurnPhaseTwo != true
+               && string.IsNullOrWhiteSpace(runtime.LastCardPlayFinishedCardId)
+               && IsDefaultInteractionRevision(runtime.InteractionRevision)
+               && runtime.HistoryStartedCount is null
+               && runtime.HistoryFinishedCount is null;
+    }
+
+    public static bool IsDefaultInteractionRevision(string? interactionRevision)
+    {
+        return string.IsNullOrWhiteSpace(interactionRevision)
+               || string.Equals(interactionRevision, DefaultInteractionRevision, StringComparison.OrdinalIgnoreCase);
     }
 
     private static PendingCombatSelection? TryResolvePendingSelection(

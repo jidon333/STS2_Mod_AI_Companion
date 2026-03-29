@@ -77,6 +77,26 @@ static class HandleCombatContextSupport
     public static ReconstructedHandleCombatContext Reconstruct(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
         var combatHistory = BuildSerializedHistoryWindow(history);
+        return ReconstructCore(combatHistory);
+    }
+
+    public static ReconstructedHandleCombatContext Reconstruct(
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        ObserverSummary observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+    {
+        var combatHistory = BuildSerializedHistoryWindow(history);
+        var runtime = CombatRuntimeStateSupport.Read(observer, combatCardKnowledge);
+        if (ShouldResetHistoryForFreshCombat(combatHistory, runtime))
+        {
+            combatHistory = Array.Empty<GuiSmokeHistoryEntry>();
+        }
+
+        return ReconstructCore(combatHistory);
+    }
+
+    private static ReconstructedHandleCombatContext ReconstructCore(IReadOnlyList<GuiSmokeHistoryEntry> combatHistory)
+    {
         var pendingSelection = CombatHistorySupport.TryGetPendingCombatSelection(combatHistory);
         var combatNoOpCountsBySlot = CombatHistorySupport.GetCombatNoOpCountsBySlot(combatHistory);
         return new ReconstructedHandleCombatContext(
@@ -86,6 +106,72 @@ static class HandleCombatContextSupport
             AnalyzeCombatNoOpLoop(combatHistory, combatNoOpCountsBySlot),
             HasRecentRepeatedNonEnemyLoop(combatHistory),
             HasRecentRepeatedAttackSelectionLoop(combatHistory));
+    }
+
+    private static bool ShouldResetHistoryForFreshCombat(
+        IReadOnlyList<GuiSmokeHistoryEntry> combatHistory,
+        CombatRuntimeState runtime)
+    {
+        if (!CombatRuntimeStateSupport.LooksLikeFreshCombatEncounterStart(runtime))
+        {
+            return false;
+        }
+
+        for (var index = combatHistory.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = combatHistory[index];
+            if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                || !CombatBarrierSupport.IsMeaningfulCombatHistoryAction(entry.Action))
+            {
+                continue;
+            }
+
+            var metadata = CombatBarrierSupport.TryParseHistoryMetadata(entry.Metadata);
+            return IsFreshCombatIncompatibleWithHistory(runtime, metadata);
+        }
+
+        return false;
+    }
+
+    private static bool IsFreshCombatIncompatibleWithHistory(
+        CombatRuntimeState runtime,
+        CombatBarrierHistoryMetadata? metadata)
+    {
+        if (metadata is null)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(metadata.ScreenEpisodeId)
+            && !string.IsNullOrWhiteSpace(runtime.ScreenEpisodeId)
+            && !string.Equals(metadata.ScreenEpisodeId, runtime.ScreenEpisodeId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (metadata.RoundNumber is not null
+            && runtime.RoundNumber is not null
+            && runtime.RoundNumber < metadata.RoundNumber)
+        {
+            return true;
+        }
+
+        if ((metadata.HistoryStartedCount is not null || metadata.HistoryFinishedCount is not null)
+            && runtime.HistoryStartedCount is null
+            && runtime.HistoryFinishedCount is null)
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(metadata.LastFinishedCardId)
+            && string.IsNullOrWhiteSpace(runtime.LastCardPlayFinishedCardId))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(metadata.InteractionRevision)
+               && !CombatRuntimeStateSupport.IsDefaultInteractionRevision(metadata.InteractionRevision)
+               && CombatRuntimeStateSupport.IsDefaultInteractionRevision(runtime.InteractionRevision);
     }
 
     public static bool HasRecentNonEnemySelection(ReconstructedHandleCombatContext context, int slotIndex)
