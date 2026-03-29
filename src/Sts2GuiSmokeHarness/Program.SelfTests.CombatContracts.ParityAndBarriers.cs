@@ -60,6 +60,11 @@ internal static partial class Program
                     new ObservedCombatHandCard(4, "CARD.STRIKE_IRONCLAD", "Attack", null),
                 })
             {
+                PublishedCurrentScreen = "combat",
+                PublishedVisibleScreen = "combat",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
@@ -365,6 +370,11 @@ internal static partial class Program
                     new ObservedCombatHandCard(2, "CARD.STRIKE_IRONCLAD", "Attack", 1),
                 })
             {
+                PublishedCurrentScreen = "combat",
+                PublishedVisibleScreen = "combat",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 SnapshotVersion = 10,
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
@@ -481,6 +491,11 @@ internal static partial class Program
                     new ObservedCombatHandCard(4, "CARD.BASH", "Attack", 2),
                 })
             {
+                PublishedCurrentScreen = "combat",
+                PublishedVisibleScreen = "combat",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 SnapshotVersion = 20,
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
@@ -584,6 +599,11 @@ internal static partial class Program
                     new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", 1),
                 })
             {
+                PublishedCurrentScreen = "combat",
+                PublishedVisibleScreen = "combat",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 SnapshotVersion = 30,
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
@@ -648,6 +668,11 @@ internal static partial class Program
                     new ObservedCombatHandCard(1, "CARD.DEFEND_IRONCLAD", "Skill", 1),
                 })
             {
+                PublishedCurrentScreen = "combat",
+                PublishedVisibleScreen = "combat",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 SnapshotVersion = 40,
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
@@ -1024,7 +1049,14 @@ internal static partial class Program
                         new ObservedCombatHandCard(1, "CARD.DEFEND_IRONCLAD", "Skill", 1),
                         new ObservedCombatHandCard(2, "CARD.STRIKE_IRONCLAD", "Attack", 1),
                         new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", 1),
-                    }),
+                    })
+                {
+                    PublishedCurrentScreen = "combat",
+                    PublishedVisibleScreen = "combat",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stable",
+                },
                 null,
                 null,
                 null);

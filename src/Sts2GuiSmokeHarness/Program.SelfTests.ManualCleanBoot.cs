@@ -577,6 +577,13 @@ internal static partial class Program
             Assert(legacyCompatibilityLeakObserver.CompatibilitySceneReady is null
                    && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.CompatibilitySceneAuthority)
                    && string.IsNullOrWhiteSpace(legacyCompatibilityLeakObserver.CompatibilitySceneStability), "Observer reader compatibility provenance should stay empty when only legacy meta scene fields are present.");
+            Assert(string.IsNullOrWhiteSpace(ObserverScreenProvenance.ControlFlowCurrentScreen(legacyCompatibilityLeakObserver))
+                   && string.IsNullOrWhiteSpace(ObserverScreenProvenance.ControlFlowVisibleScreen(legacyCompatibilityLeakObserver)), "Control-flow screen helpers should not collapse back to legacy top-level current/visible screen aliases when additive provenance is absent.");
+            Assert(ObserverScreenProvenance.ControlFlowSceneReady(legacyCompatibilityLeakObserver) is null
+                   && string.IsNullOrWhiteSpace(ObserverScreenProvenance.ControlFlowSceneAuthority(legacyCompatibilityLeakObserver))
+                   && string.IsNullOrWhiteSpace(ObserverScreenProvenance.ControlFlowSceneStability(legacyCompatibilityLeakObserver)), "Control-flow scene helpers should stay empty when only legacy meta diagnostics exist.");
+            Assert(!ObserverScreenProvenance.MatchesControlFlowScreen(legacyCompatibilityLeakObserver, "legacy-collapsed"), "Control-flow screen matching should not treat legacy top-level currentScreen as published/direct/compat provenance.");
+            Assert(string.Equals(ObserverScreenProvenance.DisplayScreen(legacyCompatibilityLeakObserver), "legacy-collapsed", StringComparison.OrdinalIgnoreCase), "Display screen may still fall back to the legacy collapsed current screen for diagnostics.");
 
             File.WriteAllText(
                 harnessLayout.InventoryPath,
@@ -706,6 +713,8 @@ internal static partial class Program
                    && string.IsNullOrWhiteSpace(legacyBleedObserver.SceneAuthority)
                    && string.IsNullOrWhiteSpace(legacyBleedObserver.SceneStability), "Observer reader primary scene diagnostics should stay empty when only legacy compatibility metadata exists.");
             Assert(string.Equals(legacyBleedObserver.VisibleScreen, "raw-only", StringComparison.OrdinalIgnoreCase), "Observer reader visible-screen should prefer direct raw observed screen over legacy visibleScreen metadata.");
+            Assert(string.Equals(ObserverScreenProvenance.ControlFlowCurrentScreen(legacyBleedObserver), "published-only", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(ObserverScreenProvenance.ControlFlowVisibleScreen(legacyBleedObserver), "raw-only", StringComparison.OrdinalIgnoreCase), "Control-flow screen helpers should remain limited to published/direct/compat provenance after legacy scene metadata is demoted.");
 
             File.WriteAllLines(
                 liveLayout.EventsPath,

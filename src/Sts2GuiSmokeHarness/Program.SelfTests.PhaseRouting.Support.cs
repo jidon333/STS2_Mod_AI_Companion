@@ -44,7 +44,14 @@ internal static partial class Program
                 {
                     new ObserverChoice("reward-card", "Reward Card", "460,250,240,340", "CARD.TEST", "Reward card"),
                 },
-                Array.Empty<ObservedCombatHandCard>()),
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "map",
+                PublishedVisibleScreen = "map",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+            },
             null,
             null,
             null);
@@ -72,7 +79,14 @@ internal static partial class Program
                 Array.Empty<string>(),
                 Array.Empty<ObserverActionNode>(),
                 Array.Empty<ObserverChoice>(),
-                Array.Empty<ObservedCombatHandCard>()),
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "character-select",
+                PublishedVisibleScreen = "character-select",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+            },
             null,
             null,
             null);

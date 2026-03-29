@@ -414,11 +414,15 @@ static class GuiSmokeSceneReasoningSupport
         var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
         var controlFlowCurrentScreen = ControlFlowCurrentScreen(observer);
         var controlFlowVisibleScreen = ControlFlowVisibleScreen(observer);
+        var controlFlowCurrentScreenUnknown = string.IsNullOrWhiteSpace(controlFlowCurrentScreen)
+                                              || string.Equals(controlFlowCurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase);
+        var controlFlowVisibleScreenUnknown = string.IsNullOrWhiteSpace(controlFlowVisibleScreen)
+                                              || string.Equals(controlFlowVisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase);
         if (eventScene.EventForegroundOwned && eventScene.ExplicitAction == EventExplicitActionKind.EventChoice)
         {
             return (firstSeenScene
-                    || string.Equals(controlFlowCurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(controlFlowVisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+                    || controlFlowCurrentScreenUnknown
+                    || controlFlowVisibleScreenUnknown
                     || observer.Summary.CurrentChoices.Count > 0)
                 ? "semantic"
                 : "tactical";
@@ -431,8 +435,8 @@ static class GuiSmokeSceneReasoningSupport
         }
 
         if (firstSeenScene
-            || string.Equals(controlFlowCurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(controlFlowVisibleScreen, "unknown", StringComparison.OrdinalIgnoreCase)
+            || controlFlowCurrentScreenUnknown
+            || controlFlowVisibleScreenUnknown
             || observer.Summary.CurrentChoices.Count > 0)
         {
             return "semantic";

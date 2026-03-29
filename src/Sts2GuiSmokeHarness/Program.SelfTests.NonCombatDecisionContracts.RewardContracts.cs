@@ -153,7 +153,14 @@ internal static partial class Program
                         new ObserverChoice("choice", "넘기기", "1583,764,269,108"),
                         new ObserverChoice("choice", "LeftArrow", "48,930,88,88"),
                     },
-                    Array.Empty<ObservedCombatHandCard>()),
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "rewards",
+                    PublishedVisibleScreen = "map",
+                    PublishedSceneReady = false,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stabilizing",
+                },
                 null,
                 null,
                 null);
@@ -198,6 +205,11 @@ internal static partial class Program
                     },
                     Array.Empty<ObservedCombatHandCard>())
                 {
+                    PublishedCurrentScreen = "rewards",
+                    PublishedVisibleScreen = "map",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stabilizing",
                     Meta = new Dictionary<string, string?>
                     {
                         ["rewardScreenDetected"] = "true",
@@ -268,6 +280,11 @@ internal static partial class Program
                     },
                     Array.Empty<ObservedCombatHandCard>())
                 {
+                    PublishedCurrentScreen = "rewards",
+                    PublishedVisibleScreen = "map",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stable",
                     Meta = new Dictionary<string, string?>
                     {
                         ["rewardScreenDetected"] = "true",

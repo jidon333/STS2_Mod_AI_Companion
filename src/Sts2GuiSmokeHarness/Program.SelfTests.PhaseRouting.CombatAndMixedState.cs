@@ -79,17 +79,50 @@ internal static partial class Program
         Assert(
             evaluator.IsPhaseSatisfied(
                 GuiSmokePhase.WaitCombat,
-                new ObserverState(new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, true, "hook", "stable", null, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>(), Array.Empty<ObserverChoice>(), Array.Empty<ObservedCombatHandCard>()), null, null, null)),
+                new ObserverState(
+                    new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, true, "hook", "stable", null, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>(), Array.Empty<ObserverChoice>(), Array.Empty<ObservedCombatHandCard>())
+                    {
+                        PublishedCurrentScreen = "combat",
+                        PublishedVisibleScreen = "combat",
+                        PublishedSceneReady = true,
+                        PublishedSceneAuthority = "hook",
+                        PublishedSceneStability = "stable",
+                    },
+                    null,
+                    null,
+                    null)),
             "Combat acceptance should require combat screen and inCombat=true.");
         Assert(
             !evaluator.IsPhaseSatisfied(
                 GuiSmokePhase.WaitCombat,
-                new ObserverState(new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, true, "hook", "transitioning", null, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>(), Array.Empty<ObserverChoice>(), Array.Empty<ObservedCombatHandCard>()), null, null, null)),
+                new ObserverState(
+                    new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, true, "hook", "transitioning", null, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>(), Array.Empty<ObserverChoice>(), Array.Empty<ObservedCombatHandCard>())
+                    {
+                        PublishedCurrentScreen = "combat",
+                        PublishedVisibleScreen = "combat",
+                        PublishedSceneReady = true,
+                        PublishedSceneAuthority = "hook",
+                        PublishedSceneStability = "transitioning",
+                    },
+                    null,
+                    null,
+                    null)),
             "WaitCombat should reject combat-looking snapshots until sceneStability reaches stable.");
         Assert(
             !evaluator.IsPhaseSatisfied(
                 GuiSmokePhase.WaitCombat,
-                new ObserverState(new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, false, "hook", "stable", null, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>(), Array.Empty<ObserverChoice>(), Array.Empty<ObservedCombatHandCard>()), null, null, null)),
+                new ObserverState(
+                    new ObserverSummary("combat", "combat", true, DateTimeOffset.UtcNow, null, false, "hook", "stable", null, null, null, null, null, null, Array.Empty<string>(), Array.Empty<string>(), Array.Empty<ObserverActionNode>(), Array.Empty<ObserverChoice>(), Array.Empty<ObservedCombatHandCard>())
+                    {
+                        PublishedCurrentScreen = "combat",
+                        PublishedVisibleScreen = "combat",
+                        PublishedSceneReady = false,
+                        PublishedSceneAuthority = "hook",
+                        PublishedSceneStability = "stable",
+                    },
+                    null,
+                    null,
+                    null)),
             "WaitCombat should reject combat-looking snapshots until sceneReady is true.");
 
         var treasureMapVisibleObserver = new ObserverState(
@@ -123,6 +156,11 @@ internal static partial class Program
                 },
                 Array.Empty<ObservedCombatHandCard>())
             {
+                PublishedCurrentScreen = "map",
+                PublishedVisibleScreen = "map",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 Meta = new Dictionary<string, string?>
                 {
                     ["treasureRoomDetected"] = "true",

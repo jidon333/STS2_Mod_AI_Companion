@@ -47,7 +47,14 @@ internal static partial class Program
                 {
                     new ObserverChoice("choice", "넘기기", "1983,764,269,108"),
                 },
-                Array.Empty<ObservedCombatHandCard>()),
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "rewards",
+                PublishedVisibleScreen = "map",
+                PublishedSceneReady = false,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stabilizing",
+            },
             null,
             null,
             null);

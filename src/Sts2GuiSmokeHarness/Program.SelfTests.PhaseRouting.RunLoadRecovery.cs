@@ -52,6 +52,11 @@ internal static partial class Program
                 },
                 Array.Empty<ObservedCombatHandCard>())
             {
+                PublishedCurrentScreen = "map",
+                PublishedVisibleScreen = "map",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 Meta = new Dictionary<string, string?>
                 {
                     ["treasureRoomDetected"] = "true",
@@ -92,6 +97,11 @@ internal static partial class Program
                 Array.Empty<ObserverChoice>(),
                 Array.Empty<ObservedCombatHandCard>())
             {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = false,
+                PublishedSceneAuthority = "transition",
+                PublishedSceneStability = "transition",
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["transitionInProgress"] = "true",
@@ -144,6 +154,11 @@ internal static partial class Program
                 },
                 Array.Empty<ObservedCombatHandCard>())
             {
+                PublishedCurrentScreen = "rewards",
+                PublishedVisibleScreen = "map",
+                PublishedSceneReady = false,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stabilizing",
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["transitionInProgress"] = "false",
@@ -196,6 +211,11 @@ internal static partial class Program
                 Array.Empty<ObserverChoice>(),
                 Array.Empty<ObservedCombatHandCard>())
             {
+                PublishedCurrentScreen = "map",
+                PublishedVisibleScreen = "map",
+                PublishedSceneReady = false,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stabilizing",
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["transitionInProgress"] = "false",
@@ -251,6 +271,11 @@ internal static partial class Program
                 },
                 Array.Empty<ObservedCombatHandCard>())
             {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["transitionInProgress"] = "false",
@@ -343,6 +368,11 @@ internal static partial class Program
                 },
                 Array.Empty<ObservedCombatHandCard>())
             {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["transitionInProgress"] = "false",
@@ -437,7 +467,14 @@ internal static partial class Program
                             Array.Empty<string>(),
                             new[] { new ObserverActionNode("event-option:0", "event-option", "Option A", "460,750,1000,100", true) },
                             new[] { new ObserverChoice("choice", "Option A", "460,750,1000,100") },
-                            Array.Empty<ObservedCombatHandCard>()),
+                            Array.Empty<ObservedCombatHandCard>())
+                        {
+                            PublishedCurrentScreen = "event",
+                            PublishedVisibleScreen = "event",
+                            PublishedSceneReady = true,
+                            PublishedSceneAuthority = "hook",
+                            PublishedSceneStability = "stable",
+                        },
                         null,
                         null,
                         null),
@@ -472,7 +509,14 @@ internal static partial class Program
                             Array.Empty<string>(),
                             Array.Empty<ObserverActionNode>(),
                             Array.Empty<ObserverChoice>(),
-                            Array.Empty<ObservedCombatHandCard>()),
+                            Array.Empty<ObservedCombatHandCard>())
+                        {
+                            PublishedCurrentScreen = "combat",
+                            PublishedVisibleScreen = "combat",
+                            PublishedSceneReady = true,
+                            PublishedSceneAuthority = "hook",
+                            PublishedSceneStability = "stable",
+                        },
                         null,
                         null,
                         null),

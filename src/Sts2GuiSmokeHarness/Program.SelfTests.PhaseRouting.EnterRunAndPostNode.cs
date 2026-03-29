@@ -242,6 +242,11 @@ internal static partial class Program
                 Array.Empty<ObserverChoice>(),
                 Array.Empty<ObservedCombatHandCard>())
             {
+                PublishedCurrentScreen = "combat",
+                PublishedVisibleScreen = "combat",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NCombatRoom",
@@ -288,7 +293,14 @@ internal static partial class Program
                             Array.Empty<string>(),
                             Array.Empty<ObserverActionNode>(),
                             Array.Empty<ObserverChoice>(),
-                            Array.Empty<ObservedCombatHandCard>()),
+                            Array.Empty<ObservedCombatHandCard>())
+                        {
+                            PublishedCurrentScreen = "combat",
+                            PublishedVisibleScreen = "combat",
+                            PublishedSceneReady = true,
+                            PublishedSceneAuthority = "hook",
+                            PublishedSceneStability = "stable",
+                        },
                         null,
                         null,
                         null),
@@ -319,7 +331,14 @@ internal static partial class Program
                             Array.Empty<string>(),
                             Array.Empty<ObserverActionNode>(),
                             Array.Empty<ObserverChoice>(),
-                            Array.Empty<ObservedCombatHandCard>()),
+                            Array.Empty<ObservedCombatHandCard>())
+                        {
+                            PublishedCurrentScreen = "combat",
+                            PublishedVisibleScreen = "combat",
+                            PublishedSceneReady = true,
+                            PublishedSceneAuthority = "hook",
+                            PublishedSceneStability = "stable",
+                        },
                         null,
                         null,
                         null),
