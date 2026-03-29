@@ -25,6 +25,7 @@
 - published-first observer provenance migration은 current `main`에서 active다
 - post-refactor cleanup program은 current `main`에서 완료 상태다
 - combat stale-end-turn / target plateau family는 current `main`에서 micro-stage + quiet convergence로 닫혔다
+- explicit shop foreground 위에 stale reward misroute가 끼어들던 `HandleShop -> HandleRewards -> decision-wait-plateau` family는 current `main`에서 즉시 `HandleRewards -> HandleShop` 회복으로 닫혔다
 - 현재 핵심은 **combat blocker 재발 방지 baseline을 유지하면서 unrelated noncombat self-test red와 남은 coverage gap만 좁게 다루는 것**이다
 
 ## 현재 우선순위
@@ -67,6 +68,14 @@ cleanup program 완료 이후에도 current follow-up은 남아 있다.
      - `step=16`에서 `WaitRunLoad -> HandleCombat`
      - `step=23 -> 24`, `step=45 -> 46`, `step=57 -> 58`에서 legitimate combat wait 뒤 다음 capture/request로 이어졌고 silent stall은 없었다
      - run은 `max-steps-reached:60`로 종료됐고 `failure-summary.json`은 생성되지 않았다
+4. latest shop recovery root
+   - root: [boot-to-long-run-20260330-live4](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live4)
+   - result: old `HandleShop -> HandleRewards from screen=shop -> decision-wait-plateau phase=HandleRewards screen=shop` family는 current `main`에서 plateau 없이 회복됐다
+   - shape:
+     - `step=22`와 `step=42`에서 transient `HandleShop -> HandleRewards from screen=shop`가 여전히 관찰된다
+     - 하지만 각각 `step=24`, `step=43`에서 즉시 `HandleRewards -> HandleShop from screen=shop`가 일어나고 shop lane이 계속 진행된다
+     - 이후 `step=25 -> 27`, `step=44 -> 46`에서 open-inventory / buy / back / proceed가 실제로 진행됐다
+     - run은 combat, reward, rest-site까지 계속 이어진 뒤 `max-steps-reached:120`으로 종료됐고 `failure-summary.json`은 생성되지 않았다
 
 즉 현재 질문은 더 이상
 
@@ -129,6 +138,7 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
 - bridge node semantics는 compatibility scene winner를 다시 먹지 않는다
 - combat post-action은 더 이상 generic observer delta 하나로 다음 step을 열지 않고, lane micro-stage + quiet convergence로 settle된다
 - runtime `combatTargetSummary` raw fact는 current `main`에서 explicit enemy-target authority로 소비된다
+- explicit shop foreground는 stale reward leftovers보다 강하며, 잘못 `HandleRewards`로 들어가도 current `main`에서는 즉시 `HandleShop`으로 회복된다
 - 하네스 구조 refactor는 current `main` 기준 문서화 가능한 수준까지 정리됐다
 - post-refactor cleanup program도 current `main` 기준 완료 상태다
 
@@ -153,12 +163,16 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
 
 - fresh combat blocker fix root:
   - [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2)
+- fresh shop recovery root:
+  - [boot-to-long-run-20260330-live4](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live4)
 - combat blocker fix startup summary:
   - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/startup-summary.json)
 - combat blocker fix session summary:
   - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/session-summary.json)
 - combat blocker fix run log:
   - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/attempts/0001/run.log)
+- shop recovery run log:
+  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live4/attempts/0001/run.log)
 - fresh reward/map closure root:
   - [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
 - latest cleanup proof root:

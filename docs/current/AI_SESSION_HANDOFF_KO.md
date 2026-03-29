@@ -73,6 +73,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - published-first observer provenance migration도 current `main`에 반영됐다
 - `compatibility retirement` 1단계도 current `main`에 반영됐다
 - combat stale-end-turn / target plateau family는 current `main`에서 micro-stage + quiet convergence + runtime target-summary authority로 닫혔다
+- explicit shop foreground 위 stale reward misroute plateau family는 current `main`에서 immediate reward-to-shop recovery로 닫혔다
 - `COMBAT-03`, `COMBAT-07`, `REWARD-04` coverage row는 current `main`에서 green이다
 - `MAP-04`는 representative live continuity는 남아 있지만 current harness self-test red 때문에 지금은 `partial`로 보는 게 맞다
 - 현재 active combat blocker는 없다
@@ -169,6 +170,19 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `step=16`에서 `WaitRunLoad -> HandleCombat from screen=combat`가 정상적으로 열렸다
 - run은 `max-steps-reached:60`까지 진행했고 `failure-summary.json`은 생성되지 않았다
 
+### 3-2. latest shop recovery proof root
+
+- commit: `835becb` `Recover explicit shop authority from stale reward misrouting`
+- root: [boot-to-long-run-20260330-live4](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live4)
+- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live4/attempts/0001/run.log)
+
+확정 사실:
+
+- old `HandleShop -> HandleRewards from screen=shop -> decision-wait-plateau phase=HandleRewards screen=shop` family는 current `main`에서 plateau 없이 회복된다
+- `step=22 -> 24`, `step=42 -> 43`에서 transient misroute는 보이지만 곧바로 `HandleRewards -> HandleShop` alternate branch가 일어난다
+- 이후 open-inventory / buy / back / proceed가 실제로 이어지고, run은 combat / reward / rest-site까지 계속 진행한 뒤 `max-steps-reached:120`으로 끝난다
+- `failure-summary.json`은 생성되지 않았다
+
 ### 4. latest speed proof root
 
 - root: [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
@@ -201,7 +215,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ## 다음 세션의 기본 목표
 
-현재 기준으로 active combat blocker는 없다. 새 세션이 잡을 기본 목표는 아래 둘 중 하나다.
+현재 기준으로 active gameplay blocker는 없다. 새 세션이 잡을 기본 목표는 아래 둘 중 하나다.
 
 ```text
 1. unrelated `WaitPostMapNodeRoom -> reward reopen` current-main self-test red를 current owner 파일에서 좁게 수정

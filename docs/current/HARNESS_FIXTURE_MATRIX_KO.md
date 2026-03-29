@@ -98,7 +98,7 @@ coverage status 의미:
 |---|---|---|---|---|---|
 | `SHOP-01` | `HandleShop` | shop foreground | green | shop authority helpers + self-tests + [PROJECT_STATUS.md](./PROJECT_STATUS.md) shop continuity roots | strong enough |
 | `SHOP-02` | `HandleShop` | bounded purchase | green | shop buy relic/card/potion/card-removal decision code and self-tests | one bounded purchase contract exists |
-| `SHOP-03` | `HandleShop` | back / proceed / map handoff | green | self-tests around proceed-before-reopen, status doc shop->map continuity | stable on current baseline |
+| `SHOP-03` | `HandleShop` | back / proceed / map handoff | green | self-tests around proceed-before-reopen, status doc shop->map continuity, fresh live root [boot-to-long-run-20260330-live4](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live4) | transient `HandleShop -> HandleRewards` misroute가 있어도 current `main`에서는 immediate reward-to-shop recovery 뒤 bounded purchase/back/proceed가 이어진다 |
 
 ## Terminal / Restart
 
