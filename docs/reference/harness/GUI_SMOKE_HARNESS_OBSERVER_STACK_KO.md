@@ -27,11 +27,11 @@ harness consumer만 owner / release / handoff를 결정한다.
 
 ```mermaid
 flowchart LR
-    A["Runtime extractor<br/>game 내부 fact 수집"] --> B["LiveExport tracker<br/>publish snapshot 정리"]
-    B --> C["Harness bridge<br/>inventory/payload passthrough"]
-    C --> D["Observer reader<br/>ObserverState 구성"]
-    D --> E["Provenance helpers<br/>raw / published / compat access"]
-    E --> F["Harness consumer<br/>phase / owner / release / handoff"]
+    A["Runtime extractor<br/>game 내부 fact<br/>수집"] --> B["LiveExport tracker<br/>publish snapshot<br/>정리"]
+    B --> C["Harness bridge<br/>inventory/payload<br/>passthrough"]
+    C --> D["Observer reader<br/>ObserverState<br/>구성"]
+    D --> E["Provenance helpers<br/>raw / published /<br/>compat access"]
+    E --> F["Harness consumer<br/>phase / owner /<br/>release / handoff"]
 ```
 
 ### 레이어별 한 줄 설명
@@ -85,9 +85,9 @@ legacy / diagnostics:
 ```mermaid
 flowchart TD
     A["raw fact"] --> B["published fact"]
-    A --> C["compatibility fact"]
-    B --> D["harness control-flow"]
-    C --> E["legacy read / diagnostics only"]
+    A --> C["compatibility<br/>fact"]
+    B --> D["harness<br/>control-flow"]
+    C --> E["legacy read /<br/>diagnostics only"]
 ```
 
 ## 4. 리팩터링 전 / 후
@@ -101,8 +101,8 @@ flowchart LR
     C --> D["reader"]
     D --> E["harness"]
 
-    B -. synthetic screen winner .-> E
-    C -. SceneType / node semantics winner .-> E
+    B -. synthetic screen<br/>winner .-> E
+    C -. SceneType / node<br/>semantics winner .-> E
     D -. collapsed alias .-> E
 ```
 
@@ -125,7 +125,11 @@ flowchart LR
     D --> E["provenance helper"]
     E --> F["harness consumer<br/>owner / release / handoff"]
 
-    C -. compatibility legacy surface .-> G["archived root / old reader / diagnostics"]
+    subgraph LEG["legacy / diagnostics"]
+        G["archived root<br/>old reader<br/>diagnostics"]
+    end
+
+    C -. compatibility<br/>legacy surface .-> G
 ```
 
 핵심 변화는 아래다.

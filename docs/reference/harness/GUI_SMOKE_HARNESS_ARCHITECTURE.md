@@ -88,14 +88,14 @@ current `main`의 `Sts2GuiSmokeHarness`는 다음 구조로 읽는다.
 flowchart TD
     A["Program.Main"] --> B["CLI parse / command dispatch"]
     B --> C["RunScenarioAsync"]
-    C --> D["bootstrap / deploy / session init"]
+    C --> D["bootstrap / deploy<br/>/ session init"]
     D --> E["RunAttemptAsync"]
-    E --> F["capture + observer acceptance"]
-    F --> G["step request + scene reasoning + allowed actions"]
+    E --> F["capture +<br/>observer acceptance"]
+    F --> G["step request +<br/>scene reasoning +<br/>allowed actions"]
     G --> H["AutoDecisionProvider"]
-    H --> I["mouse / key actuation"]
-    I --> J["artifacts + review + supervision"]
-    J --> K["next step / terminal / restart accounting"]
+    H --> I["mouse / key<br/>actuation"]
+    I --> J["artifacts +<br/>review +<br/>supervision"]
+    J --> K["next step /<br/>terminal /<br/>restart accounting"]
 ```
 
 ### 2.1 Shell / CLI

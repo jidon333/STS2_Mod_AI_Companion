@@ -150,14 +150,14 @@ authoritative attempt / session accounting은 아래 quartet로 고정한다.
 
 ```mermaid
 flowchart LR
-    subgraph DEV["개발/운영 레이어"]
+    subgraph DEV["개발/운영<br/>레이어"]
         HC["인간 조율자"]
         AA["분석 에이전트"]
         IA["구현 에이전트"]
         TA["테스트 에이전트"]
     end
 
-    subgraph RT["프로그램 런타임 레이어"]
+    subgraph RT["프로그램 런타임<br/>레이어"]
         subgraph HAR["Sts2GuiSmokeHarness"]
             RUN["Runner"]
             SUP["Supervisor"]
@@ -165,8 +165,8 @@ flowchart LR
         end
         OBS["Observer"]
         BRG["Harness Bridge"]
-        GAME["Slay the Spire 2"]
-        ART["Session Artifacts"]
+        GAME["Slay the Spire<br/>2"]
+        ART["Session<br/>Artifacts"]
     end
 
     RUN --> GAME
@@ -255,8 +255,8 @@ flowchart LR
     C --> D["terminal event 기록"]
     D --> E["restart 시작 기록"]
     E --> F["Attempt 0002 시작"]
-    F --> G["0001.screen.png 생성"]
-    G --> H["Supervisor가 milestone 평가"]
+    F --> G["0001.screen.png<br/>생성"]
+    G --> H["Supervisor가<br/>milestone 평가"]
 ```
 
 ### 왜 이렇게까지 file evidence를 요구하는가
@@ -354,11 +354,11 @@ flowchart LR
     EVT["Restart Events"]
     ATT["Attempt Index"]
     PROG["Attempt Progress"]
-    STEP["Attempt Screens"]
+    STEP["Attempt<br/>Screens"]
     SUP["Supervisor"]
     SEN["Stall Sentinel"]
     STATE["Supervisor State"]
-    DIAG["Stall Diagnosis"]
+    DIAG["Stall<br/>Diagnosis"]
 
     RUN --> PRE
     RUN --> EVT
@@ -489,13 +489,13 @@ artifacts/gui-smoke/<session-id>/
 
 ```mermaid
 flowchart TD
-    GC["Goal Contract"]
+    GC["Goal<br/>Contract"]
     PV["Prevalidation"]
-    RE["Restart Events"]
-    AI["Attempt Index"]
-    AR["Attempt Artifacts"]
-    SS["Supervisor State"]
-    SD["Stall Diagnosis"]
+    RE["Restart<br/>Events"]
+    AI["Attempt<br/>Index"]
+    AR["Attempt<br/>Artifacts"]
+    SS["Supervisor<br/>State"]
+    SD["Stall<br/>Diagnosis"]
 
     GC --> SS
     PV --> SS
@@ -885,7 +885,7 @@ flowchart LR
     AA["분석 에이전트"]
     IA["구현 에이전트"]
     TA["테스트 에이전트"]
-    ART["Session Artifacts"]
+    ART["Session<br/>Artifacts"]
 
     HC --> AA
     AA --> HC

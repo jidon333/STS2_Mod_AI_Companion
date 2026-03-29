@@ -32,14 +32,14 @@
 
 ```mermaid
 flowchart TD
-    A["Program.Main / partial Program monolith"]
-    A --> B["CLI + deploy + bootstrap"]
-    A --> C["step loop + capture + observer acceptance"]
-    A --> D["request build + scene reasoning + allowed actions"]
-    A --> E["combat / noncombat decision policy"]
-    A --> F["mouse/key actuation + post-action + validation"]
-    A --> G["artifacts + supervision + review"]
-    A --> H["self-test / replay glue"]
+    A["Program.Main /<br/>partial Program monolith"]
+    A --> B["CLI + deploy +<br/>bootstrap"]
+    A --> C["step loop + capture +<br/>observer acceptance"]
+    A --> D["request build +<br/>scene reasoning +<br/>allowed actions"]
+    A --> E["combat / noncombat<br/>decision policy"]
+    A --> F["mouse/key actuation +<br/>post-action +<br/>validation"]
+    A --> G["artifacts +<br/>supervision +<br/>review"]
+    A --> H["self-test /<br/>replay glue"]
 ```
 
 ### After
@@ -50,16 +50,16 @@ flowchart TD
     B --> C["Runner orchestration<br/>Program.Runner*"]
 
     C --> D["Observer layer<br/>Observer/*"]
-    C --> E["Request + scene reasoning<br/>GuiSmokeStepRequestFactory<br/>GuiSmokeSceneReasoningSupport<br/>AllowedActions / PhaseLoopRouting"]
+    C --> E["Request +<br/>scene reasoning<br/>GuiSmokeStepRequestFactory<br/>GuiSmokeSceneReasoningSupport<br/>AllowedActions /<br/>PhaseLoopRouting"]
     E --> F["Decision layer<br/>AutoDecisionProvider.*"]
     F --> G["Interop actuation<br/>Mouse / Key / Window"]
-    C --> H["Decision-flow + post-action<br/>AttemptDecisionFlow / AttemptPostAction"]
-    C --> I["Artifacts / supervision<br/>LongRunArtifacts.*"]
+    C --> H["Decision-flow +<br/>post-action<br/>AttemptDecisionFlow /<br/>AttemptPostAction"]
+    C --> I["Artifacts /<br/>supervision<br/>LongRunArtifacts.*"]
 
     J["Analysis/*"] --> E
     J --> F
 
-    K["Self-test / replay / parity"] --> D
+    K["Self-test /<br/>replay / parity"] --> D
     K --> E
     K --> F
     K --> C
@@ -118,10 +118,10 @@ flowchart TD
 flowchart LR
   subgraph Before
     A1["Runtime Extractor<br/>raw facts"]
-    B1["Tracker<br/>logical / visible / ready / authority / stability<br/>winner shaping"]
-    C1["Bridge<br/>scene / node renormalization<br/>compat winner influence"]
-    D1["Reader<br/>published-looking fields backfilled from compat"]
-    E1["Harness<br/>owner / release / handoff"]
+    B1["Tracker<br/>logical / visible<br/>ready / authority<br/>stability<br/>winner shaping"]
+    C1["Bridge<br/>scene / node<br/>renormalization<br/>compat winner<br/>influence"]
+    D1["Reader<br/>published-looking fields<br/>backfilled from compat"]
+    E1["Harness<br/>owner / release /<br/>handoff"]
     A1 --> B1 --> C1 --> D1 --> E1
     B1 -. early winner .-> E1
     C1 -. re-winner .-> E1
@@ -130,9 +130,9 @@ flowchart LR
   subgraph After
     A2["Runtime Extractor<br/>raw facts"]
     B2["Tracker<br/>published preserved<br/>compat demoted"]
-    C2["Bridge<br/>passthrough-oriented<br/>no node winner layer"]
+    C2["Bridge<br/>passthrough-oriented<br/>no node winner<br/>layer"]
     D2["Reader<br/>raw / published / compat split"]
-    E2["Harness<br/>canonical owner / release / handoff<br/>single winner-selection layer"]
+    E2["Harness<br/>canonical owner /<br/>release / handoff<br/>single winner-selection<br/>layer"]
     A2 --> B2 --> C2 --> D2 --> E2
   end
 ```
@@ -202,7 +202,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     A["Before<br/>capture-first"] --> B["capture"]
-    B --> C["screenshot-enriched request build"]
+    B --> C["screenshot-enriched<br/>request build"]
     C --> D["decision"]
 
     E["After<br/>observer-first"] --> F["observer/runtime fact"]

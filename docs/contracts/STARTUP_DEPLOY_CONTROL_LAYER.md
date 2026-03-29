@@ -48,11 +48,11 @@ flowchart TD
     F --> G["Bootstrap Window Detect"]
     G --> H["Bootstrap Phase"]
     H --> I["Bootstrap Teardown"]
-    I --> J["Authoritative Attempt 0001 Launch"]
-    J --> K["Authoritative First Screen"]
+    I --> J["Authoritative<br/>Attempt 0001<br/>Launch"]
+    J --> K["Authoritative<br/>First Screen"]
     K --> L["Step Loop"]
-    L --> M["Observer Decision Input"]
-    M --> N["Supervision Diagnosis"]
+    L --> M["Observer<br/>Decision Input"]
+    M --> N["Supervision<br/>Diagnosis"]
 ```
 
 이 흐름에서 역할을 나누면 다음과 같다.
