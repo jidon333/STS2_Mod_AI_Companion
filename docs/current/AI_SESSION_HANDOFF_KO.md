@@ -70,7 +70,8 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - 남은 구조 작업은 `GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md`의 cleanup program 기준으로 본다
 - explicit event / common combat hot path speed recovery도 current `main`에 반영됐다
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug도 current `main`에서 닫혔다
-- 다음 작업은 observer provenance cleanup과 coverage follow-up이다
+- published-first observer provenance migration도 current `main`에 반영됐다
+- 다음 작업은 runner / noncombat residual cleanup, legacy synthetic retirement, coverage follow-up이다
 
 ## current architecture state
 
@@ -148,7 +149,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ```text
 combat post-wait recapture / capture-boundary / lifecycle frontier나
-observer provenance cleanup을 새 owner 구조 안에서 좁게 다룬다
+runner / noncombat residual cleanup, legacy synthetic retirement를 새 owner 구조 안에서 좁게 다룬다
 ```
 
 우선 열 파일:
@@ -157,8 +158,9 @@ observer provenance cleanup을 새 owner 구조 안에서 좁게 다룬다
 2. [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
 3. [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
 4. [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
-5. [Observer/ObserverScreenProvenance.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/ObserverScreenProvenance.cs)
-6. [LongRunArtifacts.Startup.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
+5. [Program.Runner.AttemptLoop.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.Runner.AttemptLoop.cs)
+6. [AutoDecisionProvider.NonCombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
+7. [LongRunArtifacts.Startup.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
 
 ## validation baseline
 
@@ -190,7 +192,8 @@ live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
 ## 한 줄 요약
 
 ```text
-current main의 하네스 구조 정리, reward aftermath closure, common hot path speed recovery, WaitMainMenu startup boundary closure는 끝났다.
+current main의 하네스 구조 정리, reward aftermath closure, common hot path speed recovery, WaitMainMenu startup boundary closure,
+published-first observer provenance migration은 끝났다.
 새 세션은 old Program.cs monolith나 screenshot-first 전제를 다시 가져오지 말고,
-observer provenance cleanup과 coverage frontier를 새 owner 파일에서 보강하라.
+runner / noncombat residual cleanup, legacy synthetic retirement, coverage frontier를 새 owner 파일에서 보강하라.
 ```

@@ -46,7 +46,7 @@ current blocker, latest live root, current handoff는 `docs/current/*`에서 관
 - runtime hot path를 다시 읽히는 구조로 줄인다
 - canonical owner truth를 request-scoped로 재사용하게 만든다
 - stale adapter / duplicated helper / partial `Program` leakage를 제거한다
-- observer/export/bridge를 fact-only 방향으로 되돌린다
+- observer/export/bridge의 published-first provenance split을 유지하고, 남은 compatibility residue를 줄인다
 - harness만 owner / release / handoff를 결정하게 만든다
 
 ## 2. 공통 원칙
@@ -100,11 +100,9 @@ H5. large self-test hotspot residuals
 ### 3.2 Observer Priority Ladder
 
 ```text
-O0. LiveExportStateTracker semantic shaping
-O1. InventoryPublisher bridge re-normalization
-O2. RuntimeSnapshotReflectionExtractor semantic winner export
-O3. harness observer contracts의 provenance 혼합
-O4. legacy synthetic field retirement
+O0. legacy synthetic field retirement
+O1. compatibility fallback shedding
+O2. residual tracker/bridge shaping audit
 ```
 
 ## 4. Priority Detail
@@ -189,6 +187,14 @@ O4. legacy synthetic field retirement
 - raw fact를 additive하게 export
 - shaped compatibility field는 유지하되 primary truth에서 내림
 
+현재 상태:
+
+- `InventoryPublisher` primary field는 current `main`에서 published-first다
+- `ObserverSnapshotReader`는 raw / published / compatibility provenance를 분리해 읽는다
+- `ObserverScreenProvenance` control-flow는 published-first다
+- tracker는 old synthetic field를 primary truth로 다시 승격하지 않는다
+- 남은 observer work는 새 split 도입이 아니라 legacy compatibility retirement와 fallback shedding 쪽이다
+
 ### P4. Partial Program owner shedding
 
 먼저 해결해야 할 이유:
@@ -245,20 +251,28 @@ O4. legacy synthetic field retirement
 
 ### Workstream 4. Additive raw-fact export in runtime extractor
 
+> Status: completed / additive baseline in place
+
 - runtime extractor에 raw screen / raw active screen type / raw overlay / raw modal / raw explicit choice surfaces / raw room facts를 additive하게 export한다
 - current shaped fields는 compatibility로 유지한다
 
 ### Workstream 5. Tracker compatibility demotion
+
+> Status: mostly completed
 
 - `LiveExportStateTracker`는 raw facts를 보존하고, `logicalScreen`, `visibleScreen`, `sceneReady`, `sceneAuthority`, `sceneStability`를 compatibility meta로 내린다
 - reward/map mixed-state special-case 같은 winner logic을 새 truth source로 쓰지 않게 한다
 
 ### Workstream 6. Bridge passthrough migration
 
+> Status: mostly completed
+
 - `InventoryPublisher`가 `SceneType`, `SceneReady`, `SceneStability`를 다시 계산하지 않게 줄인다
 - snapshot raw/shaped meta를 provenance 보존 상태로 넘기고, bridge는 publish envelope owner만 유지한다
 
 ### Workstream 7. Harness observer contract split
+
+> Status: mostly completed
 
 - `ObserverSummary`와 room-state contracts에 raw fact fields와 compatibility fields를 같이 두되 provenance를 명확히 한다
 - harness는 dual-read migration을 시작한다
@@ -357,6 +371,17 @@ observer cleanup 계열은 아래를 만족해야 한다.
 - harness observer contracts가 raw fact와 compatibility field provenance를 분리한다
 - partial `Program` production owner leakage가 localized helper 수준으로 축소된다
 - startup/prevalidation governance hotspot이 reviewer-friendly band로 정리된다
+
+## 9-1. 현재 남은 canonical order
+
+observer provenance split이 current `main`에 반영된 뒤의 remaining order는 아래로 본다.
+
+1. runner lifecycle seam residual
+2. noncombat action-selection residue
+3. partial `Program` residual owner shedding
+4. startup/prevalidation governance cleanup
+5. legacy synthetic field retirement / compatibility fallback shedding
+6. coverage proof and docs refresh
 
 ## 10. Related Docs
 

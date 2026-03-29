@@ -10,11 +10,11 @@
 
 ## 현재 마일스톤 위치
 
-- 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` 평가 + `M9 observer-first speed recovery` 완료 확인 + `startup main-menu phase-boundary` closure
+- 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` 평가 + `M9 observer-first speed recovery` 완료 확인 + `startup main-menu phase-boundary` closure + `published-first observer provenance migration` 정리
 - 현재 engineering focus:
   1. `Sts2GuiSmokeHarness` 구조 정리 완료 상태를 문서와 current pointer에 반영
   2. explicit event / common combat hot path를 `observer-first, screenshot-on-demand`로 되돌린 현재 speed baseline 고정
-  3. 그 위에서 남아 있는 semantic gap과 coverage frontier를 새 owner 구조 안에서 좁게 다루기
+  3. 그 위에서 남아 있는 runner / noncombat residual cleanup, legacy synthetic retirement, coverage frontier를 새 owner 구조 안에서 좁게 다루기
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
 중요한 현재 해석:
@@ -22,6 +22,7 @@
 - startup / trust / bootstrap / deploy identity는 broad top blocker가 아니다
 - `WaitRunLoad` resumed room handoff bug는 이미 닫혔다
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug는 current `main`에서 닫혔다
+- published-first observer provenance migration은 current `main`에서 active다
 - 현재 핵심은 **architecture complete 상태에서 남은 semantic gap을 좁게 다루는 것**이다
 
 ## 현재 우선순위
@@ -92,6 +93,7 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 | Non-Combat Stability | green | reward aftermath map-node continuity closure, fresh live root confirms post-reward progression |
 | Combat Stability | green | latest fresh live root에서 repeated EndTurn barrier acknowledgement/reopen이 유지되고 run이 `max-steps-reached:60`까지 진행 |
 | Live-Run Speed Recovery | green | explicit event / common combat hot path가 observer-first로 복귀했고 representative speed root에서 captured step가 0건 |
+| Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 남은 것은 legacy retirement 성격 |
 | Strict Lifecycle Chain | partial | terminal -> restart -> next-attempt first-screen evidence는 여전히 appendix/work item |
 
 ## 현재 바로 믿을 수 있는 것
@@ -103,6 +105,7 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - `WaitMainMenu`는 current `main`에서 actual `Continue` / `Singleplayer` run-start surface가 나오기 전에는 accepted 되지 않는다
 - explicit event recovery와 common combat lane은 current `main`에서 screenshot 기본 경로가 아니다
 - representative speed proof root에서 explicit event/combat chain의 `captureMode`는 전부 `skipped`다
+- current `main`의 control-flow observer provenance는 published-first이고, published provenance는 legacy `visibleScreen` / `sceneReady` 계열로 다시 채워지지 않는다
 - 하네스 구조 refactor는 current `main` 기준 문서화 가능한 수준까지 정리됐다
 
 ## 현재 대표 evidence
@@ -138,6 +141,8 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
   - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/attempts/0001/run.log)
 - speed proof terminal summary:
   - [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/attempts/0001/failure-summary.json)
+- observer provenance split proof root:
+  - [observer-compat-shadow-retirement-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-compat-shadow-retirement-20260329-live1)
 - parity fixture now green:
   - `tests/replay-fixtures/m6-parity/reward-map-handoff.request.json`
 
@@ -155,6 +160,8 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - screenshot-first explicit event recovery
 - screenshot-first common combat attack / target / non-enemy confirm / end-turn chain
 - `WaitMainMenu` logo-animation-only premature acceptance
+- published provenance backfill from legacy `meta.visibleScreen` / `sceneReady` / `sceneAuthority` / `sceneStability`
+- bridge node semantics driven by compatibility scene winner
 - monolithic `Program.cs` 중심 구조
 - large self-test hotspot 1차 분해
 
@@ -162,7 +169,9 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 
 - combat post-wait recapture / capture-boundary live proof gap
 - combat broader parity/live coverage
-- full raw-vs-compat observer cleanup workstream
+- legacy synthetic field retirement / compatibility fallback shedding
+- runner lifecycle residual cleanup
+- noncombat action-selection residue reduction
 - strict lifecycle chain appendix
 - some lower-priority noncombat coverage rows (`reward back`, `post-node destination continuity`) remain partial
 
@@ -178,7 +187,7 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 3. semantic blocker, speed evidence, coverage gap을 구분한다
    - noncombat mixed-state와 combat EndTurn barrier family는 닫혔다
    - explicit event/common combat speed baseline도 현재 `main`에서 회복됐다
-   - 현재 남은 것은 coverage frontier와 observer provenance cleanup이다
+   - 현재 남은 것은 coverage frontier와 runner / noncombat residual cleanup, legacy synthetic retirement다
 
 ## 한 줄 요약
 
@@ -187,5 +196,6 @@ current main의 smoke harness architecture refactor는 완료됐다.
 reward aftermath live/parity gap도 current main에서 닫혔다.
 combat EndTurn pre-actuation drift / false barrier arm도 current main에서 닫혔다.
 explicit event / common combat hot path의 observer-first speed recovery도 current main에서 반영됐다.
-다음 follow-up은 combat / lifecycle coverage와 observer provenance cleanup을 current owner 구조 안에서 보강하는 쪽이다.
+published-first observer provenance migration도 current main에 반영됐다.
+다음 follow-up은 combat / lifecycle coverage와 runner / noncombat residual cleanup, legacy synthetic retirement를 current owner 구조 안에서 보강하는 쪽이다.
 ```
