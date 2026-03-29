@@ -91,6 +91,17 @@ static class CombatDecisionContract
             return false;
         }
 
+        if (string.Equals(decision.ActionKind, "confirm-attack-card", StringComparison.OrdinalIgnoreCase))
+        {
+            if (CombatEligibilitySupport.HasSelectedAttackConfirmEvidence(request))
+            {
+                semanticAction = "confirm selected attack card";
+                return true;
+            }
+
+            return false;
+        }
+
         if (CombatHistorySupport.TryParsePendingCombatSelection(decision.TargetLabel, out var selection)
             && selection is not null)
         {

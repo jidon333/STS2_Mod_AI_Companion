@@ -196,6 +196,12 @@ static class CombatBarrierSupport
         bool canResolveCombatEnemyTarget)
     {
         if (freshSnapshotSeen
+            && runtime.HasInFlightPlayerDrivenAction)
+        {
+            return Released(source, "selected combat card entered the play queue");
+        }
+
+        if (freshSnapshotSeen
             && (canResolveCombatEnemyTarget || analysis.HasTargetArrow))
         {
             return Released(source, "enemy-target authority surfaced after attack selection");
@@ -561,6 +567,7 @@ static class CombatBarrierSupport
         return string.Equals(action, "click", StringComparison.OrdinalIgnoreCase)
                || string.Equals(action, "click-current", StringComparison.OrdinalIgnoreCase)
                || string.Equals(action, "confirm-non-enemy", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(action, "confirm-attack-card", StringComparison.OrdinalIgnoreCase)
                || string.Equals(action, "right-click", StringComparison.OrdinalIgnoreCase)
                || string.Equals(action, "press-key", StringComparison.OrdinalIgnoreCase);
     }

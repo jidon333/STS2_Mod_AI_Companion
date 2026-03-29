@@ -19,6 +19,7 @@ static class CombatPostActionObservationSupport
         }
 
         if (IsNonEnemyConfirmDecision(decision)
+            || IsAttackConfirmDecision(decision)
             || IsAttackSelectionDecision(decision)
             || IsEnemyTargetDecision(decision)
             || IsCancelSelectionDecision(decision))
@@ -193,6 +194,22 @@ static class CombatPostActionObservationSupport
 
             if (IsAttackSelectionDecision(_decision))
             {
+                if (stage.Kind == CombatMicroStageKind.AwaitingCardPlayConfirm
+                    && !CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(context.Observer.Summary, _combatCardKnowledge)
+                    && hasFreshObservationProgress)
+                {
+                    reason = "combat-selected-attack-confirm-ready";
+                    return true;
+                }
+
+                if (stage.Kind == CombatMicroStageKind.ResolvingCardPlay
+                    && !CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(context.Observer.Summary, _combatCardKnowledge)
+                    && hasFreshObservationProgress)
+                {
+                    reason = "combat-attack-autoplay-started";
+                    return true;
+                }
+
                 if (stage.Kind == CombatMicroStageKind.ResolvingAttackTarget
                     && context.CanResolveCombatEnemyTarget
                     && hasFreshObservationProgress)
@@ -207,6 +224,35 @@ static class CombatPostActionObservationSupport
                     && hasFreshObservationProgress)
                 {
                     reason = "combat-attack-selection-cleared";
+                    return true;
+                }
+
+                if (stage.Kind is CombatMicroStageKind.TurnClosing or CombatMicroStageKind.EnemyTurnClosed)
+                {
+                    reason = $"combat-{stage.Kind.ToString().ToLowerInvariant()}";
+                    return true;
+                }
+
+                reason = string.Empty;
+                return false;
+            }
+
+            if (IsAttackConfirmDecision(_decision))
+            {
+                if (stage.Kind == CombatMicroStageKind.ResolvingCardPlay
+                    && context.RuntimeCombatState.HasInFlightPlayerDrivenAction
+                    && hasFreshObservationProgress)
+                {
+                    reason = "combat-selected-attack-enqueued";
+                    return true;
+                }
+
+                if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
+                    && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
+                    && !context.RuntimeCombatState.HasCardSelectionEvidence
+                    && hasFreshObservationProgress)
+                {
+                    reason = "combat-selected-attack-cleared";
                     return true;
                 }
 
@@ -314,6 +360,16 @@ static class CombatPostActionObservationSupport
             if (IsAttackSelectionDecision(_decision))
             {
                 return stage.Kind is CombatMicroStageKind.ResolvingAttackTarget
+                    or CombatMicroStageKind.AwaitingCardPlayConfirm
+                    or CombatMicroStageKind.ResolvingCardPlay
+                    or CombatMicroStageKind.PlayerActionOpen
+                    or CombatMicroStageKind.TurnClosing
+                    or CombatMicroStageKind.EnemyTurnClosed;
+            }
+
+            if (IsAttackConfirmDecision(_decision))
+            {
+                return stage.Kind is CombatMicroStageKind.ResolvingCardPlay
                     or CombatMicroStageKind.PlayerActionOpen
                     or CombatMicroStageKind.TurnClosing
                     or CombatMicroStageKind.EnemyTurnClosed;
@@ -364,6 +420,12 @@ static class CombatPostActionObservationSupport
     private static bool IsAttackSelectionDecision(GuiSmokeStepDecision decision)
     {
         return decision.TargetLabel?.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool IsAttackConfirmDecision(GuiSmokeStepDecision decision)
+    {
+        return string.Equals(decision.TargetLabel, "confirm selected attack card", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decision.ActionKind, "confirm-attack-card", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsEnemyTargetDecision(GuiSmokeStepDecision decision)

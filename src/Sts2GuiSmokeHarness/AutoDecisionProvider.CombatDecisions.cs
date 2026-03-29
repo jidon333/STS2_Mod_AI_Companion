@@ -120,6 +120,28 @@ sealed partial class AutoDecisionProvider
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for legal combat action", DisplayControlFlowScreen(request.Observer));
         }
 
+        if (combatMicroStage.Kind == CombatMicroStageKind.AwaitingCardPlayConfirm)
+        {
+            if (TryUseCombatDecision(new GuiSmokeStepDecision(
+                    "act",
+                    "confirm-attack-card",
+                    null,
+                    null,
+                    null,
+                    "confirm selected attack card",
+                    "A targetless or multi-target combat card is selected. Confirm that play before starting another lane or ending the turn.",
+                    0.84,
+                    "combat",
+                    150,
+                    true,
+                    null), out var allowedAttackConfirmDecision))
+            {
+                return allowedAttackConfirmDecision;
+            }
+
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for selected combat card confirm lane to resolve", DisplayControlFlowScreen(request.Observer));
+        }
+
         if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingCardPlay)
         {
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for played combat action to resolve", DisplayControlFlowScreen(request.Observer));
@@ -715,7 +737,7 @@ sealed partial class AutoDecisionProvider
             return true;
         }
 
-        if (CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge))
+        if (!CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge))
         {
             return false;
         }
@@ -919,8 +941,7 @@ sealed partial class AutoDecisionProvider
                || string.Equals(card.Target, "Self", StringComparison.OrdinalIgnoreCase)
                || string.Equals(card.Target, "None", StringComparison.OrdinalIgnoreCase)
                || string.Equals(card.Target, "AllAllies", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(card.Target, "AnyAlly", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(card.Target, "AllEnemies", StringComparison.OrdinalIgnoreCase);
+               || string.Equals(card.Target, "AnyAlly", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsPlayableAtCurrentEnergy(ObservedCombatHandCard card, int? energy)

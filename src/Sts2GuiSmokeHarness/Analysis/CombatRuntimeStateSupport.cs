@@ -35,6 +35,10 @@ sealed record CombatRuntimeState(
     string? LastCardPlayFinishedCardId,
     string? LastCardPlayFinishedCardName)
 {
+    public string? SelectedCardType { get; init; }
+
+    public string? SelectedCardTargetType { get; init; }
+
     public int? RoundNumber { get; init; }
 
     public bool? PlayerActionsDisabled { get; init; }
@@ -90,6 +94,7 @@ sealed record CombatRuntimeState(
 
     public bool HasAttackSelectionWithoutExplicitTargeting =>
         PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+        && CombatRuntimeStateSupport.RequiresExplicitEnemyTargetType(SelectedCardTargetType)
         && !HasExplicitEnemyTargetingEvidence;
 }
 
@@ -193,6 +198,8 @@ static class CombatRuntimeStateSupport
             CombatAuthoritySupport.TryGetMetaValue(observer, "combatLastCardPlayFinishedCardId"),
             CombatAuthoritySupport.TryGetMetaValue(observer, "combatLastCardPlayFinishedCardName"))
         {
+            SelectedCardType = selectedCardType,
+            SelectedCardTargetType = selectedCardTargetType,
             RoundNumber = CombatAuthoritySupport.TryGetIntOrCrossCheck(observer, "combatRoundNumber", "CombatState.RoundNumber"),
             PlayerActionsDisabled = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatPlayerActionsDisabled", "CombatManager.PlayerActionsDisabled"),
             EndingPlayerTurnPhaseOne = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "combatEndingPlayerTurnPhaseOne", "CombatManager.EndingPlayerTurnPhaseOne"),
@@ -322,7 +329,7 @@ static class CombatRuntimeStateSupport
             return false;
         }
 
-        if (RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge))
+        if (!RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge))
         {
             return false;
         }
@@ -351,7 +358,30 @@ static class CombatRuntimeStateSupport
         ObserverSummary observer,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
     {
-        return Read(observer, combatCardKnowledge).HasAttackSelectionWithoutExplicitTargeting;
+        var runtime = Read(observer, combatCardKnowledge);
+        if (runtime.PendingSelection?.Kind != AutoCombatCardKind.AttackLike)
+        {
+            return false;
+        }
+
+        if (RequiresExplicitEnemyTargetType(runtime.SelectedCardTargetType))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(runtime.SelectedCardTargetType))
+        {
+            return false;
+        }
+
+        var selectedSlot = runtime.PendingSelection.SlotIndex;
+        var knowledgeCard = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == selectedSlot);
+        if (knowledgeCard is not null)
+        {
+            return RequiresExplicitEnemyTargetCard(knowledgeCard);
+        }
+
+        return true;
     }
 
     public static bool HasSelectionToKeep(
@@ -449,17 +479,29 @@ static class CombatRuntimeStateSupport
     {
         return historyPendingSelection?.Kind == AutoCombatCardKind.AttackLike
                && historyPendingSelection.SlotIndex is >= 1 and <= 5
-               && observer.Meta.TryGetValue("combatTargetSummary", out var rawTargetSummary)
-               && !string.IsNullOrWhiteSpace(rawTargetSummary)
+               && HasAttackSelectionCarryoverMetadata(observer, runtime)
                && string.IsNullOrWhiteSpace(runtime.LastCardPlayFinishedCardId)
+               && !runtime.HasInFlightPlayerDrivenAction
                && runtime.PlayerActionsDisabled != true
                && runtime.EndingPlayerTurnPhaseOne != true
                && runtime.EndingPlayerTurnPhaseTwo != true;
     }
 
+    private static bool HasAttackSelectionCarryoverMetadata(ObserverSummary observer, CombatRuntimeState runtime)
+    {
+        if (observer.Meta.TryGetValue("combatTargetSummary", out var rawTargetSummary)
+            && !string.IsNullOrWhiteSpace(rawTargetSummary))
+        {
+            return true;
+        }
+
+        return string.Equals(runtime.SelectedCardType, "Attack", StringComparison.OrdinalIgnoreCase)
+               || IsEnemyTargetType(runtime.SelectedCardTargetType);
+    }
+
     private static bool IsEnemyTargetType(string? targetType)
     {
-        return string.Equals(targetType, "AnyEnemy", StringComparison.OrdinalIgnoreCase)
+        return RequiresExplicitEnemyTargetType(targetType)
                || string.Equals(targetType, "RandomEnemy", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -467,8 +509,17 @@ static class CombatRuntimeStateSupport
     {
         return string.Equals(targetType, "Self", StringComparison.OrdinalIgnoreCase)
                || string.Equals(targetType, "None", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetType, "AllEnemies", StringComparison.OrdinalIgnoreCase)
                || string.Equals(targetType, "AllAllies", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool RequiresExplicitEnemyTargetType(string? targetType)
+    {
+        return string.Equals(targetType, "AnyEnemy", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool RequiresExplicitEnemyTargetCard(CombatCardKnowledgeHint card)
+    {
+        return RequiresExplicitEnemyTargetType(card.Target);
     }
 
     private static bool IsObservedAttackCard(ObservedCombatHandCard card)

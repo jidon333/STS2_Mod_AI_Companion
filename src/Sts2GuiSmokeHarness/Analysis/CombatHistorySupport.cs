@@ -219,7 +219,8 @@ static class CombatHistorySupport
     {
         return IsCombatEndTurnLabel(entry.TargetLabel)
                || IsCombatCancelSelectionLabel(entry.TargetLabel)
-               || string.Equals(entry.TargetLabel, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase);
+               || string.Equals(entry.TargetLabel, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(entry.TargetLabel, "confirm selected attack card", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsNeutralCombatLabel(string? targetLabel)
@@ -235,6 +236,7 @@ static class CombatHistorySupport
         return string.Equals(action, "click", StringComparison.OrdinalIgnoreCase)
                || string.Equals(action, "click-current", StringComparison.OrdinalIgnoreCase)
                || string.Equals(action, "confirm-non-enemy", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(action, "confirm-attack-card", StringComparison.OrdinalIgnoreCase)
                || string.Equals(action, "right-click", StringComparison.OrdinalIgnoreCase)
                || string.Equals(action, "press-key", StringComparison.OrdinalIgnoreCase);
     }

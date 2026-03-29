@@ -128,6 +128,20 @@ internal static partial class Program
                 .ToArray();
         }
 
+        if (combatMicroStage.Kind == CombatMicroStageKind.AwaitingCardPlayConfirm)
+        {
+            actions.Add("confirm selected attack card");
+            if (combatMicroStage.AllowsCancel)
+            {
+                actions.Add("right-click cancel selected card");
+            }
+
+            actions.Add("wait");
+            return actions
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         foreach (var slotIndex in GetPlayableCombatAttackSlots(observer, combatCardKnowledge))
         {
             if (CombatBarrierSupport.SuppressesAttackSlot(combatBarrier, slotIndex))
@@ -253,7 +267,7 @@ internal static partial class Program
             return true;
         }
 
-        if (CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer.Summary, combatCardKnowledge))
+        if (!CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer.Summary, combatCardKnowledge))
         {
             return false;
         }

@@ -81,6 +81,24 @@ internal static partial class Program
             return;
         }
 
+        if (string.Equals(decision.ActionKind, "confirm-attack-card", StringComparison.OrdinalIgnoreCase))
+        {
+            LogHarness($"step={stepIndex} confirm-attack-card target={decision.TargetLabel ?? "null"} normalized=({GuiSmokeCombatConstants.AttackConfirmNormalizedX:0.000},{GuiSmokeCombatConstants.AttackConfirmNormalizedY:0.000}) primeMs={GuiSmokeCombatConstants.AttackConfirmPrimeMs} holdMs={GuiSmokeCombatConstants.AttackConfirmHoldMs}");
+            inputDriver.ConfirmAttackCard(
+                clickWindow,
+                GuiSmokeCombatConstants.AttackConfirmNormalizedX,
+                GuiSmokeCombatConstants.AttackConfirmNormalizedY,
+                GuiSmokeCombatConstants.AttackConfirmPrimeMs,
+                GuiSmokeCombatConstants.AttackConfirmHoldMs);
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "confirm-attack-card", decision.TargetLabel, DateTimeOffset.UtcNow)
+            {
+                Metadata = AutoDecisionProvider.BuildHistoryMetadataForDecision(request, decision),
+            });
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "confirm-attack-card", observer.CurrentScreen, observer.InCombat, decision.TargetLabel));
+            LogHarness($"step={stepIndex} confirm-attack-card sent target={decision.TargetLabel ?? "null"}");
+            return;
+        }
+
         if (string.Equals(decision.ActionKind, "confirm-non-enemy", StringComparison.OrdinalIgnoreCase))
         {
             LogHarness($"step={stepIndex} confirm-non-enemy target={decision.TargetLabel ?? "null"} normalized=({GuiSmokeCombatConstants.NonEnemyConfirmNormalizedX:0.000},{GuiSmokeCombatConstants.NonEnemyConfirmNormalizedY:0.000}) holdMs={GuiSmokeCombatConstants.NonEnemyConfirmHoldMs}");

@@ -115,6 +115,16 @@ static class CombatEligibilitySupport
         return HasSelectedNonEnemyConfirmEvidence(request.Observer, request.CombatCardKnowledge, analysis, pendingSelection);
     }
 
+    public static bool HasSelectedAttackConfirmEvidence(GuiSmokeStepRequest request)
+    {
+        var runtime = CombatRuntimeStateSupport.Read(request.Observer, request.CombatCardKnowledge);
+        return runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+               && runtime.CardPlayPending == true
+               && runtime.TargetingInProgress != true
+               && !runtime.HasInFlightPlayerDrivenAction
+               && !CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(request.Observer, request.CombatCardKnowledge);
+    }
+
     private static bool IsAutoNonEnemyPromotionEligible(CombatCardKnowledgeHint card)
     {
         return !string.Equals(card.Type, "Status", StringComparison.OrdinalIgnoreCase)
@@ -135,8 +145,7 @@ static class CombatEligibilitySupport
                || string.Equals(card.Target, "Self", StringComparison.OrdinalIgnoreCase)
                || string.Equals(card.Target, "None", StringComparison.OrdinalIgnoreCase)
                || string.Equals(card.Target, "AllAllies", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(card.Target, "AnyAlly", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(card.Target, "AllEnemies", StringComparison.OrdinalIgnoreCase);
+               || string.Equals(card.Target, "AnyAlly", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsNonEnemyCombatHandCard(ObservedCombatHandCard card)

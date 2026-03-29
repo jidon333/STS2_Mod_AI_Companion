@@ -6,6 +6,7 @@ enum CombatMicroStageKind
     HandSelectRequired,
     ResolvingNonEnemy,
     ResolvingAttackTarget,
+    AwaitingCardPlayConfirm,
     ResolvingCardPlay,
     TurnClosing,
     EnemyTurnClosed,
@@ -38,7 +39,7 @@ static class CombatMicroStageSupport
             laneLabel,
             AllowsNewActionStart: kind == CombatMicroStageKind.PlayerActionOpen,
             AllowsEndTurn: kind == CombatMicroStageKind.PlayerActionOpen,
-            AllowsCancel: kind is CombatMicroStageKind.ResolvingNonEnemy or CombatMicroStageKind.ResolvingAttackTarget,
+            AllowsCancel: kind is CombatMicroStageKind.ResolvingNonEnemy or CombatMicroStageKind.ResolvingAttackTarget or CombatMicroStageKind.AwaitingCardPlayConfirm,
             SettledFingerprint: BuildSettledFingerprint(
                 kind,
                 laneLabel,
@@ -56,6 +57,14 @@ static class CombatMicroStageSupport
         CombatBarrierEvaluation barrier,
         CombatBarrierKind effectiveBarrierKind)
     {
+        var attackLaneOpen = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                             || runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                             || effectiveBarrierKind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick;
+        var attackRequiresExplicitEnemyTarget = attackLaneOpen
+                                                && CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(
+                                                    context.Observer.Summary,
+                                                    context.CombatCardKnowledge);
+
         if (context.CombatPlayerActionWindowClosed)
         {
             return CombatMicroStageKind.EnemyTurnClosed;
@@ -74,16 +83,24 @@ static class CombatMicroStageSupport
             return CombatMicroStageKind.TurnClosing;
         }
 
+        if (attackLaneOpen
+            && !attackRequiresExplicitEnemyTarget)
+        {
+            return runtime.HasInFlightPlayerDrivenAction
+                ? CombatMicroStageKind.ResolvingCardPlay
+                : CombatMicroStageKind.AwaitingCardPlayConfirm;
+        }
+
         if (runtime.HasInFlightPlayerDrivenAction)
         {
             return CombatMicroStageKind.ResolvingCardPlay;
         }
 
-        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-            || effectiveBarrierKind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick
-            || (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-                && (runtime.HasExplicitEnemyTargetingEvidence
-                    || context.CanResolveCombatEnemyTarget)))
+        if (attackRequiresExplicitEnemyTarget
+            && (attackLaneOpen
+                || (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                    && (runtime.HasExplicitEnemyTargetingEvidence
+                        || context.CanResolveCombatEnemyTarget))))
         {
             return CombatMicroStageKind.ResolvingAttackTarget;
         }

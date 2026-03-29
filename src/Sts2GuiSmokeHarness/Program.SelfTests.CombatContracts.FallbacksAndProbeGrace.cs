@@ -353,6 +353,92 @@ internal static partial class Program
                 null);
             Assert(string.Equals(attackSelectionWakeEvaluator(progressedAttackSelectionObserver), "combat-enemy-target-ready", StringComparison.OrdinalIgnoreCase), "Attack selection settle should wake once fresh post-action progress rebuilds an explicit attack-target stage.");
 
+            var allEnemiesAttackObserver = new ObserverState(
+                progressedAttackSelectionObserver.Summary with
+                {
+                    InventoryId = "inv-combat-all-enemies-pending",
+                    SnapshotVersion = 59,
+                    PlayerEnergy = 3,
+                    CombatHand = new[]
+                    {
+                        new ObservedCombatHandCard(1, "CARD.VICIOUS", "Power", 1),
+                        new ObservedCombatHandCard(2, "CARD.BASH", "Attack", 2),
+                        new ObservedCombatHandCard(3, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                    },
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi;CombatState.RoundNumber=3;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                        ["combatCardPlayPending"] = "true",
+                        ["combatSelectedCardSlot"] = "1",
+                        ["combatSelectedCardType"] = "Attack",
+                        ["combatSelectedCardTargetType"] = "AllEnemies",
+                        ["combatTargetingInProgress"] = "false",
+                        ["combatValidTargetsType"] = "None",
+                        ["combatTargetableEnemyCount"] = "0",
+                        ["combatHittableEnemyCount"] = "0",
+                        ["combatInteractionRevision"] = "6:5:true:false:1",
+                        ["combatHistoryStartedCount"] = "6",
+                        ["combatHistoryFinishedCount"] = "5",
+                    },
+                },
+                null,
+                null,
+                null);
+            var allEnemiesAttackKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.BREAKTHROUGH", "Attack", "AllEnemies", 1, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.BASH", "Attack", "AnyEnemy", 2, "self-test"),
+                new CombatCardKnowledgeHint(3, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            };
+            var allEnemiesContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                allEnemiesAttackObserver,
+                combatNoOpScreenshotPath,
+                attackSelectionSettleHistory,
+                allEnemiesAttackKnowledge);
+            Assert(allEnemiesContext.CombatMicroStage.Kind == CombatMicroStageKind.AwaitingCardPlayConfirm,
+                "Targetless all-enemies attacks should rebuild as an awaiting-card-play-confirm stage, not as an unresolved explicit target lane.");
+            Assert(!allEnemiesContext.CanResolveCombatEnemyTarget,
+                "Targetless all-enemies attacks should keep enemy-target authority closed.");
+            var allEnemiesAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                allEnemiesAttackObserver,
+                allEnemiesAttackKnowledge,
+                combatNoOpScreenshotPath,
+                attackSelectionSettleHistory);
+            Assert(!allEnemiesAllowedActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                "Targetless all-enemies attacks should not reopen explicit enemy click actions.");
+            Assert(allEnemiesAllowedActions.Contains("confirm selected attack card", StringComparer.OrdinalIgnoreCase),
+                "Targetless all-enemies attacks should export an explicit confirm-selected-attack action.");
+            var allEnemiesDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                66,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Targetless all-enemies attacks should confirm the selected attack card instead of stalling in an explicit target lane.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                allEnemiesAttackObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                allEnemiesAttackKnowledge,
+                allEnemiesAllowedActions,
+                attackSelectionSettleHistory,
+                "Targetless all-enemies attacks should resolve through an explicit confirm-selected-attack step.",
+                null));
+            Assert(string.Equals(allEnemiesDecision.TargetLabel, "confirm selected attack card", StringComparison.OrdinalIgnoreCase),
+                "Targetless all-enemies attacks should drive an explicit confirm-selected-attack step.");
+            Assert(string.Equals(allEnemiesDecision.ActionKind, "confirm-attack-card", StringComparison.OrdinalIgnoreCase),
+                "Targetless all-enemies attacks should use the dedicated confirm-attack-card actuator.");
+
             var staleBoundsDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",

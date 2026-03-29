@@ -445,6 +445,7 @@ internal static partial class Program
             }
         }
         else if (string.Equals(decision.ActionKind, "click-current", StringComparison.OrdinalIgnoreCase)
+                 || string.Equals(decision.ActionKind, "confirm-attack-card", StringComparison.OrdinalIgnoreCase)
                  || string.Equals(decision.ActionKind, "confirm-non-enemy", StringComparison.OrdinalIgnoreCase))
         {
             if (decision.NormalizedX is not null || decision.NormalizedY is not null)
@@ -474,7 +475,7 @@ internal static partial class Program
         }
         else
         {
-            throw new InvalidOperationException("Only click, click-current, confirm-non-enemy, right-click, and press-key actionKind are supported.");
+            throw new InvalidOperationException("Only click, click-current, confirm-attack-card, confirm-non-enemy, right-click, and press-key actionKind are supported.");
         }
 
         if (request.AllowedActions.Length == 1 && string.Equals(request.AllowedActions[0], "wait", StringComparison.OrdinalIgnoreCase))
