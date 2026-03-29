@@ -31,6 +31,13 @@ static class GuiSmokeNonCombatAllowedActionSupport
         return state.ScreenType switch
         {
             "reward-pick" => new[] { "reward pick card", "wait" },
+            "simple-select" when CardSelectionObserverSignals.IsConfirmReady(state)
+                => new[] { "simple select confirm", "wait" },
+            "simple-select" => new[] { "simple select choice", "wait" },
+            "bundle-select" when CardSelectionObserverSignals.IsConfirmReady(state)
+                => new[] { "bundle select confirm", "wait" },
+            "bundle-select" => new[] { "bundle select choice", "wait" },
+            "relic-select" => new[] { "relic select choice", "wait" },
             "transform" when CardSelectionObserverSignals.IsConfirmReady(state)
                 => new[] { "transform confirm", "wait" },
             "transform" => new[] { "transform select card", "wait" },

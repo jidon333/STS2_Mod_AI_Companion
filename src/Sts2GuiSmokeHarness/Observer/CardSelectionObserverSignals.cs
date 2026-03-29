@@ -55,22 +55,43 @@ static class CardSelectionObserverSignals
     public static bool IsRewardPickState(ObserverSummary observer)
         => string.Equals(TryGetState(observer)?.ScreenType, "reward-pick", StringComparison.OrdinalIgnoreCase);
 
+    public static bool IsSimpleSelectState(ObserverSummary observer)
+        => string.Equals(TryGetState(observer)?.ScreenType, "simple-select", StringComparison.OrdinalIgnoreCase);
+
     public static bool IsNonRewardCountConfirmFamily(ObserverSummary observer)
     {
         var screenType = TryGetState(observer)?.ScreenType;
         return string.Equals(screenType, "transform", StringComparison.OrdinalIgnoreCase)
                || string.Equals(screenType, "deck-remove", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(screenType, "upgrade", StringComparison.OrdinalIgnoreCase);
+               || string.Equals(screenType, "upgrade", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(screenType, "simple-select", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(screenType, "bundle-select", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(screenType, "relic-select", StringComparison.OrdinalIgnoreCase);
     }
 
     public static IReadOnlyList<ObserverChoice> GetCardChoices(ObserverSummary observer, CardSelectionSubtypeState state)
     {
-        return observer.Choices
+        var explicitChoices = observer.Choices
             .Where(choice => IsSubtypeCardChoice(choice, state.ScreenType))
             .OrderBy(static choice => choice.Enabled == false ? 1 : 0)
             .ThenBy(static choice => GetSortX(choice.ScreenBounds))
             .ThenBy(static choice => GetSortY(choice.ScreenBounds))
             .ToArray();
+        if (explicitChoices.Length > 0)
+        {
+            return explicitChoices;
+        }
+
+        return state.ScreenType switch
+        {
+            "simple-select" or "bundle-select" or "relic-select" => observer.Choices
+                .Where(choice => IsGenericSubtypeChoiceFallback(choice, state.ScreenType))
+                .OrderBy(static choice => choice.Enabled == false ? 1 : 0)
+                .ThenBy(static choice => GetSortX(choice.ScreenBounds))
+                .ThenBy(static choice => GetSortY(choice.ScreenBounds))
+                .ToArray(),
+            _ => Array.Empty<ObserverChoice>(),
+        };
     }
 
     public static ObserverChoice? TryGetConfirmChoice(ObserverSummary observer, CardSelectionSubtypeState state)
@@ -80,6 +101,8 @@ static class CardSelectionObserverSignals
             "transform" => "transform-confirm",
             "deck-remove" => "deck-remove-confirm",
             "upgrade" => "upgrade-confirm",
+            "simple-select" => "simple-select-confirm",
+            "bundle-select" => "bundle-select-confirm",
             _ => null,
         };
         if (confirmKind is null)
@@ -114,6 +137,9 @@ static class CardSelectionObserverSignals
             "deck-remove" => "deck-remove-card",
             "upgrade" => "upgrade-card",
             "reward-pick" => "reward-pick-card",
+            "simple-select" => "simple-select-card",
+            "bundle-select" => "bundle-select-card",
+            "relic-select" => "relic-select-card",
             _ => null,
         };
         if (expectedKind is not null && string.Equals(choice.Kind, expectedKind, StringComparison.OrdinalIgnoreCase))
@@ -134,6 +160,12 @@ static class CardSelectionObserverSignals
     public static bool IsConfirmReady(CardSelectionSubtypeState state)
     {
         if (state.PreviewVisible && state.PreviewConfirmEnabled)
+        {
+            return true;
+        }
+
+        if (state.ScreenType is "simple-select" or "bundle-select"
+            && state.MainConfirmEnabled)
         {
             return true;
         }
@@ -178,6 +210,33 @@ static class CardSelectionObserverSignals
             return "reward-pick";
         }
 
+        if (string.Equals(observer.ChoiceExtractorPath, "card-selection-simple-select", StringComparison.OrdinalIgnoreCase)
+            || rootTypeSummary?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
+            || TryGetMetaValue(observer, "activeScreenType")?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
+            || TryGetMetaValue(observer, "rawCurrentActiveScreenType")?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
+            || TryGetMetaValue(observer, "rawTopOverlayType")?.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "simple-select";
+        }
+
+        if (string.Equals(observer.ChoiceExtractorPath, "card-selection-bundle-select", StringComparison.OrdinalIgnoreCase)
+            || rootTypeSummary?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || TryGetMetaValue(observer, "activeScreenType")?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || TryGetMetaValue(observer, "rawCurrentActiveScreenType")?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || TryGetMetaValue(observer, "rawTopOverlayType")?.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "bundle-select";
+        }
+
+        if (string.Equals(observer.ChoiceExtractorPath, "card-selection-relic-select", StringComparison.OrdinalIgnoreCase)
+            || rootTypeSummary?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true
+            || TryGetMetaValue(observer, "activeScreenType")?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true
+            || TryGetMetaValue(observer, "rawCurrentActiveScreenType")?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true
+            || TryGetMetaValue(observer, "rawTopOverlayType")?.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "relic-select";
+        }
+
         return null;
     }
 
@@ -189,6 +248,9 @@ static class CardSelectionObserverSignals
             "deck-remove" => "deck-remove",
             "upgrade" => "upgrade",
             "reward-pick" => "reward-pick",
+            "simple-select" => "simple-select",
+            "bundle-select" => "bundle-select",
+            "relic-select" => "relic-select",
             "unknown-card-select" => "unknown-card-select",
             _ => null,
         };
@@ -224,6 +286,39 @@ static class CardSelectionObserverSignals
                && (label.Contains("Confirm", StringComparison.OrdinalIgnoreCase)
                    || label.Contains("확인", StringComparison.OrdinalIgnoreCase)
                    || label.Contains("선택", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsGenericSubtypeChoiceFallback(ObserverChoice choice, string screenType)
+    {
+        if (choice.Enabled == false
+            || string.IsNullOrWhiteSpace(choice.ScreenBounds)
+            || string.IsNullOrWhiteSpace(choice.Label))
+        {
+            return false;
+        }
+
+        if (IsConfirmLabel(choice.Label)
+            || choice.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
+            || choice.Label.Contains("넘기", StringComparison.OrdinalIgnoreCase)
+            || choice.Label.Contains("Back", StringComparison.OrdinalIgnoreCase)
+            || choice.Label.Contains("취소", StringComparison.OrdinalIgnoreCase)
+            || choice.Label.Contains("Cancel", StringComparison.OrdinalIgnoreCase)
+            || choice.Label.Contains("Close", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (screenType == "bundle-select")
+        {
+            return choice.Kind is "bundle-select-card" or "choice" or "card";
+        }
+
+        if (screenType == "relic-select")
+        {
+            return choice.Kind is "relic-select-card" or "relic" or "choice";
+        }
+
+        return choice.Kind is "simple-select-card" or "card" or "relic" or "choice";
     }
 
     private static float GetSortX(string? rawBounds)

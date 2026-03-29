@@ -2860,26 +2860,58 @@ internal static class RuntimeSnapshotReflectionExtractor
         var rootType = screen.GetType().FullName ?? screen.GetType().Name;
         var prefs = TryGetMemberValue(screen, "_prefs") ?? TryGetMemberValue(screen, "Prefs");
         var prompt = ResolveCardSelectionPrompt(screen, prefs);
-        var minSelect = screenType == "reward-pick" ? 1 : TryReadInt(prefs, "MinSelect");
-        var maxSelect = screenType == "reward-pick" ? 1 : TryReadInt(prefs, "MaxSelect");
-        var requireManualConfirmation = screenType == "reward-pick"
-            ? false
-            : TryReadBool(prefs, "RequireManualConfirmation");
-        var cancelable = screenType == "reward-pick"
-            ? false
-            : TryReadBool(prefs, "Cancelable");
-        var selectedCards = screenType == "reward-pick"
-            ? Array.Empty<object>()
-            : ExpandEnumerable(TryGetMemberValue(screen, "_selectedCards")).ToArray();
+        var minSelect = screenType switch
+        {
+            "reward-pick" => 1,
+            "bundle-select" => 1,
+            "relic-select" => 1,
+            _ => TryReadInt(prefs, "MinSelect"),
+        };
+        var maxSelect = screenType switch
+        {
+            "reward-pick" => 1,
+            "bundle-select" => 1,
+            "relic-select" => 1,
+            _ => TryReadInt(prefs, "MaxSelect"),
+        };
+        var requireManualConfirmation = screenType switch
+        {
+            "reward-pick" => false,
+            "bundle-select" => true,
+            "relic-select" => false,
+            _ => TryReadBool(prefs, "RequireManualConfirmation"),
+        };
+        var cancelable = screenType switch
+        {
+            "reward-pick" => false,
+            "bundle-select" => true,
+            "relic-select" => true,
+            _ => TryReadBool(prefs, "Cancelable"),
+        };
+        var selectedCards = screenType switch
+        {
+            "reward-pick" => Array.Empty<object>(),
+            "bundle-select" => ExpandEnumerable(TryGetMemberValue(screen, "_selectedBundle")).ToArray(),
+            "relic-select" when TryReadBool(screen, "_relicSelected") == true => new[] { screen },
+            "relic-select" => Array.Empty<object>(),
+            _ => ExpandEnumerable(TryGetMemberValue(screen, "_selectedCards")).ToArray(),
+        };
         var selectedCardIds = ResolveCardSelectionSelectedCardIds(selectedCards);
         var visibleCards = EnumerateCardSelectionCandidates(screen, screenType, selectedCardIds)
             .OrderBy(static card => TryGetBoundsSortX(card.ScreenBounds))
             .ThenBy(static card => TryGetBoundsSortY(card.ScreenBounds))
             .ToArray();
-        var selectedCount = screenType == "reward-pick" ? 0 : selectedCards.Length;
+        var selectedCount = screenType switch
+        {
+            "reward-pick" => 0,
+            "bundle-select" => selectedCards.Length,
+            "relic-select" => TryReadBool(screen, "_relicSelected") == true ? 1 : 0,
+            _ => selectedCards.Length,
+        };
         var mainConfirmButton = screenType switch
         {
-            "transform" or "deck-remove" => TryGetMemberValue(screen, "_confirmButton"),
+            "transform" or "deck-remove" or "simple-select" => TryGetMemberValue(screen, "_confirmButton"),
+            "bundle-select" => TryGetMemberValue(screen, "_previewConfirmButton") ?? TryGetMemberValue(screen, "_confirmButton"),
             _ => null,
         };
         var mainConfirmBounds = TryResolveInteractiveScreenBounds(mainConfirmButton, out _);
@@ -2980,6 +3012,21 @@ internal static class RuntimeSnapshotReflectionExtractor
             return "deck-remove";
         }
 
+        if (typeName.Contains("NSimpleCardSelectScreen", StringComparison.OrdinalIgnoreCase))
+        {
+            return "simple-select";
+        }
+
+        if (typeName.Contains("NChooseABundleSelectionScreen", StringComparison.OrdinalIgnoreCase))
+        {
+            return "bundle-select";
+        }
+
+        if (typeName.Contains("NChooseARelicSelection", StringComparison.OrdinalIgnoreCase))
+        {
+            return "relic-select";
+        }
+
         return null;
     }
 
@@ -3025,6 +3072,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         IEnumerable<object> holders = screenType switch
         {
             "reward-pick" => EnumerateRewardPickCardHolders(screen),
+            "simple-select" => EnumerateUpgradeCardHolders(screen),
             _ => EnumerateUpgradeCardHolders(screen),
         };
 
@@ -6061,6 +6109,9 @@ internal static class RuntimeSnapshotReflectionExtractor
             "deck-remove" => "deck-remove-card",
             "upgrade" => "upgrade-card",
             "reward-pick" => "reward-pick-card",
+            "simple-select" => "simple-select-card",
+            "bundle-select" => "bundle-select-card",
+            "relic-select" => "relic-select-card",
             _ => "card-selection-card",
         };
         var confirmKind = observation.ScreenType switch
@@ -6068,6 +6119,8 @@ internal static class RuntimeSnapshotReflectionExtractor
             "transform" => "transform-confirm",
             "deck-remove" => "deck-remove-confirm",
             "upgrade" => "upgrade-confirm",
+            "simple-select" => "simple-select-confirm",
+            "bundle-select" => "bundle-select-confirm",
             _ => null,
         };
 
@@ -6348,6 +6401,18 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             hints.Add("reward-pick");
         }
+        else if (string.Equals(screenType, "simple-select", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add("simple-select");
+        }
+        else if (string.Equals(screenType, "bundle-select", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add("bundle-select");
+        }
+        else if (string.Equals(screenType, "relic-select", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add("relic-select");
+        }
 
         return hints;
     }
@@ -6369,6 +6434,9 @@ internal static class RuntimeSnapshotReflectionExtractor
             "deck-remove" => "card-selection-deck-remove",
             "upgrade" => "card-selection-upgrade",
             "reward-pick" => "card-selection-reward-pick",
+            "simple-select" => "card-selection-simple-select",
+            "bundle-select" => "card-selection-bundle-select",
+            "relic-select" => "card-selection-relic-select",
             _ => "card-selection-unknown",
         };
     }

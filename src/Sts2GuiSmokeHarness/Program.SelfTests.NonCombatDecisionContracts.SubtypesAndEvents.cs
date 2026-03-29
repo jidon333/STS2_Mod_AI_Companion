@@ -488,6 +488,153 @@ internal static partial class Program
             Assert(rewardFastPathSignature.Contains("reward:fast-path", StringComparison.OrdinalIgnoreCase), "Reward fast path scene signatures should mark the fast-path contract explicitly.");
             Assert(!rewardFastPathSignature.Contains("shot:", StringComparison.OrdinalIgnoreCase), "Reward fast path scene signatures should not pay screenshot fingerprint overhead.");
 
+            var simpleSelectObserver = new ObserverState(
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-simple-select",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-simple-select",
+                    "Event",
+                    "generic",
+                    80,
+                    80,
+                    null,
+                    new[] { "Confirm", "불타는 혈액", "니오우의 비탄", "딸기" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("event-option:confirm", "event-option", "Confirm", "1940,726,200,110", true)
+                        {
+                            TypeName = "choice",
+                        },
+                        new ObserverActionNode("event-option:relic:0", "event-option", "불타는 혈액", "12,82,68,68", true)
+                        {
+                            TypeName = "relic",
+                        },
+                        new ObserverActionNode("event-option:relic:1", "event-option", "니오우의 비탄", "80,82,68,68", true)
+                        {
+                            TypeName = "relic",
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("choice", "Confirm", "1940,726,200,110", "confirm"),
+                        new ObserverChoice("relic", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD"),
+                        new ObserverChoice("relic", "니오우의 비탄", "80,82,68,68", "RELIC.NEOWS_TORMENT"),
+                        new ObserverChoice("relic", "딸기", "148,82,68,68", "RELIC.STRAWBERRY"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen",
+                        ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen",
+                        ["rawTopOverlayType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen",
+                        ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom",
+                        ["cardSelectionSelectedCount"] = "0",
+                        ["cardSelectionMainConfirmEnabled"] = "false",
+                    },
+                },
+                null,
+                null,
+                null);
+            var simpleSelectActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                simpleSelectObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(simpleSelectActions.Contains("simple select choice", StringComparer.OrdinalIgnoreCase)
+                   && !simpleSelectActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase),
+                "Simple-select overlay should preempt generic event progression with an explicit selection lane.");
+            var simpleSelectDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                15,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Resolve the explicit simple-select overlay before generic event routing.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 2560, 1440),
+                "phase:handleevent|screen:event|visible:event|ready:true|stability:stable|card-selection:simple-select",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                simpleSelectObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                simpleSelectActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Simple-select overlay is foreground authoritative and should not devolve to generic event waits.",
+                null));
+            Assert(simpleSelectDecision.TargetLabel?.StartsWith("simple select choice", StringComparison.OrdinalIgnoreCase) == true,
+                "Simple-select overlay should choose an explicit selection candidate before any generic event wait.");
+
+            var simpleSelectConfirmObserver = new ObserverState(
+                simpleSelectObserver.Summary with
+                {
+                    InventoryId = "inv-simple-select-confirm",
+                    SceneEpisodeId = "episode-simple-select-confirm",
+                    Meta = new Dictionary<string, string?>(simpleSelectObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["cardSelectionSelectedCount"] = "1",
+                        ["cardSelectionMainConfirmEnabled"] = "true",
+                    },
+                },
+                null,
+                null,
+                null);
+            var simpleSelectConfirmActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                simpleSelectConfirmObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                new[]
+                {
+                    new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "simple select choice 불타는 혈액", DateTimeOffset.UtcNow.AddSeconds(-2)),
+                });
+            Assert(simpleSelectConfirmActions.Contains("simple select confirm", StringComparer.OrdinalIgnoreCase)
+                   && !simpleSelectConfirmActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase),
+                "Confirm-ready simple-select overlay should expose an explicit confirm lane instead of reopening HandleEvent progression.");
+            var simpleSelectConfirmDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                16,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Confirm the already-selected simple-select overlay.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 2560, 1440),
+                "phase:handleevent|screen:event|visible:event|ready:true|stability:stable|card-selection:simple-select|card-selection-selected:1",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                simpleSelectConfirmObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                simpleSelectConfirmActions,
+                new[]
+                {
+                    new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "simple select choice 불타는 혈액", DateTimeOffset.UtcNow.AddSeconds(-2)),
+                },
+                "Simple-select confirm should stay on the overlay lane until the screen closes.",
+                null));
+            Assert(string.Equals(simpleSelectConfirmDecision.TargetLabel, "simple select confirm", StringComparison.OrdinalIgnoreCase),
+                "Confirm-ready simple-select overlay should click confirm instead of generic event progression.");
+
             var deckRemoveObserver = new ObserverState(
                 rewardPickObserver.Summary with
                 {

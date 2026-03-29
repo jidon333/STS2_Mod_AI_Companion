@@ -492,6 +492,9 @@ sealed partial class AutoDecisionProvider
         return state.ScreenType switch
         {
             "reward-pick" => TryCreateRewardPickDecision(request, state),
+            "simple-select" => TryCreateSubtypeCardSelectionDecision(request, state, "simple select choice", "simple select confirm"),
+            "bundle-select" => TryCreateSubtypeCardSelectionDecision(request, state, "bundle select choice", "bundle select confirm"),
+            "relic-select" => TryCreateSubtypeCardSelectionDecision(request, state, "relic select choice", "relic select confirm"),
             "transform" => TryCreateSubtypeCardSelectionDecision(request, state, "transform select card", "transform confirm"),
             "deck-remove" => TryCreateSubtypeCardSelectionDecision(request, state, "deck remove select card", "deck remove confirm"),
             "upgrade" => TryCreateSubtypeCardSelectionDecision(request, state, "upgrade select card", "upgrade confirm"),
@@ -674,6 +677,9 @@ sealed partial class AutoDecisionProvider
         var prefix = screenType switch
         {
             "reward-pick" => "reward pick card",
+            "simple-select" => "simple select choice",
+            "bundle-select" => "bundle select choice",
+            "relic-select" => "relic select choice",
             "deck-remove" => "deck remove select card",
             "upgrade" => "upgrade select card",
             _ => "transform select card",

@@ -100,6 +100,8 @@ static class MapForegroundReconciliation
             return string.Equals(targetLabel, "treasure proceed", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(targetLabel, "reward proceed", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(targetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(targetLabel, "simple select confirm", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(targetLabel, "bundle select confirm", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(targetLabel, "transform confirm", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(targetLabel, "deck remove confirm", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(targetLabel, "upgrade confirm", StringComparison.OrdinalIgnoreCase)
