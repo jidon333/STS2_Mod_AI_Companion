@@ -50,11 +50,11 @@ sealed partial class AutoDecisionProvider
                                                     && observer.Choices.Any(IsInspectPreviewChoice)
                                                     && observer.Choices.Any(static choice => IsSkipOrProceedLabel(choice.Label))));
         var rewardScreenHint = rewardContextVisible || fallbackRewardChoiceAuthority;
-        var rewardForegroundOwned = rewardState?.ForegroundOwned == true
-                                    || (!strongerRoomForegroundAuthority
-                                        && rewardScreenHint
-                                        && rewardState?.MapIsCurrentActiveScreen != true
-                                        && (explicitRewardChoicesPresent || fallbackRewardChoiceAuthority));
+        var rewardForegroundOwned = !strongerRoomForegroundAuthority
+                                    && (rewardState?.ForegroundOwned == true
+                                        || (rewardScreenHint
+                                            && rewardState?.MapIsCurrentActiveScreen != true
+                                            && (explicitRewardChoicesPresent || fallbackRewardChoiceAuthority)));
         var staleRewardChoicePresent = staleRewardChoices.Length > 0 || staleRewardNodes.Length > 0;
         var offWindowBoundsReused = staleRewardChoices.Any(choice => IsOffWindowBounds(choice.ScreenBounds, windowBounds))
                                   || staleRewardNodes.Any(node => IsOffWindowBounds(node.ScreenBounds, windowBounds));
@@ -101,12 +101,14 @@ sealed partial class AutoDecisionProvider
                                       && HasRecentRewardSkipReleaseIntent(history);
         var canonicalOwner = rewardForegroundOwned
             ? NonCombatForegroundOwner.Reward
-            : (layerState.RewardTeardownInProgress || layerState.MapCurrentActiveScreen
-                ? NonCombatForegroundOwner.Map
-                : NonCombatForegroundOwner.Unknown);
+            : (!strongerRoomForegroundAuthority
+                && (layerState.RewardTeardownInProgress || layerState.MapCurrentActiveScreen)
+                    ? NonCombatForegroundOwner.Map
+                    : NonCombatForegroundOwner.Unknown);
         var releaseStage = canonicalOwner == NonCombatForegroundOwner.Reward
             ? (suppressSameSkipReissue ? RewardReleaseStage.ReleasePending : RewardReleaseStage.Active)
-            : ((layerState.RewardTeardownInProgress || layerState.MapCurrentActiveScreen)
+            : ((!strongerRoomForegroundAuthority
+                && (layerState.RewardTeardownInProgress || layerState.MapCurrentActiveScreen))
                 ? RewardReleaseStage.Released
                 : RewardReleaseStage.None);
         var explicitAction = releaseStage != RewardReleaseStage.Active

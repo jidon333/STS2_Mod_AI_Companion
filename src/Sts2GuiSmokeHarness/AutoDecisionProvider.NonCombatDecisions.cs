@@ -9,6 +9,12 @@ sealed partial class AutoDecisionProvider
     private static GuiSmokeStepDecision DecideHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         if (!RewardObserverSignals.IsRewardAuthorityActive(request.Observer)
+            && BuildShopSceneState(request.Observer, request.History) is { ReleaseStage: NonCombatReleaseStage.Active })
+        {
+            return DecideHandleShop(request with { Phase = GuiSmokePhase.HandleShop.ToString() });
+        }
+
+        if (!RewardObserverSignals.IsRewardAuthorityActive(request.Observer)
             && BuildRestSiteSceneState(request.Observer) is not null)
         {
             return DecideChooseFirstNode(

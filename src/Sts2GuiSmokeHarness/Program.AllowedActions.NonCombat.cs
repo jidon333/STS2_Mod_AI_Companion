@@ -89,6 +89,8 @@ internal static partial class Program
             GuiSmokePhase.WaitRunLoad => new[] { "wait" },
             GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "click character confirm", "wait" },
             GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
+            GuiSmokePhase.HandleRewards when ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
+                => BuildShopAllowedActions(observer.Summary, history),
             GuiSmokePhase.HandleRewards when explicitRestSiteChoiceAuthority
                 => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
             GuiSmokePhase.HandleRewards when restSiteScene is { SmithUpgradeActive: true }

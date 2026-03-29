@@ -868,6 +868,35 @@ internal static partial class Program
             }
         }
 
+        if (phase == GuiSmokePhase.HandleRewards)
+        {
+            if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
+            {
+                return false;
+            }
+
+            if (TryGetCanonicalForegroundModalBranch(observer, history, out var branchKind, out var canonicalForegroundPhase))
+            {
+                if (canonicalForegroundPhase == GuiSmokePhase.HandleRewards)
+                {
+                    return false;
+                }
+
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), $"reward-resolved-{branchKind["branch-".Length..]}", null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), $"reward-resolved-{branchKind["branch-".Length..]}", observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = canonicalForegroundPhase;
+                return true;
+            }
+
+            if (MapForegroundReconciliation.HasMapForegroundOwnership(observer, history))
+            {
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "reward-resolved-map", null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "reward-resolved-map", observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = GuiSmokePhase.WaitMap;
+                return true;
+            }
+        }
+
         if (phase == GuiSmokePhase.HandleCombat)
         {
             if (AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, history) is RewardSceneState { RewardForegroundOwned: true, ReleaseStage: RewardReleaseStage.Active })

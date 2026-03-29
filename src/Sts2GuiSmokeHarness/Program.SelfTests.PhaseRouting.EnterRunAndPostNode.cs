@@ -783,8 +783,40 @@ internal static partial class Program
                 bool cardRemovalEnabled = false,
                 bool cardRemovalEnoughGold = false,
                 bool cardRemovalUsed = false,
-                ObserverChoice[]? choices = null)
+                ObserverChoice[]? choices = null,
+                IReadOnlyDictionary<string, string?>? extraMeta = null)
             {
+                var meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["shopRoomDetected"] = "true",
+                    ["shopRoomVisible"] = roomVisible.ToString().ToLowerInvariant(),
+                    ["shopForegroundOwned"] = foregroundOwned.ToString().ToLowerInvariant(),
+                    ["shopTeardownInProgress"] = teardownInProgress.ToString().ToLowerInvariant(),
+                    ["shopIsCurrentActiveScreen"] = shopIsCurrentActiveScreen.ToString().ToLowerInvariant(),
+                    ["mapCurrentActiveScreen"] = mapCurrentActiveScreen.ToString().ToLowerInvariant(),
+                    ["activeScreenType"] = activeScreenType,
+                    ["shopRootType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom",
+                    ["shopInventoryOpen"] = inventoryOpen.ToString().ToLowerInvariant(),
+                    ["shopMerchantButtonVisible"] = merchantButtonVisible.ToString().ToLowerInvariant(),
+                    ["shopMerchantButtonEnabled"] = merchantButtonEnabled.ToString().ToLowerInvariant(),
+                    ["shopProceedEnabled"] = proceedEnabled.ToString().ToLowerInvariant(),
+                    ["shopBackVisible"] = backVisible.ToString().ToLowerInvariant(),
+                    ["shopBackEnabled"] = backEnabled.ToString().ToLowerInvariant(),
+                    ["shopOptionCount"] = (choices?.Count(static choice => choice.Kind.StartsWith("shop-option", StringComparison.OrdinalIgnoreCase) || string.Equals(choice.Kind, "shop-card-removal", StringComparison.OrdinalIgnoreCase)) ?? 0).ToString(CultureInfo.InvariantCulture),
+                    ["shopAffordableOptionCount"] = affordableOptionCount.ToString(CultureInfo.InvariantCulture),
+                    ["shopCardRemovalVisible"] = cardRemovalVisible.ToString().ToLowerInvariant(),
+                    ["shopCardRemovalEnabled"] = cardRemovalEnabled.ToString().ToLowerInvariant(),
+                    ["shopCardRemovalEnoughGold"] = cardRemovalEnoughGold.ToString().ToLowerInvariant(),
+                    ["shopCardRemovalUsed"] = cardRemovalUsed.ToString().ToLowerInvariant(),
+                };
+                if (extraMeta is not null)
+                {
+                    foreach (var entry in extraMeta)
+                    {
+                        meta[entry.Key] = entry.Value;
+                    }
+                }
+
                 var summary = new ObserverSummary(
                     "shop",
                     "shop",
@@ -806,30 +838,9 @@ internal static partial class Program
                     choices ?? Array.Empty<ObserverChoice>(),
                     Array.Empty<ObservedCombatHandCard>())
                 {
-                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["shopRoomDetected"] = "true",
-                        ["shopRoomVisible"] = roomVisible.ToString().ToLowerInvariant(),
-                        ["shopForegroundOwned"] = foregroundOwned.ToString().ToLowerInvariant(),
-                        ["shopTeardownInProgress"] = teardownInProgress.ToString().ToLowerInvariant(),
-                        ["shopIsCurrentActiveScreen"] = shopIsCurrentActiveScreen.ToString().ToLowerInvariant(),
-                        ["mapCurrentActiveScreen"] = mapCurrentActiveScreen.ToString().ToLowerInvariant(),
-                        ["activeScreenType"] = activeScreenType,
-                        ["shopRootType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom",
-                        ["shopInventoryOpen"] = inventoryOpen.ToString().ToLowerInvariant(),
-                        ["shopMerchantButtonVisible"] = merchantButtonVisible.ToString().ToLowerInvariant(),
-                        ["shopMerchantButtonEnabled"] = merchantButtonEnabled.ToString().ToLowerInvariant(),
-                        ["shopProceedEnabled"] = proceedEnabled.ToString().ToLowerInvariant(),
-                        ["shopBackVisible"] = backVisible.ToString().ToLowerInvariant(),
-                        ["shopBackEnabled"] = backEnabled.ToString().ToLowerInvariant(),
-                        ["shopOptionCount"] = (choices?.Count(static choice => choice.Kind.StartsWith("shop-option", StringComparison.OrdinalIgnoreCase) || string.Equals(choice.Kind, "shop-card-removal", StringComparison.OrdinalIgnoreCase)) ?? 0).ToString(CultureInfo.InvariantCulture),
-                        ["shopAffordableOptionCount"] = affordableOptionCount.ToString(CultureInfo.InvariantCulture),
-                        ["shopCardRemovalVisible"] = cardRemovalVisible.ToString().ToLowerInvariant(),
-                        ["shopCardRemovalEnabled"] = cardRemovalEnabled.ToString().ToLowerInvariant(),
-                        ["shopCardRemovalEnoughGold"] = cardRemovalEnoughGold.ToString().ToLowerInvariant(),
-                        ["shopCardRemovalUsed"] = cardRemovalUsed.ToString().ToLowerInvariant(),
-                    },
+                    Meta = meta,
                 };
+
                 return new ObserverState(summary, null, null, null);
             }
 
@@ -862,6 +873,35 @@ internal static partial class Program
                     null));
             }
 
+            GuiSmokeStepDecision DecideRewardsFallback(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
+            {
+                history ??= Array.Empty<GuiSmokeHistoryEntry>();
+                return AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                    "run",
+                    "reward-fallback-self-test",
+                    12,
+                    GuiSmokePhase.HandleRewards.ToString(),
+                    "Resolve reward aftermath.",
+                    DateTimeOffset.UtcNow,
+                    "screen.png",
+                    new WindowBounds(0, 0, 1280, 720),
+                    "phase:handlerewards|screen:shop|visible:shop|encounter:shop|ready:true|stability:stable|room:shop",
+                    "reward-fallback-self-test",
+                    1,
+                    1,
+                    true,
+                    "tactical",
+                    null,
+                    observer.Summary,
+                    Array.Empty<KnownRecipeHint>(),
+                    Array.Empty<EventKnowledgeCandidate>(),
+                    Array.Empty<CombatCardKnowledgeHint>(),
+                    BuildAllowedActions(GuiSmokePhase.HandleRewards, observer, Array.Empty<CombatCardKnowledgeHint>(), null, history),
+                    history,
+                    "reward fallback self-test",
+                    null));
+            }
+
             var embarkShopObserver = CreateShopObserver(inventoryOpen: true);
             Assert(GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(embarkShopObserver, out var postEmbarkShopPhase) && postEmbarkShopPhase == GuiSmokePhase.HandleShop, "Embark should reconcile to HandleShop when observer already reports a shop room.");
 
@@ -887,6 +927,19 @@ internal static partial class Program
                     AllowsFastForegroundWait: true,
                 },
                 "Shop scene state should preserve shop ownership, HandleShop handoff, and fast-wait eligibility.");
+            Assert(BuildAllowedActions(GuiSmokePhase.HandleRewards, shopOpenInventoryObserver, Array.Empty<CombatCardKnowledgeHint>(), null, Array.Empty<GuiSmokeHistoryEntry>()).Contains("click shop open inventory", StringComparer.OrdinalIgnoreCase), "HandleRewards fallback should reopen explicit shop authority instead of collapsing to reward wait.");
+            Assert(string.Equals(DecideRewardsFallback(shopOpenInventoryObserver).TargetLabel, "shop open inventory", StringComparison.OrdinalIgnoreCase), "HandleRewards fallback should delegate explicit shop authority to HandleShop decisions.");
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.HandleRewards,
+                    shopOpenInventoryObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    new ArtifactRecorder(Path.Combine(Path.GetTempPath(), $"gui-smoke-handle-reward-shop-reopen-{Guid.NewGuid():N}")),
+                    12,
+                    true,
+                    out var rewardFallbackShopPhase)
+                && rewardFallbackShopPhase == GuiSmokePhase.HandleShop,
+                "HandleRewards should alternate-branch back to HandleShop when explicit shop authority is foreground-active.");
 
             var shopRelicObserver = CreateShopObserver(
                 inventoryOpen: true,
@@ -1028,6 +1081,53 @@ internal static partial class Program
                     out var postShopPhase)
                 && postShopPhase == GuiSmokePhase.WaitMap,
                 "HandleShop should release ownership to map aftermath reconciliation when shop teardown is active.");
+
+            var shopWithStaleRewardObserver = CreateShopObserver(
+                inventoryOpen: true,
+                backVisible: true,
+                backEnabled: true,
+                choices: new[]
+                {
+                    new ObserverChoice("shop-back", "Back", "220,160,140,100")
+                    {
+                        BindingKind = "shop-room",
+                        BindingId = "back",
+                        Enabled = true,
+                    },
+                    new ObserverChoice("shop-option:card", "분노", "420,320,180,180")
+                    {
+                        BindingKind = "shop-option",
+                        BindingId = "CARD.ANGER",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:shop", "shop-type:card" },
+                    },
+                },
+                extraMeta: new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["rewardScreenDetected"] = "true",
+                    ["rewardScreenVisible"] = "true",
+                    ["rewardForegroundOwned"] = "true",
+                    ["rewardTeardownInProgress"] = "true",
+                    ["rewardIsCurrentActiveScreen"] = "false",
+                });
+            Assert(AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(shopWithStaleRewardObserver, null, Array.Empty<GuiSmokeHistoryEntry>()) is ShopSceneState
+                {
+                    CanonicalForegroundOwner: NonCombatCanonicalForegroundOwner.Shop,
+                    ReleaseStage: NonCombatReleaseStage.Active,
+                    HandoffTarget: NonCombatHandoffTarget.HandleShop,
+                },
+                "Active shop authority should outrank stale reward leftovers in the canonical non-combat scene builder.");
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.HandleRewards,
+                    shopWithStaleRewardObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    new ArtifactRecorder(Path.Combine(Path.GetTempPath(), $"gui-smoke-handle-reward-stale-shop-{Guid.NewGuid():N}")),
+                    12,
+                    true,
+                    out var rewardStaleShopPhase)
+                && rewardStaleShopPhase == GuiSmokePhase.HandleShop,
+                "HandleRewards should recover to HandleShop even when stale reward metadata remains under an active shop foreground.");
 
             var shopProceedAfterPurchaseActions = BuildAllowedActions(
                 GuiSmokePhase.HandleShop,
