@@ -263,6 +263,11 @@ internal static partial class Program
             var inventoryOnlyObserver = new ObserverSnapshotReader(liveLayout, harnessLayout).Read();
             Assert(string.Equals(inventoryOnlyObserver.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Observer should fall back to harness inventory sceneType when state.latest.json is not available.");
             Assert(string.Equals(inventoryOnlyObserver.VisibleScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Observer visibleScreen should fall back to harness inventory sceneType when state.latest.json is not available.");
+            Assert(string.IsNullOrWhiteSpace(inventoryOnlyObserver.RawCurrentScreen), "Observer raw current-screen should stay null when inventory only provides the generic sceneType alias.");
+            Assert(string.IsNullOrWhiteSpace(inventoryOnlyObserver.PublishedCurrentScreen), "Observer published current-screen should not collapse back to the generic inventory sceneType alias.");
+            Assert(string.IsNullOrWhiteSpace(inventoryOnlyObserver.CompatibilityCurrentScreen), "Observer compatibility current-screen should stay null when inventory only provides the generic sceneType alias.");
+            Assert(inventoryOnlyObserver.PublishedSceneReady is null
+                   && inventoryOnlyObserver.CompatibilitySceneReady is null, "Observer scene-ready provenance should stay null when inventory only provides the generic sceneReady alias.");
             Assert(inventoryOnlyObserver.CapturedAt == inventoryCapturedAt, "Observer capturedAt should fall back to harness inventory when state.latest.json is not available.");
 
             LongRunArtifacts.InitializeSessionArtifacts(manualCleanBootBootstrapRoot, "clean-boot-bootstrap-session", "boot-to-long-run", "headless");

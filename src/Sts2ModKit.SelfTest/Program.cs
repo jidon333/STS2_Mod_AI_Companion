@@ -62,8 +62,10 @@ Run("inventory publisher preserves strict map-node source contract", TestInvento
 Run("tracker and inventory preserve raw and compatibility screen provenance", TestTrackerAndInventoryPreserveScreenProvenance, failures);
 Run("tracker re-emits additive screen provenance aliases", TestTrackerReEmitsAdditiveScreenProvenanceAliases, failures);
 Run("inventory publisher separates primary and compatibility scene provenance", TestInventoryPublisherSeparatesPrimaryAndCompatibilitySceneProvenance, failures);
+Run("published scene provenance ignores legacy compatibility meta", TestPublishedSceneProvenanceIgnoresLegacyCompatibilityMeta, failures);
 Run("inventory publisher suppresses immediate publish for unstable mixed provenance", TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance, failures);
 Run("inventory publisher fingerprint tracks provenance fields", TestInventoryPublisherFingerprintTracksProvenanceFields, failures);
+Run("bridge guard surface requires explicit published scene provenance", TestHarnessBridgeGuardSurfaceRequiresPublishedProvenance, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
@@ -2391,6 +2393,67 @@ static void TestInventoryPublisherSeparatesPrimaryAndCompatibilitySceneProvenanc
     Assert(string.Equals(inventory.CompatibilitySceneStability, "stabilizing", StringComparison.OrdinalIgnoreCase), "Inventory scene stability should preserve explicit compatibility truth.");
 }
 
+static void TestPublishedSceneProvenanceIgnoresLegacyCompatibilityMeta()
+{
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
+    var observation = new LiveExportObservation(
+        "runtime-poll",
+        DateTimeOffset.UtcNow,
+        "run-published-scene-strictness-self-test",
+        "active",
+        "rewards",
+        null,
+        null,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        Array.Empty<LiveExportChoiceSummary>(),
+        Array.Empty<string>(),
+        null,
+        new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["screen"] = "rewards",
+            ["rawObservedScreen"] = "rewards",
+            ["logicalScreen"] = "event",
+            ["visibleScreen"] = "map",
+            ["sceneReady"] = "true",
+            ["sceneAuthority"] = "legacy",
+            ["sceneStability"] = "stable",
+        });
+
+    var snapshot = tracker.Apply(observation).Snapshot;
+    Assert(string.Equals(snapshot.PublishedCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker published current screen should come from direct observed truth, not legacy logicalScreen.");
+    Assert(string.Equals(snapshot.PublishedVisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker published visible screen should stay on explicit published/direct truth, not legacy visibleScreen.");
+    Assert(snapshot.PublishedSceneReady is null, "Tracker published scene-ready should ignore legacy sceneReady compatibility meta.");
+    Assert(string.IsNullOrWhiteSpace(snapshot.PublishedSceneAuthority), "Tracker published scene authority should ignore legacy sceneAuthority compatibility meta.");
+    Assert(string.IsNullOrWhiteSpace(snapshot.PublishedSceneStability), "Tracker published scene stability should ignore legacy sceneStability compatibility meta.");
+    Assert(string.Equals(snapshot.CompatibilityLogicalScreen, "event", StringComparison.OrdinalIgnoreCase), "Tracker compatibility logical screen should still preserve legacy logicalScreen.");
+    Assert(string.Equals(snapshot.CompatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker compatibility visible screen should still preserve legacy visibleScreen.");
+    Assert(snapshot.CompatibilitySceneReady == true, "Tracker compatibility scene-ready should keep legacy sceneReady.");
+    Assert(string.Equals(snapshot.CompatibilitySceneAuthority, "legacy", StringComparison.OrdinalIgnoreCase), "Tracker compatibility scene authority should keep legacy sceneAuthority.");
+    Assert(string.Equals(snapshot.CompatibilitySceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Tracker compatibility scene stability should keep legacy sceneStability.");
+
+    var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
+        ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(buildInventoryMethod is not null, "Expected private InventoryPublisher.BuildInventory helper.");
+    var normalizedScene = new CompanionNormalizedScene("event", "event", 1.0, "test");
+    var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
+    Assert(inventory is not null, "Expected inventory publisher to build an inventory from the strict published snapshot.");
+    Assert(string.Equals(inventory!.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory primary scene type should stay on published/direct screen truth instead of compatibility logicalScreen.");
+    Assert(string.Equals(inventory.PublishedSceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory published scene type should stay on published/direct screen truth.");
+    Assert(string.Equals(inventory.PublishedVisibleScene, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory published visible scene should stay on published/direct screen truth.");
+    Assert(inventory.PublishedSceneReady is null, "Inventory published scene-ready should ignore legacy compatibility sceneReady meta.");
+    Assert(string.IsNullOrWhiteSpace(inventory.PublishedSceneAuthority), "Inventory published scene authority should ignore legacy compatibility sceneAuthority meta.");
+    Assert(string.IsNullOrWhiteSpace(inventory.PublishedSceneStability), "Inventory published scene stability should ignore legacy compatibility sceneStability meta.");
+    Assert(string.Equals(inventory.CompatibilitySceneType, "event", StringComparison.OrdinalIgnoreCase), "Inventory compatibility scene type should continue to preserve legacy logicalScreen.");
+    Assert(string.Equals(inventory.CompatibilityVisibleScene, "map", StringComparison.OrdinalIgnoreCase), "Inventory compatibility visible scene should continue to preserve legacy visibleScreen.");
+    Assert(inventory.CompatibilitySceneReady == true, "Inventory compatibility scene-ready should continue to preserve legacy sceneReady.");
+    Assert(string.Equals(inventory.CompatibilitySceneAuthority, "legacy", StringComparison.OrdinalIgnoreCase), "Inventory compatibility scene authority should continue to preserve legacy sceneAuthority.");
+    Assert(string.Equals(inventory.CompatibilitySceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Inventory compatibility scene stability should continue to preserve legacy sceneStability.");
+}
+
 static void TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance()
 {
     var publisherType = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher");
@@ -2468,6 +2531,50 @@ static void TestInventoryPublisherFingerprintTracksProvenanceFields()
     Assert(!string.IsNullOrWhiteSpace(baselineFingerprint), "Expected inventory publisher fingerprint.");
     Assert(!string.IsNullOrWhiteSpace(changedVisibleFingerprint), "Expected changed inventory publisher fingerprint.");
     Assert(!string.Equals(baselineFingerprint, changedVisibleFingerprint, StringComparison.Ordinal), "Inventory publisher fingerprint should change when compatibility provenance changes even without node churn.");
+}
+
+static void TestHarnessBridgeGuardSurfaceRequiresPublishedProvenance()
+{
+    var hostType = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.HarnessBridgeHost");
+    Assert(hostType is not null, "Expected HarnessBridgeHost type.");
+
+    var resolveReadyMethod = hostType!.GetMethod("ResolveGuardSceneReady", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    var resolveAuthorityMethod = hostType.GetMethod("ResolveGuardSceneAuthority", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    var resolveStabilityMethod = hostType.GetMethod("ResolveGuardSceneStability", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(resolveReadyMethod is not null && resolveAuthorityMethod is not null && resolveStabilityMethod is not null, "Expected private harness-bridge guard provenance helpers.");
+
+    var compatibilityOnlyInventory = new HarnessNodeInventory(
+        "compat-only-inventory",
+        DateTimeOffset.UtcNow,
+        null,
+        "main-menu",
+        "episode",
+        "armed",
+        null,
+        true,
+        "compat",
+        "stable",
+        Array.Empty<HarnessNodeInventoryItem>())
+    {
+        CompatibilitySceneReady = true,
+        CompatibilitySceneAuthority = "compat",
+        CompatibilitySceneStability = "stable",
+    };
+
+    Assert(resolveReadyMethod.Invoke(null, new object?[] { compatibilityOnlyInventory }) is null, "Guard scene-ready should ignore compatibility-only provenance.");
+    Assert(resolveAuthorityMethod.Invoke(null, new object?[] { compatibilityOnlyInventory }) is null, "Guard scene-authority should ignore compatibility-only provenance.");
+    Assert(resolveStabilityMethod.Invoke(null, new object?[] { compatibilityOnlyInventory }) is null, "Guard scene-stability should ignore compatibility-only provenance.");
+
+    var publishedInventory = compatibilityOnlyInventory with
+    {
+        PublishedSceneReady = true,
+        PublishedSceneAuthority = "published",
+        PublishedSceneStability = "stable",
+    };
+
+    Assert(resolveReadyMethod.Invoke(null, new object?[] { publishedInventory }) is bool publishedReady && publishedReady, "Guard scene-ready should accept explicit published provenance.");
+    Assert(string.Equals(resolveAuthorityMethod.Invoke(null, new object?[] { publishedInventory }) as string, "published", StringComparison.OrdinalIgnoreCase), "Guard scene-authority should accept explicit published provenance.");
+    Assert(string.Equals(resolveStabilityMethod.Invoke(null, new object?[] { publishedInventory }) as string, "stable", StringComparison.OrdinalIgnoreCase), "Guard scene-stability should accept explicit published provenance.");
 }
 
 static void TestRuntimeReflectionRejectsOverlayLikePlayerRoots()

@@ -289,17 +289,17 @@ internal sealed class HarnessBridgeHost
 
     private static bool? ResolveGuardSceneReady(HarnessNodeInventory inventory)
     {
-        return inventory.PublishedSceneReady ?? inventory.SceneReady ?? inventory.CompatibilitySceneReady;
+        return inventory.PublishedSceneReady;
     }
 
     private static string? ResolveGuardSceneAuthority(HarnessNodeInventory inventory)
     {
-        return inventory.PublishedSceneAuthority ?? inventory.SceneAuthority ?? inventory.CompatibilitySceneAuthority;
+        return inventory.PublishedSceneAuthority;
     }
 
     private static string? ResolveGuardSceneStability(HarnessNodeInventory inventory)
     {
-        return inventory.PublishedSceneStability ?? inventory.SceneStability ?? inventory.CompatibilitySceneStability;
+        return inventory.PublishedSceneStability;
     }
 
     private sealed record GuardEvaluation(string GuardState, string Reason);
