@@ -64,8 +64,6 @@ internal static partial class Program
         var explicitEventRecoveryAuthority = AutoDecisionProvider.HasExplicitEventRecoveryAuthority(observer, context.WindowBounds, history, eventScene);
         var eventOwnerActive = eventScene.EventForegroundOwned
                                && eventScene.ReleaseStage == EventReleaseStage.Active;
-        var mapForegroundOwnership = MapForegroundReconciliation.HasMapForegroundOwnership(observer, history);
-        var explicitMapForegroundOwnership = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer);
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
         var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
         var restSiteScene = AutoDecisionProvider.BuildRestSiteSceneState(observer.Summary);
@@ -99,31 +97,8 @@ internal static partial class Program
                 => new[] { "click proceed", "wait" },
             GuiSmokePhase.HandleRewards
                 => BuildRewardAllowedActions(observer, context),
-            GuiSmokePhase.ChooseFirstNode when ancientMapOwner && ancientMapSurfacePending
-                => new[] { "wait" },
-            GuiSmokePhase.ChooseFirstNode when ancientMapOwner
-                => BuildMapForegroundRoutingAllowedActions(),
-            GuiSmokePhase.ChooseFirstNode when explicitRestSiteChoiceAuthority
-                => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
-            GuiSmokePhase.ChooseFirstNode when CardSelectionObserverSignals.IsUpgradeState(observer.Summary)
-                                            && string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
-                => new[] { "click smith card", "click smith confirm", "wait" },
-            GuiSmokePhase.ChooseFirstNode when restSiteScene is { SmithUpgradeActive: true }
-                => new[] { "click smith card", "click smith confirm", "wait" },
-            GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary)
-                => new[] { "click proceed", "wait" },
-            GuiSmokePhase.ChooseFirstNode when treasureState is { RoomDetected: true }
-                => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
-            GuiSmokePhase.ChooseFirstNode when !LooksLikeInspectOverlayState(observer)
-                                            && explicitEventRecoveryAuthority
-                => BuildAllowedActionsCore(GuiSmokePhase.HandleEvent, observer, combatCardKnowledge, screenshotPath, history, context),
-            GuiSmokePhase.ChooseFirstNode when mapOverlayState.ForegroundVisible
-                => BuildMapOverlayRoutingAllowedActions(mapOverlayState),
-            GuiSmokePhase.ChooseFirstNode when mapForegroundOwnership
-                => BuildMapForegroundRoutingAllowedActions(),
-            GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer.Summary)
-                => new[] { "click smith card", "click smith confirm", "wait" },
-            GuiSmokePhase.ChooseFirstNode => BuildMapForegroundRoutingAllowedActions(),
+            GuiSmokePhase.ChooseFirstNode
+                => BuildChooseFirstNodeAllowedActions(observer, combatCardKnowledge, screenshotPath, history, context),
             GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
                 => new[] { "press escape", "click inspect overlay close", "wait" },
             GuiSmokePhase.HandleEvent when cardSelectionState is not null
@@ -146,7 +121,7 @@ internal static partial class Program
                 => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
             GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !eventScene.StrongForegroundChoice && !explicitEventProceedAuthority && !explicitEventRecoveryAuthority
                 => BuildMapOverlayRoutingAllowedActions(mapOverlayState),
-            GuiSmokePhase.HandleEvent when (mapForegroundOwnership || explicitMapForegroundOwnership)
+            GuiSmokePhase.HandleEvent when (MapForegroundReconciliation.HasMapForegroundOwnership(observer, history) || NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
                                             && !forceEventProgressionAfterCardSelection
                                             && !eventOwnerActive
                                             && !explicitEventProceedAuthority
@@ -161,6 +136,28 @@ internal static partial class Program
             GuiSmokePhase.HandleShop => BuildShopAllowedActions(observer.Summary, history),
             GuiSmokePhase.HandleCombat => GetCombatAllowedActions(observer, combatCardKnowledge, screenshotPath, history),
             _ => new[] { "wait" },
+        };
+    }
+
+    static string[] BuildChooseFirstNodeAllowedActions(
+        ObserverState observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        string? screenshotPath,
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        GuiSmokeStepAnalysisContext context)
+    {
+        return GuiSmokeChooseFirstNodeLaneSupport.Resolve(observer, context.WindowBounds, screenshotPath, history, context) switch
+        {
+            GuiSmokeChooseFirstNodeLane.AncientMapPending => new[] { "wait" },
+            GuiSmokeChooseFirstNodeLane.AncientMapForeground => BuildMapForegroundRoutingAllowedActions(),
+            GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
+            GuiSmokeChooseFirstNodeLane.RestSiteSmithUpgrade => new[] { "click smith card", "click smith confirm", "wait" },
+            GuiSmokeChooseFirstNodeLane.RestSiteProceed => new[] { "click proceed", "wait" },
+            GuiSmokeChooseFirstNodeLane.TreasureRoom => TreasureRoomObserverSignals.BuildAllowedActions(TreasureRoomObserverSignals.TryGetState(observer.Summary)!),
+            GuiSmokeChooseFirstNodeLane.ShopRoom => BuildShopAllowedActions(observer.Summary, history),
+            GuiSmokeChooseFirstNodeLane.EventRecovery => BuildAllowedActionsCore(GuiSmokePhase.HandleEvent, observer, combatCardKnowledge, screenshotPath, history, context),
+            GuiSmokeChooseFirstNodeLane.MapOverlay => BuildMapOverlayRoutingAllowedActions(context.MapOverlayState),
+            _ => BuildMapForegroundRoutingAllowedActions(),
         };
     }
 

@@ -92,54 +92,6 @@ sealed partial class AutoDecisionProvider
         return RestSiteChoiceSupport.BuildCandidateLabels(observer).ToArray();
     }
 
-    private static bool HasExplicitRestSiteChoiceAffordance(ObserverSummary observer)
-    {
-        return RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
-    }
-
-    private static bool HasRestSiteRestChoice(ObserverSummary observer)
-    {
-        return RestSiteChoiceSupport.HasRestSiteRestChoice(observer);
-    }
-
-    private static bool HasRestSiteSmithChoice(ObserverSummary observer)
-    {
-        return RestSiteChoiceSupport.HasRestSiteSmithChoice(observer);
-    }
-
-    private static bool HasRestSiteHatchChoice(ObserverSummary observer)
-    {
-        return RestSiteChoiceSupport.HasRestSiteHatchChoice(observer);
-    }
-
-    private static bool IsExplicitRestSiteChoiceLabel(string? label)
-    {
-        return HasRestSiteRestLabel(label)
-               || HasRestSiteSmithLabel(label)
-               || HasRestSiteHatchLabel(label);
-    }
-
-    private static bool HasRestSiteRestLabel(string? label)
-    {
-        return !string.IsNullOrWhiteSpace(label)
-               && (label.Contains("휴식", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("Rest", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool HasRestSiteSmithLabel(string? label)
-    {
-        return !string.IsNullOrWhiteSpace(label)
-               && (label.Contains("재련", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("Smith", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool HasRestSiteHatchLabel(string? label)
-    {
-        return !string.IsNullOrWhiteSpace(label)
-               && (label.Contains("부화", StringComparison.OrdinalIgnoreCase)
-                   || label.Contains("Hatch", StringComparison.OrdinalIgnoreCase));
-    }
-
     private static bool HasExplicitEventProceedAuthority(ObserverState observer, WindowBounds? windowBounds)
     {
         return EventProceedObserverSignals.HasExplicitEventProceedAuthority(observer, windowBounds);
@@ -644,11 +596,6 @@ sealed partial class AutoDecisionProvider
             { } target when target.Contains("visible map advance", StringComparison.OrdinalIgnoreCase) => "click visible map advance",
             _ => fallback,
         };
-    }
-
-    private static bool AllowsAction(GuiSmokeStepRequest request, string action)
-    {
-        return request.AllowedActions.Contains(action, StringComparer.OrdinalIgnoreCase);
     }
 
     private static string? TryFindMapNodeBounds(GuiSmokeStepRequest request)

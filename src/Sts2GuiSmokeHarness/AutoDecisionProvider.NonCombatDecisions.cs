@@ -63,7 +63,13 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(request))
+        var chooseFirstNodeLane = GuiSmokeChooseFirstNodeLaneSupport.Resolve(
+            new ObserverState(request.Observer, null, null, request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>()),
+            request.WindowBounds,
+            request.ScreenshotPath,
+            request.History,
+            analysisContext);
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice)
         {
             GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(BuildExplicitRestSiteCandidateLabels(request.Observer));
@@ -86,12 +92,24 @@ sealed partial class AutoDecisionProvider
                    ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for an explicit rest-site choice");
         }
 
-        if (BuildRestSiteSceneState(request.Observer) is
-            {
-                ProceedVisible: true,
-                ExplicitChoiceVisible: false,
-                SmithUpgradeActive: false,
-            })
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteSmithUpgrade)
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "click smith card", "click smith confirm", "wait" });
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site-owner-active-suppresses-map-arrow-contamination");
+            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site-owner-active-preserves-room-lane");
+            return GuiSmokeDecisionDebug.TraceCandidate(
+                       "rest site upgrade",
+                       "rest-site-upgrade",
+                       0.92,
+                       TryCreateRestSiteUpgradeDecision(request),
+                       "rest-site upgrade grid is not currently actionable")
+                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for rest-site smith upgrade controls");
+        }
+
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteProceed)
         {
             GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "click proceed", "wait" });
@@ -109,7 +127,7 @@ sealed partial class AutoDecisionProvider
         }
 
         var treasureDecision = TryCreateTreasureRoomDecision(request);
-        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.TreasureRoom)
         {
             GuiSmokeDecisionDebug.SetSceneModel("treasure-room", "room-context");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(TreasureRoomObserverSignals.BuildAllowedActions(TreasureRoomObserverSignals.TryGetState(request.Observer)!).Append("wait").Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
@@ -120,7 +138,7 @@ sealed partial class AutoDecisionProvider
             return treasureDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for treasure room progression");
         }
 
-        if (ShopObserverSignals.IsShopAuthorityActive(request.Observer))
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.ShopRoom)
         {
             GuiSmokeDecisionDebug.SetSceneModel("shop", "room-context");
             var shopState = ShopObserverSignals.TryGetState(request.Observer)!;
@@ -135,15 +153,20 @@ sealed partial class AutoDecisionProvider
                 : shopDecision;
         }
 
-        var eventScene = analysisContext?.EventScene ?? BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
-        if (!LooksLikeInspectOverlayState(request.Observer)
-            && HasExplicitEventRecoveryAuthority(request.Observer, request.WindowBounds, request.History, eventScene))
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.EventRecovery)
         {
             return DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, analysisContext);
         }
 
         var mapOverlayState = analysisContext?.MapOverlayState ?? GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        if (mapOverlayState.ForegroundVisible)
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.AncientMapPending)
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("map", "ancient-event");
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "wait" });
+            return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for ancient event post-proceed map surface");
+        }
+
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.MapOverlay)
         {
             GuiSmokeDecisionDebug.SetSceneModel("map-overlay", mapOverlayState.EventBackgroundPresent ? "event-context" : "map-context");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(
