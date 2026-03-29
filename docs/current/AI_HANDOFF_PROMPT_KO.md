@@ -19,7 +19,7 @@ repo root:
 - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/PROJECT_STATUS.md
 - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/AI_SESSION_HANDOFF_KO.md
 
-3. harness architecture / cleanup program
+3. harness architecture / cleanup baseline
 - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md
 - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md
 
@@ -35,14 +35,14 @@ repo root:
 - `replay-parity-test`는 current `main` 기준 green
 - `WaitRunLoad` resumed reward/map mixed handoff bug는 이미 닫힘
 - published-first observer provenance migration은 current `main`에 반영됨
-- latest valid fresh live root는 [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)이고 request-scoped noncombat scene cache work unit이 reward aftermath mixed-state closure와 combat EndTurn continuity를 흔들지 않은 채 representative run은 `max-steps-reached:60`까지 진행함
+- latest cleanup proof root는 [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run)이고 `WaitMainMenu -> EnterRun`, `WaitRunLoad -> HandleCombat`, combat post-wait recapture continuity가 모두 fresh live로 확인됨
 - latest speed proof root는 [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)이고 explicit event `step=8~9`, common combat `step=11~17`이 모두 `captureMode=skipped`, `sceneReasoningMode=observer-only`였음
 
 이번 세션 목표
 
 1. old `Program.cs` monolith 전제를 버리고 current owner 파일 기준으로 시작
-2. 구조 refactor reopen 금지
-3. semantic follow-up이 필요하면 combat post-wait recapture / capture-boundary / lifecycle coverage frontier나 runner / noncombat residual cleanup, legacy synthetic retirement만 좁게 다룰 것
+2. cleanup-complete baseline reopen 금지
+3. semantic follow-up이 필요하면 capture-boundary / strict lifecycle / partial coverage row만 좁게 다룰 것
 4. noncombat mixed-state guard cleanup은 reopen 금지
 5. new parallel heuristic family 추가 금지
 6. acceptance 통과 시 바로 커밋
@@ -54,6 +54,7 @@ repo root:
 - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs
 - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs
 - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs
 
 핵심 원칙
 
@@ -65,10 +66,10 @@ repo root:
 
 canonical current signal
 
-- latest valid live root:
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/startup-summary.json
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/session-summary.json
-  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/attempts/0001/run.log
+- latest cleanup proof root:
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run/startup-summary.json
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run/session-summary.json
+  - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run/attempts/0001/run.log
 - latest speed proof root:
   - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/startup-summary.json
   - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/attempts/0001/run.log
@@ -90,7 +91,7 @@ canonical current signal
 - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-test`
 - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-parity-test`
 - semantic acceptance에 live root가 필요하면 fresh run 1회:
-  - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj -- run --scenario boot-to-long-run --provider auto --run-root artifacts/gui-smoke/<fresh-root> --max-attempts 1 --max-steps 60 --stop-on-first-terminal --stop-on-first-loop`
+  - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj -- run --scenario boot-to-long-run --provider auto --run-root artifacts/gui-smoke/<fresh-root> --max-attempts 1 --max-steps 60 --disable-video-capture`
 
 acceptance
 

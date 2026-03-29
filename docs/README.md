@@ -28,7 +28,7 @@
 1. [reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md](./reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)
    - current `Sts2GuiSmokeHarness` file owner / runtime layer map
 2. [contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](./contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)
-   - post-refactor harness / observer cleanup program
+   - cleanup-complete baseline contract and maintenance guardrails
 
 ## Source Of Truth Rules
 
@@ -62,7 +62,7 @@
 | live-charter | [BOUNDARIES.md](./BOUNDARIES.md) | 범위/경계 | product boundary가 바뀔 때 |
 | live-reference | [reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md](./reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md) | current smoke harness module/file architecture | harness internal file ownership or runtime layering이 바뀔 때 |
 | live-contract | [contracts/LIVE_EXPORT_SEMANTICS.md](./contracts/LIVE_EXPORT_SEMANTICS.md) | live export 파일 의미 | export semantics가 바뀔 때 |
-| live-contract | [contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](./contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md) | post-refactor harness / observer cleanup program | cleanup priority, workstream order, 또는 observer fact/export contract가 바뀔 때 |
+| live-contract | [contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](./contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md) | cleanup-complete harness / observer baseline contract | maintenance contract나 observer fact/export contract가 바뀔 때 |
 | live-contract | [contracts/STARTUP_DEPLOY_CONTROL_LAYER.md](./contracts/STARTUP_DEPLOY_CONTROL_LAYER.md) | startup/deploy/bootstrap sequencing contract | sequencing/deploy/trust contract가 바뀔 때 |
 | live-contract | [contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md](./contracts/RUNNER_SUPERVISOR_AGENT_ARCHITECTURE.md) | chronology/projection/state contract | session/accounting contract가 바뀔 때 |
 | live-runbook | [runbooks/SMOKE_TEST_CHECKLIST.md](./runbooks/SMOKE_TEST_CHECKLIST.md) | live smoke 절차 | 절차/성공 신호가 바뀔 때 |

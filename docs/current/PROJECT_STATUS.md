@@ -121,7 +121,7 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 
 ### 구조 / validation baseline
 
-- cleanup program:
+- cleanup baseline contract:
   - [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)
 - current harness architecture:
   - [GUI_SMOKE_HARNESS_ARCHITECTURE.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)
@@ -142,13 +142,13 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
   - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run/session-summary.json)
 - latest cleanup proof run log:
   - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run/attempts/0001/run.log)
-- latest valid live root:
+- main-menu boundary proof root:
   - [wait-main-menu-run-start-readiness-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1)
-- latest live startup summary:
+- main-menu boundary startup summary:
   - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1/startup-summary.json)
-- latest live session summary:
+- main-menu boundary session summary:
   - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1/session-summary.json)
-- latest live run log:
+- main-menu boundary run log:
   - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1/attempts/0001/run.log)
 - speed recovery proof root:
   - [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
@@ -181,7 +181,7 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 - bridge node semantics driven by compatibility scene winner
 - monolithic `Program.cs` 중심 구조
 - large self-test hotspot 1차 분해
-- runner residual / noncombat residue / partial `Program` helper owner / supervision health band hotspot
+- runner residual / noncombat residue / partial `Program` helper owner / supervision health band hotspot extraction
 
 ### 아직 열려 있는 것
 
