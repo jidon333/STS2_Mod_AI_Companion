@@ -42,7 +42,7 @@ repo root:
 
 1. old `Program.cs` monolith 전제를 버리고 current owner 파일 기준으로 시작
 2. cleanup-complete baseline reopen 금지
-3. semantic follow-up이 필요하면 capture-boundary / strict lifecycle / partial coverage row만 좁게 다룰 것
+3. semantic follow-up이 필요하면 strict lifecycle / partial coverage row만 좁게 다룰 것
 4. noncombat mixed-state guard cleanup은 reopen 금지
 5. new parallel heuristic family 추가 금지
 6. acceptance 통과 시 바로 커밋

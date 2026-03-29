@@ -100,7 +100,7 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 | Live-Run Speed Recovery | green | explicit event / common combat hot path가 observer-first로 복귀했고 representative speed root에서 captured step가 0건 |
 | Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 compatibility는 legacy surface로만 남는다 |
 | Post-Refactor Cleanup Program | green | runner residual, noncombat residue, partial `Program` owner shedding, supervision health split까지 current `main`에 반영 |
-| Capture Boundary | partial | bounded failure contract와 self-test는 strong하지만 fresh live proof는 아직 얇다 |
+| Capture Boundary | green | bounded failure contract와 self-test 위에 fresh live proof [capture-boundary-proof-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1)이 추가됐다 |
 | Strict Lifecycle Chain | partial | terminal -> restart -> next-attempt first-screen evidence는 여전히 appendix/work item |
 
 ## 현재 바로 믿을 수 있는 것
@@ -164,6 +164,16 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
   - [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/attempts/0001/failure-summary.json)
 - observer provenance split proof root:
   - [observer-compat-shadow-retirement-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-compat-shadow-retirement-20260329-live1)
+- capture-boundary proof root:
+  - [capture-boundary-proof-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1)
+- capture-boundary proof startup summary:
+  - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1/startup-summary.json)
+- capture-boundary proof session summary:
+  - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1/session-summary.json)
+- capture-boundary proof run log:
+  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1/attempts/0001/run.log)
+- capture-boundary proof failure summary:
+  - [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1/attempts/0001/failure-summary.json)
 - parity fixture now green:
   - `tests/replay-fixtures/m6-parity/reward-map-handoff.request.json`
 
@@ -186,10 +196,10 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 - monolithic `Program.cs` 중심 구조
 - large self-test hotspot 1차 분해
 - runner residual / noncombat residue / partial `Program` helper owner / supervision health band hotspot extraction
+- fresh live capture-boundary bounded failure proof
 
 ### 아직 열려 있는 것
 
-- capture-boundary fresh live proof
 - strict lifecycle chain evidence
 - combat broader parity/live coverage
 - strict lifecycle chain appendix
@@ -219,5 +229,5 @@ combat EndTurn pre-actuation drift / false barrier arm도 current main에서 닫
 explicit event / common combat hot path의 observer-first speed recovery도 current main에서 반영됐다.
 published-first observer provenance migration도 current main에 반영됐다.
 post-refactor cleanup program도 current main에서 완료됐다.
-다음 follow-up은 capture-boundary / strict lifecycle chain / 일부 partial coverage row를 current owner 구조 안에서 보강하는 쪽이다.
+다음 follow-up은 strict lifecycle chain / 일부 partial coverage row를 current owner 구조 안에서 보강하는 쪽이다.
 ```

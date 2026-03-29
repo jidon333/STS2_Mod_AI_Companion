@@ -22,7 +22,7 @@ coverage status 의미:
 
 | Gap | Meaning | Current Status |
 |---|---|---|
-| `VAL-CAPTURE-BOUNDARY` | phase log 이후 capture/request/failure emission을 bounded contract로 고정 | partial |
+| `VAL-CAPTURE-BOUNDARY` | phase log 이후 capture/request/failure emission을 bounded contract로 고정 | green |
 | `TERM-LIFECYCLE-CHAIN` | terminal -> restart -> next-attempt first-screen evidence | partial |
 | `REWARD-AFTERMATH-MAP-HANDOFF` | reward aftermath 이후 map-node continuity, `ChooseFirstNode` / parity alignment | green |
 
@@ -32,7 +32,7 @@ coverage status 의미:
 |---|---|---|---|---|---|
 | `VAL-01` | validation | deploy/runtime identity | green | [SMOKE_TEST_CHECKLIST.md](../runbooks/SMOKE_TEST_CHECKLIST.md), [PROJECT_STATUS.md](./PROJECT_STATUS.md) startup/trust roots | current `main` 운영 규칙 고정 |
 | `VAL-02` | validation | manual-clean-boot | green | [ROADMAP.md](../ROADMAP.md) M4, [PROJECT_STATUS.md](./PROJECT_STATUS.md) bootstrap/trust roots | trust gate는 current baseline에 포함 |
-| `VAL-03` | any phase post-log | capture boundary | partial | `Program.SelfTests.CaptureReplay.cs` capture boundary assertions and bounded failure emission now exist on current `main`; fresh cleanup-complete live proof is still pending | silent-hang hardening live evidence still needed |
+| `VAL-03` | any phase post-log | capture boundary | green | `Program.SelfTests.CaptureReplay.cs`, fresh live root [capture-boundary-proof-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1), [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1/attempts/0001/failure-summary.json) | validation-only capture fault injection으로 `capture-timeout` bounded failure가 fresh live로 고정됨 |
 | `MENU-01` | `WaitMainMenu` / `EnterRun` | main menu | green | `Program.SelfTests.CliStartup.cs`, `Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs`, [wait-main-menu-run-start-readiness-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1), [SMOKE_TEST_CHECKLIST.md](../runbooks/SMOKE_TEST_CHECKLIST.md) | continue vs singleplayer contract 고정, logo-animation bootstrap frame는 accepted 금지 |
 | `MENU-02` | `EnterRun` | continue lane | green | `GetPostEnterRunPhase`, replay parity summaries, main-menu self-tests | continue preferred 유지 |
 | `MENU-03` | `WaitRunLoad` | transition wait | green | `Program.SelfTests.PhaseRouting.RunLoadRecovery.cs`의 explicit transition truth wait-only assertions | explicit transition truth wait-only |
@@ -139,13 +139,12 @@ coverage status 의미:
 
 | Priority | Work Item | Why |
 |---|---|---|
-| P0 | capture boundary fresh live proof | `VAL-03` remains partial even though bounded failure emission and self-tests exist |
-| P1 | strict lifecycle chain evidence | `TERM-02` remains intentionally open |
+| P0 | strict lifecycle chain evidence | `TERM-02` remains intentionally open |
 
 ## Non-Canonical Appendix
 
 아래는 current `main` source-of-truth는 아니지만, 다음 구현 우선순위를 정할 때 참고할 수 있는 recent high-signal branch evidence다.
 
-- capture boundary fresh live proof gap
+- strict lifecycle chain proof gap
 
 이 appendix는 priority signal일 뿐, canonical coverage status는 위 표의 current `main` evidence만으로 판정한다.

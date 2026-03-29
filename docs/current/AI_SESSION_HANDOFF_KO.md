@@ -71,7 +71,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - explicit event / common combat hot path speed recovery도 current `main`에 반영됐다
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug도 current `main`에서 닫혔다
 - published-first observer provenance migration도 current `main`에 반영됐다
-- 다음 작업은 capture-boundary / strict lifecycle coverage follow-up과 일부 partial evidence row 보강이다
+- 다음 작업은 strict lifecycle coverage follow-up과 일부 partial evidence row 보강이다
 
 ## current architecture state
 
@@ -149,7 +149,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 다음 semantic work unit이 있다면 목표는 이 하나다.
 
 ```text
-capture-boundary / strict lifecycle frontier와 일부 partial evidence row를 새 owner 구조 안에서 좁게 다룬다
+strict lifecycle frontier와 일부 partial evidence row를 새 owner 구조 안에서 좁게 다룬다
 ```
 
 우선 열 파일:
@@ -195,5 +195,5 @@ live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
 current main의 하네스 구조 정리, reward aftermath closure, common hot path speed recovery, WaitMainMenu startup boundary closure,
 published-first observer provenance migration, post-refactor cleanup program은 끝났다.
 새 세션은 old Program.cs monolith나 screenshot-first 전제를 다시 가져오지 말고,
-capture-boundary / strict lifecycle coverage와 일부 partial evidence row를 새 owner 파일에서 보강하라.
+strict lifecycle coverage와 일부 partial evidence row를 새 owner 파일에서 보강하라.
 ```
