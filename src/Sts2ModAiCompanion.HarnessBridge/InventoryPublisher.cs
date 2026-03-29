@@ -137,8 +137,10 @@ internal sealed class InventoryPublisher
 
     private static string ResolveRawSceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
     {
-        return NormalizeSceneToken(snapshot.RawObservedScreen)
+        return NormalizeSceneToken(snapshot.RawCurrentScreen)
+               ?? NormalizeSceneToken(snapshot.RawObservedScreen)
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "rawObservedScreen"))
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "rawCurrentScreen"))
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "screen"))
                ?? NormalizeSceneToken(snapshot.CurrentScreen)
                ?? normalizedScene.SceneType;
@@ -146,16 +148,19 @@ internal sealed class InventoryPublisher
 
     private static string ResolvePublishedSceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
     {
-        return NormalizeSceneToken(snapshot.CurrentScreen)
+        return NormalizeSceneToken(snapshot.PublishedCurrentScreen)
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "publishedCurrentScreen"))
+               ?? NormalizeSceneToken(snapshot.CurrentScreen)
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "logicalScreen"))
                ?? normalizedScene.SceneType;
     }
 
     private static string ResolvePublishedVisibleScene(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene, string publishedSceneType)
     {
-        return NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"))
+        return NormalizeSceneToken(snapshot.PublishedVisibleScreen)
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "publishedVisibleScreen"))
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"))
                ?? publishedSceneType
-               ?? NormalizeSceneToken(snapshot.CurrentScreen)
                ?? normalizedScene.SceneType;
     }
 
@@ -163,6 +168,16 @@ internal sealed class InventoryPublisher
         LiveExportSnapshot snapshot,
         string? blockingModal)
     {
+        if (snapshot.PublishedSceneReady is not null)
+        {
+            return snapshot.PublishedSceneReady;
+        }
+
+        if (bool.TryParse(TryGetMeta(snapshot.Meta, "publishedSceneReady"), out var explicitPublishedSceneReady))
+        {
+            return explicitPublishedSceneReady;
+        }
+
         if (bool.TryParse(TryGetMeta(snapshot.Meta, "sceneReady"), out var publishedSceneReady))
         {
             return publishedSceneReady;
@@ -178,14 +193,18 @@ internal sealed class InventoryPublisher
 
     private static string? ResolvePublishedSceneAuthority(LiveExportSnapshot snapshot)
     {
-        return TryGetMeta(snapshot.Meta, "sceneAuthority");
+        return snapshot.PublishedSceneAuthority
+               ?? TryGetMeta(snapshot.Meta, "publishedSceneAuthority")
+               ?? TryGetMeta(snapshot.Meta, "sceneAuthority");
     }
 
     private static string? ResolvePublishedSceneStability(
         LiveExportSnapshot snapshot,
         string? blockingModal)
     {
-        var publishedSceneStability = TryGetMeta(snapshot.Meta, "sceneStability");
+        var publishedSceneStability = snapshot.PublishedSceneStability
+                                      ?? TryGetMeta(snapshot.Meta, "publishedSceneStability")
+                                      ?? TryGetMeta(snapshot.Meta, "sceneStability");
         if (!string.IsNullOrWhiteSpace(publishedSceneStability))
         {
             return publishedSceneStability;

@@ -259,6 +259,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         bool RewardIsTopOverlay,
         bool MapIsCurrentActiveScreen,
         string? ActiveScreenType,
+        string? TopOverlayType,
         string? RootType,
         bool ProceedVisible,
         bool ProceedEnabled,
@@ -510,15 +511,25 @@ internal static class RuntimeSnapshotReflectionExtractor
         AppendChoiceExtractionMetadata(choiceResult, meta, payload);
 
         meta["screen"] = screen;
+        meta["publishedCurrentScreen"] = screen;
         meta["rawObservedScreen"] = screen;
         meta["rootTypeSummary"] = rootTypeSummary;
         meta["rawRootTypeSummary"] = rootTypeSummary;
+        payload["publishedCurrentScreen"] = screen;
         payload["rawObservedScreen"] = screen;
         payload["rawRootTypeSummary"] = rootTypeSummary;
         if (!string.IsNullOrWhiteSpace(rawCurrentScreenValue))
         {
+            meta["rawCurrentScreen"] = rawCurrentScreenValue;
             meta["rawCurrentScreenValue"] = rawCurrentScreenValue;
+            payload["rawCurrentScreen"] = rawCurrentScreenValue;
             payload["rawCurrentScreenValue"] = rawCurrentScreenValue;
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentActiveScreenType))
+        {
+            meta["rawCurrentActiveScreenType"] = currentActiveScreenType;
+            payload["rawCurrentActiveScreenType"] = currentActiveScreenType;
         }
 
         if (!string.IsNullOrWhiteSpace(rawRoomTypeValue))
@@ -3555,6 +3566,7 @@ internal static class RuntimeSnapshotReflectionExtractor
                 RewardIsTopOverlay: false,
                 MapIsCurrentActiveScreen: mapIsCurrentActiveScreen,
                 ActiveScreenType: activeScreenType,
+                TopOverlayType: overlayTopType,
                 RootType: null,
                 ProceedVisible: false,
                 ProceedEnabled: false,
@@ -3621,6 +3633,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             RewardIsTopOverlay: rewardIsTopOverlay,
             MapIsCurrentActiveScreen: mapIsCurrentActiveScreen,
             ActiveScreenType: activeScreenType,
+            TopOverlayType: overlayTopType,
             RootType: rootType,
             ProceedVisible: proceedVisible,
             ProceedEnabled: proceedEnabled,
@@ -3879,19 +3892,25 @@ internal static class RuntimeSnapshotReflectionExtractor
     {
         meta["transitionInProgress"] = observation.TransitionInProgress ? "true" : "false";
         meta["rootSceneCurrentType"] = observation.RootSceneCurrentType;
+        meta["rawRootSceneCurrentType"] = observation.RootSceneCurrentType;
         meta["rootSceneIsMainMenu"] = observation.RootSceneIsMainMenu ? "true" : "false";
         meta["rootSceneIsRun"] = observation.RootSceneIsRun ? "true" : "false";
         meta["currentRunNodePresent"] = observation.CurrentRunNodePresent ? "true" : "false";
         meta["currentRunRoomType"] = observation.CurrentRunRoomType;
+        meta["rawCurrentRunRoomType"] = observation.CurrentRunRoomType;
         meta["currentRunRoomSceneType"] = observation.CurrentRunRoomSceneType;
+        meta["rawCurrentRunRoomSceneType"] = observation.CurrentRunRoomSceneType;
 
         payload["transitionInProgress"] = observation.TransitionInProgress;
         payload["rootSceneCurrentType"] = observation.RootSceneCurrentType;
+        payload["rawRootSceneCurrentType"] = observation.RootSceneCurrentType;
         payload["rootSceneIsMainMenu"] = observation.RootSceneIsMainMenu;
         payload["rootSceneIsRun"] = observation.RootSceneIsRun;
         payload["currentRunNodePresent"] = observation.CurrentRunNodePresent;
         payload["currentRunRoomType"] = observation.CurrentRunRoomType;
+        payload["rawCurrentRunRoomType"] = observation.CurrentRunRoomType;
         payload["currentRunRoomSceneType"] = observation.CurrentRunRoomSceneType;
+        payload["rawCurrentRunRoomSceneType"] = observation.CurrentRunRoomSceneType;
     }
 
     private static Type? FindLoadedType(string fullName)
@@ -5948,7 +5967,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         meta["rewardIsTopOverlay"] = observation.RewardIsTopOverlay ? "true" : "false";
         meta["mapCurrentActiveScreen"] = observation.MapIsCurrentActiveScreen ? "true" : "false";
         meta["activeScreenType"] = observation.ActiveScreenType;
+        meta["rawTopOverlayType"] = observation.TopOverlayType;
         meta["rewardScreenRootType"] = observation.RootType;
+        meta["rawRewardScreenRootType"] = observation.RootType;
         meta["rewardProceedVisible"] = observation.ProceedVisible ? "true" : "false";
         meta["rewardProceedEnabled"] = observation.ProceedEnabled ? "true" : "false";
         meta["rewardVisibleButtonCount"] = observation.VisibleButtonCount.ToString(CultureInfo.InvariantCulture);
@@ -5967,7 +5988,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         payload["rewardIsTopOverlay"] = observation.RewardIsTopOverlay;
         payload["mapCurrentActiveScreen"] = observation.MapIsCurrentActiveScreen;
         payload["activeScreenType"] = observation.ActiveScreenType;
+        payload["rawTopOverlayType"] = observation.TopOverlayType;
         payload["rewardScreenRootType"] = observation.RootType;
+        payload["rawRewardScreenRootType"] = observation.RootType;
         payload["rewardProceedVisible"] = observation.ProceedVisible;
         payload["rewardProceedEnabled"] = observation.ProceedEnabled;
         payload["rewardVisibleButtonCount"] = observation.VisibleButtonCount;

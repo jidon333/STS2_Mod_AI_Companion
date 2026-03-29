@@ -57,6 +57,7 @@ Run("runtime reflection marks ancient post-choice completion buttons explicitly"
 Run("runtime reflection exports generic event proceed semantics from EventOption.IsProceed", TestRuntimeReflectionGenericEventProceedExport, failures);
 Run("runtime reflection normalizes ancient mixed post-proceed ownership to map lane", TestRuntimeReflectionAncientMixedPostProceedOwnershipNormalization, failures);
 Run("runtime reflection keeps map owner when post-proceed map surface is pending", TestRuntimeReflectionAncientMixedPostProceedMapPending, failures);
+Run("runtime reflection separates raw current screen from observed screen", TestRuntimeReflectionSeparatesRawCurrentScreenFromObservedScreen, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("tracker and inventory preserve raw and compatibility screen provenance", TestTrackerAndInventoryPreserveScreenProvenance, failures);
 Run("tracker re-emits additive screen provenance aliases", TestTrackerReEmitsAdditiveScreenProvenanceAliases, failures);
@@ -1665,6 +1666,10 @@ static void TestRuntimeReflectionMixedRestAftermathMapExport()
     var observation = BuildRuntimeObservationForSelfTest(
         new object[]
         {
+            new
+            {
+                CurrentScreen = "map",
+            },
             new FakeActiveScreenContext
             {
                 CurrentScreen = mapScreen,
@@ -1687,6 +1692,12 @@ static void TestRuntimeReflectionMixedRestAftermathMapExport()
     Assert(observation.Meta.TryGetValue("activeScreenType", out var activeScreenType)
            && activeScreenType?.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase) == true,
         "Mixed rest-site aftermath should export NMapScreen as the active screen type.");
+    Assert(observation.Meta.TryGetValue("rawCurrentScreen", out var rawCurrentScreen)
+           && string.Equals(rawCurrentScreen, "map", StringComparison.OrdinalIgnoreCase),
+        "Mixed rest-site aftermath should preserve direct rawCurrentScreen separately from the semantic screen winner.");
+    Assert(observation.Meta.TryGetValue("rawCurrentActiveScreenType", out var rawCurrentActiveScreenType)
+           && rawCurrentActiveScreenType?.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase) == true,
+        "Mixed rest-site aftermath should export rawCurrentActiveScreenType so harness consumers can read direct active-screen provenance.");
 
     var exportedMapNode = observation.Choices.SingleOrDefault(choice => string.Equals(choice.Kind, "map-node", StringComparison.OrdinalIgnoreCase));
     Assert(exportedMapNode is not null, "Mixed rest-site aftermath should still export an explicit reachable map-node.");
@@ -2185,6 +2196,26 @@ static void TestInventoryPublisherMapNodeSourceCorrection()
     Assert(restNode.SemanticHints.Contains("source:map-choice", StringComparer.OrdinalIgnoreCase), "Real map points should retain explicit map-choice source hints.");
 }
 
+static void TestRuntimeReflectionSeparatesRawCurrentScreenFromObservedScreen()
+{
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new
+            {
+                CurrentScreen = "rewards",
+            },
+        },
+        "map");
+
+    Assert(observation.Meta.TryGetValue("rawCurrentScreen", out var rawCurrentScreen)
+           && string.Equals(rawCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Runtime reflection should export rawCurrentScreen from direct runtime state.");
+    Assert(observation.Meta.TryGetValue("rawObservedScreen", out var rawObservedScreen)
+           && string.Equals(rawObservedScreen, "map", StringComparison.OrdinalIgnoreCase), "Runtime reflection should preserve the observed screen separately from rawCurrentScreen.");
+    Assert(observation.Meta.TryGetValue("publishedCurrentScreen", out var publishedCurrentScreen)
+           && string.Equals(publishedCurrentScreen, "map", StringComparison.OrdinalIgnoreCase), "Runtime reflection should export publishedCurrentScreen from the observed screen token.");
+}
+
 static void TestTrackerAndInventoryPreserveScreenProvenance()
 {
     var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
@@ -2215,10 +2246,20 @@ static void TestTrackerAndInventoryPreserveScreenProvenance()
 
     var snapshot = tracker.Apply(observation).Snapshot;
     Assert(string.Equals(snapshot.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker legacy current screen should stay on the compatibility logical screen.");
+    Assert(string.Equals(snapshot.RawCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should expose raw current screen separately from raw observed screen.");
     Assert(string.Equals(snapshot.RawObservedScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should preserve the raw observed screen separately from compatibility logical screen.");
+    Assert(string.Equals(snapshot.PublishedCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should expose published current screen separately from raw and compatibility provenance.");
+    Assert(string.Equals(snapshot.PublishedVisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker published visible screen should preserve the direct observed screen instead of compatibility visible-screen shaping.");
+    Assert(snapshot.PublishedSceneReady is null, "Tracker should not synthesize published scene-ready when the observation did not publish it explicitly.");
+    Assert(string.Equals(snapshot.CompatibilityCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should expose compatibility current screen separately from legacy current screen.");
     Assert(string.Equals(snapshot.CompatibilityLogicalScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should expose the compatibility logical screen explicitly.");
     Assert(string.Equals(snapshot.CompatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should expose compatibility visible-screen shaping separately.");
     Assert(snapshot.CompatibilitySceneReady == false, "Reward/map mixed aftermath should demote compatibility scene-ready while leaving raw screen intact.");
+    Assert(!snapshot.Meta.ContainsKey("logicalScreen"), "Tracker should no longer emit tracker-shaped logicalScreen as primary meta.");
+    Assert(!snapshot.Meta.ContainsKey("visibleScreen"), "Tracker should no longer emit tracker-shaped visibleScreen as primary meta.");
+    Assert(!snapshot.Meta.ContainsKey("sceneReady"), "Tracker should no longer emit tracker-shaped sceneReady as primary meta.");
+    Assert(!snapshot.Meta.ContainsKey("sceneAuthority"), "Tracker should no longer emit tracker-shaped sceneAuthority as primary meta.");
+    Assert(!snapshot.Meta.ContainsKey("sceneStability"), "Tracker should no longer emit tracker-shaped sceneStability as primary meta.");
     Assert(snapshot.Meta.TryGetValue("screen", out var rawScreenMeta)
            && string.Equals(rawScreenMeta, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker meta 'screen' should now preserve raw observed screen.");
     Assert(snapshot.Meta.TryGetValue("rawCurrentScreen", out var rawCurrentScreen)
@@ -2231,6 +2272,10 @@ static void TestTrackerAndInventoryPreserveScreenProvenance()
            && string.Equals(compatVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should write compatibility visible screen into dedicated meta.");
     Assert(snapshot.Meta.TryGetValue("compatibilityVisibleScreen", out var compatibilityVisibleScreen)
            && string.Equals(compatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should emit compatibilityVisibleScreen alongside compatVisibleScreen for additive provenance migration.");
+    Assert(snapshot.Meta.TryGetValue("publishedCurrentScreen", out var publishedCurrentScreenMeta)
+           && string.Equals(publishedCurrentScreenMeta, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should emit publishedCurrentScreen explicitly instead of forcing bridge consumers to reuse logicalScreen.");
+    Assert(snapshot.Meta.TryGetValue("publishedVisibleScreen", out var publishedVisibleScreenMeta)
+           && string.Equals(publishedVisibleScreenMeta, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should emit publishedVisibleScreen explicitly from direct observation instead of forcing bridge consumers to reuse compatibility visibleScreen.");
 
     var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
         ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
@@ -2277,7 +2322,11 @@ static void TestTrackerReEmitsAdditiveScreenProvenanceAliases()
         });
 
     var snapshot = tracker.Apply(observation).Snapshot;
+    Assert(string.Equals(snapshot.RawCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should expose raw current screen directly when additive rawCurrentScreen input is provided.");
     Assert(string.Equals(snapshot.RawObservedScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Tracker should accept rawCurrentScreen input as the raw observed screen source.");
+    Assert(string.Equals(snapshot.PublishedCurrentScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should preserve published current screen separately from additive raw input.");
+    Assert(string.Equals(snapshot.PublishedVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should preserve published visible screen separately from additive raw input.");
+    Assert(string.Equals(snapshot.CompatibilityCurrentScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should keep compatibility current screen sourced from tracker shaping.");
     Assert(string.Equals(snapshot.CompatibilityLogicalScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should keep compatibility logical screen sourced from tracker shaping.");
     Assert(string.Equals(snapshot.CompatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Tracker should keep compatibility visible screen sourced from tracker shaping.");
     Assert(snapshot.Meta.TryGetValue("rawObservedScreen", out var rawObservedScreenMeta)
@@ -2288,6 +2337,10 @@ static void TestTrackerReEmitsAdditiveScreenProvenanceAliases()
            && string.Equals(compatibilityCurrentScreenMeta, "map", StringComparison.OrdinalIgnoreCase), "Tracker should emit compatibilityCurrentScreen even when only additive raw input was provided.");
     Assert(snapshot.Meta.TryGetValue("compatibilityVisibleScreen", out var compatibilityVisibleScreenMeta)
            && string.Equals(compatibilityVisibleScreenMeta, "map", StringComparison.OrdinalIgnoreCase), "Tracker should emit compatibilityVisibleScreen even when only additive raw input was provided.");
+    Assert(snapshot.Meta.TryGetValue("publishedCurrentScreen", out var publishedCurrentScreenMeta)
+           && string.Equals(publishedCurrentScreenMeta, "map", StringComparison.OrdinalIgnoreCase), "Tracker should emit publishedCurrentScreen even when only additive raw input was provided.");
+    Assert(snapshot.Meta.TryGetValue("publishedVisibleScreen", out var publishedVisibleScreenMeta)
+           && string.Equals(publishedVisibleScreenMeta, "map", StringComparison.OrdinalIgnoreCase), "Tracker should emit publishedVisibleScreen even when only additive raw input was provided.");
 }
 
 static void TestInventoryPublisherPrefersCompatibilitySceneProvenance()
@@ -2301,6 +2354,11 @@ static void TestInventoryPublisherPrefersCompatibilitySceneProvenance()
     {
         CurrentScreen = "rewards",
         RawObservedScreen = "rewards",
+        PublishedCurrentScreen = "event",
+        PublishedVisibleScreen = "event",
+        PublishedSceneReady = true,
+        PublishedSceneAuthority = "polling",
+        PublishedSceneStability = "stable",
         CompatibilityLogicalScreen = "rewards",
         CompatibilityVisibleScreen = "map",
         CompatibilitySceneReady = false,
@@ -2321,6 +2379,11 @@ static void TestInventoryPublisherPrefersCompatibilitySceneProvenance()
     var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
     Assert(inventory is not null, "Expected inventory publisher to build an inventory.");
     Assert(string.Equals(inventory!.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory scene type should follow explicit compatibility logical screen, not legacy logicalScreen/flowScreen meta.");
+    Assert(string.Equals(inventory.PublishedSceneType, "event", StringComparison.OrdinalIgnoreCase), "Inventory published scene type should preserve explicit published provenance even when compatibility scene type disagrees.");
+    Assert(string.Equals(inventory.PublishedVisibleScene, "event", StringComparison.OrdinalIgnoreCase), "Inventory published visible scene should preserve explicit published provenance even when compatibility visible scene disagrees.");
+    Assert(inventory.PublishedSceneReady == true, "Inventory published scene-ready should preserve explicit published provenance.");
+    Assert(string.Equals(inventory.PublishedSceneAuthority, "polling", StringComparison.OrdinalIgnoreCase), "Inventory published scene authority should preserve explicit published provenance.");
+    Assert(string.Equals(inventory.PublishedSceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Inventory published scene stability should preserve explicit published provenance.");
     Assert(string.Equals(inventory.CompatibilityLogicalScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should preserve explicit compatibility logical screen separately from scene type.");
     Assert(string.Equals(inventory.CompatibilityVisibleScene, "map", StringComparison.OrdinalIgnoreCase), "Inventory visible scene should follow explicit compatibility visible screen, not legacy visibleScreen meta.");
     Assert(inventory.CompatibilitySceneReady == false, "Inventory scene-ready should preserve explicit compatibility truth.");
