@@ -503,6 +503,11 @@ static class CombatRuntimeStateSupport
             return false;
         }
 
+        if (HasDownstreamAttackResolutionAttempt(history, historyPendingSelection.SlotIndex))
+        {
+            return HasLiveEnemyTargetSurface(observer, runtime);
+        }
+
         var sourceMetadata = TryGetRecentAttackSelectionMetadata(history, historyPendingSelection.SlotIndex);
         if (sourceMetadata is null)
         {
@@ -524,6 +529,80 @@ static class CombatRuntimeStateSupport
 
         return string.Equals(runtime.SelectedCardType, "Attack", StringComparison.OrdinalIgnoreCase)
                || IsEnemyTargetType(runtime.SelectedCardTargetType);
+    }
+
+    private static bool HasDownstreamAttackResolutionAttempt(
+        IReadOnlyList<GuiSmokeHistoryEntry>? history,
+        int slotIndex)
+    {
+        if (history is null || history.Count == 0)
+        {
+            return false;
+        }
+
+        var attackSelectionIndex = TryFindRecentAttackSelectionIndex(history, slotIndex);
+        if (attackSelectionIndex < 0)
+        {
+            return false;
+        }
+
+        for (var index = attackSelectionIndex + 1; index < history.Count; index += 1)
+        {
+            var entry = history[index];
+            if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (CombatHistorySupport.IsCombatEnemyTargetLabel(entry.TargetLabel)
+                || string.Equals(entry.TargetLabel, "confirm selected attack card", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int TryFindRecentAttackSelectionIndex(
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        int slotIndex)
+    {
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                || !CombatHistorySupport.TryParsePendingCombatSelection(entry.TargetLabel, out var selection)
+                || selection?.Kind != AutoCombatCardKind.AttackLike
+                || selection.SlotIndex != slotIndex)
+            {
+                continue;
+            }
+
+            return index;
+        }
+
+        return -1;
+    }
+
+    private static bool HasLiveEnemyTargetSurface(ObserverSummary observer, CombatRuntimeState runtime)
+    {
+        if (runtime.HasExplicitEnemyTargetingEvidence
+            || string.Equals(observer.ChoiceExtractorPath, "combat-targets", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return observer.ActionNodes.Any(node =>
+            node.Actionable
+            && !node.SemanticHints.Any(static hint => string.Equals(hint, "source:runtime-target-summary", StringComparison.OrdinalIgnoreCase))
+            && (string.Equals(node.Kind, "enemy-target", StringComparison.OrdinalIgnoreCase)
+                || node.NodeId.StartsWith("enemy-target:", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(node.TypeName, "enemy-target", StringComparison.OrdinalIgnoreCase)
+                || node.SemanticHints.Any(static hint =>
+                    string.Equals(hint, "combat-targetable", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(hint, "combat-hittable", StringComparison.OrdinalIgnoreCase)
+                    || hint.StartsWith("target-id:", StringComparison.OrdinalIgnoreCase))));
     }
 
     private static CombatBarrierHistoryMetadata? TryGetRecentAttackSelectionMetadata(

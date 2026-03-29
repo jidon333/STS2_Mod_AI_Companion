@@ -898,6 +898,26 @@ internal static partial class Program
             Assert(runtimeTargetSummaryHistoryCarryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
                 "Runtime target summary plus recent attack-lane history should drive enemy targeting instead of reopening the same attack slot.");
 
+            var runtimeTargetSummaryAfterDriftHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 3", DateTimeOffset.UtcNow.AddSeconds(-2)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "observer-drift", "combat enemy target Jaw Worm recenter", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            };
+            Assert(CombatRuntimeStateSupport.ResolvePendingSelection(
+                    runtimeTargetSummaryHistoryCarryObserver,
+                    runtimeTargetingKnowledge,
+                    CombatHistorySupport.TryGetPendingCombatSelection(runtimeTargetSummaryAfterDriftHistory),
+                    runtimeTargetSummaryAfterDriftHistory) is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: 3 },
+                "Live enemy-target surface should keep the recent attack lane alive even after an observer-drift retry.");
+            var runtimeTargetSummaryAfterDriftActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(runtimeTargetSummaryHistoryCarryObserver, null, null, null),
+                runtimeTargetingKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                runtimeTargetSummaryAfterDriftHistory);
+            Assert(runtimeTargetSummaryAfterDriftActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                "Live enemy-target surface should still allow click-enemy after an observer-drift retry.");
+
             var targetSummaryStaleFinishedMetadata = JsonSerializer.Serialize(
                 new CombatBarrierHistoryMetadata(
                     61,
@@ -1001,6 +1021,88 @@ internal static partial class Program
                 null));
             Assert(targetSummaryOnlyCarryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
                 "Target summary carryover should target the enemy instead of repeating the same attack slot.");
+
+            var staleTargetSummaryAfterTargetAttemptObserver = targetSummaryOnlyCarryObserver with
+            {
+                InventoryId = "inv-runtime-target-summary-after-target-attempt",
+                SceneEpisodeId = "episode-runtime-target-summary-after-target-attempt",
+                ChoiceExtractorPath = "combat",
+                CurrentChoices = new[] { "DrawPile", "DiscardPile", "ExhaustPile", "1턴 종료" },
+                ActionNodes = Array.Empty<ObserverActionNode>(),
+                Choices = new[]
+                {
+                    new ObserverChoice("choice", "DrawPile", null),
+                    new ObserverChoice("card", "DiscardPile", null),
+                    new ObserverChoice("choice", "ExhaustPile", null),
+                    new ObserverChoice("choice", "1턴 종료", null),
+                },
+                Meta = new Dictionary<string, string?>(targetSummaryOnlyCarryObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCardPlayPending"] = "false",
+                    ["combatSelectedCardSlot"] = null,
+                    ["combatSelectedCardType"] = "Attack",
+                    ["combatSelectedCardTargetType"] = "AnyEnemy",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatTargetableEnemyCount"] = "0",
+                    ["combatTargetableEnemyIds"] = null,
+                    ["combatHittableEnemyCount"] = "0",
+                    ["combatHittableEnemyIds"] = null,
+                    ["combatHoveredTargetKind"] = null,
+                    ["combatHoveredTargetId"] = null,
+                    ["combatHoveredTargetLabel"] = null,
+                    ["combatHoveredTargetIsHittable"] = null,
+                },
+            };
+            var staleTargetSummaryAfterTargetAttemptHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-2))
+                {
+                    Metadata = targetSummaryStaleFinishedMetadata,
+                },
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "observer-drift", "combat enemy target Jaw Worm recenter", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            };
+            Assert(CombatRuntimeStateSupport.ResolvePendingSelection(
+                    staleTargetSummaryAfterTargetAttemptObserver,
+                    targetSummaryOnlyCarryKnowledge,
+                    CombatHistorySupport.TryGetPendingCombatSelection(staleTargetSummaryAfterTargetAttemptHistory),
+                    staleTargetSummaryAfterTargetAttemptHistory) is null,
+                "Once an enemy-target attempt has already happened, stale attack metadata plus target summary should not keep the old attack lane alive without a live target surface.");
+            var staleTargetSummaryAfterTargetAttemptActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(staleTargetSummaryAfterTargetAttemptObserver, null, null, null),
+                targetSummaryOnlyCarryKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                staleTargetSummaryAfterTargetAttemptHistory);
+            Assert(!staleTargetSummaryAfterTargetAttemptActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                "Stale post-target-attempt combat state should not reopen click-enemy from target-summary carryover alone.");
+            Assert(staleTargetSummaryAfterTargetAttemptActions.Any(action => action.StartsWith("select attack slot ", StringComparison.OrdinalIgnoreCase)),
+                "Stale post-target-attempt combat state should reopen a fresh attack-slot choice instead of waiting on the old lane.");
+            var staleTargetSummaryAfterTargetAttemptDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                31,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "After an enemy-target attempt already happened, stale target-summary carryover should reopen player-action selection instead of waiting on the old lane.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                staleTargetSummaryAfterTargetAttemptObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                targetSummaryOnlyCarryKnowledge,
+                staleTargetSummaryAfterTargetAttemptActions,
+                staleTargetSummaryAfterTargetAttemptHistory,
+                "Drop stale attack-lane carryover after a downstream enemy-target attempt when no live target surface remains.",
+                null));
+            Assert(staleTargetSummaryAfterTargetAttemptDecision.TargetLabel?.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase) == true,
+                "Stale post-target-attempt carryover should reopen a fresh attack-slot decision instead of re-clicking an enemy or waiting.");
 
             var staleCombatLaneCarryMetadata = JsonSerializer.Serialize(
                 new CombatBarrierHistoryMetadata(
