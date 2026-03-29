@@ -71,7 +71,8 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - explicit event / common combat hot path speed recovery도 current `main`에 반영됐다
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug도 current `main`에서 닫혔다
 - published-first observer provenance migration도 current `main`에 반영됐다
-- 다음 작업은 일부 partial evidence row 보강이다
+- `compatibility retirement` 1단계도 current `main`에 반영됐다
+- 다음 작업은 `capture-boundary` fresh live proof다
 
 ## current architecture state
 
@@ -129,6 +130,22 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `step=23 -> 24`, `step=45 -> 46`, `step=57 -> 58`에서 legitimate combat wait 뒤 다음 capture/request로 이어져 post-wait recapture continuity가 fresh live로 추가 확인됐다
 - run은 `max-steps-reached:60`까지 진행했고 `failure-summary.json`은 생성되지 않았다
 
+### 2-1. latest compatibility retirement proof root
+
+- commit: `0c26301` `Retire compatibility shadow from observer primary flow`
+- root: [compat-primary-flow-retirement-20260329-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/compat-primary-flow-retirement-20260329-live2)
+- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/compat-primary-flow-retirement-20260329-live2/startup-summary.json)
+- session summary: [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/compat-primary-flow-retirement-20260329-live2/session-summary.json)
+- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/compat-primary-flow-retirement-20260329-live2/attempts/0001/run.log)
+
+확정 사실:
+
+- `ObserverSnapshotReader`와 `InventoryPublisher`의 primary flow는 compat shadow를 다시 먹지 않게 정리됐다
+- `EnterRun` 조기 클릭 regression root였던 `compat-primary-flow-retirement-20260329-live1`의 collapsed main-menu action layout 문제를 좁게 닫았다
+- `step=3`에서 distinct bounds의 `Continue` surface가 export된 뒤에만 `target=continue` 클릭이 나왔다
+- `step=16`에서 `WaitRunLoad -> HandleCombat from screen=combat`가 정상적으로 열렸다
+- run은 `max-steps-reached:60`까지 진행했고 `failure-summary.json`은 생성되지 않았다
+
 ### 3. latest speed proof root
 
 - root: [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
@@ -146,21 +163,21 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ## 다음 세션의 기본 목표
 
-다음 semantic work unit이 있다면 목표는 이 하나다.
+지금 세션은 메모리 증설 전 pause 상태로 멈췄다. 재개 시 다음 semantic work unit 목표는 이 하나다.
 
 ```text
-partial evidence row를 새 owner 구조 안에서 좁게 다룬다
+capture-boundary fresh live proof를 current baseline 위에서 닫는다
 ```
 
 우선 열 파일:
 
-1. [Program.AllowedActions.Combat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs)
-2. [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
-3. [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
-4. [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
-5. [Program.Runner.AttemptLoop.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.Runner.AttemptLoop.cs)
-6. [LongRunArtifacts.Startup.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
-7. [LongRunArtifacts.Supervision.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs)
+1. [Interop/ScreenCaptureService.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Interop/ScreenCaptureService.cs)
+2. [GuiSmokeCaptureContracts.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/GuiSmokeCaptureContracts.cs)
+3. [Program.Runner.AttemptPreflight.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.Runner.AttemptPreflight.cs)
+4. [Program.SelfTests.CaptureReplay.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.CaptureReplay.cs)
+5. [LongRunArtifacts.Startup.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Startup.cs)
+6. [LongRunArtifacts.Supervision.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/LongRunArtifacts.Supervision.cs)
+7. [Program.Cli.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.Cli.cs)
 
 ## validation baseline
 
