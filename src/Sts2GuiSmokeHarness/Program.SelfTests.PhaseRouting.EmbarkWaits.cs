@@ -73,6 +73,24 @@ internal static partial class Program
             null));
         Assert(string.Equals(embarkDecision.TargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase), "Embark decisioning should switch to the event progression choice instead of waiting for an embark button.");
         Assert(TryClassifyDecisionWaitPlateau(GuiSmokePhase.Embark, embarkEventObserver, 2, out var embarkPlateauCause, out _) && string.Equals(embarkPlateauCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase), "Embark/event repeated waits should escalate to phase-mismatch-stall.");
+        var chooseCharacterRecoveryRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-choose-character-post-embark-{Guid.NewGuid():N}");
+        var chooseCharacterRecoveryLogger = new ArtifactRecorder(chooseCharacterRecoveryRoot);
+        var chooseCharacterHistory = new List<GuiSmokeHistoryEntry>();
+        Assert(
+            TryAdvanceAlternateBranch(
+                GuiSmokePhase.ChooseCharacter,
+                embarkEventObserver,
+                chooseCharacterHistory,
+                chooseCharacterRecoveryLogger,
+                7,
+                false,
+                out var chooseCharacterRecoveredPhase)
+            && chooseCharacterRecoveredPhase == GuiSmokePhase.HandleEvent,
+            "ChooseCharacter should yield to HandleEvent when stale character-select phase survives into an already-visible event room.");
+        Assert(
+            TryClassifyDecisionWaitPlateau(GuiSmokePhase.ChooseCharacter, embarkEventObserver, 2, out var chooseCharacterPlateauCause, out _)
+            && string.Equals(chooseCharacterPlateauCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase),
+            "ChooseCharacter/event repeated waits should escalate to phase-mismatch-stall instead of a generic decision plateau.");
         Assert(TryClassifyDecisionWaitPlateau(GuiSmokePhase.HandleEvent, embarkEventObserver, 5, out var waitPlateauCause, out _) && string.Equals(waitPlateauCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase), "Repeated waits in a stable room scene should escalate to decision-wait-plateau.");
     }
 }

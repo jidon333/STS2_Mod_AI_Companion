@@ -99,7 +99,8 @@ internal static partial class Program
         out string message)
     {
         var postEmbarkPhase = GuiSmokePhase.Embark;
-        var phaseMismatchObserved = phase == GuiSmokePhase.Embark && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out postEmbarkPhase);
+        var phaseMismatchObserved = (phase == GuiSmokePhase.Embark || phase == GuiSmokePhase.ChooseCharacter)
+                                   && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out postEmbarkPhase);
         var plateauLimit = phaseMismatchObserved ? 2 : GetDecisionWaitPlateauLimit(phase);
         if (consecutiveDecisionWaitCount < plateauLimit)
         {
@@ -606,6 +607,25 @@ internal static partial class Program
             history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
             logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
             nextPhase = postEmbarkPhase;
+            return true;
+        }
+
+        if (phase == GuiSmokePhase.ChooseCharacter
+            && GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(observer, out var postChooseCharacterPhase))
+        {
+            var branchKind = postChooseCharacterPhase switch
+            {
+                GuiSmokePhase.HandleRewards => "branch-rewards",
+                GuiSmokePhase.HandleCombat => "branch-combat",
+                GuiSmokePhase.HandleEvent => "branch-event",
+                GuiSmokePhase.HandleShop => "branch-shop",
+                GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(observer.Summary) => "branch-rest-site",
+                GuiSmokePhase.ChooseFirstNode => "branch-map",
+                _ => "branch-room",
+            };
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+            logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+            nextPhase = postChooseCharacterPhase;
             return true;
         }
 
