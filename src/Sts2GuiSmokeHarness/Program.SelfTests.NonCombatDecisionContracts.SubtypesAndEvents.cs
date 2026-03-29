@@ -697,6 +697,130 @@ internal static partial class Program
                 null);
             Assert(BuildAllowedActions(GuiSmokePhase.HandleEvent, upgradeObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>()).Contains("upgrade confirm", StringComparer.OrdinalIgnoreCase), "Upgrade subtype should expose explicit confirm semantics.");
 
+            var upgradeMetaConfirmObserver = new ObserverState(
+                upgradeObserver.Summary with
+                {
+                    InventoryId = "inv-upgrade-meta-confirm",
+                    SceneEpisodeId = "episode-upgrade-meta-confirm",
+                    Choices = new[]
+                    {
+                        new ObserverChoice("upgrade-card", "타격", "255,160,240,337.6", "CARD.STRIKE_IRONCLAD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade", "selected-card" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("upgrade-card", "수비", "255,537.6,240,337.6", "CARD.DEFEND_IRONCLAD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("upgrade-card", "타격", "535,160,240,337.6", "CARD.STRIKE_IRONCLAD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade", "selected-card" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("upgrade-card", "수비", "535,537.6,240,337.6", "CARD.DEFEND_IRONCLAD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("upgrade-card", "타격", "815,160,240,337.6", "CARD.STRIKE_IRONCLAD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade", "selected-card" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("upgrade-card", "수비", "815,537.6,240,337.6", "CARD.DEFEND_IRONCLAD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("upgrade-card", "타격", "1095,160,240,337.6", "CARD.STRIKE_IRONCLAD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade", "selected-card" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("upgrade-card", "수비", "1095,537.6,240,337.6", "CARD.DEFEND_IRONCLAD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("upgrade-card", "타격", "1375,160,240,337.6", "CARD.STRIKE_IRONCLAD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade", "selected-card" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("upgrade-card", "강타", "1375,537.6,240,337.6", "CARD.BASH")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "upgrade",
+                            SemanticHints = new[] { "card-selection:upgrade" },
+                            Enabled = true,
+                        },
+                    },
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["cardSelectionScreenType"] = "upgrade",
+                        ["cardSelectionSelectedCount"] = "1",
+                        ["cardSelectionSelectedCardIds"] = "CARD.STRIKE_IRONCLAD",
+                        ["cardSelectionPreviewVisible"] = "true",
+                        ["cardSelectionPreviewConfirmEnabled"] = "true",
+                        ["cardSelectionPreviewMode"] = "upgrade-single-preview",
+                        ["restSiteUpgradeConfirmVisible"] = "true",
+                        ["restSiteUpgradeConfirmEnabled"] = "true",
+                        ["restSiteUpgradeConfirmBounds"] = "1760,726,200,110",
+                    },
+                },
+                null,
+                null,
+                null);
+            var upgradeMetaConfirmDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                17,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Confirm the selected upgrade even when the capped card-choice surface omits the explicit confirm choice.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 2560, 1440),
+                "phase:handleevent|screen:upgrade|visible:upgrade|card-selection:upgrade|preview:confirm",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                upgradeMetaConfirmObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                BuildAllowedActions(GuiSmokePhase.HandleEvent, upgradeMetaConfirmObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>()),
+                new[]
+                {
+                    new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "upgrade select card 타격", DateTimeOffset.UtcNow.AddSeconds(-2)),
+                },
+                "Upgrade preview confirm should win even when the truncated choice list only contains card entries.",
+                null));
+            Assert(string.Equals(upgradeMetaConfirmDecision.TargetLabel, "upgrade confirm", StringComparison.OrdinalIgnoreCase),
+                "Upgrade preview-visible state should synthesize the explicit confirm lane from raw confirm bounds before repeating card clicks.");
+
             var mixedRewardAfterClaimObserver = new ObserverState(
                 new ObserverSummary(
                     "map",

@@ -120,6 +120,12 @@ static class CardSelectionObserverSignals
             return explicitConfirm;
         }
 
+        var synthesizedConfirm = TryCreateMetaBackedConfirmChoice(observer, state, confirmKind);
+        if (synthesizedConfirm is not null)
+        {
+            return synthesizedConfirm;
+        }
+
         return observer.Choices
             .Where(static choice => IsConfirmLabel(choice.Label))
             .OrderBy(static choice => choice.Enabled == false ? 1 : 0)
@@ -150,6 +156,42 @@ static class CardSelectionObserverSignals
         return choice.SemanticHints.Any(hint => string.Equals(hint, $"card-selection:{screenType}", StringComparison.OrdinalIgnoreCase))
                && !choice.SemanticHints.Any(static hint => string.Equals(hint, "confirm-mode:main", StringComparison.OrdinalIgnoreCase)
                                                            || string.Equals(hint, "confirm-mode:preview", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static ObserverChoice? TryCreateMetaBackedConfirmChoice(
+        ObserverSummary observer,
+        CardSelectionSubtypeState state,
+        string confirmKind)
+    {
+        if (!string.Equals(state.ScreenType, "upgrade", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var confirmBounds = TryGetMetaValue(observer, "restSiteUpgradeConfirmBounds");
+        if (string.IsNullOrWhiteSpace(confirmBounds))
+        {
+            return null;
+        }
+
+        var previewMode = state.PreviewVisible
+            || string.Equals(TryGetMetaValue(observer, "restSiteUpgradePreviewMode"), "single", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(TryGetMetaValue(observer, "restSiteUpgradePreviewMode"), "multi", StringComparison.OrdinalIgnoreCase);
+        var enabled = previewMode
+            ? state.PreviewConfirmEnabled || string.Equals(TryGetMetaValue(observer, "restSiteUpgradeConfirmEnabled"), "true", StringComparison.OrdinalIgnoreCase)
+            : state.MainConfirmEnabled;
+
+        return new ObserverChoice(
+            confirmKind,
+            "Confirm",
+            confirmBounds,
+            previewMode ? "preview-confirm" : "main-confirm")
+        {
+            BindingKind = "card-selection-confirm",
+            BindingId = previewMode ? "preview" : "main",
+            SemanticHints = new[] { $"card-selection:{state.ScreenType}", $"confirm-mode:{(previewMode ? "preview" : "main")}" },
+            Enabled = enabled,
+        };
     }
 
     public static bool IsSelectedCardChoice(ObserverChoice choice)

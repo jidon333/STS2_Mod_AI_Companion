@@ -6124,25 +6124,6 @@ internal static class RuntimeSnapshotReflectionExtractor
             _ => null,
         };
 
-        var cardIndex = 0;
-        foreach (var card in observation.VisibleCards)
-        {
-            cardIndex += 1;
-            choices.Add(new LiveExportChoiceSummary(
-                cardKind,
-                card.Label,
-                card.CardId ?? SanitizeNodeKey(card.Label),
-                observation.Prompt)
-            {
-                ScreenBounds = card.ScreenBounds,
-                NodeId = $"card-selection:{observation.ScreenType}:card:{cardIndex}",
-                BindingKind = "card-selection-card",
-                BindingId = observation.ScreenType,
-                SemanticHints = BuildCardSelectionSemanticHints(observation.ScreenType, card.Selected),
-                Enabled = card.Enabled,
-            });
-        }
-
         if (!string.IsNullOrWhiteSpace(confirmKind))
         {
             if (!string.IsNullOrWhiteSpace(observation.PreviewConfirmBounds))
@@ -6170,6 +6151,25 @@ internal static class RuntimeSnapshotReflectionExtractor
                     Enabled = observation.MainConfirmEnabled,
                 });
             }
+        }
+
+        var cardIndex = 0;
+        foreach (var card in observation.VisibleCards)
+        {
+            cardIndex += 1;
+            choices.Add(new LiveExportChoiceSummary(
+                cardKind,
+                card.Label,
+                card.CardId ?? SanitizeNodeKey(card.Label),
+                observation.Prompt)
+            {
+                ScreenBounds = card.ScreenBounds,
+                NodeId = $"card-selection:{observation.ScreenType}:card:{cardIndex}",
+                BindingKind = "card-selection-card",
+                BindingId = observation.ScreenType,
+                SemanticHints = BuildCardSelectionSemanticHints(observation.ScreenType, card.Selected),
+                Enabled = card.Enabled,
+            });
         }
 
         return choices;
