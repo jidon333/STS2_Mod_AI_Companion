@@ -289,36 +289,23 @@ internal static partial class Program
             var requestReadyElapsedMs = requestBuild.RequestReadyElapsedMs;
             var requestPath = stepPrefix + ".request.json";
             var decisionPath = stepPrefix + ".decision.json";
-            GuiSmokeReplayEvaluation replayEvaluation;
-            GuiSmokeStepDecision decision;
-            var activeCombatBarrier = phase == GuiSmokePhase.HandleCombat
-                ? stepAnalysisContext.CombatBarrierEvaluation
-                : CombatBarrierSupport.Inactive;
-            if (phase == GuiSmokePhase.HandleCombat
-                && activeCombatBarrier.IsActive
-                && activeCombatBarrier.IsHardWaitBarrier)
-            {
-                decision = AutoDecisionProvider.CreateCombatBarrierWaitDecision(activeCombatBarrier, request.Observer.CurrentScreen);
-                replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request, decision, stepAnalysisContext);
-            }
-            else if (provider is AutoDecisionProvider)
-            {
-                replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request, null, stepAnalysisContext);
-                decision = replayEvaluation.Decision;
-            }
-            else
-            {
-                decision = await provider.GetDecisionAsync(requestPath, decisionPath, TimeSpan.FromMinutes(3), CancellationToken.None).ConfigureAwait(false);
-                replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request, decision, stepAnalysisContext);
-            }
-            var decisionReadyElapsedMs = stepStopwatch.ElapsedMilliseconds;
-            if (ShouldPersistCandidateDumpArtifact(request, decision))
-            {
-                WriteCandidateDumpArtifact(stepPrefix + ".candidates.json", replayEvaluation.CandidateDump);
-            }
-            logger.WriteDecision(decisionPath, decision);
-            LogHarness($"step={stepIndex} decision status={decision.Status} action={decision.ActionKind ?? "null"} target={decision.TargetLabel ?? "null"} confidence={decision.Confidence?.ToString("0.00") ?? "null"} reason={decision.Reason ?? "null"}");
-            LogHarness($"step={stepIndex} timing preflight->request={requestReadyElapsedMs}ms request->decision={Math.Max(0, decisionReadyElapsedMs - requestReadyElapsedMs)}ms captureMode={captureMode} sceneReasoningMode={sceneReasoningMode}");
+            var decisionResolution = await ResolveStepDecisionAsync(
+                    stepIndex,
+                    phase,
+                    provider,
+                    request,
+                    requestPath,
+                    decisionPath,
+                    stepPrefix + ".candidates.json",
+                    captureMode,
+                    sceneReasoningMode,
+                    stepAnalysisContext,
+                    logger,
+                    stepStopwatch,
+                    requestReadyElapsedMs)
+                .ConfigureAwait(false);
+            var decision = decisionResolution.Decision;
+            var decisionReadyElapsedMs = decisionResolution.DecisionReadyElapsedMs;
             if (isLongRun)
             {
                 LongRunArtifacts.MaybeRecordUnknownScene(sessionRoot, request, decision);
@@ -328,95 +315,15 @@ internal static partial class Program
                 }
             }
 
-            var decisionStatus = await TryHandleDecisionStatusAsync(
+            var decisionCycle = await ExecuteStepDecisionCycleAsync(
                     stepIndex,
-                    screenshotPath,
                     phase,
-                    observer,
-                    request,
-                    decision,
-                    stepAnalysisContext,
-                    isLongRun,
-                    logger,
-                    observerReader,
-                    evaluator,
-                    history,
-                    stepStopwatch,
-                    decisionReadyElapsedMs,
-                    loopTracking,
-                    (exitCode, status, message, terminalCause, failureClass) => CompleteAttempt(
-                        exitCode,
-                        status,
-                        message,
-                        terminalCause: terminalCause,
-                        failureClass: failureClass))
-                .ConfigureAwait(false);
-            if (decisionStatus.CompletedAttempt is not null)
-            {
-                return decisionStatus.CompletedAttempt;
-            }
-
-            if (decisionStatus.ShouldContinueLoop)
-            {
-                continue;
-            }
-
-            var actuationPreparation = await TryPrepareDecisionActuationAsync(
-                    stepIndex,
                     screenshotPath,
-                    phase,
                     window,
                     observer,
                     request,
                     decision,
-                    isLongRun,
-                    logger,
-                    observerReader,
-                    evaluator,
-                    history,
-                    stepStopwatch,
-                    loopTracking,
-                    (exitCode, status, message, terminalCause, failureClass) => CompleteAttempt(
-                        exitCode,
-                        status,
-                        message,
-                        terminalCause: terminalCause,
-                        failureClass: failureClass),
-                    TransitionSettleMs,
-                    decisionStaleBudget,
-                    useDecisionAgeGuard)
-                .ConfigureAwait(false);
-            if (actuationPreparation.CompletedAttempt is not null)
-            {
-                return actuationPreparation.CompletedAttempt;
-            }
-
-            if (actuationPreparation.ShouldContinueLoop)
-            {
-                continue;
-            }
-
-            var latestObserver = actuationPreparation.LatestObserver;
-            var clickWindow = actuationPreparation.ClickWindow ?? window;
-            var rewardMapRecoveryAttempt = actuationPreparation.RewardMapRecoveryAttempt;
-
-            ExecuteDecisionActuation(
-                stepIndex,
-                phase,
-                observer,
-                request,
-                decision,
-                clickWindow,
-                inputDriver,
-                history,
-                logger);
-
-            var postAction = await FinalizePostActionAndAdvancePhaseAsync(
-                    stepIndex,
-                    phase,
-                    observer,
-                    request,
-                    decision,
+                    stepAnalysisContext,
                     isLongRun,
                     sessionRoot,
                     sceneHistoryIndex,
@@ -426,14 +333,32 @@ internal static partial class Program
                     history,
                     stepStopwatch,
                     decisionReadyElapsedMs,
+                    loopTracking,
+                    inputDriver,
+                    decisionStaleBudget,
+                    useDecisionAgeGuard,
+                    TransitionSettleMs,
                     ActionSettleMinimumMs,
                     CombatActionSettleMinimumMs,
                     CombatNoOpProbeGraceMs,
-                    loopTracking.SameActionStallCount,
-                    rewardMapRecoveryAttempt)
+                    (exitCode, status, message, terminalCause, failureClass) => CompleteAttempt(
+                        exitCode,
+                        status,
+                        message,
+                        terminalCause: terminalCause,
+                        failureClass: failureClass))
                 .ConfigureAwait(false);
+            if (decisionCycle.CompletedAttempt is not null)
+            {
+                return decisionCycle.CompletedAttempt;
+            }
 
-            phase = postAction.Phase;
+            if (decisionCycle.ShouldContinueLoop)
+            {
+                continue;
+            }
+
+            phase = decisionCycle.Phase;
             attemptsByPhase.Clear();
         }
 
