@@ -521,9 +521,13 @@ internal static partial class Program
 
     static bool ShouldOpenCombatAlternateBranch(ObserverState observer)
     {
+        var controlFlowSceneReady = ControlFlowSceneReady(observer) ?? observer.SceneReady;
+        var controlFlowSceneStability = ControlFlowSceneStability(observer) ?? observer.SceneStability;
         return CombatBarrierPolicy.IsStableCombatEntryObserver(observer)
                || (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)
-                   && observer.InCombat == true);
+                   && observer.InCombat == true
+                   && controlFlowSceneReady != false
+                   && !string.Equals(controlFlowSceneStability, "transitioning", StringComparison.OrdinalIgnoreCase));
     }
 
     static bool TryAdvanceAlternateBranch(

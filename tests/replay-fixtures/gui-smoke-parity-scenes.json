@@ -2,6 +2,7 @@
   {
     "name": "ancient-post-proceed-map-handoff",
     "requestPath": "tests/replay-fixtures/m6-parity/ancient-map-handoff.request.json",
+    "expectedStatus": null,
     "expectedActionKind": "click",
     "expectedTargetContains": "exported reachable map node",
     "expectedForegroundOwner": "map",
@@ -11,6 +12,7 @@
   {
     "name": "reward-card-pick",
     "requestPath": "tests/replay-fixtures/m6-parity/reward-pick-card.request.json",
+    "expectedStatus": null,
     "expectedActionKind": "click",
     "expectedTargetContains": "reward pick card",
     "expectedForegroundOwner": null,
@@ -20,6 +22,7 @@
   {
     "name": "reward-aftermath-map-handoff",
     "requestPath": "tests/replay-fixtures/m6-parity/reward-map-handoff.request.json",
+    "expectedStatus": null,
     "expectedActionKind": "click",
     "expectedTargetContains": "exported reachable map node",
     "expectedForegroundOwner": null,
@@ -29,6 +32,7 @@
   {
     "name": "shop-proceed-after-bounded-purchase",
     "requestPath": "tests/replay-fixtures/m6-parity/shop-proceed.request.json",
+    "expectedStatus": null,
     "expectedActionKind": "click",
     "expectedTargetContains": "shop proceed",
     "expectedForegroundOwner": null,
@@ -38,10 +42,31 @@
   {
     "name": "elite-route-after-reward",
     "requestPath": "tests/replay-fixtures/m6-parity/elite-route-after-reward.request.json",
+    "expectedStatus": null,
     "expectedActionKind": "click",
     "expectedTargetContains": "exported reachable map node",
     "expectedForegroundOwner": null,
     "expectedForegroundActionLane": null,
     "expectedChoiceExtractorPath": "map"
+  },
+  {
+    "name": "combat-target-waits-for-explicit-node",
+    "requestPath": "tests/replay-fixtures/m6-parity/combat-target-wait.request.json",
+    "expectedStatus": "wait",
+    "expectedActionKind": null,
+    "expectedTargetContains": null,
+    "expectedForegroundOwner": null,
+    "expectedForegroundActionLane": null,
+    "expectedChoiceExtractorPath": "combat-targets"
+  },
+  {
+    "name": "combat-target-clicks-explicit-node",
+    "requestPath": "tests/replay-fixtures/m6-parity/combat-target-click.request.json",
+    "expectedStatus": "act",
+    "expectedActionKind": "click",
+    "expectedTargetContains": "combat enemy target",
+    "expectedForegroundOwner": null,
+    "expectedForegroundActionLane": null,
+    "expectedChoiceExtractorPath": "combat-targets"
   }
 ]

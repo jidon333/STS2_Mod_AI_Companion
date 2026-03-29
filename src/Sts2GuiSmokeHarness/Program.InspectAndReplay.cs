@@ -314,6 +314,13 @@ internal static partial class Program
             Assert(string.Equals(lightweightAllowedActionKey, rebuiltAllowedActionKey, StringComparison.OrdinalIgnoreCase),
                 $"Replay parity scene '{fixture.Name}' changed allowed-action semantics between saved and rebuilt requests.");
 
+            if (!string.IsNullOrWhiteSpace(fixture.ExpectedStatus))
+            {
+                Assert(string.Equals(lightweightEvaluation.Decision.Status, fixture.ExpectedStatus, StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(rebuiltEvaluation.Decision.Status, fixture.ExpectedStatus, StringComparison.OrdinalIgnoreCase),
+                    $"Replay parity scene '{fixture.Name}' expected status '{fixture.ExpectedStatus}'.");
+            }
+
             if (!string.IsNullOrWhiteSpace(fixture.ExpectedActionKind))
             {
                 Assert(string.Equals(lightweightEvaluation.Decision.ActionKind, fixture.ExpectedActionKind, StringComparison.OrdinalIgnoreCase)

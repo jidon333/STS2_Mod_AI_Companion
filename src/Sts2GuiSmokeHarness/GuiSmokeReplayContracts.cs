@@ -11,6 +11,7 @@ sealed record GuiSmokeReplayGoldenSceneFixture(
 sealed record GuiSmokeReplayParityFixture(
     string Name,
     string RequestPath,
+    string? ExpectedStatus,
     string? ExpectedActionKind,
     string? ExpectedTargetContains,
     string? ExpectedForegroundOwner,

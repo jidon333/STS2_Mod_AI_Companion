@@ -190,6 +190,8 @@ static class ObserverScreenProvenance
     {
         return string.Equals(ControlFlowCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
                || string.Equals(ControlFlowVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(StrictPublishedCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(StrictPublishedVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
                || string.Equals(DirectCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
                || string.Equals(DirectObservedScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
     }
@@ -198,6 +200,8 @@ static class ObserverScreenProvenance
     {
         return string.Equals(ControlFlowCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
                || string.Equals(ControlFlowVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(StrictPublishedCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(StrictPublishedVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
                || string.Equals(DirectCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
                || string.Equals(DirectObservedScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
     }
