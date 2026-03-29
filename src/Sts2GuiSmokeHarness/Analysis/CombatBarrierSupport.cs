@@ -267,6 +267,17 @@ static class CombatBarrierSupport
             return Released(source, "non-enemy confirm evidence surfaced");
         }
 
+        var attackTargetingSuperseded = freshSnapshotSeen
+                                        && runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                                        && runtime.PendingSelection.SlotIndex == source.SlotIndex
+                                        && (runtime.HasExplicitEnemyTargetingEvidence
+                                            || runtime.HasExplicitTargetableEnemy
+                                            || runtime.HasExplicitHittableEnemy);
+        if (attackTargetingSuperseded)
+        {
+            return Released(source, "non-enemy selection superseded by explicit attack-target authority");
+        }
+
         if (freshSnapshotSeen
             && runtime.ExplicitlyClearedSelection
             && runtime.PendingSelection is null

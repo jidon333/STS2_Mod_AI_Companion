@@ -120,7 +120,13 @@ sealed partial class AutoDecisionProvider
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for legal combat action", DisplayControlFlowScreen(request.Observer));
         }
 
-        if (request.Observer.PlayerEnergy is <= 0)
+        if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingCardPlay)
+        {
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for played combat action to resolve", DisplayControlFlowScreen(request.Observer));
+        }
+
+        if (request.Observer.PlayerEnergy is <= 0
+            && combatMicroStage.AllowsEndTurn)
         {
             if (TryUseCombatDecision(CreateCombatPressKeyDecision(
                 "E",

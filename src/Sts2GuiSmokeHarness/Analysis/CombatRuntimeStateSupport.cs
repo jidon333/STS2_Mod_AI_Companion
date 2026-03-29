@@ -83,6 +83,11 @@ sealed record CombatRuntimeState(
 
     public bool HasExplicitHittableEnemy => HittableEnemyCount > 0 || HittableEnemyIds.Count > 0;
 
+    public bool HasInFlightPlayerDrivenAction =>
+        HistoryStartedCount is not null
+        && HistoryFinishedCount is not null
+        && HistoryStartedCount > HistoryFinishedCount;
+
     public bool HasAttackSelectionWithoutExplicitTargeting =>
         PendingSelection?.Kind == AutoCombatCardKind.AttackLike
         && !HasExplicitEnemyTargetingEvidence;

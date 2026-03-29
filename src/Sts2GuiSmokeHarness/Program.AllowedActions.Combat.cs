@@ -65,7 +65,7 @@ internal static partial class Program
                 .ToArray();
         }
 
-        if (combatMicroStage.Kind is CombatMicroStageKind.TurnClosing or CombatMicroStageKind.EnemyTurnClosed)
+        if (combatMicroStage.Kind is CombatMicroStageKind.ResolvingCardPlay or CombatMicroStageKind.TurnClosing or CombatMicroStageKind.EnemyTurnClosed)
         {
             return new[] { "wait" };
         }

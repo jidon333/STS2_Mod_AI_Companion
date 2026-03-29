@@ -6,6 +6,7 @@ enum CombatMicroStageKind
     HandSelectRequired,
     ResolvingNonEnemy,
     ResolvingAttackTarget,
+    ResolvingCardPlay,
     TurnClosing,
     EnemyTurnClosed,
 }
@@ -73,17 +74,25 @@ static class CombatMicroStageSupport
             return CombatMicroStageKind.TurnClosing;
         }
 
+        if (runtime.HasInFlightPlayerDrivenAction)
+        {
+            return CombatMicroStageKind.ResolvingCardPlay;
+        }
+
+        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+            || effectiveBarrierKind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick
+            || (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                && (runtime.HasExplicitEnemyTargetingEvidence
+                    || context.CanResolveCombatEnemyTarget)))
+        {
+            return CombatMicroStageKind.ResolvingAttackTarget;
+        }
+
         if (pendingSelection?.Kind == AutoCombatCardKind.DefendLike
             || effectiveBarrierKind == CombatBarrierKind.NonEnemySelect
             || context.HasSelectedNonEnemyConfirmEvidence)
         {
             return CombatMicroStageKind.ResolvingNonEnemy;
-        }
-
-        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-            || effectiveBarrierKind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick)
-        {
-            return CombatMicroStageKind.ResolvingAttackTarget;
         }
 
         return CombatMicroStageKind.PlayerActionOpen;

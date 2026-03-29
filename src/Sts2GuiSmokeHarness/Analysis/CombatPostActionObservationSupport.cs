@@ -126,6 +126,13 @@ static class CombatPostActionObservationSupport
                     return true;
                 }
 
+                if (stage.Kind == CombatMicroStageKind.ResolvingAttackTarget
+                    && context.CanResolveCombatEnemyTarget)
+                {
+                    reason = "combat-non-enemy-selection-superseded-by-attack-target";
+                    return true;
+                }
+
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
                     && context.RuntimeCombatState.ExplicitlyClearedSelection)
                 {
@@ -147,6 +154,7 @@ static class CombatPostActionObservationSupport
             {
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
                     && !context.RuntimeCombatState.HasCardSelectionEvidence
+                    && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
                     && !context.HasSelectedNonEnemyConfirmEvidence)
                 {
                     reason = "combat-non-enemy-confirm-resolved";
@@ -172,6 +180,7 @@ static class CombatPostActionObservationSupport
                 }
 
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
+                    && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
                     && !context.RuntimeCombatState.HasCardSelectionEvidence)
                 {
                     reason = "combat-attack-selection-cleared";
@@ -191,6 +200,7 @@ static class CombatPostActionObservationSupport
             if (IsEnemyTargetDecision(_decision))
             {
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
+                    && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
                     && !context.RuntimeCombatState.HasCardSelectionEvidence)
                 {
                     reason = "combat-enemy-click-resolved";
@@ -210,6 +220,7 @@ static class CombatPostActionObservationSupport
             if (IsCancelSelectionDecision(_decision))
             {
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
+                    && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
                     && !context.RuntimeCombatState.HasCardSelectionEvidence)
                 {
                     reason = "combat-selection-cleared";
@@ -237,6 +248,7 @@ static class CombatPostActionObservationSupport
             if (IsNonEnemySelectionDecision(_decision))
             {
                 return stage.Kind is CombatMicroStageKind.ResolvingNonEnemy
+                    or CombatMicroStageKind.ResolvingAttackTarget
                     or CombatMicroStageKind.PlayerActionOpen
                     or CombatMicroStageKind.TurnClosing
                     or CombatMicroStageKind.EnemyTurnClosed;

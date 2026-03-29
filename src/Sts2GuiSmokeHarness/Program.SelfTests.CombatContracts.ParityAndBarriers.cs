@@ -667,6 +667,144 @@ internal static partial class Program
                 null));
             Assert(string.Equals(nonEnemyBarrierDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "Unresolved non-enemy barriers should defer with a wait decision instead of forcing end turn.");
 
+            var nonEnemyBarrierSupersededObserver = nonEnemyBarrierObserver with
+            {
+                InventoryId = "inv-non-enemy-barrier-superseded",
+                SnapshotVersion = 51,
+                ChoiceExtractorPath = "combat-targets",
+                CurrentChoices = new[] { "Cultist" },
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("enemy-target:1", "enemy-target", "Cultist", "967,433,84,88", true),
+                    new ObserverActionNode("end-turn", "button", "3턴 종료", "1604,846,220,90", true),
+                },
+                Choices = new[]
+                {
+                    new ObserverChoice("enemy-target", "Cultist", "967,433,84,88", "Cultist", "target-source:vfx-spawn-hitbox")
+                    {
+                        NodeId = "enemy-target:1",
+                    },
+                },
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(2, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                    new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                },
+                Meta = new Dictionary<string, string?>(nonEnemyBarrierObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCardPlayPending"] = "true",
+                    ["combatSelectedCardId"] = "CARD.STRIKE_IRONCLAD",
+                    ["combatSelectedCardName"] = "타격",
+                    ["combatSelectedCardType"] = "Attack",
+                    ["combatSelectedCardTargetType"] = "AnyEnemy",
+                    ["combatSelectedCardSlot"] = "2",
+                    ["combatAwaitingPlayCount"] = "1",
+                    ["combatAwaitingPlaySlots"] = "2",
+                    ["combatTargetingInProgress"] = "true",
+                    ["combatValidTargetsType"] = "AnyEnemy",
+                    ["combatTargetableEnemyCount"] = "1",
+                    ["combatTargetableEnemyIds"] = "Cultist",
+                    ["combatHittableEnemyCount"] = "1",
+                    ["combatHittableEnemyIds"] = "Cultist",
+                    ["combatInteractionRevision"] = "6:5:true:true:2",
+                },
+            };
+            var nonEnemyBarrierSupersededKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(2, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+                new CombatCardKnowledgeHint(3, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            };
+            var nonEnemyBarrierSupersededContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(nonEnemyBarrierSupersededObserver, null, null, null),
+                runtimeStateOnlyScreenshotPath,
+                nonEnemyBarrierHistory,
+                nonEnemyBarrierSupersededKnowledge);
+            Assert(!nonEnemyBarrierSupersededContext.CombatBarrierEvaluation.IsActive, "NonEnemySelect barrier should release once explicit attack-target runtime authority supersedes the same-slot lane.");
+            Assert(nonEnemyBarrierSupersededContext.CombatMicroStage.Kind == CombatMicroStageKind.ResolvingAttackTarget, "Superseded non-enemy lane should rebuild as an attack-target stage when runtime targeting takes ownership.");
+            var nonEnemyBarrierSupersededActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(nonEnemyBarrierSupersededObserver, null, null, null),
+                nonEnemyBarrierSupersededKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                nonEnemyBarrierHistory);
+            Assert(nonEnemyBarrierSupersededActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Superseded non-enemy lane should reopen the explicit enemy target lane.");
+            Assert(!nonEnemyBarrierSupersededActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "Superseded non-enemy lane should not reopen end turn while attack targeting is active.");
+            var nonEnemyBarrierSupersededRequest = BuildBarrierRequest(
+                "0006b",
+                33,
+                nonEnemyBarrierSupersededObserver,
+                nonEnemyBarrierSupersededKnowledge,
+                nonEnemyBarrierSupersededActions,
+                nonEnemyBarrierHistory,
+                "Superseded non-enemy lane should hand off to explicit attack targeting.");
+            var nonEnemyBarrierSupersededDecision = AutoDecisionProvider.Decide(nonEnemyBarrierSupersededRequest);
+            Assert(CombatDecisionContract.TryMapSemanticAction(nonEnemyBarrierSupersededRequest, nonEnemyBarrierSupersededDecision, out var nonEnemyBarrierSupersededSemantic)
+                   && string.Equals(nonEnemyBarrierSupersededSemantic, "click enemy", StringComparison.OrdinalIgnoreCase),
+                "Superseded non-enemy lane should drive explicit enemy targeting instead of waiting for non-enemy confirm.");
+
+            var nonEnemyConfirmResolvingObserver = nonEnemyBarrierObserver with
+            {
+                InventoryId = "inv-non-enemy-confirm-resolving",
+                SnapshotVersion = 52,
+                PlayerEnergy = 0,
+                Meta = new Dictionary<string, string?>(nonEnemyBarrierObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatRoundNumber"] = "2",
+                    ["combatPlayerActionsDisabled"] = "false",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                    ["combatCardPlayPending"] = "false",
+                    ["combatSelectedCardSlot"] = null,
+                    ["combatAwaitingPlaySlots"] = null,
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatTargetableEnemyCount"] = "0",
+                    ["combatHistoryStartedCount"] = "5",
+                    ["combatHistoryFinishedCount"] = "4",
+                    ["combatInteractionRevision"] = "5:4:false:false:none",
+                    ["combatLastCardPlayStartedCardId"] = "CARD.ARMAMENTS",
+                    ["combatLastCardPlayFinishedCardId"] = "CARD.STRIKE_IRONCLAD",
+                    ["combatLastCardPlayFinishedTargetId"] = "enemy-1",
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false",
+                },
+            };
+            var nonEnemyConfirmResolvingHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "confirm-non-enemy", "confirm selected non-enemy card", DateTimeOffset.UtcNow.AddMilliseconds(-300)),
+            };
+            var nonEnemyConfirmResolvingActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(nonEnemyConfirmResolvingObserver, null, null, null),
+                nonEnemyBarrierKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                nonEnemyConfirmResolvingHistory);
+            Assert(nonEnemyConfirmResolvingActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase), "A resolving combat card play should keep combat wait-only until the started play finishes.");
+            var nonEnemyConfirmResolvingDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                34,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Do not end turn while the confirmed non-enemy play is still resolving.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|combat-action-in-flight",
+                "0006",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                nonEnemyConfirmResolvingObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                nonEnemyBarrierKnowledge,
+                nonEnemyConfirmResolvingActions,
+                nonEnemyConfirmResolvingHistory,
+                "Confirmed non-enemy plays must drain before end turn is attempted.",
+                null));
+            Assert(string.Equals(nonEnemyConfirmResolvingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "A resolving combat card play should wait instead of falling through to auto-end turn.");
+
             var endTurnBarrierCapturedAt = DateTimeOffset.UtcNow;
             var endTurnBarrierKnowledge = new[]
             {
