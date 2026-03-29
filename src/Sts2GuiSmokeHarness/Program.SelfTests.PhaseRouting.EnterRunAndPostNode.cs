@@ -122,6 +122,50 @@ internal static partial class Program
             evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitMainMenu, readyMainMenuObserver),
             "WaitMainMenu should still accept fresh exported Continue or Singleplayer run-start surfaces.");
 
+        var publishedCharacterSelectObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-character-select-published",
+                false,
+                "compat",
+                "stabilizing",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<ObserverActionNode>(),
+                Array.Empty<ObserverChoice>(),
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "character-select",
+                PublishedVisibleScreen = "character-select",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "published",
+                PublishedSceneStability = "stable",
+                CompatibilityCurrentScreen = "main-menu",
+                CompatibilityVisibleScreen = "main-menu",
+                CompatibilitySceneReady = false,
+                CompatibilitySceneAuthority = "compat",
+                CompatibilitySceneStability = "stabilizing",
+            },
+            null,
+            null,
+            null);
+        Assert(
+            evaluator.IsPhaseSatisfied(GuiSmokePhase.WaitCharacterSelect, publishedCharacterSelectObserver),
+            "WaitCharacterSelect should accept published character-select readiness even when compatibility aliases still lag on main-menu.");
+        Assert(
+            GuiSmokeObserverPhaseHeuristics.TryGetPostCharacterSelectPhase(publishedCharacterSelectObserver, out var publishedCharacterSelectPhase)
+            && publishedCharacterSelectPhase == GuiSmokePhase.ChooseCharacter,
+            "Post-character-select routing should prefer published character-select provenance over stale compatibility aliases.");
+
         var logoAnimationMainMenuObserver = new ObserverState(
             new ObserverSummary(
                 "main-menu",

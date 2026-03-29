@@ -461,9 +461,9 @@ internal static partial class Program
 
     static bool IsSceneAuthorityInvalidFailure(GuiSmokePhase phase, ObserverState? observer)
     {
-        var currentScreen = observer is null ? null : ObserverScreenProvenance.CompatibilityCurrentScreen(observer);
-        var visibleScreen = observer is null ? null : ObserverScreenProvenance.CompatibilityVisibleScreen(observer);
-        var sceneAuthority = observer is null ? null : ObserverScreenProvenance.CompatibilitySceneAuthority(observer);
+        var currentScreen = observer is null ? null : ObserverScreenProvenance.ControlFlowCurrentScreen(observer);
+        var visibleScreen = observer is null ? null : ObserverScreenProvenance.ControlFlowVisibleScreen(observer);
+        var sceneAuthority = observer is null ? null : ObserverScreenProvenance.ControlFlowSceneAuthority(observer);
         return string.Equals(currentScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
                || string.Equals(visibleScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
                || string.Equals(currentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
@@ -537,16 +537,16 @@ internal static partial class Program
         }
 
         if (!string.Equals(
-                ObserverScreenProvenance.CompatibilityCurrentScreen(requestObserver),
-                ObserverScreenProvenance.CompatibilityCurrentScreen(latestObserver),
+                ObserverScreenProvenance.ControlFlowCurrentScreen(requestObserver),
+                ObserverScreenProvenance.ControlFlowCurrentScreen(latestObserver),
                 StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
         if (!string.Equals(
-                ObserverScreenProvenance.CompatibilityVisibleScreen(requestObserver),
-                ObserverScreenProvenance.CompatibilityVisibleScreen(latestObserver),
+                ObserverScreenProvenance.ControlFlowVisibleScreen(requestObserver),
+                ObserverScreenProvenance.ControlFlowVisibleScreen(latestObserver),
                 StringComparison.OrdinalIgnoreCase))
         {
             return true;

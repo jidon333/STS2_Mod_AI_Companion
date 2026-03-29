@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class CombatBarrierPolicy
 {
@@ -24,9 +25,9 @@ static class CombatBarrierPolicy
 
     public static bool IsStableCombatEntryObserver(ObserverState observer)
     {
-        return string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
-               && observer.SceneReady == true
-               && string.Equals(observer.SceneStability, "stable", StringComparison.OrdinalIgnoreCase)
+        return MatchesControlFlowScreen(observer, "combat")
+               && ControlFlowSceneReady(observer) == true
+               && string.Equals(ControlFlowSceneStability(observer), "stable", StringComparison.OrdinalIgnoreCase)
                && observer.InCombat == true;
     }
 }

@@ -991,8 +991,8 @@ sealed partial class AutoDecisionProvider
         var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(screenshotPath);
         return overlayAnalysis.HasBottomLeftBackArrow
                && !overlayAnalysis.HasCentralOverlayPanel
-               && (string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+               && (string.Equals(ObserverScreenProvenance.ControlFlowVisibleScreen(observer), "map", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(ObserverScreenProvenance.ControlFlowCurrentScreen(observer), "rewards", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -1003,8 +1003,8 @@ sealed partial class AutoDecisionProvider
             return false;
         }
 
-        if (!string.Equals(observer.CurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(observer.VisibleScreen, "rewards", StringComparison.OrdinalIgnoreCase)
+        if (!string.Equals(ObserverScreenProvenance.ControlFlowCurrentScreen(observer), "rewards", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(ObserverScreenProvenance.ControlFlowVisibleScreen(observer), "rewards", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase))
         {

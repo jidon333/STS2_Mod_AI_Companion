@@ -134,7 +134,7 @@ static class GuiSmokeNonCombatContractSupport
             return false;
         }
 
-        var onRestSiteScreen = MatchesCompatibilityScreen(observer, "rest-site")
+        var onRestSiteScreen = MatchesControlFlowScreen(observer, "rest-site")
                                || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase);
         if (!onRestSiteScreen)
         {
@@ -303,7 +303,7 @@ static class GuiSmokeNonCombatContractSupport
     private static bool MapAuthorityOutranksStaleRestSiteResidue(ObserverSummary observer)
     {
         var mapAuthorityVisible = HasMapCurrentActiveScreen(observer)
-                                  || MatchesCompatibilityScreen(observer, "map")
+                                  || MatchesControlFlowScreen(observer, "map")
                                   || HasExplicitMapNodeAuthority(observer);
         if (!mapAuthorityVisible)
         {

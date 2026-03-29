@@ -22,12 +22,12 @@ sealed class ObserverAcceptanceEvaluator
 {
     public bool IsPhaseSatisfied(GuiSmokePhase phase, ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
     {
-        var sceneReady = CompatibilitySceneReady(observer) != false;
+        var sceneReady = ControlFlowSceneReady(observer) != false;
         return phase switch
         {
             GuiSmokePhase.WaitMainMenu => sceneReady && MainMenuRunStartObserverSignals.IsRunStartSurfaceReady(observer),
             GuiSmokePhase.WaitRunLoad => false,
-            GuiSmokePhase.WaitCharacterSelect => sceneReady && MatchesCompatibilityScreen(observer, "character-select"),
+            GuiSmokePhase.WaitCharacterSelect => sceneReady && MatchesControlFlowScreen(observer, "character-select"),
             GuiSmokePhase.WaitMap => sceneReady && MapForegroundReconciliation.HasMapForegroundOwnership(observer, history ?? Array.Empty<GuiSmokeHistoryEntry>()),
             GuiSmokePhase.WaitPostMapNodeRoom => false,
             GuiSmokePhase.WaitCombat => CombatBarrierPolicy.IsStableCombatEntryObserver(observer),

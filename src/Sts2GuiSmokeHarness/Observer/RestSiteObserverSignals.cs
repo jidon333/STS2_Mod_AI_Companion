@@ -22,7 +22,7 @@ static class RestSiteObserverSignals
     public static bool HasSmithUpgradeScreenVisible(ObserverSummary observer)
     {
         return MatchesDirectScreen(observer, "upgrade")
-               || MatchesCompatibilityScreen(observer, "upgrade")
+               || MatchesControlFlowScreen(observer, "upgrade")
                || string.Equals(TryGetMetaValue(observer, "restSiteUpgradeScreenVisible"), "true", StringComparison.OrdinalIgnoreCase)
                || string.Equals(TryGetMetaValue(observer, "restSiteViewKind"), "smith-grid-observer-miss", StringComparison.OrdinalIgnoreCase);
     }

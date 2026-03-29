@@ -136,7 +136,7 @@ static class GuiSmokeStepRequestFactory
                 return false;
             }
 
-            var combatScreenVisible = MatchesCompatibilityScreen(observer, "combat");
+            var combatScreenVisible = MatchesControlFlowScreen(observer, "combat");
             if (!combatScreenVisible)
             {
                 return false;

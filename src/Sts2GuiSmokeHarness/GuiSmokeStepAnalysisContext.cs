@@ -323,7 +323,7 @@ sealed class GuiSmokeStepAnalysisContext
                 return false;
             }
 
-            var combatScreenVisible = MatchesCompatibilityScreen(observer, "combat");
+            var combatScreenVisible = MatchesControlFlowScreen(observer, "combat");
             if (!combatScreenVisible)
             {
                 return false;

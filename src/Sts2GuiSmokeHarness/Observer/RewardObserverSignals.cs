@@ -22,7 +22,7 @@ static class RewardObserverSignals
         var screenDetected = explicitDetected
                              ?? rewardIsCurrentActiveScreen
                              || rewardIsTopOverlay
-                             || MatchesCompatibilityScreen(observer, "rewards")
+                             || MatchesControlFlowScreen(observer, "rewards")
                              || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
                              || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
                              || observer.Choices.Any(static choice =>
@@ -57,7 +57,7 @@ static class RewardObserverSignals
                             || rewardIsTopOverlay
                             || proceedVisible
                             || visibleButtonCount > 0
-                            || MatchesCompatibilityScreen(observer, "rewards")
+                            || MatchesControlFlowScreen(observer, "rewards")
                             || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
                             || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
                             || explicitRewardProgressionPresent;
@@ -82,7 +82,7 @@ static class RewardObserverSignals
                                      && (staleTopOverlayTeardown
                                          || (!foregroundOwned
                                              && (mapIsCurrentActiveScreen
-                                                 || MatchesCompatibilityScreen(observer, "map")))));
+                                                 || MatchesControlFlowScreen(observer, "map")))));
         if (staleTopOverlayTeardown)
         {
             teardownInProgress = true;

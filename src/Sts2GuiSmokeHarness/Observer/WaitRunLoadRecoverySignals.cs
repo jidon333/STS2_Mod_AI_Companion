@@ -11,8 +11,8 @@ static class WaitRunLoadRecoverySignals
 {
     public static bool ShouldRetryEnterRunFromWaitRunLoad(ObserverSummary observer)
     {
-        if (CompatibilitySceneReady(observer) == false
-            || !string.Equals(CompatibilitySceneStability(observer), "stable", StringComparison.OrdinalIgnoreCase))
+        if (ControlFlowSceneReady(observer) == false
+            || !string.Equals(ControlFlowSceneStability(observer), "stable", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -25,7 +25,7 @@ static class WaitRunLoadRecoverySignals
             return false;
         }
 
-        var mainMenuSurfaceVisible = MatchesCompatibilityScreen(observer, "main-menu")
+        var mainMenuSurfaceVisible = MatchesControlFlowScreen(observer, "main-menu")
                                      || string.Equals(observer.ChoiceExtractorPath, "main-menu", StringComparison.OrdinalIgnoreCase)
                                      || transitionState?.RootSceneIsMainMenu == true;
         if (!mainMenuSurfaceVisible)

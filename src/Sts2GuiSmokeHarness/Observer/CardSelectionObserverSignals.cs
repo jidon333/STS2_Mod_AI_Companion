@@ -153,7 +153,7 @@ static class CardSelectionObserverSignals
             : null;
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-transform", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(CompatibilityCurrentScreen(observer), "transform", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ControlFlowCurrentScreen(observer), "transform", StringComparison.OrdinalIgnoreCase)
             || rootTypeSummary?.Contains("NDeckTransformSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "transform";
@@ -172,7 +172,7 @@ static class CardSelectionObserverSignals
         }
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-reward-pick", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(CompatibilityCurrentScreen(observer), "card-choice", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(ControlFlowCurrentScreen(observer), "card-choice", StringComparison.OrdinalIgnoreCase)
             || rootTypeSummary?.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "reward-pick";

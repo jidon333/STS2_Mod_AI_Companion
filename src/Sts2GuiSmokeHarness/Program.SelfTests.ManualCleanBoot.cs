@@ -499,6 +499,11 @@ internal static partial class Program
                    && string.Equals(aliasObserver.PublishedSceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve direct published scene readiness and authority before compatibility fallback.");
             Assert(string.Equals(aliasObserver.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive compatibilityCurrentScreen over legacy currentScreen and compatLogicalScreen.");
             Assert(string.Equals(aliasObserver.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive compatibilityVisibleScreen over legacy compatVisibleScreen and inventory fallback.");
+            Assert(string.Equals(ObserverScreenProvenance.ControlFlowCurrentScreen(aliasObserver), "legacy-event", StringComparison.OrdinalIgnoreCase), "Control-flow screen helper should prefer published current screen before compatibility aliases.");
+            Assert(string.Equals(ObserverScreenProvenance.ControlFlowVisibleScreen(aliasObserver), "legacy-direct-visible", StringComparison.OrdinalIgnoreCase), "Control-flow visible-screen helper should prefer published visible screen before compatibility aliases.");
+            Assert(ObserverScreenProvenance.ControlFlowSceneReady(aliasObserver) == true
+                   && string.Equals(ObserverScreenProvenance.ControlFlowSceneAuthority(aliasObserver), "hook", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(ObserverScreenProvenance.ControlFlowSceneStability(aliasObserver), "stable", StringComparison.OrdinalIgnoreCase), "Control-flow scene helpers should prefer published readiness and authority before compatibility aliases.");
 
             File.WriteAllText(
                 liveLayout.SnapshotPath,

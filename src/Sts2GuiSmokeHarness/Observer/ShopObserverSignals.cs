@@ -12,7 +12,7 @@ static class ShopObserverSignals
     public static ShopRoomState? TryGetState(ObserverSummary observer)
     {
         var roomDetected = TryGetMetaBool(observer, "shopRoomDetected")
-                           ?? (MatchesCompatibilityScreen(observer, "shop")
+                           ?? (MatchesControlFlowScreen(observer, "shop")
                                || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
                                || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase));
         if (!roomDetected)
@@ -31,7 +31,7 @@ static class ShopObserverSignals
                               || merchantButtonVisible
                               || backVisible
                               || proceedEnabled
-                              || MatchesCompatibilityScreen(observer, "shop"));
+                              || MatchesControlFlowScreen(observer, "shop"));
         var foregroundOwned = TryGetMetaBool(observer, "shopForegroundOwned")
                               ?? (inventoryOpen
                                   || merchantButtonEnabled

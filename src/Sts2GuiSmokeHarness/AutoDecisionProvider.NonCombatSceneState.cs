@@ -27,7 +27,7 @@ sealed partial class AutoDecisionProvider
         var rewardState = RewardObserverSignals.TryGetState(observer);
         var mapContextVisible = rewardState?.MapIsCurrentActiveScreen == true
                                 || GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
-                                || MatchesCompatibilityScreen(observer, "map");
+                                || MatchesControlFlowScreen(observer, "map");
         var rewardBackNavigationAvailable = HasOverlayChoiceState(observer)
                                             || observer.ActionNodes.Any(static node => node.Actionable && IsBackNode(node));
         var activeRewardChoices = observer.Choices.Where(choice => IsCurrentRewardProgressionChoice(choice, windowBounds)).ToArray();
@@ -38,7 +38,7 @@ sealed partial class AutoDecisionProvider
         var rewardContextVisible = rewardState?.ScreenVisible == true
                                    || RewardObserverSignals.IsRewardAuthorityActive(observer)
                                    || GuiSmokeObserverPhaseHeuristics.LooksLikeRewardsState(observer)
-                                   || MatchesCompatibilityScreen(observer, "rewards")
+                                   || MatchesControlFlowScreen(observer, "rewards")
                                    || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
                                    || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase);
         var intrinsicRewardCardAuthority = observer.Choices.Any(IsRewardCardChoice);
@@ -190,7 +190,7 @@ sealed partial class AutoDecisionProvider
                                                 && (explicitProceedVisible || activeEventChoiceVisible || genericEventProgressVisible);
         var rewardSubstateActive = rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage == RewardReleaseStage.ReleasePending;
         var mapContextVisible = mapOverlayState.ForegroundVisible
-                                || MatchesCompatibilityScreen(observer, "map")
+                                || MatchesControlFlowScreen(observer, "map")
                                 || rewardScene.LayerState.MapContextVisible
                                 || mapExplicitOwner;
         var hasExplicitProgression = ancientDialogueActive
@@ -275,7 +275,7 @@ sealed partial class AutoDecisionProvider
 
     internal static RestSiteSceneState? BuildRestSiteSceneState(ObserverState observer)
     {
-        var explicitScreenAuthority = MatchesCompatibilityScreen(observer, "rest-site")
+        var explicitScreenAuthority = MatchesControlFlowScreen(observer, "rest-site")
                                       || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
                                       || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase);
         var smithUpgradeActive = RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary);
@@ -290,7 +290,7 @@ sealed partial class AutoDecisionProvider
             return null;
         }
 
-        var mapContextVisible = MatchesCompatibilityScreen(observer, "map")
+        var mapContextVisible = MatchesControlFlowScreen(observer, "map")
                                 || NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer.Summary);
         return new RestSiteSceneState(
             explicitChoiceVisible,

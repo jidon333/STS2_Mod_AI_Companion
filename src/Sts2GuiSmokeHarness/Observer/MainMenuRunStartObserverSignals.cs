@@ -14,7 +14,7 @@ static class MainMenuRunStartObserverSignals
             return true;
         }
 
-        return MatchesCompatibilityScreen(observer, "singleplayer-submenu");
+        return MatchesControlFlowScreen(observer, "singleplayer-submenu");
     }
 
     public static bool IsLogoAnimationOnlyMainMenu(ObserverState observer)

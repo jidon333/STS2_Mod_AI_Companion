@@ -36,13 +36,13 @@ static class GuiSmokeObserverPhaseHeuristics
             return false;
         }
 
-        if (CompatibilitySceneReady(observer) == false
-            && !MatchesCompatibilityScreen(observer, "character-select"))
+        if (ControlFlowSceneReady(observer) == false
+            && !MatchesControlFlowScreen(observer, "character-select"))
         {
             return TryGetPostRunLoadNonReadyRoomPhase(observer, out nextPhase);
         }
 
-        if (MatchesCompatibilityScreen(observer, "character-select"))
+        if (MatchesControlFlowScreen(observer, "character-select"))
         {
             nextPhase = GuiSmokePhase.ChooseCharacter;
             return true;
@@ -95,7 +95,7 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool TryGetPostCharacterSelectPhase(ObserverState observer, out GuiSmokePhase nextPhase)
     {
-        if (MatchesCompatibilityScreen(observer, "character-select"))
+        if (MatchesControlFlowScreen(observer, "character-select"))
         {
             nextPhase = GuiSmokePhase.ChooseCharacter;
             return true;
@@ -250,7 +250,7 @@ static class GuiSmokeObserverPhaseHeuristics
             return rewardState.ForegroundOwned;
         }
 
-        return MatchesCompatibilityScreen(observer, "rewards")
+        return MatchesControlFlowScreen(observer, "rewards")
                || string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase)
                || observer.ActionNodes.Any(static node =>
                    node.Actionable
@@ -286,7 +286,7 @@ static class GuiSmokeObserverPhaseHeuristics
         var mapCurrentActiveScreen = observer.Meta.TryGetValue("mapCurrentActiveScreen", out var mapCurrentActiveScreenValue)
                                      ? mapCurrentActiveScreenValue
                                      : null;
-        return MatchesCompatibilityScreen(observer, "map")
+        return MatchesControlFlowScreen(observer, "map")
                || string.Equals(mapCurrentActiveScreen, "true", StringComparison.OrdinalIgnoreCase)
                || IsMapScreenType(declaringType)
                || IsMapScreenType(instanceType)
@@ -295,7 +295,7 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool LooksLikeCombatState(ObserverSummary observer)
     {
-        var combatScreen = MatchesCompatibilityScreen(observer, "combat");
+        var combatScreen = MatchesControlFlowScreen(observer, "combat");
         var combatRoomAuthority = IsCombatRoomType(TryGetMetaValue(observer, "activeScreenType"))
                                   || IsCombatRoomType(TryGetMetaValue(observer, "currentRunRoomSceneType"))
                                   || IsCombatRoomType(TryGetMetaValue(observer, "currentRunRoomType"));
@@ -326,7 +326,7 @@ static class GuiSmokeObserverPhaseHeuristics
             return false;
         }
 
-        if (MatchesCompatibilityScreen(observer, "event")
+        if (MatchesControlFlowScreen(observer, "event")
             || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase))
         {
             return true;

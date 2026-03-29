@@ -33,8 +33,8 @@ static class GuiSmokeRewardMapEvidenceSupport
         var overlayAnalysis = AutoOverlayUiAnalyzer.Analyze(screenshotPath);
         return overlayAnalysis.HasBottomLeftBackArrow
                && !overlayAnalysis.HasCentralOverlayPanel
-               && (string.Equals(CompatibilityVisibleScreen(observer), "map", StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(CompatibilityCurrentScreen(observer), "rewards", StringComparison.OrdinalIgnoreCase)
+               && (string.Equals(ControlFlowVisibleScreen(observer), "map", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(ControlFlowCurrentScreen(observer), "rewards", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -45,7 +45,7 @@ static class GuiSmokeRewardMapEvidenceSupport
             return false;
         }
 
-        if (!MatchesCompatibilityScreen(observer, "rewards")
+        if (!MatchesControlFlowScreen(observer, "rewards")
             && !string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
             && !string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase))
         {

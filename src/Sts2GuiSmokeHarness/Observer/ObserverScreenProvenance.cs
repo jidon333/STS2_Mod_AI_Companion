@@ -146,6 +146,80 @@ static class ObserverScreenProvenance
     public static string? CompatibilitySceneStability(ObserverState observer)
         => StrictCompatibilitySceneStability(observer) ?? observer.SceneStability;
 
+    public static string? ControlFlowCurrentScreen(ObserverSummary observer)
+        => StrictPublishedCurrentScreen(observer)
+           ?? StrictCompatibilityCurrentScreen(observer)
+           ?? StrictDirectCurrentScreen(observer)
+           ?? observer.CurrentScreen;
+
+    public static string? ControlFlowCurrentScreen(ObserverState observer)
+        => StrictPublishedCurrentScreen(observer)
+           ?? StrictCompatibilityCurrentScreen(observer)
+           ?? StrictDirectCurrentScreen(observer)
+           ?? observer.CurrentScreen;
+
+    public static string? ControlFlowVisibleScreen(ObserverSummary observer)
+        => StrictPublishedVisibleScreen(observer)
+           ?? StrictCompatibilityVisibleScreen(observer)
+           ?? StrictDirectObservedScreen(observer)
+           ?? StrictDirectCurrentScreen(observer)
+           ?? observer.VisibleScreen
+           ?? observer.CurrentScreen;
+
+    public static string? ControlFlowVisibleScreen(ObserverState observer)
+        => StrictPublishedVisibleScreen(observer)
+           ?? StrictCompatibilityVisibleScreen(observer)
+           ?? StrictDirectObservedScreen(observer)
+           ?? StrictDirectCurrentScreen(observer)
+           ?? observer.VisibleScreen
+           ?? observer.CurrentScreen;
+
+    public static bool? ControlFlowSceneReady(ObserverSummary observer)
+        => StrictPublishedSceneReady(observer)
+           ?? StrictCompatibilitySceneReady(observer)
+           ?? observer.SceneReady;
+
+    public static bool? ControlFlowSceneReady(ObserverState observer)
+        => StrictPublishedSceneReady(observer)
+           ?? StrictCompatibilitySceneReady(observer)
+           ?? observer.SceneReady;
+
+    public static string? ControlFlowSceneAuthority(ObserverSummary observer)
+        => StrictPublishedSceneAuthority(observer)
+           ?? StrictCompatibilitySceneAuthority(observer)
+           ?? observer.SceneAuthority;
+
+    public static string? ControlFlowSceneAuthority(ObserverState observer)
+        => StrictPublishedSceneAuthority(observer)
+           ?? StrictCompatibilitySceneAuthority(observer)
+           ?? observer.SceneAuthority;
+
+    public static string? ControlFlowSceneStability(ObserverSummary observer)
+        => StrictPublishedSceneStability(observer)
+           ?? StrictCompatibilitySceneStability(observer)
+           ?? observer.SceneStability;
+
+    public static string? ControlFlowSceneStability(ObserverState observer)
+        => StrictPublishedSceneStability(observer)
+           ?? StrictCompatibilitySceneStability(observer)
+           ?? observer.SceneStability;
+
+    public static bool MatchesControlFlowScreen(ObserverSummary observer, string screen)
+    {
+        return string.Equals(ControlFlowCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(ControlFlowVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(DirectCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(DirectObservedScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool MatchesControlFlowScreen(ObserverState observer, string screen)
+    {
+        return string.Equals(ControlFlowCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(ControlFlowVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(DirectCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
+               || string.Equals(DirectObservedScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool MatchesCompatibilityScreen(ObserverSummary observer, string screen)
     {
         return string.Equals(CompatibilityCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
@@ -193,4 +267,10 @@ static class ObserverScreenProvenance
 
     public static string? DisplayPublishedScreen(ObserverState observer)
         => PublishedCurrentScreen(observer) ?? PublishedVisibleScreen(observer);
+
+    public static string? DisplayControlFlowScreen(ObserverSummary observer)
+        => ControlFlowCurrentScreen(observer) ?? ControlFlowVisibleScreen(observer);
+
+    public static string? DisplayControlFlowScreen(ObserverState observer)
+        => ControlFlowCurrentScreen(observer) ?? ControlFlowVisibleScreen(observer);
 }

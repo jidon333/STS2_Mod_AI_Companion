@@ -43,7 +43,7 @@ static class GuiSmokeMapOverlayHeuristics
                                                       && MapNodeSourceSupport.IsExplicitMapPointNode(node)
                                                       && HasActiveBounds(node.ScreenBounds, windowBounds));
         var staleEventChoicePresent = HasEventChoiceEvidence(observer, windowBounds);
-        var eventBackgroundPresent = MatchesCompatibilityScreen(observer, "event")
+        var eventBackgroundPresent = MatchesControlFlowScreen(observer, "event")
                                      || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
                                      || staleEventChoicePresent;
         var mapBackNavigationAvailable = overlayAnalysis.HasBottomLeftBackArrow

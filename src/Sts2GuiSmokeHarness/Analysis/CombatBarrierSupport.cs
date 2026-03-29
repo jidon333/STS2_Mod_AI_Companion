@@ -16,6 +16,7 @@ using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 enum CombatBarrierKind
 {
@@ -315,7 +316,7 @@ static class CombatBarrierSupport
         bool combatPlayerActionWindowClosed)
     {
         if (observer.InCombat != true
-            || !string.Equals(observer.CurrentScreen ?? observer.VisibleScreen, "combat", StringComparison.OrdinalIgnoreCase))
+            || !MatchesControlFlowScreen(observer, "combat"))
         {
             return Released(source, "combat exited after end turn");
         }

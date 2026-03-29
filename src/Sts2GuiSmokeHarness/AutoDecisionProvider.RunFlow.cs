@@ -1,9 +1,10 @@
+using static ObserverScreenProvenance;
+
 sealed partial class AutoDecisionProvider
 {
     private static GuiSmokeStepDecision DecideEnterRun(GuiSmokeStepRequest request)
     {
-        if (string.Equals(request.Observer.CurrentScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(request.Observer.VisibleScreen, "singleplayer-submenu", StringComparison.OrdinalIgnoreCase))
+        if (MatchesControlFlowScreen(request.Observer, "singleplayer-submenu"))
         {
             return new GuiSmokeStepDecision(
                 "act",
@@ -24,13 +25,12 @@ sealed partial class AutoDecisionProvider
                ?? TryFindActionNodeDecision(request, "계속", "continue")
                ?? TryFindActionNodeDecision(request, "Singleplayer", "singleplayer")
                ?? TryFindActionNodeDecision(request, "싱글", "singleplayer")
-               ?? CreateWaitDecision("main menu actions not yet visible", request.Observer.CurrentScreen);
+               ?? CreateWaitDecision("main menu actions not yet visible", ControlFlowCurrentScreen(request.Observer));
     }
 
     private static GuiSmokeStepDecision DecideChooseCharacter(GuiSmokeStepRequest request)
     {
-        if (string.Equals(request.Observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(request.Observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        if (MatchesControlFlowScreen(request.Observer, "character-select"))
         {
             return new GuiSmokeStepDecision(
                 "act",
@@ -48,7 +48,7 @@ sealed partial class AutoDecisionProvider
         }
 
         return TryFindActionNodeDecision(request, "Ironclad", "ironclad")
-               ?? CreateWaitDecision("waiting for ironclad node", request.Observer.CurrentScreen);
+               ?? CreateWaitDecision("waiting for ironclad node", ControlFlowCurrentScreen(request.Observer));
     }
 
     private static GuiSmokeStepDecision DecideWaitRunLoad(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
@@ -63,7 +63,7 @@ sealed partial class AutoDecisionProvider
                 GuiSmokePhase.HandleCombat => DecideHandleCombat(request with { Phase = GuiSmokePhase.HandleCombat.ToString() }),
                 GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, analysisContext),
                 GuiSmokePhase.ChooseCharacter => DecideChooseCharacter(request with { Phase = GuiSmokePhase.ChooseCharacter.ToString() }),
-                _ => CreateWaitDecision("waiting for post-run-load room state", request.Observer.CurrentScreen),
+                _ => CreateWaitDecision("waiting for post-run-load room state", ControlFlowCurrentScreen(request.Observer)),
             };
         }
 
@@ -72,13 +72,12 @@ sealed partial class AutoDecisionProvider
             return DecideEnterRun(request with { Phase = GuiSmokePhase.EnterRun.ToString() });
         }
 
-        return CreateWaitDecision("waiting for root-scene transition and run load readiness", request.Observer.CurrentScreen);
+        return CreateWaitDecision("waiting for root-scene transition and run load readiness", ControlFlowCurrentScreen(request.Observer));
     }
 
     private static GuiSmokeStepDecision DecideEmbark(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        if (string.Equals(request.Observer.CurrentScreen, "character-select", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(request.Observer.VisibleScreen, "character-select", StringComparison.OrdinalIgnoreCase))
+        if (MatchesControlFlowScreen(request.Observer, "character-select"))
         {
             return new GuiSmokeStepDecision(
                 "act",
@@ -104,11 +103,11 @@ sealed partial class AutoDecisionProvider
                 GuiSmokePhase.HandleShop => DecideHandleShop(request with { Phase = GuiSmokePhase.HandleShop.ToString() }),
                 GuiSmokePhase.HandleCombat => DecideHandleCombat(request with { Phase = GuiSmokePhase.HandleCombat.ToString() }),
                 GuiSmokePhase.ChooseFirstNode => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, analysisContext),
-                _ => CreateWaitDecision("waiting for post-embark room state", request.Observer.CurrentScreen),
+                _ => CreateWaitDecision("waiting for post-embark room state", ControlFlowCurrentScreen(request.Observer)),
             };
         }
 
         return TryFindActionNodeDecision(request, "Embark", "embark")
-               ?? CreateWaitDecision("waiting for embark action", request.Observer.CurrentScreen);
+               ?? CreateWaitDecision("waiting for embark action", ControlFlowCurrentScreen(request.Observer));
     }
 }

@@ -74,9 +74,9 @@ static class RootSceneTransitionObserverSignals
             return true;
         }
 
-        return MatchesCompatibilityScreen(observer, "main-menu")
-               || MatchesCompatibilityScreen(observer, "character-select")
-               || MatchesCompatibilityScreen(observer, "singleplayer-submenu");
+        return MatchesControlFlowScreen(observer, "main-menu")
+               || MatchesControlFlowScreen(observer, "character-select")
+               || MatchesControlFlowScreen(observer, "singleplayer-submenu");
     }
 
     public static bool ShouldTreatCaptureAsTransitionWait(GuiSmokePhase phase, ObserverSummary observer)

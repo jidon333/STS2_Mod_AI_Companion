@@ -129,7 +129,7 @@ static class AncientEventObserverSignals
             return false;
         }
 
-        if (MatchesCompatibilityScreen(observer, "map"))
+        if (MatchesControlFlowScreen(observer, "map"))
         {
             return true;
         }

@@ -22,7 +22,7 @@ static class MapForegroundReconciliation
         }
 
         var mapVisible = GuiSmokeObserverPhaseHeuristics.LooksLikeMapState(observer)
-                         || MatchesCompatibilityScreen(observer, "map");
+                         || MatchesControlFlowScreen(observer, "map");
         return mapVisible
                && !HasStrongerForegroundModalAuthority(observer, history);
     }

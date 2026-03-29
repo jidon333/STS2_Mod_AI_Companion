@@ -48,7 +48,7 @@ static class EventProceedObserverSignals
     public static bool HasEventChoiceAuthority(ObserverSummary observer)
     {
         return MatchesDirectScreen(observer, "event")
-               || MatchesCompatibilityScreen(observer, "event")
+               || MatchesControlFlowScreen(observer, "event")
                || string.Equals(observer.ChoiceExtractorPath, "event", StringComparison.OrdinalIgnoreCase)
                || string.Equals(observer.ChoiceExtractorPath, "room-event", StringComparison.OrdinalIgnoreCase);
     }

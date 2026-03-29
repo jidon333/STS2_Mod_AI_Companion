@@ -247,7 +247,7 @@ internal static partial class Program
             if (isLongRun
                 && history.Count > 0
                 && phase is not GuiSmokePhase.WaitMainMenu and not GuiSmokePhase.EnterRun and not GuiSmokePhase.WaitRunLoad and not GuiSmokePhase.WaitCharacterSelect
-                && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase))
+                && MatchesControlFlowScreen(observer, "main-menu"))
             {
                 logger.WriteObserverCopies(stepPrefix, observer);
                 LogHarness($"step={stepIndex} capture skipped reason=terminal-current-screen");
@@ -468,7 +468,7 @@ internal static partial class Program
                 ResetDecisionWaitTracking();
                 var waitAttempt = IncrementAttempt(attemptsByPhase, phase);
                 if (phase == GuiSmokePhase.WaitCharacterSelect
-                    && string.Equals(observer.CurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase)
+                    && MatchesControlFlowScreen(observer, "main-menu")
                     && waitAttempt >= 2
                     && waitAttempt % 2 == 0)
                 {
@@ -733,7 +733,7 @@ internal static partial class Program
                 LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
             }
 
-            if (observer.SceneReady == false)
+            if (ControlFlowSceneReady(observer) == false)
             {
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "scene-not-ready", observer.CurrentScreen, observer.InCombat, null));
             }

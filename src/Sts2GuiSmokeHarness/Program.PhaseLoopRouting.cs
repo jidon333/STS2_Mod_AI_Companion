@@ -569,7 +569,7 @@ internal static partial class Program
 
         if (phase == GuiSmokePhase.WaitCharacterSelect)
         {
-            if (MatchesCompatibilityScreen(observer, "singleplayer-submenu"))
+            if (MatchesControlFlowScreen(observer, "singleplayer-submenu"))
             {
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-singleplayer-submenu", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-singleplayer-submenu", observer.CurrentScreen, observer.InCombat, null));
@@ -614,7 +614,7 @@ internal static partial class Program
                 return true;
             }
 
-            if (MatchesCompatibilityScreen(observer, "character-select"))
+            if (MatchesControlFlowScreen(observer, "character-select"))
             {
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-character-select", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-character-select", observer.CurrentScreen, observer.InCombat, null));
@@ -875,7 +875,7 @@ internal static partial class Program
                 return true;
             }
 
-            if (MatchesCompatibilityScreen(observer, "map") && observer.InCombat != true)
+            if (MatchesControlFlowScreen(observer, "map") && observer.InCombat != true)
             {
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-resolved-map", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-resolved-map", observer.CurrentScreen, observer.InCombat, null));
