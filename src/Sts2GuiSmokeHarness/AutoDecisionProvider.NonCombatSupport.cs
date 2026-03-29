@@ -170,6 +170,11 @@ sealed partial class AutoDecisionProvider
             return false;
         }
 
+        if (TreasureRoomObserverSignals.LooksLikeTreasureState(observer))
+        {
+            return false;
+        }
+
         static bool IsGenericContinueLabel(string? label)
         {
             return !string.IsNullOrWhiteSpace(label)
@@ -243,6 +248,11 @@ sealed partial class AutoDecisionProvider
         EventSceneState? eventScene = null)
     {
         if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
+        {
+            return false;
+        }
+
+        if (TreasureRoomObserverSignals.LooksLikeTreasureState(observer))
         {
             return false;
         }

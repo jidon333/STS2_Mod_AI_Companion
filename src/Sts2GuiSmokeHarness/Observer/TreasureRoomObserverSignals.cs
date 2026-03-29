@@ -13,19 +13,8 @@ static class TreasureRoomObserverSignals
         var sharedRelicPickingActive = TryGetMetaBool(observer, "sharedRelicPickingActive");
         var relicCollectionOpen = TryGetMetaBool(observer, "treasureRelicCollectionOpen");
         var mapScreenOpen = TryGetMetaBool(observer, "mapScreenOpen");
-        var genericChestVisible = observer.Choices.Any(static choice =>
-            string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
-            && choice.Enabled != false
-            && HasUsableBounds(choice.ScreenBounds)
-            && (choice.Label.Contains("Chest", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("상자", StringComparison.OrdinalIgnoreCase)));
-        var genericProceedVisible = observer.Choices.Any(static choice =>
-            string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
-            && choice.Enabled != false
-            && HasUsableBounds(choice.ScreenBounds)
-            && (choice.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
-                || choice.Label.Contains("진행", StringComparison.OrdinalIgnoreCase)));
+        var genericChestVisible = HasGenericChestChoice(observer);
+        var explicitTreasureSurface = HasExplicitTreasureSurface(observer, genericChestVisible);
         var explicitChestClickable = TryGetMetaBool(observer, "treasureChestClickable");
         var explicitProceedEnabled = TryGetMetaBool(observer, "treasureProceedEnabled");
         var chestOpened = TryGetMetaBool(observer, "treasureChestOpened") == true;
@@ -34,11 +23,14 @@ static class TreasureRoomObserverSignals
                                        && relicCollectionOpen == false
                                        && explicitProceedEnabled != true
                                        && chestOpened;
-        var detected = TryGetMetaBool(observer, "treasureRoomDetected")
-                       ?? (string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase)
-                           || string.Equals(observer.ChoiceExtractorPath, "treasure", StringComparison.OrdinalIgnoreCase)
-                           || (observer.Meta.TryGetValue("rootTypeSummary", out var rootTypeSummary)
-                               && rootTypeSummary?.Contains("NTreasureRoom", StringComparison.OrdinalIgnoreCase) == true));
+        if (HasConflictingForegroundRoomContext(observer, explicitTreasureSurface))
+        {
+            return null;
+        }
+
+        var detected = TryGetMetaBool(observer, "treasureRoomDetected") == true
+                       || HasTreasureRoomContext(observer)
+                       || explicitTreasureSurface;
         if (!detected || staleAfterProceedResidue)
         {
             return null;
@@ -46,12 +38,12 @@ static class TreasureRoomObserverSignals
 
         return new TreasureRoomSubtypeState(
             RoomDetected: true,
-            ChestClickable: explicitChestClickable ?? genericChestVisible,
+            ChestClickable: explicitChestClickable == true || genericChestVisible,
             ChestOpened: chestOpened,
             RelicHolderCount: TryGetMetaInt(observer, "treasureRelicHolderCount") ?? 0,
             VisibleRelicHolderCount: TryGetMetaInt(observer, "treasureVisibleRelicHolderCount") ?? 0,
             EnabledRelicHolderCount: TryGetMetaInt(observer, "treasureEnabledRelicHolderCount") ?? 0,
-            ProceedEnabled: explicitProceedEnabled ?? genericProceedVisible,
+            ProceedEnabled: explicitProceedEnabled == true,
             InspectOverlayVisible: TryGetMetaBool(observer, "treasureInspectOverlayVisible") == true
                                    || observer.CurrentChoices.Any(static label => IsOverlayLabel(label)),
             RelicHolderIds: ParseStringList(TryGetMetaValue(observer, "treasureRelicHolderIds")),
@@ -63,9 +55,15 @@ static class TreasureRoomObserverSignals
 
     public static bool LooksLikeTreasureState(ObserverSummary observer)
     {
+        var explicitTreasureSurface = HasExplicitTreasureSurface(observer);
+        if (HasConflictingForegroundRoomContext(observer, explicitTreasureSurface))
+        {
+            return false;
+        }
+
         if (IsTreasureAuthorityActive(observer)
-            || string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(observer.ChoiceExtractorPath, "treasure", StringComparison.OrdinalIgnoreCase))
+            || HasTreasureRoomContext(observer)
+            || explicitTreasureSurface)
         {
             return true;
         }
@@ -154,6 +152,67 @@ static class TreasureRoomObserverSignals
     private static string? TryGetMetaValue(ObserverSummary observer, string key)
         => observer.Meta.TryGetValue(key, out var value) ? value : null;
 
+    private static bool HasTreasureRoomContext(ObserverSummary observer)
+    {
+        return string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(observer.ChoiceExtractorPath, "treasure", StringComparison.OrdinalIgnoreCase)
+               || IsTreasureRoomType(TryGetMetaValue(observer, "rawRoomTypeValue"))
+               || IsTreasureRoomType(TryGetMetaValue(observer, "rawCurrentRunRoomType"))
+               || IsTreasureRoomType(TryGetMetaValue(observer, "rawCurrentRunRoomSceneType"))
+               || IsTreasureRoomType(TryGetMetaValue(observer, "currentRunRoomType"))
+               || IsTreasureRoomType(TryGetMetaValue(observer, "currentRunRoomSceneType"))
+               || (observer.Meta.TryGetValue("rootTypeSummary", out var rootTypeSummary)
+                   && rootTypeSummary?.Contains("NTreasureRoom", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    private static bool HasConflictingForegroundRoomContext(ObserverSummary observer, bool explicitTreasureSurface)
+    {
+        if (explicitTreasureSurface
+            || string.Equals(observer.EncounterKind, "Treasure", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return IsForeignRoomScreen(observer.CurrentScreen)
+               || IsForeignRoomScreen(observer.VisibleScreen)
+               || IsForeignRoomExtractor(observer.ChoiceExtractorPath)
+               || HasForeignForegroundRoot(observer);
+    }
+
+    private static bool HasExplicitTreasureSurface(ObserverSummary observer)
+    {
+        return HasExplicitTreasureSurface(observer, HasGenericChestChoice(observer));
+    }
+
+    private static bool HasExplicitTreasureSurface(ObserverSummary observer, bool genericChestVisible)
+    {
+        return genericChestVisible
+               || observer.ActionNodes.Any(static node =>
+                   node.Actionable
+                   && HasUsableBounds(node.ScreenBounds)
+                   && (string.Equals(node.Kind, "treasure-chest", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(node.Kind, "treasure-relic-holder", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(node.Kind, "treasure-proceed", StringComparison.OrdinalIgnoreCase)
+                       || node.SemanticHints.Any(static hint => string.Equals(hint, "treasure-room", StringComparison.OrdinalIgnoreCase))))
+               || observer.Choices.Any(static choice =>
+                   choice.Enabled != false
+                   && HasUsableBounds(choice.ScreenBounds)
+                   && (string.Equals(choice.Kind, "treasure-chest", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.Kind, "treasure-relic-holder", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.Kind, "treasure-proceed", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.BindingKind, "treasure-room", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool HasGenericChestChoice(ObserverSummary observer)
+    {
+        return observer.Choices.Any(static choice =>
+            string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+            && choice.Enabled != false
+            && HasUsableBounds(choice.ScreenBounds)
+            && (choice.Label.Contains("Chest", StringComparison.OrdinalIgnoreCase)
+                || choice.Label.Contains("상자", StringComparison.OrdinalIgnoreCase)));
+    }
+
     private static bool? TryGetMetaBool(ObserverSummary observer, string key)
         => observer.Meta.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed)
             ? parsed
@@ -163,6 +222,39 @@ static class TreasureRoomObserverSignals
         => observer.Meta.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+
+    private static bool IsTreasureRoomType(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+               && value.Contains("Treasure", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsForeignRoomScreen(string? screen)
+    {
+        return string.Equals(screen, "event", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(screen, "shop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(screen, "rewards", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(screen, "rest-site", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsForeignRoomExtractor(string? extractor)
+    {
+        return string.Equals(extractor, "event", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(extractor, "shop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(extractor, "reward", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(extractor, "rest-site", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasForeignForegroundRoot(ObserverSummary observer)
+    {
+        return observer.Meta.TryGetValue("rootTypeSummary", out var rootTypeSummary)
+               && !string.IsNullOrWhiteSpace(rootTypeSummary)
+               && (rootTypeSummary.Contains("NEventRoom", StringComparison.OrdinalIgnoreCase)
+                   || rootTypeSummary.Contains("NShopRoom", StringComparison.OrdinalIgnoreCase)
+                   || rootTypeSummary.Contains("NShopScreen", StringComparison.OrdinalIgnoreCase)
+                   || rootTypeSummary.Contains("NRewardScreen", StringComparison.OrdinalIgnoreCase)
+                   || rootTypeSummary.Contains("NRestRoom", StringComparison.OrdinalIgnoreCase));
+    }
 
     private static IReadOnlyList<string> ParseStringList(string? value)
     {

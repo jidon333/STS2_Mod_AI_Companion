@@ -202,6 +202,137 @@ internal static partial class Program
                 new[] { new GuiSmokeHistoryEntry(GuiSmokePhase.ChooseFirstNode.ToString(), "click", "treasure proceed", DateTimeOffset.UtcNow) }),
             "WaitMap should accept map-visible aftermath once treasure authority has actually cleared.");
 
+        var genericTreasureMapVisibleObserver = new ObserverState(
+            new ObserverSummary(
+                "map",
+                "map",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                true,
+                "mixed",
+                "stable",
+                null,
+                null,
+                "generic",
+                81,
+                80,
+                null,
+                new[] { "Chest", "진행", "불타는 혈액" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("choice:0", "choice", "Chest", "602,367,800,500", true)
+                    {
+                        SemanticHints = new[] { "scene:map", "kind:choice", "scene-raw:map", "scene-published:map" },
+                    },
+                    new ObserverActionNode("choice:1", "choice", "진행", "1983,764,269,108", true)
+                    {
+                        SemanticHints = new[] { "scene:map", "kind:choice", "scene-raw:map", "scene-published:map" },
+                    },
+                },
+                new[]
+                {
+                    new ObserverChoice("choice", "Chest", "602,367,800,500", "Chest", "Chest"),
+                    new ObserverChoice("choice", "진행", "1983,764,269,108", null, "진행"),
+                    new ObserverChoice("relic", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD", "Starter relic"),
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "map",
+                PublishedVisibleScreen = "map",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+                Meta = new Dictionary<string, string?>
+                {
+                    ["treasureRoomDetected"] = "false",
+                    ["treasureChestClickable"] = "false",
+                    ["treasureChestOpened"] = "false",
+                    ["treasureEnabledRelicHolderCount"] = "0",
+                    ["treasureProceedEnabled"] = "false",
+                    ["rawRoomTypeValue"] = "Treasure",
+                    ["mapCurrentActiveScreen"] = "true",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            TreasureRoomObserverSignals.IsTreasureAuthorityActive(genericTreasureMapVisibleObserver.Summary),
+            "Treasure authority should survive fallback generic choice extraction when raw room type still says Treasure and a chest surface is visible.");
+        Assert(
+            GetAllowedActions(GuiSmokePhase.ChooseFirstNode, genericTreasureMapVisibleObserver).Contains("click treasure chest", StringComparer.OrdinalIgnoreCase),
+            "ChooseFirstNode should expose the treasure chest lane when raw treasure room truth survives but exporter metadata falls back to generic map choices.");
+        Assert(
+            !AutoDecisionProvider.HasExplicitEventRecoveryAuthority(
+                genericTreasureMapVisibleObserver,
+                null,
+                Array.Empty<GuiSmokeHistoryEntry>()),
+            "Treasure chest/proceed surfaces must not reopen generic event recovery while the room is still treasure-owned.");
+
+        var staleTreasureEventForegroundObserver = new ObserverState(
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                true,
+                "published",
+                "stable",
+                null,
+                null,
+                "event",
+                67,
+                87,
+                null,
+                new[] { "골드를 거래한다", "나무를 끌어안는다" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("event-option:0", "event-option", "골드를 거래한다", "560,438,640,86", true),
+                    new ObserverActionNode("event-option:1", "event-option", "나무를 끌어안는다", "560,538,640,86", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("event-option", "골드를 거래한다", "560,438,640,86", null, "골드를 거래한다"),
+                    new ObserverChoice("event-option", "나무를 끌어안는다", "560,538,640,86", null, "나무를 끌어안는다"),
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "event",
+                PublishedVisibleScreen = "event",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+                Meta = new Dictionary<string, string?>
+                {
+                    ["treasureRoomDetected"] = "false",
+                    ["treasureChestClickable"] = "false",
+                    ["treasureChestOpened"] = "false",
+                    ["treasureEnabledRelicHolderCount"] = "0",
+                    ["treasureProceedEnabled"] = "false",
+                    ["rawRoomTypeValue"] = "Treasure",
+                    ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom System.RuntimeType",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            !TreasureRoomObserverSignals.IsTreasureAuthorityActive(staleTreasureEventForegroundObserver.Summary),
+            "Stale treasure room type residue must not keep treasure authority once event foreground ownership is explicit.");
+        Assert(
+            !TreasureRoomObserverSignals.LooksLikeTreasureState(staleTreasureEventForegroundObserver.Summary),
+            "Treasure fallback should stand down once explicit event foreground evidence beats the stale room-type residue.");
+        Assert(
+            AutoDecisionProvider.HasExplicitEventRecoveryAuthority(
+                staleTreasureEventForegroundObserver,
+                null,
+                Array.Empty<GuiSmokeHistoryEntry>()),
+            "Explicit event foreground should reopen event recovery after treasure proceed even if rawRoomTypeValue still says Treasure.");
+
         var rewardMixedStateObserver = new ObserverState(
             new ObserverSummary(
                 "map",
@@ -332,12 +463,47 @@ internal static partial class Program
                 "WaitMap should reopen the treasure branch when treasure authority remains after map becomes visible.");
 
             Assert(
+                !TryAdvanceAlternateBranch(
+                    GuiSmokePhase.ChooseFirstNode,
+                    genericTreasureMapVisibleObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitMapMixedStateLogger,
+                    6,
+                    true,
+                    out _),
+                "ChooseFirstNode should stay on the treasure lane instead of bouncing into HandleEvent when raw treasure room truth and a visible chest surface remain.");
+
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.HandleEvent,
+                    genericTreasureMapVisibleObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitMapMixedStateLogger,
+                    7,
+                    true,
+                    out var staleTreasureEventPhase)
+                && staleTreasureEventPhase == GuiSmokePhase.ChooseFirstNode,
+                "HandleEvent drift should recover back to ChooseFirstNode when the foreground room is actually treasure.");
+
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.ChooseFirstNode,
+                    staleTreasureEventForegroundObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitMapMixedStateLogger,
+                    7,
+                    true,
+                    out var staleTreasureReleasePhase)
+                && staleTreasureReleasePhase == GuiSmokePhase.HandleEvent,
+                "ChooseFirstNode should reopen HandleEvent when explicit event foreground beats stale treasure residue after treasure proceed.");
+
+            Assert(
                 TryAdvanceAlternateBranch(
                     GuiSmokePhase.WaitMap,
                     rewardMixedStateObserver,
                     new List<GuiSmokeHistoryEntry>(),
                     waitMapMixedStateLogger,
-                    7,
+                    8,
                     true,
                     out var rewardReopenPhase)
                 && rewardReopenPhase == GuiSmokePhase.HandleRewards,
