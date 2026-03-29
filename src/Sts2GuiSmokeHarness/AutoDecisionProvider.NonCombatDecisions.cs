@@ -71,71 +71,23 @@ sealed partial class AutoDecisionProvider
             analysisContext);
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice)
         {
-            GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
-            GuiSmokeDecisionDebug.ReplaceActiveCandidates(BuildExplicitRestSiteCandidateLabels(request.Observer));
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site-owner-active-suppresses-map-arrow-contamination");
-            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site-owner-active-preserves-room-lane");
-            return GuiSmokeDecisionDebug.TraceCandidate(
-                       "rest site explicit choice",
-                       "rest-site-choice",
-                       0.98,
-                       TryCreateRestSiteDecision(request),
-                       "rest-site explicit choices are not visible")
-                   ?? GuiSmokeDecisionDebug.TraceCandidate(
-                       "rest site upgrade",
-                       "rest-site-upgrade",
-                       0.92,
-                       TryCreateRestSiteUpgradeDecision(request),
-                       "rest-site upgrade grid is not currently actionable")
-                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for an explicit rest-site choice");
+            return DecideChooseFirstNodeRestSiteExplicitChoice(request);
         }
 
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteSmithUpgrade)
         {
-            GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
-            GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "click smith card", "click smith confirm", "wait" });
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site-owner-active-suppresses-map-arrow-contamination");
-            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site-owner-active-preserves-room-lane");
-            return GuiSmokeDecisionDebug.TraceCandidate(
-                       "rest site upgrade",
-                       "rest-site-upgrade",
-                       0.92,
-                       TryCreateRestSiteUpgradeDecision(request),
-                       "rest-site upgrade grid is not currently actionable")
-                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for rest-site smith upgrade controls");
+            return DecideChooseFirstNodeRestSiteSmithUpgrade(request);
         }
 
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteProceed)
         {
-            GuiSmokeDecisionDebug.SetSceneModel("rest-site", "map");
-            GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "click proceed", "wait" });
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site-owner-active-suppresses-map-arrow-contamination");
-            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site-owner-active-preserves-room-lane");
-            return GuiSmokeDecisionDebug.TraceCandidate(
-                       "visible proceed",
-                       "rest-site-proceed",
-                       0.96,
-                       TryCreateRestSiteProceedDecision(request),
-                       "rest-site proceed affordance is not currently actionable")
-                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit rest-site proceed");
+            return DecideChooseFirstNodeRestSiteProceed(request);
         }
 
-        var treasureDecision = TryCreateTreasureRoomDecision(request);
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.TreasureRoom)
         {
-            GuiSmokeDecisionDebug.SetSceneModel("treasure-room", "room-context");
-            GuiSmokeDecisionDebug.ReplaceActiveCandidates(TreasureRoomObserverSignals.BuildAllowedActions(TreasureRoomObserverSignals.TryGetState(request.Observer)!).Append("wait").Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "treasure-room-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room-owner-active-suppresses-map-arrow-contamination");
-            GuiSmokeDecisionDebug.Suppress("click map back", "treasure-room-owner-active-preserves-room-lane");
-            return treasureDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for treasure room progression");
+            return TryCreateChooseFirstNodeTreasureRoomDecision(request)
+                   ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for treasure room progression");
         }
 
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.ShopRoom)
@@ -406,42 +358,19 @@ sealed partial class AutoDecisionProvider
             return cardSelectionDecision;
         }
 
-        var treasureDecision = GuiSmokeDecisionDebug.TraceCandidate(
-            "treasure room",
-            "treasure-room-runtime",
-            0.95,
-            TryCreateTreasureRoomDecision(request),
-            "no explicit treasure room affordance is currently actionable");
-        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(request.Observer))
+        var treasureDecision = TryCreateTreasureRoomLaneDecision(
+            request,
+            "waiting for treasure room progression",
+            suppressEventChoice: true);
+        if (treasureDecision is not null)
         {
-            GuiSmokeDecisionDebug.SetSceneModel("treasure-room", "room-context");
-            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "treasure-room-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click first reachable node", "treasure-room-owner-active-preserves-room-lane");
-            GuiSmokeDecisionDebug.Suppress("click visible map advance", "treasure-room-owner-active-suppresses-map-arrow-contamination");
-            GuiSmokeDecisionDebug.Suppress("click event choice", "treasure-room-owner-active-preserves-room-lane");
-            return treasureDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for treasure room progression");
+            return treasureDecision;
         }
 
-        var explicitRewardDecision = GuiSmokeDecisionDebug.TraceCandidate(
-            "explicit reward resolution",
-            "reward-foreground",
-            0.94,
-            TryCreateExplicitRewardResolutionDecision(request),
-            "no explicit reward foreground affordance is available");
+        var explicitRewardDecision = TryCreateRewardForegroundDecision(request);
         if (explicitRewardDecision is not null)
         {
             return explicitRewardDecision;
-        }
-
-        var rewardBackDecision = GuiSmokeDecisionDebug.TraceCandidate(
-            "reward back",
-            "reward-back-nav",
-            0.84,
-            TryCreateRewardBackNavigationDecision(request),
-            "reward back navigation is not available");
-        if (rewardBackDecision is not null)
-        {
-            return rewardBackDecision;
         }
 
         var ancientDialogueDecision = GuiSmokeDecisionDebug.TraceCandidate(
@@ -517,26 +446,10 @@ sealed partial class AutoDecisionProvider
 
         if (eventOwnerActive)
         {
-            var semanticDecision = GuiSmokeDecisionDebug.TraceCandidate(
-                "semantic event option",
-                "event-semantic",
-                0.92,
-                TryCreateSemanticEventDecision(request),
-                "no semantic event option matched current screenshot and observer evidence");
-            if (semanticDecision is not null)
+            var eventProgressionDecision = TryCreateEventProgressionDecision(request);
+            if (eventProgressionDecision is not null)
             {
-                return semanticDecision;
-            }
-
-            var explicitEventChoice = GuiSmokeDecisionDebug.TraceCandidate(
-                "explicit event choice",
-                "event-choice",
-                0.90,
-                TryCreateEventProgressChoiceDecision(request),
-                "no explicit event choice has usable bounds");
-            if (explicitEventChoice is not null)
-            {
-                return explicitEventChoice;
+                return eventProgressionDecision;
             }
         }
 
@@ -547,26 +460,10 @@ sealed partial class AutoDecisionProvider
 
         if (!eventOwnerActive)
         {
-            var semanticDecision = GuiSmokeDecisionDebug.TraceCandidate(
-                "semantic event option",
-                "event-semantic",
-                0.92,
-                TryCreateSemanticEventDecision(request),
-                "no semantic event option matched current screenshot and observer evidence");
-            if (semanticDecision is not null)
+            var eventProgressionDecision = TryCreateEventProgressionDecision(request);
+            if (eventProgressionDecision is not null)
             {
-                return semanticDecision;
-            }
-
-            var explicitEventChoice = GuiSmokeDecisionDebug.TraceCandidate(
-                "explicit event choice",
-                "event-choice",
-                0.90,
-                TryCreateEventProgressChoiceDecision(request),
-                "no explicit event choice has usable bounds");
-            if (explicitEventChoice is not null)
-            {
-                return explicitEventChoice;
+                return eventProgressionDecision;
             }
         }
 
