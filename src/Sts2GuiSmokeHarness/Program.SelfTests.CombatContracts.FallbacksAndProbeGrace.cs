@@ -289,6 +289,89 @@ internal static partial class Program
                 null);
             Assert(string.Equals(targetQuietEvaluator(resolvedTargetObserver), "combat-enemy-click-resolved", StringComparison.OrdinalIgnoreCase), "Combat enemy target settle should wake once the selected attack lane fully resolves back to an open combat state.");
 
+            var historyShadowTargetObserver = new ObserverState(
+                unresolvedTargetObserver.Summary with
+                {
+                    InventoryId = "inv-combat-target-history-shadow",
+                    SnapshotVersion = 57,
+                    PlayerEnergy = 2,
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi;CombatState.RoundNumber=2;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                        ["combatCardPlayPending"] = "false",
+                        ["combatTargetingInProgress"] = "false",
+                        ["combatSelectedCardSlot"] = null,
+                        ["combatSelectedCardType"] = null,
+                        ["combatSelectedCardTargetType"] = null,
+                        ["combatAwaitingPlaySlots"] = null,
+                        ["combatTargetableEnemyCount"] = "0",
+                        ["combatHittableEnemyCount"] = "0",
+                        ["combatInteractionRevision"] = "8:7:false:false:none",
+                        ["combatHistoryStartedCount"] = "8",
+                        ["combatHistoryFinishedCount"] = "7",
+                        ["combatLastCardPlayStartedCardId"] = "CARD.STRIKE_IRONCLAD",
+                        ["combatLastCardPlayFinishedCardId"] = "CARD.DEFEND_IRONCLAD",
+                    },
+                },
+                null,
+                null,
+                null);
+            var historyShadowContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                historyShadowTargetObserver,
+                combatNoOpScreenshotPath,
+                enemyClickHistory,
+                nonEnemySettleKnowledge);
+            Assert(historyShadowContext.CombatMicroStage.Kind == CombatMicroStageKind.PlayerActionOpen,
+                "Combat history shadow without live card-play ownership should reopen to PlayerActionOpen instead of staying in a resolving-card-play wait stage.");
+            var historyShadowAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                historyShadowTargetObserver,
+                nonEnemySettleKnowledge,
+                combatNoOpScreenshotPath,
+                enemyClickHistory);
+            Assert(historyShadowAllowedActions.Contains("select attack slot 2", StringComparer.OrdinalIgnoreCase),
+                "Combat history shadow without live ownership should reopen playable attack actions.");
+            Assert(!historyShadowAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                "Combat history shadow without live ownership should not collapse back to a wait-only allowlist.");
+            var historyShadowQuietEvaluator = CombatPostActionObservationSupport.CreateWakeEvaluator(
+                unresolvedTargetObserver,
+                new GuiSmokeStepDecision("act", "click", null, 0.5, 0.5, "combat enemy target 1", "history shadow should quiet-converge once live ownership clears", 0.5, "combat", 250, true, null),
+                enemyClickHistory,
+                nonEnemySettleKnowledge,
+                new WindowBounds(0, 0, 1280, 720));
+            Assert(historyShadowQuietEvaluator(historyShadowTargetObserver) is null, "Combat history-shadow-only post-click state should start quiet convergence on the first fresh open-stage snapshot.");
+            Assert(historyShadowQuietEvaluator(historyShadowTargetObserver) is null, "Combat history-shadow-only post-click state should keep observing until the quiet convergence window completes.");
+            Assert(historyShadowQuietEvaluator(historyShadowTargetObserver) is null, "Combat history-shadow-only post-click state should still defer until the full quiet convergence window completes.");
+            Assert(string.Equals(historyShadowQuietEvaluator(historyShadowTargetObserver), "combat-quiet-convergence:playeractionopen", StringComparison.OrdinalIgnoreCase),
+                "Combat history-shadow-only post-click state should settle through quiet convergence once live ownership stays open and stable.");
+            var historyShadowDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                67,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Combat history shadow without live ownership should reopen a new action instead of hard-waiting for card-play resolution.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                historyShadowTargetObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                nonEnemySettleKnowledge,
+                historyShadowAllowedActions,
+                enemyClickHistory,
+                "Combat history shadow without live ownership should not hard-wait in a stale played-action stage.",
+                null));
+            Assert(!string.Equals(historyShadowDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+                "Combat history shadow without live ownership should not yield a wait-only combat decision.");
+
             var staleAttackSelectionObserver = new ObserverState(
                 unresolvedTargetObserver.Summary with
                 {

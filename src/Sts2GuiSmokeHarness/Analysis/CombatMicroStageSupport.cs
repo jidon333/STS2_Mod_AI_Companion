@@ -87,12 +87,12 @@ static class CombatMicroStageSupport
         if (attackLaneOpen
             && !attackRequiresExplicitEnemyTarget)
         {
-            return runtime.HasInFlightPlayerDrivenAction
+            return runtime.HasBlockingCardPlayResolution
                 ? CombatMicroStageKind.ResolvingCardPlay
                 : CombatMicroStageKind.AwaitingCardPlayConfirm;
         }
 
-        if (runtime.HasInFlightPlayerDrivenAction)
+        if (runtime.HasBlockingCardPlayResolution)
         {
             return CombatMicroStageKind.ResolvingCardPlay;
         }
@@ -159,6 +159,8 @@ static class CombatMicroStageSupport
             $"barrier:{barrierKind}",
             $"card-play-pending:{FormatNullableBool(runtime.CardPlayPending)}",
             $"targeting:{FormatNullableBool(runtime.TargetingInProgress)}",
+            $"live-card-play-ownership:{runtime.HasLiveCardPlayOwnership.ToString()}",
+            $"blocking-card-play-resolution:{runtime.HasBlockingCardPlayResolution.ToString()}",
             $"hand-selected:{runtime.HandSelectionSelectedCount.ToString(CultureInfo.InvariantCulture)}",
             $"hand-confirm:{FormatNullableBool(runtime.HandSelectionConfirmEnabled)}",
             $"confirm-evidence:{hasSelectedNonEnemyConfirmEvidence.ToString()}",

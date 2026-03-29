@@ -75,6 +75,8 @@ sealed record CombatRuntimeState(
 
     public bool HasCardSelectionEvidence => PendingSelection is not null || KeepsCardPlayOpen;
 
+    public bool HasLiveCardPlayOwnership => PendingSelection is not null || KeepsCardPlayOpen;
+
     public bool HasExplicitEnemyTargetingEvidence =>
         TargetingInProgress == true
         || string.Equals(HoveredTargetKind, "enemy", StringComparison.OrdinalIgnoreCase);
@@ -91,6 +93,10 @@ sealed record CombatRuntimeState(
         HistoryStartedCount is not null
         && HistoryFinishedCount is not null
         && HistoryStartedCount > HistoryFinishedCount;
+
+    public bool HasBlockingCardPlayResolution =>
+        HasInFlightPlayerDrivenAction
+        && HasLiveCardPlayOwnership;
 
     public bool HasAttackSelectionWithoutExplicitTargeting =>
         PendingSelection?.Kind == AutoCombatCardKind.AttackLike
