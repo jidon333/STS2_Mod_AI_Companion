@@ -61,7 +61,7 @@ Run("runtime reflection separates raw current screen from observed screen", Test
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("tracker and inventory preserve raw and compatibility screen provenance", TestTrackerAndInventoryPreserveScreenProvenance, failures);
 Run("tracker re-emits additive screen provenance aliases", TestTrackerReEmitsAdditiveScreenProvenanceAliases, failures);
-Run("inventory publisher prefers explicit compatibility scene provenance", TestInventoryPublisherPrefersCompatibilitySceneProvenance, failures);
+Run("inventory publisher separates primary and compatibility scene provenance", TestInventoryPublisherSeparatesPrimaryAndCompatibilitySceneProvenance, failures);
 Run("inventory publisher suppresses immediate publish for unstable mixed provenance", TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance, failures);
 Run("inventory publisher fingerprint tracks provenance fields", TestInventoryPublisherFingerprintTracksProvenanceFields, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
@@ -2285,7 +2285,7 @@ static void TestTrackerAndInventoryPreserveScreenProvenance()
     Assert(inventory is not null, "Expected inventory publisher to build an inventory from the tracker snapshot.");
     Assert(string.Equals(inventory!.RawSceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should preserve raw scene type separately from compatibility scene type.");
     Assert(string.Equals(inventory.RawCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose raw current screen explicitly instead of forcing consumers to overload rawSceneType.");
-    Assert(string.Equals(inventory.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory legacy scene type should remain the compatibility scene type.");
+    Assert(string.Equals(inventory.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory primary scene type should follow published scene provenance when it agrees with compatibility scene type.");
     Assert(string.Equals(inventory.CompatibilitySceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility scene type explicitly.");
     Assert(string.Equals(inventory.CompatibilityLogicalScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility logical screen explicitly instead of forcing consumers to overload compatibility scene type.");
     Assert(string.Equals(inventory.CompatibilityCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory should expose compatibility current screen explicitly instead of overloading sceneType.");
@@ -2343,7 +2343,7 @@ static void TestTrackerReEmitsAdditiveScreenProvenanceAliases()
            && string.Equals(publishedVisibleScreenMeta, "map", StringComparison.OrdinalIgnoreCase), "Tracker should emit publishedVisibleScreen even when only additive raw input was provided.");
 }
 
-static void TestInventoryPublisherPrefersCompatibilitySceneProvenance()
+static void TestInventoryPublisherSeparatesPrimaryAndCompatibilitySceneProvenance()
 {
     var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
         ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
@@ -2378,7 +2378,7 @@ static void TestInventoryPublisherPrefersCompatibilitySceneProvenance()
     var normalizedScene = new CompanionNormalizedScene("event", "event", 1.0, "test");
     var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
     Assert(inventory is not null, "Expected inventory publisher to build an inventory.");
-    Assert(string.Equals(inventory!.SceneType, "rewards", StringComparison.OrdinalIgnoreCase), "Inventory scene type should follow explicit compatibility logical screen, not legacy logicalScreen/flowScreen meta.");
+    Assert(string.Equals(inventory!.SceneType, "event", StringComparison.OrdinalIgnoreCase), "Inventory primary scene type should now follow explicit published scene provenance instead of collapsing back to compatibility logical screen.");
     Assert(string.Equals(inventory.PublishedSceneType, "event", StringComparison.OrdinalIgnoreCase), "Inventory published scene type should preserve explicit published provenance even when compatibility scene type disagrees.");
     Assert(string.Equals(inventory.PublishedVisibleScene, "event", StringComparison.OrdinalIgnoreCase), "Inventory published visible scene should preserve explicit published provenance even when compatibility visible scene disagrees.");
     Assert(inventory.PublishedSceneReady == true, "Inventory published scene-ready should preserve explicit published provenance.");

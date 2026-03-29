@@ -98,6 +98,7 @@ internal sealed class InventoryPublisher
         var compatibilitySceneReady = ResolveSceneReady(snapshot, normalizedScene, blockingModal);
         var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
         var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
+        var sceneType = publishedSceneType ?? compatibilitySceneType;
         var sceneReady = publishedSceneReady ?? compatibilitySceneReady;
         var sceneAuthority = publishedSceneAuthority ?? compatibilitySceneAuthority;
         var sceneStability = publishedSceneStability ?? compatibilitySceneStability;
@@ -106,10 +107,10 @@ internal sealed class InventoryPublisher
             .ToArray();
 
         return new HarnessNodeInventory(
-            InventoryId: BuildInventoryId(snapshot, compatibilitySceneType, nodes),
+            InventoryId: BuildInventoryId(snapshot, sceneType, nodes),
             CapturedAt: snapshot.CapturedAt,
             RunId: string.IsNullOrWhiteSpace(snapshot.RunId) ? null : snapshot.RunId,
-            SceneType: compatibilitySceneType,
+            SceneType: sceneType,
             SceneEpisodeId: TryGetMeta(snapshot.Meta, "screen-episode"),
             Mode: mode,
             BlockingModal: blockingModal,
@@ -243,7 +244,7 @@ internal sealed class InventoryPublisher
                ?? normalizedScene.SceneType;
     }
 
-    private static HarnessNodeInventoryItem BuildNode(string compatibilitySceneType, string rawSceneType, string publishedSceneType, LiveExportChoiceSummary choice, int index)
+    private static HarnessNodeInventoryItem BuildNode(string compatibilitySceneType, string rawSceneType, string? publishedSceneType, LiveExportChoiceSummary choice, int index)
     {
         var label = choice.Label?.Trim() ?? string.Empty;
         var kind = ResolveKind(compatibilitySceneType, choice);
@@ -286,7 +287,7 @@ internal sealed class InventoryPublisher
         };
     }
 
-    private static IReadOnlyList<string> BuildHints(string compatibilitySceneType, string rawSceneType, string publishedSceneType, LiveExportChoiceSummary choice, string resolvedKind)
+    private static IReadOnlyList<string> BuildHints(string compatibilitySceneType, string rawSceneType, string? publishedSceneType, LiveExportChoiceSummary choice, string resolvedKind)
     {
         var hints = new List<string>(capacity: 8)
         {
