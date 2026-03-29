@@ -71,6 +71,7 @@ internal static partial class Program
         }
 
         var keepNonEnemySelectionClosed = pendingSelection?.Kind == AutoCombatCardKind.DefendLike && hasSelectedNonEnemyConfirmEvidence;
+        var suppressedPlayableNonEnemySlots = new List<int>();
         bool ShouldSuppressNonEnemyReselect(int slotIndex)
         {
             if (keepNonEnemySelectionClosed)
@@ -164,15 +165,11 @@ internal static partial class Program
 
             if (ShouldSuppressNonEnemyReselect(slotIndex))
             {
+                suppressedPlayableNonEnemySlots.Add(slotIndex);
                 continue;
             }
 
             actions.Add($"select non-enemy slot {slotIndex}");
-        }
-
-        if (!pendingAttackBlocked && context.CanResolveCombatEnemyTarget)
-        {
-            actions.Add("click enemy");
         }
 
         if (hasSelectedNonEnemyConfirmEvidence)
@@ -180,7 +177,12 @@ internal static partial class Program
             actions.Add("confirm selected non-enemy card");
         }
 
-        if (combatMicroStage.AllowsEndTurn)
+        var shouldWaitForSuppressedNonEnemyLaneConvergence = suppressedPlayableNonEnemySlots.Count > 0
+            && combatMicroStage.Kind == CombatMicroStageKind.PlayerActionOpen
+            && !runtimeCombatState.HasCardSelectionEvidence
+            && !runtimeCombatState.HasInFlightPlayerDrivenAction
+            && !hasSelectedNonEnemyConfirmEvidence;
+        if (combatMicroStage.AllowsEndTurn && !shouldWaitForSuppressedNonEnemyLaneConvergence)
         {
             actions.Add("click end turn");
         }

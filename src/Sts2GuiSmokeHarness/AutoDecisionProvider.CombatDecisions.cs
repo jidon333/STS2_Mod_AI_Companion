@@ -30,10 +30,7 @@ sealed partial class AutoDecisionProvider
 
         var hasSelectedNonEnemyConfirmEvidence = context.HasSelectedNonEnemyConfirmEvidence;
         var enemyTargetOpportunity = context.CanResolveCombatEnemyTarget;
-        var combatNoOpLoop = combatContext.CombatNoOpLoop;
         var combatNoOpCountsBySlot = combatContext.CombatNoOpCountsBySlot;
-        var repeatedNonEnemyLoop = combatContext.RepeatedNonEnemyLoop;
-        var repeatedAttackSelectionLoop = combatContext.RepeatedAttackSelectionLoop;
         var observerHasAttackCard = request.Observer.CombatHand.Any(card =>
             card.SlotIndex >= 1
             && card.SlotIndex <= 5
@@ -85,6 +82,36 @@ sealed partial class AutoDecisionProvider
 
             return !hasSelectedNonEnemyConfirmEvidence
                    && HandleCombatContextSupport.HasRecentNonEnemySelection(combatContext, slotIndex);
+        }
+
+        bool ShouldWaitForSuppressedNonEnemyLaneConvergence()
+        {
+            if (combatMicroStage.Kind != CombatMicroStageKind.PlayerActionOpen
+                || runtimeCombatState.HasCardSelectionEvidence
+                || runtimeCombatState.HasInFlightPlayerDrivenAction
+                || hasSelectedNonEnemyConfirmEvidence)
+            {
+                return false;
+            }
+
+            foreach (var slotIndex in request.CombatCardKnowledge
+                .Where(card => card.SlotIndex is >= 1 and <= 5)
+                .Where(card => CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatCard(card, request.Observer.PlayerEnergy))
+                .Select(static card => card.SlotIndex)
+                .Concat(request.Observer.CombatHand
+                    .Where(card => card.SlotIndex is >= 1 and <= 5)
+                    .Where(card => CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatHandCard(card, request.Observer.PlayerEnergy, request.CombatCardKnowledge))
+                    .Select(static card => card.SlotIndex))
+                .Distinct())
+            {
+                if (!CombatBarrierSupport.SuppressesNonEnemySlot(combatBarrier, slotIndex)
+                    && ShouldSuppressPendingNonEnemyReselect(slotIndex))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         bool TryUseCombatDecision(GuiSmokeStepDecision? candidate, out GuiSmokeStepDecision allowedDecision)
@@ -422,11 +449,6 @@ sealed partial class AutoDecisionProvider
             }
         }
 
-        var shouldDeferLoopEndTurn = runtimeCombatState.KeepsCardPlayOpen
-                                     || CombatRuntimeStateSupport.ShouldDeferLoopEndTurn(
-                                         request.Observer,
-                                         request.CombatCardKnowledge);
-
         if (context.HasScreenshotEvidence && GetCombatAnalysis().HasSelectedCard && HasRecentCombatCardSelection(request.History))
         {
             if (TryUseCombatDecision(new GuiSmokeStepDecision(
@@ -447,70 +469,12 @@ sealed partial class AutoDecisionProvider
             }
         }
 
-        if (repeatedNonEnemyLoop && !shouldDeferLoopEndTurn)
+        if (ShouldWaitForSuppressedNonEnemyLaneConvergence())
         {
-            var endTurnNode = FindEndTurnActionNode(request);
-            if (endTurnNode is not null
-                && TryUseCombatDecision(
-                    CreateCombatEndTurnDecisionFromNode(request, endTurnNode, "end turn after repeated non-enemy loop"),
-                    out var allowedRepeatedNonEnemyDecision))
-            {
-                return allowedRepeatedNonEnemyDecision;
-            }
-
-            if (TryUseCombatDecision(CreateCombatPressKeyDecision(
-                "E",
-                "end turn after repeated non-enemy loop",
-                "Recent combat history shows a repeated non-enemy select/confirm loop. End the turn instead of repeating the same sequence.",
-                0.86,
-                200), out var allowedRepeatedNonEnemyFallback))
-            {
-                return allowedRepeatedNonEnemyFallback;
-            }
-        }
-
-        if (repeatedAttackSelectionLoop && !observerHasAttackCard && !shouldDeferLoopEndTurn)
-        {
-            var endTurnNode = FindEndTurnActionNode(request);
-            if (endTurnNode is not null
-                && TryUseCombatDecision(
-                    CreateCombatEndTurnDecisionFromNode(request, endTurnNode, "end turn after repeated attack-select loop"),
-                    out var allowedRepeatedAttackDecision))
-            {
-                return allowedRepeatedAttackDecision;
-            }
-
-            if (TryUseCombatDecision(CreateCombatPressKeyDecision(
-                "E",
-                "end turn after repeated attack-select loop",
-                "Recent combat history shows repeated attack hotkeys without a matching observer attack card. End the turn instead of looping on screenshot drift.",
-                0.88,
-                200), out var allowedRepeatedAttackFallback))
-            {
-                return allowedRepeatedAttackFallback;
-            }
-        }
-
-        if (combatNoOpLoop.LoopDetected && !shouldDeferLoopEndTurn)
-        {
-            var endTurnNode = FindEndTurnActionNode(request);
-            if (endTurnNode is not null
-                && TryUseCombatDecision(
-                    CreateCombatEndTurnDecisionFromNode(request, endTurnNode, "end turn after combat no-op loop"),
-                    out var allowedCombatNoOpDecision))
-            {
-                return allowedCombatNoOpDecision;
-            }
-
-            if (TryUseCombatDecision(CreateCombatPressKeyDecision(
-                "E",
-                "end turn after combat no-op loop",
-                "Combat has repeated the same card-select and enemy-target sequence without progress. End the turn instead of looping on an unproductive lane.",
-                0.90,
-                200), out var allowedCombatNoOpFallback))
-            {
-                return allowedCombatNoOpFallback;
-            }
+            return CreatePhaseWaitDecision(
+                GuiSmokePhase.HandleCombat,
+                "waiting for recently suppressed non-enemy lane to converge before ending the turn",
+                DisplayControlFlowScreen(request.Observer));
         }
 
         return CloseWithLegalCombatFallback();
@@ -805,16 +769,6 @@ sealed partial class AutoDecisionProvider
     private static int GetCombatNoOpCountForSlot(IReadOnlyList<GuiSmokeHistoryEntry> history, int slotIndex)
     {
         return HandleCombatContextSupport.GetCombatNoOpCountForSlot(HandleCombatContextSupport.Reconstruct(history), slotIndex);
-    }
-
-    private static bool HasRecentRepeatedNonEnemyLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
-    {
-        return HandleCombatContextSupport.Reconstruct(history).RepeatedNonEnemyLoop;
-    }
-
-    private static bool HasRecentRepeatedAttackSelectionLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
-    {
-        return HandleCombatContextSupport.Reconstruct(history).RepeatedAttackSelectionLoop;
     }
 
     private static CombatNoOpLoopAnalysis AnalyzeCombatNoOpLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)

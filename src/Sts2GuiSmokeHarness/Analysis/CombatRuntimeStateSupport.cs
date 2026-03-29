@@ -407,13 +407,6 @@ static class CombatRuntimeStateSupport
         return runtime.KeepsCardPlayOpen || runtime.PendingSelection is not null;
     }
 
-    public static bool ShouldDeferLoopEndTurn(
-        ObserverSummary observer,
-        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
-    {
-        return Read(observer, combatCardKnowledge).KeepsCardPlayOpen;
-    }
-
     public static bool LooksLikeFreshCombatEncounterStart(CombatRuntimeState runtime)
     {
         return runtime.RoundNumber == 1

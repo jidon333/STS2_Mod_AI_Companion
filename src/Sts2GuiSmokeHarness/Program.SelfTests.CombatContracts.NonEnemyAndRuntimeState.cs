@@ -338,6 +338,94 @@ internal static partial class Program
             var recentRetriedNonEnemySlot3Decision = AutoDecisionProvider.Decide(recentRetriedNonEnemySlot3Request);
             Assert(!string.Equals(recentRetriedNonEnemySlot3Decision.TargetLabel, "combat select non-enemy slot 3", StringComparison.OrdinalIgnoreCase), "Recently retried non-enemy regression should not reissue slot 3 without selected-state evidence.");
 
+            var suppressedNonEnemyConvergenceObserver = new ObserverSummary(
+                "combat",
+                "combat",
+                true,
+                DateTimeOffset.UtcNow,
+                "inv-suppressed-non-enemy-convergence",
+                true,
+                "mixed",
+                "stable",
+                "episode-suppressed-non-enemy-convergence",
+                "Monster",
+                "combat",
+                58,
+                80,
+                1,
+                new[] { "5턴 종료" },
+                Array.Empty<string>(),
+                new[] { new ObserverActionNode("end-turn", "button", "5턴 종료", "1604,846,220,90", true) },
+                Array.Empty<ObserverChoice>(),
+                new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.SLIMED", "Status", null),
+                    new ObservedCombatHandCard(2, "CARD.DEFEND_IRONCLAD", "Skill", null),
+                    new ObservedCombatHandCard(3, "CARD.SLIMED", "Status", null),
+                })
+            {
+                SnapshotVersion = 343,
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+                    ["combatCardPlayPending"] = "false",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatPlayMode"] = "Play",
+                    ["combatHistoryStartedCount"] = "13",
+                    ["combatHistoryFinishedCount"] = "13",
+                    ["combatInteractionRevision"] = "13:13:false:false:none",
+                    ["combatLastCardPlayStartedCardId"] = "CARD.DEFEND_IRONCLAD",
+                    ["combatLastCardPlayFinishedCardId"] = "CARD.DEFEND_IRONCLAD",
+                    ["combatTargetSummary"] = "enemy-target:슬라임:2@logical:1154,646.6,72,88@normalized:0.601,0.5987,0.0375,0.0815",
+                },
+            };
+            var suppressedNonEnemyConvergenceKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.SLIMED", "Status", "None", -1, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+                new CombatCardKnowledgeHint(3, "CARD.SLIMED", "Status", "None", -1, "self-test"),
+            };
+            var suppressedNonEnemyConvergenceHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 2", DateTimeOffset.UtcNow.AddSeconds(-4)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "confirm-non-enemy", "confirm selected non-enemy card", DateTimeOffset.UtcNow.AddSeconds(-3)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 2", DateTimeOffset.UtcNow.AddSeconds(-2)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "confirm-non-enemy", "confirm selected non-enemy card", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            };
+            var suppressedNonEnemyConvergenceActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(suppressedNonEnemyConvergenceObserver, null, null, null),
+                suppressedNonEnemyConvergenceKnowledge,
+                combatNoOpScreenshotPath,
+                suppressedNonEnemyConvergenceHistory);
+            Assert(!suppressedNonEnemyConvergenceActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "A recently suppressed non-enemy lane should keep end turn closed until the lane converges or explicitly clears.");
+            Assert(!suppressedNonEnemyConvergenceActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "A recently suppressed non-enemy lane should not reopen generic enemy targeting from stale target summary residue.");
+            var suppressedNonEnemyConvergenceDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                26,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Wait for the recently suppressed non-enemy lane to converge instead of ending the turn.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                suppressedNonEnemyConvergenceObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                suppressedNonEnemyConvergenceKnowledge,
+                suppressedNonEnemyConvergenceActions,
+                suppressedNonEnemyConvergenceHistory,
+                "Do not end the turn while the recent non-enemy lane may still be converging.",
+                null));
+            Assert(string.Equals(suppressedNonEnemyConvergenceDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "Recently suppressed non-enemy convergence should prefer wait over legacy end-turn fallback.");
+
             var runtimePendingNonEnemyObserver = pendingNonEnemySlot3Observer with
             {
                 InventoryId = "inv-runtime-pending-non-enemy",

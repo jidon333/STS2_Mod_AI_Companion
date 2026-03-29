@@ -30,9 +30,7 @@ sealed record ReconstructedHandleCombatContext(
     IReadOnlyList<GuiSmokeHistoryEntry> CombatHistory,
     PendingCombatSelection? PendingSelection,
     IReadOnlyDictionary<int, int> CombatNoOpCountsBySlot,
-    CombatNoOpLoopAnalysis CombatNoOpLoop,
-    bool RepeatedNonEnemyLoop,
-    bool RepeatedAttackSelectionLoop);
+    CombatNoOpLoopAnalysis CombatNoOpLoop);
 
 static class HandleCombatContextSupport
 {
@@ -103,9 +101,7 @@ static class HandleCombatContextSupport
             combatHistory,
             pendingSelection,
             combatNoOpCountsBySlot,
-            AnalyzeCombatNoOpLoop(combatHistory, combatNoOpCountsBySlot),
-            HasRecentRepeatedNonEnemyLoop(combatHistory),
-            HasRecentRepeatedAttackSelectionLoop(combatHistory));
+            AnalyzeCombatNoOpLoop(combatHistory, combatNoOpCountsBySlot));
     }
 
     private static bool ShouldResetHistoryForFreshCombat(
@@ -186,91 +182,6 @@ static class HandleCombatContextSupport
             : 0;
     }
 
-    private static bool HasRecentRepeatedNonEnemyLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
-    {
-        var labels = history
-            .Select(static entry => entry.TargetLabel)
-            .Where(static label =>
-                !string.IsNullOrWhiteSpace(label)
-                && (IsNonEnemySelectionLabel(label)
-                    || string.Equals(label, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)))
-            .TakeLast(6)
-            .ToArray();
-        if (labels.Length < 4)
-        {
-            return false;
-        }
-
-        if (labels.Length >= 4
-            && IsNonEnemySelectionLabel(labels[0])
-            && string.Equals(labels[1], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase)
-            && IsNonEnemySelectionLabel(labels[2])
-            && string.Equals(labels[3], "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var recentSelectCount = labels.Count(IsNonEnemySelectionLabel);
-        if (recentSelectCount >= 3)
-        {
-            var distinctSelectionLabels = labels
-                .Where(IsNonEnemySelectionLabel)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Count();
-            if (distinctSelectionLabels == 1)
-            {
-                return true;
-            }
-        }
-
-        if (labels.Length >= 5)
-        {
-            var trailingWindow = labels.TakeLast(5).ToArray();
-            var allowedMixedLoop = trailingWindow.All(label =>
-                IsNonEnemySelectionLabel(label)
-                || string.Equals(label, "confirm selected non-enemy card", StringComparison.OrdinalIgnoreCase));
-            if (allowedMixedLoop && trailingWindow.Count(IsNonEnemySelectionLabel) >= 3)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool HasRecentRepeatedAttackSelectionLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)
-    {
-        var labels = history
-            .Select(static entry => entry.TargetLabel)
-            .Where(static label => !string.IsNullOrWhiteSpace(label))
-            .TakeLast(6)
-            .ToArray();
-        if (labels.Length < 3)
-        {
-            return false;
-        }
-
-        var attackSelections = labels
-            .Where(static label => label is not null && label.StartsWith("combat select attack slot ", StringComparison.OrdinalIgnoreCase))
-            .Select(static label => label!)
-            .TakeLast(4)
-            .ToArray();
-        if (attackSelections.Length < 3)
-        {
-            return false;
-        }
-
-        var distinctAttackSelections = attackSelections
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Count();
-        if (distinctAttackSelections > 1)
-        {
-            return true;
-        }
-
-        return attackSelections.Length >= 3;
-    }
-
     private static CombatNoOpLoopAnalysis AnalyzeCombatNoOpLoop(
         IReadOnlyList<GuiSmokeHistoryEntry> history,
         IReadOnlyDictionary<int, int> recentNoOpCounts)
@@ -308,16 +219,5 @@ static class HandleCombatContextSupport
             : 0;
         var loopDetected = repeatedSameSlotCount >= 2 && recentEnemyTargetCount >= 2;
         return new CombatNoOpLoopAnalysis(loopDetected, mostRecentBlockedSlot, repeatedSameSlotCount);
-    }
-
-    private static bool IsNonEnemySelectionLabel(string? targetLabel)
-    {
-        if (string.IsNullOrWhiteSpace(targetLabel))
-        {
-            return false;
-        }
-
-        return targetLabel.StartsWith("combat select non-enemy slot ", StringComparison.OrdinalIgnoreCase)
-               || targetLabel.StartsWith("combat select defend slot ", StringComparison.OrdinalIgnoreCase);
     }
 }
