@@ -148,29 +148,29 @@ static class ObserverScreenProvenance
 
     public static string? ControlFlowCurrentScreen(ObserverSummary observer)
         => StrictPublishedCurrentScreen(observer)
-           ?? StrictCompatibilityCurrentScreen(observer)
            ?? StrictDirectCurrentScreen(observer)
+           ?? StrictCompatibilityCurrentScreen(observer)
            ?? observer.CurrentScreen;
 
     public static string? ControlFlowCurrentScreen(ObserverState observer)
         => StrictPublishedCurrentScreen(observer)
-           ?? StrictCompatibilityCurrentScreen(observer)
            ?? StrictDirectCurrentScreen(observer)
+           ?? StrictCompatibilityCurrentScreen(observer)
            ?? observer.CurrentScreen;
 
     public static string? ControlFlowVisibleScreen(ObserverSummary observer)
         => StrictPublishedVisibleScreen(observer)
-           ?? StrictCompatibilityVisibleScreen(observer)
            ?? StrictDirectObservedScreen(observer)
            ?? StrictDirectCurrentScreen(observer)
+           ?? StrictCompatibilityVisibleScreen(observer)
            ?? observer.VisibleScreen
            ?? observer.CurrentScreen;
 
     public static string? ControlFlowVisibleScreen(ObserverState observer)
         => StrictPublishedVisibleScreen(observer)
-           ?? StrictCompatibilityVisibleScreen(observer)
            ?? StrictDirectObservedScreen(observer)
            ?? StrictDirectCurrentScreen(observer)
+           ?? StrictCompatibilityVisibleScreen(observer)
            ?? observer.VisibleScreen
            ?? observer.CurrentScreen;
 

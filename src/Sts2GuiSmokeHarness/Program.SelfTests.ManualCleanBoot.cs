@@ -446,13 +446,18 @@ internal static partial class Program
                 """
                 {
                   "version": 7,
-                  "currentScreen": "legacy-event",
+                  "currentScreen": "legacy-collapsed",
+                  "publishedCurrentScreen": "legacy-event",
+                  "publishedVisibleScreen": "legacy-direct-visible",
+                  "publishedSceneReady": true,
+                  "publishedSceneAuthority": "hook",
+                  "publishedSceneStability": "stable",
                   "capturedAt": "REPLACE_CAPTURED_AT",
                   "meta": {
-                    "visibleScreen": "legacy-direct-visible",
-                    "sceneReady": "true",
-                    "sceneAuthority": "hook",
-                    "sceneStability": "stable",
+                    "visibleScreen": "legacy-generic-visible",
+                    "sceneReady": "false",
+                    "sceneAuthority": "legacy-generic-authority",
+                    "sceneStability": "legacy-generic-stability",
                     "rawCurrentScreen": "rewards",
                     "rawObservedScreen": "legacy-raw",
                     "compatibilityCurrentScreen": "map",
@@ -531,6 +536,7 @@ internal static partial class Program
                 """
                 {
                   "version": 8,
+                  "currentScreen": "legacy-collapsed",
                   "capturedAt": "REPLACE_CAPTURED_AT",
                   "meta": {
                     "rawObservedScreen": "legacy-raw-only",

@@ -595,12 +595,10 @@ public sealed class LiveExportStateTracker
             ["compatSceneReady"] = compatibilitySceneReady ? "true" : "false",
             ["compatSceneAuthority"] = compatibilitySceneAuthority,
             ["compatSceneStability"] = compatibilitySceneStability,
-            ["readyMarker"] = sceneReady ? observation.TriggerKind : "waiting-for-stable-scene",
             ["rawObservedScreen"] = rawObservedScreen,
         };
 
         SetOrRemove(updated, "logicalScreen", ReadMetaValue(observation.Meta, "logicalScreen"));
-        SetOrRemove(updated, "flowScreen", ReadMetaValue(observation.Meta, "flowScreen") ?? ReadMetaValue(observation.Meta, "logicalScreen"));
         SetOrRemove(updated, "visibleScreen", ReadMetaValue(observation.Meta, "visibleScreen"));
         SetOrRemove(updated, "sceneReady", FormatMetaBool(ReadMetaBool(observation.Meta, "sceneReady")));
         SetOrRemove(updated, "sceneAuthority", ReadMetaValue(observation.Meta, "sceneAuthority"));

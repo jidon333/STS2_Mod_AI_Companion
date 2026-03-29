@@ -62,6 +62,7 @@ Run("inventory publisher preserves strict map-node source contract", TestInvento
 Run("tracker and inventory preserve raw and compatibility screen provenance", TestTrackerAndInventoryPreserveScreenProvenance, failures);
 Run("tracker re-emits additive screen provenance aliases", TestTrackerReEmitsAdditiveScreenProvenanceAliases, failures);
 Run("inventory publisher separates primary and compatibility scene provenance", TestInventoryPublisherSeparatesPrimaryAndCompatibilitySceneProvenance, failures);
+Run("inventory publisher node hints prefer primary scene provenance", TestInventoryPublisherNodeHintsPreferPrimarySceneProvenance, failures);
 Run("published scene provenance ignores legacy compatibility meta", TestPublishedSceneProvenanceIgnoresLegacyCompatibilityMeta, failures);
 Run("inventory publisher suppresses immediate publish for unstable mixed provenance", TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance, failures);
 Run("inventory publisher fingerprint tracks provenance fields", TestInventoryPublisherFingerprintTracksProvenanceFields, failures);
@@ -2458,6 +2459,48 @@ static void TestPublishedSceneProvenanceIgnoresLegacyCompatibilityMeta()
     Assert(inventory.CompatibilitySceneReady == true, "Inventory compatibility scene-ready should continue to preserve legacy sceneReady.");
     Assert(string.Equals(inventory.CompatibilitySceneAuthority, "legacy", StringComparison.OrdinalIgnoreCase), "Inventory compatibility scene authority should continue to preserve legacy sceneAuthority.");
     Assert(string.Equals(inventory.CompatibilitySceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Inventory compatibility scene stability should continue to preserve legacy sceneStability.");
+}
+
+static void TestInventoryPublisherNodeHintsPreferPrimarySceneProvenance()
+{
+    var buildInventoryMethod = typeof(HarnessBridgeEntryPoint).Assembly.GetType("Sts2ModAiCompanion.HarnessBridge.InventoryPublisher")
+        ?.GetMethod("BuildInventory", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(buildInventoryMethod is not null, "Expected private InventoryPublisher.BuildInventory helper.");
+
+    var snapshot = LiveExportSnapshot.CreateEmpty("run-node-primary-provenance-self-test") with
+    {
+        CurrentScreen = "rewards",
+        RawCurrentScreen = "event",
+        RawObservedScreen = "event",
+        PublishedCurrentScreen = "event",
+        PublishedVisibleScreen = "event",
+        CompatibilityLogicalScreen = "rewards",
+        CompatibilityCurrentScreen = "rewards",
+        CompatibilityVisibleScreen = "rewards",
+        CurrentChoices = new[]
+        {
+            new LiveExportChoiceSummary(
+                Kind: string.Empty,
+                Label: "Proceed",
+                Value: "event:proceed",
+                Description: "source:event-option-button")
+            {
+                ScreenBounds = "100,100,64,32",
+                NodeId = "event:proceed",
+            }
+        },
+    };
+
+    var normalizedScene = new CompanionNormalizedScene("rewards", "rewards", 1.0, "test");
+    var inventory = buildInventoryMethod!.Invoke(null, new object?[] { snapshot, "dormant", normalizedScene }) as HarnessNodeInventory;
+    Assert(inventory is not null, "Expected inventory publisher to build a node inventory from mixed primary and compatibility scene provenance.");
+    Assert(inventory!.Nodes.Count == 1, "Expected exactly one node in the mixed provenance inventory.");
+
+    var node = inventory.Nodes[0];
+    Assert(string.Equals(node.Kind, "event-option", StringComparison.OrdinalIgnoreCase), "Inventory node kind should follow published/raw primary scene provenance instead of the compatibility scene winner.");
+    Assert(node.SemanticHints.Contains("scene:event", StringComparer.OrdinalIgnoreCase), "Inventory node semantic hints should expose the primary scene provenance.");
+    Assert(node.SemanticHints.Contains("scene-compat:rewards", StringComparer.OrdinalIgnoreCase), "Inventory node semantic hints should preserve compatibility provenance separately.");
+    Assert(!node.SemanticHints.Contains("scene:rewards", StringComparer.OrdinalIgnoreCase), "Inventory node primary scene hint should not collapse back to the compatibility scene winner.");
 }
 
 static void TestInventoryPublisherSuppressesImmediatePublishForMixedProvenance()
