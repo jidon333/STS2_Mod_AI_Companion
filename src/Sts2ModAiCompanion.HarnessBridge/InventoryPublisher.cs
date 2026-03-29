@@ -100,10 +100,12 @@ internal sealed class InventoryPublisher
         var compatibilitySceneReady = ResolveSceneReady(snapshot, normalizedScene, blockingModal);
         var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
         var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
-        var sceneType = compatibilitySceneType;
-        var sceneReady = compatibilitySceneReady;
-        var sceneAuthority = compatibilitySceneAuthority;
-        var sceneStability = compatibilitySceneStability;
+        var sceneType = publishedSceneType
+                        ?? rawSceneType
+                        ?? "unknown";
+        var sceneReady = publishedSceneReady;
+        var sceneAuthority = publishedSceneAuthority;
+        var sceneStability = publishedSceneStability;
         var nodes = snapshot.CurrentChoices
             .Select((choice, index) => BuildNode(nodePrimarySceneType, nodeRawSceneType, publishedSceneType, choice, index))
             .ToArray();
@@ -149,15 +151,12 @@ internal sealed class InventoryPublisher
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "rawCurrentScreen"));
     }
 
-    private static string ResolveRawSceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
+    private static string? ResolveRawSceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
     {
         return NormalizeSceneToken(snapshot.RawCurrentScreen)
                ?? NormalizeSceneToken(snapshot.RawObservedScreen)
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "rawObservedScreen"))
-               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "rawCurrentScreen"))
-               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "screen"))
-               ?? NormalizeSceneToken(snapshot.CurrentScreen)
-               ?? normalizedScene.SceneType;
+               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "rawCurrentScreen"));
     }
 
     private static string? ResolvePublishedSceneType(LiveExportSnapshot snapshot, CompanionNormalizedScene normalizedScene)
@@ -224,7 +223,7 @@ internal sealed class InventoryPublisher
         LiveExportSnapshot snapshot,
         CompanionNormalizedScene normalizedScene,
         string? publishedSceneType,
-        string rawSceneType)
+        string? rawSceneType)
     {
         var logicalScreen = NormalizeSceneToken(snapshot.CompatibilityLogicalScreen)
             ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "compatLogicalScreen"))

@@ -148,49 +148,39 @@ static class ObserverScreenProvenance
 
     public static string? ControlFlowCurrentScreen(ObserverSummary observer)
         => StrictPublishedCurrentScreen(observer)
-           ?? StrictDirectCurrentScreen(observer)
-           ?? StrictCompatibilityCurrentScreen(observer);
+           ?? StrictDirectCurrentScreen(observer);
 
     public static string? ControlFlowCurrentScreen(ObserverState observer)
         => StrictPublishedCurrentScreen(observer)
-           ?? StrictDirectCurrentScreen(observer)
-           ?? StrictCompatibilityCurrentScreen(observer);
+           ?? StrictDirectCurrentScreen(observer);
 
     public static string? ControlFlowVisibleScreen(ObserverSummary observer)
         => StrictPublishedVisibleScreen(observer)
            ?? StrictDirectObservedScreen(observer)
-           ?? StrictDirectCurrentScreen(observer)
-           ?? StrictCompatibilityVisibleScreen(observer);
+           ?? StrictDirectCurrentScreen(observer);
 
     public static string? ControlFlowVisibleScreen(ObserverState observer)
         => StrictPublishedVisibleScreen(observer)
            ?? StrictDirectObservedScreen(observer)
-           ?? StrictDirectCurrentScreen(observer)
-           ?? StrictCompatibilityVisibleScreen(observer);
+           ?? StrictDirectCurrentScreen(observer);
 
     public static bool? ControlFlowSceneReady(ObserverSummary observer)
-        => StrictPublishedSceneReady(observer)
-           ?? StrictCompatibilitySceneReady(observer);
+        => StrictPublishedSceneReady(observer);
 
     public static bool? ControlFlowSceneReady(ObserverState observer)
-        => StrictPublishedSceneReady(observer)
-           ?? StrictCompatibilitySceneReady(observer);
+        => StrictPublishedSceneReady(observer);
 
     public static string? ControlFlowSceneAuthority(ObserverSummary observer)
-        => StrictPublishedSceneAuthority(observer)
-           ?? StrictCompatibilitySceneAuthority(observer);
+        => StrictPublishedSceneAuthority(observer);
 
     public static string? ControlFlowSceneAuthority(ObserverState observer)
-        => StrictPublishedSceneAuthority(observer)
-           ?? StrictCompatibilitySceneAuthority(observer);
+        => StrictPublishedSceneAuthority(observer);
 
     public static string? ControlFlowSceneStability(ObserverSummary observer)
-        => StrictPublishedSceneStability(observer)
-           ?? StrictCompatibilitySceneStability(observer);
+        => StrictPublishedSceneStability(observer);
 
     public static string? ControlFlowSceneStability(ObserverState observer)
-        => StrictPublishedSceneStability(observer)
-           ?? StrictCompatibilitySceneStability(observer);
+        => StrictPublishedSceneStability(observer);
 
     public static bool MatchesControlFlowScreen(ObserverSummary observer, string screen)
     {
