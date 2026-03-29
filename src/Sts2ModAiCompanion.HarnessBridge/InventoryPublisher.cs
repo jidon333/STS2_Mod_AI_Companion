@@ -98,6 +98,9 @@ internal sealed class InventoryPublisher
         var compatibilitySceneReady = ResolveSceneReady(snapshot, normalizedScene, blockingModal);
         var compatibilitySceneAuthority = ResolveSceneAuthority(snapshot, normalizedScene);
         var compatibilitySceneStability = ResolveSceneStability(snapshot, normalizedScene, blockingModal);
+        var sceneReady = publishedSceneReady ?? compatibilitySceneReady;
+        var sceneAuthority = publishedSceneAuthority ?? compatibilitySceneAuthority;
+        var sceneStability = publishedSceneStability ?? compatibilitySceneStability;
         var nodes = snapshot.CurrentChoices
             .Select((choice, index) => BuildNode(compatibilitySceneType, rawSceneType, publishedSceneType, choice, index))
             .ToArray();
@@ -110,9 +113,9 @@ internal sealed class InventoryPublisher
             SceneEpisodeId: TryGetMeta(snapshot.Meta, "screen-episode"),
             Mode: mode,
             BlockingModal: blockingModal,
-            SceneReady: compatibilitySceneReady,
-            SceneAuthority: compatibilitySceneAuthority,
-            SceneStability: compatibilitySceneStability,
+            SceneReady: sceneReady,
+            SceneAuthority: sceneAuthority,
+            SceneStability: sceneStability,
             Nodes: nodes)
         {
             RawSceneType = rawSceneType,
