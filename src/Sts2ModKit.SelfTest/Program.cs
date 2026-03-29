@@ -75,6 +75,7 @@ Run("runtime reflection extracts combat cards from player combat state", TestRun
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
 Run("runtime reflection encounter does not override CombatManager IsInProgress false", TestRuntimeReflectionEncounterDoesNotOverrideCombatManagerFalse, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
+Run("runtime reflection does not infer combat from global startup type bags", TestRuntimeReflectionDoesNotInferCombatFromGlobalStartupTypeBag, failures);
 Run("runtime reflection exports combat play state metadata", TestRuntimeReflectionCombatMetadataExport, failures);
 Run("runtime reflection capture clears combat slot and success inference", TestRuntimeReflectionCaptureClearsCombatMetadata, failures);
 Run("companion scene normalizer prefers main-menu over hidden character-select markers", TestCompanionSceneNormalizerMainMenuPriority, failures);
@@ -2864,6 +2865,34 @@ static void TestRuntimeReflectionScreenResolution()
     Assert(resolved == "rewards", "Expected overlay reward screen to win over room-type combat fallback.");
 }
 
+static void TestRuntimeReflectionDoesNotInferCombatFromGlobalStartupTypeBag()
+{
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeCombatManagerState
+            {
+                IsInProgress = false,
+                IsPlayPhase = false,
+                IsEnemyTurnStarted = false,
+                PlayerActionsDisabled = false,
+                EndingPlayerTurnPhaseOne = false,
+                EndingPlayerTurnPhaseTwo = false,
+            },
+            new FakeNGameRoot(),
+        },
+        null);
+
+    Assert(string.Equals(observation.Screen, "unknown", StringComparison.OrdinalIgnoreCase), "Runtime reflection should not infer combat from a startup root that only exposes NGame plus the global CombatManager singleton.");
+    Assert(observation.Meta.TryGetValue("publishedCurrentScreen", out var publishedCurrentScreen)
+           && string.Equals(publishedCurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase), "Runtime reflection should keep publishedCurrentScreen unknown until a concrete foreground screen appears.");
+
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\startup-live");
+    var snapshot = tracker.Apply(observation).Snapshot;
+    Assert(string.Equals(snapshot.CurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase), "Tracker should not seed combat from a startup runtime-poll that lacks authoritative combat or foreground screen truth.");
+    Assert(snapshot.Encounter?.InCombat != true, "Startup runtime-poll should not be treated as in-combat when CombatManager.IsInProgress is false.");
+}
+
 static void TestRuntimeReflectionCombatMetadataExport()
 {
     var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
@@ -5602,6 +5631,10 @@ file sealed class FakeCombatManagerState
     public bool EndingPlayerTurnPhaseOne { get; init; }
 
     public bool EndingPlayerTurnPhaseTwo { get; init; }
+}
+
+file sealed class FakeNGameRoot
+{
 }
 
 file sealed class FakeCombatState

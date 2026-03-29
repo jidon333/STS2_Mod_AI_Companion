@@ -432,7 +432,9 @@ internal static class RuntimeSnapshotReflectionExtractor
                 .Select(root => root.GetType().FullName ?? root.GetType().Name)
                 .Distinct(StringComparer.Ordinal)
                 .Take(96));
-        var screen = ResolveScreen(screenOverride, roots, new[] { rootTypeSummary }.Concat(screenCandidates).ToArray());
+        // rootTypeSummary is a broad global type bag that always includes singleton managers.
+        // Keep it for diagnostics, but do not let it decide the primary screen.
+        var screen = ResolveScreen(screenOverride, roots, screenCandidates);
         if (string.Equals(screen, "unknown", StringComparison.Ordinal)
             && encounter?.InCombat == true)
         {
