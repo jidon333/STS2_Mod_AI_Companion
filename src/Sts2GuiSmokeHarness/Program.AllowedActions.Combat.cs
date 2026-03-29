@@ -267,7 +267,7 @@ internal static partial class Program
             return true;
         }
 
-        if (!CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer.Summary, combatCardKnowledge))
+        if (!CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer.Summary, combatCardKnowledge, pendingSelection))
         {
             return false;
         }

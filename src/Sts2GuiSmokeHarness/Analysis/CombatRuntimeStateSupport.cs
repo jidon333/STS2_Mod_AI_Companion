@@ -219,6 +219,15 @@ static class CombatRuntimeStateSupport
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
         PendingCombatSelection? historyPendingSelection)
     {
+        return ResolvePendingSelection(observer, combatCardKnowledge, historyPendingSelection, null);
+    }
+
+    public static PendingCombatSelection? ResolvePendingSelection(
+        ObserverSummary observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        PendingCombatSelection? historyPendingSelection,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
         var runtime = Read(observer, combatCardKnowledge);
         if (runtime.PendingSelection is not null)
         {
@@ -227,7 +236,7 @@ static class CombatRuntimeStateSupport
 
         if (runtime.ExplicitlyClearedSelection)
         {
-            if (ShouldPreserveHistoryAttackSelection(observer, runtime, historyPendingSelection))
+            if (ShouldPreserveHistoryAttackSelection(observer, runtime, historyPendingSelection, history))
             {
                 return historyPendingSelection;
             }
@@ -329,7 +338,7 @@ static class CombatRuntimeStateSupport
             return false;
         }
 
-        if (!RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge))
+        if (!RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge, pendingSelection))
         {
             return false;
         }
@@ -356,10 +365,16 @@ static class CombatRuntimeStateSupport
 
     public static bool RequiresExplicitTargetingBeforeEnemyClick(
         ObserverSummary observer,
-        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        PendingCombatSelection? pendingSelection = null)
     {
         var runtime = Read(observer, combatCardKnowledge);
-        if (runtime.PendingSelection?.Kind != AutoCombatCardKind.AttackLike)
+        var effectivePendingSelection = runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+            ? runtime.PendingSelection
+            : pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                ? pendingSelection
+                : null;
+        if (effectivePendingSelection?.Kind != AutoCombatCardKind.AttackLike)
         {
             return false;
         }
@@ -374,7 +389,7 @@ static class CombatRuntimeStateSupport
             return false;
         }
 
-        var selectedSlot = runtime.PendingSelection.SlotIndex;
+        var selectedSlot = effectivePendingSelection.SlotIndex;
         var knowledgeCard = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == selectedSlot);
         if (knowledgeCard is not null)
         {
@@ -475,16 +490,29 @@ static class CombatRuntimeStateSupport
     private static bool ShouldPreserveHistoryAttackSelection(
         ObserverSummary observer,
         CombatRuntimeState runtime,
-        PendingCombatSelection? historyPendingSelection)
+        PendingCombatSelection? historyPendingSelection,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history)
     {
-        return historyPendingSelection?.Kind == AutoCombatCardKind.AttackLike
-               && historyPendingSelection.SlotIndex is >= 1 and <= 5
-               && HasAttackSelectionCarryoverMetadata(observer, runtime)
-               && string.IsNullOrWhiteSpace(runtime.LastCardPlayFinishedCardId)
-               && !runtime.HasInFlightPlayerDrivenAction
-               && runtime.PlayerActionsDisabled != true
-               && runtime.EndingPlayerTurnPhaseOne != true
-               && runtime.EndingPlayerTurnPhaseTwo != true;
+        if (historyPendingSelection?.Kind != AutoCombatCardKind.AttackLike
+            || historyPendingSelection.SlotIndex is < 1 or > 5
+            || !HasAttackSelectionCarryoverMetadata(observer, runtime)
+            || runtime.HasInFlightPlayerDrivenAction
+            || runtime.PlayerActionsDisabled == true
+            || runtime.EndingPlayerTurnPhaseOne == true
+            || runtime.EndingPlayerTurnPhaseTwo == true)
+        {
+            return false;
+        }
+
+        var sourceMetadata = TryGetRecentAttackSelectionMetadata(history, historyPendingSelection.SlotIndex);
+        if (sourceMetadata is null)
+        {
+            return !string.IsNullOrWhiteSpace(runtime.SelectedCardType)
+                   || !string.IsNullOrWhiteSpace(runtime.SelectedCardTargetType)
+                   || string.IsNullOrWhiteSpace(runtime.LastCardPlayFinishedCardId);
+        }
+
+        return !HasPostSelectionProgress(runtime, sourceMetadata);
     }
 
     private static bool HasAttackSelectionCarryoverMetadata(ObserverSummary observer, CombatRuntimeState runtime)
@@ -497,6 +525,72 @@ static class CombatRuntimeStateSupport
 
         return string.Equals(runtime.SelectedCardType, "Attack", StringComparison.OrdinalIgnoreCase)
                || IsEnemyTargetType(runtime.SelectedCardTargetType);
+    }
+
+    private static CombatBarrierHistoryMetadata? TryGetRecentAttackSelectionMetadata(
+        IReadOnlyList<GuiSmokeHistoryEntry>? history,
+        int slotIndex)
+    {
+        if (history is null || history.Count == 0)
+        {
+            return null;
+        }
+
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(entry.Action, "press-key", StringComparison.OrdinalIgnoreCase)
+                || !CombatHistorySupport.TryParsePendingCombatSelection(entry.TargetLabel, out var selection)
+                || selection?.Kind != AutoCombatCardKind.AttackLike
+                || selection.SlotIndex != slotIndex)
+            {
+                continue;
+            }
+
+            return CombatBarrierSupport.TryParseHistoryMetadata(entry.Metadata);
+        }
+
+        return null;
+    }
+
+    private static bool HasPostSelectionProgress(
+        CombatRuntimeState runtime,
+        CombatBarrierHistoryMetadata sourceMetadata)
+    {
+        if (sourceMetadata.RoundNumber is not null
+            && runtime.RoundNumber is not null
+            && runtime.RoundNumber != sourceMetadata.RoundNumber)
+        {
+            return true;
+        }
+
+        if (sourceMetadata.HistoryStartedCount is not null
+            && runtime.HistoryStartedCount is not null
+            && runtime.HistoryStartedCount != sourceMetadata.HistoryStartedCount)
+        {
+            return true;
+        }
+
+        if (sourceMetadata.HistoryFinishedCount is not null
+            && runtime.HistoryFinishedCount is not null
+            && runtime.HistoryFinishedCount != sourceMetadata.HistoryFinishedCount)
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(sourceMetadata.InteractionRevision)
+            && !string.Equals(runtime.InteractionRevision, sourceMetadata.InteractionRevision, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!string.Equals(runtime.LastCardPlayFinishedCardId, sourceMetadata.LastFinishedCardId, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static bool IsEnemyTargetType(string? targetType)

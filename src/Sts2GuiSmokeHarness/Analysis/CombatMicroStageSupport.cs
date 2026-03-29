@@ -63,7 +63,8 @@ static class CombatMicroStageSupport
         var attackRequiresExplicitEnemyTarget = attackLaneOpen
                                                 && CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(
                                                     context.Observer.Summary,
-                                                    context.CombatCardKnowledge);
+                                                    context.CombatCardKnowledge,
+                                                    pendingSelection);
 
         if (context.CombatPlayerActionWindowClosed)
         {

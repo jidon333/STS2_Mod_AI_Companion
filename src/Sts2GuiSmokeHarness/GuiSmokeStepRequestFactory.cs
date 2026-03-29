@@ -61,7 +61,7 @@ static class GuiSmokeStepRequestFactory
         {
             if (!pendingSelectionComputed)
             {
-                pendingSelection = CombatRuntimeStateSupport.ResolvePendingSelection(observer.Summary, combatCardKnowledge, GetCombatContext().PendingSelection);
+                pendingSelection = CombatRuntimeStateSupport.ResolvePendingSelection(observer.Summary, combatCardKnowledge, GetCombatContext().PendingSelection, history);
                 pendingSelectionComputed = true;
             }
 

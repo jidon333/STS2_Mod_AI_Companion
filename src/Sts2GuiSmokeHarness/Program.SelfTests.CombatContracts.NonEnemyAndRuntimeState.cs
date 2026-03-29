@@ -810,6 +810,110 @@ internal static partial class Program
             Assert(runtimeTargetSummaryHistoryCarryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
                 "Runtime target summary plus recent attack-lane history should drive enemy targeting instead of reopening the same attack slot.");
 
+            var targetSummaryStaleFinishedMetadata = JsonSerializer.Serialize(
+                new CombatBarrierHistoryMetadata(
+                    61,
+                    DateTimeOffset.UtcNow.AddSeconds(-1),
+                    "map",
+                    "6:6:false:false:none",
+                    6,
+                    6,
+                    "CARD.DEFEND_IRONCLAD")
+                {
+                    RoundNumber = 3,
+                    PlayerActionsDisabled = false,
+                    EndingPlayerTurnPhaseOne = false,
+                    EndingPlayerTurnPhaseTwo = false,
+                },
+                GuiSmokeShared.JsonOptions);
+            var targetSummaryOnlyCarryObserver = runtimeTargetSummaryObserver with
+            {
+                InventoryId = "inv-runtime-target-summary-only-carry",
+                SceneEpisodeId = null,
+                PlayerEnergy = 3,
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                    new ObservedCombatHandCard(2, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                    new ObservedCombatHandCard(3, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                    new ObservedCombatHandCard(4, "CARD.GRAPPLE", "Attack", 1),
+                    new ObservedCombatHandCard(5, "CARD.SWORD_BOOMERANG", "Attack", 1),
+                },
+                Meta = new Dictionary<string, string?>(runtimeTargetSummaryObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCardPlayPending"] = "false",
+                    ["combatSelectedCardSlot"] = null,
+                    ["combatSelectedCardType"] = null,
+                    ["combatSelectedCardTargetType"] = null,
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatTargetableEnemyCount"] = "0",
+                    ["combatTargetableEnemyIds"] = null,
+                    ["combatHittableEnemyCount"] = "0",
+                    ["combatHittableEnemyIds"] = null,
+                    ["combatInteractionRevision"] = "6:6:false:false:none",
+                    ["combatHistoryStartedCount"] = "6",
+                    ["combatHistoryFinishedCount"] = "6",
+                    ["combatLastCardPlayFinishedCardId"] = "CARD.DEFEND_IRONCLAD",
+                    ["combatRoundNumber"] = "3",
+                    ["combatTargetSummary"] = "enemy-target:Jaw Worm:1@logical:720,180,180,260@normalized:0.3750,0.1667,0.0938,0.2407",
+                },
+            };
+            var targetSummaryOnlyCarryKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+                new CombatCardKnowledgeHint(3, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+                new CombatCardKnowledgeHint(4, "CARD.GRAPPLE", "Attack", "AnyEnemy", 1, "self-test"),
+                new CombatCardKnowledgeHint(5, "CARD.SWORD_BOOMERANG", "Attack", "RandomEnemy", 1, "self-test"),
+            };
+            var targetSummaryOnlyCarryHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-1))
+                {
+                    Metadata = targetSummaryStaleFinishedMetadata,
+                },
+            };
+            Assert(CombatRuntimeStateSupport.ResolvePendingSelection(
+                    targetSummaryOnlyCarryObserver,
+                    targetSummaryOnlyCarryKnowledge,
+                    CombatHistorySupport.TryGetPendingCombatSelection(targetSummaryOnlyCarryHistory),
+                    targetSummaryOnlyCarryHistory) is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: 1 },
+                "Unchanged post-select runtime metadata plus target summary should preserve the recent attack lane even when selected-card fields briefly clear.");
+            var targetSummaryOnlyCarryActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(targetSummaryOnlyCarryObserver, null, null, null),
+                targetSummaryOnlyCarryKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                targetSummaryOnlyCarryHistory);
+            Assert(targetSummaryOnlyCarryActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                "Target summary carryover should reopen click-enemy instead of forcing another attack-slot hotkey.");
+            var targetSummaryOnlyCarryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                30,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Preserve a just-selected attack lane from unchanged runtime metadata before repeating the same hotkey.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                targetSummaryOnlyCarryObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                targetSummaryOnlyCarryKnowledge,
+                targetSummaryOnlyCarryActions,
+                targetSummaryOnlyCarryHistory,
+                "Use unchanged runtime metadata plus target summary to continue the current attack lane.",
+                null));
+            Assert(targetSummaryOnlyCarryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
+                "Target summary carryover should target the enemy instead of repeating the same attack slot.");
+
             var staleCombatLaneCarryMetadata = JsonSerializer.Serialize(
                 new CombatBarrierHistoryMetadata(
                     82,

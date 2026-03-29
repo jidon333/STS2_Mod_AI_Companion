@@ -195,7 +195,7 @@ static class CombatPostActionObservationSupport
             if (IsAttackSelectionDecision(_decision))
             {
                 if (stage.Kind == CombatMicroStageKind.AwaitingCardPlayConfirm
-                    && !CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(context.Observer.Summary, _combatCardKnowledge)
+                    && !CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(context.Observer.Summary, _combatCardKnowledge, context.PendingCombatSelection)
                     && hasFreshObservationProgress)
                 {
                     reason = "combat-selected-attack-confirm-ready";
@@ -203,7 +203,7 @@ static class CombatPostActionObservationSupport
                 }
 
                 if (stage.Kind == CombatMicroStageKind.ResolvingCardPlay
-                    && !CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(context.Observer.Summary, _combatCardKnowledge)
+                    && !CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(context.Observer.Summary, _combatCardKnowledge, context.PendingCombatSelection)
                     && hasFreshObservationProgress)
                 {
                     reason = "combat-attack-autoplay-started";

@@ -737,7 +737,7 @@ sealed partial class AutoDecisionProvider
             return true;
         }
 
-        if (!CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge))
+        if (!CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge, pendingSelection))
         {
             return false;
         }
