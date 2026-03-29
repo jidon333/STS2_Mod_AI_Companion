@@ -257,10 +257,10 @@ static class ObserverScreenProvenance
     }
 
     public static string? DisplayScreen(ObserverSummary observer)
-        => observer.CurrentScreen ?? observer.VisibleScreen;
+        => DisplayControlFlowScreen(observer);
 
     public static string? DisplayScreen(ObserverState observer)
-        => observer.CurrentScreen ?? observer.VisibleScreen;
+        => DisplayControlFlowScreen(observer);
 
     public static string? DisplayPublishedScreen(ObserverSummary observer)
         => PublishedCurrentScreen(observer) ?? PublishedVisibleScreen(observer);

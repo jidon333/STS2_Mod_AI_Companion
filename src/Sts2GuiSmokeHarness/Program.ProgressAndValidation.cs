@@ -60,11 +60,11 @@ internal static partial class Program
 
     static string DescribeObserverHuman(ObserverState observer)
     {
-        var logical = CompatibilityCurrentScreen(observer) ?? "null";
-        var visible = CompatibilityVisibleScreen(observer) ?? "null";
+        var logical = ControlFlowCurrentScreen(observer) ?? "null";
+        var visible = ControlFlowVisibleScreen(observer) ?? "null";
         var inCombat = observer.InCombat?.ToString() ?? "null";
-        var sceneReady = CompatibilitySceneReady(observer)?.ToString() ?? "null";
-        var sceneStability = CompatibilitySceneStability(observer) ?? "null";
+        var sceneReady = ControlFlowSceneReady(observer)?.ToString() ?? "null";
+        var sceneStability = ControlFlowSceneStability(observer) ?? "null";
         var hp = observer.Summary.PlayerCurrentHp is not null && observer.Summary.PlayerMaxHp is not null
             ? $"{observer.Summary.PlayerCurrentHp}/{observer.Summary.PlayerMaxHp}"
             : "null";
@@ -110,14 +110,14 @@ internal static partial class Program
                 CanonicalForegroundOwner: not NonCombatCanonicalForegroundOwner.Unknown
                     and not NonCombatCanonicalForegroundOwner.Map,
             };
-        if (CompatibilitySceneReady(observer) is not null)
+        if (ControlFlowSceneReady(observer) is not null)
         {
-            observerSignals.Add(CompatibilitySceneReady(observer) == true ? "scene-ready-true" : "scene-ready-false");
+            observerSignals.Add(ControlFlowSceneReady(observer) == true ? "scene-ready-true" : "scene-ready-false");
         }
 
-        if (!string.IsNullOrWhiteSpace(CompatibilitySceneAuthority(observer)))
+        if (!string.IsNullOrWhiteSpace(ControlFlowSceneAuthority(observer)))
         {
-            observerSignals.Add($"scene-authority:{CompatibilitySceneAuthority(observer)}");
+            observerSignals.Add($"scene-authority:{ControlFlowSceneAuthority(observer)}");
         }
 
         if (phase == GuiSmokePhase.HandleCombat)
@@ -221,7 +221,7 @@ internal static partial class Program
             }
 
             if (GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
-                && !MatchesCompatibilityScreen(observer, "map")
+                && !MatchesControlFlowScreen(observer, "map")
                 && !suppressMapTransitionByForegroundAuthority)
             {
                 observerSignals.Add("map-transition-evidence");
@@ -260,7 +260,7 @@ internal static partial class Program
                 actuatorSignals.Add("no-repeat-stall");
             }
 
-            if (CompatibilitySceneReady(observer) != false)
+            if (ControlFlowSceneReady(observer) != false)
             {
                 actuatorSignals.Add("scene-safe");
             }
@@ -302,8 +302,8 @@ internal static partial class Program
             stepIndex,
             phase.ToString(),
             sceneSignature,
-            CompatibilityCurrentScreen(observer),
-            postActionObserver is null ? null : CompatibilityCurrentScreen(postActionObserver),
+            ControlFlowCurrentScreen(observer),
+            postActionObserver is null ? null : ControlFlowCurrentScreen(postActionObserver),
             decision?.TargetLabel,
             observerProgress,
             actuatorProgress,
@@ -330,7 +330,7 @@ internal static partial class Program
         return before.InCombat == true
                && after.InCombat == true
                && !HasMeaningfulObserverDelta(before, after)
-               && string.Equals(DisplayScreen(after), "combat", StringComparison.OrdinalIgnoreCase);
+               && string.Equals(DisplayControlFlowScreen(after), "combat", StringComparison.OrdinalIgnoreCase);
     }
 
     static bool IsSpecificExtractorPath(string? choiceExtractorPath)
@@ -348,7 +348,7 @@ internal static partial class Program
     {
         var beforeRuntime = CombatRuntimeStateSupport.Read(before.Summary, Array.Empty<CombatCardKnowledgeHint>());
         var afterRuntime = CombatRuntimeStateSupport.Read(after.Summary, Array.Empty<CombatCardKnowledgeHint>());
-        return !string.Equals(DisplayScreen(before), DisplayScreen(after), StringComparison.OrdinalIgnoreCase)
+        return !string.Equals(DisplayControlFlowScreen(before), DisplayControlFlowScreen(after), StringComparison.OrdinalIgnoreCase)
                || before.InCombat != after.InCombat
                || !string.Equals(before.Summary.SceneEpisodeId, after.Summary.SceneEpisodeId, StringComparison.Ordinal)
                || before.PlayerEnergy != after.PlayerEnergy
@@ -380,18 +380,18 @@ internal static partial class Program
         if (before.InCombat != true
             || after.InCombat != true
             || HasMeaningfulObserverDelta(before, after)
-            || !string.Equals(DisplayScreen(after), "combat", StringComparison.OrdinalIgnoreCase))
+            || !string.Equals(DisplayControlFlowScreen(after), "combat", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         var laneLabel = AutoDecisionProvider.ResolveCombatLaneLabel(decision.TargetLabel, history) ?? decision.TargetLabel ?? "combat";
         history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-noop", laneLabel, DateTimeOffset.UtcNow));
-        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-noop", DisplayScreen(after), after.InCombat, laneLabel));
+        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-noop", DisplayControlFlowScreen(after), after.InCombat, laneLabel));
         signal = laneLabel.StartsWith("combat lane slot ", StringComparison.OrdinalIgnoreCase)
             ? $"combat-noop-observed:{laneLabel}"
             : "combat-noop-observed";
-        LogHarness($"step={stepIndex} observed combat-noop target={decision.TargetLabel ?? "null"} lane={laneLabel} screen={DisplayScreen(after) ?? "null"}");
+        LogHarness($"step={stepIndex} observed combat-noop target={decision.TargetLabel ?? "null"} lane={laneLabel} screen={DisplayControlFlowScreen(after) ?? "null"}");
         return true;
     }
 

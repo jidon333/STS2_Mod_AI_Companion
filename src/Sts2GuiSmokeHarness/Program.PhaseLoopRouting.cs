@@ -43,8 +43,8 @@ internal static partial class Program
         return string.Join("|",
             phase.ToString(),
             NormalizeSceneSignatureForPlateau(sceneSignature),
-            observer.CurrentScreen ?? "unknown",
-            observer.VisibleScreen ?? "unknown",
+            ControlFlowCurrentScreen(observer) ?? "unknown",
+            ControlFlowVisibleScreen(observer) ?? "unknown",
             observer.ChoiceExtractorPath ?? "unknown",
             GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType") ?? "unknown",
             observer.InventoryId ?? "unknown",
@@ -59,8 +59,8 @@ internal static partial class Program
             .Take(6);
         return string.Join("|",
             NormalizeSceneSignatureForPlateau(sceneSignature),
-            observer.CurrentScreen ?? "unknown",
-            observer.VisibleScreen ?? "unknown",
+            ControlFlowCurrentScreen(observer) ?? "unknown",
+            ControlFlowVisibleScreen(observer) ?? "unknown",
             observer.InventoryId ?? "unknown",
             string.Join(";", overlayLabels));
     }
@@ -111,12 +111,12 @@ internal static partial class Program
         if (phaseMismatchObserved)
         {
             terminalCause = "phase-mismatch-stall";
-            message = $"phase-mismatch-stall phase={phase} observer={observer.CurrentScreen ?? observer.VisibleScreen ?? "null"} reconciledPhase={postEmbarkPhase} waits={consecutiveDecisionWaitCount}";
+            message = $"phase-mismatch-stall phase={phase} observer={DisplayControlFlowScreen(observer) ?? "null"} reconciledPhase={postEmbarkPhase} waits={consecutiveDecisionWaitCount}";
             return true;
         }
 
         terminalCause = "decision-wait-plateau";
-        message = $"decision-wait-plateau phase={phase} screen={observer.CurrentScreen ?? "null"} waits={consecutiveDecisionWaitCount} inventory={observer.InventoryId ?? "null"}";
+        message = $"decision-wait-plateau phase={phase} screen={DisplayControlFlowScreen(observer) ?? "null"} waits={consecutiveDecisionWaitCount} inventory={observer.InventoryId ?? "null"}";
         return true;
     }
 

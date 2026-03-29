@@ -504,6 +504,13 @@ internal static partial class Program
             Assert(ObserverScreenProvenance.ControlFlowSceneReady(aliasObserver) == true
                    && string.Equals(ObserverScreenProvenance.ControlFlowSceneAuthority(aliasObserver), "hook", StringComparison.OrdinalIgnoreCase)
                    && string.Equals(ObserverScreenProvenance.ControlFlowSceneStability(aliasObserver), "stable", StringComparison.OrdinalIgnoreCase), "Control-flow scene helpers should prefer published readiness and authority before compatibility aliases.");
+            Assert(string.Equals(ObserverScreenProvenance.DisplayScreen(aliasObserver), "legacy-event", StringComparison.OrdinalIgnoreCase), "Display screen should follow control-flow provenance instead of the compatibility-collapsed current screen.");
+            var aliasSceneSignature = GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(null, aliasObserver, GuiSmokePhase.HandleEvent, null);
+            Assert(aliasSceneSignature.Contains("screen:legacy-event", StringComparison.OrdinalIgnoreCase), "Scene signatures should use control-flow current screen instead of collapsing back to compatibility current screen.");
+            Assert(aliasSceneSignature.Contains("visible:legacy-direct-visible", StringComparison.OrdinalIgnoreCase), "Scene signatures should use control-flow visible screen instead of compatibility visible screen.");
+            var aliasObserverDescription = DescribeObserverHuman(aliasObserver);
+            Assert(aliasObserverDescription.Contains("logical=legacy-event", StringComparison.OrdinalIgnoreCase), "Observer description should report control-flow current screen, not compatibility current screen.");
+            Assert(aliasObserverDescription.Contains("visible=legacy-direct-visible", StringComparison.OrdinalIgnoreCase), "Observer description should report control-flow visible screen, not compatibility visible screen.");
 
             File.WriteAllText(
                 liveLayout.SnapshotPath,

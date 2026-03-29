@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Sts2AiCompanion.Foundation.Contracts;
 using static GuiSmokeNonCombatAllowedActionSupport;
+using static ObserverScreenProvenance;
 
 static class GuiSmokePromptContractSupport
 {
@@ -119,7 +120,7 @@ static class GuiSmokePromptContractSupport
                 => "Reward screen authority is stronger than the background map. Claim the visible reward or use skip/proceed first, and ignore any contaminated map arrow until the reward panel disappears.",
             GuiSmokePhase.HandleRewards when GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                 => "Map authority is already stronger than the lingering event label. Prefer a reachable node or screenshot-derived map advance instead of repeating proceed/event clicks.",
-            GuiSmokePhase.HandleRewards when string.Equals(observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+            GuiSmokePhase.HandleRewards when MatchesControlFlowScreen(observer, "map")
                 => "AI first: use the screenshot as the primary source. If the map is clearly visible, you may click the first reachable node instead of forcing another reward proceed click.",
             GuiSmokePhase.HandleRewards => "Prefer the proceed arrow when the reward can be skipped; otherwise pick a valid reward card.",
             GuiSmokePhase.ChooseFirstNode when GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, screenshotPath)
