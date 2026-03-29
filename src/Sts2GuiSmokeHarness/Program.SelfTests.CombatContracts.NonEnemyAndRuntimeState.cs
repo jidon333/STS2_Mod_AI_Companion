@@ -750,6 +750,66 @@ internal static partial class Program
             Assert(runtimeTargetSummaryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
                 "Runtime target summary should drive an explicit combat enemy-target click instead of leaving the attack lane unresolved.");
 
+            var runtimeTargetSummaryHistoryCarryObserver = runtimeTargetSummaryObserver with
+            {
+                InventoryId = "inv-runtime-target-summary-history-carry",
+                SceneEpisodeId = "episode-runtime-target-summary-history-carry",
+                Meta = new Dictionary<string, string?>(runtimeTargetSummaryObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCardPlayPending"] = "false",
+                    ["combatSelectedCardSlot"] = null,
+                    ["combatSelectedCardType"] = "Attack",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatInteractionRevision"] = "5:5:false:false:none",
+                    ["combatHistoryStartedCount"] = "5",
+                    ["combatHistoryFinishedCount"] = "5",
+                },
+            };
+            var runtimeTargetSummaryHistoryCarryHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 3", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            };
+            var reconstructedPendingAttack = CombatRuntimeStateSupport.ResolvePendingSelection(
+                runtimeTargetSummaryHistoryCarryObserver,
+                runtimeTargetingKnowledge,
+                CombatHistorySupport.TryGetPendingCombatSelection(runtimeTargetSummaryHistoryCarryHistory));
+            Assert(reconstructedPendingAttack is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: 3 },
+                "Runtime target summary should preserve the recent attack-lane selection instead of clearing it before enemy targeting resolves.");
+            var runtimeTargetSummaryHistoryCarryActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(runtimeTargetSummaryHistoryCarryObserver, null, null, null),
+                runtimeTargetingKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                runtimeTargetSummaryHistoryCarryHistory);
+            Assert(runtimeTargetSummaryHistoryCarryActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                "Runtime target summary plus recent attack history should keep click-enemy open even when selected-slot metadata briefly clears.");
+            var runtimeTargetSummaryHistoryCarryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                26,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Rebuild the unresolved attack lane from runtime target summary before retrying the same slot.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                runtimeTargetSummaryHistoryCarryObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                runtimeTargetingKnowledge,
+                runtimeTargetSummaryHistoryCarryActions,
+                runtimeTargetSummaryHistoryCarryHistory,
+                "Use runtime target summary and recent attack-lane history before repeating the same attack-slot hotkey.",
+                null));
+            Assert(runtimeTargetSummaryHistoryCarryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
+                "Runtime target summary plus recent attack-lane history should drive enemy targeting instead of reopening the same attack slot.");
+
             var runtimeTargetingObserver = runtimeAttackSelectionObserver with
             {
                 InventoryId = "inv-runtime-targeting",

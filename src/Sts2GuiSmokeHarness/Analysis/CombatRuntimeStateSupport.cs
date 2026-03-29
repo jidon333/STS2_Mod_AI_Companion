@@ -218,6 +218,11 @@ static class CombatRuntimeStateSupport
 
         if (runtime.ExplicitlyClearedSelection)
         {
+            if (ShouldPreserveHistoryAttackSelection(observer, runtime, historyPendingSelection))
+            {
+                return historyPendingSelection;
+            }
+
             return null;
         }
 
@@ -410,6 +415,21 @@ static class CombatRuntimeStateSupport
         }
 
         return null;
+    }
+
+    private static bool ShouldPreserveHistoryAttackSelection(
+        ObserverSummary observer,
+        CombatRuntimeState runtime,
+        PendingCombatSelection? historyPendingSelection)
+    {
+        return historyPendingSelection?.Kind == AutoCombatCardKind.AttackLike
+               && historyPendingSelection.SlotIndex is >= 1 and <= 5
+               && observer.Meta.TryGetValue("combatTargetSummary", out var rawTargetSummary)
+               && !string.IsNullOrWhiteSpace(rawTargetSummary)
+               && string.IsNullOrWhiteSpace(runtime.LastCardPlayFinishedCardId)
+               && runtime.PlayerActionsDisabled != true
+               && runtime.EndingPlayerTurnPhaseOne != true
+               && runtime.EndingPlayerTurnPhaseTwo != true;
     }
 
     private static bool IsEnemyTargetType(string? targetType)

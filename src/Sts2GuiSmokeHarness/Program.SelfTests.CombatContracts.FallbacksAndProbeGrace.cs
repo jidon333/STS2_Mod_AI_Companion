@@ -224,6 +224,7 @@ internal static partial class Program
                 null,
                 null);
             var nonEnemyWakeEvaluator = CombatPostActionObservationSupport.CreateWakeEvaluator(
+                staleNonEnemyObserver,
                 nonEnemySelectDecision,
                 nonEnemySettleHistory,
                 nonEnemySettleKnowledge,
@@ -257,6 +258,7 @@ internal static partial class Program
                 null,
                 null);
             var targetQuietEvaluator = CombatPostActionObservationSupport.CreateWakeEvaluator(
+                unresolvedTargetObserver,
                 new GuiSmokeStepDecision("act", "click", null, 0.5, 0.5, "combat enemy target 1", "quiet convergence", 0.5, "combat", 250, true, null),
                 enemyClickHistory,
                 nonEnemySettleKnowledge,
@@ -286,6 +288,70 @@ internal static partial class Program
                 null,
                 null);
             Assert(string.Equals(targetQuietEvaluator(resolvedTargetObserver), "combat-enemy-click-resolved", StringComparison.OrdinalIgnoreCase), "Combat enemy target settle should wake once the selected attack lane fully resolves back to an open combat state.");
+
+            var staleAttackSelectionObserver = new ObserverState(
+                unresolvedTargetObserver.Summary with
+                {
+                    InventoryId = "inv-combat-attack-stale-open",
+                    SnapshotVersion = 57,
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi;CombatState.RoundNumber=3;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                        ["combatCardPlayPending"] = "false",
+                        ["combatSelectedCardSlot"] = null,
+                        ["combatSelectedCardType"] = null,
+                        ["combatTargetingInProgress"] = "false",
+                        ["combatTargetableEnemyCount"] = "0",
+                        ["combatHittableEnemyCount"] = "0",
+                        ["combatTargetSummary"] = "enemy-target:Jaw Worm:1@logical:720,180,180,260@normalized:0.3750,0.1667,0.0938,0.2407",
+                        ["combatInteractionRevision"] = "5:5:false:false:none",
+                        ["combatHistoryStartedCount"] = "5",
+                        ["combatHistoryFinishedCount"] = "5",
+                    },
+                },
+                null,
+                null,
+                null);
+            var attackSelectionSettleHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 3", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            };
+            var attackSelectionWakeEvaluator = CombatPostActionObservationSupport.CreateWakeEvaluator(
+                staleAttackSelectionObserver,
+                new GuiSmokeStepDecision("act", "press-key", "3", null, null, "combat select attack slot 3", "stale attack settle", 0.5, "combat", 250, true, null),
+                attackSelectionSettleHistory,
+                nonEnemySettleKnowledge,
+                new WindowBounds(0, 0, 1280, 720));
+            Assert(attackSelectionWakeEvaluator(staleAttackSelectionObserver) is null, "Attack selection settle should not treat an unchanged open combat baseline as a cleared selection.");
+            Assert(attackSelectionWakeEvaluator(staleAttackSelectionObserver) is null, "Repeated stale attack-settle polls should not quiet-converge without fresh post-action progress.");
+            Assert(attackSelectionWakeEvaluator(staleAttackSelectionObserver) is null, "Stale attack-settle fingerprint should keep deferring while no fresh combat progress appears.");
+            Assert(attackSelectionWakeEvaluator(staleAttackSelectionObserver) is null, "Attack selection settle should not complete on an unchanged baseline fingerprint.");
+
+            var progressedAttackSelectionObserver = new ObserverState(
+                staleAttackSelectionObserver.Summary with
+                {
+                    InventoryId = "inv-combat-attack-progressed",
+                    SnapshotVersion = 58,
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi;CombatState.RoundNumber=3;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                        ["combatCardPlayPending"] = "false",
+                        ["combatSelectedCardSlot"] = "3",
+                        ["combatSelectedCardType"] = "Attack",
+                        ["combatSelectedCardTargetType"] = "AnyEnemy",
+                        ["combatTargetingInProgress"] = "false",
+                        ["combatTargetableEnemyCount"] = "0",
+                        ["combatHittableEnemyCount"] = "0",
+                        ["combatTargetSummary"] = "enemy-target:Jaw Worm:1@logical:720,180,180,260@normalized:0.3750,0.1667,0.0938,0.2407",
+                        ["combatInteractionRevision"] = "6:5:false:false:none",
+                        ["combatHistoryStartedCount"] = "6",
+                        ["combatHistoryFinishedCount"] = "5",
+                    },
+                },
+                null,
+                null,
+                null);
+            Assert(string.Equals(attackSelectionWakeEvaluator(progressedAttackSelectionObserver), "combat-enemy-target-ready", StringComparison.OrdinalIgnoreCase), "Attack selection settle should wake once fresh post-action progress rebuilds an explicit attack-target stage.");
 
             var staleBoundsDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",

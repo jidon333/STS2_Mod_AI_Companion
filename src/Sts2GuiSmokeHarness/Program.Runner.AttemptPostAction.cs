@@ -168,6 +168,7 @@ internal static partial class Program
                     CombatPostActionObservationSupport.QuietConvergencePollingSliceMs,
                     observer,
                     CombatPostActionObservationSupport.CreateWakeEvaluator(
+                        observer,
                         decision,
                         history,
                         request.CombatCardKnowledge,

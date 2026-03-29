@@ -30,34 +30,47 @@ static class CombatPostActionObservationSupport
     }
 
     public static Func<ObserverState, string?> CreateWakeEvaluator(
+        ObserverState baselineObserver,
         GuiSmokeStepDecision decision,
         IReadOnlyList<GuiSmokeHistoryEntry> history,
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
         WindowBounds? windowBounds)
     {
-        var tracker = new CombatPostActionObservationTracker(decision, history, combatCardKnowledge, windowBounds);
+        var tracker = new CombatPostActionObservationTracker(baselineObserver, decision, history, combatCardKnowledge, windowBounds);
         return tracker.Evaluate;
     }
 
     private sealed class CombatPostActionObservationTracker
     {
+        private readonly ObserverState _baselineObserver;
         private readonly GuiSmokeStepDecision _decision;
         private readonly IReadOnlyList<GuiSmokeHistoryEntry> _history;
         private readonly IReadOnlyList<CombatCardKnowledgeHint> _combatCardKnowledge;
         private readonly WindowBounds? _windowBounds;
+        private readonly GuiSmokeStepAnalysisContext _baselineContext;
+        private readonly CombatMicroStageSnapshot _baselineStage;
         private string? _stableFingerprint;
         private int _stablePollCount;
 
         public CombatPostActionObservationTracker(
+            ObserverState baselineObserver,
             GuiSmokeStepDecision decision,
             IReadOnlyList<GuiSmokeHistoryEntry> history,
             IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
             WindowBounds? windowBounds)
         {
+            _baselineObserver = baselineObserver;
             _decision = decision;
             _history = history;
             _combatCardKnowledge = combatCardKnowledge;
             _windowBounds = windowBounds;
+            _baselineContext = GuiSmokeStepRequestFactory.CreateObserverOnlyAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                baselineObserver,
+                history,
+                combatCardKnowledge,
+                windowBounds);
+            _baselineStage = _baselineContext.CombatMicroStage;
         }
 
         public string? Evaluate(ObserverState latestObserver)
@@ -69,13 +82,14 @@ static class CombatPostActionObservationSupport
                 _combatCardKnowledge,
                 _windowBounds);
             var stage = context.CombatMicroStage;
-            if (TryGetTerminalSignal(context, stage, out var terminalReason))
+            var hasFreshObservationProgress = HasFreshObservationProgress(context, stage);
+            if (TryGetTerminalSignal(context, stage, hasFreshObservationProgress, out var terminalReason))
             {
                 ResetStableFingerprint();
                 return terminalReason;
             }
 
-            if (!IsAcceptableSettledStage(stage))
+            if (!IsAcceptableSettledStage(stage) || !hasFreshObservationProgress)
             {
                 ResetStableFingerprint();
                 return null;
@@ -97,6 +111,7 @@ static class CombatPostActionObservationSupport
         private bool TryGetTerminalSignal(
             GuiSmokeStepAnalysisContext context,
             CombatMicroStageSnapshot stage,
+            bool hasFreshObservationProgress,
             out string reason)
         {
             if (IsEndTurnDecision(_decision))
@@ -120,21 +135,25 @@ static class CombatPostActionObservationSupport
 
             if (IsNonEnemySelectionDecision(_decision))
             {
-                if (stage.Kind == CombatMicroStageKind.ResolvingNonEnemy && context.HasSelectedNonEnemyConfirmEvidence)
+                if (stage.Kind == CombatMicroStageKind.ResolvingNonEnemy
+                    && context.HasSelectedNonEnemyConfirmEvidence
+                    && hasFreshObservationProgress)
                 {
                     reason = "combat-non-enemy-confirm-ready";
                     return true;
                 }
 
                 if (stage.Kind == CombatMicroStageKind.ResolvingAttackTarget
-                    && context.CanResolveCombatEnemyTarget)
+                    && context.CanResolveCombatEnemyTarget
+                    && hasFreshObservationProgress)
                 {
                     reason = "combat-non-enemy-selection-superseded-by-attack-target";
                     return true;
                 }
 
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
-                    && context.RuntimeCombatState.ExplicitlyClearedSelection)
+                    && context.RuntimeCombatState.ExplicitlyClearedSelection
+                    && hasFreshObservationProgress)
                 {
                     reason = "combat-non-enemy-selection-cleared";
                     return true;
@@ -155,7 +174,8 @@ static class CombatPostActionObservationSupport
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
                     && !context.RuntimeCombatState.HasCardSelectionEvidence
                     && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
-                    && !context.HasSelectedNonEnemyConfirmEvidence)
+                    && !context.HasSelectedNonEnemyConfirmEvidence
+                    && hasFreshObservationProgress)
                 {
                     reason = "combat-non-enemy-confirm-resolved";
                     return true;
@@ -173,7 +193,9 @@ static class CombatPostActionObservationSupport
 
             if (IsAttackSelectionDecision(_decision))
             {
-                if (stage.Kind == CombatMicroStageKind.ResolvingAttackTarget && context.CanResolveCombatEnemyTarget)
+                if (stage.Kind == CombatMicroStageKind.ResolvingAttackTarget
+                    && context.CanResolveCombatEnemyTarget
+                    && hasFreshObservationProgress)
                 {
                     reason = "combat-enemy-target-ready";
                     return true;
@@ -181,7 +203,8 @@ static class CombatPostActionObservationSupport
 
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
                     && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
-                    && !context.RuntimeCombatState.HasCardSelectionEvidence)
+                    && !context.RuntimeCombatState.HasCardSelectionEvidence
+                    && hasFreshObservationProgress)
                 {
                     reason = "combat-attack-selection-cleared";
                     return true;
@@ -201,7 +224,8 @@ static class CombatPostActionObservationSupport
             {
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
                     && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
-                    && !context.RuntimeCombatState.HasCardSelectionEvidence)
+                    && !context.RuntimeCombatState.HasCardSelectionEvidence
+                    && hasFreshObservationProgress)
                 {
                     reason = "combat-enemy-click-resolved";
                     return true;
@@ -221,7 +245,8 @@ static class CombatPostActionObservationSupport
             {
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
                     && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
-                    && !context.RuntimeCombatState.HasCardSelectionEvidence)
+                    && !context.RuntimeCombatState.HasCardSelectionEvidence
+                    && hasFreshObservationProgress)
                 {
                     reason = "combat-selection-cleared";
                     return true;
@@ -236,6 +261,31 @@ static class CombatPostActionObservationSupport
 
             reason = string.Empty;
             return false;
+        }
+
+        private bool HasFreshObservationProgress(
+            GuiSmokeStepAnalysisContext context,
+            CombatMicroStageSnapshot stage)
+        {
+            if (context.Observer.Summary.SnapshotVersion != _baselineObserver.Summary.SnapshotVersion)
+            {
+                return true;
+            }
+
+            if (!string.Equals(stage.SettledFingerprint, _baselineStage.SettledFingerprint, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            var runtime = context.RuntimeCombatState;
+            var baselineRuntime = _baselineContext.RuntimeCombatState;
+            return !string.Equals(runtime.InteractionRevision, baselineRuntime.InteractionRevision, StringComparison.OrdinalIgnoreCase)
+                   || runtime.HistoryStartedCount != baselineRuntime.HistoryStartedCount
+                   || runtime.HistoryFinishedCount != baselineRuntime.HistoryFinishedCount
+                   || !string.Equals(runtime.LastCardPlayStartedCardId, baselineRuntime.LastCardPlayStartedCardId, StringComparison.OrdinalIgnoreCase)
+                   || !string.Equals(runtime.LastCardPlayFinishedCardId, baselineRuntime.LastCardPlayFinishedCardId, StringComparison.OrdinalIgnoreCase)
+                   || context.HasSelectedNonEnemyConfirmEvidence != _baselineContext.HasSelectedNonEnemyConfirmEvidence
+                   || context.CanResolveCombatEnemyTarget != _baselineContext.CanResolveCombatEnemyTarget;
         }
 
         private bool IsAcceptableSettledStage(CombatMicroStageSnapshot stage)
