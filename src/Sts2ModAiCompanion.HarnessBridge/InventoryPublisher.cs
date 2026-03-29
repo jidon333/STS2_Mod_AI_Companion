@@ -154,8 +154,8 @@ internal sealed class InventoryPublisher
     {
         return NormalizeSceneToken(snapshot.PublishedCurrentScreen)
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "publishedCurrentScreen"))
-               ?? NormalizeSceneToken(snapshot.CurrentScreen)
-               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "logicalScreen"))
+               ?? NormalizeSceneToken(snapshot.RawObservedScreen)
+               ?? NormalizeSceneToken(snapshot.RawCurrentScreen)
                ?? normalizedScene.SceneType;
     }
 
@@ -163,7 +163,6 @@ internal sealed class InventoryPublisher
     {
         return NormalizeSceneToken(snapshot.PublishedVisibleScreen)
                ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "publishedVisibleScreen"))
-               ?? NormalizeSceneToken(TryGetMeta(snapshot.Meta, "visibleScreen"))
                ?? publishedSceneType
                ?? normalizedScene.SceneType;
     }
@@ -182,11 +181,6 @@ internal sealed class InventoryPublisher
             return explicitPublishedSceneReady;
         }
 
-        if (bool.TryParse(TryGetMeta(snapshot.Meta, "sceneReady"), out var publishedSceneReady))
-        {
-            return publishedSceneReady;
-        }
-
         if (!string.IsNullOrWhiteSpace(blockingModal))
         {
             return false;
@@ -198,8 +192,7 @@ internal sealed class InventoryPublisher
     private static string? ResolvePublishedSceneAuthority(LiveExportSnapshot snapshot)
     {
         return snapshot.PublishedSceneAuthority
-               ?? TryGetMeta(snapshot.Meta, "publishedSceneAuthority")
-               ?? TryGetMeta(snapshot.Meta, "sceneAuthority");
+               ?? TryGetMeta(snapshot.Meta, "publishedSceneAuthority");
     }
 
     private static string? ResolvePublishedSceneStability(
@@ -207,8 +200,7 @@ internal sealed class InventoryPublisher
         string? blockingModal)
     {
         var publishedSceneStability = snapshot.PublishedSceneStability
-                                      ?? TryGetMeta(snapshot.Meta, "publishedSceneStability")
-                                      ?? TryGetMeta(snapshot.Meta, "sceneStability");
+                                      ?? TryGetMeta(snapshot.Meta, "publishedSceneStability");
         if (!string.IsNullOrWhiteSpace(publishedSceneStability))
         {
             return publishedSceneStability;
