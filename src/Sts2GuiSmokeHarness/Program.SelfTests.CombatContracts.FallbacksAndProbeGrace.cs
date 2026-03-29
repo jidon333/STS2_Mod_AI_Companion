@@ -436,6 +436,91 @@ internal static partial class Program
                 null);
             Assert(string.Equals(attackSelectionWakeEvaluator(progressedAttackSelectionObserver), "combat-enemy-target-ready", StringComparison.OrdinalIgnoreCase), "Attack selection settle should wake once fresh post-action progress rebuilds an explicit attack-target stage.");
 
+            var targetedAttackInFlightObserver = new ObserverState(
+                progressedAttackSelectionObserver.Summary with
+                {
+                    InventoryId = "inv-combat-attack-targeting-in-flight",
+                    SnapshotVersion = 59,
+                    PlayerEnergy = 2,
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi;CombatState.RoundNumber=7;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                        ["combatCardPlayPending"] = "true",
+                        ["combatSelectedCardSlot"] = "4",
+                        ["combatAwaitingPlaySlots"] = "4",
+                        ["combatSelectedCardType"] = "Attack",
+                        ["combatSelectedCardTargetType"] = "AnyEnemy",
+                        ["combatTargetingInProgress"] = "true",
+                        ["combatValidTargetsType"] = "AnyEnemy",
+                        ["combatTargetableEnemyCount"] = "0",
+                        ["combatHittableEnemyCount"] = "0",
+                        ["combatTargetSummary"] = "enemy-target:Jaw Worm:1@logical:720,180,180,260@normalized:0.3750,0.1667,0.0938,0.2407",
+                        ["combatInteractionRevision"] = "18:17:true:true:4",
+                        ["combatHistoryStartedCount"] = "18",
+                        ["combatHistoryFinishedCount"] = "17",
+                        ["combatLastCardPlayStartedCardId"] = "CARD.STRIKE_IRONCLAD",
+                        ["combatLastCardPlayFinishedCardId"] = "CARD.DEFEND_IRONCLAD",
+                    },
+                },
+                null,
+                null,
+                null);
+            var targetedAttackInFlightKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(4, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            };
+            var targetedAttackInFlightHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 4", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            };
+            var targetedAttackContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                targetedAttackInFlightObserver,
+                combatNoOpScreenshotPath,
+                targetedAttackInFlightHistory,
+                targetedAttackInFlightKnowledge);
+            Assert(targetedAttackContext.CombatMicroStage.Kind == CombatMicroStageKind.ResolvingAttackTarget,
+                "Explicit-target attack lanes should stay in ResolvingAttackTarget even while the play remains in flight.");
+            Assert(targetedAttackContext.CanResolveCombatEnemyTarget,
+                "Explicit-target attack lanes with runtime target summary should reopen enemy targeting authority instead of collapsing into played-card wait.");
+            var targetedAttackAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                targetedAttackInFlightObserver,
+                targetedAttackInFlightKnowledge,
+                combatNoOpScreenshotPath,
+                targetedAttackInFlightHistory);
+            Assert(targetedAttackAllowedActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                "Explicit-target attack lanes should keep click-enemy available while targeting is active.");
+            Assert(!targetedAttackAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                "Explicit-target attack lanes should not collapse into a wait-only allowlist while target authority is available.");
+            var targetedAttackDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                68,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Explicit-target attack lanes with in-flight play ownership should still click the enemy target instead of waiting for card-play resolution.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:elite|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                targetedAttackInFlightObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                targetedAttackInFlightKnowledge,
+                targetedAttackAllowedActions,
+                targetedAttackInFlightHistory,
+                "Explicit-target attack lanes should preserve enemy targeting authority until the click resolves.",
+                null));
+            Assert(string.Equals(targetedAttackDecision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
+                   && targetedAttackDecision.TargetLabel?.StartsWith("combat enemy target ", StringComparison.OrdinalIgnoreCase) == true,
+                "Explicit-target attack lanes with in-flight play ownership should still choose an enemy click decision.");
+
             var allEnemiesAttackObserver = new ObserverState(
                 progressedAttackSelectionObserver.Summary with
                 {

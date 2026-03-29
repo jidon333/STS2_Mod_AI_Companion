@@ -84,6 +84,15 @@ static class CombatMicroStageSupport
             return CombatMicroStageKind.TurnClosing;
         }
 
+        if (attackRequiresExplicitEnemyTarget
+            && (attackLaneOpen
+                || (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                    && (runtime.HasExplicitEnemyTargetingEvidence
+                        || context.CanResolveCombatEnemyTarget))))
+        {
+            return CombatMicroStageKind.ResolvingAttackTarget;
+        }
+
         if (attackLaneOpen
             && !attackRequiresExplicitEnemyTarget)
         {
@@ -95,15 +104,6 @@ static class CombatMicroStageSupport
         if (runtime.HasBlockingCardPlayResolution)
         {
             return CombatMicroStageKind.ResolvingCardPlay;
-        }
-
-        if (attackRequiresExplicitEnemyTarget
-            && (attackLaneOpen
-                || (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-                    && (runtime.HasExplicitEnemyTargetingEvidence
-                        || context.CanResolveCombatEnemyTarget))))
-        {
-            return CombatMicroStageKind.ResolvingAttackTarget;
         }
 
         if (pendingSelection?.Kind == AutoCombatCardKind.DefendLike
