@@ -218,202 +218,68 @@ internal static partial class Program
                 continue;
             }
 
-            var captureMode = "skipped";
-            var capturePolicy = Evaluate(stepIndex, isAuthoritativeFirstAttempt, stepAnalysisContext);
-            var captureSkipReason = capturePolicy.SkipReason;
-            if (capturePolicy.NeedsScreenshot)
-            {
-                var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
-                if (!captureResult.Succeeded)
-                {
-                    var captureFailureObserver = observerReader.Read(includeEventTail: false);
-                    if (captureResult.FailureKind is CaptureBoundaryFailureKind.TimedOut or CaptureBoundaryFailureKind.Exception)
-                    {
-                        ResetDecisionWaitTracking();
-                        var captureTerminalSignal = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
-                            ? "capture-timeout"
-                            : "capture-exception";
-                        var captureFailureMessage = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
-                            ? "capture-timeout"
-                            : $"capture-exception: {captureResult.Detail ?? captureResult.Exception?.GetType().Name ?? "unknown"}";
-                        LogHarness($"step={stepIndex} {captureTerminalSignal} detail={captureResult.Detail ?? "none"}");
-                        logger.AppendTrace(new GuiSmokeTraceEntry(
-                            DateTimeOffset.UtcNow,
-                            stepIndex,
-                            phase.ToString(),
-                            captureTerminalSignal,
-                            captureFailureObserver.CurrentScreen,
-                            captureFailureObserver.InCombat,
-                            null));
-                        AppendProgressIfLongRun(
-                            isLongRun,
-                            logger,
-                            EvaluateStepProgress(
-                                stepIndex,
-                                phase,
-                                "capture-boundary-failure",
-                                captureFailureObserver,
-                                null,
-                                null,
-                                false,
-                                "capture-boundary",
-                                false,
-                                sameActionStallCount,
-                                captureTerminalSignal));
-                        logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                            phase.ToString(),
-                            captureFailureMessage,
-                            captureFailureObserver.CurrentScreen,
-                            captureFailureObserver.InCombat,
-                            screenshotPath));
-                        return CompleteAttempt(
-                            1,
-                            "failed",
-                            captureFailureMessage,
-                            terminalCause: captureTerminalSignal,
-                            failureClass: ClassifyFailureForAttempt(phase, captureFailureObserver, captureTerminalSignal, launchFailed: false));
-                    }
-
-                    if (WindowLocator.IsHungWindow(window))
-                    {
-                        ResetDecisionWaitTracking();
-                        LogHarness($"step={stepIndex} window not responding; aborting capture-driven wait");
-                        logger.AppendTrace(new GuiSmokeTraceEntry(
-                            DateTimeOffset.UtcNow,
-                            stepIndex,
-                            phase.ToString(),
-                            "window-not-responding",
-                            captureFailureObserver.CurrentScreen,
-                            captureFailureObserver.InCombat,
-                            null));
-                        logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                            phase.ToString(),
-                            "game-window-not-responding",
-                            captureFailureObserver.CurrentScreen,
-                            captureFailureObserver.InCombat,
-                            screenshotPath));
-                        return CompleteAttempt(
-                            1,
-                            "failed",
-                            "game-window-not-responding",
-                            terminalCause: "game-window-not-responding",
-                            failureClass: "launch-runtime-noise");
-                    }
-
-                    ResetDecisionWaitTracking();
-                    consecutiveBlackFrames += 1;
-                    var transitionBlackFrame = RootSceneTransitionObserverSignals.ShouldTreatCaptureAsTransitionWait(phase, captureFailureObserver.Summary);
-                    var captureFailureSignal = transitionBlackFrame ? "transition-black-frame" : "capture-unusable";
-                    LogHarness(transitionBlackFrame
-                        ? $"step={stepIndex} capture unusable during explicit transition/loading boundary; waiting for scene readiness"
-                        : $"step={stepIndex} capture unusable; waiting for a valid process frame");
-                    logger.AppendTrace(new GuiSmokeTraceEntry(
-                        DateTimeOffset.UtcNow,
-                        stepIndex,
-                        phase.ToString(),
-                        captureFailureSignal,
-                        captureFailureObserver.CurrentScreen,
-                        captureFailureObserver.InCombat,
-                        null));
-                    if (window.IsFallback && !HasLiveGameProcess())
-                    {
-                        consecutiveFallbackCapturesWithoutProcess += 1;
-                        if (consecutiveFallbackCapturesWithoutProcess >= 3)
-                        {
-                            RecordAttemptStartupFailure("process-lost");
-                            logger.WriteFailureSummary(new GuiSmokeFailureSummary(
-                                phase.ToString(),
-                                "process-lost",
-                                null,
-                                null,
-                                screenshotPath));
-                            return CompleteAttempt(
-                                1,
-                                "failed",
-                                "process-lost",
-                                terminalCause: "process-lost",
-                                failureClass: "launch-runtime-noise");
-                        }
-                    }
-                    else
-                    {
-                        consecutiveFallbackCapturesWithoutProcess = 0;
-                    }
-
-                    if (!transitionBlackFrame
-                        && !window.IsFallback
-                        && consecutiveBlackFrames >= 3)
-                    {
-                        var focusWindow = WindowLocator.EnsureInteractive(window);
-                        LogHarness($"step={stepIndex} black-frame streak={consecutiveBlackFrames}; sending center nudge");
-                        inputDriver.Click(focusWindow, 0.5, 0.5);
-                        history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "black-frame-nudge", "center", DateTimeOffset.UtcNow));
-                        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "black-frame-nudge", null, null, "center"));
-                        consecutiveBlackFrames = 0;
-                    }
-
-                    var captureFailureWait = await WaitWithObserverPollingAsync(
-                            observerReader,
-                            TransitionSettleMs,
-                            75,
-                            captureFailureObserver,
-                            latestObserver => HasWaitWakeDelta(captureFailureObserver, latestObserver)
-                                ? "observer-delta"
-                                : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
-                                    ? "phase-satisfied"
-                                    : null)
-                        .ConfigureAwait(false);
-                    if (!string.IsNullOrWhiteSpace(captureFailureWait.WakeReason))
-                    {
-                        LogHarness($"step={stepIndex} capture backoff woke early reason={captureFailureWait.WakeReason}");
-                    }
-
-                    continue;
-                }
-
-                consecutiveBlackFrames = 0;
-                consecutiveFallbackCapturesWithoutProcess = 0;
-                if (isAuthoritativeFirstAttempt && stepIndex == 1)
-                {
-                    RecordAttemptStartupStage("authoritative-first-screenshot-captured", "finished", screenshotPath);
-                }
-
-                if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
-                {
-                    LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
-                    attemptStartedRecorded = true;
-                }
-
-                captureMode = "captured";
-                captureSkipReason = "screenshot-required";
-                observer = observerReader.Read();
-                logger.WriteObserverCopies(stepPrefix, observer);
-                LogHarness($"step={stepIndex} captured={screenshotPath}");
-                LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
-                (_, _, stepAnalysisContext, iterationSceneContext) = BuildIterationContext(
-                    workspaceRoot,
-                    phase,
-                    history,
-                    observer,
-                    window,
+            var capturePreparation = await TryPrepareStepCaptureContextAsync(
+                    stepIndex,
+                    stepPrefix,
                     screenshotPath,
+                    phase,
+                    window,
+                    observer,
+                    stepAnalysisContext,
+                    iterationSceneContext,
+                    workspaceRoot,
+                    sessionRoot,
+                    attemptId,
+                    attemptOrdinal,
+                    trustStateAtStart,
+                    runId,
                     isLongRun,
-                    sceneHistoryIndex);
-                iterationSceneSignature = iterationSceneContext.SceneSignature;
-                iterationFirstSeenScene = iterationSceneContext.FirstSeenScene;
-                iterationReasoningMode = iterationSceneContext.ReasoningMode;
-            }
-            else
+                    isAuthoritativeFirstAttempt,
+                    attemptStartedRecorded,
+                    sameActionStallCount,
+                    consecutiveBlackFrames,
+                    consecutiveFallbackCapturesWithoutProcess,
+                    history,
+                    logger,
+                    sceneHistoryIndex,
+                    observerReader,
+                    captureService,
+                    inputDriver,
+                    evaluator,
+                    (exitCode, status, message, terminalCause, failureClass) => CompleteAttempt(
+                        exitCode,
+                        status,
+                        message,
+                        terminalCause: terminalCause,
+                        failureClass: failureClass),
+                    RecordAttemptStartupStage,
+                    TransitionSettleMs)
+                .ConfigureAwait(false);
+            observer = capturePreparation.Observer;
+            stepAnalysisContext = capturePreparation.StepAnalysisContext;
+            iterationSceneContext = capturePreparation.SceneContext;
+            iterationSceneSignature = iterationSceneContext.SceneSignature;
+            iterationFirstSeenScene = iterationSceneContext.FirstSeenScene;
+            iterationReasoningMode = iterationSceneContext.ReasoningMode;
+            attemptStartedRecorded = capturePreparation.AttemptStartedRecorded;
+            consecutiveBlackFrames = capturePreparation.ConsecutiveBlackFrames;
+            consecutiveFallbackCapturesWithoutProcess = capturePreparation.ConsecutiveFallbackCapturesWithoutProcess;
+            var captureMode = capturePreparation.CaptureMode;
+            if (capturePreparation.CompletedAttempt is not null)
             {
-                if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
+                ResetDecisionWaitTracking();
+                if (string.Equals(capturePreparation.CompletedAttempt.Message, "process-lost", StringComparison.OrdinalIgnoreCase))
                 {
-                    LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
-                    attemptStartedRecorded = true;
+                    RecordAttemptStartupFailure("process-lost");
                 }
 
-                logger.WriteObserverCopies(stepPrefix, observer);
-                LogHarness($"step={stepIndex} capture skipped reason={captureSkipReason}");
-                LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
+                return capturePreparation.CompletedAttempt;
+            }
+
+            if (capturePreparation.ShouldContinueLoop)
+            {
+                ResetDecisionWaitTracking();
+                continue;
             }
 
             var requestBuild = BuildAndLogStepRequest(

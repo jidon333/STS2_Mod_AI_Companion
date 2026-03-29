@@ -17,6 +17,7 @@ using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokeSceneReasoningSupport;
+using static GuiSmokeStepScreenshotPolicy;
 using static GuiSmokeStepRequestFactory;
 using static ObserverScreenProvenance;
 
@@ -32,6 +33,18 @@ internal static partial class Program
         GuiSmokeStepRequest Request,
         string SceneReasoningMode,
         long RequestReadyElapsedMs);
+
+    sealed record GuiSmokeStepCapturePreparationResult(
+        GuiSmokeAttemptResult? CompletedAttempt,
+        bool ShouldContinueLoop,
+        ObserverState Observer,
+        GuiSmokeStepAnalysisContext StepAnalysisContext,
+        GuiSmokeSceneRequestContext SceneContext,
+        string CaptureMode,
+        string CaptureSkipReason,
+        bool AttemptStartedRecorded,
+        int ConsecutiveBlackFrames,
+        int ConsecutiveFallbackCapturesWithoutProcess);
 
     static (
         IReadOnlyList<GuiSmokeHistoryEntry> SerializedHistory,
@@ -493,5 +506,289 @@ internal static partial class Program
         logger.WriteRequest(requestPath, request);
         LogHarness($"step={stepIndex} request={requestPath} captureMode={captureMode} sceneReasoningMode={sceneReasoningMode}");
         return new GuiSmokeStepRequestBuildResult(request, sceneReasoningMode, stepStopwatch.ElapsedMilliseconds);
+    }
+
+    static async Task<GuiSmokeStepCapturePreparationResult> TryPrepareStepCaptureContextAsync(
+        int stepIndex,
+        string stepPrefix,
+        string screenshotPath,
+        GuiSmokePhase phase,
+        WindowCaptureTarget window,
+        ObserverState observer,
+        GuiSmokeStepAnalysisContext stepAnalysisContext,
+        GuiSmokeSceneRequestContext sceneContext,
+        string workspaceRoot,
+        string sessionRoot,
+        string attemptId,
+        int attemptOrdinal,
+        string trustStateAtStart,
+        string runId,
+        bool isLongRun,
+        bool isAuthoritativeFirstAttempt,
+        bool attemptStartedRecorded,
+        int sameActionStallCount,
+        int consecutiveBlackFrames,
+        int consecutiveFallbackCapturesWithoutProcess,
+        List<GuiSmokeHistoryEntry> history,
+        ArtifactRecorder logger,
+        GuiSmokeSessionSceneHistoryIndex sceneHistoryIndex,
+        ObserverSnapshotReader observerReader,
+        ScreenCaptureService captureService,
+        MouseInputDriver inputDriver,
+        ObserverAcceptanceEvaluator evaluator,
+        Func<int, string, string, string?, string?, GuiSmokeAttemptResult> completeAttempt,
+        Action<string, string, string?> recordAttemptStartupStage,
+        int transitionSettleMs)
+    {
+        var capturePolicy = Evaluate(stepIndex, isAuthoritativeFirstAttempt, stepAnalysisContext);
+        var captureMode = "skipped";
+        var captureSkipReason = capturePolicy.SkipReason;
+        if (!capturePolicy.NeedsScreenshot)
+        {
+            if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
+            {
+                LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
+                attemptStartedRecorded = true;
+            }
+
+            logger.WriteObserverCopies(stepPrefix, observer);
+            LogHarness($"step={stepIndex} capture skipped reason={captureSkipReason}");
+            LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
+            return new GuiSmokeStepCapturePreparationResult(
+                null,
+                ShouldContinueLoop: false,
+                observer,
+                stepAnalysisContext,
+                sceneContext,
+                captureMode,
+                captureSkipReason,
+                attemptStartedRecorded,
+                consecutiveBlackFrames,
+                consecutiveFallbackCapturesWithoutProcess);
+        }
+
+        var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
+        if (!captureResult.Succeeded)
+        {
+            var captureFailureObserver = observerReader.Read(includeEventTail: false);
+            if (captureResult.FailureKind is CaptureBoundaryFailureKind.TimedOut or CaptureBoundaryFailureKind.Exception)
+            {
+                var captureTerminalSignal = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
+                    ? "capture-timeout"
+                    : "capture-exception";
+                var captureFailureMessage = captureResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
+                    ? "capture-timeout"
+                    : $"capture-exception: {captureResult.Detail ?? captureResult.Exception?.GetType().Name ?? "unknown"}";
+                LogHarness($"step={stepIndex} {captureTerminalSignal} detail={captureResult.Detail ?? "none"}");
+                logger.AppendTrace(new GuiSmokeTraceEntry(
+                    DateTimeOffset.UtcNow,
+                    stepIndex,
+                    phase.ToString(),
+                    captureTerminalSignal,
+                    captureFailureObserver.CurrentScreen,
+                    captureFailureObserver.InCombat,
+                    null));
+                AppendProgressIfLongRun(
+                    isLongRun,
+                    logger,
+                    EvaluateStepProgress(
+                        stepIndex,
+                        phase,
+                        "capture-boundary-failure",
+                        captureFailureObserver,
+                        null,
+                        null,
+                        false,
+                        "capture-boundary",
+                        false,
+                        sameActionStallCount,
+                        captureTerminalSignal));
+                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                    phase.ToString(),
+                    captureFailureMessage,
+                    captureFailureObserver.CurrentScreen,
+                    captureFailureObserver.InCombat,
+                    screenshotPath));
+                return new GuiSmokeStepCapturePreparationResult(
+                    completeAttempt(
+                        1,
+                        "failed",
+                        captureFailureMessage,
+                        captureTerminalSignal,
+                        ClassifyFailureForAttempt(phase, captureFailureObserver, captureTerminalSignal, launchFailed: false)),
+                    ShouldContinueLoop: false,
+                    captureFailureObserver,
+                    stepAnalysisContext,
+                    sceneContext,
+                    captureMode,
+                    captureSkipReason,
+                    attemptStartedRecorded,
+                    consecutiveBlackFrames,
+                    consecutiveFallbackCapturesWithoutProcess);
+            }
+
+            if (WindowLocator.IsHungWindow(window))
+            {
+                LogHarness($"step={stepIndex} window not responding; aborting capture-driven wait");
+                logger.AppendTrace(new GuiSmokeTraceEntry(
+                    DateTimeOffset.UtcNow,
+                    stepIndex,
+                    phase.ToString(),
+                    "window-not-responding",
+                    captureFailureObserver.CurrentScreen,
+                    captureFailureObserver.InCombat,
+                    null));
+                logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                    phase.ToString(),
+                    "game-window-not-responding",
+                    captureFailureObserver.CurrentScreen,
+                    captureFailureObserver.InCombat,
+                    screenshotPath));
+                return new GuiSmokeStepCapturePreparationResult(
+                    completeAttempt(
+                        1,
+                        "failed",
+                        "game-window-not-responding",
+                        "game-window-not-responding",
+                        "launch-runtime-noise"),
+                    ShouldContinueLoop: false,
+                    captureFailureObserver,
+                    stepAnalysisContext,
+                    sceneContext,
+                    captureMode,
+                    captureSkipReason,
+                    attemptStartedRecorded,
+                    consecutiveBlackFrames,
+                    consecutiveFallbackCapturesWithoutProcess);
+            }
+
+            consecutiveBlackFrames += 1;
+            var transitionBlackFrame = RootSceneTransitionObserverSignals.ShouldTreatCaptureAsTransitionWait(phase, captureFailureObserver.Summary);
+            var captureFailureSignal = transitionBlackFrame ? "transition-black-frame" : "capture-unusable";
+            LogHarness(transitionBlackFrame
+                ? $"step={stepIndex} capture unusable during explicit transition/loading boundary; waiting for scene readiness"
+                : $"step={stepIndex} capture unusable; waiting for a valid process frame");
+            logger.AppendTrace(new GuiSmokeTraceEntry(
+                DateTimeOffset.UtcNow,
+                stepIndex,
+                phase.ToString(),
+                captureFailureSignal,
+                captureFailureObserver.CurrentScreen,
+                captureFailureObserver.InCombat,
+                null));
+            if (window.IsFallback && !HasLiveGameProcess())
+            {
+                consecutiveFallbackCapturesWithoutProcess += 1;
+                if (consecutiveFallbackCapturesWithoutProcess >= 3)
+                {
+                    logger.WriteFailureSummary(new GuiSmokeFailureSummary(
+                        phase.ToString(),
+                        "process-lost",
+                        null,
+                        null,
+                        screenshotPath));
+                    return new GuiSmokeStepCapturePreparationResult(
+                        completeAttempt(
+                            1,
+                            "failed",
+                            "process-lost",
+                            "process-lost",
+                            "launch-runtime-noise"),
+                        ShouldContinueLoop: false,
+                        captureFailureObserver,
+                        stepAnalysisContext,
+                        sceneContext,
+                        captureMode,
+                        captureSkipReason,
+                        attemptStartedRecorded,
+                        consecutiveBlackFrames,
+                        consecutiveFallbackCapturesWithoutProcess);
+                }
+            }
+            else
+            {
+                consecutiveFallbackCapturesWithoutProcess = 0;
+            }
+
+            if (!transitionBlackFrame
+                && !window.IsFallback
+                && consecutiveBlackFrames >= 3)
+            {
+                var focusWindow = WindowLocator.EnsureInteractive(window);
+                LogHarness($"step={stepIndex} black-frame streak={consecutiveBlackFrames}; sending center nudge");
+                inputDriver.Click(focusWindow, 0.5, 0.5);
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "black-frame-nudge", "center", DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "black-frame-nudge", null, null, "center"));
+                consecutiveBlackFrames = 0;
+            }
+
+            var captureFailureWait = await WaitWithObserverPollingAsync(
+                    observerReader,
+                    transitionSettleMs,
+                    75,
+                    captureFailureObserver,
+                    latestObserver => HasWaitWakeDelta(captureFailureObserver, latestObserver)
+                        ? "observer-delta"
+                        : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                            ? "phase-satisfied"
+                            : null)
+                .ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(captureFailureWait.WakeReason))
+            {
+                LogHarness($"step={stepIndex} capture backoff woke early reason={captureFailureWait.WakeReason}");
+            }
+
+            return new GuiSmokeStepCapturePreparationResult(
+                null,
+                ShouldContinueLoop: true,
+                captureFailureWait.Observer,
+                stepAnalysisContext,
+                sceneContext,
+                captureMode,
+                captureSkipReason,
+                attemptStartedRecorded,
+                consecutiveBlackFrames,
+                consecutiveFallbackCapturesWithoutProcess);
+        }
+
+        consecutiveBlackFrames = 0;
+        consecutiveFallbackCapturesWithoutProcess = 0;
+        if (isAuthoritativeFirstAttempt && stepIndex == 1)
+        {
+            recordAttemptStartupStage("authoritative-first-screenshot-captured", "finished", screenshotPath);
+        }
+
+        if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
+        {
+            LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
+            attemptStartedRecorded = true;
+        }
+
+        captureMode = "captured";
+        captureSkipReason = "screenshot-required";
+        observer = observerReader.Read();
+        logger.WriteObserverCopies(stepPrefix, observer);
+        LogHarness($"step={stepIndex} captured={screenshotPath}");
+        LogHarness($"step={stepIndex} observer {DescribeObserverHuman(observer)} capturedAt={observer.CapturedAt?.ToString("O") ?? "null"}");
+        (_, _, stepAnalysisContext, sceneContext) = BuildIterationContext(
+            workspaceRoot,
+            phase,
+            history,
+            observer,
+            window,
+            screenshotPath,
+            isLongRun,
+            sceneHistoryIndex);
+        return new GuiSmokeStepCapturePreparationResult(
+            null,
+            ShouldContinueLoop: false,
+            observer,
+            stepAnalysisContext,
+            sceneContext,
+            captureMode,
+            captureSkipReason,
+            attemptStartedRecorded,
+            consecutiveBlackFrames,
+            consecutiveFallbackCapturesWithoutProcess);
     }
 }
