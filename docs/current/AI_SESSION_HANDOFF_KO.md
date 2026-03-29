@@ -2,7 +2,7 @@
 
 > 상태: 현재 사용 중
 > 기준 브랜치: `main`
-> 최종 갱신: 2026-03-29
+> 최종 갱신: 2026-03-30
 > 대상: 새 구현 세션, 새 검증 세션, 새 참모 세션
 
 ## 문서 목적
@@ -72,8 +72,11 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug도 current `main`에서 닫혔다
 - published-first observer provenance migration도 current `main`에 반영됐다
 - `compatibility retirement` 1단계도 current `main`에 반영됐다
-- `COMBAT-03`, `COMBAT-07`, `REWARD-04`, `MAP-04` coverage row도 current `main`에서 green으로 올라갔다
-- 현재 active semantic blocker는 없다
+- combat stale-end-turn / target plateau family는 current `main`에서 micro-stage + quiet convergence + runtime target-summary authority로 닫혔다
+- `COMBAT-03`, `COMBAT-07`, `REWARD-04` coverage row는 current `main`에서 green이다
+- `MAP-04`는 representative live continuity는 남아 있지만 current harness self-test red 때문에 지금은 `partial`로 보는 게 맞다
+- 현재 active combat blocker는 없다
+- 현재 알려진 current-main red는 unrelated `WaitPostMapNodeRoom -> reward reopen` self-test 1건이다
 
 ## current architecture state
 
@@ -108,14 +111,33 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ## 현재 semantic follow-up
 
-현재 source-of-truth signal은 세 개다.
+현재 source-of-truth signal은 네 개다.
 
 ### 1. replay parity suite
 
 - current baseline: green
 - old `reward-aftermath-map-handoff` known red는 current `main`에서 닫혔다
 
-### 2. latest cleanup proof root
+### 2. latest combat blocker fix root
+
+- commits:
+  - `577d4ee` `Add combat micro-stage gating for unresolved lanes`
+  - `8f70570` `Replace combat delta wake with stage-aware settle observation`
+  - `20bb88e` `Recover combat target authority from runtime target summary`
+- root: [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2)
+- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/startup-summary.json)
+- session summary: [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/session-summary.json)
+- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/attempts/0001/run.log)
+
+확정 사실:
+
+- unresolved non-enemy lane는 더 이상 stale observer snapshot 하나로 `auto-end turn`으로 닫히지 않는다
+- combat post-action은 generic delta 하나가 아니라 lane micro-stage terminal signal 또는 quiet convergence로 settle된다
+- runtime `combatTargetSummary` raw fact가 explicit enemy target authority로 소비된다
+- `step=51`에서 `capture skipped reason=combat-explicit-target-runtime`, `action=click`, `target=combat enemy target 의식의-신수 recenter`가 실제로 나왔다
+- run은 `attempt-completed:max-steps-reached`로 끝났고 `failure-summary.json`은 생성되지 않았다
+
+### 3. latest cleanup proof root
 
 - root: [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run)
 - startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run/startup-summary.json)
@@ -131,7 +153,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `step=23 -> 24`, `step=45 -> 46`, `step=57 -> 58`에서 legitimate combat wait 뒤 다음 capture/request로 이어져 post-wait recapture continuity가 fresh live로 추가 확인됐다
 - run은 `max-steps-reached:60`까지 진행했고 `failure-summary.json`은 생성되지 않았다
 
-### 2-1. latest compatibility retirement proof root
+### 3-1. latest compatibility retirement proof root
 
 - commit: `0c26301` `Retire compatibility shadow from observer primary flow`
 - root: [compat-primary-flow-retirement-20260329-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/compat-primary-flow-retirement-20260329-live2)
@@ -147,7 +169,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `step=16`에서 `WaitRunLoad -> HandleCombat from screen=combat`가 정상적으로 열렸다
 - run은 `max-steps-reached:60`까지 진행했고 `failure-summary.json`은 생성되지 않았다
 
-### 3. latest speed proof root
+### 4. latest speed proof root
 
 - root: [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
 - startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9/startup-summary.json)
@@ -162,7 +184,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - representative `preflight->request`는 `1155~1466ms` band다
 - attempt는 `returned-main-menu`로 끝났지만, speed 관점에서는 captured hot path가 0건이라는 점이 핵심이다
 
-### 4. latest post-node continuity coverage proof
+### 5. latest post-node continuity coverage proof
 
 - commit: `c85b75f` `Strengthen post-node reward handoff coverage`
 - self-test owner:
@@ -179,18 +201,18 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ## 다음 세션의 기본 목표
 
-현재 기준으로 active blocker는 없다. 새 세션이 잡을 기본 목표는 아래 둘 중 하나다.
+현재 기준으로 active combat blocker는 없다. 새 세션이 잡을 기본 목표는 아래 둘 중 하나다.
 
 ```text
-1. low-priority coverage frontier (`EVENT-05`, `REWARD-10`) 보강
-2. 새 live issue가 실제로 재현될 때 current owner 파일에서 좁게 수정
+1. unrelated `WaitPostMapNodeRoom -> reward reopen` current-main self-test red를 current owner 파일에서 좁게 수정
+2. 그 다음 low-priority coverage frontier (`EVENT-05`, `REWARD-10`) 보강
 ```
 
 우선 열 파일:
 
-1. [AutoDecisionProvider.NonCombatSceneState.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
-2. [Program.PhaseLoopRouting.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
-3. [Observer/GuiSmokeObserverPhaseHeuristics.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/GuiSmokeObserverPhaseHeuristics.cs)
+1. [Program.PhaseLoopRouting.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
+2. [Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs)
+3. [AutoDecisionProvider.NonCombatSceneState.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
 4. [Program.SelfTests.EventRewardSubstates.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.EventRewardSubstates.cs)
 5. [Program.SelfTests.StallSentinel.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.StallSentinel.cs)
 
@@ -201,9 +223,15 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 ```text
 cmd.exe /c dotnet build STS2_Mod_AI_Companion.sln
 cmd.exe /c dotnet run --project src/Sts2ModKit.SelfTest/Sts2ModKit.SelfTest.csproj --no-build
-cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- self-test
 cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-test
 cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-parity-test
+```
+
+현재 known red:
+
+```text
+cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- self-test
+-> WaitPostMapNodeRoom should reopen reward handling when the destination room is rewards.
 ```
 
 replay parity acceptance:
@@ -225,8 +253,8 @@ live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
 
 ```text
 current main의 하네스 구조 정리, reward aftermath closure, common hot path speed recovery, WaitMainMenu startup boundary closure,
-published-first observer provenance migration, post-refactor cleanup program은 끝났다.
+published-first observer provenance migration, post-refactor cleanup program, combat stale-end-turn / target plateau fix는 끝났다.
 새 세션은 old Program.cs monolith나 screenshot-first 전제를 다시 가져오지 말고,
-low-priority coverage frontier만 새 owner 파일에서 좁게 다루고,
-새 blocker가 재현되면 그때만 semantic fix를 열어라.
+우선 unrelated `WaitPostMapNodeRoom` self-test red를 current owner 파일에서 좁게 닫고,
+그 다음 low-priority coverage frontier만 다뤄라.
 ```

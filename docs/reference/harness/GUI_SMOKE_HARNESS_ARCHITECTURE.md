@@ -48,6 +48,8 @@ current `main`의 `Sts2GuiSmokeHarness`는 다음 구조로 읽는다.
   - [Analysis/AutoMapAnalyzer.cs](../../../src/Sts2GuiSmokeHarness/Analysis/AutoMapAnalyzer.cs)
   - [Analysis/AutoCardGridAnalyzers.cs](../../../src/Sts2GuiSmokeHarness/Analysis/AutoCardGridAnalyzers.cs)
   - [Analysis/AutoCombatAnalyzer.cs](../../../src/Sts2GuiSmokeHarness/Analysis/AutoCombatAnalyzer.cs)
+  - [Analysis/CombatMicroStageSupport.cs](../../../src/Sts2GuiSmokeHarness/Analysis/CombatMicroStageSupport.cs)
+  - [Analysis/CombatPostActionObservationSupport.cs](../../../src/Sts2GuiSmokeHarness/Analysis/CombatPostActionObservationSupport.cs)
   - [Analysis/CombatTargetabilitySupport.cs](../../../src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
 - decisions
   - [AutoDecisionProvider.Core.cs](../../../src/Sts2GuiSmokeHarness/AutoDecisionProvider.Core.cs)
@@ -119,6 +121,7 @@ flowchart TD
 ### 2.4 Analysis
 
 - screenshot 기반 raw geometry, card grid, map node, overlay, combat target 추론은 analysis layer가 소유한다.
+- combat lane micro-stage 재구성과 lane-specific quiet convergence settle semantics도 analysis layer가 소유한다.
 - decision layer는 analysis 결과를 소비하지만, raw image interpretation owner가 아니다.
 
 ### 2.5 Decisions
@@ -182,13 +185,16 @@ flowchart TD
 - replay parity suite
   - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-parity-test`
 
-2026-03-28 기준 parity baseline은 green이며, old `reward-aftermath-map-handoff` red는 닫혔다.
+2026-03-30 기준 `build`, `Sts2ModKit.SelfTest`, `replay-test`, `replay-parity-test`는 green이다.
+현재 harness `self-test`는 unrelated `WaitPostMapNodeRoom -> reward reopen` known red 1건이 남아 있다.
 
 ## 6. Current semantic follow-up pointers
 
 현재 architecture work는 정리됐고, semantic follow-up은 아래 파일들부터 보는 것이 맞다.
 
 - combat post-wait / barrier / targetability coverage
+  - [Analysis/CombatMicroStageSupport.cs](../../../src/Sts2GuiSmokeHarness/Analysis/CombatMicroStageSupport.cs)
+  - [Analysis/CombatPostActionObservationSupport.cs](../../../src/Sts2GuiSmokeHarness/Analysis/CombatPostActionObservationSupport.cs)
   - [Program.AllowedActions.Combat.cs](../../../src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs)
   - [AutoDecisionProvider.CombatDecisions.cs](../../../src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
   - [Analysis/CombatBarrierSupport.cs](../../../src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)

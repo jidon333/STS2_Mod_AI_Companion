@@ -6,15 +6,15 @@
 
 ## 날짜
 
-- 2026-03-29
+- 2026-03-30
 
 ## 현재 마일스톤 위치
 
 - 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` + `M9 observer-first speed recovery` + `startup main-menu phase-boundary` + `published-first observer provenance migration` + post-refactor cleanup completion
 - 현재 engineering focus:
-  1. `Sts2GuiSmokeHarness` cleanup-complete 기준선을 문서와 current pointer에 고정
+  1. `Sts2GuiSmokeHarness` cleanup-complete 기준선과 combat micro-stage baseline을 current docs에 고정
   2. explicit event / common combat hot path를 `observer-first, screenshot-on-demand`로 되돌린 speed baseline 유지
-  3. cleanup 이후 남은 coverage frontier를 새 owner 구조 안에서 좁게 다루기
+  3. unrelated known self-test red (`WaitPostMapNodeRoom -> reward reopen`)를 current owner 구조 안에서 좁게 닫기
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
 중요한 현재 해석:
@@ -24,7 +24,8 @@
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug는 current `main`에서 닫혔다
 - published-first observer provenance migration은 current `main`에서 active다
 - post-refactor cleanup program은 current `main`에서 완료 상태다
-- 현재 핵심은 **cleanup 이후 남아 있는 coverage gap만 좁게 다루는 것**이다
+- combat stale-end-turn / target plateau family는 current `main`에서 micro-stage + quiet convergence로 닫혔다
+- 현재 핵심은 **combat blocker 재발 방지 baseline을 유지하면서 unrelated noncombat self-test red와 남은 coverage gap만 좁게 다루는 것**이다
 
 ## 현재 우선순위
 
@@ -42,14 +43,23 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 
 ### 2. 현재 semantic gap
 
-cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
+cleanup program 완료 이후에도 current follow-up은 남아 있다.
 
-현재 가장 중요한 두 signal은 아래다.
+현재 가장 중요한 세 signal은 아래다.
 
 1. replay parity suite
    - status: green
    - 해석: old `reward-aftermath-map-handoff` known red는 current `main`에서 닫혔다
-2. latest cleanup proof root
+2. latest combat blocker fix root
+   - root: [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2)
+   - result: original `combat select non-enemy slot -> stale observer -> auto-end turn -> combat-barrier-wait-plateau` family와 후속 attack-target plateau family가 모두 재현되지 않았다
+   - shape:
+     - unresolved non-enemy lane는 `end turn`으로 닫히지 않고 lane settle/confirm으로만 진행됐다
+     - `step=51`에서 `capture skipped reason=combat-explicit-target-runtime`, `action=click`, `target=combat enemy target 의식의-신수 recenter`
+     - `step=51` 이후 settle reason은 generic observer delta가 아니라 `combat-enemy-click-resolved`였다
+     - `step=55 -> 60`에서는 unresolved selected lane이 `right-click cancel unresolved selected card`로만 해소됐다
+     - run은 `attempt-completed:max-steps-reached`로 끝났고 `failure-summary.json`은 생성되지 않았다
+3. latest cleanup proof root
    - root: [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run)
    - result: representative fresh live root, cleanup-complete `main`에서 `WaitMainMenu -> EnterRun`, `WaitRunLoad -> HandleCombat`, combat wait/re-capture continuity가 모두 비회귀였다
    - shape:
@@ -71,7 +81,8 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 ```text
 "mixed-state noncombat guard cleanup, combat EndTurn pre-actuation drift, combat post-wait recapture continuity는 current main에서 닫혔고,
 capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
-현재 남은 건 blocker라기보다 low-priority coverage frontier다"
+combat stale-end-turn / target plateau family도 current main에서 닫혔고,
+현재 남은 건 blocker라기보다 unrelated noncombat self-test red와 low-priority coverage frontier다"
 ```
 
 ### 3. current speed baseline
@@ -93,11 +104,11 @@ capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
 | Startup / Trust / Deploy Identity | green | broad top blocker 아님, latest live root에서 main-menu phase-boundary도 비회귀 |
 | Harness Architecture | green | wave 1-8 complete, shell/module split complete |
 | Build / Shared Self-Test | green | current `main` 기준 통과 |
-| Harness Self-Test | green | current `main` 기준 통과 |
+| Harness Self-Test | red | current `main` 기준으로 `WaitPostMapNodeRoom -> reward reopen` known failure 1건이 남아 있다 |
 | Replay Golden Suite | green | `replay-test` 통과 |
 | Replay Parity Suite | green | `reward-aftermath-map-handoff` 포함 current parity fixtures green |
 | Non-Combat Stability | green | reward aftermath map-node continuity closure, fresh live root confirms post-reward progression |
-| Combat Stability | green | cleanup proof root에서 combat wait/re-capture continuity와 non-enemy confirm / end-turn이 비회귀였고 run이 `max-steps-reached:60`까지 진행 |
+| Combat Stability | green | micro-stage gating, quiet convergence settle, runtime target-summary authority까지 current `main`에 반영됐고 fresh live root에서 stale end-turn / target plateau family가 재현되지 않았다 |
 | Live-Run Speed Recovery | green | explicit event / common combat hot path가 observer-first로 복귀했고 representative speed root에서 captured step가 0건 |
 | Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 compatibility는 legacy surface로만 남는다 |
 | Post-Refactor Cleanup Program | green | runner residual, noncombat residue, partial `Program` owner shedding, supervision health split까지 current `main`에 반영 |
@@ -106,7 +117,8 @@ capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
 
 ## 현재 바로 믿을 수 있는 것
 
-- `build`, `Sts2ModKit.SelfTest`, `Sts2GuiSmokeHarness -- self-test`, `replay-test`는 current `main`에서 green이다
+- `build`, `Sts2ModKit.SelfTest`, `replay-test`, `replay-parity-test`는 current `main`에서 green이다
+- `Sts2GuiSmokeHarness -- self-test`는 현재 `WaitPostMapNodeRoom -> reward reopen` known failure 1건 때문에 red다
 - replay parity는 current `main` 기준 green이다
 - `WaitRunLoad -> HandleRewards` resumed room handoff fix는 current `main`에 반영되어 있다
 - reward aftermath `ChooseFirstNode` exported-node closure는 current `main`에 반영되어 있다
@@ -115,6 +127,8 @@ capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
 - representative speed proof root에서 explicit event/combat chain의 `captureMode`는 전부 `skipped`다
 - current `main`의 control-flow observer provenance는 published-first이고, published provenance는 legacy `visibleScreen` / `sceneReady` 계열로 다시 채워지지 않는다
 - bridge node semantics는 compatibility scene winner를 다시 먹지 않는다
+- combat post-action은 더 이상 generic observer delta 하나로 다음 step을 열지 않고, lane micro-stage + quiet convergence로 settle된다
+- runtime `combatTargetSummary` raw fact는 current `main`에서 explicit enemy-target authority로 소비된다
 - 하네스 구조 refactor는 current `main` 기준 문서화 가능한 수준까지 정리됐다
 - post-refactor cleanup program도 current `main` 기준 완료 상태다
 
@@ -137,6 +151,14 @@ capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
 
 ### current semantic closure evidence
 
+- fresh combat blocker fix root:
+  - [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2)
+- combat blocker fix startup summary:
+  - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/startup-summary.json)
+- combat blocker fix session summary:
+  - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/session-summary.json)
+- combat blocker fix run log:
+  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/attempts/0001/run.log)
 - fresh reward/map closure root:
   - [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
 - latest cleanup proof root:
@@ -209,11 +231,14 @@ capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
 - fresh live strict lifecycle restart chronology proof
 - combat broader target parity/live proof
 - enemy-turn closed play-phase replay/live proof
+- combat non-enemy stale-end-turn blocker family
+- combat attack-target plateau on stale zero-count target aggregates
 - reward back canonical replay proof
 - post-node destination continuity handoff coverage
 
 ### 아직 열려 있는 것
 
+- `WaitPostMapNodeRoom -> reward reopen` harness self-test regression은 current `main`에서 아직 red다
 - some low-priority coverage rows (`event reward substate`, `reward-map loop sentinel`) remain partial
 
 ## 다음 작업 원칙
@@ -221,10 +246,17 @@ capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
 1. 새 semantic fix는 좁게 한다
    - refactor wave는 현재 완료 상태를 reopen하지 않는다
 2. 다음 coverage follow-up은 current owner 파일에서만 본다
-   - [Program.AllowedActions.Combat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs)
-   - [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
-   - [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
-   - [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
+   - active noncombat red:
+     - [Program.PhaseLoopRouting.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
+     - [Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs)
+     - [AutoDecisionProvider.NonCombatSceneState.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
+   - retained combat owner baseline:
+     - [Analysis/CombatMicroStageSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatMicroStageSupport.cs)
+     - [Analysis/CombatPostActionObservationSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatPostActionObservationSupport.cs)
+     - [Program.AllowedActions.Combat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs)
+     - [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
+     - [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
+     - [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
 3. semantic blocker, speed evidence, coverage gap을 구분한다
    - noncombat mixed-state와 combat EndTurn barrier family는 닫혔다
    - explicit event/common combat speed baseline도 현재 `main`에서 회복됐다
@@ -235,10 +267,8 @@ capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
 
 ```text
 current main의 smoke harness architecture refactor는 완료됐다.
-reward aftermath live/parity gap도 current main에서 닫혔다.
-combat EndTurn pre-actuation drift / false barrier arm도 current main에서 닫혔다.
-explicit event / common combat hot path의 observer-first speed recovery도 current main에서 반영됐다.
-published-first observer provenance migration도 current main에 반영됐다.
-post-refactor cleanup program도 current main에서 완료됐다.
-다음 follow-up은 low-priority coverage frontier를 current owner 구조 안에서 보강하는 쪽이다.
+reward aftermath live/parity gap과 combat stale-end-turn / target plateau family도 current main에서 닫혔다.
+explicit event / common combat hot path의 observer-first speed recovery와 published-first observer provenance migration도 current main에 반영됐다.
+다만 harness self-test는 현재 `WaitPostMapNodeRoom -> reward reopen` known red 1건이 남아 있다.
+다음 follow-up은 이 unrelated noncombat self-test red와 low-priority coverage frontier를 current owner 구조 안에서 보강하는 쪽이다.
 ```
