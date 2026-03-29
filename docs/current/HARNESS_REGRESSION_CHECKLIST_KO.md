@@ -157,4 +157,4 @@
 
 current `main` 바깥의 clean validation branch/worktree에서 드러난 최근 regression families는 source of truth가 아니므로 본문 기준선에는 넣지 않는다. 다만 아래 family는 이후 current `main`에 같은 shape가 들어오는지 감시 대상으로 유지한다.
 
-- strict lifecycle chain proof gap
+- combat target / enemy-turn / noncombat continuity partial coverage

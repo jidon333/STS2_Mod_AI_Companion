@@ -70,7 +70,8 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 
 ```text
 "mixed-state noncombat guard cleanup, combat EndTurn pre-actuation drift, combat post-wait recapture continuity는 current main에서 닫혔고,
-현재 남은 건 blocker라기보다 capture-boundary / strict lifecycle coverage frontier다"
+capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
+현재 남은 건 blocker라기보다 일부 partial coverage row다"
 ```
 
 ### 3. current speed baseline
@@ -101,7 +102,7 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 | Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 compatibility는 legacy surface로만 남는다 |
 | Post-Refactor Cleanup Program | green | runner residual, noncombat residue, partial `Program` owner shedding, supervision health split까지 current `main`에 반영 |
 | Capture Boundary | green | bounded failure contract와 self-test 위에 fresh live proof [capture-boundary-proof-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1)이 추가됐다 |
-| Strict Lifecycle Chain | partial | terminal -> restart -> next-attempt first-screen evidence는 여전히 appendix/work item |
+| Strict Lifecycle Chain | green | fresh live root [strict-lifecycle-chain-20260329-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/strict-lifecycle-chain-20260329-live2)에서 `0001 terminal -> 0002 restart -> 0002 next-attempt-started` chronology와 first-screen proof가 닫혔다 |
 
 ## 현재 바로 믿을 수 있는 것
 
@@ -174,6 +175,14 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
   - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1/attempts/0001/run.log)
 - capture-boundary proof failure summary:
   - [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1/attempts/0001/failure-summary.json)
+- strict lifecycle proof root:
+  - [strict-lifecycle-chain-20260329-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/strict-lifecycle-chain-20260329-live2)
+- strict lifecycle restart chronology:
+  - [restart-events.ndjson](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/strict-lifecycle-chain-20260329-live2/restart-events.ndjson)
+- strict lifecycle supervisor state:
+  - [supervisor-state.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/strict-lifecycle-chain-20260329-live2/supervisor-state.json)
+- strict lifecycle second-attempt first screen:
+  - [0001.screen.png](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/strict-lifecycle-chain-20260329-live2/attempts/0002/steps/0001.screen.png)
 - parity fixture now green:
   - `tests/replay-fixtures/m6-parity/reward-map-handoff.request.json`
 
@@ -197,12 +206,11 @@ cleanup program 완료 이후에도 current coverage follow-up은 남아 있다.
 - large self-test hotspot 1차 분해
 - runner residual / noncombat residue / partial `Program` helper owner / supervision health band hotspot extraction
 - fresh live capture-boundary bounded failure proof
+- fresh live strict lifecycle restart chronology proof
 
 ### 아직 열려 있는 것
 
-- strict lifecycle chain evidence
 - combat broader parity/live coverage
-- strict lifecycle chain appendix
 - some lower-priority noncombat coverage rows (`reward back`, `post-node destination continuity`) remain partial
 
 ## 다음 작업 원칙
@@ -229,5 +237,5 @@ combat EndTurn pre-actuation drift / false barrier arm도 current main에서 닫
 explicit event / common combat hot path의 observer-first speed recovery도 current main에서 반영됐다.
 published-first observer provenance migration도 current main에 반영됐다.
 post-refactor cleanup program도 current main에서 완료됐다.
-다음 follow-up은 strict lifecycle chain / 일부 partial coverage row를 current owner 구조 안에서 보강하는 쪽이다.
+다음 follow-up은 일부 partial coverage row를 current owner 구조 안에서 보강하는 쪽이다.
 ```

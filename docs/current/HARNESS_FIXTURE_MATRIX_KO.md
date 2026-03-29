@@ -23,7 +23,7 @@ coverage status 의미:
 | Gap | Meaning | Current Status |
 |---|---|---|
 | `VAL-CAPTURE-BOUNDARY` | phase log 이후 capture/request/failure emission을 bounded contract로 고정 | green |
-| `TERM-LIFECYCLE-CHAIN` | terminal -> restart -> next-attempt first-screen evidence | partial |
+| `TERM-LIFECYCLE-CHAIN` | terminal -> restart -> next-attempt first-screen evidence | green |
 | `REWARD-AFTERMATH-MAP-HANDOFF` | reward aftermath 이후 map-node continuity, `ChooseFirstNode` / parity alignment | green |
 
 ## Validation / Boot / Menu
@@ -104,7 +104,7 @@ coverage status 의미:
 | State ID | Canonical Phase | Owner / Lane | Coverage | Representative Evidence | Notes |
 |---|---|---|---|---|---|
 | `TERM-01` | reward/menu terminal boundaries | terminal boundary | green | `RewardObserverSignals.IsTerminalRunBoundary`, terminal suppression tests, [PROJECT_STATUS.md](./PROJECT_STATUS.md) | gameplay map fallback suppression covered |
-| `TERM-02` | terminal -> restart -> next attempt | lifecycle lane | missing | [PROJECT_STATUS.md](./PROJECT_STATUS.md), [PROJECT_STATUS_READER_KO.md](./PROJECT_STATUS_READER_KO.md) both call this residual gap out explicitly | strict lifecycle chain still open |
+| `TERM-02` | terminal -> restart -> next attempt | lifecycle lane | green | fresh live root [strict-lifecycle-chain-20260329-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/strict-lifecycle-chain-20260329-live2), [restart-events.ndjson](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/strict-lifecycle-chain-20260329-live2/restart-events.ndjson), [supervisor-state.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/strict-lifecycle-chain-20260329-live2/supervisor-state.json) | validation-only lifecycle proof mode로 `0001 terminal -> 0002 restart -> 0002 first-screen` chain이 current `main` live root에서 고정됨 |
 
 ## Current-Main Evidence Index
 
@@ -139,12 +139,14 @@ coverage status 의미:
 
 | Priority | Work Item | Why |
 |---|---|---|
-| P0 | strict lifecycle chain evidence | `TERM-02` remains intentionally open |
+| P0 | combat broader target parity/live proof | `COMBAT-03` remains partial |
+| P1 | enemy-turn closed play-phase proof | `COMBAT-07` remains partial |
+| P1 | reward back / post-node continuity proof | `REWARD-04`, `MAP-04` remain partial |
 
 ## Non-Canonical Appendix
 
 아래는 current `main` source-of-truth는 아니지만, 다음 구현 우선순위를 정할 때 참고할 수 있는 recent high-signal branch evidence다.
 
-- strict lifecycle chain proof gap
+- combat target / enemy-turn / noncombat continuity partial coverage
 
 이 appendix는 priority signal일 뿐, canonical coverage status는 위 표의 current `main` evidence만으로 판정한다.
