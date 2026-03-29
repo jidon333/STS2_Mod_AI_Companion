@@ -181,7 +181,9 @@ public sealed class LiveExportStateTracker
         var relics = MergeStrings(previous.Relics, observation.Relics, observation, screen, "relics", regressionWarnings);
         var potions = MergeStrings(previous.Potions, observation.Potions, observation, screen, "potions", regressionWarnings);
         var choices = MergeChoices(previous.CurrentChoices, observation.Choices, observation, previous.CurrentScreen, screen, previous.CapturedAt);
-        var warnings = MergeWarnings(previous.Warnings, MergeWarnings(observation.Warnings, regressionWarnings));
+        var warnings = MergeWarnings(
+            previous.Warnings ?? Array.Empty<string>(),
+            MergeWarnings(observation.Warnings ?? Array.Empty<string>(), regressionWarnings));
         var encounter = MergeEncounter(previous.Encounter, observation.Encounter, observation, screen, regressionWarnings);
         if (!string.Equals(screen, "combat", StringComparison.OrdinalIgnoreCase)
             && encounter?.InCombat == true)
@@ -200,26 +202,18 @@ public sealed class LiveExportStateTracker
                                 ?? observation.Screen
                                 ?? screen;
         var publishedCurrentScreen = ReadMetaValue(observation.Meta, "publishedCurrentScreen")
-                                     ?? ReadMetaValue(observation.Meta, "logicalScreen")
                                      ?? observation.Screen
                                      ?? rawObservedScreen;
         var publishedVisibleScreen = ReadMetaValue(observation.Meta, "publishedVisibleScreen")
-                                     ?? ReadMetaValue(observation.Meta, "visibleScreen")
                                      ?? publishedCurrentScreen;
-        var publishedSceneReady = ReadMetaBool(observation.Meta, "publishedSceneReady")
-                                  ?? ReadMetaBool(observation.Meta, "sceneReady");
-        var publishedSceneAuthority = ReadMetaValue(observation.Meta, "publishedSceneAuthority")
-                                      ?? ReadMetaValue(observation.Meta, "sceneAuthority");
-        var publishedSceneStability = ReadMetaValue(observation.Meta, "publishedSceneStability")
-                                      ?? ReadMetaValue(observation.Meta, "sceneStability");
+        var publishedSceneReady = ReadMetaBool(observation.Meta, "publishedSceneReady");
+        var publishedSceneAuthority = ReadMetaValue(observation.Meta, "publishedSceneAuthority");
+        var publishedSceneStability = ReadMetaValue(observation.Meta, "publishedSceneStability");
+        var compatibilityLogicalScreen = ReadMetaValue(meta, "compatLogicalScreen")
+                                         ?? ReadMetaValue(meta, "logicalScreen")
+                                         ?? screen;
         var compatibilityCurrentScreen = ReadMetaValue(meta, "compatibilityCurrentScreen")
-                                         ?? ReadMetaValue(meta, "compatLogicalScreen")
-                                         ?? ReadMetaValue(meta, "logicalScreen")
-                                         ?? screen;
-        var compatibilityLogicalScreen = compatibilityCurrentScreen
-                                         ?? ReadMetaValue(meta, "compatLogicalScreen")
-                                         ?? ReadMetaValue(meta, "logicalScreen")
-                                         ?? screen;
+                                         ?? compatibilityLogicalScreen;
         var compatibilityVisibleScreen = ReadMetaValue(meta, "compatibilityVisibleScreen")
                                          ?? ReadMetaValue(meta, "compatVisibleScreen")
                                          ?? ReadMetaValue(meta, "visibleScreen")
@@ -544,26 +538,46 @@ public sealed class LiveExportStateTracker
                                 ?? logicalScreen;
         var publishedCurrentScreen = ReadMetaValue(mergedMeta, "publishedCurrentScreen")
                                      ?? ReadMetaValue(observation.Meta, "publishedCurrentScreen")
-                                     ?? ReadMetaValue(observation.Meta, "logicalScreen")
                                      ?? observation.Screen
                                      ?? rawObservedScreen;
         var publishedVisibleScreen = ReadMetaValue(mergedMeta, "publishedVisibleScreen")
                                      ?? ReadMetaValue(observation.Meta, "publishedVisibleScreen")
-                                     ?? ReadMetaValue(observation.Meta, "visibleScreen")
                                      ?? publishedCurrentScreen;
         var publishedSceneReady = ReadMetaBool(mergedMeta, "publishedSceneReady")
-                                  ?? ReadMetaBool(observation.Meta, "publishedSceneReady")
-                                  ?? ReadMetaBool(observation.Meta, "sceneReady");
+                                  ?? ReadMetaBool(observation.Meta, "publishedSceneReady");
         var publishedSceneAuthority = ReadMetaValue(mergedMeta, "publishedSceneAuthority")
-                                      ?? ReadMetaValue(observation.Meta, "publishedSceneAuthority")
-                                      ?? ReadMetaValue(observation.Meta, "sceneAuthority");
+                                      ?? ReadMetaValue(observation.Meta, "publishedSceneAuthority");
         var publishedSceneStability = ReadMetaValue(mergedMeta, "publishedSceneStability")
-                                      ?? ReadMetaValue(observation.Meta, "publishedSceneStability")
-                                      ?? ReadMetaValue(observation.Meta, "sceneStability");
+                                      ?? ReadMetaValue(observation.Meta, "publishedSceneStability");
+        var compatibilityLogicalScreen = ReadMetaValue(observation.Meta, "compatLogicalScreen")
+                                         ?? ReadMetaValue(observation.Meta, "logicalScreen")
+                                         ?? ReadMetaValue(mergedMeta, "compatLogicalScreen")
+                                         ?? ReadMetaValue(mergedMeta, "logicalScreen")
+                                         ?? logicalScreen;
         var visibleScreen = ResolveVisibleScreen(previousMeta, mergedMeta, observation, logicalScreen);
+        var compatibilityVisibleScreen = ReadMetaValue(observation.Meta, "compatVisibleScreen")
+                                         ?? ReadMetaValue(observation.Meta, "visibleScreen")
+                                         ?? ReadMetaValue(mergedMeta, "compatVisibleScreen")
+                                         ?? ReadMetaValue(mergedMeta, "visibleScreen")
+                                         ?? visibleScreen;
         var sceneReady = ResolveSceneReady(logicalScreen, visibleScreen, observation, mergedMeta);
         var sceneAuthority = ResolveSceneAuthority(observation, mergedMeta);
         var sceneStability = ResolveSceneStability(logicalScreen, sceneReady, mergedMeta);
+        var compatibilitySceneReady = ReadMetaBool(observation.Meta, "compatSceneReady")
+                                      ?? ReadMetaBool(observation.Meta, "sceneReady")
+                                      ?? ReadMetaBool(mergedMeta, "compatSceneReady")
+                                      ?? ReadMetaBool(mergedMeta, "sceneReady")
+                                      ?? sceneReady;
+        var compatibilitySceneAuthority = ReadMetaValue(observation.Meta, "compatSceneAuthority")
+                                          ?? ReadMetaValue(observation.Meta, "sceneAuthority")
+                                          ?? ReadMetaValue(mergedMeta, "compatSceneAuthority")
+                                          ?? ReadMetaValue(mergedMeta, "sceneAuthority")
+                                          ?? sceneAuthority;
+        var compatibilitySceneStability = ReadMetaValue(observation.Meta, "compatSceneStability")
+                                          ?? ReadMetaValue(observation.Meta, "sceneStability")
+                                          ?? ReadMetaValue(mergedMeta, "compatSceneStability")
+                                          ?? ReadMetaValue(mergedMeta, "sceneStability")
+                                          ?? sceneStability;
         var updated = new Dictionary<string, string?>(mergedMeta, StringComparer.OrdinalIgnoreCase)
         {
             ["screen"] = rawObservedScreen,
@@ -573,14 +587,14 @@ public sealed class LiveExportStateTracker
             ["publishedSceneReady"] = FormatMetaBool(publishedSceneReady),
             ["publishedSceneAuthority"] = publishedSceneAuthority,
             ["publishedSceneStability"] = publishedSceneStability,
-            ["compatLogicalScreen"] = logicalScreen,
-            ["compatVisibleScreen"] = visibleScreen,
+            ["compatLogicalScreen"] = compatibilityLogicalScreen,
+            ["compatVisibleScreen"] = compatibilityVisibleScreen,
             ["rawCurrentScreen"] = rawCurrentScreen ?? rawObservedScreen,
             ["compatibilityCurrentScreen"] = logicalScreen,
-            ["compatibilityVisibleScreen"] = visibleScreen,
-            ["compatSceneReady"] = sceneReady ? "true" : "false",
-            ["compatSceneAuthority"] = sceneAuthority,
-            ["compatSceneStability"] = sceneStability,
+            ["compatibilityVisibleScreen"] = compatibilityVisibleScreen,
+            ["compatSceneReady"] = compatibilitySceneReady ? "true" : "false",
+            ["compatSceneAuthority"] = compatibilitySceneAuthority,
+            ["compatSceneStability"] = compatibilitySceneStability,
             ["readyMarker"] = sceneReady ? observation.TriggerKind : "waiting-for-stable-scene",
             ["rawObservedScreen"] = rawObservedScreen,
         };
