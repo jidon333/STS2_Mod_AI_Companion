@@ -428,7 +428,8 @@ internal static partial class Program
                     },
                     GuiSmokeShared.JsonOptions));
 
-            var aliasObserver = new ObserverSnapshotReader(liveLayout, harnessLayout).Read();
+            var aliasReader = new ObserverSnapshotReader(liveLayout, harnessLayout);
+            var aliasObserver = aliasReader.Read();
             Assert(string.Equals(aliasObserver.RawObservedScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive rawCurrentScreen over legacy rawObservedScreen and inventory fallback.");
             Assert(string.Equals(aliasObserver.PublishedCurrentScreen, "legacy-event", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve the direct published current screen before compatibility fallback.");
             Assert(string.Equals(aliasObserver.PublishedVisibleScreen, "legacy-direct-visible", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve the direct published visible screen before compatibility fallback.");
@@ -437,6 +438,29 @@ internal static partial class Program
                    && string.Equals(aliasObserver.PublishedSceneStability, "stable", StringComparison.OrdinalIgnoreCase), "Observer reader should preserve direct published scene readiness and authority before compatibility fallback.");
             Assert(string.Equals(aliasObserver.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive compatibilityCurrentScreen over legacy currentScreen and compatLogicalScreen.");
             Assert(string.Equals(aliasObserver.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase), "Observer reader should prefer additive compatibilityVisibleScreen over legacy compatVisibleScreen and inventory fallback.");
+
+            File.WriteAllLines(
+                liveLayout.EventsPath,
+                Enumerable.Range(1, 18)
+                    .Select(index => $"event-line-{index:00}"));
+            var tailObserver = aliasReader.Read();
+            Assert(tailObserver.LastEventsTail.Count == 10
+                   && string.Equals(tailObserver.LastEventsTail[0], "event-line-09", StringComparison.Ordinal)
+                   && string.Equals(tailObserver.LastEventsTail[^1], "event-line-18", StringComparison.Ordinal),
+                "Observer reader should preserve the latest 10 event lines without rereading the entire event stream semantics.");
+
+            File.AppendAllLines(
+                liveLayout.EventsPath,
+                new[]
+                {
+                    "event-line-19",
+                    "event-line-20",
+                });
+            var updatedTailObserver = aliasReader.Read();
+            Assert(updatedTailObserver.LastEventsTail.Count == 10
+                   && string.Equals(updatedTailObserver.LastEventsTail[0], "event-line-11", StringComparison.Ordinal)
+                   && string.Equals(updatedTailObserver.LastEventsTail[^1], "event-line-20", StringComparison.Ordinal),
+                "Observer reader event-tail cache should invalidate when the live events stream grows.");
         }
         finally
         {

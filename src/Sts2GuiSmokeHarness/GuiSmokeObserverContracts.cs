@@ -212,6 +212,7 @@ sealed record ObserverState(
     public string? CompatibilitySceneStability => Summary.CompatibilitySceneStability ?? Summary.SceneStability;
     public int? PlayerEnergy => Summary.PlayerEnergy;
     public IReadOnlyList<string> CurrentChoices => Summary.CurrentChoices;
+    public IReadOnlyList<string> LastEventsTail => Summary.LastEventsTail;
     public IReadOnlyList<ObserverActionNode> ActionNodes => Summary.ActionNodes;
     public IReadOnlyList<ObserverChoice> Choices => Summary.Choices;
     public IReadOnlyList<ObservedCombatHandCard> CombatHand => Summary.CombatHand;

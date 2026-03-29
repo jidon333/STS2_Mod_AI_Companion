@@ -169,7 +169,8 @@ internal static partial class Program
             int totalBudgetMs,
             int sliceMs,
             ObserverState baselineObserver,
-            Func<ObserverState, string?> wakeEvaluator)
+            Func<ObserverState, string?> wakeEvaluator,
+            bool includeEventTail = false)
         {
             if (totalBudgetMs <= 0)
             {
@@ -183,7 +184,7 @@ internal static partial class Program
                 var delayMs = Math.Min(sliceMs, remainingBudgetMs);
                 await Task.Delay(delayMs).ConfigureAwait(false);
                 remainingBudgetMs -= delayMs;
-                latestObserver = observerReader.Read();
+                latestObserver = observerReader.Read(includeEventTail);
                 var wakeReason = wakeEvaluator(latestObserver);
                 if (!string.IsNullOrWhiteSpace(wakeReason))
                 {
@@ -231,7 +232,7 @@ internal static partial class Program
             {
                 observer = await BootstrapManualCleanBootObserverAsync(
                         observer,
-                        observerReader.Read,
+                        () => observerReader.Read(includeEventTail: false),
                         freshnessFloor,
                         ManualCleanBootObserverBootstrapPollCount,
                         ManualCleanBootObserverBootstrapPollMs)
@@ -551,7 +552,7 @@ internal static partial class Program
                 var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
                 if (!captureResult.Succeeded)
                 {
-                    var captureFailureObserver = observerReader.Read();
+                    var captureFailureObserver = observerReader.Read(includeEventTail: false);
                     if (captureResult.FailureKind is CaptureBoundaryFailureKind.TimedOut or CaptureBoundaryFailureKind.Exception)
                     {
                         ResetDecisionWaitTracking();
@@ -1081,7 +1082,7 @@ internal static partial class Program
                 continue;
             }
 
-            var latestObserver = observerReader.Read();
+            var latestObserver = observerReader.Read(includeEventTail: false);
             if (ShouldRecaptureForObserverDrift(request.Observer, latestObserver, decision))
             {
                 LogHarness($"step={stepIndex} recapture required observer-drift requestScreen={request.Observer.CurrentScreen ?? "null"} latestScreen={latestObserver.CurrentScreen ?? "null"} requestVisible={request.Observer.VisibleScreen ?? "null"} latestVisible={latestObserver.VisibleScreen ?? "null"}");

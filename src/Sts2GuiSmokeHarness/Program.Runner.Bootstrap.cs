@@ -261,7 +261,7 @@ internal static partial class Program
             {
                 observer = await BootstrapManualCleanBootObserverAsync(
                         observer,
-                        observerReader.Read,
+                        () => observerReader.Read(includeEventTail: false),
                         freshnessFloor,
                         ManualCleanBootObserverBootstrapPollCount,
                         ManualCleanBootObserverBootstrapPollMs)

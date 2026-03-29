@@ -21,6 +21,10 @@ sealed class ObserverSnapshotReader
 {
     private readonly LiveExportLayout _liveLayout;
     private readonly HarnessQueueLayout _harnessLayout;
+    private string? _cachedEventsPath;
+    private long? _cachedEventsLength;
+    private DateTime _cachedEventsLastWriteUtc;
+    private string[]? _cachedEventTail;
 
     public ObserverSnapshotReader(LiveExportLayout liveLayout, HarnessQueueLayout harnessLayout)
     {
@@ -28,11 +32,11 @@ sealed class ObserverSnapshotReader
         _harnessLayout = harnessLayout;
     }
 
-    public ObserverState Read()
+    public ObserverState Read(bool includeEventTail = true)
     {
         JsonDocument? stateDocument = TryReadJson(_liveLayout.SnapshotPath);
         JsonDocument? inventoryDocument = TryReadJson(_harnessLayout.InventoryPath);
-        var eventLines = TryReadTail(_liveLayout.EventsPath, 10);
+        var eventLines = includeEventTail ? TryReadTailCached(_liveLayout.EventsPath, 10) : null;
 
         var inventorySceneType = TryReadString(inventoryDocument?.RootElement, "sceneType");
         var inventoryRawCurrentScreen = TryReadString(inventoryDocument?.RootElement, "rawCurrentScreen")
@@ -166,6 +170,42 @@ sealed class ObserverSnapshotReader
         }
     }
 
+    private string[]? TryReadTailCached(string path, int lines)
+    {
+        if (!File.Exists(path))
+        {
+            _cachedEventsPath = path;
+            _cachedEventsLength = null;
+            _cachedEventsLastWriteUtc = default;
+            _cachedEventTail = null;
+            return null;
+        }
+
+        try
+        {
+            var fileInfo = new FileInfo(path);
+            var length = fileInfo.Length;
+            var lastWriteUtc = fileInfo.LastWriteTimeUtc;
+            if (string.Equals(_cachedEventsPath, path, StringComparison.Ordinal)
+                && _cachedEventsLength == length
+                && _cachedEventsLastWriteUtc == lastWriteUtc)
+            {
+                return _cachedEventTail;
+            }
+
+            var tail = TryReadTail(path, lines);
+            _cachedEventsPath = path;
+            _cachedEventsLength = length;
+            _cachedEventsLastWriteUtc = lastWriteUtc;
+            _cachedEventTail = tail;
+            return tail;
+        }
+        catch (IOException)
+        {
+            return _cachedEventTail;
+        }
+    }
+
     private static string[]? TryReadTail(string path, int lines)
     {
         if (!File.Exists(path))
@@ -176,16 +216,54 @@ sealed class ObserverSnapshotReader
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            using var reader = new StreamReader(stream);
-            var queue = new Queue<string>(Math.Max(1, lines));
-            while (!reader.EndOfStream)
+            if (stream.Length == 0)
             {
-                var line = reader.ReadLine();
-                if (line is null)
+                return Array.Empty<string>();
+            }
+
+            const int chunkSize = 4096;
+            var buffer = new byte[chunkSize];
+            var chunks = new List<byte[]>();
+            var newlineCount = 0;
+            var position = stream.Length;
+            while (position > 0 && newlineCount <= lines)
+            {
+                var readSize = (int)Math.Min(chunkSize, position);
+                position -= readSize;
+                stream.Seek(position, SeekOrigin.Begin);
+                var read = stream.Read(buffer, 0, readSize);
+                if (read <= 0)
                 {
-                    continue;
+                    break;
                 }
 
+                var chunk = new byte[read];
+                Buffer.BlockCopy(buffer, 0, chunk, 0, read);
+                newlineCount += chunk.Count(static value => value == (byte)'\n');
+                chunks.Add(chunk);
+            }
+
+            chunks.Reverse();
+            var totalLength = chunks.Sum(static chunk => chunk.Length);
+            var combined = new byte[totalLength];
+            var offset = 0;
+            foreach (var chunk in chunks)
+            {
+                Buffer.BlockCopy(chunk, 0, combined, offset, chunk.Length);
+                offset += chunk.Length;
+            }
+
+            var text = Encoding.UTF8.GetString(combined);
+            using var reader = new StringReader(text);
+            var queue = new Queue<string>(Math.Max(1, lines));
+            if (position > 0)
+            {
+                reader.ReadLine();
+            }
+
+            string? line;
+            while ((line = reader.ReadLine()) is not null)
+            {
                 queue.Enqueue(line);
                 while (queue.Count > lines)
                 {
