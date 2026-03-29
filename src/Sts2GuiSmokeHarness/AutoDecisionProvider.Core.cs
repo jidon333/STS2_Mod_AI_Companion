@@ -1,4 +1,5 @@
 using System.Text.Json;
+using static ObserverScreenProvenance;
 
 sealed partial class AutoDecisionProvider : IGuiDecisionProvider
 {
@@ -214,10 +215,10 @@ sealed partial class AutoDecisionProvider : IGuiDecisionProvider
             GuiSmokePhase.HandleShop => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleShop(request), "shop", null),
             GuiSmokePhase.HandleCombat => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request, context), "combat", null),
             GuiSmokePhase.EnterRun => AnalyzeGenericPhase(request, actualDecision, () => DecideEnterRun(request), "main-menu", null),
-            GuiSmokePhase.WaitRunLoad => AnalyzeGenericPhase(request, actualDecision, () => DecideWaitRunLoad(request, context), request.Observer.CurrentScreen, null),
+            GuiSmokePhase.WaitRunLoad => AnalyzeGenericPhase(request, actualDecision, () => DecideWaitRunLoad(request, context), DisplayControlFlowScreen(request.Observer), null),
             GuiSmokePhase.ChooseCharacter => AnalyzeGenericPhase(request, actualDecision, () => DecideChooseCharacter(request), "character-select", null),
             GuiSmokePhase.Embark => AnalyzeGenericPhase(request, actualDecision, () => DecideEmbark(request, context), "embark", null),
-            _ => AnalyzeGenericPhase(request, actualDecision, () => CreateWaitDecision("waiting for passive phase", request.Observer.CurrentScreen), request.Observer.CurrentScreen, null),
+            _ => AnalyzeGenericPhase(request, actualDecision, () => CreateWaitDecision("waiting for passive phase", DisplayControlFlowScreen(request.Observer)), DisplayControlFlowScreen(request.Observer), null),
         };
     }
 

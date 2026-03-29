@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Globalization;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 sealed partial class AutoDecisionProvider
 {
@@ -18,12 +19,12 @@ sealed partial class AutoDecisionProvider
         var combatBarrier = context.CombatBarrierEvaluation;
         if (context.CombatPlayerActionWindowClosed)
         {
-            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "observer reports enemy turn or a closed combat play phase", request.Observer.CurrentScreen);
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "observer reports enemy turn or a closed combat play phase", DisplayControlFlowScreen(request.Observer));
         }
 
         if (combatBarrier.IsActive && combatBarrier.IsHardWaitBarrier)
         {
-            return CreateCombatBarrierWaitDecision(combatBarrier, request.Observer.CurrentScreen);
+            return CreateCombatBarrierWaitDecision(combatBarrier, DisplayControlFlowScreen(request.Observer));
         }
 
         var hasSelectedNonEnemyConfirmEvidence = context.HasSelectedNonEnemyConfirmEvidence;
@@ -110,7 +111,7 @@ sealed partial class AutoDecisionProvider
                 return allowedFallback;
             }
 
-            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for legal combat action", request.Observer.CurrentScreen);
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for legal combat action", DisplayControlFlowScreen(request.Observer));
         }
 
         if (request.Observer.PlayerEnergy is <= 0)
@@ -139,7 +140,7 @@ sealed partial class AutoDecisionProvider
                 return allowedHandSelectionDecision;
             }
 
-            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for selectable combat hand card", request.Observer.CurrentScreen);
+            return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for selectable combat hand card", DisplayControlFlowScreen(request.Observer));
         }
 
         if (hasSelectedNonEnemyConfirmEvidence)

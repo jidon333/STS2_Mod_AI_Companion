@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Globalization;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 sealed partial class AutoDecisionProvider
 {
@@ -42,7 +43,7 @@ sealed partial class AutoDecisionProvider
 
         if (rewardScene.LayerState.TerminalRunBoundary)
         {
-            return CreateWaitDecision("terminal reward boundary is active; do not reopen gameplay map fallback from reward aftermath.", request.Observer.CurrentScreen);
+            return CreateWaitDecision("terminal reward boundary is active; do not reopen gameplay map fallback from reward aftermath.", ResolveObserverScreen(request.Observer));
         }
 
         if (rewardScene.ReleaseToMapPending
@@ -57,7 +58,7 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision CreateRewardOwnershipReleaseWaitDecision(GuiSmokeStepRequest request)
     {
-        return CreateWaitDecision("waiting for reward ownership release to map/post-room reconciliation", request.Observer.CurrentScreen);
+        return CreateWaitDecision("waiting for reward ownership release to map/post-room reconciliation", ResolveObserverScreen(request.Observer));
     }
 
     private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
@@ -198,7 +199,7 @@ sealed partial class AutoDecisionProvider
             return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit shop room authority");
         }
 
-        var screen = request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "shop";
+        var screen = ResolveObserverScreen(request.Observer, "shop");
         var alreadyPurchased = ShopObserverSignals.HasRecentPurchase(request.History);
         if (!shopState.InventoryOpen && alreadyPurchased && shopState.ProceedEnabled)
         {
@@ -582,7 +583,7 @@ sealed partial class AutoDecisionProvider
                 BuildCardSelectionCardTargetLabel(state.ScreenType, explicitChoice, 0),
                 "Reward-pick subtype is runtime-visible. Pick a reward card directly instead of entering any count/confirm flow.",
                 0.96,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "card-choice",
+                ResolveObserverScreen(request.Observer, "card-choice"),
                 1400);
         }
 
@@ -608,7 +609,7 @@ sealed partial class AutoDecisionProvider
                     confirmTargetLabel,
                     $"Card-selection subtype '{state.ScreenType}' is confirm-ready. Use the exported confirm affordance instead of repeating a card click.",
                     0.95,
-                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? state.ScreenType,
+                    ResolveObserverScreen(request.Observer, state.ScreenType),
                     1400);
             }
         }
@@ -628,7 +629,7 @@ sealed partial class AutoDecisionProvider
                     BuildCardSelectionCardTargetLabel(state.ScreenType, preferredChoice, choiceIndex),
                     $"Card-selection subtype '{state.ScreenType}' is active. Advance it with an explicit exported card hitbox before any generic reward fallback.",
                     0.95,
-                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? state.ScreenType,
+                    ResolveObserverScreen(request.Observer, state.ScreenType),
                     1400);
             }
         }
@@ -700,7 +701,7 @@ sealed partial class AutoDecisionProvider
             targetLabel + variantSuffix,
             $"Card-selection subtype '{state.ScreenType}' is active, but no exported card bounds are available. Use bounded card-grid fallback for this subtype only.",
             0.88,
-            request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? state.ScreenType,
+            ResolveObserverScreen(request.Observer, state.ScreenType),
             1400,
             true,
             null);
@@ -799,7 +800,7 @@ sealed partial class AutoDecisionProvider
                 "claim reward item",
                 $"Reward choice '{rewardChoice.Label}' is explicitly visible. Claim it before using any proceed or map fallback.",
                 0.93,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                ResolveObserverScreen(request.Observer, "rewards"),
                 1400);
         }
 
@@ -818,7 +819,7 @@ sealed partial class AutoDecisionProvider
                 IsSkipLikeLabel(proceedChoice.Label) ? "reward skip" : "proceed after resolving rewards",
                 $"Reward proceed choice '{proceedChoice.Label}' is explicitly visible. Use it before any screenshot-derived map fallback.",
                 0.92,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                ResolveObserverScreen(request.Observer, "rewards"),
                 1400);
         }
 
@@ -846,7 +847,7 @@ sealed partial class AutoDecisionProvider
                 "proceed after resolving rewards",
                 "Reward runtime metadata reports an enabled proceed button even though no explicit reward hitbox was exported. Use the standard bottom-right reward proceed anchor before any map fallback.",
                 0.88,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                ResolveObserverScreen(request.Observer, "rewards"),
                 1400,
                 true,
                 null);
@@ -883,7 +884,7 @@ sealed partial class AutoDecisionProvider
                 rewardCardTarget,
                 "A reward card row is still visible in the screenshot. Click the row before using skip, proceed, or map fallback.",
                 0.94,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                ResolveObserverScreen(request.Observer, "rewards"),
                 1400,
                 true,
                 null);
@@ -904,7 +905,7 @@ sealed partial class AutoDecisionProvider
             rewardCardTarget,
             "A claimable reward card is still visible in the screenshot. Choose it before falling back to skip, proceed, or map routing.",
             0.95,
-            request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+            ResolveObserverScreen(request.Observer, "rewards"),
             1400,
             true,
             null);
@@ -929,7 +930,7 @@ sealed partial class AutoDecisionProvider
                 "inspect overlay escape",
                 "Inspect overlay remained open after repeated dismiss clicks. Send Escape before retrying any room progression.",
                 0.84,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1000,
                 true,
                 null);
@@ -1052,7 +1053,7 @@ sealed partial class AutoDecisionProvider
                 "claim reward item",
                 $"Reward choice '{bestChoice.Label}' is explicitly visible. Claim it before using any proceed or map fallback.",
                 0.93,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                ResolveObserverScreen(request.Observer, "rewards"),
                 1400);
         }
 
@@ -1090,7 +1091,7 @@ sealed partial class AutoDecisionProvider
                 rewardCardTarget,
                 "Reward card row is explicitly visible. Open it before using skip or any screenshot-derived fallback.",
                 0.95,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                ResolveObserverScreen(request.Observer, "rewards"),
                 1400);
         }
 
@@ -1128,7 +1129,7 @@ sealed partial class AutoDecisionProvider
                 rewardCardTarget,
                 "A reward card row is still visible in the screenshot. Open it before pressing confirm or skip.",
                 0.94,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rewards",
+                ResolveObserverScreen(request.Observer, "rewards"),
                 1400,
                 true,
                 null);
@@ -1147,7 +1148,7 @@ sealed partial class AutoDecisionProvider
                     ? "Colorless reward choice is visible. Select a card from the card area instead of clicking the relic inspect icons."
                     : "Reward card choice is visible. Select a card before pressing confirm or skip.",
                 0.94,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1400,
                 true,
                 null);
@@ -1161,7 +1162,7 @@ sealed partial class AutoDecisionProvider
                 "event confirm",
                 "Card selection substate is active. Confirm the current card selection.",
                 0.92,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1400);
         }
 
@@ -1185,7 +1186,7 @@ sealed partial class AutoDecisionProvider
                 "ancient dialogue advance",
                 "Ancient event dialogue is still active. Advance it using the explicit dialogue hitbox before selecting an option.",
                 0.94,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 800);
         }
 
@@ -1221,7 +1222,7 @@ sealed partial class AutoDecisionProvider
                 GetProgressChoiceTargetLabel(bestChoice, request.Observer),
                 BuildProgressChoiceReason(bestChoice, request.Observer),
                 0.90,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1400);
         }
 
@@ -1250,7 +1251,7 @@ sealed partial class AutoDecisionProvider
                 "ancient dialogue advance",
                 "Ancient event dialogue is still active. Advance it through the explicit dialogue hitbox before selecting a reward option.",
                 0.95,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 800);
         }
 
@@ -1281,7 +1282,7 @@ sealed partial class AutoDecisionProvider
                 "event progression choice",
                 $"Ancient event option '{choice.Label}' is exported from an explicit NEventOptionButton. Prefer its real button bounds over generic title/layout pseudo-choices.",
                 0.94,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1400);
         }
 
@@ -1304,7 +1305,7 @@ sealed partial class AutoDecisionProvider
                 "ancient event completion",
                 "Ancient completion is exported from the default-focused NEventOptionButton and the control already has focus. Use ui_select (Enter) so the canonical focused control handles the release.",
                 0.96,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1400);
         }
 
@@ -1319,7 +1320,7 @@ sealed partial class AutoDecisionProvider
                     ? "Ancient completion is exported from an explicit NEventOptionButton, but the control does not currently have focus. Use a hover-primed click so NClickableControl can enter its focused mouse-release path before event release."
                     : $"Ancient event completion '{node.Label}' is still exported from an explicit NEventOptionButton proceed lane. Finish the event before handing off to map routing.",
                 AncientEventObserverSignals.CompletionUsesDefaultFocus(request.Observer) ? 0.94 : 0.95,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1400);
         }
 
@@ -1334,7 +1335,7 @@ sealed partial class AutoDecisionProvider
                     ? "Ancient completion is exported from an explicit NEventOptionButton, but the control does not currently have focus. Use a hover-primed click so NClickableControl can enter its focused mouse-release path before event release."
                     : $"Ancient event completion '{choice.Label}' is still exported from an explicit NEventOptionButton proceed lane. Finish the event before handing off to map routing.",
                 AncientEventObserverSignals.CompletionUsesDefaultFocus(request.Observer) ? 0.94 : 0.95,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1400);
         }
 

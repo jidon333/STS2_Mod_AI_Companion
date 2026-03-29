@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Globalization;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 sealed partial class AutoDecisionProvider
 {
@@ -19,7 +20,7 @@ sealed partial class AutoDecisionProvider
 
         if (CardSelectionObserverSignals.TryGetState(request.Observer) is { } cardSelectionState)
         {
-            return ($"card-selection:{cardSelectionState.ScreenType}", request.Observer.CurrentScreen);
+            return ($"card-selection:{cardSelectionState.ScreenType}", ResolveObserverCurrentScreen(request.Observer));
         }
 
         var eventScene = BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
@@ -73,17 +74,17 @@ sealed partial class AutoDecisionProvider
             return ("rest-site", request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase) ? "map" : null);
         }
 
-        if (string.Equals(request.Observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(ResolveObserverCurrentScreen(request.Observer), "combat", StringComparison.OrdinalIgnoreCase))
         {
             return ("combat", null);
         }
 
-        if (string.Equals(request.Observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(ResolveObserverCurrentScreen(request.Observer), "map", StringComparison.OrdinalIgnoreCase))
         {
             return ("map", null);
         }
 
-        return (request.Observer.CurrentScreen, request.Observer.VisibleScreen);
+        return (ResolveObserverCurrentScreen(request.Observer), ResolveObserverVisibleScreen(request.Observer));
     }
 
     private static string[] BuildExplicitRestSiteCandidateLabels(ObserverSummary observer)
@@ -386,11 +387,11 @@ sealed partial class AutoDecisionProvider
             var repeatState = GetRestSiteExplicitChoiceRepeatState(request, targetLabel);
             if (repeatState == RestSiteExplicitChoiceRepeatState.NoOpDetected)
             {
-                decision = CreateRestSitePostClickNoOpWaitDecision(request, targetLabel, request.Observer.CurrentScreen);
+                decision = CreateRestSitePostClickNoOpWaitDecision(request, targetLabel, ResolveObserverScreen(request.Observer));
             }
             else if (repeatState == RestSiteExplicitChoiceRepeatState.GraceNeeded)
             {
-                decision = CreateRestSiteGraceWaitDecision(targetLabel, request.Observer.CurrentScreen);
+                decision = CreateRestSiteGraceWaitDecision(targetLabel, ResolveObserverScreen(request.Observer));
             }
             else if (choice.HasMetadata)
             {
@@ -412,7 +413,7 @@ sealed partial class AutoDecisionProvider
                         targetLabel,
                         BuildRestSiteChoiceReason(targetLabel, currentHp, maxHp),
                         0.92,
-                        request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                        ResolveObserverScreen(request.Observer, "map"),
                         1400);
                 }
             }
@@ -448,7 +449,7 @@ sealed partial class AutoDecisionProvider
                 choice.TargetLabel,
                 BuildRestSiteChoiceReason(choice.TargetLabel, currentHp, maxHp),
                 0.92,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                ResolveObserverScreen(request.Observer, "map"),
                 1400);
         }
 
@@ -939,7 +940,7 @@ sealed partial class AutoDecisionProvider
                     "treasure overlay back",
                     "Treasure inspect overlay is foreground-visible. Close it before retrying any chest, relic-holder, or proceed action.",
                     0.98,
-                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                    ResolveObserverScreen(request.Observer, "map"),
                     1200);
             }
 
@@ -957,7 +958,7 @@ sealed partial class AutoDecisionProvider
                     "treasure chest",
                     "Treasure room authority is active. Open the chest before any relic holder or proceed action.",
                     0.98,
-                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                    ResolveObserverScreen(request.Observer, "map"),
                     1500);
             }
 
@@ -979,7 +980,7 @@ sealed partial class AutoDecisionProvider
                     "treasure proceed",
                     "Treasure relic picking is finished. Use the explicit treasure proceed affordance before any map routing fallback.",
                     0.96,
-                    request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                    ResolveObserverScreen(request.Observer, "map"),
                     1400);
             }
         }
@@ -998,7 +999,7 @@ sealed partial class AutoDecisionProvider
                 "treasure relic holder",
                 "Treasure chest is open and proceed is not yet authoritative. Click the explicit treasure relic holder, not a top-bar inventory relic icon or map node.",
                 0.97,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "map",
+                ResolveObserverScreen(request.Observer, "map"),
                 1500);
         }
 
@@ -1078,7 +1079,7 @@ sealed partial class AutoDecisionProvider
                 "rest site: smith confirm",
                 "Rest site smith confirm is runtime-visible. Confirm the selected upgrade instead of repeating the smith option click.",
                 0.95,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "upgrade",
+                ResolveObserverScreen(request.Observer, "upgrade"),
                 1400);
         }
 
@@ -1094,7 +1095,7 @@ sealed partial class AutoDecisionProvider
                 "rest site: smith card",
                 "Rest site smith grid is runtime-visible. Select an exported upgrade card hitbox instead of relying on screenshot-only inference.",
                 0.94,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "upgrade",
+                ResolveObserverScreen(request.Observer, "upgrade"),
                 1400);
         }
 
@@ -1184,7 +1185,7 @@ sealed partial class AutoDecisionProvider
                 "visible proceed",
                 "Rest-site post-selection proceed is runtime-visible. Advance the room flow before attempting any map routing.",
                 0.96,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "rest-site",
+                ResolveObserverScreen(request.Observer, "rest-site"),
                 1400);
         }
 
@@ -1210,7 +1211,7 @@ sealed partial class AutoDecisionProvider
                 "visible proceed",
                 "Explicit event proceed is exported from EventOption.IsProceed authority. Advance the event before any map fallback.",
                 0.95,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1400);
         }
 
@@ -1225,7 +1226,7 @@ sealed partial class AutoDecisionProvider
                 "visible proceed",
                 "Explicit event proceed is exported from EventOption.IsProceed authority. Advance the event before any map fallback.",
                 0.95,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1400);
         }
 
@@ -1302,7 +1303,7 @@ sealed partial class AutoDecisionProvider
             normalizedX,
             normalizedY,
             "visible map advance",
-            $"Visible map is present while logical flow remains '{request.Observer.CurrentScreen}'. Advance from the red current-node arrow using screenshot-derived positioning (attempt {attempt + 1}).",
+            $"Visible map is present while logical flow remains '{ResolveObserverCurrentScreen(request.Observer) ?? "unknown"}'. Advance from the red current-node arrow using screenshot-derived positioning (attempt {attempt + 1}).",
             0.78,
             "map",
             1500,
@@ -1348,7 +1349,7 @@ sealed partial class AutoDecisionProvider
                 "hidden overlay close",
                 "Overlay controls remain active in the room state even though no central panel is visible. Retry backdrop dismissal before progressing.",
                 0.72,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1200,
                 true,
                 null);
@@ -1363,7 +1364,7 @@ sealed partial class AutoDecisionProvider
             "hidden overlay close",
             "Overlay controls remain active behind the visible room. Send escape/cancel before trying to progress.",
             0.84,
-            request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+            ResolveObserverScreen(request.Observer, "event"),
             1000,
             true,
             null);
@@ -1399,7 +1400,7 @@ sealed partial class AutoDecisionProvider
                 "overlay close",
                 "Overlay remains open after repeated dismiss attempts. Send escape before trying to progress again.",
                 0.72,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1200,
                 true,
                 null);
@@ -1416,7 +1417,7 @@ sealed partial class AutoDecisionProvider
                 "overlay back",
                 "An inspect overlay is present above the room flow. Close it via the visible back arrow before trying to progress.",
                 0.93,
-                request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+                ResolveObserverScreen(request.Observer, "event"),
                 1200,
                 true,
                 null);
@@ -1431,7 +1432,7 @@ sealed partial class AutoDecisionProvider
             "overlay backdrop close",
             "A centered inspect overlay is visible without a dedicated back arrow. Click the dark backdrop to dismiss it before trying to progress.",
             0.88,
-            request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "event",
+            ResolveObserverScreen(request.Observer, "event"),
             1200,
             true,
             null);
@@ -1474,8 +1475,7 @@ sealed partial class AutoDecisionProvider
 
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
         return mapOverlayState.ForegroundVisible
-               || string.Equals(request.Observer.CurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(request.Observer.VisibleScreen, "map", StringComparison.OrdinalIgnoreCase)
+               || MatchesControlFlowScreen(request.Observer, "map")
                || request.SceneSignature.Contains("substate:map-transition", StringComparison.OrdinalIgnoreCase)
                || request.SceneSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase)
                || request.SceneSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase)

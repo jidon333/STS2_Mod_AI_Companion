@@ -2,9 +2,46 @@ using System.Drawing;
 using System.Globalization;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 sealed partial class AutoDecisionProvider
 {
+    private static string ResolveObserverScreen(ObserverSummary observer, string fallback)
+        => DisplayControlFlowScreen(observer) ?? fallback;
+
+    private static string? ResolveObserverScreen(ObserverSummary observer)
+        => DisplayControlFlowScreen(observer);
+
+    private static string ResolveObserverScreen(ObserverState observer, string fallback)
+        => DisplayControlFlowScreen(observer) ?? fallback;
+
+    private static string? ResolveObserverScreen(ObserverState observer)
+        => DisplayControlFlowScreen(observer);
+
+    private static string ResolveObserverCurrentScreen(ObserverSummary observer, string fallback)
+        => ControlFlowCurrentScreen(observer) ?? fallback;
+
+    private static string? ResolveObserverCurrentScreen(ObserverSummary observer)
+        => ControlFlowCurrentScreen(observer);
+
+    private static string ResolveObserverCurrentScreen(ObserverState observer, string fallback)
+        => ControlFlowCurrentScreen(observer) ?? fallback;
+
+    private static string? ResolveObserverCurrentScreen(ObserverState observer)
+        => ControlFlowCurrentScreen(observer);
+
+    private static string ResolveObserverVisibleScreen(ObserverSummary observer, string fallback)
+        => ControlFlowVisibleScreen(observer) ?? fallback;
+
+    private static string? ResolveObserverVisibleScreen(ObserverSummary observer)
+        => ControlFlowVisibleScreen(observer);
+
+    private static string ResolveObserverVisibleScreen(ObserverState observer, string fallback)
+        => ControlFlowVisibleScreen(observer) ?? fallback;
+
+    private static string? ResolveObserverVisibleScreen(ObserverState observer)
+        => ControlFlowVisibleScreen(observer);
+
     private static GuiSmokeStepDecision CreateClickDecisionFromNode(GuiSmokeStepRequest request, ObserverActionNode node, string targetLabel)
     {
         if (!TryParseNodeBounds(node.ScreenBounds, out var bounds))
@@ -284,13 +321,13 @@ sealed partial class AutoDecisionProvider
         var waitMs = allowFastForegroundWait && ShouldUseFastNonCombatForegroundWait(request)
             ? 400
             : 2000;
-        return CreateWaitDecision(reason, request.Observer.CurrentScreen, waitMs);
+        return CreateWaitDecision(reason, ResolveObserverScreen(request.Observer), waitMs);
     }
 
     private static bool ShouldUseFastNonCombatForegroundWait(GuiSmokeStepRequest request)
     {
-        if (request.Observer.SceneReady == false
-            || !string.Equals(request.Observer.SceneStability, "stable", StringComparison.OrdinalIgnoreCase))
+        if (ControlFlowSceneReady(request.Observer) == false
+            || !string.Equals(ControlFlowSceneStability(request.Observer), "stable", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
