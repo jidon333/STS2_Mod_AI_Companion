@@ -701,6 +701,70 @@ internal static partial class Program
                 && waitPostMapNodeShopPhase == GuiSmokePhase.HandleShop,
                 "WaitPostMapNodeRoom should reopen shop handling when the destination room is shop.");
 
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.WaitPostMapNodeRoom,
+                    new ObserverState(
+                        new ObserverSummary(
+                            "rewards",
+                            "rewards",
+                            false,
+                            DateTimeOffset.UtcNow,
+                            null,
+                            true,
+                            "reward",
+                            "stable",
+                            null,
+                            "Monster",
+                            "reward",
+                            80,
+                            80,
+                            null,
+                            new[] { "11 골드", "넘기기" },
+                            Array.Empty<string>(),
+                            new[]
+                            {
+                                new ObserverActionNode("reward-item:0", "reward-item", "11 골드", "758,374,402,86", true),
+                                new ObserverActionNode("reward-proceed:0", "proceed", "넘기기", "1583,764,269,108", true),
+                            },
+                            new[]
+                            {
+                                new ObserverChoice("choice", "11 골드", "758,374,402,86"),
+                                new ObserverChoice("choice", "넘기기", "1583,764,269,108"),
+                            },
+                            Array.Empty<ObservedCombatHandCard>())
+                        {
+                            PublishedCurrentScreen = "rewards",
+                            PublishedVisibleScreen = "rewards",
+                            PublishedSceneReady = true,
+                            PublishedSceneAuthority = "reward",
+                            PublishedSceneStability = "stable",
+                            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["rewardScreenDetected"] = "true",
+                                ["rewardScreenVisible"] = "true",
+                                ["rewardForegroundOwned"] = "true",
+                                ["rewardTeardownInProgress"] = "false",
+                                ["rewardIsCurrentActiveScreen"] = "true",
+                                ["rewardIsTopOverlay"] = "true",
+                                ["rewardProceedVisible"] = "true",
+                                ["rewardProceedEnabled"] = "true",
+                                ["rewardVisibleButtonCount"] = "1",
+                                ["rewardEnabledButtonCount"] = "1",
+                                ["choiceExtractorPath"] = "reward",
+                            },
+                        },
+                        null,
+                        null,
+                        null),
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitPostMapNodeLogger,
+                    13,
+                    true,
+                    out var waitPostMapNodeRewardPhase)
+                && waitPostMapNodeRewardPhase == GuiSmokePhase.HandleRewards,
+                "WaitPostMapNodeRoom should reopen reward handling when the destination room is rewards.");
+
             ObserverState CreateShopObserver(
                 bool inventoryOpen,
                 bool merchantButtonVisible = false,
