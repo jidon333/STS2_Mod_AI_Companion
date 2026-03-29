@@ -25,7 +25,7 @@ sealed record ObserverSummary(
 
     public string? RawCurrentScreen { get; init; }
 
-    public string? RawObservedScreen => RawCurrentScreen;
+    public string? RawObservedScreen { get; init; }
 
     public string? PublishedCurrentScreen { get; init; }
 
@@ -39,11 +39,11 @@ sealed record ObserverSummary(
 
     public string? CompatibilityCurrentScreen { get; init; }
 
-    public string? CompatibilityLogicalScreen => CompatibilityCurrentScreen;
+    public string? CompatibilityLogicalScreen { get; init; }
 
     public string? CompatibilityVisibleScreen { get; init; }
 
-    public string? CompatibilityVisibleObservedScreen => CompatibilityVisibleScreen;
+    public string? CompatibilityVisibleObservedScreen { get; init; }
 
     public bool? CompatibilitySceneReady { get; init; }
 
@@ -191,25 +191,25 @@ sealed record ObserverState(
 {
     public string? CurrentScreen => Summary.CurrentScreen;
     public string? VisibleScreen => Summary.VisibleScreen;
-    public string? RawCurrentScreen => Summary.RawCurrentScreen ?? Summary.CurrentScreen;
-    public string? RawObservedScreen => Summary.RawObservedScreen ?? Summary.RawCurrentScreen ?? Summary.CurrentScreen;
-    public string? PublishedCurrentScreen => Summary.PublishedCurrentScreen ?? Summary.CurrentScreen;
-    public string? PublishedVisibleScreen => Summary.PublishedVisibleScreen ?? Summary.VisibleScreen;
-    public bool? PublishedSceneReady => Summary.PublishedSceneReady ?? Summary.SceneReady;
-    public string? PublishedSceneAuthority => Summary.PublishedSceneAuthority ?? Summary.SceneAuthority;
-    public string? PublishedSceneStability => Summary.PublishedSceneStability ?? Summary.SceneStability;
-    public string? CompatibilityCurrentScreen => Summary.CompatibilityCurrentScreen ?? Summary.CurrentScreen;
-    public string? CompatibilityLogicalScreen => Summary.CompatibilityLogicalScreen ?? Summary.CompatibilityCurrentScreen ?? Summary.CurrentScreen;
-    public string? CompatibilityVisibleScreen => Summary.CompatibilityVisibleScreen ?? Summary.VisibleScreen;
-    public string? CompatibilityVisibleObservedScreen => Summary.CompatibilityVisibleObservedScreen ?? Summary.CompatibilityVisibleScreen ?? Summary.VisibleScreen;
+    public string? RawCurrentScreen => Summary.RawCurrentScreen;
+    public string? RawObservedScreen => Summary.RawObservedScreen;
+    public string? PublishedCurrentScreen => Summary.PublishedCurrentScreen;
+    public string? PublishedVisibleScreen => Summary.PublishedVisibleScreen;
+    public bool? PublishedSceneReady => Summary.PublishedSceneReady;
+    public string? PublishedSceneAuthority => Summary.PublishedSceneAuthority;
+    public string? PublishedSceneStability => Summary.PublishedSceneStability;
+    public string? CompatibilityCurrentScreen => Summary.CompatibilityCurrentScreen;
+    public string? CompatibilityLogicalScreen => Summary.CompatibilityLogicalScreen;
+    public string? CompatibilityVisibleScreen => Summary.CompatibilityVisibleScreen;
+    public string? CompatibilityVisibleObservedScreen => Summary.CompatibilityVisibleObservedScreen;
     public bool? InCombat => Summary.InCombat;
     public string? InventoryId => Summary.InventoryId;
     public bool? SceneReady => Summary.SceneReady;
     public string? SceneAuthority => Summary.SceneAuthority;
     public string? SceneStability => Summary.SceneStability;
-    public bool? CompatibilitySceneReady => Summary.CompatibilitySceneReady ?? Summary.SceneReady;
-    public string? CompatibilitySceneAuthority => Summary.CompatibilitySceneAuthority ?? Summary.SceneAuthority;
-    public string? CompatibilitySceneStability => Summary.CompatibilitySceneStability ?? Summary.SceneStability;
+    public bool? CompatibilitySceneReady => Summary.CompatibilitySceneReady;
+    public string? CompatibilitySceneAuthority => Summary.CompatibilitySceneAuthority;
+    public string? CompatibilitySceneStability => Summary.CompatibilitySceneStability;
     public int? PlayerEnergy => Summary.PlayerEnergy;
     public IReadOnlyList<string> CurrentChoices => Summary.CurrentChoices;
     public IReadOnlyList<string> LastEventsTail => Summary.LastEventsTail;

@@ -2,77 +2,149 @@ using System;
 
 static class ObserverScreenProvenance
 {
+    public static string? StrictDirectCurrentScreen(ObserverSummary observer)
+        => observer.RawCurrentScreen;
+
+    public static string? StrictDirectCurrentScreen(ObserverState observer)
+        => observer.RawCurrentScreen;
+
+    public static string? StrictDirectObservedScreen(ObserverSummary observer)
+        => observer.RawObservedScreen;
+
+    public static string? StrictDirectObservedScreen(ObserverState observer)
+        => observer.RawObservedScreen;
+
+    public static string? StrictPublishedCurrentScreen(ObserverSummary observer)
+        => observer.PublishedCurrentScreen;
+
+    public static string? StrictPublishedCurrentScreen(ObserverState observer)
+        => observer.PublishedCurrentScreen;
+
+    public static string? StrictPublishedVisibleScreen(ObserverSummary observer)
+        => observer.PublishedVisibleScreen;
+
+    public static string? StrictPublishedVisibleScreen(ObserverState observer)
+        => observer.PublishedVisibleScreen;
+
+    public static bool? StrictPublishedSceneReady(ObserverSummary observer)
+        => observer.PublishedSceneReady;
+
+    public static bool? StrictPublishedSceneReady(ObserverState observer)
+        => observer.PublishedSceneReady;
+
+    public static string? StrictPublishedSceneAuthority(ObserverSummary observer)
+        => observer.PublishedSceneAuthority;
+
+    public static string? StrictPublishedSceneAuthority(ObserverState observer)
+        => observer.PublishedSceneAuthority;
+
+    public static string? StrictPublishedSceneStability(ObserverSummary observer)
+        => observer.PublishedSceneStability;
+
+    public static string? StrictPublishedSceneStability(ObserverState observer)
+        => observer.PublishedSceneStability;
+
+    public static string? StrictCompatibilityCurrentScreen(ObserverSummary observer)
+        => observer.CompatibilityCurrentScreen ?? observer.CompatibilityLogicalScreen;
+
+    public static string? StrictCompatibilityCurrentScreen(ObserverState observer)
+        => observer.CompatibilityCurrentScreen ?? observer.CompatibilityLogicalScreen;
+
+    public static string? StrictCompatibilityVisibleScreen(ObserverSummary observer)
+        => observer.CompatibilityVisibleScreen ?? observer.CompatibilityVisibleObservedScreen;
+
+    public static string? StrictCompatibilityVisibleScreen(ObserverState observer)
+        => observer.CompatibilityVisibleScreen ?? observer.CompatibilityVisibleObservedScreen;
+
+    public static bool? StrictCompatibilitySceneReady(ObserverSummary observer)
+        => observer.CompatibilitySceneReady;
+
+    public static bool? StrictCompatibilitySceneReady(ObserverState observer)
+        => observer.CompatibilitySceneReady;
+
+    public static string? StrictCompatibilitySceneAuthority(ObserverSummary observer)
+        => observer.CompatibilitySceneAuthority;
+
+    public static string? StrictCompatibilitySceneAuthority(ObserverState observer)
+        => observer.CompatibilitySceneAuthority;
+
+    public static string? StrictCompatibilitySceneStability(ObserverSummary observer)
+        => observer.CompatibilitySceneStability;
+
+    public static string? StrictCompatibilitySceneStability(ObserverState observer)
+        => observer.CompatibilitySceneStability;
+
     public static string? DirectCurrentScreen(ObserverSummary observer)
-        => observer.RawCurrentScreen ?? observer.CurrentScreen;
+        => StrictDirectCurrentScreen(observer) ?? observer.CurrentScreen;
 
     public static string? DirectCurrentScreen(ObserverState observer)
-        => observer.RawCurrentScreen ?? observer.CurrentScreen;
+        => StrictDirectCurrentScreen(observer) ?? observer.CurrentScreen;
 
     public static string? DirectObservedScreen(ObserverSummary observer)
-        => observer.RawObservedScreen ?? observer.RawCurrentScreen ?? observer.CurrentScreen;
+        => StrictDirectObservedScreen(observer) ?? StrictDirectCurrentScreen(observer) ?? observer.CurrentScreen;
 
     public static string? DirectObservedScreen(ObserverState observer)
-        => observer.RawObservedScreen ?? observer.RawCurrentScreen ?? observer.CurrentScreen;
+        => StrictDirectObservedScreen(observer) ?? StrictDirectCurrentScreen(observer) ?? observer.CurrentScreen;
 
     public static string? PublishedCurrentScreen(ObserverSummary observer)
-        => observer.PublishedCurrentScreen ?? observer.CurrentScreen;
+        => StrictPublishedCurrentScreen(observer) ?? observer.CurrentScreen;
 
     public static string? PublishedCurrentScreen(ObserverState observer)
-        => observer.PublishedCurrentScreen ?? observer.CurrentScreen;
+        => StrictPublishedCurrentScreen(observer) ?? observer.CurrentScreen;
 
     public static string? PublishedVisibleScreen(ObserverSummary observer)
-        => observer.PublishedVisibleScreen ?? observer.VisibleScreen;
+        => StrictPublishedVisibleScreen(observer) ?? observer.VisibleScreen;
 
     public static string? PublishedVisibleScreen(ObserverState observer)
-        => observer.PublishedVisibleScreen ?? observer.VisibleScreen;
+        => StrictPublishedVisibleScreen(observer) ?? observer.VisibleScreen;
 
     public static bool? PublishedSceneReady(ObserverSummary observer)
-        => observer.PublishedSceneReady ?? observer.SceneReady;
+        => StrictPublishedSceneReady(observer) ?? observer.SceneReady;
 
     public static bool? PublishedSceneReady(ObserverState observer)
-        => observer.PublishedSceneReady ?? observer.SceneReady;
+        => StrictPublishedSceneReady(observer) ?? observer.SceneReady;
 
     public static string? PublishedSceneAuthority(ObserverSummary observer)
-        => observer.PublishedSceneAuthority ?? observer.SceneAuthority;
+        => StrictPublishedSceneAuthority(observer) ?? observer.SceneAuthority;
 
     public static string? PublishedSceneAuthority(ObserverState observer)
-        => observer.PublishedSceneAuthority ?? observer.SceneAuthority;
+        => StrictPublishedSceneAuthority(observer) ?? observer.SceneAuthority;
 
     public static string? PublishedSceneStability(ObserverSummary observer)
-        => observer.PublishedSceneStability ?? observer.SceneStability;
+        => StrictPublishedSceneStability(observer) ?? observer.SceneStability;
 
     public static string? PublishedSceneStability(ObserverState observer)
-        => observer.PublishedSceneStability ?? observer.SceneStability;
+        => StrictPublishedSceneStability(observer) ?? observer.SceneStability;
 
     public static string? CompatibilityCurrentScreen(ObserverSummary observer)
-        => observer.CompatibilityCurrentScreen ?? observer.CurrentScreen;
+        => StrictCompatibilityCurrentScreen(observer) ?? observer.CurrentScreen;
 
     public static string? CompatibilityCurrentScreen(ObserverState observer)
-        => observer.CompatibilityCurrentScreen ?? observer.CurrentScreen;
+        => StrictCompatibilityCurrentScreen(observer) ?? observer.CurrentScreen;
 
     public static string? CompatibilityVisibleScreen(ObserverSummary observer)
-        => observer.CompatibilityVisibleScreen ?? observer.VisibleScreen;
+        => StrictCompatibilityVisibleScreen(observer) ?? observer.VisibleScreen;
 
     public static string? CompatibilityVisibleScreen(ObserverState observer)
-        => observer.CompatibilityVisibleScreen ?? observer.VisibleScreen;
+        => StrictCompatibilityVisibleScreen(observer) ?? observer.VisibleScreen;
 
     public static bool? CompatibilitySceneReady(ObserverSummary observer)
-        => observer.CompatibilitySceneReady ?? observer.SceneReady;
+        => StrictCompatibilitySceneReady(observer) ?? observer.SceneReady;
 
     public static bool? CompatibilitySceneReady(ObserverState observer)
-        => observer.CompatibilitySceneReady ?? observer.SceneReady;
+        => StrictCompatibilitySceneReady(observer) ?? observer.SceneReady;
 
     public static string? CompatibilitySceneAuthority(ObserverSummary observer)
-        => observer.CompatibilitySceneAuthority ?? observer.SceneAuthority;
+        => StrictCompatibilitySceneAuthority(observer) ?? observer.SceneAuthority;
 
     public static string? CompatibilitySceneAuthority(ObserverState observer)
-        => observer.CompatibilitySceneAuthority ?? observer.SceneAuthority;
+        => StrictCompatibilitySceneAuthority(observer) ?? observer.SceneAuthority;
 
     public static string? CompatibilitySceneStability(ObserverSummary observer)
-        => observer.CompatibilitySceneStability ?? observer.SceneStability;
+        => StrictCompatibilitySceneStability(observer) ?? observer.SceneStability;
 
     public static string? CompatibilitySceneStability(ObserverState observer)
-        => observer.CompatibilitySceneStability ?? observer.SceneStability;
+        => StrictCompatibilitySceneStability(observer) ?? observer.SceneStability;
 
     public static bool MatchesCompatibilityScreen(ObserverSummary observer, string screen)
     {
@@ -111,10 +183,10 @@ static class ObserverScreenProvenance
     }
 
     public static string? DisplayScreen(ObserverSummary observer)
-        => CompatibilityCurrentScreen(observer) ?? CompatibilityVisibleScreen(observer);
+        => observer.CurrentScreen ?? observer.VisibleScreen;
 
     public static string? DisplayScreen(ObserverState observer)
-        => CompatibilityCurrentScreen(observer) ?? CompatibilityVisibleScreen(observer);
+        => observer.CurrentScreen ?? observer.VisibleScreen;
 
     public static string? DisplayPublishedScreen(ObserverSummary observer)
         => PublishedCurrentScreen(observer) ?? PublishedVisibleScreen(observer);
