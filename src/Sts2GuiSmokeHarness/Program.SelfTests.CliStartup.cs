@@ -40,6 +40,14 @@ internal static partial class Program
                 "headless",
                 StringComparison.OrdinalIgnoreCase),
             "Explicit headless provider should remain selectable.");
+        Assert(
+            IsLifecycleProofModeEnabled(
+                ParseOptions(
+                    new[]
+                    {
+                        "--lifecycle-proof-mode",
+                    })),
+            "Lifecycle proof mode flag should round-trip through CLI option parsing.");
 
         var missingHeadlessProviderCommandRejected = false;
         try

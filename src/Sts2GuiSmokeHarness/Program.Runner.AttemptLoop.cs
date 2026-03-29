@@ -151,6 +151,22 @@ internal static partial class Program
                     .ConfigureAwait(false);
             }
 
+            attemptStartedRecorded = TryRecordLifecycleProofFirstScreen(
+                options,
+                isLongRun,
+                stepIndex,
+                attemptStartedRecorded,
+                window,
+                screenshotPath,
+                sessionRoot,
+                attemptId,
+                attemptOrdinal,
+                trustStateAtStart,
+                runId,
+                isAuthoritativeFirstAttempt,
+                captureService,
+                RecordAttemptStartupStage);
+
             var (_, _, stepAnalysisContext, iterationSceneContext) = BuildIterationContext(
                 workspaceRoot,
                 phase,
@@ -376,5 +392,46 @@ internal static partial class Program
             "global timeout",
             terminalCause: "global-timeout",
             failureClass: ClassifyFailureForAttempt(phase, finalObserver, "global-timeout", launchFailed: false));
+    }
+
+    static bool TryRecordLifecycleProofFirstScreen(
+        IReadOnlyDictionary<string, string> options,
+        bool isLongRun,
+        int stepIndex,
+        bool attemptStartedRecorded,
+        WindowCaptureTarget window,
+        string screenshotPath,
+        string sessionRoot,
+        string attemptId,
+        int attemptOrdinal,
+        string trustStateAtStart,
+        string runId,
+        bool isAuthoritativeFirstAttempt,
+        ScreenCaptureService captureService,
+        Action<string, string, string?> recordAttemptStartupStage)
+    {
+        if (!isLongRun
+            || attemptStartedRecorded
+            || stepIndex != 1
+            || !IsLifecycleProofModeEnabled(options))
+        {
+            return attemptStartedRecorded;
+        }
+
+        var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
+        if (!captureResult.Succeeded)
+        {
+            LogHarness($"step={stepIndex} lifecycle proof first-screen capture failed detail={captureResult.Detail ?? captureResult.Exception?.Message ?? captureResult.FailureKind.ToString()}");
+            return attemptStartedRecorded;
+        }
+
+        if (isAuthoritativeFirstAttempt)
+        {
+            recordAttemptStartupStage("authoritative-first-screenshot-captured", "finished", screenshotPath);
+        }
+
+        LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
+        LogHarness($"step={stepIndex} lifecycle proof first-screen captured={screenshotPath}");
+        return true;
     }
 }

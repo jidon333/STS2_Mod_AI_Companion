@@ -95,7 +95,16 @@ internal static partial class Program
                          && int.TryParse(stepRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedStep)
             ? parsedStep
             : null;
-        return new CaptureFaultInjectionOptions(failureKind, scopeKind, phaseName, stepIndex);
+        int? attemptOrdinal = options.TryGetValue("--capture-fault-attempt", out var attemptRaw)
+                              && int.TryParse(attemptRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedAttempt)
+            ? parsedAttempt
+            : null;
+        return new CaptureFaultInjectionOptions(failureKind, scopeKind, phaseName, stepIndex, attemptOrdinal);
+    }
+
+    static bool IsLifecycleProofModeEnabled(IReadOnlyDictionary<string, string> options)
+    {
+        return options.ContainsKey("--lifecycle-proof-mode");
     }
 
     static string? ResolveConfigPath(IReadOnlyDictionary<string, string> options, string workspaceRoot)
@@ -232,7 +241,7 @@ internal static partial class Program
     static void WriteUsage()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--deploy-mode in-process|subprocess] [--runtime-assembly-root path] [--ffmpeg-path path] [--keep-video-on-success] [--disable-video-capture] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop] [--capture-fault-mode unusable-frame|timeout|exception] [--capture-fault-scope bootstrap|attempt] [--capture-fault-phase <GuiSmokePhase>] [--capture-fault-step n]");
+        Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--deploy-mode in-process|subprocess] [--runtime-assembly-root path] [--ffmpeg-path path] [--keep-video-on-success] [--disable-video-capture] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop] [--capture-fault-mode unusable-frame|timeout|exception] [--capture-fault-scope bootstrap|attempt] [--capture-fault-phase <GuiSmokePhase>] [--capture-fault-step n] [--capture-fault-attempt n] [--lifecycle-proof-mode]");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-run --run-root <path>");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>] [--trace] [--full-request-rebuild]");
