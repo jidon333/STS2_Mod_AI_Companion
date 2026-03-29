@@ -434,7 +434,9 @@ internal static class RuntimeSnapshotReflectionExtractor
                 .Take(96));
         // rootTypeSummary is a broad global type bag that always includes singleton managers.
         // Keep it for diagnostics, but do not let it decide the primary screen.
-        var screen = ResolveScreen(screenOverride, roots, screenCandidates);
+        var screen = string.Equals(triggerKind, "runtime-poll", StringComparison.OrdinalIgnoreCase)
+            ? ResolvePolledScreen(screenOverride, currentActiveScreenType, roots, screenCandidates)
+            : ResolveScreen(screenOverride, roots, screenCandidates);
         if (string.Equals(screen, "unknown", StringComparison.Ordinal)
             && encounter?.InCombat == true)
         {
@@ -6810,6 +6812,11 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static string InferScreen(params string?[] candidates)
     {
         var joined = string.Join(" ", candidates.Where(candidate => !string.IsNullOrWhiteSpace(candidate)));
+        if (joined.Contains("Feedback", StringComparison.OrdinalIgnoreCase))
+        {
+            return "feedback-overlay";
+        }
+
         if (joined.Contains("CharacterSelect", StringComparison.OrdinalIgnoreCase)
             || joined.Contains("NewRun", StringComparison.OrdinalIgnoreCase))
         {
@@ -6916,6 +6923,30 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return "unknown";
+    }
+
+    private static string ResolvePolledScreen(
+        string? screenOverride,
+        string? currentActiveScreenType,
+        IReadOnlyList<object> roots,
+        params string?[] screenCandidates)
+    {
+        var activeScreen = InferScreen(currentActiveScreenType);
+        if (!string.Equals(activeScreen, "unknown", StringComparison.Ordinal))
+        {
+            return activeScreen;
+        }
+
+        var explicitScreen = InferScreen(
+            TryReadString(roots, "CurrentScreen"),
+            TryReadString(roots, "Screen"),
+            TryReadString(roots, "ScreenName"));
+        if (!string.Equals(explicitScreen, "unknown", StringComparison.Ordinal))
+        {
+            return explicitScreen;
+        }
+
+        return ResolveScreen(screenOverride, roots, screenCandidates);
     }
 
     private static string? TryReadString(IEnumerable<object> roots, params string[] memberNames)

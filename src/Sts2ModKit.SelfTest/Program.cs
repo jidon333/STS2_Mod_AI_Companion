@@ -57,7 +57,7 @@ Run("runtime reflection marks ancient post-choice completion buttons explicitly"
 Run("runtime reflection exports generic event proceed semantics from EventOption.IsProceed", TestRuntimeReflectionGenericEventProceedExport, failures);
 Run("runtime reflection normalizes ancient mixed post-proceed ownership to map lane", TestRuntimeReflectionAncientMixedPostProceedOwnershipNormalization, failures);
 Run("runtime reflection keeps map owner when post-proceed map surface is pending", TestRuntimeReflectionAncientMixedPostProceedMapPending, failures);
-Run("runtime reflection separates raw current screen from observed screen", TestRuntimeReflectionSeparatesRawCurrentScreenFromObservedScreen, failures);
+Run("runtime reflection prefers direct current screen over broad observed probe", TestRuntimeReflectionPrefersDirectCurrentScreenOverBroadObservedProbe, failures);
 Run("inventory publisher preserves strict map-node source contract", TestInventoryPublisherMapNodeSourceCorrection, failures);
 Run("tracker and inventory preserve raw and compatibility screen provenance", TestTrackerAndInventoryPreserveScreenProvenance, failures);
 Run("tracker re-emits additive screen provenance aliases", TestTrackerReEmitsAdditiveScreenProvenanceAliases, failures);
@@ -75,6 +75,7 @@ Run("runtime reflection extracts combat cards from player combat state", TestRun
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
 Run("runtime reflection encounter does not override CombatManager IsInProgress false", TestRuntimeReflectionEncounterDoesNotOverrideCombatManagerFalse, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
+Run("runtime reflection prefers explicit active feedback screen over broad combat probe", TestRuntimeReflectionPrefersActiveFeedbackScreenOverBroadCombatProbe, failures);
 Run("runtime reflection does not infer combat from global startup type bags", TestRuntimeReflectionDoesNotInferCombatFromGlobalStartupTypeBag, failures);
 Run("runtime reflection exports combat play state metadata", TestRuntimeReflectionCombatMetadataExport, failures);
 Run("runtime reflection capture clears combat slot and success inference", TestRuntimeReflectionCaptureClearsCombatMetadata, failures);
@@ -2205,7 +2206,7 @@ static void TestInventoryPublisherMapNodeSourceCorrection()
     Assert(restNode.SemanticHints.Contains("source:map-choice", StringComparer.OrdinalIgnoreCase), "Real map points should retain explicit map-choice source hints.");
 }
 
-static void TestRuntimeReflectionSeparatesRawCurrentScreenFromObservedScreen()
+static void TestRuntimeReflectionPrefersDirectCurrentScreenOverBroadObservedProbe()
 {
     var observation = BuildRuntimeObservationForSelfTest(
         new object[]
@@ -2220,9 +2221,9 @@ static void TestRuntimeReflectionSeparatesRawCurrentScreenFromObservedScreen()
     Assert(observation.Meta.TryGetValue("rawCurrentScreen", out var rawCurrentScreen)
            && string.Equals(rawCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Runtime reflection should export rawCurrentScreen from direct runtime state.");
     Assert(observation.Meta.TryGetValue("rawObservedScreen", out var rawObservedScreen)
-           && string.Equals(rawObservedScreen, "map", StringComparison.OrdinalIgnoreCase), "Runtime reflection should preserve the observed screen separately from rawCurrentScreen.");
+           && string.Equals(rawObservedScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Runtime-poll screen resolution should not let a broad observed probe override the direct current screen.");
     Assert(observation.Meta.TryGetValue("publishedCurrentScreen", out var publishedCurrentScreen)
-           && string.Equals(publishedCurrentScreen, "map", StringComparison.OrdinalIgnoreCase), "Runtime reflection should export publishedCurrentScreen from the observed screen token.");
+           && string.Equals(publishedCurrentScreen, "rewards", StringComparison.OrdinalIgnoreCase), "Runtime reflection should publish the direct current screen when it conflicts with a broad observed probe.");
 }
 
 static void TestTrackerAndInventoryPreserveScreenProvenance()
@@ -2891,6 +2892,32 @@ static void TestRuntimeReflectionDoesNotInferCombatFromGlobalStartupTypeBag()
     var snapshot = tracker.Apply(observation).Snapshot;
     Assert(string.Equals(snapshot.CurrentScreen, "unknown", StringComparison.OrdinalIgnoreCase), "Tracker should not seed combat from a startup runtime-poll that lacks authoritative combat or foreground screen truth.");
     Assert(snapshot.Encounter?.InCombat != true, "Startup runtime-poll should not be treated as in-combat when CombatManager.IsInProgress is false.");
+}
+
+static void TestRuntimeReflectionPrefersActiveFeedbackScreenOverBroadCombatProbe()
+{
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeCombatManagerState
+            {
+                IsInProgress = false,
+                IsPlayPhase = false,
+                IsEnemyTurnStarted = false,
+                PlayerActionsDisabled = false,
+                EndingPlayerTurnPhaseOne = false,
+                EndingPlayerTurnPhaseTwo = false,
+            },
+            new FakeActiveScreenContext { CurrentScreen = new FakeFeedbackScreen() },
+        },
+        "combat");
+
+    Assert(string.Equals(observation.Screen, "feedback-overlay", StringComparison.OrdinalIgnoreCase), $"Runtime reflection should prefer the explicit feedback overlay over a broad combat probe, got {observation.Screen}.");
+    Assert(observation.Meta.TryGetValue("publishedCurrentScreen", out var publishedCurrentScreen)
+           && string.Equals(publishedCurrentScreen, "feedback-overlay", StringComparison.OrdinalIgnoreCase), "Runtime reflection should publish feedback-overlay when ActiveScreenContext resolves the feedback screen.");
+    Assert(observation.Meta.TryGetValue("rawCurrentActiveScreenType", out var currentActiveScreenType)
+           && currentActiveScreenType.Contains("Feedback", StringComparison.OrdinalIgnoreCase), "Runtime reflection should surface the feedback active screen type for diagnostics.");
+    Assert(observation.Encounter?.InCombat != true, "Feedback overlay startup should not be treated as in-combat when CombatManager.IsInProgress is false.");
 }
 
 static void TestRuntimeReflectionCombatMetadataExport()
@@ -5492,6 +5519,10 @@ file sealed class FakeCardModel
     public string? Id { get; init; }
 
     public string? Name { get; init; }
+}
+
+file sealed class FakeFeedbackScreen
+{
 }
 
 file sealed class FakeCardCreationResult
