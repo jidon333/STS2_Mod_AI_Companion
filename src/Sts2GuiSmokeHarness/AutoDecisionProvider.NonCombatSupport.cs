@@ -308,16 +308,12 @@ sealed partial class AutoDecisionProvider
         string? selectedOptionId)
     {
         var targetLabel = choice.TargetLabel;
-        var rawBounds = choice.HasMetadata
-            ? choice.Choice?.ScreenBounds
-            : choice.Choice?.ScreenBounds ?? choice.ActionNode?.ScreenBounds;
-        var boundsSource = choice.HasMetadata
-            ? !string.IsNullOrWhiteSpace(choice.Choice?.ScreenBounds) ? "observer-rest-site-choice" : null
-            : !string.IsNullOrWhiteSpace(choice.Choice?.ScreenBounds)
-                ? "observer-rest-site-choice-legacy"
-                : !string.IsNullOrWhiteSpace(choice.ActionNode?.ScreenBounds)
-                    ? "observer-rest-site-node-legacy"
-                    : "fixed-rest-site-fallback";
+        var rawBounds = choice.Choice?.ScreenBounds ?? choice.ActionNode?.ScreenBounds;
+        var boundsSource = !string.IsNullOrWhiteSpace(choice.Choice?.ScreenBounds)
+            ? choice.HasMetadata ? "observer-rest-site-choice" : "observer-rest-site-choice-legacy"
+            : !string.IsNullOrWhiteSpace(choice.ActionNode?.ScreenBounds)
+                ? choice.HasMetadata ? "observer-rest-site-node" : "observer-rest-site-node-legacy"
+                : null;
         var rejectReason = "no-rest-site-decision";
         GuiSmokeStepDecision? decision = null;
 
@@ -373,7 +369,7 @@ sealed partial class AutoDecisionProvider
             {
                 decision = TryCreateLegacyRestSiteDecision(request, choice);
                 rejectReason = decision is null
-                    ? "legacy-rest-site-choice-unavailable"
+                    ? "legacy-rest-site-choice-without-bounds"
                     : "legacy-rest-site-choice-selected";
             }
         }
@@ -412,26 +408,7 @@ sealed partial class AutoDecisionProvider
             return CreateClickDecisionFromNode(request, choice.ActionNode, choice.TargetLabel);
         }
 
-        var normalizedX = choice.TargetLabel switch
-        {
-            "rest site: rest" => 0.405,
-            "rest site: smith" => 0.575,
-            "rest site: hatch" => 0.745,
-            _ => 0.575,
-        };
-        return new GuiSmokeStepDecision(
-            "act",
-            "click",
-            null,
-            normalizedX,
-            0.305,
-            choice.TargetLabel,
-            BuildRestSiteChoiceReason(choice.TargetLabel, currentHp, maxHp),
-            0.86,
-            "map",
-            1500,
-            true,
-            null);
+        return null;
     }
 
     private static double GetRestSiteCandidateScore(string optionId)
@@ -1049,29 +1026,6 @@ sealed partial class AutoDecisionProvider
         if (RestSiteObserverSignals.HasExportedSmithUpgradeChoices(request.Observer))
         {
             return null;
-        }
-
-        var lastUpgradeAction = request.History
-            .Where(entry =>
-                string.Equals(entry.TargetLabel, "rest site: smith card", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(entry.TargetLabel, "rest site: smith confirm", StringComparison.OrdinalIgnoreCase))
-            .LastOrDefault();
-        if (lastUpgradeAction is not null
-            && string.Equals(lastUpgradeAction.TargetLabel, "rest site: smith card", StringComparison.OrdinalIgnoreCase))
-        {
-            return new GuiSmokeStepDecision(
-                "act",
-                "click",
-                null,
-                0.949,
-                0.716,
-                "rest site: smith confirm",
-                "Rest site upgrade comparison is visible. Click the right-side confirm button after selecting the card.",
-                0.94,
-                "map",
-                1400,
-                true,
-                null);
         }
 
         var analysis = AutoRestSiteCardGridAnalyzer.Analyze(request.ScreenshotPath);

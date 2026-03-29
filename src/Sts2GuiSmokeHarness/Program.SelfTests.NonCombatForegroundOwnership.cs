@@ -665,6 +665,24 @@ internal static partial class Program
                        && string.Equals(candidate.RejectReason, "missing-hitbox-for-explicit-choice", StringComparison.OrdinalIgnoreCase)),
                 "Authoritative rest-site options without hitboxes should wait and record missing-hitbox-for-explicit-choice instead of using fixed coordinates.");
 
+            var legacyNoBoundsSummary = restSiteMetadataSummary with
+            {
+                Choices = Array.Empty<ObserverChoice>(),
+                ActionNodes = Array.Empty<ObserverActionNode>(),
+                CurrentChoices = new[] { "Smith" },
+            };
+            var legacyNoBoundsRequest = restSiteMetadataRequest with
+            {
+                Observer = legacyNoBoundsSummary,
+                AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(legacyNoBoundsSummary, null, null, null)),
+            };
+            var legacyNoBoundsAnalysis = AutoDecisionProvider.Analyze(legacyNoBoundsRequest);
+            Assert(string.Equals(legacyNoBoundsAnalysis.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && legacyNoBoundsAnalysis.Candidates.Any(candidate =>
+                       string.Equals(candidate.Label, "click rest site choice", StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(candidate.RejectReason, "legacy-rest-site-choice-without-bounds", StringComparison.OrdinalIgnoreCase)),
+                "Legacy rest-site fallback should wait when no actionable observer bounds exist instead of guessing fixed smith/rest coordinates.");
+
             var fingerprint = RestSiteChoiceSupport.BuildExplicitChoiceFingerprint(restSiteMetadataSummary);
             var firstSmithClick = new GuiSmokeHistoryEntry(
                 GuiSmokePhase.ChooseFirstNode.ToString(),
@@ -825,6 +843,28 @@ internal static partial class Program
             Assert(GuiSmokeNonCombatContractSupport.TryMapNonCombatAllowedAction(disabledConfirmSmithUpgradeDecision, out var disabledConfirmSmithUpgradeAction)
                    && string.Equals(disabledConfirmSmithUpgradeAction, "click smith card", StringComparison.OrdinalIgnoreCase),
                 $"Smith-grid selection should map to click smith card instead of the broader rest-site choice lane. actual={disabledConfirmSmithUpgradeAction ?? "null"}");
+
+            var missingConfirmAfterSmithSummary = smithUpgradeSummary with
+            {
+                Choices = Array.Empty<ObserverChoice>(),
+                CurrentChoices = new[] { "Smith Confirm" },
+            };
+            var missingConfirmAfterSmithRequest = restSiteMetadataRequest with
+            {
+                Observer = missingConfirmAfterSmithSummary,
+                AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(missingConfirmAfterSmithSummary, null, null, null)),
+                History = new[]
+                {
+                    new GuiSmokeHistoryEntry(
+                        GuiSmokePhase.ChooseFirstNode.ToString(),
+                        "click",
+                        "rest site: smith card",
+                        DateTimeOffset.UtcNow.AddSeconds(-1)),
+                },
+            };
+            var missingConfirmAfterSmithDecision = AutoDecisionProvider.Decide(missingConfirmAfterSmithRequest);
+            Assert(string.Equals(missingConfirmAfterSmithDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+                "Rest-site smith confirm should wait when no exported confirm/card hitbox is present instead of clicking a fixed confirm coordinate.");
 
             var restSiteProceedSummary = restSiteMetadataSummary with
             {
