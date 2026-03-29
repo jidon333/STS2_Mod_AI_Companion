@@ -205,6 +205,8 @@ flowchart TD
 
 ## 7. Related docs
 
+- observer/export/bridge layering:
+  - [GUI_SMOKE_HARNESS_OBSERVER_STACK_KO.md](./GUI_SMOKE_HARNESS_OBSERVER_STACK_KO.md)
 - glossary:
   - [GUI_SMOKE_HARNESS_GLOSSARY_KO.md](./GUI_SMOKE_HARNESS_GLOSSARY_KO.md)
 - human-readable before/after comparison:
