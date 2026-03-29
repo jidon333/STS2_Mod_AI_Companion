@@ -6,11 +6,11 @@
 
 ## 날짜
 
-- 2026-03-28
+- 2026-03-29
 
 ## 현재 마일스톤 위치
 
-- 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` 평가 + `M9 observer-first speed recovery` 완료 확인
+- 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` 평가 + `M9 observer-first speed recovery` 완료 확인 + `startup main-menu phase-boundary` closure
 - 현재 engineering focus:
   1. `Sts2GuiSmokeHarness` 구조 정리 완료 상태를 문서와 current pointer에 반영
   2. explicit event / common combat hot path를 `observer-first, screenshot-on-demand`로 되돌린 현재 speed baseline 고정
@@ -19,8 +19,9 @@
 
 중요한 현재 해석:
 
-- startup / trust / bootstrap / deploy identity는 현재 top blocker가 아니다
+- startup / trust / bootstrap / deploy identity는 broad top blocker가 아니다
 - `WaitRunLoad` resumed room handoff bug는 이미 닫혔다
+- `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug는 current `main`에서 닫혔다
 - 현재 핵심은 **architecture complete 상태에서 남은 semantic gap을 좁게 다루는 것**이다
 
 ## 현재 우선순위
@@ -47,9 +48,9 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
    - status: green
    - 해석: old `reward-aftermath-map-handoff` known red는 current `main`에서 닫혔다
 2. latest valid fresh live root
-   - root: [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
-   - result: valid root, request-scoped noncombat scene cache가 reward aftermath / mixed-overlay / combat continuity를 흔들지 않은 채 run은 `max-steps-reached:60`까지 진행했다
-   - shape: old `combat-barrier-wait-plateau`는 재현되지 않았고, barrier reason은 계속 `end turn acknowledged; waiting for the next round reopen`으로 유지된 뒤 다음 player-turn reopen으로 정상 복귀했다
+   - root: [wait-main-menu-run-start-readiness-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1)
+   - result: valid root, `WaitMainMenu`는 logo-animation bootstrap frame를 그대로 accepted 하지 않았고 actual `Continue` surface가 export된 뒤에만 `EnterRun`으로 handoff했다
+   - shape: `step=2`는 still `WaitMainMenu`, `step=3`에서 `extractor=main-menu` `choices=[계속, 멀티플레이, 종료, 설정]` 뒤 `target=continue` click이 나왔고, old `EnterRun` `main menu actions not yet visible` plateau는 재현되지 않았다
 
 즉 현재 질문은 더 이상
 
@@ -82,7 +83,7 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 
 | Rail | Status | Notes |
 |---|---|---|
-| Startup / Trust / Deploy Identity | green | 현재 top blocker 아님 |
+| Startup / Trust / Deploy Identity | green | broad top blocker 아님, latest live root에서 main-menu phase-boundary도 비회귀 |
 | Harness Architecture | green | wave 1-8 complete, shell/module split complete |
 | Build / Shared Self-Test | green | current `main` 기준 통과 |
 | Harness Self-Test | green | current `main` 기준 통과 |
@@ -99,6 +100,7 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - replay parity는 current `main` 기준 green이다
 - `WaitRunLoad -> HandleRewards` resumed room handoff fix는 current `main`에 반영되어 있다
 - reward aftermath `ChooseFirstNode` exported-node closure는 current `main`에 반영되어 있다
+- `WaitMainMenu`는 current `main`에서 actual `Continue` / `Singleplayer` run-start surface가 나오기 전에는 accepted 되지 않는다
 - explicit event recovery와 common combat lane은 current `main`에서 screenshot 기본 경로가 아니다
 - representative speed proof root에서 explicit event/combat chain의 `captureMode`는 전부 `skipped`다
 - 하네스 구조 refactor는 current `main` 기준 문서화 가능한 수준까지 정리됐다
@@ -121,13 +123,13 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - fresh reward/map closure root:
   - [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1)
 - latest valid live root:
-  - [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
+  - [wait-main-menu-run-start-readiness-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1)
 - latest live startup summary:
-  - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/startup-summary.json)
+  - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1/startup-summary.json)
 - latest live session summary:
-  - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/session-summary.json)
+  - [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1/session-summary.json)
 - latest live run log:
-  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/attempts/0001/run.log)
+  - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1/attempts/0001/run.log)
 - speed recovery proof root:
   - [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
 - speed proof startup summary:
@@ -152,6 +154,7 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 - combat EndTurn barrier arming from `observer-drift` history instead of actual sent actions
 - screenshot-first explicit event recovery
 - screenshot-first common combat attack / target / non-enemy confirm / end-turn chain
+- `WaitMainMenu` logo-animation-only premature acceptance
 - monolithic `Program.cs` 중심 구조
 - large self-test hotspot 1차 분해
 

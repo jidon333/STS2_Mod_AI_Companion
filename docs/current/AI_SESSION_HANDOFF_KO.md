@@ -2,7 +2,7 @@
 
 > 상태: 현재 사용 중
 > 기준 브랜치: `main`
-> 최종 갱신: 2026-03-28
+> 최종 갱신: 2026-03-29
 > 대상: 새 구현 세션, 새 검증 세션, 새 참모 세션
 
 ## 문서 목적
@@ -69,7 +69,8 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - old wave 1-8 refactor program은 완료됐다
 - 남은 구조 작업은 `GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md`의 cleanup program 기준으로 본다
 - explicit event / common combat hot path speed recovery도 current `main`에 반영됐다
-- 다음 작업은 구조 분리보다 semantic follow-up과 observer provenance cleanup이다
+- `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug도 current `main`에서 닫혔다
+- 다음 작업은 observer provenance cleanup과 coverage follow-up이다
 
 ## current architecture state
 
@@ -113,21 +114,18 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ### 2. latest valid fresh live root
 
-- root: [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
-- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/startup-summary.json)
-- session summary: [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/session-summary.json)
-- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1/attempts/0001/run.log)
+- root: [wait-main-menu-run-start-readiness-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1)
+- startup: [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1/startup-summary.json)
+- session summary: [session-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1/session-summary.json)
+- trace: [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1/attempts/0001/run.log)
 
 확정 사실:
 
 - root는 valid다
-- request-scoped noncombat scene cache work unit은 reward/event/map mixed-state routing을 흔들지 않았다
-- `WaitRunLoad -> HandleRewards`는 이미 정상 handoff된다
-- reward aftermath `step=15`는 여전히 `exported reachable map node`로 진행한다
-- mixed-state noncombat cleanup은 regression 없이 유지됐다
-- `HandleCombat` `step=17`의 `auto-end turn`은 실제 `key sent key=E`로 전송된다
-- old `combat-barrier-wait-plateau`는 재현되지 않는다
-- run은 `max-steps-reached:60`까지 진행했고 current first blocker는 없다
+- `WaitMainMenu`는 logo-animation / `choiceExtractorPath=generic` bootstrap frame를 그대로 accepted 하지 않는다
+- `step=3`에서 actual `Continue` surface가 export된 뒤에만 `EnterRun`이 `target=continue`를 클릭했다
+- old `EnterRun` `main menu actions not yet visible` plateau는 재현되지 않는다
+- `WaitRunLoad`는 이후 combat까지 정상 handoff됐고 run은 `max-steps-reached:20`까지 진행했다
 
 ### 3. latest speed proof root
 
@@ -192,7 +190,7 @@ live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
 ## 한 줄 요약
 
 ```text
-current main의 하네스 구조 정리, reward aftermath closure, common hot path speed recovery는 끝났다.
+current main의 하네스 구조 정리, reward aftermath closure, common hot path speed recovery, WaitMainMenu startup boundary closure는 끝났다.
 새 세션은 old Program.cs monolith나 screenshot-first 전제를 다시 가져오지 말고,
-combat/lifecycle coverage frontier와 observer provenance cleanup을 새 owner 파일에서 보강하라.
+observer provenance cleanup과 coverage frontier를 새 owner 파일에서 보강하라.
 ```
