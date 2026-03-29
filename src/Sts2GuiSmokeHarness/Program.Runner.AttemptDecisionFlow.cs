@@ -220,7 +220,7 @@ internal static partial class Program
                 waitBudgetMs,
                 75,
                 observer,
-                latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                latestObserver => HasGenericObserverWakeDelta(observer, latestObserver)
                     ? "observer-delta"
                     : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
                         ? "phase-satisfied"
@@ -348,7 +348,7 @@ internal static partial class Program
                     GetDecisionWaitMinimumMs(phase),
                     75,
                     observer,
-                    latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                    latestObserver => HasGenericObserverWakeDelta(observer, latestObserver)
                         ? "observer-delta"
                         : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
                             ? "phase-satisfied"
@@ -393,7 +393,7 @@ internal static partial class Program
                     GetDecisionWaitMinimumMs(phase),
                     75,
                     latestObserver,
-                    currentObserver => HasWaitWakeDelta(latestObserver, currentObserver)
+                    currentObserver => HasGenericObserverWakeDelta(latestObserver, currentObserver)
                         ? "observer-delta"
                         : evaluator.IsPhaseSatisfied(phase, currentObserver, history)
                             ? "phase-satisfied"
@@ -604,7 +604,7 @@ internal static partial class Program
                     transitionSettleMs,
                     75,
                     latestObserver,
-                    currentObserver => HasWaitWakeDelta(latestObserver, currentObserver)
+                    currentObserver => HasGenericObserverWakeDelta(latestObserver, currentObserver)
                         ? "observer-delta"
                         : evaluator.IsPhaseSatisfied(phase, currentObserver, history)
                             ? "phase-satisfied"

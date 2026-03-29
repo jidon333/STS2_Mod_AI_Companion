@@ -145,50 +145,126 @@ internal static partial class Program
                 null));
             Assert(!string.Equals(noEnemyDecision.TargetLabel, "auto-target enemy", StringComparison.OrdinalIgnoreCase), "Combat decisioning should not emit auto-target enemy when the observer hand no longer contains an attack.");
 
-            var unchangedCombatProbeObserver = new ObserverState(
+            var nonEnemySelectDecision = new GuiSmokeStepDecision("act", "press-key", "3", null, null, "combat select non-enemy slot 3", "stage-aware settle", 0.5, "combat", 120, true, null);
+            Assert(CombatPostActionObservationSupport.GetMinimumSettleDelayMs(nonEnemySelectDecision) == 1200, "Non-enemy selection settle should reserve a wider combat settle budget.");
+            var attackSelectDecision = new GuiSmokeStepDecision("act", "press-key", "4", null, null, "combat select attack slot 4", "stage-aware settle", 0.5, "combat", 120, true, null);
+            Assert(CombatPostActionObservationSupport.GetMinimumSettleDelayMs(attackSelectDecision) == 900, "Attack selection settle should use the combat lane settle budget.");
+
+            var combatSettleCapturedAt = DateTimeOffset.UtcNow;
+            var nonEnemySettleHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 3", DateTimeOffset.UtcNow),
+            };
+            var nonEnemySettleKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(2, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+                new CombatCardKnowledgeHint(3, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            };
+            var staleNonEnemyObserver = new ObserverState(
                 new ObserverSummary(
                     "combat",
                     "combat",
                     true,
-                    DateTimeOffset.UtcNow,
-                    "inv-combat-probe-grace",
+                    combatSettleCapturedAt,
+                    "inv-combat-non-enemy-stale",
                     true,
-                    "mixed",
+                    "hook",
                     "stable",
-                    "episode-combat-probe-grace",
+                    "episode-combat-non-enemy-stale",
                     "Combat",
                     "combat",
                     60,
                     80,
-                    3,
-                    new[] { "Jaw Worm" },
+                    1,
+                    new[] { "1턴 종료" },
                     Array.Empty<string>(),
                     Array.Empty<ObserverActionNode>(),
                     Array.Empty<ObserverChoice>(),
-                    new[] { new ObservedCombatHandCard(4, "CARD.STRIKE_IRONCLAD", "Attack", 1) }),
+                    new[]
+                    {
+                        new ObservedCombatHandCard(2, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                        new ObservedCombatHandCard(3, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                    })
+                {
+                    SnapshotVersion = 41,
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+                        ["combatCardPlayPending"] = "false",
+                        ["combatTargetingInProgress"] = "false",
+                        ["combatHistoryStartedCount"] = "4",
+                        ["combatHistoryFinishedCount"] = "2",
+                        ["combatInteractionRevision"] = "4:2:false:false:none",
+                    },
+                },
                 null,
                 null,
                 null);
-            Assert(ShouldGrantCombatNoOpProbeGrace(
-                GuiSmokePhase.HandleCombat,
-                unchangedCombatProbeObserver,
-                unchangedCombatProbeObserver,
-                new GuiSmokeStepDecision("act", "press-key", "4", null, null, "combat select attack slot 4", "probe grace", 0.5, "combat", 250, true, null)),
-                "Combat no-op-sensitive actions should allow one grace resample before a same-frame no-op is recorded.");
-            Assert(!ShouldGrantCombatNoOpProbeGrace(
-                GuiSmokePhase.HandleCombat,
-                unchangedCombatProbeObserver,
-                new ObserverState(
-                    unchangedCombatProbeObserver.Summary with
+            var pendingNonEnemyObserver = new ObserverState(
+                staleNonEnemyObserver.Summary with
+                {
+                    CapturedAt = combatSettleCapturedAt.AddMilliseconds(600),
+                    InventoryId = "inv-combat-non-enemy-pending",
+                    SnapshotVersion = 42,
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
                     {
-                        CapturedAt = DateTimeOffset.UtcNow.AddMilliseconds(200),
-                        PlayerEnergy = 2,
+                        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+                        ["combatCardPlayPending"] = "true",
+                        ["combatTargetingInProgress"] = "false",
+                        ["combatSelectedCardSlot"] = "3",
+                        ["combatSelectedCardType"] = "Skill",
+                        ["combatSelectedCardTargetType"] = "Self",
+                        ["combatAwaitingPlaySlots"] = "3",
+                        ["combatHistoryStartedCount"] = "5",
+                        ["combatHistoryFinishedCount"] = "2",
+                        ["combatInteractionRevision"] = "5:2:true:false:none",
                     },
-                    null,
-                    null,
-                    null),
-                new GuiSmokeStepDecision("act", "press-key", "E", null, null, "auto-end turn", "no probe grace", 0.5, "combat", 250, true, null)),
-                "Combat probe grace should stay closed once a post-action delta is already visible or the action is not no-op-sensitive.");
+                },
+                null,
+                null,
+                null);
+            var nonEnemyWakeEvaluator = CombatPostActionObservationSupport.CreateWakeEvaluator(
+                nonEnemySelectDecision,
+                nonEnemySettleHistory,
+                nonEnemySettleKnowledge,
+                new WindowBounds(0, 0, 1280, 720));
+            Assert(nonEnemyWakeEvaluator(staleNonEnemyObserver) is null, "Combat non-enemy settle should not treat the stale post-action snapshot as actionable convergence.");
+            Assert(string.Equals(nonEnemyWakeEvaluator(pendingNonEnemyObserver), "combat-non-enemy-confirm-ready", StringComparison.OrdinalIgnoreCase), "Combat non-enemy settle should wake only after runtime confirm evidence surfaces.");
+
+            var enemyClickHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "click", "combat enemy target 1", DateTimeOffset.UtcNow),
+            };
+            var unresolvedTargetObserver = new ObserverState(
+                staleNonEnemyObserver.Summary with
+                {
+                    InventoryId = "inv-combat-target-quiet",
+                    SnapshotVersion = 55,
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+                        ["combatCardPlayPending"] = "true",
+                        ["combatTargetingInProgress"] = "false",
+                        ["combatSelectedCardSlot"] = "2",
+                        ["combatSelectedCardType"] = "Attack",
+                        ["combatSelectedCardTargetType"] = "AnyEnemy",
+                        ["combatHistoryStartedCount"] = "7",
+                        ["combatHistoryFinishedCount"] = "3",
+                        ["combatInteractionRevision"] = "7:3:true:false:none",
+                    },
+                },
+                null,
+                null,
+                null);
+            var targetQuietEvaluator = CombatPostActionObservationSupport.CreateWakeEvaluator(
+                new GuiSmokeStepDecision("act", "click", null, 0.5, 0.5, "combat enemy target 1", "quiet convergence", 0.5, "combat", 250, true, null),
+                enemyClickHistory,
+                nonEnemySettleKnowledge,
+                new WindowBounds(0, 0, 1280, 720));
+            Assert(targetQuietEvaluator(unresolvedTargetObserver) is null, "First unresolved combat target snapshot should start, not finish, quiet convergence.");
+            Assert(targetQuietEvaluator(unresolvedTargetObserver) is null, "Second unresolved combat target snapshot should still be within the quiet convergence window.");
+            Assert(targetQuietEvaluator(unresolvedTargetObserver) is null, "Third unresolved combat target snapshot should still defer combat settle completion.");
+            Assert(string.Equals(targetQuietEvaluator(unresolvedTargetObserver), "combat-quiet-convergence:resolvingattacktarget", StringComparison.OrdinalIgnoreCase), "Stable unresolved combat target state should wake only after the configured quiet convergence window.");
 
             var staleBoundsDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",

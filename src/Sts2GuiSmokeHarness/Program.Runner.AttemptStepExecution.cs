@@ -105,7 +105,6 @@ internal static partial class Program
         int transitionSettleMs,
         int actionSettleMinimumMs,
         int combatActionSettleMinimumMs,
-        int combatNoOpProbeGraceMs,
         Func<int, string, string, string?, string?, GuiSmokeAttemptResult> completeAttempt)
     {
         var decisionStatus = await TryHandleDecisionStatusAsync(
@@ -195,7 +194,6 @@ internal static partial class Program
                 decisionReadyElapsedMs,
                 actionSettleMinimumMs,
                 combatActionSettleMinimumMs,
-                combatNoOpProbeGraceMs,
                 loopTracking.SameActionStallCount,
                 actuationPreparation.RewardMapRecoveryAttempt)
             .ConfigureAwait(false);

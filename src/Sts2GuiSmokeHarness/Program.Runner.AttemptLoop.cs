@@ -52,7 +52,6 @@ internal static partial class Program
         const int PassiveWaitMs = 450;
         const int ActionSettleMinimumMs = 180;
         const int CombatActionSettleMinimumMs = 90;
-        const int CombatNoOpProbeGraceMs = 80;
         const int TransitionSettleMs = 1000;
         const int ManualCleanBootObserverBootstrapPollMs = 500;
         const int ManualCleanBootObserverBootstrapPollCount = 12;
@@ -357,7 +356,6 @@ internal static partial class Program
                     TransitionSettleMs,
                     ActionSettleMinimumMs,
                     CombatActionSettleMinimumMs,
-                    CombatNoOpProbeGraceMs,
                     (exitCode, status, message, terminalCause, failureClass) => CompleteAttempt(
                         exitCode,
                         status,

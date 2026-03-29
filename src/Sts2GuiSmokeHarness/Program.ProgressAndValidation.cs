@@ -314,25 +314,6 @@ internal static partial class Program
             actuatorSignals);
     }
 
-    static bool ShouldGrantCombatNoOpProbeGrace(
-        GuiSmokePhase phase,
-        ObserverState before,
-        ObserverState after,
-        GuiSmokeStepDecision decision)
-    {
-        if (phase != GuiSmokePhase.HandleCombat
-            || !string.Equals(decision.Status, "act", StringComparison.OrdinalIgnoreCase)
-            || !AutoDecisionProvider.IsCombatNoOpSensitiveTarget(decision.TargetLabel))
-        {
-            return false;
-        }
-
-        return before.InCombat == true
-               && after.InCombat == true
-               && !HasMeaningfulObserverDelta(before, after)
-               && string.Equals(DisplayControlFlowScreen(after), "combat", StringComparison.OrdinalIgnoreCase);
-    }
-
     static bool IsSpecificExtractorPath(string? choiceExtractorPath)
     {
         if (string.IsNullOrWhiteSpace(choiceExtractorPath))

@@ -84,7 +84,7 @@ internal static partial class Program
                 iterationKnownRecipes));
     }
 
-    static bool HasWaitWakeDelta(ObserverState baselineObserver, ObserverState latestObserver)
+    static bool HasGenericObserverWakeDelta(ObserverState baselineObserver, ObserverState latestObserver)
     {
         return HasMeaningfulObserverDelta(baselineObserver, latestObserver)
                || !string.Equals(PublishedCurrentScreen(baselineObserver), PublishedCurrentScreen(latestObserver), StringComparison.OrdinalIgnoreCase)
@@ -247,7 +247,7 @@ internal static partial class Program
                     observer,
                     latestObserver => latestObserver.IsFreshSince(freshnessFloor)
                         ? "observer-fresh"
-                        : HasWaitWakeDelta(observer, latestObserver)
+                        : HasGenericObserverWakeDelta(observer, latestObserver)
                             ? "observer-delta"
                             : null)
                 .ConfigureAwait(false);
@@ -306,7 +306,7 @@ internal static partial class Program
                     transitionSettleMs,
                     75,
                     observer,
-                    latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                    latestObserver => HasGenericObserverWakeDelta(observer, latestObserver)
                         ? "observer-delta"
                         : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
                             ? "phase-satisfied"
@@ -355,7 +355,7 @@ internal static partial class Program
                     transitionSettleMs,
                     75,
                     observer,
-                    latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                    latestObserver => HasGenericObserverWakeDelta(observer, latestObserver)
                         ? "observer-delta"
                         : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
                             ? "phase-satisfied"
@@ -390,7 +390,7 @@ internal static partial class Program
                     transitionSettleMs,
                     75,
                     observer,
-                    latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                    latestObserver => HasGenericObserverWakeDelta(observer, latestObserver)
                         ? "observer-delta"
                         : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
                             ? "phase-satisfied"
@@ -447,7 +447,7 @@ internal static partial class Program
                 passiveWaitMs,
                 75,
                 observer,
-                latestObserver => HasWaitWakeDelta(observer, latestObserver)
+                latestObserver => HasGenericObserverWakeDelta(observer, latestObserver)
                     ? "observer-delta"
                     : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
                         ? "phase-satisfied"
@@ -541,7 +541,7 @@ internal static partial class Program
         int transitionSettleMs)
     {
         var capturePolicy = Evaluate(stepIndex, isAuthoritativeFirstAttempt, stepAnalysisContext);
-        if (!capturePolicy.NeedsScreenshot && captureService.ShouldForceCapture("attempt", phase, stepIndex))
+        if (!capturePolicy.NeedsScreenshot && captureService.ShouldForceCapture("attempt", phase, stepIndex, attemptOrdinal))
         {
             capturePolicy = (true, "capture-fault-forced");
         }
@@ -575,7 +575,7 @@ internal static partial class Program
             window,
             screenshotPath,
             ScreenCaptureService.CaptureTimeout,
-            faultContext: new CaptureFaultInjectionContext("attempt", phase.ToString(), stepIndex));
+            faultContext: new CaptureFaultInjectionContext("attempt", phase.ToString(), stepIndex, attemptOrdinal));
         if (!captureResult.Succeeded)
         {
             var captureFailureObserver = observerReader.Read(includeEventTail: false);
@@ -735,7 +735,7 @@ internal static partial class Program
                     transitionSettleMs,
                     75,
                     captureFailureObserver,
-                    latestObserver => HasWaitWakeDelta(captureFailureObserver, latestObserver)
+                    latestObserver => HasGenericObserverWakeDelta(captureFailureObserver, latestObserver)
                         ? "observer-delta"
                         : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
                             ? "phase-satisfied"

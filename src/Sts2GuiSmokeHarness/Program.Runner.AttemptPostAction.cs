@@ -131,7 +131,6 @@ internal static partial class Program
         long decisionReadyElapsedMs,
         int actionSettleMinimumMs,
         int combatActionSettleMinimumMs,
-        int combatNoOpProbeGraceMs,
         int sameActionStallCount,
         bool rewardMapRecoveryAttempt)
     {
@@ -149,57 +148,58 @@ internal static partial class Program
             }
         }
 
-        var settleDelayMs = GetActionSettleDelayMs(completedPhase, decision, actionSettleMinimumMs, combatActionSettleMinimumMs);
-        var progressProbeDelayMs = Math.Min(settleDelayMs, completedPhase == GuiSmokePhase.HandleCombat ? 80 : 180);
-        ObserverState? probedPostActionObserver = null;
-        if (progressProbeDelayMs > 0)
-        {
-            var progressProbeWait = await WaitWithObserverPollingAsync(
-                    observerReader,
-                    progressProbeDelayMs,
-                    75,
-                    observer,
-                    latestObserver => HasWaitWakeDelta(observer, latestObserver) ? "observer-delta" : null)
-                .ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(progressProbeWait.WakeReason))
-            {
-                probedPostActionObserver = progressProbeWait.Observer;
-                LogHarness($"step={stepIndex} progress probe woke early reason={progressProbeWait.WakeReason}");
-            }
-        }
-
         var extraProgressSignals = new List<string>();
         if (rewardMapRecoveryAttempt)
         {
             extraProgressSignals.Add("reward-map-recovery-attempt");
         }
 
-        var postActionObserver = probedPostActionObserver ?? observerReader.Read();
-        var additionalProbeDelayMs = 0;
-        if (ShouldGrantCombatNoOpProbeGrace(completedPhase, observer, postActionObserver, decision))
+        var settleDelayMs = GetActionSettleDelayMs(completedPhase, decision, actionSettleMinimumMs, combatActionSettleMinimumMs);
+        var progressProbeDelayMs = 0;
+        var usedCombatStageObservation = CombatPostActionObservationSupport.ShouldUseStageAwareObservation(completedPhase, decision);
+        ObserverState postActionObserver;
+        if (usedCombatStageObservation)
         {
-            additionalProbeDelayMs = combatNoOpProbeGraceMs;
-            extraProgressSignals.Add("combat-noop-probe-grace");
-            LogHarness($"step={stepIndex} combat noop probe grace target={decision.TargetLabel ?? "null"} delayMs={additionalProbeDelayMs}");
-            var noOpGraceWait = await WaitWithObserverPollingAsync(
+            settleDelayMs = Math.Max(settleDelayMs, CombatPostActionObservationSupport.GetMinimumSettleDelayMs(decision));
+            progressProbeDelayMs = settleDelayMs;
+            var combatSettleWait = await WaitWithObserverPollingAsync(
                     observerReader,
-                    additionalProbeDelayMs,
-                    75,
-                    postActionObserver,
-                    latestObserver => !ShouldGrantCombatNoOpProbeGrace(completedPhase, observer, latestObserver, decision)
-                        ? "observer-delta"
-                        : null)
+                    settleDelayMs,
+                    CombatPostActionObservationSupport.QuietConvergencePollingSliceMs,
+                    observer,
+                    CombatPostActionObservationSupport.CreateWakeEvaluator(
+                        decision,
+                        history,
+                        request.CombatCardKnowledge,
+                        request.WindowBounds))
                 .ConfigureAwait(false);
-            postActionObserver = noOpGraceWait.Observer;
-            if (!string.IsNullOrWhiteSpace(noOpGraceWait.WakeReason))
+            postActionObserver = combatSettleWait.Observer;
+            if (!string.IsNullOrWhiteSpace(combatSettleWait.WakeReason))
             {
-                LogHarness($"step={stepIndex} combat noop probe grace woke early reason={noOpGraceWait.WakeReason}");
+                LogHarness($"step={stepIndex} combat post-action settle woke early reason={combatSettleWait.WakeReason}");
             }
-            if (!ShouldGrantCombatNoOpProbeGrace(completedPhase, observer, postActionObserver, decision))
+        }
+        else
+        {
+            progressProbeDelayMs = Math.Min(settleDelayMs, 180);
+            ObserverState? probedPostActionObserver = null;
+            if (progressProbeDelayMs > 0)
             {
-                extraProgressSignals.Add("combat-noop-probe-recovered");
-                LogHarness($"step={stepIndex} combat noop probe recovered target={decision.TargetLabel ?? "null"} screen={postActionObserver.CurrentScreen ?? postActionObserver.VisibleScreen ?? "null"}");
+                var progressProbeWait = await WaitWithObserverPollingAsync(
+                        observerReader,
+                        progressProbeDelayMs,
+                        75,
+                        observer,
+                        latestObserver => HasGenericObserverWakeDelta(observer, latestObserver) ? "observer-delta" : null)
+                    .ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(progressProbeWait.WakeReason))
+                {
+                    probedPostActionObserver = progressProbeWait.Observer;
+                    LogHarness($"step={stepIndex} progress probe woke early reason={progressProbeWait.WakeReason}");
+                }
             }
+
+            postActionObserver = probedPostActionObserver ?? observerReader.Read();
         }
 
         if (TryRecordCombatNoOpObservation(
@@ -279,7 +279,9 @@ internal static partial class Program
         }
 
         LogHarness($"step={stepIndex} next phase={phase}");
-        var remainingSettleDelayMs = Math.Max(0, settleDelayMs - progressProbeDelayMs - additionalProbeDelayMs);
+        var remainingSettleDelayMs = usedCombatStageObservation
+            ? 0
+            : Math.Max(0, settleDelayMs - progressProbeDelayMs);
         if (remainingSettleDelayMs > 0)
         {
             var trailingSettleWait = await WaitWithObserverPollingAsync(
@@ -287,7 +289,7 @@ internal static partial class Program
                     remainingSettleDelayMs,
                     75,
                     postActionObserver,
-                    latestObserver => HasWaitWakeDelta(postActionObserver, latestObserver)
+                    latestObserver => HasGenericObserverWakeDelta(postActionObserver, latestObserver)
                         ? "observer-delta"
                         : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
                             ? "phase-satisfied"
