@@ -935,7 +935,7 @@ internal static partial class Program
                 null);
             var mixedRewardAfterClaimHistory = new[]
             {
-                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleRewards.ToString(), "click", "claim reward item", DateTimeOffset.UtcNow.AddSeconds(-1)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleRewards.ToString(), "click", "claim reward potion", DateTimeOffset.UtcNow.AddSeconds(-1)),
             };
             var mixedRewardAfterClaimActions = BuildAllowedActions(
                 GuiSmokePhase.HandleRewards,
@@ -971,7 +971,7 @@ internal static partial class Program
                 mixedRewardAfterClaimHistory,
                 "A prior reward claim should not suppress the next explicit reward item.",
                 null));
-            Assert(string.Equals(mixedRewardAfterClaimDecision.TargetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase), "A prior claim reward click should not suppress the next explicit reward item in a mixed reward/map state.");
+            Assert(string.Equals(mixedRewardAfterClaimDecision.TargetLabel, "claim reward potion", StringComparison.OrdinalIgnoreCase), "A prior reward claim should not suppress the next explicit potion reward in a mixed reward/map state.");
             Assert(ShouldAllowRewardMapRecovery(
                     new GuiSmokeStepRequest(
                         "run",

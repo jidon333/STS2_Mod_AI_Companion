@@ -87,7 +87,7 @@ internal static partial class Program
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 "Reward panel is authoritative over any background map contamination.",
                 null));
-            Assert(string.Equals(rewardDecision.TargetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase), "Explicit reward items should preserve the reward lane over screenshot-derived map routing on NRewardsScreen.");
+            Assert(string.Equals(rewardDecision.TargetLabel, "claim reward gold", StringComparison.OrdinalIgnoreCase), "Explicit gold rewards should preserve the reward lane over screenshot-derived map routing on NRewardsScreen.");
             Assert(TryClassifyRewardMapLoop(
                 GuiSmokePhase.HandleRewards,
                 new GuiSmokeStepRequest(
@@ -995,5 +995,121 @@ internal static partial class Program
             Assert(!string.Equals(rewardPolicyDecision.TargetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
                    && !string.Equals(rewardPolicyDecision.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase),
                 "Reward policy should prefer a visible card or claimable reward over default gold/skip choices.");
+
+            var rewardPromptObserver = new ObserverState(
+                new ObserverSummary(
+                    "rewards",
+                    "rewards",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-reward-prompt",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-reward-prompt",
+                    "Monster",
+                    "reward",
+                    80,
+                    80,
+                    null,
+                    new[] { "{gold} 골드", "{gold} 골드", "덱에 추가할 카드를 선택하세요.", "넘기기" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("reward-item:0", "reward-item", "{gold} 골드", "758,374,402,86", true) { TypeName = "gold" },
+                        new ObserverActionNode("reward-item:1", "reward-item", "{gold} 골드", "758,470,402,86", true) { TypeName = "gold" },
+                        new ObserverActionNode("reward-item:2", "reward-item", "덱에 추가할 카드를 선택하세요.", "758,566,402,86", true)
+                        {
+                            TypeName = "card",
+                            SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                        },
+                        new ObserverActionNode("proceed:3", "proceed", "넘기기", "1583,764,269,108", true),
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("gold", "{gold} 골드", "758,374,402,86", "GoldReward", "{gold} 골드")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "GoldReward",
+                            SemanticHints = new[] { "reward", "reward-gold", "reward-type:GoldReward" },
+                        },
+                        new ObserverChoice("gold", "{gold} 골드", "758,470,402,86", "GoldReward", "{gold} 골드")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "GoldReward",
+                            SemanticHints = new[] { "reward", "reward-gold", "reward-type:GoldReward" },
+                        },
+                        new ObserverChoice("card", "덱에 추가할 카드를 선택하세요.", "758,566,402,86", "CardReward", "카드 보상")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "CardReward",
+                            SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                        },
+                        new ObserverChoice("choice", "넘기기", "1583,764,269,108"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>()),
+                null,
+                null,
+                null);
+            var rewardPromptHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleRewards.ToString(), "click", "claim reward gold", DateTimeOffset.UtcNow.AddSeconds(-4)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleRewards.ToString(), "click", "claim reward gold", DateTimeOffset.UtcNow.AddSeconds(-2)),
+            };
+            var rewardPromptDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                165,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "After gold rewards are claimed, the remaining card reward prompt should open the card reward child screen instead of repeating a generic claim label.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                ComputeSceneSignature(rewardRankingScreenshotPath, rewardPromptObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                rewardPromptObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                GetAllowedActions(GuiSmokePhase.HandleRewards, rewardPromptObserver),
+                rewardPromptHistory,
+                "The remaining reward is a card reward prompt, not a generic confirm button.",
+                null));
+            Assert(string.Equals(rewardPromptDecision.TargetLabel, "reward card choice", StringComparison.OrdinalIgnoreCase),
+                "Reward card prompt labels containing '선택' should still route through the reward-card lane instead of a generic claim label.");
+            Assert(!TryClassifyRewardMapLoop(
+                    GuiSmokePhase.HandleRewards,
+                    new GuiSmokeStepRequest(
+                        "run",
+                        "boot-to-long-run",
+                        165,
+                        GuiSmokePhase.HandleRewards.ToString(),
+                        "Do not classify gold->gold->card reward progression as a reward-map-loop.",
+                        DateTimeOffset.UtcNow,
+                        rewardRankingScreenshotPath,
+                        new WindowBounds(0, 0, 1280, 720),
+                        ComputeSceneSignature(rewardRankingScreenshotPath, rewardPromptObserver, GuiSmokePhase.HandleRewards),
+                        "0001",
+                        1,
+                        3,
+                        true,
+                        "tactical",
+                        null,
+                        rewardPromptObserver.Summary,
+                        Array.Empty<KnownRecipeHint>(),
+                        Array.Empty<EventKnowledgeCandidate>(),
+                        Array.Empty<CombatCardKnowledgeHint>(),
+                        GetAllowedActions(GuiSmokePhase.HandleRewards, rewardPromptObserver),
+                        rewardPromptHistory,
+                        "Different reward subtypes should not be collapsed into the same stale reward loop key.",
+                        null),
+                    rewardPromptDecision,
+                    out _),
+                "Gold claims followed by a remaining card reward prompt should not trip the reward-map-loop sentinel.");
     }
 }

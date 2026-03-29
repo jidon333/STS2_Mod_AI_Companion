@@ -705,6 +705,9 @@ sealed partial class AutoDecisionProvider
 
         var claimableRewardChoices = GetClaimableRewardProgressionChoices(request.Observer, request.WindowBounds, rewardScene.ScreenState);
         var claimableRewardNodes = GetClaimableRewardProgressionNodes(request.Observer, request.WindowBounds, rewardScene.ScreenState);
+        var activeRewardChoices = request.Observer.Choices
+            .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds))
+            .ToArray();
 
         if (!rewardScene.RewardForegroundOwned
             || rewardScene.ReleaseStage != RewardReleaseStage.Active
@@ -720,7 +723,7 @@ sealed partial class AutoDecisionProvider
             .FirstOrDefault();
         if (rewardNode is not null)
         {
-            return CreateClickDecisionFromNode(request, rewardNode, "claim reward item");
+            return CreateExplicitRewardDecisionFromNode(request, rewardNode, activeRewardChoices, "claim");
         }
 
         var rewardChoice = claimableRewardChoices
@@ -730,14 +733,7 @@ sealed partial class AutoDecisionProvider
             .FirstOrDefault();
         if (rewardChoice is not null)
         {
-            return CreateClickDecisionFromChoice(
-                request,
-                rewardChoice,
-                "claim reward item",
-                $"Reward choice '{rewardChoice.Label}' is explicitly visible. Claim it before using any proceed or map fallback.",
-                0.93,
-                ResolveObserverScreen(request.Observer, "rewards"),
-                1400);
+            return CreateExplicitRewardDecisionFromChoice(request, rewardChoice, "claim");
         }
 
         var proceedChoice = request.Observer.Choices
@@ -984,14 +980,7 @@ sealed partial class AutoDecisionProvider
             .FirstOrDefault();
         if (bestChoice is not null)
         {
-            return CreateClickDecisionFromChoice(
-                request,
-                bestChoice,
-                "claim reward item",
-                $"Reward choice '{bestChoice.Label}' is explicitly visible. Claim it before using any proceed or map fallback.",
-                0.93,
-                ResolveObserverScreen(request.Observer, "rewards"),
-                1400);
+            return CreateExplicitRewardDecisionFromChoice(request, bestChoice, "claim");
         }
 
         var bestNode = claimableRewardNodes
@@ -1001,7 +990,7 @@ sealed partial class AutoDecisionProvider
             .FirstOrDefault();
         if (bestNode is not null)
         {
-            return CreateClickDecisionFromNode(request, bestNode, "claim reward item");
+            return CreateExplicitRewardDecisionFromNode(request, bestNode, request.Observer.Choices, "claim");
         }
 
         return null;
@@ -1102,6 +1091,112 @@ sealed partial class AutoDecisionProvider
         }
 
         return null;
+    }
+
+    private static GuiSmokeStepDecision CreateExplicitRewardDecisionFromChoice(
+        GuiSmokeStepRequest request,
+        ObserverChoice choice,
+        string mode)
+    {
+        var (targetLabel, reason, confidence) = BuildExplicitRewardDecisionMetadata(choice, request.Observer, mode);
+        return CreateClickDecisionFromChoice(
+            request,
+            choice,
+            targetLabel,
+            reason,
+            confidence,
+            ResolveObserverScreen(request.Observer, "rewards"),
+            1400);
+    }
+
+    private static GuiSmokeStepDecision CreateExplicitRewardDecisionFromNode(
+        GuiSmokeStepRequest request,
+        ObserverActionNode node,
+        IReadOnlyList<ObserverChoice> activeRewardChoices,
+        string mode)
+    {
+        var (targetLabel, reason, confidence) = BuildExplicitRewardDecisionMetadata(node, activeRewardChoices, request.Observer, mode);
+        return CreateClickDecisionFromNode(
+            request,
+            node,
+            targetLabel,
+            reason,
+            confidence,
+            ResolveObserverScreen(request.Observer, "rewards"),
+            1400);
+    }
+
+    private static (string TargetLabel, string Reason, double Confidence) BuildExplicitRewardDecisionMetadata(
+        ObserverChoice choice,
+        ObserverSummary observer,
+        string mode)
+    {
+        if (GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(observer) && IsRewardCardChoice(choice))
+        {
+            return ("colorless card choice", "Colorless reward choice is explicitly visible. Open it before using skip or proceed.", 0.95);
+        }
+
+        if (IsRewardCardChoice(choice))
+        {
+            return ("reward card choice", "Reward card row is explicitly visible. Open it before using skip or proceed.", 0.95);
+        }
+
+        if (IsPotionRewardChoice(choice))
+        {
+            return ("claim reward potion", $"Reward potion '{choice.Label}' is explicitly visible. Claim it before using proceed or map fallback.", 0.93);
+        }
+
+        if (IsRelicRewardChoice(choice))
+        {
+            return ("claim reward relic", $"Reward relic '{choice.Label}' is explicitly visible. Claim it before using proceed or map fallback.", 0.94);
+        }
+
+        if (IsGoldRewardChoice(choice))
+        {
+            return ("claim reward gold", $"Reward gold '{choice.Label}' is explicitly visible. Claim it before using proceed or map fallback.", 0.92);
+        }
+
+        var reason = mode == "claim"
+            ? $"Reward choice '{choice.Label}' is explicitly visible. Claim it before using any proceed or map fallback."
+            : $"Reward choice '{choice.Label}' is explicitly visible. Open it before using skip or any map fallback.";
+        return ("claim reward item", reason, 0.92);
+    }
+
+    private static (string TargetLabel, string Reason, double Confidence) BuildExplicitRewardDecisionMetadata(
+        ObserverActionNode node,
+        IReadOnlyList<ObserverChoice> activeRewardChoices,
+        ObserverSummary observer,
+        string mode)
+    {
+        if (GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(observer) && IsCardRewardNode(node, activeRewardChoices))
+        {
+            return ("colorless card choice", $"Reward node '{node.Label}' opens a colorless reward choice. Open it before using skip or proceed.", 0.95);
+        }
+
+        if (IsCardRewardNode(node, activeRewardChoices))
+        {
+            return ("reward card choice", $"Reward node '{node.Label}' opens a reward card choice. Open it before using skip or proceed.", 0.95);
+        }
+
+        if (IsPotionRewardNode(node, activeRewardChoices))
+        {
+            return ("claim reward potion", $"Reward node '{node.Label}' is an explicit potion reward. Claim it before using proceed or map fallback.", 0.93);
+        }
+
+        if (IsRelicRewardNode(node, activeRewardChoices))
+        {
+            return ("claim reward relic", $"Reward node '{node.Label}' is an explicit relic reward. Claim it before using proceed or map fallback.", 0.94);
+        }
+
+        if (IsGoldRewardNode(node, activeRewardChoices))
+        {
+            return ("claim reward gold", $"Reward node '{node.Label}' is an explicit gold reward. Claim it before using proceed or map fallback.", 0.92);
+        }
+
+        var reason = mode == "claim"
+            ? $"Reward node '{node.Label}' is explicitly visible. Claim it before using any proceed or map fallback."
+            : $"Reward node '{node.Label}' is explicitly visible. Open it before using skip or any map fallback.";
+        return ("claim reward item", reason, 0.92);
     }
 
     private static GuiSmokeStepDecision? TryCreateEventProgressChoiceDecision(GuiSmokeStepRequest request)

@@ -463,8 +463,8 @@ static partial class LongRunArtifacts
             if (string.Equals(entry.DecisionTargetLabel, "first event option", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(entry.DecisionTargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(entry.DecisionTargetLabel, "reward choice", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(entry.DecisionTargetLabel, "reward card choice", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(entry.DecisionTargetLabel, "colorless card choice", StringComparison.OrdinalIgnoreCase))
+                || GuiSmokeRewardActionTargetSupport.IsRewardCardChoiceTarget(entry.DecisionTargetLabel)
+                || GuiSmokeRewardActionTargetSupport.IsRewardClaimTarget(entry.DecisionTargetLabel))
             {
                 lastMisdirectedTarget = entry.DecisionTargetLabel;
             }
@@ -1005,9 +1005,7 @@ static partial class LongRunArtifacts
 
     private static bool IsStaleRewardLoopTarget(string? decisionTargetLabel)
     {
-        return string.Equals(decisionTargetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(decisionTargetLabel, "reward choice", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(decisionTargetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase);
+        return GuiSmokeRewardActionTargetSupport.IsRewardStaleLoopTarget(decisionTargetLabel);
     }
 
     private static bool IsOverlayCleanupDecisionTarget(string? decisionTargetLabel)

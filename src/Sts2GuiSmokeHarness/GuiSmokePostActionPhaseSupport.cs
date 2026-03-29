@@ -88,11 +88,10 @@ static class GuiSmokePostActionPhaseSupport
 
     internal static bool KeepsCurrentRoomPhase(string? targetLabel)
     {
-        return string.Equals(targetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "reward choice", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "reward card choice", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "colorless card choice", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
+        return GuiSmokeRewardActionTargetSupport.IsRewardClaimTarget(targetLabel)
+               || GuiSmokeRewardActionTargetSupport.IsRewardGenericChoiceTarget(targetLabel)
+               || GuiSmokeRewardActionTargetSupport.IsRewardCardChoiceTarget(targetLabel)
+               || GuiSmokeRewardActionTargetSupport.IsRewardSkipTarget(targetLabel)
                || Program.IsOverlayCleanupTarget(targetLabel);
     }
 

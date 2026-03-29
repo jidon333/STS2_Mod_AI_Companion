@@ -156,7 +156,6 @@ internal static partial class Program
             "treasure chest" => 4,
             "treasure relic holder" => 4,
             "treasure proceed" => 4,
-            "claim reward item" => 3,
             "rest site: smith card" => 4,
             "rest site: smith confirm" => 4,
             "hidden overlay close" => 4,
@@ -165,6 +164,7 @@ internal static partial class Program
             "overlay backdrop close" => 4,
             "treasure overlay back" => 4,
             "inspect overlay escape" => 3,
+            _ when GuiSmokeRewardActionTargetSupport.IsRewardClaimTarget(decision.TargetLabel) => 3,
             _ => 2,
         };
     }
@@ -193,7 +193,8 @@ internal static partial class Program
             return false;
         }
 
-        if (!IsRewardMapLoopTarget(decision.TargetLabel) && !IsStaleRewardLoopTarget(decision.TargetLabel))
+        var staleRewardLoopKey = GuiSmokeRewardActionTargetSupport.TryGetRewardStaleLoopKey(decision.TargetLabel);
+        if (!IsRewardMapLoopTarget(decision.TargetLabel) && staleRewardLoopKey is null)
         {
             return false;
         }
@@ -207,7 +208,15 @@ internal static partial class Program
                 break;
             }
 
-            if (IsRewardMapLoopTarget(entry.TargetLabel) || IsStaleRewardLoopTarget(entry.TargetLabel))
+            if (staleRewardLoopKey is not null)
+            {
+                if (string.Equals(GuiSmokeRewardActionTargetSupport.TryGetRewardStaleLoopKey(entry.TargetLabel), staleRewardLoopKey, StringComparison.Ordinal))
+                {
+                    repeatedLoopCount += 1;
+                    continue;
+                }
+            }
+            else if (IsRewardMapLoopTarget(entry.TargetLabel))
             {
                 repeatedLoopCount += 1;
                 continue;
@@ -449,9 +458,7 @@ internal static partial class Program
 
     static bool IsStaleRewardLoopTarget(string? targetLabel)
     {
-        return string.Equals(targetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "reward choice", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(targetLabel, "claim reward item", StringComparison.OrdinalIgnoreCase);
+        return GuiSmokeRewardActionTargetSupport.IsRewardStaleLoopTarget(targetLabel);
     }
 
     static bool ShouldAllowRewardMapRecovery(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)

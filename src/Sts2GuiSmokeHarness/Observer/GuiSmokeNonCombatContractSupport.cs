@@ -367,14 +367,17 @@ static class GuiSmokeNonCombatContractSupport
 
     private static bool IsRewardCardChoice(ObserverChoice choice)
     {
+        var explicitRewardCardBinding = string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+                                        && string.Equals(choice.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase);
+        var explicitRewardCardHint = choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
+                                                                             || string.Equals(hint, "reward-pick", StringComparison.OrdinalIgnoreCase)
+                                                                             || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase));
         return (string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(choice.Kind, "reward-card", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
-                   && string.Equals(choice.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase)
-                || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
-                                                           || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase)))
+                || explicitRewardCardBinding
+                || explicitRewardCardHint)
                && !IsSkipOrProceedLabel(choice.Label)
-               && !IsConfirmLikeLabel(choice.Label)
+               && (!IsConfirmLikeLabel(choice.Label) || explicitRewardCardBinding || explicitRewardCardHint)
                && !IsDismissLikeLabel(choice.Label)
                && !IsOverlayChoiceLabel(choice.Label)
                && HasRewardCardLikeBounds(choice.ScreenBounds);

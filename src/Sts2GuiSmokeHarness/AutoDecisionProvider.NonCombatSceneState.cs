@@ -622,6 +622,56 @@ sealed partial class AutoDecisionProvider
             && RewardBoundsLookEquivalent(choice.ScreenBounds, node.ScreenBounds));
     }
 
+    private static bool IsGoldRewardNode(ObserverActionNode node, IReadOnlyList<ObserverChoice> activeRewardChoices)
+    {
+        if (string.Equals(node.TypeName, "gold", StringComparison.OrdinalIgnoreCase)
+            || ContainsAny(node.Label, "골드", "gold")
+            || node.SemanticHints.Any(static hint => string.Equals(hint, "reward-gold", StringComparison.OrdinalIgnoreCase)
+                                                     || string.Equals(hint, "reward-type:GoldReward", StringComparison.OrdinalIgnoreCase)
+                                                     || string.Equals(hint, "raw-kind:gold", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return activeRewardChoices.Any(choice =>
+            IsGoldRewardChoice(choice)
+            && string.Equals(choice.Label, node.Label, StringComparison.OrdinalIgnoreCase)
+            && RewardBoundsLookEquivalent(choice.ScreenBounds, node.ScreenBounds));
+    }
+
+    private static bool IsRelicRewardNode(ObserverActionNode node, IReadOnlyList<ObserverChoice> activeRewardChoices)
+    {
+        if (string.Equals(node.TypeName, "relic", StringComparison.OrdinalIgnoreCase)
+            || node.SemanticHints.Any(static hint => string.Equals(hint, "reward-relic", StringComparison.OrdinalIgnoreCase)
+                                                     || string.Equals(hint, "reward-type:RelicReward", StringComparison.OrdinalIgnoreCase)
+                                                     || string.Equals(hint, "raw-kind:relic", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return activeRewardChoices.Any(choice =>
+            IsRelicRewardChoice(choice)
+            && string.Equals(choice.Label, node.Label, StringComparison.OrdinalIgnoreCase)
+            && RewardBoundsLookEquivalent(choice.ScreenBounds, node.ScreenBounds));
+    }
+
+    private static bool IsCardRewardNode(ObserverActionNode node, IReadOnlyList<ObserverChoice> activeRewardChoices)
+    {
+        if (string.Equals(node.TypeName, "card", StringComparison.OrdinalIgnoreCase)
+            || node.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
+                                                     || string.Equals(hint, "reward-pick", StringComparison.OrdinalIgnoreCase)
+                                                     || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase)
+                                                     || string.Equals(hint, "raw-kind:card", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        return activeRewardChoices.Any(choice =>
+            IsRewardCardChoice(choice)
+            && string.Equals(choice.Label, node.Label, StringComparison.OrdinalIgnoreCase)
+            && RewardBoundsLookEquivalent(choice.ScreenBounds, node.ScreenBounds));
+    }
+
     private static bool RewardBoundsLookEquivalent(string? firstBounds, string? secondBounds)
     {
         if (!TryParseNodeBounds(firstBounds, out var first) || !TryParseNodeBounds(secondBounds, out var second))
@@ -637,6 +687,11 @@ sealed partial class AutoDecisionProvider
 
     private static bool IsRewardCardChoice(ObserverChoice choice)
     {
+        var explicitRewardCardBinding = string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+                                        && string.Equals(choice.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase);
+        var explicitRewardCardHint = choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
+                                                                             || string.Equals(hint, "reward-pick", StringComparison.OrdinalIgnoreCase)
+                                                                             || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase));
         if (choice.Kind.StartsWith("transform-", StringComparison.OrdinalIgnoreCase)
             || choice.Kind.StartsWith("deck-remove-", StringComparison.OrdinalIgnoreCase)
             || choice.Kind.StartsWith("upgrade-", StringComparison.OrdinalIgnoreCase)
@@ -651,13 +706,10 @@ sealed partial class AutoDecisionProvider
         return (string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(choice.Kind, "reward-card", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(choice.Kind, "reward-pick-card", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
-                   && string.Equals(choice.BindingId, "CardReward", StringComparison.OrdinalIgnoreCase)
-                || choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
-                                                           || string.Equals(hint, "reward-pick", StringComparison.OrdinalIgnoreCase)
-                                                           || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase)))
+                || explicitRewardCardBinding
+                || explicitRewardCardHint)
                && !IsSkipOrProceedLabel(choice.Label)
-               && !IsConfirmLikeLabel(choice.Label)
+               && (!IsConfirmLikeLabel(choice.Label) || explicitRewardCardBinding || explicitRewardCardHint)
                && !IsDismissLikeLabel(choice.Label)
                && !IsOverlayChoiceLabel(choice.Label)
                && HasRewardCardLikeBounds(choice.ScreenBounds);
