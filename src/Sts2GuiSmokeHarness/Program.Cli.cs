@@ -71,6 +71,33 @@ internal static partial class Program
         return options;
     }
 
+    static CaptureFaultInjectionOptions? ResolveCaptureFaultInjectionOptions(IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("--capture-fault-mode", out var modeRaw) || string.IsNullOrWhiteSpace(modeRaw))
+        {
+            return null;
+        }
+
+        var failureKind = modeRaw.Trim().ToLowerInvariant() switch
+        {
+            "unusable-frame" => CaptureBoundaryFailureKind.UnusableFrame,
+            "timeout" => CaptureBoundaryFailureKind.TimedOut,
+            "exception" => CaptureBoundaryFailureKind.Exception,
+            _ => throw new InvalidOperationException($"Unsupported capture fault mode: {modeRaw}"),
+        };
+        var scopeKind = options.TryGetValue("--capture-fault-scope", out var scopeRaw) && !string.IsNullOrWhiteSpace(scopeRaw)
+            ? scopeRaw.Trim().ToLowerInvariant()
+            : "attempt";
+        var phaseName = options.TryGetValue("--capture-fault-phase", out var phaseRaw) && !string.IsNullOrWhiteSpace(phaseRaw)
+            ? phaseRaw.Trim()
+            : null;
+        int? stepIndex = options.TryGetValue("--capture-fault-step", out var stepRaw)
+                         && int.TryParse(stepRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedStep)
+            ? parsedStep
+            : null;
+        return new CaptureFaultInjectionOptions(failureKind, scopeKind, phaseName, stepIndex);
+    }
+
     static string? ResolveConfigPath(IReadOnlyDictionary<string, string> options, string workspaceRoot)
     {
         if (options.TryGetValue("--config", out var explicitPath))
@@ -205,7 +232,7 @@ internal static partial class Program
     static void WriteUsage()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--deploy-mode in-process|subprocess] [--runtime-assembly-root path] [--ffmpeg-path path] [--keep-video-on-success] [--disable-video-capture] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop]");
+        Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- run --scenario boot-to-combat|boot-to-long-run --provider session|auto|headless [--provider-command \"<cmd>\"] [--config path] [--run-root path] [--deploy-mode in-process|subprocess] [--runtime-assembly-root path] [--ffmpeg-path path] [--keep-video-on-success] [--disable-video-capture] [--max-attempts n] [--max-consecutive-launch-failures n] [--max-scene-dead-ends n] [--max-session-hours n] [--max-steps n] [--stop-on-first-terminal] [--stop-on-first-loop] [--capture-fault-mode unusable-frame|timeout|exception] [--capture-fault-scope bootstrap|attempt] [--capture-fault-phase <GuiSmokePhase>] [--capture-fault-step n]");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-run --run-root <path>");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>] [--trace] [--full-request-rebuild]");

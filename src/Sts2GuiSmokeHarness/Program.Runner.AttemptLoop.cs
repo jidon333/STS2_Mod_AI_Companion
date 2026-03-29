@@ -87,7 +87,7 @@ internal static partial class Program
                 : new SessionDecisionProvider();
 
         var observerReader = new ObserverSnapshotReader(liveLayout, harnessLayout);
-        var captureService = new ScreenCaptureService();
+        var captureService = new ScreenCaptureService(ResolveCaptureFaultInjectionOptions(options));
         var inputDriver = new MouseInputDriver();
         var evaluator = new ObserverAcceptanceEvaluator();
 

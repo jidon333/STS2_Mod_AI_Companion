@@ -32,6 +32,17 @@ enum CaptureBoundaryFailureKind
     Exception,
 }
 
+sealed record CaptureFaultInjectionOptions(
+    CaptureBoundaryFailureKind FailureKind,
+    string ScopeKind,
+    string? PhaseName,
+    int? StepIndex);
+
+sealed record CaptureFaultInjectionContext(
+    string ScopeKind,
+    string? PhaseName,
+    int? StepIndex);
+
 sealed record CaptureBoundaryResult(
     bool Succeeded,
     CaptureBoundaryFailureKind FailureKind,

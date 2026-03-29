@@ -149,7 +149,7 @@ internal static partial class Program
             return false;
         }
 
-        var captureService = new ScreenCaptureService();
+        var captureService = new ScreenCaptureService(ResolveCaptureFaultInjectionOptions(options));
         var observerReader = new ObserverSnapshotReader(liveLayout, harnessLayout);
         var phase = GuiSmokePhase.WaitMainMenu;
         var history = Array.Empty<GuiSmokeHistoryEntry>();
@@ -177,7 +177,11 @@ internal static partial class Program
             var capturePrefix = Path.Combine(bootstrapRoot, captureIndex.ToString("0000"));
             var screenshotPath = capturePrefix + ".screen.png";
             var observerStatePath = capturePrefix + ".observer.state.json";
-            var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
+            var captureResult = captureService.TryCaptureDetailed(
+                window,
+                screenshotPath,
+                ScreenCaptureService.CaptureTimeout,
+                faultContext: new CaptureFaultInjectionContext("bootstrap", phase.ToString(), captureIndex));
             if (!captureResult.Succeeded)
             {
                 if (captureResult.FailureKind is CaptureBoundaryFailureKind.TimedOut or CaptureBoundaryFailureKind.Exception)

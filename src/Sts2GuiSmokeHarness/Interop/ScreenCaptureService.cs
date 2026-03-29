@@ -20,6 +20,13 @@ using Sts2ModKit.Core.LiveExport;
 sealed class ScreenCaptureService
 {
     internal static readonly TimeSpan CaptureTimeout = TimeSpan.FromSeconds(15);
+    private readonly CaptureFaultInjectionOptions? _faultInjection;
+    private bool _faultConsumed;
+
+    public ScreenCaptureService(CaptureFaultInjectionOptions? faultInjection = null)
+    {
+        _faultInjection = faultInjection;
+    }
 
     internal static int GetCaptureRetryDelayMs(int attempt)
     {
@@ -41,8 +48,14 @@ sealed class ScreenCaptureService
         WindowCaptureTarget target,
         string outputPath,
         TimeSpan timeout,
-        Func<WindowCaptureTarget, Bitmap?>? captureOverride = null)
+        Func<WindowCaptureTarget, Bitmap?>? captureOverride = null,
+        CaptureFaultInjectionContext? faultContext = null)
     {
+        if (TryInjectFault(faultContext) is { } injectedFault)
+        {
+            return injectedFault;
+        }
+
         try
         {
             Bitmap? bitmap;
@@ -106,6 +119,71 @@ sealed class ScreenCaptureService
                 exception.Message,
                 exception);
         }
+    }
+
+    internal bool ShouldForceCapture(string scopeKind, GuiSmokePhase phase, int stepIndex)
+    {
+        if (_faultInjection is null || _faultConsumed)
+        {
+            return false;
+        }
+
+        if (!string.Equals(_faultInjection.ScopeKind, scopeKind, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_faultInjection.PhaseName)
+            && !string.Equals(_faultInjection.PhaseName, phase.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return _faultInjection.StepIndex is null || _faultInjection.StepIndex == stepIndex;
+    }
+
+    private CaptureBoundaryResult? TryInjectFault(CaptureFaultInjectionContext? faultContext)
+    {
+        if (_faultInjection is null || _faultConsumed || faultContext is null)
+        {
+            return null;
+        }
+
+        if (!string.Equals(_faultInjection.ScopeKind, faultContext.ScopeKind, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_faultInjection.PhaseName)
+            && !string.Equals(_faultInjection.PhaseName, faultContext.PhaseName, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (_faultInjection.StepIndex is not null && _faultInjection.StepIndex != faultContext.StepIndex)
+        {
+            return null;
+        }
+
+        _faultConsumed = true;
+        return _faultInjection.FailureKind switch
+        {
+            CaptureBoundaryFailureKind.UnusableFrame => new CaptureBoundaryResult(
+                false,
+                CaptureBoundaryFailureKind.UnusableFrame,
+                "capture-fault-injected: unusable-frame"),
+            CaptureBoundaryFailureKind.TimedOut => new CaptureBoundaryResult(
+                false,
+                CaptureBoundaryFailureKind.TimedOut,
+                "capture-fault-injected: timeout",
+                new TimeoutException("capture-fault-injected-timeout")),
+            CaptureBoundaryFailureKind.Exception => new CaptureBoundaryResult(
+                false,
+                CaptureBoundaryFailureKind.Exception,
+                "capture-fault-injected: exception",
+                new InvalidOperationException("capture-fault-injected-exception")),
+            _ => null,
+        };
     }
 
     private static Bitmap? TryCaptureProcessWindow(WindowCaptureTarget target)

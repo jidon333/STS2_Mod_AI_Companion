@@ -541,6 +541,10 @@ internal static partial class Program
         int transitionSettleMs)
     {
         var capturePolicy = Evaluate(stepIndex, isAuthoritativeFirstAttempt, stepAnalysisContext);
+        if (!capturePolicy.NeedsScreenshot && captureService.ShouldForceCapture("attempt", phase, stepIndex))
+        {
+            capturePolicy = (true, "capture-fault-forced");
+        }
         var captureMode = "skipped";
         var captureSkipReason = capturePolicy.SkipReason;
         if (!capturePolicy.NeedsScreenshot)
@@ -567,7 +571,11 @@ internal static partial class Program
                 consecutiveFallbackCapturesWithoutProcess);
         }
 
-        var captureResult = captureService.TryCaptureDetailed(window, screenshotPath, ScreenCaptureService.CaptureTimeout);
+        var captureResult = captureService.TryCaptureDetailed(
+            window,
+            screenshotPath,
+            ScreenCaptureService.CaptureTimeout,
+            faultContext: new CaptureFaultInjectionContext("attempt", phase.ToString(), stepIndex));
         if (!captureResult.Succeeded)
         {
             var captureFailureObserver = observerReader.Read(includeEventTail: false);

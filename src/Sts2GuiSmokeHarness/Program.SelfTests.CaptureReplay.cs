@@ -645,6 +645,39 @@ internal static partial class Program
                     && exceptionCaptureResult.FailureKind == CaptureBoundaryFailureKind.Exception
                     && exceptionCaptureResult.Exception is InvalidOperationException,
                     "Detailed capture should classify thrown capture failures as capture-exception.");
+
+                var faultOptions = ResolveCaptureFaultInjectionOptions(
+                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["--capture-fault-mode"] = "timeout",
+                        ["--capture-fault-scope"] = "attempt",
+                        ["--capture-fault-phase"] = GuiSmokePhase.EnterRun.ToString(),
+                        ["--capture-fault-step"] = "3",
+                    });
+                Assert(
+                    faultOptions is not null
+                    && faultOptions.FailureKind == CaptureBoundaryFailureKind.TimedOut
+                    && string.Equals(faultOptions.ScopeKind, "attempt", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(faultOptions.PhaseName, GuiSmokePhase.EnterRun.ToString(), StringComparison.OrdinalIgnoreCase)
+                    && faultOptions.StepIndex == 3,
+                    "Capture fault injector options should parse validation-only fault settings.");
+                var injectedCaptureService = new ScreenCaptureService(faultOptions);
+                Assert(
+                    injectedCaptureService.ShouldForceCapture("attempt", GuiSmokePhase.EnterRun, 3),
+                    "Capture fault injector should force capture on the configured attempt phase.");
+                var injectedTimeoutResult = injectedCaptureService.TryCaptureDetailed(
+                    new WindowCaptureTarget(IntPtr.Zero, "injector-self-test", Rectangle.Empty, true, false),
+                    Path.Combine(detailedCaptureRoot, "injector-timeout.png"),
+                    TimeSpan.FromMilliseconds(1),
+                    faultContext: new CaptureFaultInjectionContext("attempt", GuiSmokePhase.EnterRun.ToString(), 3));
+                Assert(
+                    !injectedTimeoutResult.Succeeded
+                    && injectedTimeoutResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
+                    && injectedTimeoutResult.Exception is TimeoutException,
+                    "Capture fault injector should emit a bounded timeout result without relying on a real capture.");
+                Assert(
+                    !injectedCaptureService.ShouldForceCapture("attempt", GuiSmokePhase.EnterRun, 3),
+                    "Capture fault injector should be one-shot and stop forcing capture after the first injected result.");
             }
             finally
             {
