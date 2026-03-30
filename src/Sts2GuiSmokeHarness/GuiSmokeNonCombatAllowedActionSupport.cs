@@ -26,18 +26,25 @@ static class GuiSmokeNonCombatAllowedActionSupport
                    || node.Label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase));
     }
 
-    public static string[] BuildCardSelectionAllowedActions(CardSelectionSubtypeState state)
+    public static string[] BuildCardSelectionAllowedActions(ObserverSummary observer, CardSelectionSubtypeState state)
     {
+        var hasExplicitCardChoices = CardSelectionObserverSignals.GetCardChoices(observer, state)
+            .Any(choice => choice.Enabled != false && !string.IsNullOrWhiteSpace(choice.ScreenBounds));
+        var hasExplicitConfirmChoice = CardSelectionObserverSignals.TryGetConfirmChoice(observer, state) is { Enabled: not false, ScreenBounds.Length: > 0 };
+
         return state.ScreenType switch
         {
             "reward-pick" => new[] { "reward pick card", "wait" },
-            "simple-select" when CardSelectionObserverSignals.IsConfirmReady(state)
+            "simple-select" when CardSelectionObserverSignals.IsConfirmReady(state) && hasExplicitConfirmChoice
                 => new[] { "simple select confirm", "wait" },
-            "simple-select" => new[] { "simple select choice", "wait" },
-            "bundle-select" when CardSelectionObserverSignals.IsConfirmReady(state)
+            "simple-select" when hasExplicitCardChoices => new[] { "simple select choice", "wait" },
+            "simple-select" => new[] { "wait" },
+            "bundle-select" when CardSelectionObserverSignals.IsConfirmReady(state) && hasExplicitConfirmChoice
                 => new[] { "bundle select confirm", "wait" },
-            "bundle-select" => new[] { "bundle select choice", "wait" },
-            "relic-select" => new[] { "relic select choice", "wait" },
+            "bundle-select" when hasExplicitCardChoices => new[] { "bundle select choice", "wait" },
+            "bundle-select" => new[] { "wait" },
+            "relic-select" when hasExplicitCardChoices => new[] { "relic select choice", "wait" },
+            "relic-select" => new[] { "wait" },
             "transform" when CardSelectionObserverSignals.IsConfirmReady(state)
                 => new[] { "transform confirm", "wait" },
             "transform" => new[] { "transform select card", "wait" },

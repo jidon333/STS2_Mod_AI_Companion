@@ -44,7 +44,7 @@ internal static partial class Program
         var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
         if (cardSelectionState is not null)
         {
-            return GuiSmokeNonCombatAllowedActionSupport.BuildCardSelectionAllowedActions(cardSelectionState);
+            return GuiSmokeNonCombatAllowedActionSupport.BuildCardSelectionAllowedActions(observer.Summary, cardSelectionState);
         }
 
         var actions = new List<string>();

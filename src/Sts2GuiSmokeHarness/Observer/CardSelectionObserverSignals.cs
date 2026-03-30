@@ -77,21 +77,7 @@ static class CardSelectionObserverSignals
             .ThenBy(static choice => GetSortX(choice.ScreenBounds))
             .ThenBy(static choice => GetSortY(choice.ScreenBounds))
             .ToArray();
-        if (explicitChoices.Length > 0)
-        {
-            return explicitChoices;
-        }
-
-        return state.ScreenType switch
-        {
-            "simple-select" or "bundle-select" or "relic-select" => observer.Choices
-                .Where(choice => IsGenericSubtypeChoiceFallback(choice, state.ScreenType))
-                .OrderBy(static choice => choice.Enabled == false ? 1 : 0)
-                .ThenBy(static choice => GetSortX(choice.ScreenBounds))
-                .ThenBy(static choice => GetSortY(choice.ScreenBounds))
-                .ToArray(),
-            _ => Array.Empty<ObserverChoice>(),
-        };
+        return explicitChoices;
     }
 
     public static ObserverChoice? TryGetConfirmChoice(ObserverSummary observer, CardSelectionSubtypeState state)
@@ -124,6 +110,11 @@ static class CardSelectionObserverSignals
         if (synthesizedConfirm is not null)
         {
             return synthesizedConfirm;
+        }
+
+        if (state.ScreenType is "simple-select" or "bundle-select")
+        {
+            return null;
         }
 
         return observer.Choices
@@ -350,39 +341,6 @@ static class CardSelectionObserverSignals
                && (label.Contains("Confirm", StringComparison.OrdinalIgnoreCase)
                    || label.Contains("확인", StringComparison.OrdinalIgnoreCase)
                    || label.Contains("선택", StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool IsGenericSubtypeChoiceFallback(ObserverChoice choice, string screenType)
-    {
-        if (choice.Enabled == false
-            || string.IsNullOrWhiteSpace(choice.ScreenBounds)
-            || string.IsNullOrWhiteSpace(choice.Label))
-        {
-            return false;
-        }
-
-        if (IsConfirmLabel(choice.Label)
-            || choice.Label.Contains("Proceed", StringComparison.OrdinalIgnoreCase)
-            || choice.Label.Contains("넘기", StringComparison.OrdinalIgnoreCase)
-            || choice.Label.Contains("Back", StringComparison.OrdinalIgnoreCase)
-            || choice.Label.Contains("취소", StringComparison.OrdinalIgnoreCase)
-            || choice.Label.Contains("Cancel", StringComparison.OrdinalIgnoreCase)
-            || choice.Label.Contains("Close", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (screenType == "bundle-select")
-        {
-            return choice.Kind is "bundle-select-card" or "choice" or "card";
-        }
-
-        if (screenType == "relic-select")
-        {
-            return choice.Kind is "relic-select-card" or "relic" or "choice";
-        }
-
-        return choice.Kind is "simple-select-card" or "card" or "relic" or "choice";
     }
 
     private static float GetSortX(string? rawBounds)

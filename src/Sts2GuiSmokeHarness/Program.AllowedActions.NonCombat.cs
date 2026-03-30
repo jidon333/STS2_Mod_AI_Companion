@@ -107,7 +107,7 @@ internal static partial class Program
             GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
                 => new[] { "press escape", "click inspect overlay close", "wait" },
             GuiSmokePhase.HandleEvent when cardSelectionState is not null
-                => BuildCardSelectionAllowedActions(cardSelectionState),
+                => BuildCardSelectionAllowedActions(observer.Summary, cardSelectionState),
             GuiSmokePhase.HandleEvent when eventScene.RewardSubstateActive
                 => BuildRewardAllowedActionsFromState(observer, eventScene.RewardScene),
             GuiSmokePhase.HandleEvent when eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending
@@ -182,7 +182,7 @@ internal static partial class Program
 
         if (CardSelectionObserverSignals.TryGetState(observer) is not null)
         {
-            return BuildCardSelectionAllowedActions(CardSelectionObserverSignals.TryGetState(observer)!);
+            return BuildCardSelectionAllowedActions(observer, CardSelectionObserverSignals.TryGetState(observer)!);
         }
 
         return ShopObserverSignals.BuildAllowedActions(observer, state, alreadyPurchased: ShopObserverSignals.HasRecentPurchase(history));
@@ -203,7 +203,7 @@ internal static partial class Program
         var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
         if (cardSelectionState is not null)
         {
-            return BuildCardSelectionAllowedActions(cardSelectionState);
+            return BuildCardSelectionAllowedActions(observer.Summary, cardSelectionState);
         }
 
         var rewardScene = context.RewardScene;
@@ -220,7 +220,7 @@ internal static partial class Program
         var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
         if (cardSelectionState is not null)
         {
-            return BuildCardSelectionAllowedActions(cardSelectionState);
+            return BuildCardSelectionAllowedActions(observer.Summary, cardSelectionState);
         }
 
         if (rewardScene.LayerState.TerminalRunBoundary || rewardScene.ReleaseToMapPending)

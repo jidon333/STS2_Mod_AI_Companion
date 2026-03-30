@@ -8,14 +8,13 @@ sealed partial class AutoDecisionProvider
 {
     private static GuiSmokeStepDecision DecideHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        if (!RewardObserverSignals.IsRewardAuthorityActive(request.Observer)
-            && BuildShopSceneState(request.Observer, request.History) is { ReleaseStage: NonCombatReleaseStage.Active })
+        var canonicalScene = TryBuildCanonicalNonCombatSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        if (canonicalScene is ShopSceneState { ReleaseStage: NonCombatReleaseStage.Active })
         {
             return DecideHandleShop(request with { Phase = GuiSmokePhase.HandleShop.ToString() });
         }
 
-        if (!RewardObserverSignals.IsRewardAuthorityActive(request.Observer)
-            && BuildRestSiteSceneState(request.Observer) is not null)
+        if (canonicalScene is RestSiteSceneState { ReleaseStage: NonCombatReleaseStage.Active })
         {
             return DecideChooseFirstNode(
                 request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() },
@@ -546,6 +545,13 @@ sealed partial class AutoDecisionProvider
                     ResolveObserverScreen(request.Observer, state.ScreenType),
                     1400);
             }
+
+            if (state.ScreenType is "simple-select" or "bundle-select")
+            {
+                return CreateForegroundAwareNonCombatWaitDecision(
+                    request,
+                    $"waiting for explicit {state.ScreenType} confirm surface");
+            }
         }
 
         var cardChoices = CardSelectionObserverSignals.GetCardChoices(request.Observer, state)
@@ -566,6 +572,13 @@ sealed partial class AutoDecisionProvider
                     ResolveObserverScreen(request.Observer, state.ScreenType),
                     1400);
             }
+        }
+
+        if (state.ScreenType is "simple-select" or "bundle-select" or "relic-select")
+        {
+            return CreateForegroundAwareNonCombatWaitDecision(
+                request,
+                $"waiting for explicit {state.ScreenType} selection surface");
         }
 
         return TryCreateScreenshotSubtypeCardSelectionDecision(request, state, selectTargetLabel);

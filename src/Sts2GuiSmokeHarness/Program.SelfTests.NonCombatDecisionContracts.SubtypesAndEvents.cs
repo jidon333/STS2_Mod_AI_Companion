@@ -624,27 +624,30 @@ internal static partial class Program
                     null,
                     new[] { "Confirm", "불타는 혈액", "니오우의 비탄", "딸기" },
                     Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
                     new[]
                     {
-                        new ObserverActionNode("event-option:confirm", "event-option", "Confirm", "1940,726,200,110", true)
+                        new ObserverChoice("simple-select-card", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD")
                         {
-                            TypeName = "choice",
+                            BindingKind = "card-selection-card",
+                            BindingId = "simple-select",
+                            SemanticHints = new[] { "card-selection:simple-select" },
+                            Enabled = true,
                         },
-                        new ObserverActionNode("event-option:relic:0", "event-option", "불타는 혈액", "12,82,68,68", true)
+                        new ObserverChoice("simple-select-card", "니오우의 비탄", "80,82,68,68", "RELIC.NEOWS_TORMENT")
                         {
-                            TypeName = "relic",
+                            BindingKind = "card-selection-card",
+                            BindingId = "simple-select",
+                            SemanticHints = new[] { "card-selection:simple-select" },
+                            Enabled = true,
                         },
-                        new ObserverActionNode("event-option:relic:1", "event-option", "니오우의 비탄", "80,82,68,68", true)
+                        new ObserverChoice("simple-select-card", "딸기", "148,82,68,68", "RELIC.STRAWBERRY")
                         {
-                            TypeName = "relic",
+                            BindingKind = "card-selection-card",
+                            BindingId = "simple-select",
+                            SemanticHints = new[] { "card-selection:simple-select" },
+                            Enabled = true,
                         },
-                    },
-                    new[]
-                    {
-                        new ObserverChoice("choice", "Confirm", "1940,726,200,110", "confirm"),
-                        new ObserverChoice("relic", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD"),
-                        new ObserverChoice("relic", "니오우의 비탄", "80,82,68,68", "RELIC.NEOWS_TORMENT"),
-                        new ObserverChoice("relic", "딸기", "148,82,68,68", "RELIC.STRAWBERRY"),
                     },
                     Array.Empty<ObservedCombatHandCard>())
                 {
@@ -702,6 +705,23 @@ internal static partial class Program
                 {
                     InventoryId = "inv-simple-select-confirm",
                     SceneEpisodeId = "episode-simple-select-confirm",
+                    Choices = new[]
+                    {
+                        new ObserverChoice("simple-select-confirm", "Confirm", "1940,726,200,110", "main-confirm")
+                        {
+                            BindingKind = "card-selection-confirm",
+                            BindingId = "main",
+                            SemanticHints = new[] { "card-selection:simple-select", "confirm-mode:main" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("simple-select-card", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "simple-select",
+                            SemanticHints = new[] { "card-selection:simple-select", "selected-card" },
+                            Enabled = true,
+                        },
+                    },
                     Meta = new Dictionary<string, string?>(simpleSelectObserver.Meta, StringComparer.OrdinalIgnoreCase)
                     {
                         ["cardSelectionSelectedCount"] = "1",
@@ -752,6 +772,300 @@ internal static partial class Program
                 null));
             Assert(string.Equals(simpleSelectConfirmDecision.TargetLabel, "simple select confirm", StringComparison.OrdinalIgnoreCase),
                 "Confirm-ready simple-select overlay should click confirm instead of generic event progression.");
+
+            var simpleSelectGenericFallbackObserver = new ObserverState(
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-simple-select-generic-fallback",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-simple-select-generic-fallback",
+                    "Event",
+                    "generic",
+                    80,
+                    80,
+                    null,
+                    new[] { "Confirm", "불타는 혈액", "니오우의 비탄", "딸기" },
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    new[]
+                    {
+                        new ObserverChoice("choice", "Confirm", "1940,726,200,110", "confirm"),
+                        new ObserverChoice("relic", "불타는 혈액", "12,82,68,68", "RELIC.BURNING_BLOOD"),
+                        new ObserverChoice("relic", "니오우의 비탄", "80,82,68,68", "RELIC.NEOWS_TORMENT"),
+                        new ObserverChoice("relic", "딸기", "148,82,68,68", "RELIC.STRAWBERRY"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen",
+                        ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen",
+                        ["rawTopOverlayType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen",
+                        ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom",
+                        ["cardSelectionSelectedCount"] = "0",
+                        ["cardSelectionMainConfirmEnabled"] = "false",
+                    },
+                },
+                null,
+                null,
+                null);
+            var simpleSelectGenericFallbackActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                simpleSelectGenericFallbackObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(simpleSelectGenericFallbackActions.SequenceEqual(new[] { "wait" }),
+                "Simple-select should not reopen a card-selection lane from generic relic/choice surfaces alone.");
+            var simpleSelectGenericFallbackDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                17,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Generic simple-select surfaces without exported subtype choices should wait instead of clicking mixed-state relic affordances.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 2560, 1440),
+                "phase:handleevent|screen:event|visible:event|ready:true|stability:stable|card-selection:simple-select",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                simpleSelectGenericFallbackObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                simpleSelectGenericFallbackActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Simple-select should not broaden generic choice/relic surfaces into a primary card-selection lane.",
+                null));
+            Assert(string.Equals(simpleSelectGenericFallbackDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+                "Simple-select generic fallback should wait instead of clicking a broad mixed-state choice.");
+
+            var bundleSelectObserver = new ObserverState(
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-bundle-select",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-bundle-select",
+                    "Event",
+                    "card-selection-bundle-select",
+                    80,
+                    80,
+                    null,
+                    new[] { "전투 꾸러미", "기술 꾸러미" },
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    new[]
+                    {
+                        new ObserverChoice("bundle-select-card", "전투 꾸러미", "420,280,420,300", "bundle:attack")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "bundle-select",
+                            SemanticHints = new[] { "card-selection:bundle-select" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("bundle-select-card", "기술 꾸러미", "980,280,420,300", "bundle:skill")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "bundle-select",
+                            SemanticHints = new[] { "card-selection:bundle-select" },
+                            Enabled = true,
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["cardSelectionScreenType"] = "bundle-select",
+                        ["cardSelectionSelectedCount"] = "0",
+                        ["cardSelectionMainConfirmEnabled"] = "false",
+                    },
+                },
+                null,
+                null,
+                null);
+            var bundleSelectActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                bundleSelectObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(bundleSelectActions.Contains("bundle select choice", StringComparer.OrdinalIgnoreCase)
+                   && !bundleSelectActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase),
+                "Bundle-select overlay should expose only the explicit bundle-select lane.");
+            var bundleSelectDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                18,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Resolve the explicit bundle-select overlay before any generic event routing.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 2560, 1440),
+                "phase:handleevent|screen:event|visible:event|ready:true|stability:stable|card-selection:bundle-select",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                bundleSelectObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                bundleSelectActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Bundle-select overlay should use explicit subtype choices only.",
+                null));
+            Assert(bundleSelectDecision.TargetLabel?.StartsWith("bundle select choice", StringComparison.OrdinalIgnoreCase) == true,
+                "Bundle-select overlay should choose an explicit bundle candidate before any generic event wait.");
+
+            var bundleSelectGenericFallbackObserver = new ObserverState(
+                bundleSelectObserver.Summary with
+                {
+                    InventoryId = "inv-bundle-select-generic-fallback",
+                    SceneEpisodeId = "episode-bundle-select-generic-fallback",
+                    ChoiceExtractorPath = "generic",
+                    CurrentChoices = new[] { "Confirm", "전투 꾸러미", "기술 꾸러미" },
+                    Choices = new[]
+                    {
+                        new ObserverChoice("choice", "Confirm", "1940,726,200,110", "confirm"),
+                        new ObserverChoice("card", "전투 꾸러미", "420,280,420,300", "bundle:attack"),
+                        new ObserverChoice("choice", "기술 꾸러미", "980,280,420,300", "bundle:skill"),
+                    },
+                },
+                null,
+                null,
+                null);
+            var bundleSelectGenericFallbackActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                bundleSelectGenericFallbackObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(bundleSelectGenericFallbackActions.SequenceEqual(new[] { "wait" }),
+                "Bundle-select should not broaden generic card/choice surfaces into a primary bundle-select lane.");
+
+            var relicSelectObserver = new ObserverState(
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-relic-select",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-relic-select",
+                    "Event",
+                    "card-selection-relic-select",
+                    80,
+                    80,
+                    null,
+                    new[] { "불타는 혈액", "니오우의 비탄" },
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    new[]
+                    {
+                        new ObserverChoice("relic-select-card", "불타는 혈액", "420,280,280,280", "RELIC.BURNING_BLOOD")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "relic-select",
+                            SemanticHints = new[] { "card-selection:relic-select" },
+                            Enabled = true,
+                        },
+                        new ObserverChoice("relic-select-card", "니오우의 비탄", "980,280,280,280", "RELIC.NEOWS_TORMENT")
+                        {
+                            BindingKind = "card-selection-card",
+                            BindingId = "relic-select",
+                            SemanticHints = new[] { "card-selection:relic-select" },
+                            Enabled = true,
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["cardSelectionScreenType"] = "relic-select",
+                        ["cardSelectionSelectedCount"] = "0",
+                    },
+                },
+                null,
+                null,
+                null);
+            var relicSelectActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                relicSelectObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(relicSelectActions.Contains("relic select choice", StringComparer.OrdinalIgnoreCase)
+                   && !relicSelectActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase),
+                "Relic-select overlay should expose only the explicit relic-select lane.");
+            var relicSelectDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                19,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Resolve the explicit relic-select overlay before any generic event routing.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 2560, 1440),
+                "phase:handleevent|screen:event|visible:event|ready:true|stability:stable|card-selection:relic-select",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                relicSelectObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                relicSelectActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Relic-select overlay should use explicit subtype choices only.",
+                null));
+            Assert(relicSelectDecision.TargetLabel?.StartsWith("relic select choice", StringComparison.OrdinalIgnoreCase) == true,
+                "Relic-select overlay should choose an explicit relic candidate before any generic event wait.");
+
+            var relicSelectGenericFallbackObserver = new ObserverState(
+                relicSelectObserver.Summary with
+                {
+                    InventoryId = "inv-relic-select-generic-fallback",
+                    SceneEpisodeId = "episode-relic-select-generic-fallback",
+                    ChoiceExtractorPath = "generic",
+                    CurrentChoices = new[] { "불타는 혈액", "니오우의 비탄" },
+                    Choices = new[]
+                    {
+                        new ObserverChoice("relic", "불타는 혈액", "420,280,280,280", "RELIC.BURNING_BLOOD"),
+                        new ObserverChoice("choice", "니오우의 비탄", "980,280,280,280", "RELIC.NEOWS_TORMENT"),
+                    },
+                },
+                null,
+                null,
+                null);
+            var relicSelectGenericFallbackActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                relicSelectGenericFallbackObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(relicSelectGenericFallbackActions.SequenceEqual(new[] { "wait" }),
+                "Relic-select should not broaden generic relic/choice surfaces into a primary relic-select lane.");
 
             var deckRemoveObserver = new ObserverState(
                 rewardPickObserver.Summary with
