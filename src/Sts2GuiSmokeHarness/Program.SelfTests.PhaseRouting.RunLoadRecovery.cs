@@ -392,6 +392,79 @@ internal static partial class Program
             !WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadTerminalMainMenuObserver.Summary),
             "Terminal main-menu returns without Continue should not be retried as run-load recovery.");
 
+        var waitRunLoadRunSaveCleanupObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                true,
+                "mixed",
+                "stable",
+                "main-menu",
+                null,
+                null,
+                24,
+                24,
+                null,
+                new[] { "\uACC4\uC18D", "\uC804\uD22C \uD3EC\uAE30" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("main-menu:continue", "continue-run", "\uACC4\uC18D", "676,659,200,50", true),
+                    new ObserverActionNode("main-menu:\uC804\uD22C-\uD3EC\uAE30", "menu-action", "\uC804\uD22C \uD3EC\uAE30", "676,709,200,50", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("continue-run", "\uACC4\uC18D", "676,659,200,50", "main-menu:continue", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuContinueButton")
+                    {
+                        NodeId = "main-menu:continue",
+                        BindingKind = "continue-run",
+                        Enabled = true,
+                    },
+                    new ObserverChoice("menu-action", "\uC804\uD22C \uD3EC\uAE30", "676,709,200,50", "main-menu:\uC804\uD22C-\uD3EC\uAE30", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuTextButton")
+                    {
+                        NodeId = "main-menu:\uC804\uD22C-\uD3EC\uAE30",
+                        Enabled = true,
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["transitionInProgress"] = "false",
+                    ["rootSceneIsMainMenu"] = "true",
+                    ["rootSceneIsRun"] = "false",
+                    ["currentRunNodePresent"] = "false",
+                    ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    ["terminalRunBoundary"] = "true",
+                    ["mainMenuReturnDetected"] = "true",
+                    ["choiceExtractorPath"] = "main-menu",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadRunSaveCleanupObserver.Summary),
+            "Stable main-menu run-save cleanup surfaces should reopen EnterRun from WaitRunLoad instead of timing out.");
+        var waitRunLoadRunSaveActions = BuildAllowedActions(
+            GuiSmokePhase.WaitRunLoad,
+            waitRunLoadRunSaveCleanupObserver,
+            Array.Empty<CombatCardKnowledgeHint>(),
+            null,
+            Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(
+            waitRunLoadRunSaveActions.Contains("click abandon run", StringComparer.OrdinalIgnoreCase)
+            && waitRunLoadRunSaveActions.Contains("wait", StringComparer.OrdinalIgnoreCase),
+            "WaitRunLoad recovery should expose Abandon Run when a stale run-save surface remains on the main menu.");
+
         var waitCharacterSelectBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-wait-character-select-branch-{Guid.NewGuid():N}");
         Directory.CreateDirectory(waitCharacterSelectBranchRoot);
         try

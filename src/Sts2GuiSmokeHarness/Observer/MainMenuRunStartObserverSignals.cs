@@ -4,6 +4,43 @@ using static ObserverScreenProvenance;
 
 static class MainMenuRunStartObserverSignals
 {
+    public static bool HasRunSaveCleanupSurface(ObserverState observer)
+        => HasRunSaveCleanupSurface(observer.Summary);
+
+    public static bool HasRunSaveCleanupSurface(ObserverSummary observer)
+    {
+        if (!IsMainMenuSurface(observer)
+            || HasPublishedBootstrapVisibility(observer)
+            || HasCollapsedMainMenuActionLayout(observer))
+        {
+            return false;
+        }
+
+        return observer.ActionNodes.Any(IsBoundedAbandonRunActionNode)
+               || observer.Choices.Any(IsBoundedAbandonRunChoice);
+    }
+
+    public static bool HasAbandonRunConfirmSurface(ObserverState observer)
+        => HasAbandonRunConfirmSurface(observer.Summary);
+
+    public static bool HasAbandonRunConfirmSurface(ObserverSummary observer)
+    {
+        if (!IsMainMenuSurface(observer))
+        {
+            return false;
+        }
+
+        var hasConfirm = observer.ActionNodes.Any(IsBoundedPopupConfirmNode)
+                         || observer.Choices.Any(IsBoundedPopupConfirmChoice);
+        if (!hasConfirm)
+        {
+            return false;
+        }
+
+        return observer.ActionNodes.Any(IsBoundedPopupCancelNode)
+               || observer.Choices.Any(IsBoundedPopupCancelChoice);
+    }
+
     public static bool IsRunStartSurfaceReady(ObserverState observer)
         => IsRunStartSurfaceReady(observer.Summary);
 
@@ -19,7 +56,7 @@ static class MainMenuRunStartObserverSignals
             return false;
         }
 
-        if (HasRunStartActionSurface(observer))
+        if (HasEnterRunActionSurface(observer))
         {
             return true;
         }
@@ -45,6 +82,30 @@ static class MainMenuRunStartObserverSignals
                && (HasCollapsedMainMenuActionLayout(observer)
                    || (HasContinueRunStartSurface(observer)
                        && HasSingleplayerRunStartSurface(observer)));
+    }
+
+    internal static bool IsAbandonRunLabel(string? label)
+    {
+        return string.Equals(label, "Abandon Run", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "\uC804\uD22C \uD3EC\uAE30", StringComparison.OrdinalIgnoreCase)
+               || (!string.IsNullOrWhiteSpace(label)
+                   && label.Contains("\uD3EC\uAE30", StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static bool IsPopupConfirmLabel(string? label)
+    {
+        return string.Equals(label, "Confirm", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "\uD655\uC778", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "Yes", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "\uC608", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static bool IsPopupCancelLabel(string? label)
+    {
+        return string.Equals(label, "Cancel", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "\uCDE8\uC18C", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "No", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(label, "\uC544\uB2C8\uC624", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsLogoAnimationOnlyMainMenu(ObserverSummary observer)
@@ -77,6 +138,13 @@ static class MainMenuRunStartObserverSignals
     {
         return observer.ActionNodes.Any(IsBoundedRunStartActionNode)
                || observer.Choices.Any(IsBoundedRunStartChoice);
+    }
+
+    private static bool HasEnterRunActionSurface(ObserverSummary observer)
+    {
+        return HasRunStartActionSurface(observer)
+               || HasRunSaveCleanupSurface(observer)
+               || HasAbandonRunConfirmSurface(observer);
     }
 
     private static bool HasContinueRunStartSurface(ObserverSummary observer)
@@ -174,6 +242,24 @@ static class MainMenuRunStartObserverSignals
     private static bool IsBoundedSingleplayerRunChoice(ObserverChoice choice)
         => IsSingleplayerRunChoice(choice) && HasUsableBounds(choice.ScreenBounds);
 
+    private static bool IsBoundedAbandonRunActionNode(ObserverActionNode node)
+        => node.Actionable && IsAbandonRunLabel(node.Label) && HasUsableBounds(node.ScreenBounds);
+
+    private static bool IsBoundedAbandonRunChoice(ObserverChoice choice)
+        => (choice.Enabled ?? true) && IsAbandonRunLabel(choice.Label) && HasUsableBounds(choice.ScreenBounds);
+
+    private static bool IsBoundedPopupConfirmNode(ObserverActionNode node)
+        => node.Actionable && IsPopupConfirmLabel(node.Label) && HasUsableBounds(node.ScreenBounds);
+
+    private static bool IsBoundedPopupConfirmChoice(ObserverChoice choice)
+        => (choice.Enabled ?? true) && IsPopupConfirmLabel(choice.Label) && HasUsableBounds(choice.ScreenBounds);
+
+    private static bool IsBoundedPopupCancelNode(ObserverActionNode node)
+        => node.Actionable && IsPopupCancelLabel(node.Label) && HasUsableBounds(node.ScreenBounds);
+
+    private static bool IsBoundedPopupCancelChoice(ObserverChoice choice)
+        => (choice.Enabled ?? true) && IsPopupCancelLabel(choice.Label) && HasUsableBounds(choice.ScreenBounds);
+
     private static bool HasCollapsedMainMenuActionLayout(ObserverSummary observer)
     {
         var actionNodeSurfaces = observer.ActionNodes
@@ -270,6 +356,20 @@ static class MainMenuRunStartObserverSignals
     {
         return !string.IsNullOrWhiteSpace(typeName)
                && typeName.Contains("NLogoAnimation", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMainMenuSurface(ObserverSummary observer)
+    {
+        return MatchesControlFlowScreen(observer, "main-menu")
+               || string.Equals(observer.ChoiceExtractorPath, "main-menu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "choiceExtractorPath"), "main-menu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "rawChoiceExtractorPath"), "main-menu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "activeScreenType"), "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "rootSceneCurrentType"), "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "publishedCurrentScreen"), "main-menu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "publishedVisibleScreen"), "main-menu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "rawObservedScreen"), "main-menu", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "rootSceneIsMainMenu"), "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? TryGetMetaValue(ObserverSummary observer, string key)

@@ -33,8 +33,9 @@ static class WaitRunLoadRecoverySignals
             return false;
         }
 
-        return observer.ActionNodes.Any(IsActionableContinueRunNode)
-               || observer.Choices.Any(IsContinueRunChoice)
+        return MainMenuRunStartObserverSignals.HasMainMenuRunStartSurface(observer)
+               || MainMenuRunStartObserverSignals.HasRunSaveCleanupSurface(observer)
+               || MainMenuRunStartObserverSignals.HasAbandonRunConfirmSurface(observer)
                || observer.CurrentChoices.Any(IsContinueRunLabel);
     }
 

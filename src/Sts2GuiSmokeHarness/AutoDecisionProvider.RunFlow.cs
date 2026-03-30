@@ -4,6 +4,30 @@ sealed partial class AutoDecisionProvider
 {
     private static GuiSmokeStepDecision DecideEnterRun(GuiSmokeStepRequest request)
     {
+        if (MainMenuRunStartObserverSignals.HasAbandonRunConfirmSurface(request.Observer))
+        {
+            return TryFindLabeledSurfaceDecision(
+                       request,
+                       MainMenuRunStartObserverSignals.IsPopupConfirmLabel,
+                       "confirm abandon run",
+                       "The abandon-run confirmation popup is open on the main menu. Confirm it so the stale run save is cleared before starting a fresh run.",
+                       0.95,
+                       1200)
+                   ?? CreateWaitDecision("waiting for abandon-run confirmation button", ControlFlowCurrentScreen(request.Observer));
+        }
+
+        if (MainMenuRunStartObserverSignals.HasRunSaveCleanupSurface(request.Observer))
+        {
+            return TryFindLabeledSurfaceDecision(
+                       request,
+                       MainMenuRunStartObserverSignals.IsAbandonRunLabel,
+                       "abandon run",
+                       "The main menu is still showing a persisted run-save surface. Clear the stale run with Abandon Run before reopening the fresh new-run path.",
+                       0.95,
+                       1200)
+                   ?? CreateWaitDecision("waiting for abandon-run action", ControlFlowCurrentScreen(request.Observer));
+        }
+
         if (MatchesControlFlowScreen(request.Observer, "singleplayer-submenu"))
         {
             return new GuiSmokeStepDecision(
@@ -31,6 +55,28 @@ sealed partial class AutoDecisionProvider
                ?? TryFindActionNodeDecision(request, "Singleplayer", "singleplayer")
                ?? TryFindActionNodeDecision(request, "싱글", "singleplayer")
                ?? CreateWaitDecision("main menu actions not yet visible", ControlFlowCurrentScreen(request.Observer));
+    }
+
+    private static GuiSmokeStepDecision? TryFindLabeledSurfaceDecision(
+        GuiSmokeStepRequest request,
+        Func<string?, bool> labelPredicate,
+        string targetLabel,
+        string reason,
+        double confidence,
+        int waitMs)
+    {
+        var node = request.Observer.ActionNodes.FirstOrDefault(candidate =>
+            candidate.Actionable && labelPredicate(candidate.Label));
+        if (node is not null)
+        {
+            return CreateClickDecisionFromNode(request, node, targetLabel);
+        }
+
+        var choice = request.Observer.Choices.FirstOrDefault(candidate =>
+            (candidate.Enabled ?? true) && labelPredicate(candidate.Label));
+        return choice is null
+            ? null
+            : CreateClickDecisionFromChoice(request, choice, targetLabel, reason, confidence, "main-menu", waitMs);
     }
 
     private static GuiSmokeStepDecision DecideChooseCharacter(GuiSmokeStepRequest request)

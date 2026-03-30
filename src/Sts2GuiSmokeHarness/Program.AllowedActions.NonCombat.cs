@@ -18,6 +18,7 @@ using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokeNonCombatAllowedActionSupport;
 using static GuiSmokeStepRequestFactory;
+using static ObserverScreenProvenance;
 
 internal static partial class Program
 {
@@ -85,7 +86,7 @@ internal static partial class Program
 
         return phase switch
         {
-            GuiSmokePhase.EnterRun => new[] { "click continue", "click singleplayer", "click normal mode", "wait" },
+            GuiSmokePhase.EnterRun => BuildEnterRunAllowedActions(observer.Summary),
             GuiSmokePhase.WaitRunLoad => new[] { "wait" },
             GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "click character confirm", "wait" },
             GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
@@ -243,6 +244,26 @@ internal static partial class Program
                 => new[] { "click reward back", "wait" },
             _ => new[] { "wait" },
         };
+    }
+
+    static string[] BuildEnterRunAllowedActions(ObserverSummary observer)
+    {
+        if (MainMenuRunStartObserverSignals.HasAbandonRunConfirmSurface(observer))
+        {
+            return new[] { "click confirm abandon run", "click cancel abandon run", "wait" };
+        }
+
+        if (MainMenuRunStartObserverSignals.HasRunSaveCleanupSurface(observer))
+        {
+            return new[] { "click abandon run", "wait" };
+        }
+
+        if (MatchesControlFlowScreen(observer, "singleplayer-submenu"))
+        {
+            return new[] { "click normal mode", "wait" };
+        }
+
+        return new[] { "click continue", "click singleplayer", "click normal mode", "wait" };
     }
 
 }

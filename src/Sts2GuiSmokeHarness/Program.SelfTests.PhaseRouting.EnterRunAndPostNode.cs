@@ -84,6 +84,151 @@ internal static partial class Program
         Assert(
             GetPostEnterRunPhase(continuePreferredDecision) == GuiSmokePhase.WaitRunLoad,
             "Continue should hand off to neutral run-load waiting, not WaitCharacterSelect.");
+        var runSaveCleanupDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            2,
+            GuiSmokePhase.EnterRun.ToString(),
+            "Clear a stale run-save surface before entering a fresh run.",
+            DateTimeOffset.UtcNow,
+            "screen.png",
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:enter-run|screen:main-menu|visible:main-menu|ready:true|terminal-run-boundary",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-main-menu-run-save",
+                true,
+                "main-menu",
+                "stable",
+                null,
+                null,
+                "main-menu",
+                null,
+                null,
+                null,
+                new[] { "Continue", "Abandon Run" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("main-menu:continue", "continue-run", "Continue", "620,560,420,96", true),
+                    new ObserverActionNode("main-menu:abandon-run", "menu-action", "Abandon Run", "620,680,420,96", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("continue-run", "Continue", "620,560,420,96"),
+                    new ObserverChoice("menu-action", "Abandon Run", "620,680,420,96"),
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["terminalRunBoundary"] = "true",
+                    ["mainMenuReturnDetected"] = "true",
+                    ["choiceExtractorPath"] = "main-menu",
+                    ["rootSceneIsMainMenu"] = "true",
+                },
+            },
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            Array.Empty<string>(),
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            string.Empty,
+            null));
+        Assert(
+            string.Equals(runSaveCleanupDecision.TargetLabel, "abandon run", StringComparison.OrdinalIgnoreCase),
+            "EnterRun should clear a persisted run-save surface with Abandon Run before reopening the fresh new-run path.");
+        Assert(
+            GetPostEnterRunPhase(runSaveCleanupDecision) == GuiSmokePhase.WaitRunLoad,
+            "Abandon Run should hand off to neutral run-load waiting so the main-menu cleanup popup and follow-up recovery can be observed.");
+        var abandonRunConfirmDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            3,
+            GuiSmokePhase.EnterRun.ToString(),
+            "Confirm main-menu abandon-run cleanup.",
+            DateTimeOffset.UtcNow,
+            "screen.png",
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:enter-run|screen:main-menu|visible:main-menu|ready:true|terminal-run-boundary",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-main-menu-abandon-confirm",
+                true,
+                "main-menu",
+                "stable",
+                null,
+                null,
+                "generic",
+                null,
+                null,
+                null,
+                new[] { "Confirm", "Cancel" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("popup:confirm", "choice", "Confirm", "760,470,210,80", true),
+                    new ObserverActionNode("popup:cancel", "choice", "Cancel", "520,470,210,80", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("choice", "Confirm", "760,470,210,80"),
+                    new ObserverChoice("choice", "Cancel", "520,470,210,80"),
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["terminalRunBoundary"] = "true",
+                    ["mainMenuReturnDetected"] = "true",
+                    ["choiceExtractorPath"] = "generic",
+                    ["rootSceneIsMainMenu"] = "true",
+                },
+            },
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            Array.Empty<string>(),
+            new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.EnterRun.ToString(), "abandon run", "main-menu", DateTimeOffset.UtcNow),
+            },
+            string.Empty,
+            null));
+        Assert(
+            string.Equals(abandonRunConfirmDecision.TargetLabel, "confirm abandon run", StringComparison.OrdinalIgnoreCase),
+            "EnterRun should confirm the main-menu abandon-run popup before proceeding to the fresh new-run path.");
+        Assert(
+            GetPostEnterRunPhase(abandonRunConfirmDecision) == GuiSmokePhase.WaitRunLoad,
+            "Confirming Abandon Run should stay on neutral run-load waiting until the fresh main-menu run-start surface is exported.");
         var ambiguousRunStartDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
             "run",
             "boot-to-long-run",

@@ -5,6 +5,8 @@ static class GuiSmokePostActionPhaseSupport
     internal static GuiSmokePhase GetPostEnterRunPhase(GuiSmokeStepDecision decision)
     {
         return string.Equals(decision.TargetLabel, "continue", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decision.TargetLabel, "abandon run", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decision.TargetLabel, "confirm abandon run", StringComparison.OrdinalIgnoreCase)
             ? GuiSmokePhase.WaitRunLoad
             : GuiSmokePhase.WaitCharacterSelect;
     }
