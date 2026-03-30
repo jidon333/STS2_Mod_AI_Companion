@@ -437,6 +437,7 @@
   "allowedActions": [
     "select attack slot 1",
     "select attack slot 4",
+    "click end turn",
     "wait"
   ],
   "history": [

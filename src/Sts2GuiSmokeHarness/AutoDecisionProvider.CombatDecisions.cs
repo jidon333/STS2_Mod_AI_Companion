@@ -97,36 +97,6 @@ sealed partial class AutoDecisionProvider
                    && HandleCombatContextSupport.HasRecentNonEnemySelection(combatContext, slotIndex);
         }
 
-        bool ShouldWaitForSuppressedNonEnemyLaneConvergence()
-        {
-            if (combatMicroStage.Kind != CombatMicroStageKind.PlayerActionOpen
-                || runtimeCombatState.HasCardSelectionEvidence
-                || runtimeCombatState.HasInFlightPlayerDrivenAction
-                || hasSelectedNonEnemyConfirmEvidence)
-            {
-                return false;
-            }
-
-            foreach (var slotIndex in request.CombatCardKnowledge
-                .Where(card => card.SlotIndex is >= 1 and <= 5)
-                .Where(card => CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatCard(card, request.Observer.PlayerEnergy))
-                .Select(static card => card.SlotIndex)
-                .Concat(request.Observer.CombatHand
-                    .Where(card => card.SlotIndex is >= 1 and <= 5)
-                    .Where(card => CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatHandCard(card, request.Observer.PlayerEnergy, request.CombatCardKnowledge))
-                    .Select(static card => card.SlotIndex))
-                .Distinct())
-            {
-                if (!CombatBarrierSupport.SuppressesNonEnemySlot(combatBarrier, slotIndex)
-                    && ShouldSuppressPendingNonEnemyReselect(slotIndex))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         bool TryUseCombatDecision(GuiSmokeStepDecision? candidate, out GuiSmokeStepDecision allowedDecision)
         {
             allowedDecision = default!;
@@ -480,14 +450,6 @@ sealed partial class AutoDecisionProvider
             {
                 return allowedLingeringSelectionDecision;
             }
-        }
-
-        if (ShouldWaitForSuppressedNonEnemyLaneConvergence())
-        {
-            return CreatePhaseWaitDecision(
-                GuiSmokePhase.HandleCombat,
-                "waiting for recently suppressed non-enemy lane to converge before ending the turn",
-                DisplayControlFlowScreen(request.Observer));
         }
 
         return CloseWithLegalCombatFallback();

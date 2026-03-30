@@ -398,14 +398,14 @@ internal static partial class Program
                 suppressedNonEnemyConvergenceKnowledge,
                 combatNoOpScreenshotPath,
                 suppressedNonEnemyConvergenceHistory);
-            Assert(!suppressedNonEnemyConvergenceActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "A recently suppressed non-enemy lane should keep end turn closed until the lane converges or explicitly clears.");
             Assert(!suppressedNonEnemyConvergenceActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "A recently suppressed non-enemy lane should not reopen generic enemy targeting from stale target summary residue.");
+            Assert(suppressedNonEnemyConvergenceActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "Once the non-enemy lane has fully cleared, legacy suppression should not keep end turn closed.");
             var suppressedNonEnemyConvergenceDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
                 26,
                 GuiSmokePhase.HandleCombat.ToString(),
-                "Wait for the recently suppressed non-enemy lane to converge instead of ending the turn.",
+                "Do not let a cleared non-enemy suppression heuristic block the legal end-turn fallback.",
                 DateTimeOffset.UtcNow,
                 combatNoOpScreenshotPath,
                 new WindowBounds(1, 32, 1280, 720),
@@ -422,9 +422,9 @@ internal static partial class Program
                 suppressedNonEnemyConvergenceKnowledge,
                 suppressedNonEnemyConvergenceActions,
                 suppressedNonEnemyConvergenceHistory,
-                "Do not end the turn while the recent non-enemy lane may still be converging.",
+                "Legacy recent-lane suppression must not trap the combat loop in wait once the lane is already quiescent.",
                 null));
-            Assert(string.Equals(suppressedNonEnemyConvergenceDecision.Status, "wait", StringComparison.OrdinalIgnoreCase), "Recently suppressed non-enemy convergence should prefer wait over legacy end-turn fallback.");
+            Assert(string.Equals(suppressedNonEnemyConvergenceDecision.TargetLabel, "auto-end turn", StringComparison.OrdinalIgnoreCase), "A cleared non-enemy suppression heuristic should fall through to the legal end-turn fallback.");
 
             var runtimePendingNonEnemyObserver = pendingNonEnemySlot3Observer with
             {
