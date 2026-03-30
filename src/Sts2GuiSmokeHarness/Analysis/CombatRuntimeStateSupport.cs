@@ -75,8 +75,7 @@ sealed record CombatRuntimeState(
         !RequiresHandCardSelection
         && PendingSelection is null
         && CardPlayPending == false
-        && TargetingInProgress != true
-        && !CombatRuntimeStateSupport.HasSelectedAttackMetadata(SelectedCardType, SelectedCardTargetType);
+        && TargetingInProgress != true;
 
     public bool HasCardSelectionEvidence => PendingSelection is not null || KeepsCardPlayOpen;
 
@@ -249,7 +248,8 @@ static class CombatRuntimeStateSupport
             && historyPendingSelection.SlotIndex is >= 1 and <= 5
             && HasDownstreamAttackResolutionAttempt(history, historyPendingSelection.SlotIndex))
         {
-            return HasLiveEnemyTargetSurface(observer, runtime)
+            return HasCurrentFrameAttackLaneOwnership(observer, runtime)
+                   && HasLiveEnemyTargetSurface(observer, runtime)
                 ? historyPendingSelection
                 : null;
         }
@@ -299,12 +299,17 @@ static class CombatRuntimeStateSupport
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
         PendingCombatSelection? pendingSelection)
     {
+        var runtime = Read(observer, combatCardKnowledge);
+        if (!HasCurrentFrameAttackLaneOwnership(observer, runtime))
+        {
+            return false;
+        }
+
         if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer).Count > 0)
         {
             return true;
         }
 
-        var runtime = Read(observer, combatCardKnowledge);
         if (runtime.HasExplicitHittableEnemyAuthority)
         {
             return false;
@@ -395,6 +400,22 @@ static class CombatRuntimeStateSupport
         return runtime.KeepsCardPlayOpen || runtime.PendingSelection is not null;
     }
 
+    public static bool HasCurrentFrameAttackLaneOwnership(
+        ObserverSummary observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
+    {
+        return HasCurrentFrameAttackLaneOwnership(observer, Read(observer, combatCardKnowledge));
+    }
+
+    public static bool HasResidualAttackSelectionTail(
+        ObserverSummary observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        PendingCombatSelection? historyPendingSelection,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
+        return HasResidualAttackSelectionTail(observer, Read(observer, combatCardKnowledge), historyPendingSelection, history);
+    }
+
     public static bool LooksLikeFreshCombatEncounterStart(CombatRuntimeState runtime)
     {
         return runtime.RoundNumber == 1
@@ -476,7 +497,7 @@ static class CombatRuntimeStateSupport
     {
         if (historyPendingSelection?.Kind != AutoCombatCardKind.AttackLike
             || historyPendingSelection.SlotIndex is < 1 or > 5
-            || !HasAttackSelectionCarryoverMetadata(observer, runtime)
+            || !HasCurrentFrameAttackLaneOwnership(observer, runtime)
             || runtime.HasInFlightPlayerDrivenAction
             || runtime.PlayerActionsDisabled == true
             || runtime.EndingPlayerTurnPhaseOne == true
@@ -493,24 +514,51 @@ static class CombatRuntimeStateSupport
         var sourceMetadata = TryGetRecentAttackSelectionMetadata(history, historyPendingSelection.SlotIndex);
         if (sourceMetadata is null)
         {
-            return !string.IsNullOrWhiteSpace(runtime.SelectedCardType)
-                   || !string.IsNullOrWhiteSpace(runtime.SelectedCardTargetType)
-                   || string.IsNullOrWhiteSpace(runtime.LastCardPlayFinishedCardId);
+            return true;
         }
 
         return !HasPostSelectionProgress(runtime, sourceMetadata);
     }
 
-    private static bool HasAttackSelectionCarryoverMetadata(ObserverSummary observer, CombatRuntimeState runtime)
+    private static bool HasCurrentFrameAttackLaneOwnership(ObserverSummary observer, CombatRuntimeState runtime)
     {
-        if (observer.Meta.TryGetValue("combatTargetSummary", out var rawTargetSummary)
-            && !string.IsNullOrWhiteSpace(rawTargetSummary))
+        if (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike)
         {
             return true;
         }
 
-        return string.Equals(runtime.SelectedCardType, "Attack", StringComparison.OrdinalIgnoreCase)
-               || IsEnemyTargetType(runtime.SelectedCardTargetType);
+        if (runtime.CardPlayPending != true
+            && runtime.TargetingInProgress != true)
+        {
+            return false;
+        }
+
+        return HasSelectedAttackMetadata(runtime.SelectedCardType, runtime.SelectedCardTargetType)
+               || HasLiveEnemyTargetSurface(observer, runtime);
+    }
+
+    private static bool HasResidualAttackSelectionTail(
+        ObserverSummary observer,
+        CombatRuntimeState runtime,
+        PendingCombatSelection? historyPendingSelection,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
+        if (historyPendingSelection?.Kind != AutoCombatCardKind.AttackLike
+            || historyPendingSelection.SlotIndex is < 1 or > 5
+            || HasCurrentFrameAttackLaneOwnership(observer, runtime)
+            || runtime.HasInFlightPlayerDrivenAction
+            || runtime.PlayerActionsDisabled == true
+            || runtime.EndingPlayerTurnPhaseOne == true
+            || runtime.EndingPlayerTurnPhaseTwo == true
+            || LooksLikeFreshCombatEncounterStart(runtime)
+            || HasDownstreamAttackResolutionAttempt(history, historyPendingSelection.SlotIndex))
+        {
+            return false;
+        }
+
+        return HasSelectedAttackMetadata(runtime.SelectedCardType, runtime.SelectedCardTargetType)
+               || observer.Meta.TryGetValue("combatTargetSummary", out var rawTargetSummary)
+               && !string.IsNullOrWhiteSpace(rawTargetSummary);
     }
 
     private static bool HasDownstreamAttackResolutionAttempt(

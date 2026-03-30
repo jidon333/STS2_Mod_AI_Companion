@@ -1094,22 +1094,25 @@ internal static partial class Program
                 runtimeTargetSummaryHistoryCarryObserver,
                 runtimeTargetingKnowledge,
                 CombatHistorySupport.TryGetPendingCombatSelection(runtimeTargetSummaryHistoryCarryHistory));
-            Assert(reconstructedPendingAttack is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: 3 },
-                "Runtime target summary should preserve the recent attack-lane selection instead of clearing it before enemy targeting resolves.");
+            Assert(reconstructedPendingAttack is null,
+                "Runtime target summary plus stale selected-card metadata should not resurrect the old attack lane after current-frame ownership clears.");
             var runtimeTargetSummaryHistoryCarryActions = BuildAllowedActions(
                 GuiSmokePhase.HandleCombat,
                 new ObserverState(runtimeTargetSummaryHistoryCarryObserver, null, null, null),
                 runtimeTargetingKnowledge,
                 runtimeStateOnlyScreenshotPath,
                 runtimeTargetSummaryHistoryCarryHistory);
-            Assert(runtimeTargetSummaryHistoryCarryActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
-                "Runtime target summary plus recent attack history should keep click-enemy open even when selected-slot metadata briefly clears.");
+            Assert(!runtimeTargetSummaryHistoryCarryActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                "Runtime target summary plus recent attack history should keep click-enemy closed once current-frame attack ownership clears.");
+            Assert(runtimeTargetSummaryHistoryCarryActions.Contains("wait", StringComparer.OrdinalIgnoreCase)
+                   && !runtimeTargetSummaryHistoryCarryActions.Any(action => action.StartsWith("select attack slot ", StringComparison.OrdinalIgnoreCase)),
+                "Runtime target summary plus recent attack history should wait for fresh combat selection truth instead of immediately reopening another attack lane.");
             var runtimeTargetSummaryHistoryCarryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
                 26,
                 GuiSmokePhase.HandleCombat.ToString(),
-                "Rebuild the unresolved attack lane from runtime target summary before retrying the same slot.",
+                "Wait for fresh combat selection truth when target summary survives after current-frame attack ownership already cleared.",
                 DateTimeOffset.UtcNow,
                 runtimeStateOnlyScreenshotPath,
                 new WindowBounds(1, 32, 1280, 720),
@@ -1126,10 +1129,11 @@ internal static partial class Program
                 runtimeTargetingKnowledge,
                 runtimeTargetSummaryHistoryCarryActions,
                 runtimeTargetSummaryHistoryCarryHistory,
-                "Use runtime target summary and recent attack-lane history before repeating the same attack-slot hotkey.",
+                "Do not rebuild a stale attack lane from runtime target summary after current-frame ownership cleared.",
                 null));
-            Assert(runtimeTargetSummaryHistoryCarryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
-                "Runtime target summary plus recent attack-lane history should drive enemy targeting instead of reopening the same attack slot.");
+            Assert(runtimeTargetSummaryHistoryCarryDecision.Status == "wait"
+                   && runtimeTargetSummaryHistoryCarryDecision.TargetLabel is null,
+                "Runtime target summary plus recent attack-lane history should wait instead of driving enemy targeting or reopening another slot.");
 
             var runtimeTargetSummaryAfterDriftHistory = new[]
             {
@@ -1140,16 +1144,17 @@ internal static partial class Program
                     runtimeTargetSummaryHistoryCarryObserver,
                     runtimeTargetingKnowledge,
                     CombatHistorySupport.TryGetPendingCombatSelection(runtimeTargetSummaryAfterDriftHistory),
-                    runtimeTargetSummaryAfterDriftHistory) is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: 3 },
-                "Live enemy-target surface should keep the recent attack lane alive even after an observer-drift retry.");
+                    runtimeTargetSummaryAfterDriftHistory) is null,
+                "Observer-drift history alone should not keep the recent attack lane alive without fresh current-frame ownership.");
             var runtimeTargetSummaryAfterDriftActions = BuildAllowedActions(
                 GuiSmokePhase.HandleCombat,
                 new ObserverState(runtimeTargetSummaryHistoryCarryObserver, null, null, null),
                 runtimeTargetingKnowledge,
                 runtimeStateOnlyScreenshotPath,
                 runtimeTargetSummaryAfterDriftHistory);
-            Assert(runtimeTargetSummaryAfterDriftActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
-                "Live enemy-target surface should still allow click-enemy after an observer-drift retry.");
+            Assert(!runtimeTargetSummaryAfterDriftActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase)
+                   && runtimeTargetSummaryAfterDriftActions.Any(action => action.StartsWith("select attack slot ", StringComparison.OrdinalIgnoreCase)),
+                "Observer-drift history alone should reopen a fresh explicit attack slot instead of re-clicking the stale target.");
 
             var targetSummaryStaleFinishedMetadata = JsonSerializer.Serialize(
                 new CombatBarrierHistoryMetadata(
@@ -1753,13 +1758,13 @@ internal static partial class Program
                 new CombatCardKnowledgeHint(2, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
                 new CombatCardKnowledgeHint(3, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
             };
-            Assert(!CombatRuntimeStateSupport.Read(carryoverRandomEnemyObserver, carryoverRandomEnemyKnowledge).ExplicitlyClearedSelection,
-                "Random-enemy attack metadata should not be treated as an explicit cleared selection.");
+            Assert(CombatRuntimeStateSupport.Read(carryoverRandomEnemyObserver, carryoverRandomEnemyKnowledge).ExplicitlyClearedSelection,
+                "Random-enemy attack metadata without current-frame ownership should count as a cleared selection.");
             Assert(CombatRuntimeStateSupport.ResolvePendingSelection(
                     carryoverRandomEnemyObserver,
                     carryoverRandomEnemyKnowledge,
-                    CombatHistorySupport.TryGetPendingCombatSelection(carryoverRandomEnemyHistory)) is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: 1 },
-                "Selected attack metadata may still preserve the last lane label, but it should not reopen a false confirm lane without live in-card-play ownership.");
+                    CombatHistorySupport.TryGetPendingCombatSelection(carryoverRandomEnemyHistory)) is null,
+                "Selected random-enemy metadata alone should not preserve the old lane once current-frame ownership is gone.");
             var carryoverRandomEnemyActions = BuildAllowedActions(
                 GuiSmokePhase.HandleCombat,
                 new ObserverState(carryoverRandomEnemyObserver, null, null, null),
@@ -1768,6 +1773,9 @@ internal static partial class Program
                 carryoverRandomEnemyHistory);
             Assert(!carryoverRandomEnemyActions.Contains("confirm selected attack card", StringComparer.OrdinalIgnoreCase),
                 "Random-enemy attack metadata without live in-card-play ownership should keep confirm selected attack card closed.");
+            Assert(carryoverRandomEnemyActions.Contains("wait", StringComparer.OrdinalIgnoreCase)
+                   && !carryoverRandomEnemyActions.Any(action => action.StartsWith("select attack slot ", StringComparison.OrdinalIgnoreCase)),
+                "Random-enemy attack metadata without live ownership should wait for fresh combat selection truth instead of reopening another attack lane.");
             var carryoverRandomEnemyDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
@@ -1792,8 +1800,9 @@ internal static partial class Program
                 carryoverRandomEnemyHistory,
                 "Do not synthesize confirm-selected-attack from stale random-enemy metadata alone.",
                 null));
-            Assert(!string.Equals(carryoverRandomEnemyDecision.TargetLabel, "confirm selected attack card", StringComparison.OrdinalIgnoreCase),
-                "Random-enemy attack metadata without live in-card-play ownership should not emit confirm selected attack card.");
+            Assert(carryoverRandomEnemyDecision.Status == "wait"
+                   && carryoverRandomEnemyDecision.TargetLabel is null,
+                "Random-enemy attack metadata without live in-card-play ownership should wait instead of reopening another attack lane.");
 
     }
 }

@@ -49,6 +49,7 @@ internal static partial class Program
 
         var actions = new List<string>();
         var combatContext = context.CombatContext;
+        var historyPendingSelection = CombatHistorySupport.TryGetPendingCombatSelection(combatContext.CombatHistory);
         var blockedCombatNoOpCounts = combatContext.CombatNoOpCountsBySlot;
         var pendingSelection = context.PendingCombatSelection;
         var runtimeCombatState = context.RuntimeCombatState;
@@ -102,6 +103,12 @@ internal static partial class Program
                                              && !runtimeCombatState.HasCardSelectionEvidence
                                              && !context.CanResolveCombatEnemyTarget
                                              && CombatHistorySupport.HasRecentAttackSelectionChurnWithoutResolution(combatContext.CombatHistory);
+        var staleAttackSelectionTail = pendingSelection is null
+                                       && CombatRuntimeStateSupport.HasResidualAttackSelectionTail(
+                                           observer.Summary,
+                                           combatCardKnowledge,
+                                           historyPendingSelection,
+                                           combatContext.CombatHistory);
         if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingNonEnemy)
         {
             if (hasSelectedNonEnemyConfirmEvidence)
@@ -157,6 +164,11 @@ internal static partial class Program
         }
 
         if (unresolvedAttackSelectionChurn)
+        {
+            return new[] { "wait" };
+        }
+
+        if (staleAttackSelectionTail)
         {
             return new[] { "wait" };
         }

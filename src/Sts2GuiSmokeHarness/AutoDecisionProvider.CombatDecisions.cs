@@ -12,6 +12,7 @@ sealed partial class AutoDecisionProvider
         AutoCombatAnalysis? analysis = null;
         AutoCombatAnalysis GetCombatAnalysis() => analysis ??= context.CombatAnalysis;
         var combatContext = context.CombatContext;
+        var historyPendingSelection = CombatHistorySupport.TryGetPendingCombatSelection(combatContext.CombatHistory);
         var pendingSelection = context.PendingCombatSelection;
         var runtimeCombatState = context.RuntimeCombatState;
         var combatBarrier = context.CombatBarrierEvaluation;
@@ -217,6 +218,12 @@ sealed partial class AutoDecisionProvider
                                              && !runtimeCombatState.HasCardSelectionEvidence
                                              && !enemyTargetOpportunity
                                              && CombatHistorySupport.HasRecentAttackSelectionChurnWithoutResolution(combatContext.CombatHistory);
+        var staleAttackSelectionTail = pendingSelection is null
+                                       && CombatRuntimeStateSupport.HasResidualAttackSelectionTail(
+                                           request.Observer,
+                                           request.CombatCardKnowledge,
+                                           historyPendingSelection,
+                                           combatContext.CombatHistory);
         if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingNonEnemy)
         {
             if (hasSelectedNonEnemyConfirmEvidence
@@ -278,6 +285,14 @@ sealed partial class AutoDecisionProvider
             return CreatePhaseWaitDecision(
                 GuiSmokePhase.HandleCombat,
                 "waiting for explicit combat selection truth before reopening another attack lane",
+                DisplayControlFlowScreen(request.Observer));
+        }
+
+        if (staleAttackSelectionTail)
+        {
+            return CreatePhaseWaitDecision(
+                GuiSmokePhase.HandleCombat,
+                "waiting for fresh combat selection truth before reopening an attack lane from stale target diagnostics",
                 DisplayControlFlowScreen(request.Observer));
         }
 
