@@ -2,7 +2,7 @@
 
 > 상태: 현재 사용 중
 > 기준 브랜치: `main`
-> 최종 갱신: 2026-03-30
+> 최종 갱신: 2026-03-31
 > 대상: 새 구현 세션, 새 검증 세션, 새 참모 세션
 
 ## 문서 목적
@@ -61,6 +61,71 @@ currentScreen = logical/flow screen
 ```
 
 semantic fix는 기존 owner 구조를 다시 우회하지 않고 current owner 파일 안에서만 좁게 한다.
+
+## 2026-03-31 즉시 상태
+
+새 세션이 가장 먼저 알아야 하는 것은 아래 다섯 가지다.
+
+1. current `main`의 `build`, `self-test`, `replay-test`, `replay-parity-test`는 여전히 green이다.
+2. repeated `reward-pick` plateau family는 `15dd5cf` `Prioritize reward-pick child-screen export facts` 이후 [boot-to-long-run-20260330-live18](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live18)에서 재현되지 않았다.
+3. combat target-selection / carryover self-test red는 `d9e4c01`, `10028f8`, `ed0a379`, `9c6621b` 이후 green으로 닫혔다.
+4. stale `combatTargetSummary` 기반 attack-lane churn/no-op family는 [boot-to-long-run-20260330-live21](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21)에서 재현되지 않았다.
+5. latest authoritative live blocker는 combat이 아니라 `HandleEvent` ancient option wait plateau다.
+
+latest important commits:
+
+1. `15dd5cf` `Prioritize reward-pick child-screen export facts`
+2. `d9e4c01` `Make combat barrier self-test use live target ids`
+3. `10028f8` `Make combat target-selection self-test live-faithful`
+4. `ed0a379` `Wait on unresolved attack-lane churn`
+5. `9c6621b` `Narrow combat target-summary carryover`
+
+latest blocker evidence:
+
+1. failure root:
+   - [boot-to-long-run-20260330-live21](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21)
+2. failure summary:
+   - [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21/attempts/0001/failure-summary.json)
+3. trace:
+   - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21/attempts/0001/run.log)
+4. decisive request:
+   - [0101.request.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21/attempts/0001/steps/0101.request.json)
+
+current blocker shape:
+
+```text
+phase=HandleEvent
+reason=waiting for explicit ancient event option buttons
+allowedActions=[click event choice, wait]
+observer.actionNodes already contain actionable event-option buttons with bounds
+```
+
+즉 문제는:
+
+```text
+ancient option 화면을 못 봤다
+```
+
+가 아니라
+
+```text
+ancient lane이라고 판단한 뒤,
+실제 보이는 generic explicit NEventOptionButton을
+"ancient explicit option"으로는 인정하지 못해서
+decision이 wait로만 떨어진다
+```
+
+이다.
+
+이 family의 historical root는 아래다.
+
+1. `96d3db6` `Fix ancient completion release reopen recovery`
+2. `b7314e8` `Fix ancient completion release reopen recovery`
+3. `57a67a0` `Extract observer routing modules from Program.cs`
+4. `94896e9` `Extract GuiSmokeHarness decision contracts and provider verticals`
+5. `091b4d7` `Collapse mixed-state guard residue onto canonical owner truth`
+
+즉 어젯밤 새로 만든 코드라기보다, **3월 23일에 들어온 ancient special-case가 extraction 이후에도 그대로 남아 있다가 recent explicit-truth cleanup 뒤에 드러난 것**이다.
 
 ## 최근 완료된 work unit
 
@@ -231,23 +296,23 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ## 다음 세션의 기본 목표
 
-현재 기준으로 immediate priority는 coverage frontier보다 **`deck-remove` / reward card child-screen explicit owner/export cleanup**이다.
+현재 기준으로 immediate priority는 coverage frontier보다 **`live21` ancient event option blocker closure**다.
 
 ```text
-1. decompiled runtime truth + AutoSlay contract로 `deck-remove` / reward-pick child-screen concrete contract를 먼저 다시 읽는다
-2. extractor/export와 card-selection owner를 좁혀 transient captured/enriched recapture를 줄인다
-3. clean deploy / Manual Clean Boot / identity verify 뒤 fresh long-run live root를 다시 만든다
-4. first authoritative blocker가 나오면 blocker 1개만 분류한다
+1. decompiled runtime truth + AutoSlay contract로 ancient event option phase를 먼저 다시 읽는다
+2. exporter가 ancient option lane fact와 generic explicit `NEventOptionButton` fact를 additive하게 내는지 확인한다
+3. harness는 dialogue/completion만 ancient 특화 유지하고, option phase는 generic explicit event-option button contract를 먼저 믿게 정리한다
+4. self-test / replay / parity를 다시 잠근 뒤 clean deploy / Manual Clean Boot / identity verify 후 fresh long-run live root를 다시 만든다
 ```
 
 현재 바로 열 파일:
 
 1. [RuntimeSnapshotReflectionExtractor.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2ModAiCompanion.Mod/Runtime/RuntimeSnapshotReflectionExtractor.cs)
-2. [Observer/CardSelectionObserverSignals.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/CardSelectionObserverSignals.cs)
+2. [Observer/AncientEventObserverSignals.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/AncientEventObserverSignals.cs)
 3. [AutoDecisionProvider.NonCombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
-4. [Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs)
-5. [CardRewardScreenHandler.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/knowledge/decompiled/MegaCrit/sts2/Core/AutoSlay/Handlers/Screens/CardRewardScreenHandler.cs)
-6. [DeckCardSelectScreenHandler.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/knowledge/decompiled/MegaCrit/sts2/Core/AutoSlay/Handlers/Screens/DeckCardSelectScreenHandler.cs)
+4. [Program.AllowedActions.NonCombat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.NonCombat.cs)
+5. [Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs)
+6. [EventRoomHandler.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/knowledge/decompiled/MegaCrit/sts2/Core/AutoSlay/Handlers/Rooms/EventRoomHandler.cs)
 
 ## validation baseline
 
@@ -275,7 +340,8 @@ current live baseline note:
 
 - `live8`는 combat false-confirm + speed regression을 드러낸 authoritative regression root였다
 - `84e4647`, `5ebe718`, `3a24338` 이후 fresh live root [boot-to-long-run-20260330-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live9)에서 그 plateau는 재현되지 않았다
-- current 남은 high-signal gap은 `deck-remove` / reward card child-screen에서 transient `captured/enriched` recapture가 끼는 smoothness 문제다
+- `15dd5cf`, `10028f8`, `ed0a379`, `9c6621b` 이후 reward-pick repeated plateau와 stale combat carryover family는 재현되지 않았다
+- current authoritative live blocker는 [boot-to-long-run-20260330-live21](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21)의 `HandleEvent` ancient option wait plateau다
 
 ## 절대 reopen하지 말 것
 
@@ -290,7 +356,8 @@ current live baseline note:
 ```text
 current main의 하네스 구조 정리와 anti-drift recovery wave는 current code/test baseline에서 닫혔다.
 새 세션은 old Program.cs monolith, screenshot-first recovery, broad mixed-state fallback을 다시 가져오지 말고,
-먼저 `deck-remove` / reward card child-screen concrete contract를 decompiled truth와 AutoSlay 기준으로 다시 맞추고,
+먼저 `live21` ancient event option blocker를 decompiled truth와 AutoSlay 기준으로 닫아라.
+핵심은 dialogue/completion만 ancient 특화로 남기고, option phase는 generic explicit `NEventOptionButton` contract를 먼저 믿게 정리하는 것이다.
 그 다음 clean deploy / Manual Clean Boot 뒤 fresh authoritative live root를 다시 만들고,
 그 다음 first blocker 1개만 decompiled truth와 AutoSlay contract 기준으로 다뤄라.
 ```
