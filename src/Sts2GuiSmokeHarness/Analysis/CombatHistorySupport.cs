@@ -179,6 +179,43 @@ static class CombatHistorySupport
                    || targetLabel.Contains("취소", StringComparison.OrdinalIgnoreCase));
     }
 
+    public static bool HasRecentAttackSelectionChurnWithoutResolution(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        if (history.Count < 2)
+        {
+            return false;
+        }
+
+        var distinctSlots = new HashSet<int>();
+        var consecutiveSelections = 0;
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (!string.Equals(entry.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (TryParsePendingCombatSelection(entry.TargetLabel, out var selection)
+                && selection is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: >= 1 and <= 5 })
+            {
+                distinctSlots.Add(selection.SlotIndex);
+                consecutiveSelections += 1;
+                continue;
+            }
+
+            if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.TargetLabel, "observer-accepted", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        return consecutiveSelections >= 2 && distinctSlots.Count >= 2;
+    }
+
     private static bool TryResolveCombatLaneSlotIndex(
         string? targetLabel,
         IReadOnlyList<GuiSmokeHistoryEntry> history,

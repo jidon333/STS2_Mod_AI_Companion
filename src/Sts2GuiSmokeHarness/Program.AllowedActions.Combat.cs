@@ -98,6 +98,10 @@ internal static partial class Program
         var pendingAttackBlocked = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
                                    && blockedCombatNoOpCounts.TryGetValue(pendingSelection.SlotIndex, out var pendingNoOpCount)
                                    && pendingNoOpCount >= 2;
+        var unresolvedAttackSelectionChurn = pendingSelection is null
+                                             && !runtimeCombatState.HasCardSelectionEvidence
+                                             && !context.CanResolveCombatEnemyTarget
+                                             && CombatHistorySupport.HasRecentAttackSelectionChurnWithoutResolution(combatContext.CombatHistory);
         if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingNonEnemy)
         {
             if (hasSelectedNonEnemyConfirmEvidence)
@@ -150,6 +154,11 @@ internal static partial class Program
             return actions
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+        }
+
+        if (unresolvedAttackSelectionChurn)
+        {
+            return new[] { "wait" };
         }
 
         foreach (var slotIndex in GetPlayableCombatAttackSlots(observer, combatCardKnowledge))

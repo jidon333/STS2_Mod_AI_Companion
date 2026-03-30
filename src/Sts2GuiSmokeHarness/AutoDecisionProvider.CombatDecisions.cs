@@ -213,6 +213,10 @@ sealed partial class AutoDecisionProvider
                                          && pendingSelection.SlotIndex is >= 1 and <= 5
                                          && CombatRuntimeStateSupport.HasSelectionToKeep(request.Observer, request.CombatCardKnowledge)
                                          && HandleCombatContextSupport.GetCombatNoOpCountForSlot(combatContext, pendingSelection.SlotIndex) >= 2;
+        var unresolvedAttackSelectionChurn = pendingSelection is null
+                                             && !runtimeCombatState.HasCardSelectionEvidence
+                                             && !enemyTargetOpportunity
+                                             && CombatHistorySupport.HasRecentAttackSelectionChurnWithoutResolution(combatContext.CombatHistory);
         if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingNonEnemy)
         {
             if (hasSelectedNonEnemyConfirmEvidence
@@ -267,6 +271,14 @@ sealed partial class AutoDecisionProvider
             }
 
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for selected combat lane to resolve", DisplayControlFlowScreen(request.Observer));
+        }
+
+        if (unresolvedAttackSelectionChurn)
+        {
+            return CreatePhaseWaitDecision(
+                GuiSmokePhase.HandleCombat,
+                "waiting for explicit combat selection truth before reopening another attack lane",
+                DisplayControlFlowScreen(request.Observer));
         }
 
         var knowledgeAttackSlot = request.CombatCardKnowledge
