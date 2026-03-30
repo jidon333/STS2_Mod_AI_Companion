@@ -22,7 +22,7 @@ coverage status 의미:
 
 | Gap | Meaning | Current Status |
 |---|---|---|
-| `MAP-POSTNODE-REWARD-REOPEN` | `WaitPostMapNodeRoom` reward destination reopen self-test regression | partial |
+| `MAP-POSTNODE-REWARD-REOPEN` | `WaitPostMapNodeRoom` reward destination reopen contract | green |
 | `VAL-CAPTURE-BOUNDARY` | phase log 이후 capture/request/failure emission을 bounded contract로 고정 | green |
 | `TERM-LIFECYCLE-CHAIN` | terminal -> restart -> next-attempt first-screen evidence | green |
 | `REWARD-AFTERMATH-MAP-HANDOFF` | reward aftermath 이후 map-node continuity, `ChooseFirstNode` / parity alignment | green |
@@ -47,14 +47,14 @@ coverage status 의미:
 | `MAP-01` | `ChooseFirstNode` | map-node | green | replay parity fixtures expecting `foregroundOwner=map`, exported map-node self-tests | explicit map node routing strong |
 | `MAP-02` | `ChooseFirstNode` / `HandleEvent` | map-overlay foreground | green | `Program.SelfTests.NonCombatForegroundOwnership.cs` map-overlay foreground assertions, `Program.SelfTests.StallSentinel.cs` `map-overlay-noop-loop` sentinel | stale event residue suppression covered |
 | `MAP-03` | `WaitMap` | room reopen | green | `Program.SelfTests.NonCombatForegroundOwnership.cs`의 `WaitMap` reopen reward/event/treasure assertions | mixed modal reopen now follows canonical owner/release handoff directly |
-| `MAP-04` | `WaitPostMapNodeRoom` | destination room handoff | partial | representative live roots [observer-first-combat-speed-20260328-live6](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-combat-speed-20260328-live6) (`step=16`) + [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1) (`step=15`, `25`), but current harness self-test [Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs](../../src/Sts2GuiSmokeHarness/Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs) still fails on reward destination reopen (`line 704`) | event/combat/rest/shop continuity evidence는 남아 있지만, reward reopen self-test regression 때문에 current `main`에서 완전 green으로 보지 않는다 |
+| `MAP-04` | `WaitPostMapNodeRoom` | destination room handoff | green | [Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs](../../src/Sts2GuiSmokeHarness/Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs) reward/event/combat/rest/shop destination reopen assertions + representative live roots [observer-first-combat-speed-20260328-live6](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-combat-speed-20260328-live6) and [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1) | reward reopen self-test regression은 current `main`에서 닫혔고, exported room handoff continuity가 self-test/live로 다시 맞춰졌다 |
 
 ## Combat
 
 | State ID | Canonical Phase | Owner / Lane | Coverage | Representative Evidence | Notes |
 |---|---|---|---|---|---|
 | `COMBAT-01` | `WaitCombat` | combat acceptance | green | `Program.SelfTests.CombatContracts.*.cs`의 WaitCombat acceptance assertions (`ready`, `stable`, `inCombat`) | strong acceptance gate |
-| `COMBAT-02` | `HandleCombat` | card select | green | combat opener self-test (`combat select attack slot 1`) + speed proof root [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9) | common combat opener is now observer-first (`captureMode=skipped`) |
+| `COMBAT-02` | `HandleCombat` | card select | partial | combat opener self-tests, `84e4647` current-main recovery commit, and `Program.SelfTests.CombatContracts.NonEnemyAndRuntimeState.cs` explicit-slot assertions | screenshot-primary slot selection은 current code/test baseline에서 제거됐지만, fresh post-recovery live root는 아직 다시 찍어야 한다 |
 | `COMBAT-03` | `HandleCombat` | target lane | green | `Analysis/CombatMicroStageSupport.cs`, `Analysis/CombatPostActionObservationSupport.cs`, `Analysis/CombatTargetabilitySupport.cs`, `Program.SelfTests.CombatContracts.TargetSelection.cs`, parity fixtures `combat-target-wait.request.json` / `combat-target-click.request.json`, fresh live root [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2) | unresolved attack lane는 `end turn`으로 새지 않고, runtime `combatTargetSummary` raw fact까지 explicit target authority로 소비된다 |
 | `COMBAT-04` | `HandleCombat` | cancel blocked selection | green | old blocker replay `0167.request.json` family, commit-era closure evidence referenced in current conversation | explicit cancel lane is required contract |
 | `COMBAT-05` | `HandleCombat` | end-turn pre-ack | green | current code barriers + self-tests + fresh live roots [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) and [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2) | `auto-end turn`은 `PlayerActionOpen` stage에서만 열리고 unresolved non-enemy/attack lane에서는 금지된다 |
@@ -140,7 +140,7 @@ coverage status 의미:
 
 | Priority | Work Item | Why |
 |---|---|---|
-| P1 | `WaitPostMapNodeRoom -> reward reopen` self-test fix | `MAP-04`는 representative live continuity는 있으나 current self-test red 때문에 아직 `partial`이다 |
+| P1 | combat post-recovery fresh live rerun | `84e4647` / `5ebe718` 뒤 current code/test baseline은 green이지만 combat live continuity는 다시 찍어야 한다 |
 | P1 | event reward substate live evidence | `EVENT-05` remains partial |
 | P1 | reward-map loop sentinel evidence | `REWARD-10` remains partial |
 

@@ -10,11 +10,11 @@
 
 ## 현재 마일스톤 위치
 
-- 현재 진행 축: `M7 non-combat stability` + `M8 combat stability` + `M9 observer-first speed recovery` + `startup main-menu phase-boundary` + `published-first observer provenance migration` + post-refactor cleanup completion
+- 현재 진행 축: `M5 authoritative long-run blocker loop` + post-refactor cleanup completion + `post-live8 anti-drift recovery`
 - 현재 engineering focus:
-  1. `Sts2GuiSmokeHarness` cleanup-complete 기준선과 combat micro-stage baseline을 current docs에 고정
-  2. explicit event / common combat hot path를 `observer-first, screenshot-on-demand`로 되돌린 speed baseline 유지
-  3. unrelated known self-test red (`WaitPostMapNodeRoom -> reward reopen`)를 current owner 구조 안에서 좁게 닫기
+  1. anti-drift rules를 current docs와 current owner code에 다시 고정
+  2. `84e4647` / `5ebe718` current-main recovery 이후 fresh authoritative live baseline을 다시 세우기
+  3. next blocker가 나오면 first blocker 1개만 decompiled runtime truth + `AutoSlay` contract 기준으로 닫기
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
 중요한 현재 해석:
@@ -26,7 +26,7 @@
 - post-refactor cleanup program은 current `main`에서 완료 상태다
 - combat stale-end-turn / target plateau family는 current `main`에서 micro-stage + quiet convergence로 닫혔다
 - explicit shop foreground 위에 stale reward misroute가 끼어들던 `HandleShop -> HandleRewards -> decision-wait-plateau` family는 current `main`에서 즉시 `HandleRewards -> HandleShop` 회복으로 닫혔다
-- 현재 핵심은 **combat blocker 재발 방지 baseline을 유지하면서 unrelated noncombat self-test red와 남은 coverage gap만 좁게 다루는 것**이다
+- 현재 핵심은 **cleanup-complete baseline을 reopen하지 않고 explicit truth 기반 current-main authority contracts를 유지한 채 fresh live baseline을 다시 세우는 것**이다
 
 ## 현재 우선순위
 
@@ -46,7 +46,7 @@ current `main`의 하네스 구조 정리 wave 1-8은 완료됐다.
 
 cleanup program 완료 이후에도 current follow-up은 남아 있다.
 
-현재 가장 중요한 세 signal은 아래다.
+현재 가장 중요한 네 signal은 아래다.
 
 1. replay parity suite
    - status: green
@@ -60,7 +60,19 @@ cleanup program 완료 이후에도 current follow-up은 남아 있다.
      - `step=51` 이후 settle reason은 generic observer delta가 아니라 `combat-enemy-click-resolved`였다
      - `step=55 -> 60`에서는 unresolved selected lane이 `right-click cancel unresolved selected card`로만 해소됐다
      - run은 `attempt-completed:max-steps-reached`로 끝났고 `failure-summary.json`은 생성되지 않았다
-3. latest cleanup proof root
+3. latest anti-drift recovery commits
+   - commits:
+     - `bc53c34` `Retire broad card-selection subtype fallback`
+     - `f29cc5d` `Retire screenshot-first noncombat recovery paths`
+     - `52ebabd` `Reinforce harness anti-drift rules in current docs`
+     - `84e4647` `Recover explicit combat and noncombat authority contracts`
+     - `5ebe718` `Refresh replay fixtures for exported map routing`
+     - `3a24338` `Retire combat screenshot and stale target fallbacks`
+   - result:
+     - `build`, `self-test`, `replay-test`, `replay-parity-test` are green on current `main`
+     - combat false-confirm lane, screenshot-primary combat selection, stale target recenter fallback, exported-map routing drift, and reward screenshot residue were tightened back toward explicit truth
+     - fresh authoritative live rerun is still required before upgrading the current live baseline
+4. latest cleanup proof root
    - root: [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run)
    - result: representative fresh live root, cleanup-complete `main`에서 `WaitMainMenu -> EnterRun`, `WaitRunLoad -> HandleCombat`, combat wait/re-capture continuity가 모두 비회귀였다
    - shape:
@@ -85,18 +97,18 @@ cleanup program 완료 이후에도 current follow-up은 남아 있다.
 
 가 아니다.
 
-현재 authoritative frontier는
+historical frontier는
 
 ```text
 "mixed-state noncombat guard cleanup, combat EndTurn pre-actuation drift, combat post-wait recapture continuity는 current main에서 닫혔고,
 capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
 combat stale-end-turn / target plateau family도 current main에서 닫혔고,
-현재 남은 건 blocker라기보다 unrelated noncombat self-test red와 low-priority coverage frontier다"
+현재 next step은 anti-drift recovery 뒤 fresh live baseline을 다시 찍는 것이다"
 ```
 
 ### 3. current speed baseline
 
-- speed recovery program의 핵심 목표였던 `capture-first -> observer-first, screenshot-on-demand` 전환은 common hot path 기준으로 현재 `main`에 반영됐다
+- speed recovery program의 핵심 목표였던 `capture-first -> observer-first, screenshot-on-demand` 전환은 historical baseline으로 current docs에 남아 있다
 - speed proof root:
   - [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
 - 해석:
@@ -104,6 +116,8 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
   - common combat chain `step=11~17`도 `captureMode=skipped`, `sceneReasoningMode=observer-only`
   - representative `preflight->request`는 `1155~1466ms` band로 내려왔다
   - same root의 attempt는 `step=19`에서 `returned-main-menu` terminal로 끝났지만, speed proof 관점에서는 captured hot path가 0건이라는 점이 핵심이다
+  - 다만 `live8` regression root에서 combat false-confirm + screenshot-heavy slowdown이 다시 드러났고, current `main`에는 이를 되돌린 recovery commits (`84e4647`, `5ebe718`)가 반영돼 있다
+  - 그래서 speed baseline은 current code/test에서는 회복됐지만, fresh live proof는 다시 찍어야 한다
   - 이 root는 semantic blocker root가 아니라 speed/capture baseline evidence로만 본다
 
 ## 진행 스냅샷
@@ -113,12 +127,12 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
 | Startup / Trust / Deploy Identity | green | broad top blocker 아님, latest live root에서 main-menu phase-boundary도 비회귀 |
 | Harness Architecture | green | wave 1-8 complete, shell/module split complete |
 | Build / Shared Self-Test | green | current `main` 기준 통과 |
-| Harness Self-Test | red | current `main` 기준으로 `WaitPostMapNodeRoom -> reward reopen` known failure 1건이 남아 있다 |
+| Harness Self-Test | green | `84e4647` current-main recovery 이후 self-test green |
 | Replay Golden Suite | green | `replay-test` 통과 |
 | Replay Parity Suite | green | `reward-aftermath-map-handoff` 포함 current parity fixtures green |
 | Non-Combat Stability | green | reward aftermath map-node continuity closure, fresh live root confirms post-reward progression |
-| Combat Stability | green | micro-stage gating, quiet convergence settle, runtime target-summary authority까지 current `main`에 반영됐고 fresh live root에서 stale end-turn / target plateau family가 재현되지 않았다 |
-| Live-Run Speed Recovery | green | explicit event / common combat hot path가 observer-first로 복귀했고 representative speed root에서 captured step가 0건 |
+| Combat Stability | partial | current code/test baseline은 explicit confirm/target authority를 다시 고정했고 self-test/replay green이지만, fresh post-recovery live rerun은 아직 pending |
+| Live-Run Speed Recovery | partial | historical observer-first proof는 남아 있고 screenshot-primary combat path는 current code/test baseline에서 제거됐지만, fresh post-recovery speed live proof는 아직 pending |
 | Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 compatibility는 legacy surface로만 남는다 |
 | Post-Refactor Cleanup Program | green | runner residual, noncombat residue, partial `Program` owner shedding, supervision health split까지 current `main`에 반영 |
 | Capture Boundary | green | bounded failure contract와 self-test 위에 fresh live proof [capture-boundary-proof-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1)이 추가됐다 |
@@ -127,20 +141,22 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
 ## 현재 바로 믿을 수 있는 것
 
 - `build`, `Sts2ModKit.SelfTest`, `replay-test`, `replay-parity-test`는 current `main`에서 green이다
-- `Sts2GuiSmokeHarness -- self-test`는 현재 `WaitPostMapNodeRoom -> reward reopen` known failure 1건 때문에 red다
+- `Sts2GuiSmokeHarness -- self-test`도 current `main`에서 green이다
 - replay parity는 current `main` 기준 green이다
 - `WaitRunLoad -> HandleRewards` resumed room handoff fix는 current `main`에 반영되어 있다
 - reward aftermath `ChooseFirstNode` exported-node closure는 current `main`에 반영되어 있다
 - `WaitMainMenu`는 current `main`에서 actual `Continue` / `Singleplayer` run-start surface가 나오기 전에는 accepted 되지 않는다
-- explicit event recovery와 common combat lane은 current `main`에서 screenshot 기본 경로가 아니다
-- representative speed proof root에서 explicit event/combat chain의 `captureMode`는 전부 `skipped`다
+- current combat/noncombat owner code는 screenshot-primary fallback이 아니라 explicit truth 우선 기준으로 다시 묶여 있다
+- historical speed proof root에서 explicit event/combat chain의 `captureMode`는 전부 `skipped`였고, current `main`은 그 baseline을 fresh live로 다시 확인해야 하는 상태다
 - current `main`의 control-flow observer provenance는 published-first이고, published provenance는 legacy `visibleScreen` / `sceneReady` 계열로 다시 채워지지 않는다
 - bridge node semantics는 compatibility scene winner를 다시 먹지 않는다
 - combat post-action은 더 이상 generic observer delta 하나로 다음 step을 열지 않고, lane micro-stage + quiet convergence로 settle된다
 - runtime `combatTargetSummary` raw fact는 current `main`에서 explicit enemy-target authority로 소비된다
+- `AwaitingCardPlayConfirm`는 current `main`에서 stale history/barrier shadow만으로 열리지 않고, positive runtime/export evidence가 있어야 열린다
 - explicit shop foreground는 stale reward leftovers보다 강하며, 잘못 `HandleRewards`로 들어가도 current `main`에서는 즉시 `HandleShop`으로 회복된다
 - 하네스 구조 refactor는 current `main` 기준 문서화 가능한 수준까지 정리됐다
 - post-refactor cleanup program도 current `main` 기준 완료 상태다
+- exported map routing은 current `main`에서 `click exported reachable node` 우선 계약으로 다시 정렬됐다
 
 ## 현재 대표 evidence
 

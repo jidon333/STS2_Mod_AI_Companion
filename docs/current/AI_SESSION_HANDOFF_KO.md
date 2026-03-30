@@ -90,10 +90,10 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `compatibility retirement` 1단계도 current `main`에 반영됐다
 - combat stale-end-turn / target plateau family는 current `main`에서 micro-stage + quiet convergence + runtime target-summary authority로 닫혔다
 - explicit shop foreground 위 stale reward misroute plateau family는 current `main`에서 immediate reward-to-shop recovery로 닫혔다
-- `COMBAT-03`, `COMBAT-07`, `REWARD-04` coverage row는 current `main`에서 green이다
-- `MAP-04`는 representative live continuity는 남아 있지만 current harness self-test red 때문에 지금은 `partial`로 보는 게 맞다
-- 현재 active combat blocker는 없다
-- 현재 알려진 current-main red는 unrelated `WaitPostMapNodeRoom -> reward reopen` self-test 1건이다
+- anti-drift recovery wave `bc53c34`, `f29cc5d`, `52ebabd`, `84e4647`, `5ebe718`, `3a24338`도 current `main`에 반영됐다
+- `MAP-04` reward reopen self-test regression은 current `main`에서 닫혔다
+- `build`, `self-test`, `replay-test`, `replay-parity-test`는 current `main`에서 green이다
+- current code/test baseline은 explicit combat/noncombat authority contracts를 다시 고정했지만, fresh authoritative live rerun은 아직 다시 찍어야 한다
 
 ## current architecture state
 
@@ -231,20 +231,22 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ## 다음 세션의 기본 목표
 
-현재 기준으로 active gameplay blocker는 없다. 새 세션이 잡을 기본 목표는 아래 둘 중 하나다.
+현재 기준으로 immediate priority는 coverage frontier보다 **fresh authoritative live rerun**이다.
 
 ```text
-1. unrelated `WaitPostMapNodeRoom -> reward reopen` current-main self-test red를 current owner 파일에서 좁게 수정
-2. 그 다음 low-priority coverage frontier (`EVENT-05`, `REWARD-10`) 보강
+1. clean deploy / Manual Clean Boot / identity verify 뒤 fresh long-run live root를 다시 만든다
+2. first authoritative blocker가 나오면 blocker 1개만 분류한다
+3. decompiled runtime truth + AutoSlay contract + anti-drift rules로 수정 방향을 먼저 잠근다
 ```
 
-우선 열 파일:
+현재 바로 열 파일:
 
-1. [Program.PhaseLoopRouting.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.PhaseLoopRouting.cs)
-2. [Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs)
-3. [AutoDecisionProvider.NonCombatSceneState.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatSceneState.cs)
-4. [Program.SelfTests.EventRewardSubstates.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.EventRewardSubstates.cs)
-5. [Program.SelfTests.StallSentinel.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.StallSentinel.cs)
+1. [Analysis/CombatMicroStageSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatMicroStageSupport.cs)
+2. [Analysis/CombatPostActionObservationSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatPostActionObservationSupport.cs)
+3. [Analysis/CombatRuntimeStateSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatRuntimeStateSupport.cs)
+4. [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
+5. [AutoDecisionProvider.NonCombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
+6. [GuiSmokeStepRequestFactory.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/GuiSmokeStepRequestFactory.cs)
 
 ## validation baseline
 
@@ -260,8 +262,7 @@ cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.cspr
 현재 known red:
 
 ```text
-cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- self-test
--> WaitPostMapNodeRoom should reopen reward handling when the destination room is rewards.
+none
 ```
 
 replay parity acceptance:
@@ -269,7 +270,10 @@ replay parity acceptance:
 - green 유지
 - 새 failing fixture 추가 금지
 
-live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
+fresh live rerun이 필요한 이유:
+
+- `live8`는 combat false-confirm + speed regression을 드러낸 authoritative regression root였다
+- `84e4647`와 `5ebe718`는 그 회귀를 current code/test baseline에서 되돌렸지만, fresh live closure는 아직 다시 찍어야 한다
 
 ## 절대 reopen하지 말 것
 
@@ -282,9 +286,8 @@ live root가 필요한 semantic fix는 fresh run 1회를 추가한다.
 ## 한 줄 요약
 
 ```text
-current main의 하네스 구조 정리, reward aftermath closure, common hot path speed recovery, WaitMainMenu startup boundary closure,
-published-first observer provenance migration, post-refactor cleanup program, combat stale-end-turn / target plateau fix는 끝났다.
-새 세션은 old Program.cs monolith나 screenshot-first 전제를 다시 가져오지 말고,
-우선 unrelated `WaitPostMapNodeRoom` self-test red를 current owner 파일에서 좁게 닫고,
-그 다음 low-priority coverage frontier만 다뤄라.
+current main의 하네스 구조 정리와 anti-drift recovery wave는 current code/test baseline에서 닫혔다.
+새 세션은 old Program.cs monolith, screenshot-first recovery, broad mixed-state fallback을 다시 가져오지 말고,
+먼저 clean deploy / Manual Clean Boot 뒤 fresh authoritative live root를 다시 만들고,
+그 다음 first blocker 1개만 decompiled truth와 AutoSlay contract 기준으로 다뤄라.
 ```
