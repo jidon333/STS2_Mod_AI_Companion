@@ -565,7 +565,16 @@ internal static partial class Program
                 CurrentChoices = new[] { "Cultist" },
                 ActionNodes = new[]
                 {
-                    new ObserverActionNode("enemy-target:cultist:1", "enemy-target", "Cultist", "930,210,180,250", true),
+                    new ObserverActionNode("enemy-target:cultist:1", "enemy-target", "Cultist", "930,210,180,250", true)
+                    {
+                        TypeName = "enemy-target",
+                        SemanticHints = new[]
+                        {
+                            "combat-targetable",
+                            "source:runtime-target-summary",
+                            "target-id:Cultist",
+                        },
+                    },
                 },
                 Choices = new[]
                 {
@@ -582,8 +591,14 @@ internal static partial class Program
                     ["combatSelectedCardType"] = "Attack",
                     ["combatSelectedCardTargetType"] = "AnyEnemy",
                     ["combatTargetingInProgress"] = "true",
+                    ["combatTargetCount"] = "1",
+                    ["combatTargetCoordinateSpace"] = "logical-render",
+                    ["combatTargetClickCoordinateSpace"] = "current-window-normalized",
+                    ["combatTargetSummary"] = "enemy-target:cultist:1@logical:930,210,180,250@normalized:0.7266,0.2917,0.1406,0.3472",
                     ["combatTargetableEnemyCount"] = "1",
+                    ["combatTargetableEnemyIds"] = "Cultist",
                     ["combatHittableEnemyCount"] = "1",
+                    ["combatHittableEnemyIds"] = "Cultist",
                     ["combatInteractionRevision"] = "3:2:true:true:2",
                 },
             };
