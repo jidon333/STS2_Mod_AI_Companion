@@ -122,6 +122,10 @@ internal static partial class Program
                 => new[] { "click event choice", "wait" },
             GuiSmokePhase.HandleEvent when forceEventProgressionAfterCardSelection
                 => new[] { "click event choice", "click proceed", "wait" },
+            GuiSmokePhase.HandleEvent when eventOwnerActive || explicitEventRecoveryAuthority
+                => explicitEventProceedAuthority
+                    ? new[] { "click event choice", "click proceed", "wait" }
+                    : new[] { "click event choice", "wait" },
             GuiSmokePhase.HandleEvent when treasureState is { RoomDetected: true }
                 => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
             GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !eventScene.StrongForegroundChoice && !explicitEventProceedAuthority && !explicitEventRecoveryAuthority
@@ -136,7 +140,7 @@ internal static partial class Program
                                             && !forceEventProgressionAfterCardSelection
                                             && !eventOwnerActive
                 => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
-            GuiSmokePhase.HandleEvent => new[] { "click event choice", "click proceed", "wait" },
+            GuiSmokePhase.HandleEvent => new[] { "wait" },
             GuiSmokePhase.WaitEventRelease => new[] { "wait" },
             GuiSmokePhase.HandleShop => BuildShopAllowedActions(observer.Summary, history),
             GuiSmokePhase.HandleCombat => GetCombatAllowedActions(observer, combatCardKnowledge, screenshotPath, history),

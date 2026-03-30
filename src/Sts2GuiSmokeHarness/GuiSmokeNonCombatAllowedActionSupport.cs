@@ -34,7 +34,8 @@ static class GuiSmokeNonCombatAllowedActionSupport
 
         return state.ScreenType switch
         {
-            "reward-pick" => new[] { "reward pick card", "wait" },
+            "reward-pick" when hasExplicitCardChoices => new[] { "reward pick card", "wait" },
+            "reward-pick" => new[] { "wait" },
             "simple-select" when CardSelectionObserverSignals.IsConfirmReady(state) && hasExplicitConfirmChoice
                 => new[] { "simple select confirm", "wait" },
             "simple-select" when hasExplicitCardChoices => new[] { "simple select choice", "wait" },
@@ -45,15 +46,18 @@ static class GuiSmokeNonCombatAllowedActionSupport
             "bundle-select" => new[] { "wait" },
             "relic-select" when hasExplicitCardChoices => new[] { "relic select choice", "wait" },
             "relic-select" => new[] { "wait" },
-            "transform" when CardSelectionObserverSignals.IsConfirmReady(state)
+            "transform" when CardSelectionObserverSignals.IsConfirmReady(state) && hasExplicitConfirmChoice
                 => new[] { "transform confirm", "wait" },
-            "transform" => new[] { "transform select card", "wait" },
-            "deck-remove" when CardSelectionObserverSignals.IsConfirmReady(state)
+            "transform" when hasExplicitCardChoices => new[] { "transform select card", "wait" },
+            "transform" => new[] { "wait" },
+            "deck-remove" when CardSelectionObserverSignals.IsConfirmReady(state) && hasExplicitConfirmChoice
                 => new[] { "deck remove confirm", "wait" },
-            "deck-remove" => new[] { "deck remove select card", "wait" },
-            "upgrade" when CardSelectionObserverSignals.IsConfirmReady(state)
+            "deck-remove" when hasExplicitCardChoices => new[] { "deck remove select card", "wait" },
+            "deck-remove" => new[] { "wait" },
+            "upgrade" when CardSelectionObserverSignals.IsConfirmReady(state) && hasExplicitConfirmChoice
                 => new[] { "upgrade confirm", "wait" },
-            "upgrade" => new[] { "upgrade select card", "wait" },
+            "upgrade" when hasExplicitCardChoices => new[] { "upgrade select card", "wait" },
+            "upgrade" => new[] { "wait" },
             _ => new[] { "wait" },
         };
     }

@@ -520,7 +520,9 @@ sealed partial class AutoDecisionProvider
                 1400);
         }
 
-        return TryCreateScreenshotSubtypeCardSelectionDecision(request, state, "reward pick card");
+        return CreateForegroundAwareNonCombatWaitDecision(
+            request,
+            "waiting for explicit reward-pick card surface");
     }
 
     private static GuiSmokeStepDecision? TryCreateSubtypeCardSelectionDecision(
@@ -581,7 +583,9 @@ sealed partial class AutoDecisionProvider
                 $"waiting for explicit {state.ScreenType} selection surface");
         }
 
-        return TryCreateScreenshotSubtypeCardSelectionDecision(request, state, selectTargetLabel);
+        return CreateForegroundAwareNonCombatWaitDecision(
+            request,
+            $"waiting for explicit {state.ScreenType} selection or confirm surface");
     }
 
     private static ObserverChoice? SelectSubtypeCardChoice(
@@ -612,77 +616,6 @@ sealed partial class AutoDecisionProvider
         }
 
         return preferred.FirstOrDefault();
-    }
-
-    private static GuiSmokeStepDecision? TryCreateScreenshotSubtypeCardSelectionDecision(
-        GuiSmokeStepRequest request,
-        CardSelectionSubtypeState state,
-        string targetLabel)
-    {
-        var analysis = AutoEventCardGridAnalyzer.Analyze(request.ScreenshotPath);
-        if (!analysis.HasSelectableCard)
-        {
-            return null;
-        }
-
-        var variantIndex = CountRecentCardSelectionRepeats(request.History, targetLabel) % 3;
-        var adjustedX = variantIndex switch
-        {
-            1 => Math.Clamp(analysis.CardNormalizedX - 0.12d, 0.12d, 0.88d),
-            2 => Math.Clamp(analysis.CardNormalizedX + 0.12d, 0.12d, 0.88d),
-            _ => analysis.CardNormalizedX,
-        };
-        var variantSuffix = variantIndex switch
-        {
-            1 => " left",
-            2 => " right",
-            _ => string.Empty,
-        };
-
-        return new GuiSmokeStepDecision(
-            "act",
-            "click",
-            null,
-            adjustedX,
-            analysis.CardNormalizedY,
-            targetLabel + variantSuffix,
-            $"Card-selection subtype '{state.ScreenType}' is active, but no exported card bounds are available. Use bounded card-grid fallback for this subtype only.",
-            0.88,
-            ResolveObserverScreen(request.Observer, state.ScreenType),
-            1400,
-            true,
-            null);
-    }
-
-    private static int CountRecentCardSelectionRepeats(IReadOnlyList<GuiSmokeHistoryEntry> history, string targetLabel)
-    {
-        var count = 0;
-        for (var index = history.Count - 1; index >= 0; index -= 1)
-        {
-            var entry = history[index];
-            if (!string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase))
-            {
-                if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
-                    || entry.Action.StartsWith("observer-", StringComparison.OrdinalIgnoreCase)
-                    || entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                break;
-            }
-
-            if (!string.Equals(entry.TargetLabel, targetLabel, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(entry.TargetLabel, targetLabel + " left", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(entry.TargetLabel, targetLabel + " right", StringComparison.OrdinalIgnoreCase))
-            {
-                break;
-            }
-
-            count += 1;
-        }
-
-        return count;
     }
 
     private static string BuildCardSelectionCardTargetLabel(string screenType, ObserverChoice choice, int index)
@@ -798,62 +731,7 @@ sealed partial class AutoDecisionProvider
                 null);
         }
 
-        var screenshotClaimableDecision = TryCreateScreenshotClaimableRewardDecision(request);
-        if (screenshotClaimableDecision is not null)
-        {
-            return screenshotClaimableDecision;
-        }
-
         return null;
-    }
-
-    private static GuiSmokeStepDecision? TryCreateScreenshotClaimableRewardDecision(GuiSmokeStepRequest request)
-    {
-        if (!HasScreenshotClaimableRewardEvidenceInScreenshot(request.Observer, request.ScreenshotPath))
-        {
-            return null;
-        }
-
-        var rewardCardTarget = GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(request.Observer)
-            ? "colorless card choice"
-            : "reward card choice";
-        var rewardRowAnalysis = AutoRewardRowAnalyzer.Analyze(request.ScreenshotPath);
-        if (rewardRowAnalysis.HasSelectableRewardRow)
-        {
-            return new GuiSmokeStepDecision(
-                "act",
-                "click",
-                null,
-                rewardRowAnalysis.RowNormalizedX,
-                rewardRowAnalysis.RowNormalizedY,
-                rewardCardTarget,
-                "A reward card row is still visible in the screenshot. Click the row before using skip, proceed, or map fallback.",
-                0.94,
-                ResolveObserverScreen(request.Observer, "rewards"),
-                1400,
-                true,
-                null);
-        }
-
-        var cardGridAnalysis = AutoEventCardGridAnalyzer.Analyze(request.ScreenshotPath);
-        if (!cardGridAnalysis.HasSelectableCard)
-        {
-            return null;
-        }
-
-        return new GuiSmokeStepDecision(
-            "act",
-            "click",
-            null,
-            cardGridAnalysis.CardNormalizedX,
-            cardGridAnalysis.CardNormalizedY,
-            rewardCardTarget,
-            "A claimable reward card is still visible in the screenshot. Choose it before falling back to skip, proceed, or map routing.",
-            0.95,
-            ResolveObserverScreen(request.Observer, "rewards"),
-            1400,
-            true,
-            null);
     }
 
     private static GuiSmokeStepDecision? TryCreateRoomOverlayCleanupDecision(GuiSmokeStepRequest request)
@@ -942,25 +820,6 @@ sealed partial class AutoDecisionProvider
                    || string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool HasScreenshotClaimableRewardEvidenceInScreenshot(ObserverSummary observer, string? screenshotPath)
-    {
-        if (string.IsNullOrWhiteSpace(screenshotPath) || !File.Exists(screenshotPath))
-        {
-            return false;
-        }
-
-        if (!string.Equals(ObserverScreenProvenance.ControlFlowCurrentScreen(observer), "rewards", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(ObserverScreenProvenance.ControlFlowVisibleScreen(observer), "rewards", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return AutoRewardRowAnalyzer.Analyze(screenshotPath).HasSelectableRewardRow
-               || AutoEventCardGridAnalyzer.Analyze(screenshotPath).HasSelectableCard;
-    }
-
     private static GuiSmokeStepDecision? TryCreateRewardChoiceDecision(GuiSmokeStepRequest request)
     {
         return TryCreateRewardChoiceDecision(
@@ -980,10 +839,13 @@ sealed partial class AutoDecisionProvider
         var claimableRewardChoices = GetClaimableRewardProgressionChoices(request.Observer, request.WindowBounds, rewardScene.ScreenState);
         var claimableRewardNodes = GetClaimableRewardProgressionNodes(request.Observer, request.WindowBounds, rewardScene.ScreenState);
 
-        var cardChoiceDecision = TryCreateCardRewardChoiceDecision(request);
-        if (cardChoiceDecision is not null)
+        if (rewardScene.ExplicitAction is RewardExplicitActionKind.CardChoice or RewardExplicitActionKind.ColorlessChoice)
         {
-            return cardChoiceDecision;
+            return TryCreateCardRewardChoiceDecision(request)
+                   ?? CreatePhaseWaitDecision(
+                       GuiSmokePhase.HandleRewards,
+                       "waiting for explicit reward card surface",
+                       ResolveObserverScreen(request.Observer, "rewards"));
         }
 
         var bestChoice = claimableRewardChoices
@@ -1026,23 +888,10 @@ sealed partial class AutoDecisionProvider
                 request,
                 explicitRewardCardChoice,
                 rewardCardTarget,
-                "Reward card row is explicitly visible. Open it before using skip or any screenshot-derived fallback.",
+                "Reward card row is explicitly visible. Open it before using skip or any map fallback.",
                 0.95,
                 ResolveObserverScreen(request.Observer, "rewards"),
                 1400);
-        }
-
-        var hasExplicitRewardCardChoice = false;
-        var cardGridAnalysis = AutoEventCardGridAnalyzer.Analyze(request.ScreenshotPath);
-        var rewardRowAnalysis = AutoRewardRowAnalyzer.Analyze(request.ScreenshotPath);
-        var canRescueMissingRewardCard = !hasExplicitRewardCardChoice
-                                         && GuiSmokeRewardSceneSignals.HasRewardChoiceAuthority(request.Observer)
-                                         && BuildRewardMapLayerState(request.Observer, request.WindowBounds).RewardPanelVisible
-                                         && (rewardRowAnalysis.HasSelectableRewardRow || cardGridAnalysis.HasSelectableCard)
-                                         && request.Observer.Choices.All(static choice => !IsCurrentRewardProgressionChoice(choice, null) || IsSkipOrProceedLabel(choice.Label));
-        if (!hasExplicitRewardCardChoice && !canRescueMissingRewardCard)
-        {
-            return null;
         }
 
         var lastTarget = request.History
@@ -1055,40 +904,9 @@ sealed partial class AutoDecisionProvider
             .OrderByDescending(GetChoiceSortX)
             .FirstOrDefault();
         var canChooseCard = !string.Equals(lastTarget, rewardCardTarget, StringComparison.OrdinalIgnoreCase);
-        if (canChooseCard && rewardRowAnalysis.HasSelectableRewardRow)
+        if (canChooseCard)
         {
-            return new GuiSmokeStepDecision(
-                "act",
-                "click",
-                null,
-                rewardRowAnalysis.RowNormalizedX,
-                rewardRowAnalysis.RowNormalizedY,
-                rewardCardTarget,
-                "A reward card row is still visible in the screenshot. Open it before pressing confirm or skip.",
-                0.94,
-                ResolveObserverScreen(request.Observer, "rewards"),
-                1400,
-                true,
-                null);
-        }
-
-        if (canChooseCard && cardGridAnalysis.HasSelectableCard)
-        {
-            return new GuiSmokeStepDecision(
-                "act",
-                "click",
-                null,
-                cardGridAnalysis.CardNormalizedX,
-                cardGridAnalysis.CardNormalizedY,
-                rewardCardTarget,
-                GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(request.Observer)
-                    ? "Colorless reward choice is visible. Select a card from the card area instead of clicking the relic inspect icons."
-                    : "Reward card choice is visible. Select a card before pressing confirm or skip.",
-                0.94,
-                ResolveObserverScreen(request.Observer, "event"),
-                1400,
-                true,
-                null);
+            return null;
         }
 
         if (confirmChoice is not null)
@@ -1214,6 +1032,11 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateEventProgressChoiceDecision(GuiSmokeStepRequest request)
     {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click event choice"))
+        {
+            return null;
+        }
+
         var bestAncientDialogueNode = AncientEventObserverSignals.GetActiveDialogueNode(request.Observer, request.WindowBounds);
         if (bestAncientDialogueNode is not null)
         {
@@ -1238,8 +1061,9 @@ sealed partial class AutoDecisionProvider
                 node.Actionable
                 && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds)
                 && !AncientEventObserverSignals.IsAncientDialogueNode(node)
-                && ScoreProgressionNode(node) > 0)
-            .OrderByDescending(ScoreProgressionNode)
+                && !EventProceedObserverSignals.IsExplicitEventProceedNode(node)
+                && IsExplicitEventChoiceNode(node))
+            .OrderByDescending(static node => HasEventChoiceSemantic(node.SemanticHints, includeProceed: false) ? 1 : 0)
             .ThenBy(GetNodeSortY)
             .ThenBy(GetNodeSortX)
             .FirstOrDefault();
@@ -1252,8 +1076,9 @@ sealed partial class AutoDecisionProvider
             .Where(choice =>
                 HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds)
                 && !AncientEventObserverSignals.IsAncientDialogueChoice(choice)
-                && ScoreProgressionChoice(choice) > 0)
-            .OrderByDescending(ScoreProgressionChoice)
+                && !EventProceedObserverSignals.IsExplicitEventProceedChoice(choice)
+                && IsExplicitEventChoiceChoice(choice))
+            .OrderByDescending(static choice => HasEventChoiceSemantic(choice.SemanticHints, includeProceed: false) ? 1 : 0)
             .ThenBy(GetChoiceSortY)
             .ThenBy(GetChoiceSortX)
             .FirstOrDefault();
@@ -1270,6 +1095,32 @@ sealed partial class AutoDecisionProvider
         }
 
         return null;
+    }
+
+    private static bool IsExplicitEventChoiceNode(ObserverActionNode node)
+    {
+        return (node.NodeId?.StartsWith("event-option:", StringComparison.OrdinalIgnoreCase) ?? false)
+               || node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(node.TypeName, "event-option", StringComparison.OrdinalIgnoreCase)
+               || HasEventChoiceSemantic(node.SemanticHints, includeProceed: false);
+    }
+
+    private static bool IsExplicitEventChoiceChoice(ObserverChoice choice)
+    {
+        return string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(choice.BindingKind, "event-option", StringComparison.OrdinalIgnoreCase)
+               || HasEventChoiceSemantic(choice.SemanticHints, includeProceed: false);
+    }
+
+    private static bool HasEventChoiceSemantic(IReadOnlyList<string> semanticHints, bool includeProceed)
+    {
+        return semanticHints.Any(hint =>
+            string.Equals(hint, "kind:event-option", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hint, "source:event-option", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hint, "source:event-option-button", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hint, "option-role:choice", StringComparison.OrdinalIgnoreCase)
+            || (includeProceed && (string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(hint, "event-proceed", StringComparison.OrdinalIgnoreCase))));
     }
 
     private static GuiSmokeStepDecision? TryCreateAncientDialogueAdvanceDecision(GuiSmokeStepRequest request)

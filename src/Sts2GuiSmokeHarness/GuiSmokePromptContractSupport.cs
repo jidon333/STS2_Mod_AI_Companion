@@ -78,8 +78,8 @@ static class GuiSmokePromptContractSupport
             {
                 return cardSelectionState.ScreenType switch
                 {
-                    "reward-pick" => "AI first: trust the explicit reward-pick card-selection subtype and choose a visible reward card before any screenshot fallback.",
-                    _ => "AI first: trust the explicit reward card-selection subtype and use its select/confirm semantics before any screenshot fallback.",
+                    "reward-pick" => "AI first: trust the explicit reward-pick card-selection subtype and choose a visible reward card only when exported card bounds are present; otherwise wait for explicit subtype surfaces.",
+                    _ => "AI first: trust the explicit reward card-selection subtype and use its select/confirm semantics only when exported subtype surfaces are present; otherwise wait.",
                 };
             }
 
@@ -88,7 +88,7 @@ static class GuiSmokePromptContractSupport
                 return "Reward ownership has already dropped or map is current. Release to map/post-room reconciliation instead of forcing reward or map fallback from stale visuals.";
             }
 
-            return "AI first: trust reward observer/runtime state. Use reward foreground ownership, explicit reward choices, and proceed availability before any screenshot fallback; only inspect the screenshot when explicit reward authority is missing or contradictory.";
+            return "AI first: trust reward observer/runtime state. Use reward foreground ownership, explicit reward choices, and proceed availability; if explicit authority is missing, wait or export more truth instead of inventing a screenshot-only reward action.";
         }
 
         if (phase == GuiSmokePhase.HandleEvent)

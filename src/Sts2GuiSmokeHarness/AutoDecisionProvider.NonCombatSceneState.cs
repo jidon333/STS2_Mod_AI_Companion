@@ -97,12 +97,9 @@ sealed partial class AutoDecisionProvider
                                      || (!strongerRoomForegroundAuthority
                                          && (activeRewardChoices.Any(choice => IsSkipOrProceedLabel(choice.Label))
                                              || activeRewardNodes.Any(IsProceedNode)));
-        var claimableRewardPresent = (!strongerRoomForegroundAuthority
-                                      && (claimableRewardChoices.Length > 0
-                                          || claimableRewardNodes.Length > 0))
-                                     || (!strongerRoomForegroundAuthority
-                                         && !string.IsNullOrWhiteSpace(screenshotPath)
-                                         && HasScreenshotClaimableRewardEvidenceInScreenshot(observer, screenshotPath));
+        var claimableRewardPresent = !strongerRoomForegroundAuthority
+                                     && (claimableRewardChoices.Length > 0
+                                         || claimableRewardNodes.Length > 0);
         var suppressSameSkipReissue = rewardForegroundOwned
                                       && explicitProceedVisible
                                       && !claimableRewardPresent
@@ -185,19 +182,20 @@ sealed partial class AutoDecisionProvider
         var ancientCompletionActive = AncientEventObserverSignals.HasExplicitCompletionAction(observer);
         var ancientOptionActive = AncientEventObserverSignals.HasExplicitOptionSelection(observer);
         var eventChoiceAuthority = EventProceedObserverSignals.HasEventChoiceAuthority(observer);
-        var genericEventProgressVisible = eventChoiceAuthority
-                                          && !rewardScene.RewardForegroundOwned
-                                          && HasRawEventProgressionSurface(observer, windowBounds);
+        var eventReleaseToMapActive = HasRecentEventReleaseIntent(history)
+                                      && (mapExplicitOwner || mapOverlayState.ForegroundVisible);
         var explicitProceedVisible = eventChoiceAuthority
+                                     && !eventReleaseToMapActive
                                      && !mapExplicitOwner
                                      && !rewardScene.RewardForegroundOwned
                                      && EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
         var activeEventChoiceVisible = eventChoiceAuthority
+                                       && !eventReleaseToMapActive
                                        && !mapExplicitOwner
                                        && !rewardScene.RewardForegroundOwned
                                        && HasRawExplicitEventChoiceVisible(observer, windowBounds);
         var forceProgressionAfterCardSelection = HasRecentCardSelectionSubtypeAftermath(history ?? Array.Empty<GuiSmokeHistoryEntry>())
-                                                && (explicitProceedVisible || activeEventChoiceVisible || genericEventProgressVisible);
+                                                && (explicitProceedVisible || activeEventChoiceVisible);
         var rewardSubstateActive = rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage == RewardReleaseStage.ReleasePending;
         var mapContextVisible = mapOverlayState.ForegroundVisible
                                 || MatchesControlFlowScreen(observer, "map")
@@ -208,7 +206,6 @@ sealed partial class AutoDecisionProvider
                                      || ancientOptionActive
                                      || explicitProceedVisible
                                      || activeEventChoiceVisible
-                                     || genericEventProgressVisible
                                      || forceProgressionAfterCardSelection;
         var strongForegroundChoice = ancientDialogueActive
                                      || ancientCompletionActive
@@ -221,13 +218,13 @@ sealed partial class AutoDecisionProvider
                                          && HasRecentEventReleaseIntent(history);
         var canonicalOwner = rewardSubstateActive
             ? NonCombatForegroundOwner.Reward
+            : strongForegroundChoice || (eventChoiceAuthority && hasExplicitProgression)
+                ? NonCombatForegroundOwner.Event
             : mapExplicitOwner
                 ? NonCombatForegroundOwner.Map
                 : mapOverlayState.ForegroundVisible && !strongForegroundChoice
                     ? NonCombatForegroundOwner.Map
-                    : ancientDialogueActive || ancientCompletionActive || ancientOptionActive || (eventChoiceAuthority && hasExplicitProgression)
-                        ? NonCombatForegroundOwner.Event
-                        : NonCombatForegroundOwner.Unknown;
+                    : NonCombatForegroundOwner.Unknown;
         var releaseStage = rewardSubstateActive
             ? EventReleaseStage.Released
             : canonicalOwner == NonCombatForegroundOwner.Event
@@ -433,7 +430,11 @@ sealed partial class AutoDecisionProvider
                 continue;
             }
 
-            return string.Equals(entry.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
+            return string.Equals(entry.Action, "event-resolved-map", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.Action, "branch-map", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.TargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
                    || string.Equals(entry.TargetLabel, "ancient event completion", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -751,7 +752,7 @@ sealed partial class AutoDecisionProvider
                 || string.Equals(choice.Kind, "reward-pick-card", StringComparison.OrdinalIgnoreCase)
                 || explicitRewardCardBinding
                 || explicitRewardCardHint)
-               && !IsSkipOrProceedLabel(choice.Label)
+               && (!IsSkipOrProceedLabel(choice.Label) || explicitRewardCardBinding || explicitRewardCardHint)
                && (!IsConfirmLikeLabel(choice.Label) || explicitRewardCardBinding || explicitRewardCardHint)
                && !IsDismissLikeLabel(choice.Label)
                && !IsOverlayChoiceLabel(choice.Label)

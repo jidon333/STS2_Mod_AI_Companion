@@ -25,8 +25,14 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeDecisionAnalysis AnalyzeHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision, GuiSmokeStepAnalysisContext analysisContext)
     {
-        if (!RewardObserverSignals.IsRewardAuthorityActive(request.Observer)
-            && BuildRestSiteSceneState(request.Observer) is not null)
+        var canonicalScene = TryBuildCanonicalNonCombatSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        if (canonicalScene is ShopSceneState { ReleaseStage: NonCombatReleaseStage.Active })
+        {
+            var shopRequest = request with { Phase = GuiSmokePhase.HandleShop.ToString() };
+            return AnalyzeGenericPhase(shopRequest, actualDecision, () => DecideHandleShop(shopRequest), "shop", null);
+        }
+
+        if (canonicalScene is RestSiteSceneState { ReleaseStage: NonCombatReleaseStage.Active })
         {
             return AnalyzeChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, actualDecision, analysisContext);
         }
@@ -457,6 +463,16 @@ sealed partial class AutoDecisionProvider
         {
             builder.AddSuppressed("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
         }
+
+        var explicitProceedDecision = TryCreateExplicitEventProceedDecision(request);
+        builder.Consider(
+            "click proceed",
+            "event-proceed-explicit",
+            eventForegroundActive || eventScene.ExplicitProceedVisible ? 0.97d : 0.78d,
+            () => explicitProceedDecision,
+            "no-explicit-event-proceed",
+            rawBounds: TryFindEventChoiceBounds(request),
+            boundsSource: "observer-event");
 
         var semanticDecision = TryCreateSemanticEventDecision(request);
         builder.Consider("click event choice", "semantic-event", eventForegroundActive ? 0.98d : 0.72d, () => semanticDecision, "no-semantic-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");

@@ -569,22 +569,22 @@ internal static partial class Program
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 Array.Empty<CombatCardKnowledgeHint>());
             var (rewardPickNeedsScreenshot, rewardPickFallbackReason) = GuiSmokeStepScreenshotPolicy.Evaluate(42, false, rewardPickNoBoundsContext);
-            Assert(rewardPickNeedsScreenshot && string.Equals(rewardPickFallbackReason, "reward-card-selection-screenshot-fallback", StringComparison.OrdinalIgnoreCase),
-                "Reward-pick subtype without exported card bounds should reopen screenshot fallback instead of staying in reward fast-path skip.");
+            Assert(!rewardPickNeedsScreenshot && string.Equals(rewardPickFallbackReason, "reward-fast-path", StringComparison.OrdinalIgnoreCase),
+                "Reward-pick subtype without exported card bounds should stay observer-only and wait for explicit subtype surfaces instead of reopening screenshot fallback.");
             var rewardPickNoBoundsAllowedActions = BuildAllowedActions(
                 GuiSmokePhase.HandleRewards,
                 rewardPickNoBoundsObserver,
                 Array.Empty<CombatCardKnowledgeHint>(),
                 rewardPickScreenshotFallbackPath,
                 Array.Empty<GuiSmokeHistoryEntry>());
-            Assert(rewardPickNoBoundsAllowedActions.Contains("reward pick card", StringComparer.OrdinalIgnoreCase),
-                "Reward-pick subtype without bounds should keep the reward pick lane open for screenshot fallback.");
+            Assert(rewardPickNoBoundsAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Reward-pick subtype without bounds should wait for explicit subtype surfaces instead of reopening a screenshot-only pick lane. Actual allowlist=[{string.Join(", ", rewardPickNoBoundsAllowedActions)}].");
             var rewardPickNoBoundsDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
                 49,
                 GuiSmokePhase.HandleRewards.ToString(),
-                "A reward-pick subtype with no exported card bounds should still choose a card via screenshot fallback.",
+                "A reward-pick subtype with no exported card bounds should wait for explicit subtype surfaces.",
                 DateTimeOffset.UtcNow,
                 rewardPickScreenshotFallbackPath,
                 new WindowBounds(0, 0, 1920, 1080),
@@ -601,10 +601,10 @@ internal static partial class Program
                 Array.Empty<CombatCardKnowledgeHint>(),
                 rewardPickNoBoundsAllowedActions,
                 Array.Empty<GuiSmokeHistoryEntry>(),
-                "Reward-pick subtype is explicit, but card bounds are absent. Use the subtype screenshot fallback instead of waiting.",
+                "Reward-pick subtype is explicit, but card bounds are absent. Wait until exported subtype bounds exist.",
                 null));
-            Assert(rewardPickNoBoundsDecision.TargetLabel?.StartsWith("reward pick card", StringComparison.OrdinalIgnoreCase) == true,
-                "Reward-pick subtype without exported bounds should still resolve to a screenshot-backed reward pick decision instead of wait.");
+            Assert(string.Equals(rewardPickNoBoundsDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+                "Reward-pick subtype without exported bounds should wait instead of fabricating a screenshot-backed reward pick decision.");
 
             var simpleSelectObserver = new ObserverState(
                 new ObserverSummary(
@@ -1297,9 +1297,12 @@ internal static partial class Program
                 rewardRankingScreenshotPath,
                 mixedRewardAfterClaimHistory);
             Assert(!mixedRewardAfterClaimActions.Contains("click visible map advance", StringComparer.OrdinalIgnoreCase), "Reward allowlist should keep map fallback closed while a mixed reward/map state still exposes explicit reward choices.");
-            Assert(mixedRewardAfterClaimActions.Contains("click reward", StringComparer.OrdinalIgnoreCase)
-                   || mixedRewardAfterClaimActions.Contains("click reward choice", StringComparer.OrdinalIgnoreCase),
-                "Reward allowlist should keep explicit reward actions open after the first reward claim when reward extractor evidence remains.");
+            Assert(!mixedRewardAfterClaimActions.Contains("click reward", StringComparer.OrdinalIgnoreCase)
+                   && !mixedRewardAfterClaimActions.Contains("click reward choice", StringComparer.OrdinalIgnoreCase),
+                "Unknown potion-slot capacity must not reopen claim actions just because mixed reward residue is still visible.");
+            Assert(mixedRewardAfterClaimActions.Contains("click reward skip", StringComparer.OrdinalIgnoreCase)
+                   || mixedRewardAfterClaimActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
+                "Mixed reward/map aftermath with unknown potion capacity should stay in the reward owner lane, but it must resolve through skip/proceed instead of reopening potion claim.");
             var mixedRewardAfterClaimDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
@@ -1324,7 +1327,9 @@ internal static partial class Program
                 mixedRewardAfterClaimHistory,
                 "A prior reward claim should not suppress the next explicit reward item.",
                 null));
-            Assert(string.Equals(mixedRewardAfterClaimDecision.TargetLabel, "claim reward potion", StringComparison.OrdinalIgnoreCase), "A prior reward claim should not suppress the next explicit potion reward in a mixed reward/map state.");
+            Assert(string.Equals(mixedRewardAfterClaimDecision.TargetLabel, "reward skip", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(mixedRewardAfterClaimDecision.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase),
+                "Mixed reward/map aftermath with unknown potion capacity should resolve through the explicit reward skip/proceed lane instead of reopening potion claim.");
             Assert(ShouldAllowRewardMapRecovery(
                     new GuiSmokeStepRequest(
                         "run",

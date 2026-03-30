@@ -64,7 +64,12 @@ internal static partial class Program
                 null,
                 null);
             Assert(GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(mapTransitionObserver, out var postMapPhase) && postMapPhase == GuiSmokePhase.ChooseFirstNode, "Map-screen authority should win over stale event labels when observer meta already points at NMapScreen.");
-            Assert(GetAllowedActions(GuiSmokePhase.HandleEvent, mapTransitionObserver).Contains("click visible map advance", StringComparer.OrdinalIgnoreCase), "Event allowlist should open map affordances when map transition evidence is stronger than the stale event screen.");
+            var mapTransitionAllowedActions = GetAllowedActions(GuiSmokePhase.HandleEvent, mapTransitionObserver);
+            var mapTransitionEventScene = AutoDecisionProvider.BuildEventSceneState(mapTransitionObserver, null);
+            var mapTransitionEventRecovery = AutoDecisionProvider.HasExplicitEventRecoveryAuthority(mapTransitionObserver, null, Array.Empty<GuiSmokeHistoryEntry>(), mapTransitionEventScene);
+            var mapTransitionMapOwner = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(mapTransitionObserver);
+            Assert(mapTransitionAllowedActions.Contains("click visible map advance", StringComparer.OrdinalIgnoreCase),
+                $"Event allowlist should open map affordances when map transition evidence is stronger than the stale event screen. Actual allowlist=[{string.Join(", ", mapTransitionAllowedActions)}] eventOwner={mapTransitionEventScene.EventForegroundOwned} release={mapTransitionEventScene.ReleaseStage} explicitProceed={mapTransitionEventScene.ExplicitProceedVisible} explicitProgress={mapTransitionEventScene.HasExplicitProgression} mapOwner={mapTransitionMapOwner} explicitEventRecovery={mapTransitionEventRecovery}.");
             var mapTransitionWaitObserver = new ObserverState(
                 mapTransitionObserver.Summary with
                 {
@@ -307,7 +312,7 @@ internal static partial class Program
                 string.Equals(explicitProceedDecision.Status, "act", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(explicitProceedDecision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
                 && string.Equals(explicitProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
-                "HandleEvent should click the explicit event proceed lane instead of waiting when EventOption.IsProceed is exported.");
+                $"HandleEvent should click the explicit event proceed lane instead of waiting when EventOption.IsProceed is exported. Actual decision={explicitProceedDecision.Status}/{explicitProceedDecision.ActionKind}/{explicitProceedDecision.TargetLabel ?? "null"}.");
             var chooseFirstNodeEventRecoveryContext = CreateObserverOnlyAnalysisContext(
                 GuiSmokePhase.ChooseFirstNode,
                 explicitProceedObserverState,
@@ -1308,6 +1313,101 @@ internal static partial class Program
             Assert(mixedAftermathAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
                    && !mixedAftermathAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
                 $"HandleEvent should reopen the map lane instead of the stale event-proceed lane when map owns the foreground. Actual allowlist=[{string.Join(", ", mixedAftermathAllowedActions)}].");
+            var staleAncientMapAftermathObserver = new ObserverState(
+                new ObserverSummary(
+                    "map",
+                    "map",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-live59-ancient",
+                    true,
+                    "published",
+                    "stable",
+                    null,
+                    "Monster",
+                    "map",
+                    109,
+                    80,
+                    null,
+                    new[] { "Monster (2,4)" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("map:2:4", "map-node", "Monster (2,4)", "1072.061,542.331,56,56", true)
+                        {
+                            TypeName = "map-node",
+                            SemanticHints = new[] { "scene:map", "kind:map-node", "scene-raw:map", "scene-published:map", "value:2,4", "raw-kind:map-node", "node-id:map:2:4", "coord:2,4", "source:map-choice" },
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("map-node", "Monster (2,4)", "1072.061,542.331,56,56", "2,4", "type:Monster;state:Travelable;coord:2,4")
+                        {
+                            NodeId = "map:2:4",
+                            Enabled = true,
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "map",
+                    PublishedVisibleScreen = "map",
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["choiceExtractorPath"] = "map",
+                        ["foregroundOwner"] = "event",
+                        ["foregroundActionLane"] = "ancient-option",
+                        ["ancientEventDetected"] = "true",
+                        ["ancientDialogueActive"] = "false",
+                        ["ancientOptionCount"] = "0",
+                        ["ancientCompletionCount"] = "0",
+                        ["ancientPhase"] = "await-options",
+                        ["ancientOptionSummary"] = "ancient-event-option:0@460,942,1000,100",
+                        ["ancientCompletionSummary"] = "ancient-event-option:0@460,942,1000,100",
+                        ["rewardForegroundOwned"] = "false",
+                        ["rewardTeardownInProgress"] = "true",
+                        ["mapCurrentActiveScreen"] = "true",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                    },
+                },
+                mapOverlayStateDocument,
+                null,
+                null);
+            Assert(!AncientEventObserverSignals.HasExplicitOptionSelection(staleAncientMapAftermathObserver.Summary),
+                "Stale ancient-option residue must not stay actionable once explicit map foreground ownership is present.");
+            Assert(!AncientEventObserverSignals.HasForegroundAuthority(staleAncientMapAftermathObserver.Summary),
+                "Explicit map foreground ownership must outrank stale ancient foreground metadata.");
+            Assert(!AutoDecisionProvider.HasExplicitEventRecoveryAuthority(staleAncientMapAftermathObserver, new WindowBounds(1, 32, 1280, 720), Array.Empty<GuiSmokeHistoryEntry>()),
+                "Stale ancient-event residue must not reopen explicit event recovery once map ownership is explicit.");
+            var staleAncientAllowedActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, staleAncientMapAftermathObserver, Array.Empty<CombatCardKnowledgeHint>(), mapOverlayScreenshotPath, Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(staleAncientAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+                   && !staleAncientAllowedActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase),
+                $"HandleEvent should reopen the map lane instead of waiting for stale ancient option buttons. Actual allowlist=[{string.Join(", ", staleAncientAllowedActions)}].");
+            var staleAncientHandleEventDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                109,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Resolve the event screen. If nothing else is obvious, pick the first visible option.",
+                DateTimeOffset.UtcNow,
+                mapOverlayScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handleevent|screen:map|visible:map|encounter:monster|layer:reward-teardown|layer:map-background|layer:map-overlay-foreground|reachable-node-candidate-present|exported-reachable-node-present",
+                "0001",
+                1,
+                4,
+                true,
+                "tactical",
+                null,
+                staleAncientMapAftermathObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                staleAncientAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Explicit map ownership should beat stale ancient event residue.",
+                null));
+            Assert(string.Equals(staleAncientHandleEventDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase),
+                $"HandleEvent should choose the exported reachable map node when stale ancient residue lingers. Actual decision={staleAncientHandleEventDecision.TargetLabel ?? "null"}.");
             var mixedAftermathChooseFirstNodeDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",

@@ -175,43 +175,32 @@ sealed partial class AutoDecisionProvider
             return false;
         }
 
-        static bool IsGenericContinueLabel(string? label)
-        {
-            return !string.IsNullOrWhiteSpace(label)
-                   && (label.Contains("계속", StringComparison.OrdinalIgnoreCase)
-                       || label.Contains("Continue", StringComparison.OrdinalIgnoreCase)
-                       || label.Contains("Proceed", StringComparison.OrdinalIgnoreCase));
-        }
-
         return observer.ActionNodes.Any(node =>
                    node.Actionable
                    && HasActiveNodeBounds(node.ScreenBounds, windowBounds)
                    && !MapNodeSourceSupport.IsExplicitMapPointNode(node)
-                   && !IsGenericContinueLabel(node.Label)
+                   && !LooksLikeRewardProgressionNode(node)
                    && !IsBackChoiceLabel(node.Label)
-                   && (node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(node.TypeName, "event-option", StringComparison.OrdinalIgnoreCase)))
+                   && !EventProceedObserverSignals.IsExplicitEventProceedNode(node)
+                   && ((node.NodeId?.StartsWith("event-option:", StringComparison.OrdinalIgnoreCase) ?? false)
+                       || node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(node.TypeName, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || HasExplicitEventChoiceSemantic(node.SemanticHints)))
                || observer.Choices.Any(choice =>
                    HasActiveNodeBounds(choice.ScreenBounds, windowBounds)
                    && !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
-                   && !IsGenericContinueLabel(choice.Label)
+                   && !LooksLikeRewardProgressionChoice(choice)
                    && !IsBackChoiceLabel(choice.Label)
-                   && (string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
-                       || string.Equals(choice.BindingKind, "event-option", StringComparison.OrdinalIgnoreCase)));
+                   && !EventProceedObserverSignals.IsExplicitEventProceedChoice(choice)
+                   && (string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.BindingKind, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || HasExplicitEventChoiceSemantic(choice.SemanticHints)));
     }
 
     internal static bool HasRawEventProgressionSurface(ObserverSummary observer, WindowBounds? windowBounds)
     {
-        return observer.ActionNodes.Any(node =>
-                   node.Actionable
-                   && HasActiveNodeBounds(node.ScreenBounds, windowBounds)
-                   && !MapNodeSourceSupport.IsExplicitMapPointNode(node)
-                   && ScoreProgressionNode(node) > 0)
-               || observer.Choices.Any(choice =>
-                   HasActiveNodeBounds(choice.ScreenBounds, windowBounds)
-                   && !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
-                   && ScoreProgressionChoice(choice) > 0);
+        return HasRawExplicitEventChoiceVisible(observer, windowBounds)
+               || EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
     }
 
     internal static bool HasObserverOnlyRestSiteUpgradeAuthority(ObserverSummary observer, WindowBounds? windowBounds)
@@ -263,6 +252,11 @@ sealed partial class AutoDecisionProvider
         }
 
         eventScene ??= BuildEventSceneState(observer, windowBounds, history);
+        if (eventScene.RewardSubstateActive)
+        {
+            return false;
+        }
+
         if (AncientEventObserverSignals.IsDialogueActive(observer)
             || AncientEventObserverSignals.HasExplicitCompletionAction(observer)
             || AncientEventObserverSignals.HasExplicitOptionSelection(observer))
@@ -289,6 +283,21 @@ sealed partial class AutoDecisionProvider
         IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
         EventSceneState? eventScene = null)
     {
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+        {
+            return false;
+        }
+
+        if (TreasureRoomObserverSignals.LooksLikeTreasureState(observer.Summary))
+        {
+            return false;
+        }
+
+        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
+        {
+            return false;
+        }
+
         return HasExplicitEventRecoveryAuthority(observer.Summary, windowBounds, history, eventScene);
     }
 
@@ -296,6 +305,34 @@ sealed partial class AutoDecisionProvider
     {
         return RestSiteChoiceSupport.MapOptionIdToTargetLabel(RestSiteChoiceSupport.MapLabelToOptionId(label) ?? string.Empty)
             .Equals(targetLabel, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeRewardProgressionChoice(ObserverChoice choice)
+    {
+        return choice.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Any(static hint => hint.Contains("reward", StringComparison.OrdinalIgnoreCase))
+               || choice.Value?.StartsWith("RELIC.", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool LooksLikeRewardProgressionNode(ObserverActionNode node)
+    {
+        return node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase)
+               || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
+               || node.SemanticHints.Any(static hint => hint.Contains("reward", StringComparison.OrdinalIgnoreCase))
+               || string.Equals(node.TypeName, "gold", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(node.TypeName, "relic", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(node.TypeName, "potion", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(node.TypeName, "card", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasExplicitEventChoiceSemantic(IReadOnlyList<string> semanticHints)
+    {
+        return semanticHints.Any(static hint =>
+            string.Equals(hint, "kind:event-option", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hint, "source:event-option", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hint, "source:event-option-button", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(hint, "option-role:choice", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string BuildRestSiteChoiceReason(string targetLabel, int currentHp, int maxHp)
