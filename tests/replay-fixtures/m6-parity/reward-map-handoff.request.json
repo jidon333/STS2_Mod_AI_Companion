@@ -307,7 +307,6 @@
   ],
   "allowedActions": [
     "click exported reachable node",
-    "click first reachable node",
     "wait"
   ],
   "history": [

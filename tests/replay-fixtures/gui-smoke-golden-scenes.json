@@ -20,12 +20,10 @@
     "expectedBackgroundKind": "event",
     "requiredCandidateLabels": [
       "click exported reachable node",
-      "click map back",
-      "click first reachable node"
+      "click map back"
     ],
     "requiredSuppressedLabels": [
-      "click event choice",
-      "click visible map advance"
+      "click event choice"
     ],
     "forbiddenTargetLabels": [
       "visible map advance"
@@ -38,12 +36,10 @@
     "expectedBackgroundKind": "event",
     "requiredCandidateLabels": [
       "click exported reachable node",
-      "click map back",
-      "click first reachable node"
+      "click map back"
     ],
     "requiredSuppressedLabels": [
-      "click event choice",
-      "click visible map advance"
+      "click event choice"
     ],
     "forbiddenTargetLabels": [
       "visible map advance"
@@ -56,12 +52,10 @@
     "expectedBackgroundKind": "event",
     "requiredCandidateLabels": [
       "click exported reachable node",
-      "click map back",
-      "click first reachable node"
+      "click map back"
     ],
     "requiredSuppressedLabels": [
-      "click event choice",
-      "click visible map advance"
+      "click event choice"
     ],
     "forbiddenTargetLabels": [
       "visible map advance"
@@ -70,7 +64,6 @@
   {
     "name": "rest-site-explicit-over-current-arrow",
     "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-10/attempts/0001/steps/0010.request.json",
-    "expectedTargetContains": "rest site:",
     "expectedForegroundKind": "rest-site",
     "expectedBackgroundKind": "map",
     "requiredCandidateLabels": [

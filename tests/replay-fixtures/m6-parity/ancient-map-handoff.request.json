@@ -281,7 +281,6 @@
   "combatCardKnowledge": [],
   "allowedActions": [
     "click exported reachable node",
-    "click visible map advance",
     "wait"
   ],
   "history": [
