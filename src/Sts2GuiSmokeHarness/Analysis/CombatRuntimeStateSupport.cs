@@ -259,30 +259,9 @@ static class CombatRuntimeStateSupport
             return null;
         }
 
-        return historyPendingSelection;
-    }
-
-    public static bool HasNonEnemyConfirmEvidence(
-        ObserverSummary observer,
-        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
-        PendingCombatSelection? pendingSelection,
-        AutoCombatAnalysis analysis)
-    {
-        if (HasRuntimeSelectedNonEnemyConfirmEvidence(observer, combatCardKnowledge, pendingSelection))
-        {
-            return true;
-        }
-
-        var runtime = Read(observer, combatCardKnowledge);
-        if (runtime.RequiresHandCardSelection)
-        {
-            return false;
-        }
-
-        return pendingSelection?.Kind == AutoCombatCardKind.DefendLike
-               && pendingSelection.SlotIndex is >= 1 and <= 5
-               && ((analysis.HasSelectedCard && analysis.SelectedCardKind == AutoCombatCardKind.DefendLike)
-                   || analysis.HasSelfTargetBrackets);
+        return ShouldPreserveHistoryAttackSelection(observer, runtime, historyPendingSelection, history)
+            ? historyPendingSelection
+            : null;
     }
 
     public static bool HasRuntimeSelectedNonEnemyConfirmEvidence(
@@ -312,29 +291,7 @@ static class CombatRuntimeStateSupport
         PendingCombatSelection? pendingSelection,
         AutoCombatAnalysis analysis)
     {
-        if (CanResolveEnemyTargetWithoutScreenshot(observer, combatCardKnowledge, pendingSelection))
-        {
-            return true;
-        }
-
-        var runtime = Read(observer, combatCardKnowledge);
-        if (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-            && RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge, pendingSelection)
-            && !runtime.HasExplicitEnemyTargetingEvidence)
-        {
-            return false;
-        }
-
-        if (runtime.HasExplicitHittableEnemyAuthority)
-        {
-            return false;
-        }
-
-        return analysis.HasTargetArrow
-               || (analysis.HasSelectedCard
-                   && analysis.SelectedCardKind == AutoCombatCardKind.AttackLike
-                   && (GetPlayableAttackSlots(observer, combatCardKnowledge).Any()
-                       || (observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0)));
+        return CanResolveEnemyTargetWithoutScreenshot(observer, combatCardKnowledge, pendingSelection);
     }
 
     public static bool CanResolveEnemyTargetWithoutScreenshot(
@@ -342,25 +299,13 @@ static class CombatRuntimeStateSupport
         IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
         PendingCombatSelection? pendingSelection)
     {
-        var runtime = Read(observer, combatCardKnowledge);
         if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer).Count > 0)
         {
             return true;
         }
 
-        if (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-            && runtime.HasExplicitEnemyTargetingEvidence
-            && (!runtime.HasExplicitHittableEnemyAuthority || runtime.HasExplicitHittableEnemy))
-        {
-            return true;
-        }
-
+        var runtime = Read(observer, combatCardKnowledge);
         if (runtime.HasExplicitHittableEnemyAuthority)
-        {
-            return false;
-        }
-
-        if (!RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge, pendingSelection))
         {
             return false;
         }

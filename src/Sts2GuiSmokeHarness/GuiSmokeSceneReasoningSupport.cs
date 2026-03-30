@@ -32,10 +32,6 @@ static class GuiSmokeSceneReasoningSupport
         if (context.UseCombatFastPath)
         {
             var combatRuntimeState = context.RuntimeCombatState;
-            var hasCombatScreenshotEvidence = context.HasScreenshotEvidence;
-            var combatAnalysis = hasCombatScreenshotEvidence
-                ? context.CombatAnalysis
-                : new AutoCombatAnalysis(false, AutoCombatOverlayBand.None, false, false, AutoCombatCardKind.Unknown);
             var combatControlFlowCurrentScreen = ControlFlowCurrentScreen(observer) ?? "unknown";
             var combatControlFlowVisibleScreen = ControlFlowVisibleScreen(observer) ?? "unknown";
             var combatTags = new List<string>(capacity: 10)
@@ -47,7 +43,7 @@ static class GuiSmokeSceneReasoningSupport
                 $"ready:{(ControlFlowSceneReady(observer)?.ToString() ?? "unknown").ToLowerInvariant()}",
                 $"stability:{(ControlFlowSceneStability(observer) ?? "unknown").Trim().ToLowerInvariant()}",
                 "combat:fast-path",
-                $"combat-targeting:{((combatRuntimeState.TargetingInProgress == true || (hasCombatScreenshotEvidence && combatAnalysis.HasTargetArrow)) ? "active" : "inactive")}",
+                $"combat-targeting:{(combatRuntimeState.TargetingInProgress == true ? "active" : "inactive")}",
                 $"combat-hittable:{(combatRuntimeState.HittableEnemyCount?.ToString(CultureInfo.InvariantCulture) ?? "unknown")}",
             };
 
@@ -55,10 +51,6 @@ static class GuiSmokeSceneReasoningSupport
             {
                 combatTags.Add($"combat-selection:{pendingSelection.Kind.ToString().ToLowerInvariant()}");
                 combatTags.Add($"combat-slot:{pendingSelection.SlotIndex.ToString(CultureInfo.InvariantCulture)}");
-            }
-            else if (hasCombatScreenshotEvidence && combatAnalysis.HasSelectedCard)
-            {
-                combatTags.Add($"combat-selection:{combatAnalysis.SelectedCardKind.ToString().ToLowerInvariant()}");
             }
 
             if (combatRuntimeState.KeepsCardPlayOpen)

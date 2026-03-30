@@ -79,13 +79,7 @@ static class GuiSmokeStepRequestFactory
         bool HasSelectedNonEnemyConfirmEvidence()
         {
             var pendingSelection = GetPendingSelection();
-            if (CombatRuntimeStateSupport.HasRuntimeSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, pendingSelection))
-            {
-                return true;
-            }
-
-            return !string.IsNullOrWhiteSpace(screenshotPath)
-                   && CombatEligibilitySupport.HasSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, GetCombatAnalysis(), pendingSelection);
+            return CombatRuntimeStateSupport.HasRuntimeSelectedNonEnemyConfirmEvidence(observer.Summary, combatCardKnowledge, pendingSelection);
         }
 
         bool CanResolveCombatEnemyTarget()
@@ -133,13 +127,6 @@ static class GuiSmokeStepRequestFactory
 
             var combatScreenVisible = MatchesControlFlowScreen(observer, "combat");
             if (!combatScreenVisible)
-            {
-                return false;
-            }
-
-            if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
-                || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
-                || LooksLikeInspectOverlayState(observer))
             {
                 return false;
             }

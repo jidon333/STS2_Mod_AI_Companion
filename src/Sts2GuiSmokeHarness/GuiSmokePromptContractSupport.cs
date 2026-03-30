@@ -24,7 +24,7 @@ static class GuiSmokePromptContractSupport
             GuiSmokePhase.WaitEventRelease => "Wait for the explicit ancient event completion click to release the event room before map handoff.",
             GuiSmokePhase.HandleShop => "Resolve explicit shop room semantics: open inventory, perform one bounded shop action, then back/proceed.",
             GuiSmokePhase.WaitCombat => "Wait until observer currentScreen=combat and encounter.inCombat=true.",
-            GuiSmokePhase.HandleCombat => "Play the combat from the screenshot: choose cards, targets, or end turn until combat resolves.",
+            GuiSmokePhase.HandleCombat => "Resolve combat from observer/runtime truth first: choose explicit cards, targets, confirms, or end turn only when those lanes are explicitly open.",
             _ => "Complete the scenario.",
         };
     }

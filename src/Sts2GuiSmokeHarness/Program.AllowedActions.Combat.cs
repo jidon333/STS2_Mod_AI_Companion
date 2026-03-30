@@ -251,53 +251,7 @@ internal static partial class Program
         AutoCombatAnalysis analysis,
         PendingCombatSelection? pendingSelection)
     {
-        var runtime = CombatRuntimeStateSupport.Read(observer.Summary, combatCardKnowledge);
-        if (CombatRuntimeStateSupport.CanResolveEnemyTarget(observer.Summary, combatCardKnowledge, pendingSelection, analysis))
-        {
-            return true;
-        }
-
-        if (runtime.HasExplicitHittableEnemyAuthority)
-        {
-            return false;
-        }
-
-        if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer.Summary).Count > 0)
-        {
-            return true;
-        }
-
-        if (analysis.HasTargetArrow)
-        {
-            return true;
-        }
-
-        if (!CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer.Summary, combatCardKnowledge, pendingSelection))
-        {
-            return false;
-        }
-
-        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike)
-        {
-            var pendingCard = observer.CombatHand.FirstOrDefault(card => card.SlotIndex == pendingSelection.SlotIndex);
-            if (pendingCard is not null)
-            {
-                return IsAttackCombatHandCard(pendingCard)
-                       && IsObservedCombatCardPlayableAtCurrentEnergy(pendingCard, observer.PlayerEnergy, combatCardKnowledge);
-            }
-
-            var pendingKnowledge = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == pendingSelection.SlotIndex);
-            if (pendingKnowledge is not null)
-            {
-                return IsEnemyTargetCombatCard(pendingKnowledge)
-                       && IsPlayableAtCurrentEnergy(pendingKnowledge, observer.PlayerEnergy);
-            }
-        }
-
-        return analysis.HasSelectedCard
-               && analysis.SelectedCardKind == AutoCombatCardKind.AttackLike
-               && (GetPlayableCombatAttackSlots(observer, combatCardKnowledge).Any()
-                   || (observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0));
+        return CombatRuntimeStateSupport.CanResolveEnemyTarget(observer.Summary, combatCardKnowledge, pendingSelection, analysis);
     }
 
     static bool HasCombatSelectionToCancelFromAnalysis(
@@ -317,8 +271,7 @@ internal static partial class Program
             return false;
         }
 
-        return analysis.HasSelectedCard
-               && !CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, analysis, pendingSelection);
+        return false;
     }
 
     static bool HasBlockedOpenAttackSelectionToCancel(

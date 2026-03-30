@@ -30,10 +30,4 @@ static class GuiSmokeCombatConstants
     public const int AttackConfirmHoldMs = 120;
     public const double HandSelectionConfirmNormalizedX = 0.952;
     public const double HandSelectionConfirmNormalizedY = 0.734;
-    public static readonly (double X, double Y, string Label)[] EnemyTargetCandidates =
-    {
-        (0.744, 0.542, "auto-target enemy"),
-        (0.708, 0.532, "auto-target enemy recenter"),
-        (0.778, 0.556, "auto-target enemy alternate"),
-    };
 }

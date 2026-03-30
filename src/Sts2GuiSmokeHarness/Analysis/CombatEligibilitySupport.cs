@@ -92,12 +92,7 @@ static class CombatEligibilitySupport
         AutoCombatAnalysis analysis,
         PendingCombatSelection? pendingSelection)
     {
-        if (CombatRuntimeStateSupport.HasRuntimeSelectedNonEnemyConfirmEvidence(observer, combatCardKnowledge, pendingSelection))
-        {
-            return true;
-        }
-
-        return CombatRuntimeStateSupport.HasNonEnemyConfirmEvidence(observer, combatCardKnowledge, pendingSelection, analysis);
+        return CombatRuntimeStateSupport.HasRuntimeSelectedNonEnemyConfirmEvidence(observer, combatCardKnowledge, pendingSelection);
     }
 
     public static bool HasSelectedNonEnemyConfirmEvidence(GuiSmokeStepRequest request)

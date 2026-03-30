@@ -202,7 +202,7 @@ static class CombatBarrierSupport
         }
 
         if (freshSnapshotSeen
-            && (canResolveCombatEnemyTarget || analysis.HasTargetArrow))
+            && canResolveCombatEnemyTarget)
         {
             return Released(source, "enemy-target authority surfaced after attack selection");
         }

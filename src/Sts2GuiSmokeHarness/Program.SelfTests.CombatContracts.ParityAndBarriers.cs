@@ -165,6 +165,22 @@ internal static partial class Program
             Assert(combatFastPathSignature.Contains("combat:fast-path", StringComparison.OrdinalIgnoreCase), "Combat fast path scene signatures should mark the fast-path contract explicitly.");
             Assert(!combatFastPathSignature.Contains("layer:map-background", StringComparison.OrdinalIgnoreCase), "Combat fast path scene signatures should not add reward/map contamination layers.");
             Assert(!combatFastPathSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase), "Combat fast path scene signatures should not add screenshot map-arrow contamination.");
+            var combatFastPathResidueObserver = parityCombatObserver with
+            {
+                InventoryId = "inv-combat-fast-path-residue",
+                CurrentChoices = new[] { "Backstop", "2턴 종료" },
+                Choices = new[]
+                {
+                    new ObserverChoice("choice", "Backstop", null),
+                },
+            };
+            var combatFastPathResidueContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(combatFastPathResidueObserver, null, null, null),
+                combatNoOpScreenshotPath,
+                paritySerializedHistory,
+                parityCombatKnowledge);
+            Assert(combatFastPathResidueContext.UseCombatFastPath, "Explicit combat authority should keep the combat fast path active even when stale inspect-overlay residue is present.");
             var parityContextAnalysis = AutoDecisionProvider.Analyze(parityRequest, analysisContext: CreateRequestAnalysisContext(parityRequest));
             Assert(CombatDecisionContract.TryMapSemanticAction(parityRequest, parityContextAnalysis.FinalDecision, out var parityContextSemantic), "Context-backed combat analysis should still map to a legal combat semantic action.");
             Assert(string.Equals(parityContextSemantic, parityNonRebuildSemantic, StringComparison.OrdinalIgnoreCase), "Context-backed combat analysis should preserve the same HandleCombat parity semantic as saved/rebuilt replay analysis.");

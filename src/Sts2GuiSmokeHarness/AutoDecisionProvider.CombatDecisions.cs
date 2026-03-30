@@ -266,29 +266,6 @@ sealed partial class AutoDecisionProvider
                 return allowedBlockedSelectionCancelDecision;
             }
 
-            if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-                && context.HasScreenshotEvidence
-                && GetCombatAnalysis().HasSelectedCard
-                && !enemyTargetOpportunity)
-            {
-                if (TryUseCombatDecision(new GuiSmokeStepDecision(
-                    "act",
-                    "right-click",
-                    null,
-                    null,
-                    null,
-                    "cancel unresolved selected card",
-                    "A stale attack selection is still highlighted, but the observer no longer shows a matching playable attack. Cancel it before choosing a new card or ending the turn.",
-                    0.80,
-                    "combat",
-                    250,
-                    true,
-                    null), out var allowedCancelDecision))
-                {
-                    return allowedCancelDecision;
-                }
-            }
-
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "waiting for selected combat lane to resolve", DisplayControlFlowScreen(request.Observer));
         }
 
@@ -424,57 +401,7 @@ sealed partial class AutoDecisionProvider
             }
         }
 
-        if (context.HasScreenshotEvidence && GetCombatAnalysis().HasSelectedCard && HasRecentCombatCardSelection(request.History))
-        {
-            if (TryUseCombatDecision(new GuiSmokeStepDecision(
-                "act",
-                "right-click",
-                null,
-                null,
-                null,
-                "cancel unresolved selected card",
-                "A lingering selected card is still visible after the prior combat action. Cancel it before continuing.",
-                0.72,
-                "combat",
-                250,
-                true,
-                null), out var allowedLingeringSelectionDecision))
-            {
-                return allowedLingeringSelectionDecision;
-            }
-        }
-
         return CloseWithLegalCombatFallback();
-    }
-
-    private static bool HasRecentCombatCardSelection(IReadOnlyList<GuiSmokeHistoryEntry> history)
-    {
-        return CombatHistorySupport.TryGetPendingCombatSelection(history) is not null;
-    }
-
-    private static bool IsCompatibleScreenshotCombatSlot(
-        AutoCombatHandSlotAnalysis slot,
-        ObserverSummary observer,
-        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
-        bool expectEnemyTarget)
-    {
-        var observerCard = observer.CombatHand.FirstOrDefault(card => card.SlotIndex == slot.SlotIndex);
-        if (observerCard is not null)
-        {
-            return expectEnemyTarget
-                ? IsAttackCombatHandCard(observerCard) && IsPlayableAtCurrentEnergy(observerCard, observer.PlayerEnergy, combatCardKnowledge)
-                : CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatHandCard(observerCard, observer.PlayerEnergy, combatCardKnowledge);
-        }
-
-        var knowledgeCard = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == slot.SlotIndex);
-        if (knowledgeCard is not null)
-        {
-            return expectEnemyTarget
-                ? IsEnemyTargetCombatCard(knowledgeCard) && IsPlayableAtCurrentEnergy(knowledgeCard, observer.PlayerEnergy)
-                : CombatEligibilitySupport.IsPlayableAutoNonEnemyCombatCard(knowledgeCard, observer.PlayerEnergy);
-        }
-
-        return observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0;
     }
 
     private static GuiSmokeStepDecision? TryCreateCombatHandSelectionDecision(GuiSmokeStepRequest request)
@@ -589,34 +516,10 @@ sealed partial class AutoDecisionProvider
             return true;
         }
 
-        if (CombatTargetabilitySupport.HasExplicitCombatEnemyTargetNodeSource(request.Observer)
-            || CombatTargetabilitySupport.HasExplicitTargetableEnemyAuthority(request.Observer))
-        {
-            decision = CreatePhaseWaitDecision(
-                GuiSmokePhase.HandleCombat,
-                CombatTargetabilitySupport.DescribeMissingCombatEnemyTargetDecisionSource(request.Observer, request.WindowBounds),
-                "combat");
-            return true;
-        }
-
-        var targetCandidateIndex = Math.Clamp(pendingSelectionNoOpCount, 0, GuiSmokeCombatConstants.EnemyTargetCandidates.Length - 1);
-        var targetCandidate = GuiSmokeCombatConstants.EnemyTargetCandidates[targetCandidateIndex];
-        var reason = pendingSelectionNoOpCount == 0
-            ? "An attack card is selected. Click the enemy body to resolve it."
-            : $"The previous enemy click from slot {pendingSelection.SlotIndex} produced no board delta. Recenter the target click before abandoning the lane.";
-        decision = new GuiSmokeStepDecision(
-            "act",
-            "click",
-            null,
-            targetCandidate.X,
-            targetCandidate.Y,
-            targetCandidate.Label,
-            reason,
-            pendingSelectionNoOpCount == 0 ? 0.90 : 0.86,
-            "combat",
-            300,
-            true,
-            null);
+        decision = CreatePhaseWaitDecision(
+            GuiSmokePhase.HandleCombat,
+            CombatTargetabilitySupport.DescribeMissingCombatEnemyTargetDecisionSource(request.Observer, request.WindowBounds),
+            "combat");
         return true;
     }
 
@@ -647,56 +550,7 @@ sealed partial class AutoDecisionProvider
         AutoCombatAnalysis analysis,
         PendingCombatSelection? pendingSelection)
     {
-        var runtime = CombatRuntimeStateSupport.Read(observer, combatCardKnowledge);
-        if (CombatRuntimeStateSupport.CanResolveEnemyTarget(observer, combatCardKnowledge, pendingSelection, analysis))
-        {
-            return true;
-        }
-
-        if (runtime.HasExplicitHittableEnemyAuthority)
-        {
-            return false;
-        }
-
-        if (CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer).Count > 0)
-        {
-            return true;
-        }
-
-        if (analysis.HasTargetArrow)
-        {
-            return true;
-        }
-
-        if (!CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge, pendingSelection))
-        {
-            return false;
-        }
-
-        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike)
-        {
-            var pendingCard = observer.CombatHand.FirstOrDefault(card => card.SlotIndex == pendingSelection.SlotIndex);
-            if (pendingCard is not null)
-            {
-                return IsAttackCombatHandCard(pendingCard)
-                       && IsPlayableAtCurrentEnergy(pendingCard, observer.PlayerEnergy, combatCardKnowledge);
-            }
-
-            var pendingKnowledge = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == pendingSelection.SlotIndex);
-            if (pendingKnowledge is not null)
-            {
-                return IsEnemyTargetCombatCard(pendingKnowledge)
-                       && IsPlayableAtCurrentEnergy(pendingKnowledge, observer.PlayerEnergy);
-            }
-        }
-
-        return analysis.HasSelectedCard
-               && analysis.SelectedCardKind == AutoCombatCardKind.AttackLike
-               && (observer.CombatHand.Any(card =>
-                       card.SlotIndex is >= 1 and <= 5
-                       && IsAttackCombatHandCard(card)
-                       && IsPlayableAtCurrentEnergy(card, observer.PlayerEnergy, combatCardKnowledge))
-                   || (observer.CombatHand.Count == 0 && combatCardKnowledge.Count == 0));
+        return CombatRuntimeStateSupport.CanResolveEnemyTarget(observer, combatCardKnowledge, pendingSelection, analysis);
     }
 
     public static CombatNoOpLoopAnalysis PeekCombatNoOpLoop(IReadOnlyList<GuiSmokeHistoryEntry> history)

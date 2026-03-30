@@ -1470,13 +1470,13 @@ internal static partial class Program
                 runtimeTargetingKnowledge,
                 runtimeStateOnlyScreenshotPath,
                 runtimeAttackSelectionHistory);
-            Assert(runtimeTargetingActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Runtime targeting state should open click-enemy even when screenshot arrow evidence is absent.");
+            Assert(!runtimeTargetingActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Runtime targeting state without explicit target-node source should keep click-enemy closed.");
             var runtimeTargetingDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
                 27,
                 GuiSmokePhase.HandleCombat.ToString(),
-                "Runtime targeting state should drive an actual enemy-target lane.",
+                "Runtime targeting state without explicit target-node source should wait instead of fabricating an enemy click.",
                 DateTimeOffset.UtcNow,
                 runtimeStateOnlyScreenshotPath,
                 new WindowBounds(1, 32, 1280, 720),
@@ -1493,11 +1493,12 @@ internal static partial class Program
                 runtimeTargetingKnowledge,
                 runtimeTargetingActions,
                 runtimeAttackSelectionHistory,
-                "Use runtime targeting metadata before screenshot heuristics.",
+                "Use runtime targeting metadata only when explicit target-node source is present.",
                 null));
-            Assert(runtimeTargetingDecision.TargetLabel?.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase) == true
-                   || runtimeTargetingDecision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) == true,
-                "Runtime targeting metadata should drive an enemy-target decision, not reopen card selection.");
+            Assert(!string.Equals(runtimeTargetingDecision.TargetLabel, "click enemy", StringComparison.OrdinalIgnoreCase)
+                   && runtimeTargetingDecision.TargetLabel?.StartsWith("auto-target enemy", StringComparison.OrdinalIgnoreCase) != true
+                   && runtimeTargetingDecision.TargetLabel?.StartsWith("combat enemy target", StringComparison.OrdinalIgnoreCase) != true,
+                "Runtime targeting metadata without explicit target-node source should wait instead of emitting an enemy-target click.");
 
             var runtimeHittableEnemyObserver = runtimeTargetingObserver with
             {
