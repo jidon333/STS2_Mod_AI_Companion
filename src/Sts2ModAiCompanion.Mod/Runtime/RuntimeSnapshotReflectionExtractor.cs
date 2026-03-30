@@ -1441,13 +1441,13 @@ internal static class RuntimeSnapshotReflectionExtractor
             {
                 return WithForegroundMetadata(
                     genericEventAttempt,
-                    BuildAncientBackgroundMetadata(ancientEventStrict.Meta),
+                    BuildAncientDiagnosticsMetadata(ancientEventStrict.Meta),
                     "event",
                     eventForegroundLane,
                     eventTeardownInProgress: false,
                     mapReleaseAuthority: false,
                     mapSurfacePending: false,
-                    ancientPhase: ancientPhase);
+                    ancientPhase: null);
             }
 
             return WithForegroundMetadata(
@@ -1583,6 +1583,17 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         return filtered;
+    }
+
+    private static Dictionary<string, string?> BuildAncientDiagnosticsMetadata(IReadOnlyDictionary<string, string?> metadata)
+    {
+        var diagnostics = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        if (metadata.TryGetValue("ancientEventDetected", out var ancientEventDetected))
+        {
+            diagnostics["ancientEventDetected"] = ancientEventDetected;
+        }
+
+        return diagnostics;
     }
 
     private static bool ShouldSkipAncientForegroundMetadata(string key)

@@ -426,7 +426,7 @@ sealed partial class AutoDecisionProvider
             builder.AddSuppressed("click first reachable node", "event-owner-active-preserves-room-lane");
             builder.AddSuppressed("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
             return builder.Build(
-                CreateForegroundAwareContractWaitDecision(
+                CreateAncientOptionContractMismatchAbortDecision(
                     request,
                     "ancient option contract mismatch: foreground lane claims explicit ancient buttons, but only generic event-option buttons remain actionable",
                     "ancient-event-option-contract-mismatch"),

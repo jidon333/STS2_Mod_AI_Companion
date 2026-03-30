@@ -2108,18 +2108,17 @@ static void TestRuntimeReflectionAncientAwaitOptionsReconcilesToGenericEventButt
     Assert(observation.Meta.TryGetValue("ancientEventDetected", out var ancientDetected)
            && string.Equals(ancientDetected, "true", StringComparison.OrdinalIgnoreCase),
         "Ancient residue should remain detectable even when the actionable surface is a generic event button family.");
-    Assert(observation.Meta.TryGetValue("ancientPhase", out var ancientPhase)
-           && string.Equals(ancientPhase, "await-options", StringComparison.OrdinalIgnoreCase),
-        "Ancient residue should keep the strict ancient extractor phase at await-options when it has no explicit button surface.");
-    Assert(observation.Meta.TryGetValue("ancientEventExtractionPath", out var ancientPath)
-           && string.Equals(ancientPath, "ancient-await-options", StringComparison.OrdinalIgnoreCase),
-        "Ancient residue should keep the strict ancient extraction path at ancient-await-options.");
     Assert(observation.Meta.TryGetValue("foregroundOwner", out var foregroundOwner)
            && string.Equals(foregroundOwner, "event", StringComparison.OrdinalIgnoreCase),
         "Generic event button reconciliation should keep event ownership while map release truth is absent.");
     Assert(observation.Meta.TryGetValue("foregroundActionLane", out var foregroundLane)
            && string.Equals(foregroundLane, "event-choice", StringComparison.OrdinalIgnoreCase),
         $"Generic event button reconciliation should surface the actual event-choice lane instead of promoting metadata-only ancient-option. Actual lane='{foregroundLane ?? "<missing>"}'.");
+    Assert(!observation.Meta.ContainsKey("ancientPhase")
+           && !observation.Meta.ContainsKey("ancientEventExtractionPath")
+           && !observation.Meta.ContainsKey("ancientOptionCount")
+           && !observation.Meta.ContainsKey("ancientCompletionCount"),
+        "Generic event button reconciliation should clear ancient foreground-driving metadata once the final lane is generic event-choice.");
     Assert(!observation.Meta.ContainsKey("ancientOptionSummary"),
         "Ancient await-options reconciliation should not keep stale ancient option summaries when no explicit ancient buttons are exported.");
 

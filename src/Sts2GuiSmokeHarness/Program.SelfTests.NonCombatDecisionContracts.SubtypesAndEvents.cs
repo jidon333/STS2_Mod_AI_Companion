@@ -511,7 +511,9 @@ internal static partial class Program
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 "Ancient option mismatch should reconcile to the same actionable event-option button family.",
                 null));
-            Assert(string.Equals(ancientContractMismatchDecision.TargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+            Assert(string.Equals(ancientContractMismatchDecision.Status, "act", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(ancientContractMismatchDecision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(ancientContractMismatchDecision.TargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
                    && ancientContractMismatchDecision.Reason?.Contains("Bounded reconciliation", StringComparison.OrdinalIgnoreCase) == true,
                 "Ancient option contract mismatch should reconcile through the same generic event-option button family instead of waiting on a stale ancient lane.");
 
@@ -560,9 +562,13 @@ internal static partial class Program
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 "Ancient option mismatch without a bounded same-family button should fail explicitly.",
                 null));
-            Assert(string.Equals(ancientContractFailureDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
-                   && string.Equals(ancientContractFailureDecision.DecisionRisk, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase),
-                "Ancient option mismatch without a bounded same-family button should surface an explicit contract-failure wait.");
+            Assert(string.Equals(ancientContractFailureDecision.Status, "abort", StringComparison.OrdinalIgnoreCase)
+                   && ancientContractFailureDecision.ActionKind is null
+                   && string.Equals(ancientContractFailureDecision.DecisionRisk, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
+                   && ancientContractFailureDecision.AbortReason?.Contains("contract mismatch", StringComparison.OrdinalIgnoreCase) == true
+                   && (ancientContractFailureDecision.AbortReason is null
+                       || !ancientContractFailureDecision.AbortReason.Contains("plateau", StringComparison.OrdinalIgnoreCase)),
+                "Ancient option mismatch without a bounded same-family button should abort with an explicit contract mismatch instead of plateau masking.");
 
             var ancientFollowUpObserver = new ObserverState(
                 transformSubtypeObserver.Summary with

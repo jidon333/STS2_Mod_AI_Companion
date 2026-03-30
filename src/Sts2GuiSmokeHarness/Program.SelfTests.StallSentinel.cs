@@ -78,6 +78,90 @@ internal static partial class Program
             }
         }
 
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.HandleEvent,
+                    observer: null,
+                    terminalCause: "ancient-event-option-contract-mismatch",
+                    launchFailed: false),
+                "ancient-event-option-contract-mismatch",
+                StringComparison.OrdinalIgnoreCase),
+            "Ancient event option contract mismatch should stay a first-class failure class instead of collapsing to generic decision-abort.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
+                    "ancient-contract-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic ancient option contract mismatch",
+                    12,
+                    false,
+                    "ancient-event-option-contract-mismatch",
+                    "ancient-event-option-contract-mismatch",
+                    GuiSmokeContractStates.TrustValid)),
+            "Ancient event option contract mismatch should count as a dead-end attempt for supervision.");
+
+        var ancientContractMismatchSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-ancient-contract-mismatch-sentinel-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(ancientContractMismatchSentinelRoot);
+            var runRoot = Path.Combine(ancientContractMismatchSentinelRoot, "attempts", "0001");
+            Directory.CreateDirectory(runRoot);
+            LongRunArtifacts.InitializeSessionArtifacts(ancientContractMismatchSentinelRoot, "ancient-contract-session", "boot-to-long-run", "headless");
+            File.WriteAllLines(
+                Path.Combine(ancientContractMismatchSentinelRoot, "attempt-index.ndjson"),
+                new[]
+                {
+                    JsonSerializer.Serialize(
+                        new GuiSmokeAttemptIndexEntry(
+                            "0001",
+                            1,
+                            "ancient-contract-session",
+                            "failed",
+                            "synthetic ancient option contract mismatch",
+                            DateTimeOffset.UtcNow.AddSeconds(-30),
+                            DateTimeOffset.UtcNow.AddSeconds(-5),
+                            9,
+                            "ancient-event-option-contract-mismatch",
+                            false,
+                            "ancient-event-option-contract-mismatch",
+                            GuiSmokeContractStates.TrustValid),
+                        GuiSmokeShared.NdjsonOptions),
+                });
+            File.WriteAllText(
+                Path.Combine(runRoot, "failure-summary.json"),
+                JsonSerializer.Serialize(
+                    new GuiSmokeFailureSummary(
+                        GuiSmokePhase.HandleEvent.ToString(),
+                        "ancient option contract mismatch synthetic failure",
+                        "event",
+                        false,
+                        "synthetic-ancient-contract-mismatch.png"),
+                    GuiSmokeShared.JsonOptions));
+            LongRunArtifacts.RefreshStallSentinel(ancientContractMismatchSentinelRoot);
+            var diagnosisEntries = File.ReadLines(Path.Combine(ancientContractMismatchSentinelRoot, "stall-diagnosis.ndjson"))
+                .Where(static line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+                .Where(static entry => entry is not null)
+                .Cast<GuiSmokeStallDiagnosisEntry>()
+                .ToArray();
+            Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic ancient contract mismatch attempt.");
+            Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
+                   && diagnosisEntries[0].StallDetected,
+                "Stall sentinel should preserve ancient-event-option-contract-mismatch as a first-class diagnosis kind.");
+        }
+        finally
+        {
+            if (Directory.Exists(ancientContractMismatchSentinelRoot))
+            {
+                Directory.Delete(ancientContractMismatchSentinelRoot, recursive: true);
+            }
+        }
+
         var stallSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-stall-sentinel-self-test-{Guid.NewGuid():N}");
         try
         {

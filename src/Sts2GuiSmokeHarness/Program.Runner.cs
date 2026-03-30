@@ -419,6 +419,11 @@ internal static partial class Program
                || IsRestSitePostClickFailureKind(result.FailureClass);
     }
 
+    static bool IsExplicitDecisionAbortRisk(string? decisionRisk)
+    {
+        return string.Equals(decisionRisk, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase);
+    }
+
     static string ClassifyFailureForAttempt(
         GuiSmokePhase phase,
         ObserverState? observer,
@@ -451,6 +456,7 @@ internal static partial class Program
             "rest-site-selection-failed" => "rest-site-selection-failed",
             "rest-site-grid-not-visible-after-selection" => "rest-site-grid-not-visible-after-selection",
             "rest-site-grid-observer-miss" => "rest-site-grid-observer-miss",
+            "ancient-event-option-contract-mismatch" => "ancient-event-option-contract-mismatch",
             "same-action-stall" => "screenshot-heuristic-drift",
             "decision-abort" => "semantic-scene-ambiguity",
             "phase-timeout" => "observer-blindspot",
@@ -488,6 +494,7 @@ internal static partial class Program
                || string.Equals(result.TerminalCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
                || IsRestSitePostClickFailureKind(result.TerminalCause)
                || string.Equals(result.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase)
@@ -498,6 +505,7 @@ internal static partial class Program
                || string.Equals(result.FailureClass, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
                || IsRestSitePostClickFailureKind(result.FailureClass)
                || string.Equals(result.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "observer-blindspot", StringComparison.OrdinalIgnoreCase)

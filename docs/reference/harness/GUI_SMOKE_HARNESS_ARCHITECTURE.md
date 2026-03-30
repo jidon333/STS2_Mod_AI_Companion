@@ -117,6 +117,7 @@ flowchart TD
 - scene authority, foreground ownership, phase handoff는 observer layer만 canonical owner다.
 - `currentScreen`은 logical/flow screen이고, foreground owner와 동일어가 아니다.
 - `visible/open != canonical foreground owner` 규칙은 observer layer에서 enforced된다.
+- final lane metadata는 final exported actionable surface를 따라야 한다. ancient residue facts는 diagnostic transport만 허용하고, lane promotion에 쓰지 않는다.
 
 ### 2.4 Analysis
 
@@ -129,6 +130,7 @@ flowchart TD
 - `AutoDecisionProvider`는 action selection owner다.
 - noncombat scene-state build와 noncombat decision selection은 분리되어 있다.
 - combat targetability와 combat policy는 combat decision/support owner만 가진다.
+- lane metadata와 actionable surface가 어긋나면 decision layer는 explicit contract mismatch 또는 bounded reconciliation만 선택한다. generic wait-plateau로 감추지 않는다.
 
 ### 2.6 Artifacts / Supervision
 
@@ -139,6 +141,7 @@ flowchart TD
 
 - self-test는 production owner를 따라가는 verification layer다.
 - replay-test / replay-parity-test는 saved request vs rebuilt request semantic drift를 고정한다.
+- self-test는 final actionable surface가 lane metadata를 결정하는지, metadata-only lane promotion이 차단되는지, unresolved mismatch가 explicit contract mismatch로 노출되는지를 고정한다.
 
 ## 3. Canonical owner 규칙
 

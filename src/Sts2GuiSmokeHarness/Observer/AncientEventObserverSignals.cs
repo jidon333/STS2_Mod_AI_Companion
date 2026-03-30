@@ -115,9 +115,7 @@ static class AncientEventObserverSignals
             return true;
         }
 
-        var optionCount = TryGetMetaInt(observer, "ancientOptionCount") ?? 0;
-        var completionCount = TryGetMetaInt(observer, "ancientCompletionCount") ?? 0;
-        return optionCount > completionCount;
+        return false;
     }
 
     public static bool HasExplicitCompletionAction(ObserverSummary observer)
@@ -138,8 +136,7 @@ static class AncientEventObserverSignals
             return true;
         }
 
-        var completionCount = TryGetMetaInt(observer, "ancientCompletionCount");
-        return completionCount is > 0;
+        return false;
     }
 
     public static bool CompletionUsesDefaultFocus(ObserverSummary observer)

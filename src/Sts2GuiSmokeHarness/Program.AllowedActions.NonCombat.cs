@@ -118,6 +118,8 @@ internal static partial class Program
                 => new[] { "click ancient dialogue advance", "wait" },
             GuiSmokePhase.HandleEvent when AncientEventObserverSignals.HasExplicitCompletionAction(observer.Summary)
                 => new[] { "click ancient event completion", "wait" },
+            GuiSmokePhase.HandleEvent when AncientEventObserverSignals.HasOptionContractMismatch(observer.Summary)
+                => new[] { "click event choice", "wait" },
             GuiSmokePhase.HandleEvent when AncientEventObserverSignals.HasExplicitOptionSelection(observer.Summary)
                 => new[] { "click event choice", "wait" },
             GuiSmokePhase.HandleEvent when forceEventProgressionAfterCardSelection

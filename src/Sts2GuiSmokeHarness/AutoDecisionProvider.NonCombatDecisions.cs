@@ -451,7 +451,7 @@ sealed partial class AutoDecisionProvider
             GuiSmokeDecisionDebug.Suppress("click first reachable node", "event-owner-active-preserves-room-lane");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
             return ancientOptionContractReconciliationDecision
-                   ?? CreateForegroundAwareContractWaitDecision(
+                   ?? CreateAncientOptionContractMismatchAbortDecision(
                        request,
                        "ancient option contract mismatch: foreground lane claims explicit ancient buttons, but only generic event-option buttons remain actionable",
                        "ancient-event-option-contract-mismatch");
@@ -1317,6 +1317,29 @@ sealed partial class AutoDecisionProvider
         }
 
         return null;
+    }
+
+    private static GuiSmokeStepDecision CreateAncientOptionContractMismatchAbortDecision(
+        GuiSmokeStepRequest request,
+        string reason,
+        string decisionRisk)
+    {
+        return new GuiSmokeStepDecision(
+            "abort",
+            null,
+            null,
+            null,
+            null,
+            null,
+            reason,
+            0.0,
+            ResolveObserverScreen(request.Observer, "event"),
+            null,
+            true,
+            reason,
+            null,
+            null,
+            decisionRisk);
     }
 
     private static GuiSmokeStepDecision? TryCreateAncientEventCompletionDecision(GuiSmokeStepRequest request)

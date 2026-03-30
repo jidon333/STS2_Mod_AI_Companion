@@ -47,6 +47,7 @@
 
 - mixed-state 버그를 고칠 때는 새 helper를 추가하기 전에 기존 owner/action/release 판단 경로를 찾아 같이 제거하거나 wrapper화한다
 - `GetAllowedActions`, `Decide*`, `Analyze*`, `GetPost*Phase`, loop sentinel이 같은 상태 계약을 공유해야 한다
+- decision consumer만 바꾸고 exporter/observer contract가 여전히 애매하면 미완성으로 본다. source-of-truth owner까지 계속 추적한다
 - self-test / replay / live root 중 무엇으로 고정했는지 반드시 문서와 매트릭스에 남긴다
 
 ### Anti-Drift Rules
@@ -56,6 +57,7 @@
 3. truth가 부족하면 fallback을 넓히지 말고 export를 늘리거나 `wait`로 남긴다
 4. `LooksLike*`, `HasRaw*Visible`, `HasRaw*Surface` 류 broad helper는 primary owner 결정에서 이기지 못한다
 5. 새 precise path가 들어가면 obsolete fallback은 같은 wave에서 같이 제거한다
+6. final lane은 final actionable surface로만 승격한다. metadata-only lane promotion과 plateau masking은 허용하지 않는다.
 
 ## Startup / Validation
 
@@ -111,6 +113,7 @@
 | `EVENT-02` Semantic event choice | ambiguous event screen without explicit option metadata | Event / semantic option | semantic event option, then explicit choice fallback | map routing while canonical event owner remains stronger | option click -> event or room transition | semantic reasoning only while ownership ambiguous | `AutoDecisionProvider.NonCombatDecisions.cs`, `Program.SelfTests.EventRewardSubstates.cs` |
 | `EVENT-03` Explicit event proceed | `eventProceed` semantic exported, `EventOption.IsProceed` lane present | Event / proceed | click explicit proceed | map-only routing while event proceed still foreground active | proceed -> event release or room handoff | stale map overlay does not override explicit proceed | `Observer/EventProceedObserverSignals.cs`, `Program.SelfTests.EventRewardSubstates.cs` |
 | `EVENT-04` Ancient dialogue / completion | ancient dialogue state active or explicit ancient completion visible | Event / ancient lane | ancient dialogue progression, ancient completion, then `WaitEventRelease` | generic proceed, map node click before release | ancient completion -> `WaitEventRelease` -> map | map current active screen does not win until ancient lane disappears | [PROJECT_STATUS.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/PROJECT_STATUS.md), `Observer/AncientEventObserverSignals.cs`, `Program.SelfTests.EventRewardSubstates.cs` |
+| `EVENT-04A` Ancient option contract reconciliation | ancient residue still present, but final actionable surface is generic `NEventOptionButton` family | Event / event-choice or explicit contract mismatch | bounded same-family `click event choice`, `wait` only while the contract is unresolved | metadata-only ancient-option promotion, map fallback, plateau masking | same-family click -> event continues; no same-family surface -> explicit contract mismatch | ancient counts/phase may remain diagnostic, but they may not promote the lane | `Observer/AncientEventObserverSignals.cs`, `Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs`, `src/Sts2ModKit.SelfTest/Program.cs` |
 | `EVENT-05` Event reward substate | event screen but reward owner/action lane explicit | Reward / reward lane | reward choice, reward skip/proceed | generic event option while reward substate foreground active | release to event or map after reward teardown | event text becomes background residue | `AutoDecisionProvider.NonCombatSceneState.cs`, `Program.SelfTests.EventRewardSubstates.cs` |
 | `EVENT-06` Event -> map mixed aftermath | map explicit canonical foreground owner, stale event residue remains | Map / map-node | exported reachable node, map back, wait | stale event proceed or generic event choice | handoff to map until room changes | lingering event proceed is residue when map owner explicit | `Observer/NonCombatForegroundOwnership.cs`, `Program.SelfTests.NonCombatForegroundOwnership.cs` |
 | `TREASURE-01` Treasure room chest/relic/proceed | treasure room authority active | Treasure / treasure lane | chest, relic holder, treasure proceed | map routing while treasure owner active | treasure proceed -> map handoff | background map ignored until treasure lane completes | [PROJECT_STATUS.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/PROJECT_STATUS.md) |

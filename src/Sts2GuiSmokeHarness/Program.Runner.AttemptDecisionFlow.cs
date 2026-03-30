@@ -79,8 +79,14 @@ internal static partial class Program
 
         if (string.Equals(decision.Status, "abort", StringComparison.OrdinalIgnoreCase))
         {
+            var abortTerminalCause = IsExplicitDecisionAbortRisk(decision.DecisionRisk)
+                ? decision.DecisionRisk!
+                : "decision-abort";
+            var abortMessage = decision.AbortReason
+                               ?? decision.DecisionRisk
+                               ?? "decision aborted";
             loopTracking.ResetDecisionWaitTracking();
-            LogHarness($"step={stepIndex} aborted reason={decision.AbortReason ?? "null"}");
+            LogHarness($"step={stepIndex} aborted reason={abortMessage}");
             AppendProgressIfLongRun(
                 isLongRun,
                 logger,
@@ -95,9 +101,9 @@ internal static partial class Program
                     request.ReasoningMode,
                     false,
                     loopTracking.SameActionStallCount,
-                    "decision-abort"));
+                    abortTerminalCause));
             return new GuiSmokeDecisionStatusResult(
-                CompleteFailure(decision.AbortReason ?? "decision aborted", "decision-abort"),
+                CompleteFailure(abortMessage, abortTerminalCause),
                 ShouldContinueLoop: false);
         }
 
