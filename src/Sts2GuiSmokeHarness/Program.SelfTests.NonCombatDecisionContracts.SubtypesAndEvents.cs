@@ -606,6 +606,62 @@ internal static partial class Program
             Assert(string.Equals(rewardPickNoBoundsDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
                 "Reward-pick subtype without exported bounds should wait instead of fabricating a screenshot-backed reward pick decision.");
 
+            var rewardPickActiveScreenFallbackObserver = new ObserverState(
+                rewardPickObserver.Summary with
+                {
+                    CurrentScreen = "rewards",
+                    VisibleScreen = "rewards",
+                    EncounterKind = "Reward",
+                    ChoiceExtractorPath = "reward",
+                    CurrentChoices = new[] { "넘기기" },
+                    ActionNodes = Array.Empty<ObserverActionNode>(),
+                    Choices = new[]
+                    {
+                        new ObserverChoice("card", "넘기기", null, "CardReward")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "CardReward",
+                            Enabled = true,
+                        },
+                    },
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+                        ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+                        ["rawTopOverlayType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NCardRewardSelectionScreen",
+                        ["cardSelectionScreenDetected"] = "false",
+                        ["cardSelectionVisibleCardCount"] = "0",
+                        ["rewardScreenDetected"] = "false",
+                        ["rewardScreenVisible"] = "false",
+                        ["rewardForegroundOwned"] = "false",
+                        ["rewardProceedVisible"] = "false",
+                        ["rewardProceedEnabled"] = "false",
+                    },
+                },
+                null,
+                null,
+                null);
+            var rewardPickActiveScreenState = CardSelectionObserverSignals.TryGetState(rewardPickActiveScreenFallbackObserver.Summary);
+            Assert(string.Equals(rewardPickActiveScreenState?.ScreenType, "reward-pick", StringComparison.OrdinalIgnoreCase),
+                "NCardRewardSelectionScreen active-screen truth should reopen the reward-pick subtype even when the reward extractor has not yet switched choice families.");
+            var rewardPickActiveScreenContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleRewards,
+                rewardPickActiveScreenFallbackObserver,
+                rewardPickScreenshotFallbackPath,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                Array.Empty<CombatCardKnowledgeHint>());
+            var (rewardPickActiveScreenNeedsScreenshot, rewardPickActiveScreenReason) = GuiSmokeStepScreenshotPolicy.Evaluate(43, false, rewardPickActiveScreenContext);
+            Assert(!rewardPickActiveScreenNeedsScreenshot && string.Equals(rewardPickActiveScreenReason, "reward-fast-path", StringComparison.OrdinalIgnoreCase),
+                "Active-screen reward-pick truth should keep the reward child-screen transition observer-only instead of reopening a captured/enriched recovery step.");
+            var rewardPickActiveScreenAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                rewardPickActiveScreenFallbackObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardPickScreenshotFallbackPath,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(rewardPickActiveScreenAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Reward-pick active-screen fallback should wait for explicit card bounds without reopening screenshot fallback. Actual allowlist=[{string.Join(", ", rewardPickActiveScreenAllowedActions)}].");
+
             var simpleSelectObserver = new ObserverState(
                 new ObserverSummary(
                     "event",
@@ -1098,6 +1154,15 @@ internal static partial class Program
                 null,
                 null);
             Assert(BuildAllowedActions(GuiSmokePhase.HandleEvent, deckRemoveObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>()).Contains("deck remove confirm", StringComparer.OrdinalIgnoreCase), "Deck-remove subtype should expose explicit confirm semantics.");
+            var deckRemoveContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleEvent,
+                deckRemoveObserver,
+                rewardPickScreenshotFallbackPath,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                Array.Empty<CombatCardKnowledgeHint>());
+            var (deckRemoveNeedsScreenshot, deckRemoveFallbackReason) = GuiSmokeStepScreenshotPolicy.Evaluate(77, false, deckRemoveContext);
+            Assert(!deckRemoveNeedsScreenshot && string.Equals(deckRemoveFallbackReason, "event-card-selection-explicit-authority", StringComparison.OrdinalIgnoreCase),
+                "Deck-remove child screens should stay observer-only when explicit card-selection subtype authority is already exported.");
 
             var upgradeObserver = new ObserverState(
                 deckRemoveObserver.Summary with

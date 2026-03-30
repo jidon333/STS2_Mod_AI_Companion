@@ -42,9 +42,13 @@ static class GuiSmokeStepScreenshotPolicy
         }
 
         if (analysisContext.Phase == GuiSmokePhase.HandleEvent
-            && cardSelectionState is null
             && !LooksLikeInspectOverlayState(observer))
         {
+            if (cardSelectionState is not null)
+            {
+                return (false, "event-card-selection-explicit-authority");
+            }
+
             var eventScene = analysisContext.EventScene;
             if (eventScene.RewardSubstateActive
                 || (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)

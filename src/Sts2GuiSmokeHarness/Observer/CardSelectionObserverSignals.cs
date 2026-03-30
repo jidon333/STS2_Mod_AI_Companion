@@ -240,7 +240,10 @@ static class CardSelectionObserverSignals
         }
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-deck-remove", StringComparison.OrdinalIgnoreCase)
-            || rootTypeSummary?.Contains("NDeckCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
+            || rootTypeSummary?.Contains("NDeckCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
+            || activeScreenType?.Contains("NDeckCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawCurrentActiveScreenType?.Contains("NDeckCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawTopOverlayType?.Contains("NDeckCardSelectScreen", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "deck-remove";
         }
@@ -252,7 +255,10 @@ static class CardSelectionObserverSignals
         }
 
         if (string.Equals(observer.ChoiceExtractorPath, "card-selection-reward-pick", StringComparison.OrdinalIgnoreCase)
-            || rootTypeSummary?.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
+            || rootTypeSummary?.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || activeScreenType?.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawCurrentActiveScreenType?.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true
+            || rawTopOverlayType?.Contains("NCardRewardSelectionScreen", StringComparison.OrdinalIgnoreCase) == true)
         {
             return "reward-pick";
         }
