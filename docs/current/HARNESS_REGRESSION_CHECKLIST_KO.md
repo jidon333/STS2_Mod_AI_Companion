@@ -49,6 +49,14 @@
 - `GetAllowedActions`, `Decide*`, `Analyze*`, `GetPost*Phase`, loop sentinel이 같은 상태 계약을 공유해야 한다
 - self-test / replay / live root 중 무엇으로 고정했는지 반드시 문서와 매트릭스에 남긴다
 
+### Anti-Drift Rules
+
+1. `explicit truth > broad fallback`
+2. owner/subtype/claimability fix에 screenshot을 primary path로 쓰지 않는다
+3. truth가 부족하면 fallback을 넓히지 말고 export를 늘리거나 `wait`로 남긴다
+4. `LooksLike*`, `HasRaw*Visible`, `HasRaw*Surface` 류 broad helper는 primary owner 결정에서 이기지 못한다
+5. 새 precise path가 들어가면 obsolete fallback은 같은 wave에서 같이 제거한다
+
 ## Startup / Validation
 
 | State ID | Authority | Foreground owner / lane | Allowed actions | Forbidden actions | Release / handoff | Mixed residue rule | Current evidence |
