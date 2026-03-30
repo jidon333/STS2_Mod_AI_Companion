@@ -41,15 +41,41 @@ internal static partial class Program
                     Array.Empty<string>(),
                     new[]
                     {
-                        new ObserverActionNode("enemy-target:1", "enemy-target", "Jaw Worm", "720,180,180,260", true),
-                        new ObserverActionNode("enemy-target:2", "enemy-target", "Cultist", "930,210,180,250", true),
+                        new ObserverActionNode("enemy-target:jaw-worm:1", "enemy-target", "Jaw Worm", "720,180,180,260", true)
+                        {
+                            TypeName = "enemy-target",
+                            SemanticHints = new[] { "combat-targetable", "combat-hittable", "source:target-manager", "target-id:Jaw Worm" },
+                        },
+                        new ObserverActionNode("enemy-target:cultist:2", "enemy-target", "Cultist", "930,210,180,250", true)
+                        {
+                            TypeName = "enemy-target",
+                            SemanticHints = new[] { "combat-targetable", "combat-hittable", "source:target-manager", "target-id:Cultist" },
+                        },
                         new ObserverActionNode("end-turn", "button", "3턴 종료", "1080,620,140,60", true),
                     },
                     Array.Empty<ObserverChoice>(),
                     new[]
                     {
                         new ObservedCombatHandCard(1, "CARD.STRIKE_IRONCLAD", "Attack", 1),
-                    }),
+                    })
+                {
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["combatCardPlayPending"] = "true",
+                        ["combatSelectedCardSlot"] = "1",
+                        ["combatSelectedCardType"] = "Attack",
+                        ["combatSelectedCardTargetType"] = "AnyEnemy",
+                        ["combatTargetingInProgress"] = "true",
+                        ["combatTargetCount"] = "2",
+                        ["combatTargetCoordinateSpace"] = "logical-render",
+                        ["combatTargetClickCoordinateSpace"] = "current-window-normalized",
+                        ["combatTargetSummary"] = "enemy-target:Jaw Worm:1@logical:720,180,180,260@normalized:0.3750,0.1667,0.0938,0.2407;enemy-target:Cultist:2@logical:930,210,180,250@normalized:0.4844,0.1944,0.0938,0.2315",
+                        ["combatTargetableEnemyCount"] = "2",
+                        ["combatTargetableEnemyIds"] = "Jaw Worm,Cultist",
+                        ["combatHittableEnemyCount"] = "2",
+                        ["combatHittableEnemyIds"] = "Jaw Worm,Cultist",
+                    },
+                },
                 null,
                 null,
                 null);
@@ -119,7 +145,9 @@ internal static partial class Program
                 },
                 "Try another enemy target before ending the turn.",
                 null));
-            Assert(combatTargetRetryDecision.TargetLabel?.Contains("Cultist", StringComparison.OrdinalIgnoreCase) == true, "After one no-op enemy click, combat recovery should try another observed enemy target when one is available.");
+            Assert(
+                combatTargetRetryDecision.TargetLabel?.Contains("Cultist", StringComparison.OrdinalIgnoreCase) == true,
+                $"After one no-op enemy click, combat recovery should try another observed enemy target when one is available. Actual target='{combatTargetRetryDecision.TargetLabel ?? "<null>"}'.");
 
             var logicalBoundsTargetObserver = new ObserverState(
                 new ObserverSummary(
