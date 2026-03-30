@@ -410,6 +410,29 @@ sealed partial class AutoDecisionProvider
             return builder.Build(CreateWaitDecision("waiting for explicit ancient event option buttons", DisplayControlFlowScreen(request.Observer)), actualDecision);
         }
 
+        var ancientOptionContractReconciliationDecision = TryCreateAncientOptionContractReconciliationDecision(request);
+        builder.Consider(
+            "click event choice",
+            "ancient-option-contract-reconciliation",
+            0.955d,
+            () => ancientOptionContractReconciliationDecision,
+            "no-same-family-event-option-button-for-bounded-reconciliation",
+            rawBounds: TryFindEventChoiceBounds(request),
+            boundsSource: "observer-event-option-button");
+        if (AncientEventObserverSignals.HasOptionContractMismatch(request.Observer))
+        {
+            builder.AddSuppressed("click proceed", "ancient-option-contract-mismatch-suppresses-stale-proceed-inference");
+            builder.AddSuppressed("click exported reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click first reachable node", "event-owner-active-preserves-room-lane");
+            builder.AddSuppressed("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
+            return builder.Build(
+                CreateForegroundAwareContractWaitDecision(
+                    request,
+                    "ancient option contract mismatch: foreground lane claims explicit ancient buttons, but only generic event-option buttons remain actionable",
+                    "ancient-event-option-contract-mismatch"),
+                actualDecision);
+        }
+
         if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
         {
             if (mapOverlayState.StaleEventChoicePresent)

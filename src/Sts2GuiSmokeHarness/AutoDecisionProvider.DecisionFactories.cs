@@ -324,6 +324,18 @@ sealed partial class AutoDecisionProvider
         return CreateWaitDecision(reason, ResolveObserverScreen(request.Observer), waitMs);
     }
 
+    private static GuiSmokeStepDecision CreateForegroundAwareContractWaitDecision(
+        GuiSmokeStepRequest request,
+        string reason,
+        string decisionRisk,
+        bool allowFastForegroundWait = true)
+    {
+        return CreateForegroundAwareNonCombatWaitDecision(request, reason, allowFastForegroundWait) with
+        {
+            DecisionRisk = decisionRisk,
+        };
+    }
+
     private static bool ShouldUseFastNonCombatForegroundWait(GuiSmokeStepRequest request)
     {
         if (ControlFlowSceneReady(request.Observer) == false

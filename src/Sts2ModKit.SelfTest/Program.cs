@@ -55,6 +55,7 @@ Run("runtime reflection reports filtered mixed-aftermath map-point diagnostics",
 Run("runtime reflection exports explicit ancient dialogue advance before Neow options", TestRuntimeReflectionAncientEventDialogueExport, failures);
 Run("runtime reflection exports explicit ancient option buttons and suppresses pseudo-choice duplicates", TestRuntimeReflectionAncientEventOptionExport, failures);
 Run("runtime reflection marks ancient post-choice completion buttons explicitly", TestRuntimeReflectionAncientEventCompletionExport, failures);
+Run("runtime reflection reconciles ancient await-options residue to generic event-option button lane", TestRuntimeReflectionAncientAwaitOptionsReconcilesToGenericEventButtons, failures);
 Run("runtime reflection exports generic event proceed semantics from EventOption.IsProceed", TestRuntimeReflectionGenericEventProceedExport, failures);
 Run("runtime reflection normalizes ancient mixed post-proceed ownership to map lane", TestRuntimeReflectionAncientMixedPostProceedOwnershipNormalization, failures);
 Run("runtime reflection keeps map owner when post-proceed map surface is pending", TestRuntimeReflectionAncientMixedPostProceedMapPending, failures);
@@ -2050,6 +2051,90 @@ static void TestRuntimeReflectionAncientEventCompletionExport()
         "Ancient post-choice proceed should carry explicit completion semantic hints.");
     Assert(completionChoice.SemanticHints.Contains("option-role:proceed", StringComparer.OrdinalIgnoreCase),
         "Ancient post-choice proceed should preserve the canonical Option.IsProceed role.");
+}
+
+static void TestRuntimeReflectionAncientAwaitOptionsReconcilesToGenericEventButtons()
+{
+    var staleProceedButton = new FakeNEventOptionButton(
+        0,
+        "진행",
+        "[gold][b]진행[/b][/gold]",
+        460,
+        942,
+        enabled: false,
+        isProceed: true);
+    var ancientLayout = new FakeNAncientEventLayout
+    {
+        Visible = true,
+        IsDialogueOnLastLine = true,
+        DefaultFocusedControl = staleProceedButton,
+        Children = new object[] { staleProceedButton },
+    };
+    var genericEventButtons = new object[]
+    {
+        new FakeNEventOptionButton(
+            10,
+            "해독한다",
+            "최대 체력을 3 잃고 무작위 카드를 1장 강화합니다.",
+            922,
+            596,
+            enabled: true),
+        new FakeNEventOptionButton(
+            11,
+            "부순다",
+            "체력을 20 회복합니다.",
+            922,
+            700,
+            enabled: true),
+    };
+    var eventRoom = new FakeNEventRoom
+    {
+        Visible = true,
+        Children = new object[] { ancientLayout }.Concat(genericEventButtons).ToArray(),
+    };
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = eventRoom,
+            },
+            eventRoom,
+            genericEventButtons[0],
+            genericEventButtons[1],
+        },
+        "event");
+
+    Assert(observation.Meta.TryGetValue("ancientEventDetected", out var ancientDetected)
+           && string.Equals(ancientDetected, "true", StringComparison.OrdinalIgnoreCase),
+        "Ancient residue should remain detectable even when the actionable surface is a generic event button family.");
+    Assert(observation.Meta.TryGetValue("ancientPhase", out var ancientPhase)
+           && string.Equals(ancientPhase, "await-options", StringComparison.OrdinalIgnoreCase),
+        "Ancient residue should keep the strict ancient extractor phase at await-options when it has no explicit button surface.");
+    Assert(observation.Meta.TryGetValue("ancientEventExtractionPath", out var ancientPath)
+           && string.Equals(ancientPath, "ancient-await-options", StringComparison.OrdinalIgnoreCase),
+        "Ancient residue should keep the strict ancient extraction path at ancient-await-options.");
+    Assert(observation.Meta.TryGetValue("foregroundOwner", out var foregroundOwner)
+           && string.Equals(foregroundOwner, "event", StringComparison.OrdinalIgnoreCase),
+        "Generic event button reconciliation should keep event ownership while map release truth is absent.");
+    Assert(observation.Meta.TryGetValue("foregroundActionLane", out var foregroundLane)
+           && string.Equals(foregroundLane, "event-choice", StringComparison.OrdinalIgnoreCase),
+        $"Generic event button reconciliation should surface the actual event-choice lane instead of promoting metadata-only ancient-option. Actual lane='{foregroundLane ?? "<missing>"}'.");
+    Assert(!observation.Meta.ContainsKey("ancientOptionSummary"),
+        "Ancient await-options reconciliation should not keep stale ancient option summaries when no explicit ancient buttons are exported.");
+
+    var exportedOptions = observation.Choices
+        .Where(choice => string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(choice => choice.NodeId, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    Assert(exportedOptions.Length == 4,
+        $"Await-options reconciliation should preserve the live-faithful mixed event-option export shape. Actual options: {string.Join(" | ", exportedOptions.Select(choice => $"{choice.NodeId}:{choice.Label}:{string.Join(",", choice.SemanticHints ?? Array.Empty<string>())}"))}");
+    Assert(exportedOptions.Count(choice => choice.SemanticHints.Contains("source:event-option-button", StringComparer.OrdinalIgnoreCase)) == 2,
+        "Await-options reconciliation should keep the two actionable generic NEventOptionButton choices.");
+    Assert(exportedOptions.Count(choice => choice.SemanticHints.Contains("source:event-option", StringComparer.OrdinalIgnoreCase)) == 2,
+        "Await-options reconciliation should keep the paired raw EventOption entries that still appear in live choice exports.");
+    Assert(exportedOptions.All(choice => !choice.SemanticHints.Contains("source:ancient-option-button", StringComparer.OrdinalIgnoreCase)),
+        "Await-options reconciliation should not relabel any live event-option surface as an ancient explicit button source.");
 }
 
 static void TestRuntimeReflectionGenericEventProceedExport()

@@ -1217,6 +1217,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         ChoiceExtractionResult? restSiteUpgradeStrict = null;
         ChoiceExtractionResult? ancientEventStrict = null;
+        ChoiceExtractionResult? genericEventStrict = null;
         if (LooksLikeRestSiteUpgradeContext(triggerKind, screenHint, choiceRoots))
         {
             restSiteUpgradeStrict = ExtractRestSiteSmithUpgradeChoices(choiceRoots, maxEntries, screenHint);
@@ -1232,14 +1233,16 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             ancientEventStrict = ExtractAncientEventChoices(choiceRoots, maxEntries);
             strictAttempts.Add(ancientEventStrict);
-            if (!IsAncientEventDetected(ancientEventStrict))
+            genericEventStrict = EvaluateChoiceSet(
+                "event",
+                CollectEventChoiceItems(choiceRoots),
+                maxEntries,
+                strictExtractor: true);
+            if (!IsAncientEventDetected(ancientEventStrict)
+                || genericEventStrict.Choices.Count > 0
+                || genericEventStrict.Candidates.Count > 0)
             {
-                strictAttempts.Add(
-                    EvaluateChoiceSet(
-                        "event",
-                        CollectEventChoiceItems(choiceRoots),
-                        maxEntries,
-                        strictExtractor: true));
+                strictAttempts.Add(genericEventStrict);
             }
         }
 
@@ -1280,6 +1283,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             && result.Choices.Count > 0);
         var normalizedAncientOwnership = NormalizeAncientForegroundOwnership(
             ancientEventStrict,
+            genericEventStrict,
             mapAttempt,
             currentActiveScreenType,
             rootSceneObservation);
@@ -1403,6 +1407,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static ChoiceExtractionResult? NormalizeAncientForegroundOwnership(
         ChoiceExtractionResult? ancientEventStrict,
+        ChoiceExtractionResult? genericEventAttempt,
         ChoiceExtractionResult? mapAttempt,
         string? currentActiveScreenType,
         RootSceneTransitionObservation rootSceneObservation)
@@ -1418,17 +1423,41 @@ internal static class RuntimeSnapshotReflectionExtractor
         var mapReleaseAuthority = HasAncientMapReleaseAuthority(mapAttempt, currentActiveScreenType, rootSceneObservation);
         if (!mapReleaseAuthority)
         {
+            if (TryResolveAncientForegroundActionLane(ancientEventStrict) is { } ancientForegroundLane)
+            {
+                return WithForegroundMetadata(
+                    ancientEventStrict,
+                    ancientEventStrict.Meta,
+                    "event",
+                    ancientForegroundLane,
+                    eventTeardownInProgress: false,
+                    mapReleaseAuthority: false,
+                    mapSurfacePending: false,
+                    ancientPhase: ancientPhase);
+            }
+
+            if (genericEventAttempt is not null
+                && TryResolveEventForegroundActionLane(genericEventAttempt) is { } eventForegroundLane)
+            {
+                return WithForegroundMetadata(
+                    genericEventAttempt,
+                    BuildAncientBackgroundMetadata(ancientEventStrict.Meta),
+                    "event",
+                    eventForegroundLane,
+                    eventTeardownInProgress: false,
+                    mapReleaseAuthority: false,
+                    mapSurfacePending: false,
+                    ancientPhase: ancientPhase);
+            }
+
             return WithForegroundMetadata(
-                ancientEventStrict,
-                ancientEventStrict.Meta,
-                "event",
-                ancientPhase switch
+                ancientEventStrict with
                 {
-                    "dialogue" => "ancient-dialogue",
-                    "options" => "ancient-option",
-                    "completion" => "ancient-completion",
-                    _ => "ancient-option",
+                    Meta = BuildAncientBackgroundMetadata(ancientEventStrict.Meta),
                 },
+                null,
+                "event",
+                "none",
                 eventTeardownInProgress: false,
                 mapReleaseAuthority: false,
                 mapSurfacePending: false,
@@ -1509,6 +1538,63 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             Meta = metadata,
         };
+    }
+
+    private static string? TryResolveAncientForegroundActionLane(ChoiceExtractionResult result)
+    {
+        if (result.Choices.Any(static choice => string.Equals(choice.Kind, "event-dialogue", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "ancient-dialogue";
+        }
+
+        if (result.Choices.Any(IsAncientEventCompletionChoice))
+        {
+            return "ancient-completion";
+        }
+
+        return result.Choices.Any(IsAncientEventOptionChoice)
+            ? "ancient-option"
+            : null;
+    }
+
+    private static string? TryResolveEventForegroundActionLane(ChoiceExtractionResult result)
+    {
+        if (result.Choices.Any(IsBoundedEventOptionButtonChoice))
+        {
+            return "event-choice";
+        }
+
+        return result.Choices.Any(IsBoundedEventOptionButtonProceedChoice)
+            ? "event-proceed"
+            : null;
+    }
+
+    private static Dictionary<string, string?> BuildAncientBackgroundMetadata(IReadOnlyDictionary<string, string?> metadata)
+    {
+        var filtered = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in metadata)
+        {
+            if (ShouldSkipAncientForegroundMetadata(entry.Key))
+            {
+                continue;
+            }
+
+            filtered[entry.Key] = entry.Value;
+        }
+
+        return filtered;
+    }
+
+    private static bool ShouldSkipAncientForegroundMetadata(string key)
+    {
+        return string.Equals(key, "foregroundOwner", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "foregroundActionLane", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "ancientOptionSummary", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "ancientCompletionSummary", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "ancientCompletionBoundsSource", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "ancientCompletionControlType", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "ancientCompletionUsesDefaultFocus", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(key, "ancientCompletionHasFocus", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasAncientMapReleaseAuthority(
@@ -4900,6 +4986,29 @@ internal static class RuntimeSnapshotReflectionExtractor
         return choice.SemanticHints.Any(static hint =>
             string.Equals(hint, "ancient-event-completion", StringComparison.OrdinalIgnoreCase)
             || string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsAncientEventOptionChoice(LiveExportChoiceSummary choice)
+    {
+        return string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+               && choice.SemanticHints.Any(static hint => string.Equals(hint, "source:ancient-option-button", StringComparison.OrdinalIgnoreCase))
+               && !IsAncientEventCompletionChoice(choice);
+    }
+
+    private static bool IsBoundedEventOptionButtonChoice(LiveExportChoiceSummary choice)
+    {
+        return string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+               && choice.SemanticHints.Any(static hint => string.Equals(hint, "source:event-option-button", StringComparison.OrdinalIgnoreCase))
+               && !IsBoundedEventOptionButtonProceedChoice(choice);
+    }
+
+    private static bool IsBoundedEventOptionButtonProceedChoice(LiveExportChoiceSummary choice)
+    {
+        return string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+               && choice.SemanticHints.Any(static hint => string.Equals(hint, "source:event-option-button", StringComparison.OrdinalIgnoreCase))
+               && choice.SemanticHints.Any(static hint =>
+                   string.Equals(hint, "option-role:proceed", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(hint, "event-proceed", StringComparison.OrdinalIgnoreCase));
     }
 
     private static IEnumerable<object> EnumerateDescendantsAndSelf(object root, int maxDepth)

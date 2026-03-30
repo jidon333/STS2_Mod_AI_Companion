@@ -437,6 +437,26 @@ sealed partial class AutoDecisionProvider
             return ancientOptionDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient event option buttons");
         }
 
+        var ancientOptionContractReconciliationDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "ancient option contract reconciliation",
+            "ancient-option-contract-reconciliation",
+            0.935,
+            TryCreateAncientOptionContractReconciliationDecision(request),
+            "no same-family event-option button remains for bounded reconciliation");
+        if (AncientEventObserverSignals.HasOptionContractMismatch(request.Observer))
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("event-choice", "event-context");
+            GuiSmokeDecisionDebug.Suppress("click proceed", "ancient option contract mismatch suppresses stale proceed inference");
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "event-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "event-owner-active-preserves-room-lane");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "event-owner-active-suppresses-map-arrow-contamination");
+            return ancientOptionContractReconciliationDecision
+                   ?? CreateForegroundAwareContractWaitDecision(
+                       request,
+                       "ancient option contract mismatch: foreground lane claims explicit ancient buttons, but only generic event-option buttons remain actionable",
+                       "ancient-event-option-contract-mismatch");
+        }
+
         var explicitProceedDecision = GuiSmokeDecisionDebug.TraceCandidate(
             "explicit event proceed",
             "event-proceed-explicit",
@@ -1254,6 +1274,44 @@ sealed partial class AutoDecisionProvider
                 "event progression choice",
                 $"Ancient event option '{choice.Label}' is exported from an explicit NEventOptionButton. Prefer its real button bounds over generic title/layout pseudo-choices.",
                 0.94,
+                ResolveObserverScreen(request.Observer, "event"),
+                1400);
+        }
+
+        return null;
+    }
+
+    private static GuiSmokeStepDecision? TryCreateAncientOptionContractReconciliationDecision(GuiSmokeStepRequest request)
+    {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click event choice"))
+        {
+            return null;
+        }
+
+        var node = AncientEventObserverSignals.GetActiveReconciledOptionNodes(request.Observer, request.WindowBounds)
+            .FirstOrDefault();
+        if (node is not null)
+        {
+            return CreateClickDecisionFromNode(
+                request,
+                node,
+                "event progression choice",
+                $"Ancient option metadata is stale for this event owner. Bounded reconciliation is using the same actionable NEventOptionButton family exported as generic event choice '{node.Label}'.",
+                0.93,
+                ResolveObserverScreen(request.Observer, "event"),
+                1400);
+        }
+
+        var choice = AncientEventObserverSignals.GetActiveReconciledOptionChoices(request.Observer, request.WindowBounds)
+            .FirstOrDefault();
+        if (choice is not null)
+        {
+            return CreateClickDecisionFromChoice(
+                request,
+                choice,
+                "event progression choice",
+                $"Ancient option metadata is stale for this event owner. Bounded reconciliation is using the same actionable NEventOptionButton family exported as generic event choice '{choice.Label}'.",
+                0.93,
                 ResolveObserverScreen(request.Observer, "event"),
                 1400);
         }

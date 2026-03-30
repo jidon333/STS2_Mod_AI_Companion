@@ -83,14 +83,18 @@ static class AncientEventObserverSignals
             return false;
         }
 
-        if (IsEventForegroundOwner(observer)
-            && string.Equals(GetForegroundActionLane(observer), "ancient-dialogue", StringComparison.OrdinalIgnoreCase))
+        if (!IsAncientEventDetected(observer))
+        {
+            return false;
+        }
+
+        if (TryGetMetaBool(observer, "ancientDialogueActive") == true)
         {
             return true;
         }
 
-        return IsAncientEventDetected(observer)
-               && TryGetMetaBool(observer, "ancientDialogueActive") == true;
+        return observer.ActionNodes.Any(IsAncientDialogueNode)
+               || observer.Choices.Any(IsAncientDialogueChoice);
     }
 
     public static bool HasExplicitOptionSelection(ObserverSummary observer)
@@ -100,26 +104,20 @@ static class AncientEventObserverSignals
             return false;
         }
 
-        if (IsEventForegroundOwner(observer)
-            && string.Equals(GetForegroundActionLane(observer), "ancient-option", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
         if (!IsAncientEventDetected(observer))
         {
             return false;
         }
 
-        var optionCount = TryGetMetaInt(observer, "ancientOptionCount") ?? 0;
-        var completionCount = TryGetMetaInt(observer, "ancientCompletionCount") ?? 0;
-        if (optionCount > completionCount)
+        if (observer.ActionNodes.Any(node => IsExplicitAncientOptionNode(node) && !IsExplicitAncientCompletionNode(node))
+            || observer.Choices.Any(choice => IsExplicitAncientOptionChoice(choice) && !IsExplicitAncientCompletionChoice(choice)))
         {
             return true;
         }
 
-        return observer.ActionNodes.Any(node => IsExplicitAncientOptionNode(node) && !IsExplicitAncientCompletionNode(node))
-               || observer.Choices.Any(choice => IsExplicitAncientOptionChoice(choice) && !IsExplicitAncientCompletionChoice(choice));
+        var optionCount = TryGetMetaInt(observer, "ancientOptionCount") ?? 0;
+        var completionCount = TryGetMetaInt(observer, "ancientCompletionCount") ?? 0;
+        return optionCount > completionCount;
     }
 
     public static bool HasExplicitCompletionAction(ObserverSummary observer)
@@ -129,25 +127,19 @@ static class AncientEventObserverSignals
             return false;
         }
 
-        if (IsEventForegroundOwner(observer)
-            && string.Equals(GetForegroundActionLane(observer), "ancient-completion", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
         if (!IsAncientEventDetected(observer))
         {
             return false;
         }
 
-        var completionCount = TryGetMetaInt(observer, "ancientCompletionCount");
-        if (completionCount is > 0)
+        if (observer.ActionNodes.Any(IsExplicitAncientCompletionNode)
+            || observer.Choices.Any(IsExplicitAncientCompletionChoice))
         {
             return true;
         }
 
-        return observer.ActionNodes.Any(IsExplicitAncientCompletionNode)
-               || observer.Choices.Any(IsExplicitAncientCompletionChoice);
+        var completionCount = TryGetMetaInt(observer, "ancientCompletionCount");
+        return completionCount is > 0;
     }
 
     public static bool CompletionUsesDefaultFocus(ObserverSummary observer)
@@ -199,14 +191,31 @@ static class AncientEventObserverSignals
             return false;
         }
 
-        if (IsEventForegroundOwner(observer))
-        {
-            return true;
-        }
-
         return IsDialogueActive(observer)
                || HasExplicitCompletionAction(observer)
                || HasExplicitOptionSelection(observer);
+    }
+
+    public static bool HasOptionContractMismatch(ObserverSummary observer)
+    {
+        if (HasExplicitMapForegroundOverride(observer)
+            || !IsAncientEventDetected(observer)
+            || !IsEventForegroundOwner(observer)
+            || !string.Equals(GetForegroundActionLane(observer), "ancient-option", StringComparison.OrdinalIgnoreCase)
+            || HasExplicitOptionSelection(observer))
+        {
+            return false;
+        }
+
+        return string.Equals(TryGetMetaString(observer, "ancientPhase"), "await-options", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaString(observer, "ancientEventExtractionPath"), "ancient-await-options", StringComparison.OrdinalIgnoreCase)
+               || (TryGetMetaInt(observer, "ancientOptionCount") ?? 0) == 0;
+    }
+
+    public static bool HasOptionContractReconciliationSurface(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return GetActiveReconciledOptionNodes(observer, windowBounds).Count > 0
+               || GetActiveReconciledOptionChoices(observer, windowBounds).Count > 0;
     }
 
     public static bool IsAncientDialogueNode(ObserverActionNode node)
@@ -288,6 +297,33 @@ static class AncientEventObserverSignals
         return observer.Choices
             .Where(choice =>
                 IsExplicitAncientOptionChoice(choice)
+                && !IsExplicitAncientCompletionChoice(choice)
+                && HasActiveBounds(choice.ScreenBounds, windowBounds))
+            .OrderBy(GetChoiceSortYInternal)
+            .ThenBy(GetChoiceSortXInternal)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<ObserverActionNode> GetActiveReconciledOptionNodes(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.ActionNodes
+            .Where(node =>
+                IsEventOptionButtonFamilyChoice(node.SemanticHints)
+                && node.Actionable
+                && !IsExplicitAncientOptionNode(node)
+                && !IsExplicitAncientCompletionNode(node)
+                && HasActiveBounds(node.ScreenBounds, windowBounds))
+            .OrderBy(GetNodeSortYInternal)
+            .ThenBy(GetNodeSortXInternal)
+            .ToArray();
+    }
+
+    public static IReadOnlyList<ObserverChoice> GetActiveReconciledOptionChoices(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return observer.Choices
+            .Where(choice =>
+                IsEventOptionButtonFamilyChoice(choice.SemanticHints)
+                && !IsExplicitAncientOptionChoice(choice)
                 && !IsExplicitAncientCompletionChoice(choice)
                 && HasActiveBounds(choice.ScreenBounds, windowBounds))
             .OrderBy(GetChoiceSortYInternal)
@@ -382,6 +418,12 @@ static class AncientEventObserverSignals
 
         bounds = new RectangleF(x, y, width, height);
         return true;
+    }
+
+    private static bool IsEventOptionButtonFamilyChoice(IReadOnlyList<string> semanticHints)
+    {
+        return semanticHints.Any(static hint => string.Equals(hint, "source:event-option-button", StringComparison.OrdinalIgnoreCase))
+               && semanticHints.Any(static hint => string.Equals(hint, "option-role:choice", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool? TryGetMetaBool(ObserverSummary observer, string key)

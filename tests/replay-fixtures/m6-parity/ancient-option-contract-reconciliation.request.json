@@ -1,0 +1,242 @@
+{
+  "runId": "20260331-000052-boot-to-long-run-attempt-0001",
+  "scenarioId": "boot-to-long-run",
+  "stepIndex": 101,
+  "phase": "HandleEvent",
+  "goal": "Resolve the event screen. If nothing else is obvious, pick the first visible option.",
+  "issuedAt": "2026-03-30T15:02:01.7265878+00:00",
+  "screenshotPath": "",
+  "windowBounds": {
+    "x": 26,
+    "y": 75,
+    "width": 1280,
+    "height": 720
+  },
+  "sceneSignature": "phase:handleevent|screen:event|visible:event|encounter:none|ready:unknown|stability:unknown|layer:event-background|reward:claimable|layer:event-foreground",
+  "attemptId": "0001",
+  "attemptOrdinal": 1,
+  "boundedExplorationBudget": 3,
+  "firstSeenScene": false,
+  "reasoningMode": "tactical",
+  "observer": {
+    "currentScreen": "event",
+    "visibleScreen": "event",
+    "inCombat": false,
+    "capturedAt": "2026-03-30T15:02:01.1477823+00:00",
+    "inventoryId": "cb6e1f9b627b98b6",
+    "sceneEpisodeId": "event",
+    "encounterKind": "None",
+    "choiceExtractorPath": "event",
+    "playerCurrentHp": 68,
+    "playerMaxHp": 80,
+    "playerEnergy": 1,
+    "currentChoices": [
+      "해독한다",
+      "해독한다",
+      "부순다",
+      "부순다"
+    ],
+    "lastEventsTail": [],
+    "actionNodes": [
+      {
+        "nodeId": "event-option:0",
+        "kind": "event-option",
+        "label": "해독한다",
+        "screenBounds": "922,596,800,100",
+        "actionable": true,
+        "typeName": "event-option",
+        "semanticHints": [
+          "scene:event",
+          "kind:event-option",
+          "source:event-option-button",
+          "option-role:choice"
+        ]
+      },
+      {
+        "nodeId": "event-option:tablet-of-truth-pages-initial-options-decipher-1",
+        "kind": "event-option",
+        "label": "해독한다",
+        "actionable": false,
+        "typeName": "event-option",
+        "semanticHints": [
+          "scene:event",
+          "kind:event-option",
+          "source:event-option",
+          "option-role:choice"
+        ]
+      },
+      {
+        "nodeId": "event-option:1",
+        "kind": "event-option",
+        "label": "부순다",
+        "screenBounds": "922,700,800,100",
+        "actionable": true,
+        "typeName": "event-option",
+        "semanticHints": [
+          "scene:event",
+          "kind:event-option",
+          "source:event-option-button",
+          "option-role:choice"
+        ]
+      },
+      {
+        "nodeId": "event-option:tablet-of-truth-pages-initial-options-smash",
+        "kind": "event-option",
+        "label": "부순다",
+        "actionable": false,
+        "typeName": "event-option",
+        "semanticHints": [
+          "scene:event",
+          "kind:event-option",
+          "source:event-option",
+          "option-role:choice"
+        ]
+      }
+    ],
+    "choices": [
+      {
+        "kind": "event-option",
+        "label": "해독한다",
+        "screenBounds": "922,596,800,100",
+        "value": "해독한다",
+        "description": "[gold][b]해독한다[/b][/gold] 최대 체력을 [red]3[/red] 잃습니다. 무작위 카드를 1장 [gold]강화[/gold]합니다.",
+        "nodeId": "event-option:0",
+        "bindingKind": "event-option",
+        "bindingId": "TABLET_OF_TRUTH.pages.INITIAL.options.DECIPHER_1",
+        "enabled": true,
+        "semanticHints": [
+          "scene:event",
+          "kind:event-option",
+          "source:event-option-button",
+          "option-role:choice"
+        ]
+      },
+      {
+        "kind": "event-option",
+        "label": "해독한다",
+        "description": "최대 체력을 [red]{DecipherMaxHpLoss}[/red] 잃습니다. 무작위 카드를 1장 [gold]강화[/gold]합니다.",
+        "nodeId": "event-option:tablet-of-truth-pages-initial-options-decipher-1",
+        "bindingKind": "event-option",
+        "bindingId": "TABLET_OF_TRUTH.pages.INITIAL.options.DECIPHER_1",
+        "enabled": true,
+        "semanticHints": [
+          "scene:event",
+          "kind:event-option",
+          "source:event-option",
+          "option-role:choice"
+        ]
+      },
+      {
+        "kind": "event-option",
+        "label": "부순다",
+        "screenBounds": "922,700,800,100",
+        "value": "부순다",
+        "description": "[gold][b]부순다[/b][/gold] 체력을 [green]20[/green] 회복합니다.",
+        "nodeId": "event-option:1",
+        "bindingKind": "event-option",
+        "bindingId": "TABLET_OF_TRUTH.pages.INITIAL.options.SMASH",
+        "enabled": true,
+        "semanticHints": [
+          "scene:event",
+          "kind:event-option",
+          "source:event-option-button",
+          "option-role:choice"
+        ]
+      },
+      {
+        "kind": "event-option",
+        "label": "부순다",
+        "description": "체력을 [green]{SmashHPGain}[/green] 회복합니다.",
+        "nodeId": "event-option:tablet-of-truth-pages-initial-options-smash",
+        "bindingKind": "event-option",
+        "bindingId": "TABLET_OF_TRUTH.pages.INITIAL.options.SMASH",
+        "enabled": true,
+        "semanticHints": [
+          "scene:event",
+          "kind:event-option",
+          "source:event-option",
+          "option-role:choice"
+        ]
+      }
+    ],
+    "combatHand": [],
+    "snapshotVersion": 117,
+    "rawCurrentScreen": "0",
+    "rawObservedScreen": "event",
+    "publishedCurrentScreen": "event",
+    "publishedVisibleScreen": "event",
+    "compatibilityCurrentScreen": "event",
+    "compatibilityVisibleScreen": "bootstrap",
+    "compatibilitySceneReady": false,
+    "compatibilitySceneAuthority": "hook",
+    "compatibilitySceneStability": "transient",
+    "meta": {
+      "screen": "event",
+      "publishedCurrentScreen": "event",
+      "publishedVisibleScreen": "bootstrap",
+      "rawCurrentScreen": "0",
+      "compatibilityCurrentScreen": "event",
+      "compatibilityVisibleScreen": "bootstrap",
+      "compatSceneReady": "false",
+      "compatSceneAuthority": "hook",
+      "compatSceneStability": "transient",
+      "rawObservedScreen": "event",
+      "semanticKind": "runtime-poll",
+      "source": "scene-poll",
+      "currentSceneType": "MegaCrit.Sts2.Core.Nodes.NGame",
+      "sceneRootType": "Godot.Window",
+      "combatPrimarySource": "CombatManager.IsInProgress",
+      "combatPrimaryValue": "false",
+      "transitionInProgress": "false",
+      "rootSceneCurrentType": "MegaCrit.Sts2.Core.Nodes.NRun",
+      "rawRootSceneCurrentType": "MegaCrit.Sts2.Core.Nodes.NRun",
+      "rootSceneIsMainMenu": "false",
+      "rootSceneIsRun": "true",
+      "currentRunNodePresent": "true",
+      "eventProceedOptionVisible": "false",
+      "eventProceedOptionEnabled": "false",
+      "eventProceedOptionCount": "0",
+      "ancientEventDetected": "true",
+      "ancientDialogueActive": "false",
+      "ancientDialogueHitboxVisible": "false",
+      "ancientDialogueHitboxEnabled": "false",
+      "ancientOptionCount": "0",
+      "ancientCompletionActive": "false",
+      "ancientCompletionCount": "0",
+      "ancientPhase": "await-options",
+      "ancientEventExtractionPath": "ancient-await-options",
+      "foregroundOwner": "event",
+      "foregroundActionLane": "ancient-option",
+      "eventTeardownInProgress": "false",
+      "mapReleaseAuthority": "false",
+      "mapSurfacePending": "false",
+      "choiceExtractorPath": "event"
+    }
+  },
+  "knownRecipes": [],
+  "eventKnowledgeCandidates": [],
+  "combatCardKnowledge": [],
+  "allowedActions": [
+    "click event choice",
+    "wait"
+  ],
+  "history": [
+    {
+      "phase": "HandleEvent",
+      "action": "wait",
+      "recordedAt": "2026-03-30T15:01:58.1387766+00:00"
+    },
+    {
+      "phase": "HandleEvent",
+      "action": "wait",
+      "recordedAt": "2026-03-30T15:01:58.7528526+00:00"
+    },
+    {
+      "phase": "HandleEvent",
+      "action": "wait",
+      "recordedAt": "2026-03-30T15:01:59.5289761+00:00"
+    }
+  ],
+  "failureModeHint": "If the event text is ambiguous, choose a large visible progression option, not inspect affordances or detail overlays.",
+  "decisionRiskHint": "scene-stability:unknown"
+}

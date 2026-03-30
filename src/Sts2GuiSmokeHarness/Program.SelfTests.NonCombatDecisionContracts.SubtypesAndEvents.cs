@@ -411,6 +411,159 @@ internal static partial class Program
             Assert(string.Equals(ancientOffWindowDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
                 "Ancient event decisioning should wait instead of throwing on off-window pseudo-choice bounds.");
 
+            var ancientContractMismatchObserver = new ObserverState(
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-ancient-contract-mismatch",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-ancient-contract-mismatch",
+                    "None",
+                    "event",
+                    68,
+                    80,
+                    1,
+                    new[] { "해독한다", "부순다" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("event-option:0", "event-option", "해독한다", "922,596,800,100", true)
+                        {
+                            TypeName = "event-option",
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                        },
+                        new ObserverActionNode("event-option:1", "event-option", "부순다", "922,700,800,100", true)
+                        {
+                            TypeName = "event-option",
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("event-option", "해독한다", "922,596,800,100", "해독한다")
+                        {
+                            NodeId = "event-option:0",
+                            BindingKind = "event-option",
+                            BindingId = "TABLET_OF_TRUTH.pages.INITIAL.options.DECIPHER_1",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                        },
+                        new ObserverChoice("event-option", "부순다", "922,700,800,100", "부순다")
+                        {
+                            NodeId = "event-option:1",
+                            BindingKind = "event-option",
+                            BindingId = "TABLET_OF_TRUTH.pages.INITIAL.options.SMASH",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["ancientEventDetected"] = "true",
+                        ["ancientDialogueActive"] = "false",
+                        ["ancientDialogueHitboxVisible"] = "false",
+                        ["ancientDialogueHitboxEnabled"] = "false",
+                        ["ancientOptionCount"] = "0",
+                        ["ancientCompletionCount"] = "0",
+                        ["ancientPhase"] = "await-options",
+                        ["ancientEventExtractionPath"] = "ancient-await-options",
+                        ["foregroundOwner"] = "event",
+                        ["foregroundActionLane"] = "ancient-option",
+                    },
+                },
+                null,
+                null,
+                null);
+            Assert(!AncientEventObserverSignals.HasExplicitOptionSelection(ancientContractMismatchObserver.Summary),
+                "Metadata-only ancient-option lane promotion must not resurrect explicit ancient option authority.");
+            Assert(AncientEventObserverSignals.HasOptionContractMismatch(ancientContractMismatchObserver.Summary),
+                "Ancient option lane mismatch should be surfaced when only generic event-option buttons remain actionable.");
+            var ancientContractMismatchActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, ancientContractMismatchObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(ancientContractMismatchActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase),
+                "Ancient option contract mismatch should keep click event choice available for bounded reconciliation.");
+            var ancientContractMismatchDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                101,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Resolve the event screen. If nothing else is obvious, pick the first visible option.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(26, 75, 1280, 720),
+                "phase:handleevent|screen:event|visible:event|encounter:none|ready:unknown|stability:unknown|layer:event-background|layer:event-foreground",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                ancientContractMismatchObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                ancientContractMismatchActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Ancient option mismatch should reconcile to the same actionable event-option button family.",
+                null));
+            Assert(string.Equals(ancientContractMismatchDecision.TargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+                   && ancientContractMismatchDecision.Reason?.Contains("Bounded reconciliation", StringComparison.OrdinalIgnoreCase) == true,
+                "Ancient option contract mismatch should reconcile through the same generic event-option button family instead of waiting on a stale ancient lane.");
+
+            var ancientContractFailureObserver = new ObserverState(
+                ancientContractMismatchObserver.Summary with
+                {
+                    InventoryId = "inv-ancient-contract-failure",
+                    SceneEpisodeId = "episode-ancient-contract-failure",
+                    ActionNodes = Array.Empty<ObserverActionNode>(),
+                    Choices = new[]
+                    {
+                        new ObserverChoice("event-option", "해독한다", null, "해독한다")
+                        {
+                            NodeId = "event-option:tablet-of-truth-pages-initial-options-decipher-1",
+                            BindingKind = "event-option",
+                            BindingId = "TABLET_OF_TRUTH.pages.INITIAL.options.DECIPHER_1",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                        },
+                    },
+                },
+                null,
+                null,
+                null);
+            var ancientContractFailureDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                102,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Do not hide ancient option contract mismatches behind a generic wait plateau.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(26, 75, 1280, 720),
+                "phase:handleevent|screen:event|visible:event|encounter:none|ready:unknown|stability:unknown|layer:event-background|layer:event-foreground",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                ancientContractFailureObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                new[] { "click event choice", "wait" },
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Ancient option mismatch without a bounded same-family button should fail explicitly.",
+                null));
+            Assert(string.Equals(ancientContractFailureDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(ancientContractFailureDecision.DecisionRisk, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase),
+                "Ancient option mismatch without a bounded same-family button should surface an explicit contract-failure wait.");
+
             var ancientFollowUpObserver = new ObserverState(
                 transformSubtypeObserver.Summary with
                 {

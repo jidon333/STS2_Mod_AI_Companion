@@ -10,6 +10,16 @@
     "expectedChoiceExtractorPath": "map"
   },
   {
+    "name": "ancient-option-contract-reconciliation",
+    "requestPath": "tests/replay-fixtures/m6-parity/ancient-option-contract-reconciliation.request.json",
+    "expectedStatus": "act",
+    "expectedActionKind": "click",
+    "expectedTargetContains": "event progression choice",
+    "expectedForegroundOwner": "event",
+    "expectedForegroundActionLane": "ancient-option",
+    "expectedChoiceExtractorPath": "event"
+  },
+  {
     "name": "reward-card-pick",
     "requestPath": "tests/replay-fixtures/m6-parity/reward-pick-card.request.json",
     "expectedStatus": null,
