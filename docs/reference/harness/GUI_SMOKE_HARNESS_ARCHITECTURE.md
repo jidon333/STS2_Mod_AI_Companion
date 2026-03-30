@@ -120,7 +120,7 @@ flowchart TD
 
 ### 2.4 Analysis
 
-- screenshot 기반 raw geometry, card grid, map node, overlay, combat target 추론은 analysis layer가 소유한다.
+- screenshot 기반 raw geometry, card grid, map node, overlay 추론은 analysis layer가 소유한다. combat enemy target authority는 current `main`에서 exported/runtime explicit target surface가 canonical owner이고, screenshot target 추론은 primary path가 아니다.
 - combat lane micro-stage 재구성과 lane-specific quiet convergence settle semantics도 analysis layer가 소유한다.
 - decision layer는 analysis 결과를 소비하지만, raw image interpretation owner가 아니다.
 
@@ -185,8 +185,7 @@ flowchart TD
 - replay parity suite
   - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-parity-test`
 
-2026-03-30 기준 `build`, `Sts2ModKit.SelfTest`, `replay-test`, `replay-parity-test`는 green이다.
-현재 harness `self-test`는 unrelated `WaitPostMapNodeRoom -> reward reopen` known red 1건이 남아 있다.
+2026-03-30 기준 `build`, `Sts2ModKit.SelfTest`, `replay-test`, `replay-parity-test`, `self-test`는 green이다.
 
 ## 6. Current semantic follow-up pointers
 

@@ -42,26 +42,28 @@ repo root:
 - anti-drift recovery wave `bc53c34`, `f29cc5d`, `52ebabd`, `84e4647`, `5ebe718`, `3a24338`는 current `main`에 반영됨
 - `COMBAT-03`, `COMBAT-07`, `REWARD-04` coverage row는 current `main`에서 green
 - `MAP-04` reward reopen self-test regression은 current `main`에서 닫힘
-- 다만 `84e4647` 이후 fresh authoritative live rerun은 아직 다시 찍어야 함
+- fresh authoritative live rerun [boot-to-long-run-20260330-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live9)도 확보됐고, `live8` false-confirm plateau는 재현되지 않음
+- current 남은 high-signal gap은 `deck-remove` / reward card child-screen의 transient `captured/enriched` recapture임
 
 이번 세션 목표
 
 1. old `Program.cs` monolith 전제를 버리고 current owner 파일 기준으로 시작
 2. cleanup-complete baseline reopen 금지
-3. clean deploy / Manual Clean Boot / identity verify 뒤 fresh authoritative live root를 먼저 다시 만든다
-4. first blocker가 나오면 blocker 1개만 분류한다
-5. decompiled runtime truth + `AutoSlay` contract + anti-drift rules로 수정 방향을 먼저 잠근다
-6. new parallel heuristic family 추가 금지
-7. acceptance 통과 시 바로 커밋
+3. `deck-remove` / reward-pick child-screen concrete contract를 decompiled runtime truth + `AutoSlay` 기준으로 먼저 다시 확인한다
+4. extractor/export와 child-screen owner를 좁힌 뒤 clean deploy / Manual Clean Boot / identity verify를 거쳐 fresh authoritative live root를 만든다
+5. first blocker가 나오면 blocker 1개만 분류한다
+6. decompiled runtime truth + `AutoSlay` contract + anti-drift rules로 수정 방향을 먼저 잠근다
+7. new parallel heuristic family 추가 금지
+8. acceptance 통과 시 바로 커밋
 
 우선 열 파일
 
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Analysis/CombatMicroStageSupport.cs
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Analysis/CombatPostActionObservationSupport.cs
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Analysis/CombatRuntimeStateSupport.cs
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2ModAiCompanion.Mod/Runtime/RuntimeSnapshotReflectionExtractor.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Observer/CardSelectionObserverSignals.cs
 - /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs
-- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/GuiSmokeStepRequestFactory.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/knowledge/decompiled/MegaCrit/sts2/Core/AutoSlay/Handlers/Screens/CardRewardScreenHandler.cs
+- /mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/artifacts/knowledge/decompiled/MegaCrit/sts2/Core/AutoSlay/Handlers/Screens/DeckCardSelectScreenHandler.cs
 
 핵심 원칙
 

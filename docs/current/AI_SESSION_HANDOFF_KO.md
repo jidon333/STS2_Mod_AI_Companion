@@ -93,7 +93,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - anti-drift recovery wave `bc53c34`, `f29cc5d`, `52ebabd`, `84e4647`, `5ebe718`, `3a24338`도 current `main`에 반영됐다
 - `MAP-04` reward reopen self-test regression은 current `main`에서 닫혔다
 - `build`, `self-test`, `replay-test`, `replay-parity-test`는 current `main`에서 green이다
-- current code/test baseline은 explicit combat/noncombat authority contracts를 다시 고정했지만, fresh authoritative live rerun은 아직 다시 찍어야 한다
+- current code/test baseline은 explicit combat/noncombat authority contracts를 다시 고정했고, fresh authoritative live rerun [boot-to-long-run-20260330-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live9)도 확보됐다
 
 ## current architecture state
 
@@ -231,22 +231,23 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 
 ## 다음 세션의 기본 목표
 
-현재 기준으로 immediate priority는 coverage frontier보다 **fresh authoritative live rerun**이다.
+현재 기준으로 immediate priority는 coverage frontier보다 **`deck-remove` / reward card child-screen explicit owner/export cleanup**이다.
 
 ```text
-1. clean deploy / Manual Clean Boot / identity verify 뒤 fresh long-run live root를 다시 만든다
-2. first authoritative blocker가 나오면 blocker 1개만 분류한다
-3. decompiled runtime truth + AutoSlay contract + anti-drift rules로 수정 방향을 먼저 잠근다
+1. decompiled runtime truth + AutoSlay contract로 `deck-remove` / reward-pick child-screen concrete contract를 먼저 다시 읽는다
+2. extractor/export와 card-selection owner를 좁혀 transient captured/enriched recapture를 줄인다
+3. clean deploy / Manual Clean Boot / identity verify 뒤 fresh long-run live root를 다시 만든다
+4. first authoritative blocker가 나오면 blocker 1개만 분류한다
 ```
 
 현재 바로 열 파일:
 
-1. [Analysis/CombatMicroStageSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatMicroStageSupport.cs)
-2. [Analysis/CombatPostActionObservationSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatPostActionObservationSupport.cs)
-3. [Analysis/CombatRuntimeStateSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatRuntimeStateSupport.cs)
-4. [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
-5. [AutoDecisionProvider.NonCombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
-6. [GuiSmokeStepRequestFactory.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/GuiSmokeStepRequestFactory.cs)
+1. [RuntimeSnapshotReflectionExtractor.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2ModAiCompanion.Mod/Runtime/RuntimeSnapshotReflectionExtractor.cs)
+2. [Observer/CardSelectionObserverSignals.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Observer/CardSelectionObserverSignals.cs)
+3. [AutoDecisionProvider.NonCombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.NonCombatDecisions.cs)
+4. [Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs)
+5. [CardRewardScreenHandler.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/knowledge/decompiled/MegaCrit/sts2/Core/AutoSlay/Handlers/Screens/CardRewardScreenHandler.cs)
+6. [DeckCardSelectScreenHandler.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/knowledge/decompiled/MegaCrit/sts2/Core/AutoSlay/Handlers/Screens/DeckCardSelectScreenHandler.cs)
 
 ## validation baseline
 
@@ -270,10 +271,11 @@ replay parity acceptance:
 - green 유지
 - 새 failing fixture 추가 금지
 
-fresh live rerun이 필요한 이유:
+current live baseline note:
 
 - `live8`는 combat false-confirm + speed regression을 드러낸 authoritative regression root였다
-- `84e4647`와 `5ebe718`는 그 회귀를 current code/test baseline에서 되돌렸지만, fresh live closure는 아직 다시 찍어야 한다
+- `84e4647`, `5ebe718`, `3a24338` 이후 fresh live root [boot-to-long-run-20260330-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live9)에서 그 plateau는 재현되지 않았다
+- current 남은 high-signal gap은 `deck-remove` / reward card child-screen에서 transient `captured/enriched` recapture가 끼는 smoothness 문제다
 
 ## 절대 reopen하지 말 것
 
@@ -288,6 +290,7 @@ fresh live rerun이 필요한 이유:
 ```text
 current main의 하네스 구조 정리와 anti-drift recovery wave는 current code/test baseline에서 닫혔다.
 새 세션은 old Program.cs monolith, screenshot-first recovery, broad mixed-state fallback을 다시 가져오지 말고,
-먼저 clean deploy / Manual Clean Boot 뒤 fresh authoritative live root를 다시 만들고,
+먼저 `deck-remove` / reward card child-screen concrete contract를 decompiled truth와 AutoSlay 기준으로 다시 맞추고,
+그 다음 clean deploy / Manual Clean Boot 뒤 fresh authoritative live root를 다시 만들고,
 그 다음 first blocker 1개만 decompiled truth와 AutoSlay contract 기준으로 다뤄라.
 ```

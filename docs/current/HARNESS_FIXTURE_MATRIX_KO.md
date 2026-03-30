@@ -54,7 +54,7 @@ coverage status 의미:
 | State ID | Canonical Phase | Owner / Lane | Coverage | Representative Evidence | Notes |
 |---|---|---|---|---|---|
 | `COMBAT-01` | `WaitCombat` | combat acceptance | green | `Program.SelfTests.CombatContracts.*.cs`의 WaitCombat acceptance assertions (`ready`, `stable`, `inCombat`) | strong acceptance gate |
-| `COMBAT-02` | `HandleCombat` | card select | partial | combat opener self-tests, `84e4647` current-main recovery commit, and `Program.SelfTests.CombatContracts.NonEnemyAndRuntimeState.cs` explicit-slot assertions | screenshot-primary slot selection은 current code/test baseline에서 제거됐지만, fresh post-recovery live root는 아직 다시 찍어야 한다 |
+| `COMBAT-02` | `HandleCombat` | card select | green | combat opener self-tests, `Program.SelfTests.CombatContracts.NonEnemyAndRuntimeState.cs` explicit-slot assertions, and fresh live root [boot-to-long-run-20260330-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live9) | screenshot-primary slot selection은 current `main`에서 제거됐고, `live9` first combat가 observer-first card select로 다시 고정됐다 |
 | `COMBAT-03` | `HandleCombat` | target lane | green | `Analysis/CombatMicroStageSupport.cs`, `Analysis/CombatPostActionObservationSupport.cs`, `Analysis/CombatTargetabilitySupport.cs`, `Program.SelfTests.CombatContracts.TargetSelection.cs`, parity fixtures `combat-target-wait.request.json` / `combat-target-click.request.json`, fresh live root [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2) | unresolved attack lane는 `end turn`으로 새지 않고, runtime `combatTargetSummary` raw fact까지 explicit target authority로 소비된다 |
 | `COMBAT-04` | `HandleCombat` | cancel blocked selection | green | old blocker replay `0167.request.json` family, commit-era closure evidence referenced in current conversation | explicit cancel lane is required contract |
 | `COMBAT-05` | `HandleCombat` | end-turn pre-ack | green | current code barriers + self-tests + fresh live roots [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1) and [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2) | `auto-end turn`은 `PlayerActionOpen` stage에서만 열리고 unresolved non-enemy/attack lane에서는 금지된다 |
@@ -140,7 +140,8 @@ coverage status 의미:
 
 | Priority | Work Item | Why |
 |---|---|---|
-| P1 | combat post-recovery fresh live rerun | `84e4647` / `5ebe718` 뒤 current code/test baseline은 green이지만 combat live continuity는 다시 찍어야 한다 |
+| P1 | `deck-remove` child-screen explicit owner/export cleanup | `live9`에서 correctness blocker는 없었지만 child-screen에서 transient `captured/enriched` recapture가 남아 있다 |
+| P1 | reward card child-screen smoothness cleanup | reward card choice가 `captured/enriched wait` 뒤 observer-first로 회복되며, subtype owner/export를 더 좁힐 여지가 있다 |
 | P1 | event reward substate live evidence | `EVENT-05` remains partial |
 | P1 | reward-map loop sentinel evidence | `REWARD-10` remains partial |
 
