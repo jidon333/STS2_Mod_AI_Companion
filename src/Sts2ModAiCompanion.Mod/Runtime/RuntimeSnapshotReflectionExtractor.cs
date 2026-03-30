@@ -1194,6 +1194,11 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         var strictAttempts = new List<ChoiceExtractionResult>();
 
+        if (LooksLikeMainMenuAbandonConfirmContext(currentActiveScreenType, choiceRoots))
+        {
+            strictAttempts.Add(ExtractMainMenuAbandonConfirmChoices(choiceRoots, maxEntries));
+        }
+
         if (LooksLikeMainMenuContext(triggerKind, screenHint, choiceRoots))
         {
             strictAttempts.Add(ExtractMainMenuChoices(choiceRoots, maxEntries));
@@ -6812,6 +6817,11 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static string InferScreen(params string?[] candidates)
     {
         var joined = string.Join(" ", candidates.Where(candidate => !string.IsNullOrWhiteSpace(candidate)));
+        if (LooksLikeAbandonRunConfirmPopupType(joined))
+        {
+            return "main-menu";
+        }
+
         if (joined.Contains("Feedback", StringComparison.OrdinalIgnoreCase))
         {
             return "feedback-overlay";
@@ -6893,6 +6903,10 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         return "unknown";
     }
+
+    private static bool LooksLikeAbandonRunConfirmPopupType(string? candidate)
+        => !string.IsNullOrWhiteSpace(candidate)
+           && candidate.Contains("AbandonRunConfirmPopup", StringComparison.OrdinalIgnoreCase);
 
     private static string ResolveScreen(string? screenOverride, IReadOnlyList<object> roots, params string?[] screenCandidates)
     {
@@ -7450,6 +7464,16 @@ internal static class RuntimeSnapshotReflectionExtractor
         });
     }
 
+    private static bool LooksLikeMainMenuAbandonConfirmContext(string? currentActiveScreenType, IEnumerable<object> choiceRoots)
+    {
+        if (LooksLikeAbandonRunConfirmPopupType(currentActiveScreenType))
+        {
+            return true;
+        }
+
+        return choiceRoots.Any(root => LooksLikeAbandonRunConfirmPopupType(root.GetType().FullName ?? root.GetType().Name));
+    }
+
     private static ChoiceExtractionResult ExtractMainMenuChoices(IEnumerable<object> roots, int maxEntries)
     {
         var buttons = new List<object>();
@@ -7523,6 +7547,97 @@ internal static class RuntimeSnapshotReflectionExtractor
                 Array.Empty<string>()));
     }
 
+    private static ChoiceExtractionResult ExtractMainMenuAbandonConfirmChoices(IEnumerable<object> roots, int maxEntries)
+    {
+        var buttons = new List<object>();
+        foreach (var root in roots)
+        {
+            var typeName = root.GetType().FullName ?? root.GetType().Name;
+            if (typeName.Contains("NPopupYesNoButton", StringComparison.OrdinalIgnoreCase))
+            {
+                AddIfUseful(buttons, root);
+            }
+
+            if (LooksLikeAbandonRunConfirmPopupType(typeName))
+            {
+                foreach (var memberName in new[] { "_verticalPopup", "VerticalPopup", "Popup", "popup" })
+                {
+                    var popup = TryGetMemberValue(root, memberName);
+                    AddIfUseful(buttons, popup);
+                    foreach (var item in ExpandEnumerable(popup))
+                    {
+                        AddIfUseful(buttons, item);
+                    }
+
+                    foreach (var popupButtonMemberName in new[] { "YesButton", "NoButton", "_yesButton", "_noButton" })
+                    {
+                        var popupButton = popup is null ? null : TryGetMemberValue(popup, popupButtonMemberName);
+                        AddIfUseful(buttons, popupButton);
+                        foreach (var item in ExpandEnumerable(popupButton))
+                        {
+                            AddIfUseful(buttons, item);
+                        }
+                    }
+                }
+            }
+
+            if (!typeName.Contains("NVerticalPopup", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var memberName in new[] { "YesButton", "NoButton", "_yesButton", "_noButton" })
+            {
+                var button = TryGetMemberValue(root, memberName);
+                AddIfUseful(buttons, button);
+                foreach (var item in ExpandEnumerable(button))
+                {
+                    AddIfUseful(buttons, item);
+                }
+            }
+        }
+
+        var distinctButtons = buttons
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        var choices = distinctButtons
+            .Select(TryCreateMainMenuAbandonConfirmChoiceSummary)
+            .Where(choice => choice is not null)
+            .Cast<LiveExportChoiceSummary>()
+            .OrderBy(choice => choice.NodeId, StringComparer.Ordinal)
+            .Take(maxEntries)
+            .ToArray();
+
+        var candidates = distinctButtons
+            .Select(button =>
+            {
+                var typeName = button.GetType().FullName ?? button.GetType().Name;
+                var summary = TryCreateMainMenuAbandonConfirmChoiceSummary(button);
+                return new LiveExportChoiceCandidate(
+                    "main-menu-abandon-confirm",
+                    typeName,
+                    summary?.Label ?? TryResolveChoiceLabel(button),
+                    summary?.Value,
+                    summary?.Description,
+                    summary is null ? 0 : 140,
+                    Accepted: summary is not null,
+                    RejectReason: summary is null ? "not-abandon-confirm-button" : null);
+            })
+            .ToArray();
+
+        return new ChoiceExtractionResult(
+            choices,
+            candidates,
+            new LiveExportChoiceDecision(
+                "main-menu-abandon-confirm",
+                UsedStrictExtractor: true,
+                CandidateCount: candidates.Length,
+                AcceptedCount: choices.Length,
+                choices.Length == 0 ? "strict-miss" : "accepted",
+                choices.Length == 0 ? "strict extractor 'main-menu-abandon-confirm' did not resolve confirm/cancel popup buttons." : null,
+                Array.Empty<string>()));
+    }
+
     private static LiveExportChoiceSummary? TryCreateMainMenuChoiceSummary(object item)
     {
         var typeName = item.GetType().FullName ?? item.GetType().Name;
@@ -7573,6 +7688,57 @@ internal static class RuntimeSnapshotReflectionExtractor
             normalizedLabel,
             nodeId,
             typeName)
+        {
+            NodeId = nodeId,
+            ScreenBounds = screenBounds,
+        };
+    }
+
+    private static LiveExportChoiceSummary? TryCreateMainMenuAbandonConfirmChoiceSummary(object item)
+    {
+        var typeName = item.GetType().FullName ?? item.GetType().Name;
+        if (!typeName.Contains("NPopupYesNoButton", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (TryReadBool(item, "Visible", "IsVisible") == false
+            || TryReadBool(item, "IsEnabled", "Enabled", "Disabled") == false)
+        {
+            return null;
+        }
+
+        var screenBounds = TryResolveScreenBounds(item);
+        if (string.IsNullOrWhiteSpace(screenBounds))
+        {
+            return null;
+        }
+
+        var label = TryResolveChoiceLabel(item);
+        var isYes = TryReadBool(item, "IsYes", "_isYes");
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            label = isYes == true ? "Confirm" : isYes == false ? "Cancel" : null;
+        }
+
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        var normalizedLabel = label.Trim();
+        var nodeId = isYes == true
+            ? "main-menu:abandon-run-confirm"
+            : isYes == false
+                ? "main-menu:abandon-run-cancel"
+                : $"main-menu:{SanitizeNodeKey(normalizedLabel)}";
+        var kind = isYes == true ? "confirm" : isYes == false ? "cancel" : "choice";
+
+        return new LiveExportChoiceSummary(
+            kind,
+            normalizedLabel,
+            nodeId,
+            "main-menu abandon run confirm popup")
         {
             NodeId = nodeId,
             ScreenBounds = screenBounds,

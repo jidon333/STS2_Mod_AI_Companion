@@ -76,6 +76,7 @@ Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRunti
 Run("runtime reflection encounter does not override CombatManager IsInProgress false", TestRuntimeReflectionEncounterDoesNotOverrideCombatManagerFalse, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
 Run("runtime reflection prefers explicit active feedback screen over broad combat probe", TestRuntimeReflectionPrefersActiveFeedbackScreenOverBroadCombatProbe, failures);
+Run("runtime reflection prefers abandon-run confirm popup over broad feedback bag", TestRuntimeReflectionPrefersAbandonRunConfirmPopupOverBroadFeedbackBag, failures);
 Run("runtime reflection does not infer combat from global startup type bags", TestRuntimeReflectionDoesNotInferCombatFromGlobalStartupTypeBag, failures);
 Run("runtime reflection exports combat play state metadata", TestRuntimeReflectionCombatMetadataExport, failures);
 Run("runtime reflection capture clears combat slot and success inference", TestRuntimeReflectionCaptureClearsCombatMetadata, failures);
@@ -2920,6 +2921,73 @@ static void TestRuntimeReflectionPrefersActiveFeedbackScreenOverBroadCombatProbe
     Assert(observation.Encounter?.InCombat != true, "Feedback overlay startup should not be treated as in-combat when CombatManager.IsInProgress is false.");
 }
 
+static void TestRuntimeReflectionPrefersAbandonRunConfirmPopupOverBroadFeedbackBag()
+{
+    var popup = new FakeNAbandonRunConfirmPopup
+    {
+        VerticalPopup = new FakeNVerticalPopup
+        {
+            YesButton = new FakeNPopupYesNoButton
+            {
+                IsYes = true,
+                Visible = true,
+                Enabled = true,
+                Position = new FakeVector2(640, 512),
+                Size = new FakeVector2(180, 72),
+                _label = new FakeLabel { Text = "확인" },
+            },
+            NoButton = new FakeNPopupYesNoButton
+            {
+                IsYes = false,
+                Visible = true,
+                Enabled = true,
+                Position = new FakeVector2(840, 512),
+                Size = new FakeVector2(180, 72),
+                _label = new FakeLabel { Text = "취소" },
+            },
+        },
+    };
+
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeNMainMenu
+            {
+                _continueButton = new FakeNMainMenuContinueButton
+                {
+                    Visible = true,
+                    Enabled = true,
+                    Position = new FakeVector2(220, 260),
+                    Size = new FakeVector2(220, 72),
+                    _label = new FakeLabel { Text = "계속" },
+                },
+                _abandonRunButton = new FakeNMainMenuTextButton
+                {
+                    Visible = true,
+                    Enabled = true,
+                    Position = new FakeVector2(220, 540),
+                    Size = new FakeVector2(220, 72),
+                    _label = new FakeLabel { Text = "전투 포기" },
+                },
+            },
+            new FakeFeedbackScreen(),
+            popup,
+            new FakeActiveScreenContext { CurrentScreen = popup },
+        },
+        null);
+
+    Assert(string.Equals(observation.Screen, "main-menu", StringComparison.OrdinalIgnoreCase), $"Runtime reflection should let AbandonRunConfirmPopup beat the broad feedback bag, got {observation.Screen}.");
+    Assert(observation.Meta.TryGetValue("publishedCurrentScreen", out var publishedCurrentScreen)
+           && string.Equals(publishedCurrentScreen, "main-menu", StringComparison.OrdinalIgnoreCase), "Runtime reflection should publish main-menu while the abandon-run confirm popup owns the foreground.");
+    Assert(observation.Meta.TryGetValue("rawCurrentActiveScreenType", out var currentActiveScreenType)
+           && currentActiveScreenType.Contains("AbandonRunConfirmPopup", StringComparison.OrdinalIgnoreCase), "Runtime reflection should surface the abandon-run popup active screen type for diagnostics.");
+    Assert(observation.Meta.TryGetValue("choiceExtractorPath", out var extractorPath)
+           && string.Equals(extractorPath, "main-menu-abandon-confirm", StringComparison.OrdinalIgnoreCase), "Choice extraction should prefer the abandon-run confirm popup over the underlying main-menu buttons.");
+    Assert(observation.Choices.Any(choice => string.Equals(choice.Label, "확인", StringComparison.OrdinalIgnoreCase)), "Popup extraction should export the confirm button.");
+    Assert(observation.Choices.Any(choice => string.Equals(choice.Label, "취소", StringComparison.OrdinalIgnoreCase)), "Popup extraction should export the cancel button.");
+    Assert(!observation.Choices.Any(choice => string.Equals(choice.Label, "계속", StringComparison.OrdinalIgnoreCase)), "Underlying main-menu choices should not win while the abandon-run popup owns the foreground.");
+}
+
 static void TestRuntimeReflectionCombatMetadataExport()
 {
     var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
@@ -5443,6 +5511,57 @@ file sealed class FakeActiveScreenContext
     {
         return CurrentScreen;
     }
+}
+
+file sealed class FakeNAbandonRunConfirmPopup
+{
+    public object? VerticalPopup { get; init; }
+}
+
+file sealed class FakeNVerticalPopup
+{
+    public object? YesButton { get; init; }
+
+    public object? NoButton { get; init; }
+}
+
+file sealed class FakeNPopupYesNoButton
+{
+    public bool IsYes { get; init; }
+
+    public bool Visible { get; init; }
+
+    public bool Enabled { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+
+    public object? _label { get; init; }
+}
+
+file sealed class FakeNMainMenu
+{
+    public object? _continueButton { get; init; }
+
+    public object? _abandonRunButton { get; init; }
+}
+
+file class FakeNMainMenuTextButton
+{
+    public bool Visible { get; init; }
+
+    public bool Enabled { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+
+    public object? _label { get; init; }
+}
+
+file sealed class FakeNMainMenuContinueButton : FakeNMainMenuTextButton
+{
 }
 
 file sealed class FakeScreenStateTracker
