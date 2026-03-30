@@ -449,10 +449,10 @@ internal static class RuntimeSnapshotReflectionExtractor
         AppendCardSelectionRuntimeMetadata(cardSelectionObservation, meta, payload);
         if (cardSelectionObservation.ScreenVisible)
         {
-            foreach (var choice in CreateCardSelectionChoices(cardSelectionObservation))
-            {
-                AddChoiceSummary(choices, choice, config.LiveExport.MaxChoiceEntries);
-            }
+            PromoteCardSelectionChoices(
+                choices,
+                cardSelectionObservation,
+                config.LiveExport.MaxChoiceEntries);
 
             var extractorPath = GetCardSelectionExtractorPath(cardSelectionObservation.ScreenType);
             meta["choiceExtractorPath"] = extractorPath;
@@ -507,7 +507,8 @@ internal static class RuntimeSnapshotReflectionExtractor
             meta["hasOpenPotionSlots"] = hasOpenPotionSlots == true ? "true" : "false";
             payload["hasOpenPotionSlots"] = hasOpenPotionSlots == true;
         }
-        if (rewardObservation.ForegroundOwned)
+        if (rewardObservation.ForegroundOwned
+            && !cardSelectionObservation.ScreenVisible)
         {
             meta["choiceExtractorPath"] = "reward";
             meta["rawChoiceExtractorPath"] = "reward";
@@ -6472,6 +6473,77 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         choices.Add(choice);
+    }
+
+    private static void PromoteCardSelectionChoices(
+        List<LiveExportChoiceSummary> choices,
+        CardSelectionObservation observation,
+        int maxEntries)
+    {
+        var preferredChoices = CreateCardSelectionChoices(observation);
+        if (preferredChoices.Count == 0)
+        {
+            return;
+        }
+
+        var explicitCardLabels = preferredChoices
+            .Where(static choice => string.Equals(choice.BindingKind, "card-selection-card", StringComparison.OrdinalIgnoreCase))
+            .Select(static choice => choice.Label)
+            .Where(static label => !string.IsNullOrWhiteSpace(label))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var explicitConfirmBounds = preferredChoices
+            .Where(static choice => string.Equals(choice.BindingKind, "card-selection-confirm", StringComparison.OrdinalIgnoreCase))
+            .Select(static choice => choice.ScreenBounds)
+            .Where(static bounds => !string.IsNullOrWhiteSpace(bounds))
+            .Cast<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var mergedChoices = new List<LiveExportChoiceSummary>();
+        foreach (var choice in preferredChoices)
+        {
+            AddChoiceSummary(mergedChoices, choice, maxEntries);
+        }
+
+        foreach (var choice in choices)
+        {
+            if (ShouldSuppressChoiceForExplicitCardSelection(choice, explicitCardLabels, explicitConfirmBounds))
+            {
+                continue;
+            }
+
+            AddChoiceSummary(mergedChoices, choice, maxEntries);
+        }
+
+        choices.Clear();
+        choices.AddRange(mergedChoices);
+    }
+
+    private static bool ShouldSuppressChoiceForExplicitCardSelection(
+        LiveExportChoiceSummary choice,
+        IReadOnlySet<string> explicitCardLabels,
+        IReadOnlySet<string> explicitConfirmBounds)
+    {
+        if (string.Equals(choice.BindingKind, "card-selection-card", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(choice.BindingKind, "card-selection-confirm", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(choice.ScreenBounds)
+            && explicitConfirmBounds.Contains(choice.ScreenBounds))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(choice.Label)
+            || !explicitCardLabels.Contains(choice.Label))
+        {
+            return false;
+        }
+
+        return string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void RemoveTreasureInventoryChoiceContamination(List<LiveExportChoiceSummary> choices)

@@ -45,6 +45,7 @@ Run("runtime reflection string extraction resolves nested label text", TestRunti
 Run("runtime reflection keeps reward-backed card rows and reward type metadata", TestRuntimeReflectionRewardBackedCardChoiceExtraction, failures);
 Run("runtime reflection exports transform card-selection subtype metadata", TestRuntimeReflectionTransformCardSelectionExport, failures);
 Run("runtime reflection keeps reward-pick separate from confirm-driven card selection", TestRuntimeReflectionRewardPickCardSelectionExport, failures);
+Run("runtime reflection prioritizes reward-pick child-screen choices over generic reward rows", TestRuntimeReflectionPrioritizesRewardPickChildScreenChoices, failures);
 Run("runtime reflection exports deck-remove card-selection preview semantics", TestRuntimeReflectionDeckRemoveCardSelectionExport, failures);
 Run("runtime reflection exports treasure room chest holder and proceed semantics", TestRuntimeReflectionTreasureRoomExport, failures);
 Run("runtime reflection exports explicit shop room semantics and typed shop choices", TestRuntimeReflectionShopExport, failures);
@@ -1320,6 +1321,75 @@ static void TestRuntimeReflectionRewardPickCardSelectionExport()
     Assert((bool)(ReadProperty(observation!, "PreviewVisible") ?? true) == false, "Reward-pick should not export preview-visible state.");
     Assert((bool)(ReadProperty(observation!, "MainConfirmEnabled") ?? true) == false, "Reward-pick should not expose main confirm.");
     Assert((bool)(ReadProperty(observation!, "PreviewConfirmEnabled") ?? true) == false, "Reward-pick should not expose preview confirm.");
+}
+
+static void TestRuntimeReflectionPrioritizesRewardPickChildScreenChoices()
+{
+    var rewardButtons = Enumerable.Range(0, 8)
+        .Select(index => (object)new FakeRewardButton
+        {
+            Reward = new FakeCardReward
+            {
+                Description = new FakeLocString($"보상 설명 {index}"),
+            },
+            _label = new FakeLabel { Text = $"보상 카드 행 {index}" },
+            Position = new FakeVector2(720, 280 + (index * 48)),
+            Size = new FakeVector2(402, 86),
+        })
+        .ToArray();
+    var proceedButton = new FakeClickableControl
+    {
+        Visible = true,
+        Enabled = true,
+        Position = new FakeVector2(1860, 764),
+        Size = new FakeVector2(269, 108),
+    };
+    var rewardScreen = new FakeNRewardsScreen
+    {
+        Visible = true,
+        _proceedButton = proceedButton,
+        _rewardButtons = rewardButtons,
+    };
+    var rewardPickScreen = new FakeNCardRewardSelectionScreen
+    {
+        Visible = true,
+        _banner = new FakeBanner { label = new FakeLabel { Text = "카드를 선택하세요" } },
+        _cardRow = new object[]
+        {
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.SHRUG_IT_OFF", Name = "흘려보내기" }, 520, 280),
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.RAGE", Name = "격노" }, 860, 280),
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.ANGER", Name = "분노" }, 1200, 280),
+        },
+    };
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            rewardScreen,
+            rewardPickScreen,
+            proceedButton,
+            new FakeActiveScreenContext
+            {
+                CurrentScreen = rewardPickScreen,
+            },
+        },
+        "rewards");
+
+    Assert(observation.Meta.TryGetValue("cardSelectionVisibleCardCount", out var visibleCardCount)
+           && string.Equals(visibleCardCount, "3", StringComparison.OrdinalIgnoreCase),
+        "Reward-pick child-screen should still export the visible card count.");
+    Assert(observation.Meta.TryGetValue("choiceExtractorPath", out var extractorPath)
+           && string.Equals(extractorPath, "card-selection-reward-pick", StringComparison.OrdinalIgnoreCase),
+        "Reward-pick child-screen should keep the card-selection extractor path even while the parent reward screen remains foreground-owned.");
+
+    var rewardPickChoices = observation.Choices
+        .Where(choice => string.Equals(choice.Kind, "reward-pick-card", StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    Assert(rewardPickChoices.Length == 3,
+        $"Reward-pick child-screen should keep all explicit card-selection choices ahead of the generic reward budget. Actual reward-pick-card count={rewardPickChoices.Length}.");
+    Assert(rewardPickChoices.All(choice => !string.IsNullOrWhiteSpace(choice.ScreenBounds)),
+        "Reward-pick child-screen should preserve bounds on the exported card-selection choices.");
+    Assert(observation.Choices.Any(choice => string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)),
+        "Reward-pick child-screen export should stay additive and keep parent reward rows for diagnostics.");
 }
 
 static void TestRuntimeReflectionDeckRemoveCardSelectionExport()
