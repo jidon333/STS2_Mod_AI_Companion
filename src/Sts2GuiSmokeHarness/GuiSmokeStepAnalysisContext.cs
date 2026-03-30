@@ -311,13 +311,6 @@ sealed class GuiSmokeStepAnalysisContext
                        || node.Label.Contains("RightArrow", StringComparison.OrdinalIgnoreCase));
         }
 
-        static bool HasRestSiteAuthorityForCombat(ObserverSummary summary)
-        {
-            return string.Equals(summary.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(summary.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
-                   || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(summary);
-        }
-
         bool ComputeUseCombatFastPath()
         {
             if (!string.Equals(request.Phase, GuiSmokePhase.HandleCombat.ToString(), StringComparison.OrdinalIgnoreCase)
@@ -332,15 +325,8 @@ sealed class GuiSmokeStepAnalysisContext
                 return false;
             }
 
-            var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
             if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
                 || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
-                || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
-                || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
-                || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
-                || HasRestSiteAuthorityForCombat(observer.Summary)
-                || eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active
-                || eventScene.EventForegroundOwned && eventScene.HasExplicitProgression
                 || LooksLikeInspectOverlayForeground(observer.Summary))
             {
                 return false;

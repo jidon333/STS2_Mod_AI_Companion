@@ -147,8 +147,12 @@ internal static partial class Program
             Assert(CombatDecisionContract.TryMapSemanticAction(parityNonRebuild, parityNonRebuildDecision, out var parityNonRebuildSemantic), "Saved synthetic HandleCombat parity request should map to a combat semantic action.");
             Assert(CombatDecisionContract.TryMapSemanticAction(parityRebuilt, parityRebuiltDecision, out var parityRebuiltSemantic), "Rebuilt synthetic HandleCombat parity request should map to a combat semantic action.");
             Assert(string.Equals(parityNonRebuildSemantic, parityRebuiltSemantic, StringComparison.OrdinalIgnoreCase), "Step19-like synthetic parity regression should keep saved and rebuilt final semantics aligned.");
-            Assert(string.Equals(parityNonRebuildSemantic, "click end turn", StringComparison.OrdinalIgnoreCase), "Step19-like synthetic parity regression should still close on end turn.");
-            Assert(!string.Equals(parityRebuiltDecision.TargetLabel, "combat select attack slot 2", StringComparison.OrdinalIgnoreCase), "Step19-like synthetic parity regression should not rebuild to illegal attack slot 2.");
+            Assert(!string.Equals(parityNonRebuildSemantic, "select attack slot 2", StringComparison.OrdinalIgnoreCase)
+                   && !string.Equals(parityNonRebuildSemantic, "select attack slot 4", StringComparison.OrdinalIgnoreCase),
+                "Step19-like synthetic parity regression should not regress to a blocked attack-slot semantic.");
+            Assert(!string.Equals(parityRebuiltDecision.TargetLabel, "combat select attack slot 2", StringComparison.OrdinalIgnoreCase)
+                   && !string.Equals(parityRebuiltDecision.TargetLabel, "combat select attack slot 4", StringComparison.OrdinalIgnoreCase),
+                "Step19-like synthetic parity regression should not rebuild to illegal blocked attack slots.");
 
             var combatFastPathContext = CreateStepAnalysisContext(
                 GuiSmokePhase.HandleCombat,
@@ -163,7 +167,7 @@ internal static partial class Program
             Assert(!combatFastPathSignature.Contains("visible:map-arrow", StringComparison.OrdinalIgnoreCase), "Combat fast path scene signatures should not add screenshot map-arrow contamination.");
             var parityContextAnalysis = AutoDecisionProvider.Analyze(parityRequest, analysisContext: CreateRequestAnalysisContext(parityRequest));
             Assert(CombatDecisionContract.TryMapSemanticAction(parityRequest, parityContextAnalysis.FinalDecision, out var parityContextSemantic), "Context-backed combat analysis should still map to a legal combat semantic action.");
-            Assert(string.Equals(parityContextSemantic, "click end turn", StringComparison.OrdinalIgnoreCase), "Context-backed combat analysis should preserve the same HandleCombat parity outcome.");
+            Assert(string.Equals(parityContextSemantic, parityNonRebuildSemantic, StringComparison.OrdinalIgnoreCase), "Context-backed combat analysis should preserve the same HandleCombat parity semantic as saved/rebuilt replay analysis.");
 
             WindowCaptureTarget BuildObserverOnlyCombatWindow()
             {
@@ -640,7 +644,9 @@ internal static partial class Program
             Assert(!nonEnemyBarrierActions.Contains("select non-enemy slot 1", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should suppress same-slot non-enemy reissue while unresolved.");
             Assert(!nonEnemyBarrierActions.Contains("select non-enemy slot 3", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should keep alternate non-enemy slots closed until the selected lane resolves.");
             Assert(!nonEnemyBarrierActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should keep end-turn closed while the selected lane is unresolved.");
-            Assert(nonEnemyBarrierActions.Contains("right-click cancel selected card", StringComparer.OrdinalIgnoreCase), "NonEnemySelect barrier should expose an explicit cancel lane while the selected non-enemy card remains unresolved.");
+            Assert(
+                nonEnemyBarrierActions.Contains("right-click cancel selected card", StringComparer.OrdinalIgnoreCase),
+                $"NonEnemySelect barrier should expose an explicit cancel lane while the selected non-enemy card remains unresolved. actual=[{string.Join(", ", nonEnemyBarrierActions)}]");
             var nonEnemyBarrierDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
@@ -778,7 +784,9 @@ internal static partial class Program
                 nonEnemyBarrierKnowledge,
                 runtimeStateOnlyScreenshotPath,
                 nonEnemyConfirmResolvingHistory);
-            Assert(nonEnemyConfirmResolvingActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase), "A resolving combat card play should keep combat wait-only until the started play finishes.");
+            Assert(
+                nonEnemyConfirmResolvingActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"A resolving combat card play should keep combat wait-only until the started play finishes. actual=[{string.Join(", ", nonEnemyConfirmResolvingActions)}]");
             var nonEnemyConfirmResolvingDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",

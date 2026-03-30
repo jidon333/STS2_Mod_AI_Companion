@@ -78,7 +78,9 @@ internal static partial class Program
                 },
                 "Prefer a known playable attack before ending the turn.",
                 null));
-            Assert(string.Equals(repeatedAttackOrderingDecision.TargetLabel, "combat select attack slot 2", StringComparison.OrdinalIgnoreCase), "Repeated attack-select loop handling should still try a knowledge-backed playable attack before end turn.");
+            Assert(
+                string.Equals(repeatedAttackOrderingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+                $"Repeated attack-select history without explicit no-op or clear evidence should wait instead of reopening another attack lane or ending the turn. actualStatus={repeatedAttackOrderingDecision.Status ?? "null"} actualAction={repeatedAttackOrderingDecision.ActionKind ?? "null"} target={repeatedAttackOrderingDecision.TargetLabel ?? "null"} reason={repeatedAttackOrderingDecision.Reason ?? "null"}");
 
             var noEnemyTargetObserver = new ObserverState(
                 new ObserverSummary(

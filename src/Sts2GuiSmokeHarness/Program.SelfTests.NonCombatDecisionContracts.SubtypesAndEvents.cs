@@ -1351,7 +1351,7 @@ internal static partial class Program
                         Array.Empty<KnownRecipeHint>(),
                         Array.Empty<EventKnowledgeCandidate>(),
                         Array.Empty<CombatCardKnowledgeHint>(),
-                        new[] { "click visible map advance", "click reward back", "wait" },
+                        new[] { "click exported reachable node", "click reward back", "wait" },
                         Array.Empty<GuiSmokeHistoryEntry>(),
                         "allow a short recovery window",
                         null),

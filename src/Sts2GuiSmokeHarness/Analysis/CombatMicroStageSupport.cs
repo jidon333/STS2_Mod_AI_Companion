@@ -61,14 +61,34 @@ static class CombatMicroStageSupport
         CombatBarrierKind effectiveBarrierKind,
         CardSelectionSubtypeState? cardSelectionState)
     {
-        var attackLaneOpen = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
-                             || runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-                             || effectiveBarrierKind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick;
+        var carriedAttackLaneOpen = pendingSelection?.Kind == AutoCombatCardKind.AttackLike;
+        var carriedAttackLaneBlocked = carriedAttackLaneOpen
+                                       && pendingSelection!.SlotIndex is >= 1 and <= 5
+                                       && HandleCombatContextSupport.GetCombatNoOpCountForSlot(context.CombatContext, pendingSelection.SlotIndex) >= 2;
+        var barrierAttackLaneOpen = effectiveBarrierKind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick
+                                    && (barrier.SourceSlotIndex is not int barrierSourceSlotIndex
+                                        || barrierSourceSlotIndex is < 1 or > 5
+                                        || HandleCombatContextSupport.GetCombatNoOpCountForSlot(context.CombatContext, barrierSourceSlotIndex) < 2);
+        var runtimeAttackLaneOpen = runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                                    || barrierAttackLaneOpen;
+        var attackLaneOpen = runtimeAttackLaneOpen || (carriedAttackLaneOpen && !carriedAttackLaneBlocked);
         var attackRequiresExplicitEnemyTarget = attackLaneOpen
                                                 && CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(
                                                     context.Observer.Summary,
                                                     context.CombatCardKnowledge,
                                                     pendingSelection);
+        var hasExplicitAttackLaneEvidence = runtimeAttackLaneOpen
+                                            || CombatRuntimeStateSupport.HasSelectedAttackMetadata(runtime.SelectedCardType, runtime.SelectedCardTargetType)
+                                            || (carriedAttackLaneOpen
+                                                && !carriedAttackLaneBlocked
+                                                && (runtime.HasExplicitEnemyTargetingEvidence
+                                                    || context.CanResolveCombatEnemyTarget));
+        var attackConfirmReady = attackLaneOpen
+                                 && !attackRequiresExplicitEnemyTarget
+                                 && CombatRuntimeStateSupport.HasPositiveAttackConfirmEvidence(
+                                     context.Observer.Summary,
+                                     context.CombatCardKnowledge,
+                                     pendingSelection);
 
         if (context.CombatPlayerActionWindowClosed)
         {
@@ -94,23 +114,18 @@ static class CombatMicroStageSupport
         }
 
         if (attackRequiresExplicitEnemyTarget
-            && (attackLaneOpen
-                || (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-                    && (runtime.HasExplicitEnemyTargetingEvidence
-                        || context.CanResolveCombatEnemyTarget))))
+            && hasExplicitAttackLaneEvidence)
         {
             return CombatMicroStageKind.ResolvingAttackTarget;
         }
 
-        if (attackLaneOpen
-            && !attackRequiresExplicitEnemyTarget)
+        if (attackConfirmReady)
         {
-            return runtime.HasBlockingCardPlayResolution
-                ? CombatMicroStageKind.ResolvingCardPlay
-                : CombatMicroStageKind.AwaitingCardPlayConfirm;
+            return CombatMicroStageKind.AwaitingCardPlayConfirm;
         }
 
-        if (runtime.HasBlockingCardPlayResolution)
+        if (runtime.HasInFlightPlayerDrivenAction
+            && HasRecentPlayCommitAction(context.History))
         {
             return CombatMicroStageKind.ResolvingCardPlay;
         }
@@ -120,6 +135,11 @@ static class CombatMicroStageSupport
             || context.HasSelectedNonEnemyConfirmEvidence)
         {
             return CombatMicroStageKind.ResolvingNonEnemy;
+        }
+
+        if (runtime.HasBlockingCardPlayResolution)
+        {
+            return CombatMicroStageKind.ResolvingCardPlay;
         }
 
         return CombatMicroStageKind.PlayerActionOpen;
@@ -149,6 +169,31 @@ static class CombatMicroStageSupport
         }
 
         return null;
+    }
+
+    private static bool HasRecentPlayCommitAction(IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        for (var index = history.Count - 1; index >= 0 && index >= history.Count - 3; index -= 1)
+        {
+            var entry = history[index];
+            if (string.Equals(entry.Action, "confirm-non-enemy", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "confirm-attack-card", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(entry.Action, "observer-accepted", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "recapture-required", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return false;
     }
 
     private static string BuildSettledFingerprint(

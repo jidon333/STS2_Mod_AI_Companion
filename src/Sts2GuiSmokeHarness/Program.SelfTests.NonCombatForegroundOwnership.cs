@@ -68,8 +68,8 @@ internal static partial class Program
             var mapTransitionEventScene = AutoDecisionProvider.BuildEventSceneState(mapTransitionObserver, null);
             var mapTransitionEventRecovery = AutoDecisionProvider.HasExplicitEventRecoveryAuthority(mapTransitionObserver, null, Array.Empty<GuiSmokeHistoryEntry>(), mapTransitionEventScene);
             var mapTransitionMapOwner = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(mapTransitionObserver);
-            Assert(mapTransitionAllowedActions.Contains("click visible map advance", StringComparer.OrdinalIgnoreCase),
-                $"Event allowlist should open map affordances when map transition evidence is stronger than the stale event screen. Actual allowlist=[{string.Join(", ", mapTransitionAllowedActions)}] eventOwner={mapTransitionEventScene.EventForegroundOwned} release={mapTransitionEventScene.ReleaseStage} explicitProceed={mapTransitionEventScene.ExplicitProceedVisible} explicitProgress={mapTransitionEventScene.HasExplicitProgression} mapOwner={mapTransitionMapOwner} explicitEventRecovery={mapTransitionEventRecovery}.");
+            Assert(mapTransitionAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
+                $"Event allowlist should open exported map routing when map transition evidence is stronger than the stale event screen. Actual allowlist=[{string.Join(", ", mapTransitionAllowedActions)}] eventOwner={mapTransitionEventScene.EventForegroundOwned} release={mapTransitionEventScene.ReleaseStage} explicitProceed={mapTransitionEventScene.ExplicitProceedVisible} explicitProgress={mapTransitionEventScene.HasExplicitProgression} mapOwner={mapTransitionMapOwner} explicitEventRecovery={mapTransitionEventRecovery}.");
             var mapTransitionWaitObserver = new ObserverState(
                 mapTransitionObserver.Summary with
                 {

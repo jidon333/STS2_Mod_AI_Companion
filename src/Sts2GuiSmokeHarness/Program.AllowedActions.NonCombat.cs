@@ -139,7 +139,7 @@ internal static partial class Program
             GuiSmokePhase.HandleEvent when GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                                             && !forceEventProgressionAfterCardSelection
                                             && !eventOwnerActive
-                => new[] { "click first reachable node", "click visible map advance", "click proceed", "wait" },
+                => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.HandleEvent => new[] { "wait" },
             GuiSmokePhase.WaitEventRelease => new[] { "wait" },
             GuiSmokePhase.HandleShop => BuildShopAllowedActions(observer.Summary, history),

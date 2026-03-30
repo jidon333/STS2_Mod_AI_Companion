@@ -216,7 +216,10 @@ static class CombatPostActionObservationSupport
                 }
 
                 if (stage.Kind == CombatMicroStageKind.AwaitingCardPlayConfirm
-                    && !CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(context.Observer.Summary, _combatCardKnowledge, context.PendingCombatSelection)
+                    && CombatRuntimeStateSupport.HasPositiveAttackConfirmEvidence(
+                        context.Observer.Summary,
+                        _combatCardKnowledge,
+                        context.PendingCombatSelection)
                     && hasFreshObservationProgress)
                 {
                     reason = "combat-selected-attack-confirm-ready";
@@ -304,8 +307,8 @@ static class CombatPostActionObservationSupport
                 }
 
                 if (stage.Kind == CombatMicroStageKind.PlayerActionOpen
-                    && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
                     && !context.RuntimeCombatState.HasCardSelectionEvidence
+                    && HasSameLaneEnemyClickResolutionEvidence(context)
                     && hasFreshObservationProgress)
                 {
                     reason = "combat-enemy-click-resolved";
@@ -374,8 +377,10 @@ static class CombatPostActionObservationSupport
             bool IsQuiescentPlayerActionOpen()
             {
                 return stage.Kind == CombatMicroStageKind.PlayerActionOpen
-                       && !context.RuntimeCombatState.HasInFlightPlayerDrivenAction
+                       && (!context.RuntimeCombatState.HasInFlightPlayerDrivenAction
+                           || !context.RuntimeCombatState.HasLiveCardPlayOwnership)
                        && !context.RuntimeCombatState.HasCardSelectionEvidence
+                       && !context.CanResolveCombatEnemyTarget
                        && CardSelectionObserverSignals.TryGetState(context.Observer.Summary) is null;
             }
 
@@ -406,10 +411,14 @@ static class CombatPostActionObservationSupport
             {
                 return stage.Kind is CombatMicroStageKind.ResolvingAttackTarget
                     or CombatMicroStageKind.ResolvingOverlayCardSelection
-                    or CombatMicroStageKind.AwaitingCardPlayConfirm
                     or CombatMicroStageKind.ResolvingCardPlay
                     or CombatMicroStageKind.TurnClosing
                     or CombatMicroStageKind.EnemyTurnClosed
+                    || (stage.Kind == CombatMicroStageKind.AwaitingCardPlayConfirm
+                        && CombatRuntimeStateSupport.HasPositiveAttackConfirmEvidence(
+                            context.Observer.Summary,
+                            _combatCardKnowledge,
+                            context.PendingCombatSelection))
                     || IsQuiescentPlayerActionOpen();
             }
 
@@ -445,6 +454,29 @@ static class CombatPostActionObservationSupport
         {
             _stableFingerprint = null;
             _stablePollCount = 0;
+        }
+
+        private bool HasSameLaneEnemyClickResolutionEvidence(GuiSmokeStepAnalysisContext context)
+        {
+            var runtime = context.RuntimeCombatState;
+            var baselineRuntime = _baselineContext.RuntimeCombatState;
+            if (runtime.HasLiveCardPlayOwnership
+                || context.CanResolveCombatEnemyTarget
+                || !runtime.ExplicitlyClearedSelection)
+            {
+                return false;
+            }
+
+            if (baselineRuntime.HistoryStartedCount is null
+                || runtime.HistoryStartedCount is null
+                || runtime.HistoryStartedCount != baselineRuntime.HistoryStartedCount)
+            {
+                return false;
+            }
+
+            return baselineRuntime.HistoryFinishedCount is not null
+                   && runtime.HistoryFinishedCount is not null
+                   && runtime.HistoryFinishedCount > baselineRuntime.HistoryFinishedCount;
         }
     }
 

@@ -239,17 +239,10 @@ sealed partial class AutoDecisionProvider
                 builder.AddSuppressed("click event choice", "map-overlay-foreground-removes-stale-event-choice");
             }
 
-            if (mapOverlayState.CurrentNodeArrowVisible)
-            {
-                builder.AddSuppressed("click visible map advance", "current-node-arrow-is-not-a-reachable-node");
-            }
-
             if (!GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request))
             {
                 builder.AddSuppressed("click exported reachable node", "request-allowlist-excludes-map-routing");
-                builder.AddSuppressed("click first reachable node", "request-allowlist-excludes-map-routing");
                 builder.AddSuppressed("click map back", "request-allowlist-excludes-map-routing");
-                builder.AddSuppressed("click visible map advance", "request-allowlist-excludes-map-routing");
                 return builder.Build(
                     GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
                         request,
@@ -273,14 +266,7 @@ sealed partial class AutoDecisionProvider
                 "map-back-navigation-unavailable",
                 rawBounds: TryFindBackBounds(request),
                 boundsSource: "overlay-back");
-            builder.Consider(
-                "click first reachable node",
-                "screenshot-reachable-node",
-                0.82d,
-                () => TryFindFirstReachableMapNodeDecision(request),
-                "no-screenshot-reachable-node",
-                boundsSource: "screenshot-map-node");
-            return builder.Build(CreateWaitDecision("waiting for exported or screenshot-reachable map node", DisplayControlFlowScreen(request.Observer)), actualDecision);
+            return builder.Build(CreateWaitDecision("waiting for exported reachable map node", DisplayControlFlowScreen(request.Observer)), actualDecision);
         }
 
         builder.Consider(
@@ -291,13 +277,6 @@ sealed partial class AutoDecisionProvider
             "no-exported-reachable-node",
             rawBounds: TryFindMapNodeBounds(request),
             boundsSource: "observer-map-node");
-        builder.Consider(
-            "click visible map advance",
-            "screenshot-current-arrow",
-            0.62d,
-            () => TryFindVisibleMapAdvanceDecision(request),
-            "visible-map-advance-suppressed-or-unavailable",
-            boundsSource: "screenshot-map-arrow");
         return builder.Build(CreateWaitDecision("waiting for reachable map node", DisplayControlFlowScreen(request.Observer)), actualDecision);
     }
 
@@ -438,14 +417,8 @@ sealed partial class AutoDecisionProvider
                 builder.AddSuppressed("click event choice", "map-overlay-foreground-removes-stale-event-choice");
             }
 
-            if (mapOverlayState.CurrentNodeArrowVisible)
-            {
-                builder.AddSuppressed("click visible map advance", "current-node-arrow-is-not-a-reachable-node");
-            }
-
             builder.Consider("click exported reachable node", "observer-export:map-node", 0.88d, () => TryCreateExportedReachableMapPointDecision(request), "no-exported-reachable-node", rawBounds: TryFindMapNodeBounds(request), boundsSource: "observer-map-node");
             builder.Consider("click map back", "overlay-back-navigation", 0.84d, () => TryCreateMapBackNavigationDecision(request), "map-back-navigation-unavailable", rawBounds: TryFindBackBounds(request), boundsSource: "overlay-back");
-            builder.Consider("click first reachable node", "screenshot-reachable-node", 0.78d, () => TryFindFirstReachableMapNodeDecision(request), "no-screenshot-reachable-node", boundsSource: "screenshot-map-node");
             return builder.Build(CreateWaitDecision("waiting for an explicit event progression choice", DisplayControlFlowScreen(request.Observer)), actualDecision);
         }
 
@@ -482,11 +455,11 @@ sealed partial class AutoDecisionProvider
 
         if (LooksLikeMapTransitionState(request))
         {
-            builder.Consider("click first reachable node", "branch:choose-first-node", 0.66d, () => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, analysisContext), "no-map-transition-candidate", boundsSource: "branch-choose-first-node");
+            builder.Consider("click exported reachable node", "branch:choose-first-node", 0.66d, () => DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, analysisContext), "no-map-transition-candidate", boundsSource: "branch-choose-first-node");
         }
         else
         {
-            builder.AddSuppressed("click first reachable node", "event-owner-active-suppresses-map-transition-branch");
+            builder.AddSuppressed("click exported reachable node", "event-owner-active-suppresses-map-transition-branch");
         }
 
         return builder.Build(CreateWaitDecision("waiting for an explicit event progression choice", DisplayControlFlowScreen(request.Observer)), actualDecision);

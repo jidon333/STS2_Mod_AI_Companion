@@ -71,7 +71,12 @@ sealed record CombatRuntimeState(
 
     public bool KeepsCardPlayOpen => CardPlayPending == true || TargetingInProgress == true || RequiresHandCardSelection;
 
-    public bool ExplicitlyClearedSelection => !RequiresHandCardSelection && CardPlayPending == false && TargetingInProgress != true;
+    public bool ExplicitlyClearedSelection =>
+        !RequiresHandCardSelection
+        && PendingSelection is null
+        && CardPlayPending == false
+        && TargetingInProgress != true
+        && !CombatRuntimeStateSupport.HasSelectedAttackMetadata(SelectedCardType, SelectedCardTargetType);
 
     public bool HasCardSelectionEvidence => PendingSelection is not null || KeepsCardPlayOpen;
 
@@ -240,13 +245,17 @@ static class CombatRuntimeStateSupport
             return runtime.PendingSelection;
         }
 
+        if (historyPendingSelection?.Kind == AutoCombatCardKind.AttackLike
+            && historyPendingSelection.SlotIndex is >= 1 and <= 5
+            && HasDownstreamAttackResolutionAttempt(history, historyPendingSelection.SlotIndex))
+        {
+            return HasLiveEnemyTargetSurface(observer, runtime)
+                ? historyPendingSelection
+                : null;
+        }
+
         if (runtime.ExplicitlyClearedSelection)
         {
-            if (ShouldPreserveHistoryAttackSelection(observer, runtime, historyPendingSelection, history))
-            {
-                return historyPendingSelection;
-            }
-
             return null;
         }
 
@@ -309,6 +318,13 @@ static class CombatRuntimeStateSupport
         }
 
         var runtime = Read(observer, combatCardKnowledge);
+        if (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+            && RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge, pendingSelection)
+            && !runtime.HasExplicitEnemyTargetingEvidence)
+        {
+            return false;
+        }
+
         if (runtime.HasExplicitHittableEnemyAuthority)
         {
             return false;
@@ -349,23 +365,6 @@ static class CombatRuntimeStateSupport
             return false;
         }
 
-        if (pendingSelection?.Kind == AutoCombatCardKind.AttackLike)
-        {
-            var pendingCard = observer.CombatHand.FirstOrDefault(card => card.SlotIndex == pendingSelection.SlotIndex);
-            if (pendingCard is not null)
-            {
-                return IsObservedAttackCard(pendingCard)
-                       && IsObservedPlayableAtEnergy(pendingCard, observer.PlayerEnergy, combatCardKnowledge);
-            }
-
-            var pendingKnowledge = combatCardKnowledge.FirstOrDefault(card => card.SlotIndex == pendingSelection.SlotIndex);
-            if (pendingKnowledge is not null)
-            {
-                return IsKnowledgeEnemyTargetCard(pendingKnowledge)
-                       && IsKnowledgePlayableAtEnergy(pendingKnowledge, observer.PlayerEnergy);
-            }
-        }
-
         return false;
     }
 
@@ -403,6 +402,44 @@ static class CombatRuntimeStateSupport
         }
 
         return true;
+    }
+
+    public static bool HasSelectedAttackMetadata(string? selectedCardType, string? selectedCardTargetType)
+    {
+        return string.Equals(selectedCardType, "Attack", StringComparison.OrdinalIgnoreCase)
+               || IsEnemyTargetType(selectedCardTargetType);
+    }
+
+    public static bool HasPositiveAttackConfirmEvidence(
+        ObserverSummary observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        PendingCombatSelection? pendingSelection = null)
+    {
+        var runtime = Read(observer, combatCardKnowledge);
+        if (runtime.RequiresHandCardSelection)
+        {
+            return false;
+        }
+
+        var effectivePendingSelection = runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+            ? runtime.PendingSelection
+            : pendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                ? pendingSelection
+                : null;
+        if (effectivePendingSelection?.Kind != AutoCombatCardKind.AttackLike)
+        {
+            return false;
+        }
+
+        if (RequiresExplicitTargetingBeforeEnemyClick(observer, combatCardKnowledge, effectivePendingSelection))
+        {
+            return false;
+        }
+
+        return runtime.CardPlayPending == true
+               && runtime.TargetingInProgress != true
+               && (runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+                   || HasSelectedAttackMetadata(runtime.SelectedCardType, runtime.SelectedCardTargetType));
     }
 
     public static bool HasSelectionToKeep(

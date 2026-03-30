@@ -133,8 +133,8 @@ sealed partial class AutoDecisionProvider
             GuiSmokeDecisionDebug.SetSceneModel("map-overlay", mapOverlayState.EventBackgroundPresent ? "event-context" : "map-context");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(
                 mapOverlayState.MapBackNavigationAvailable
-                    ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
-                    : new[] { "click exported reachable node", "click first reachable node", "wait" });
+                    ? new[] { "click exported reachable node", "click map back", "wait" }
+                    : new[] { "click exported reachable node", "wait" });
             if (mapOverlayState.StaleEventChoicePresent)
             {
                 GuiSmokeDecisionDebug.Suppress("click event choice", "map overlay foreground suppresses stale event choices");
@@ -151,12 +151,6 @@ sealed partial class AutoDecisionProvider
                    0.95,
                    TryCreateExportedReachableMapPointDecision(request),
                    "no exported reachable map node bounds available")
-               ?? GuiSmokeDecisionDebug.TraceCandidate(
-                   "visible map advance",
-                   "screenshot-current-arrow",
-                   0.78,
-                   TryFindVisibleMapAdvanceDecision(request),
-                   "no current-node-arrow fallback was permitted")
                ?? (GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request)
                    ? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for reachable map node")
                    : GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
@@ -332,8 +326,8 @@ sealed partial class AutoDecisionProvider
             GuiSmokeDecisionDebug.SetSceneModel("map-overlay", mapOverlayState.EventBackgroundPresent ? "event-context" : "map-context");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(
                 mapOverlayState.MapBackNavigationAvailable
-                    ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
-                    : new[] { "click exported reachable node", "click first reachable node", "wait" });
+                    ? new[] { "click exported reachable node", "click map back", "wait" }
+                    : new[] { "click exported reachable node", "wait" });
             GuiSmokeDecisionDebug.Suppress("click event choice", "map overlay foreground suppresses stale event choices");
             GuiSmokeDecisionDebug.Suppress("click proceed", "map overlay foreground suppresses stale event proceed choices");
             GuiSmokeDecisionDebug.Suppress("click visible map advance", "map overlay foreground suppresses current-node-arrow fallback");
@@ -894,6 +888,29 @@ sealed partial class AutoDecisionProvider
                 1400);
         }
 
+        var semanticRewardCardChoices = request.Observer.Choices
+            .Where(IsSemanticRewardCardChoiceWithoutBounds)
+            .ToArray();
+        if (semanticRewardCardChoices.Length > 0)
+        {
+            var preferredSemanticChoice = SelectRewardCardSemanticChoice(request, semanticRewardCardChoices);
+            var semanticChoiceIndex = Array.IndexOf(semanticRewardCardChoices, preferredSemanticChoice);
+            var rewardCardPoint = ResolveRewardCardChoiceAnchor(semanticChoiceIndex, semanticRewardCardChoices.Length);
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                rewardCardPoint.X,
+                rewardCardPoint.Y,
+                rewardCardTarget,
+                "Reward card semantics are explicitly visible even though the exporter omitted per-card bounds. Use the canonical reward-card lane anchor before any inspect affordance or wait fallback.",
+                0.82,
+                ResolveObserverScreen(request.Observer, "rewards"),
+                1400,
+                true,
+                null);
+        }
+
         var lastTarget = request.History
             .LastOrDefault(entry =>
                 string.Equals(entry.Phase, request.Phase, StringComparison.OrdinalIgnoreCase)
@@ -922,6 +939,67 @@ sealed partial class AutoDecisionProvider
         }
 
         return null;
+    }
+
+    private static ObserverChoice SelectRewardCardSemanticChoice(
+        GuiSmokeStepRequest request,
+        IReadOnlyList<ObserverChoice> rewardCardChoices)
+    {
+        var lastTarget = request.History
+            .LastOrDefault(entry =>
+                string.Equals(entry.Phase, request.Phase, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase))
+            ?.TargetLabel;
+        if (!string.Equals(lastTarget, "reward card choice", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(lastTarget, "colorless card choice", StringComparison.OrdinalIgnoreCase))
+        {
+            return rewardCardChoices[0];
+        }
+
+        return rewardCardChoices.Count > 1
+            ? rewardCardChoices[1]
+            : rewardCardChoices[0];
+    }
+
+    private static GuiSmokeCandidatePoint ResolveRewardCardChoiceAnchor(int index, int count)
+    {
+        if (count <= 1)
+        {
+            return new GuiSmokeCandidatePoint(0.50, 0.42);
+        }
+
+        if (count == 2)
+        {
+            return index <= 0
+                ? new GuiSmokeCandidatePoint(0.43, 0.42)
+                : new GuiSmokeCandidatePoint(0.57, 0.42);
+        }
+
+        return index switch
+        {
+            <= 0 => new GuiSmokeCandidatePoint(0.33, 0.42),
+            1 => new GuiSmokeCandidatePoint(0.50, 0.42),
+            _ => new GuiSmokeCandidatePoint(0.67, 0.42),
+        };
+    }
+
+    private static bool IsSemanticRewardCardChoiceWithoutBounds(ObserverChoice choice)
+    {
+        if (!string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
+            || !string.IsNullOrWhiteSpace(choice.ScreenBounds)
+            || IsSkipOrProceedLabel(choice.Label)
+            || IsConfirmLikeLabel(choice.Label))
+        {
+            return false;
+        }
+
+        return !string.IsNullOrWhiteSpace(choice.BindingId)
+               || !string.IsNullOrWhiteSpace(choice.Value)
+               || string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Any(static hint =>
+                   string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
+                   || hint.StartsWith("reward-card:", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(hint, "reward:card-choice", StringComparison.OrdinalIgnoreCase));
     }
 
     private static GuiSmokeStepDecision CreateExplicitRewardDecisionFromChoice(

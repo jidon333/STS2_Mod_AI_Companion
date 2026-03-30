@@ -17,7 +17,6 @@ using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokeNonCombatAllowedActionSupport;
-using static GuiSmokeRewardMapEvidenceSupport;
 using static ObserverScreenProvenance;
 
 static class GuiSmokeStepRequestFactory
@@ -92,13 +91,9 @@ static class GuiSmokeStepRequestFactory
         bool CanResolveCombatEnemyTarget()
         {
             var pendingSelection = GetPendingSelection();
-            if (CombatRuntimeStateSupport.CanResolveEnemyTargetWithoutScreenshot(observer.Summary, combatCardKnowledge, pendingSelection))
-            {
-                return true;
-            }
-
             return !string.IsNullOrWhiteSpace(screenshotPath)
-                   && Program.CanResolveEnemyTargetFromStateAnalysis(observer, combatCardKnowledge, GetCombatAnalysis(), pendingSelection);
+                ? CombatRuntimeStateSupport.CanResolveEnemyTarget(observer.Summary, combatCardKnowledge, pendingSelection, GetCombatAnalysis())
+                : CombatRuntimeStateSupport.CanResolveEnemyTargetWithoutScreenshot(observer.Summary, combatCardKnowledge, pendingSelection);
         }
 
         CombatBarrierEvaluation GetCombatBarrierEvaluation()
@@ -142,15 +137,8 @@ static class GuiSmokeStepRequestFactory
                 return false;
             }
 
-            var eventScene = GetEventScene();
             if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
                 || CardSelectionObserverSignals.TryGetState(observer.Summary) is not null
-                || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
-                || ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
-                || RewardObserverSignals.IsRewardAuthorityActive(observer.Summary)
-                || GuiSmokeNonCombatContractSupport.HasRestSiteAuthority(observer.Summary)
-                || eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active
-                || eventScene.EventForegroundOwned && eventScene.HasExplicitProgression
                 || LooksLikeInspectOverlayState(observer))
             {
                 return false;
@@ -187,13 +175,13 @@ static class GuiSmokeStepRequestFactory
             combatCardKnowledge,
             ComputeUseCombatFastPath,
             ComputeUseRewardFastPath,
-            () => BuildRewardMapLayerState(observer.Summary, windowBounds),
+            () => GuiSmokeRewardMapEvidenceSupport.BuildRewardMapLayerState(observer.Summary, windowBounds),
             () =>
             {
-                var rewardMapLayer = BuildRewardMapLayerState(observer.Summary, windowBounds);
-                return rewardMapLayer.RewardBackNavigationAvailable || LooksLikeRewardBackNavigationAffordance(observer.Summary, screenshotPath);
+                var rewardMapLayer = GuiSmokeRewardMapEvidenceSupport.BuildRewardMapLayerState(observer.Summary, windowBounds);
+                return rewardMapLayer.RewardBackNavigationAvailable;
             },
-            () => HasScreenshotClaimableRewardEvidence(observer.Summary, screenshotPath),
+            () => GetRewardScene().ClaimableRewardPresent,
             () => GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath),
             GetRewardScene,
             GetEventScene,

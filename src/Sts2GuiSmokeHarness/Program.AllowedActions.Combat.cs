@@ -134,7 +134,11 @@ internal static partial class Program
                 .ToArray();
         }
 
-        if (combatMicroStage.Kind == CombatMicroStageKind.AwaitingCardPlayConfirm)
+        if (combatMicroStage.Kind == CombatMicroStageKind.AwaitingCardPlayConfirm
+            && CombatRuntimeStateSupport.HasPositiveAttackConfirmEvidence(
+                observer.Summary,
+                combatCardKnowledge,
+                pendingSelection))
         {
             actions.Add("confirm selected attack card");
             if (combatMicroStage.AllowsCancel)

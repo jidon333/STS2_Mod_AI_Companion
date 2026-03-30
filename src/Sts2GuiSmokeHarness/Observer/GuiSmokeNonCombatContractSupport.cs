@@ -180,8 +180,6 @@ static class GuiSmokeNonCombatContractSupport
     public static bool AllowsAnyMapRoutingAction(GuiSmokeStepRequest request)
     {
         return AllowsAction(request, "click exported reachable node")
-               || AllowsAction(request, "click first reachable node")
-               || AllowsAction(request, "click visible map advance")
                || AllowsAction(request, "click map back");
     }
 

@@ -64,8 +64,9 @@ internal static partial class Program
                 ScreenshotPath = combatScreenshotPath,
                 AllowedActions = new[] { "click card", "click enemy", "click end turn", "wait" },
             });
-            Assert(combatStartDecision.ActionKind == "press-key", "Combat opener should start by selecting a visible card with a hotkey.");
-            Assert(combatStartDecision.TargetLabel == "combat select attack slot 1", "Combat opener should not skip directly to targeting before selecting a visible attack card.");
+            Assert(
+                string.Equals(combatStartDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
+                $"Combat opener should wait when combat screenshot evidence is present but no explicit combat slot truth is exported yet. actualStatus={combatStartDecision.Status ?? "null"} actualAction={combatStartDecision.ActionKind ?? "null"} target={combatStartDecision.TargetLabel ?? "null"} reason={combatStartDecision.Reason ?? "null"}");
         }
         finally
         {
@@ -826,6 +827,73 @@ internal static partial class Program
                     out var cardSelectionReopenPhase)
                 && cardSelectionReopenPhase == GuiSmokePhase.ChooseFirstNode,
                 "WaitMap should reopen card-selection handling while subtype authority remains visible over the map.");
+
+            var rewardPickMixedStateObserver = new ObserverState(
+                new ObserverSummary(
+                    "rewards",
+                    "rewards",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    true,
+                    "mixed",
+                    "stable",
+                    null,
+                    "Reward",
+                    "card-selection-reward-pick",
+                    76,
+                    80,
+                    null,
+                    new[] { "천둥", "넘기기" },
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    new[]
+                    {
+                        new ObserverChoice("reward-pick-card", "천둥", "400,250,180,260", "CARD.THUNDERCLAP", "Reward pick")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "CardReward",
+                            Enabled = true,
+                            SemanticHints = new[] { "card-selection:reward-pick", "reward-pick", "reward-card", "reward-type:CardReward" },
+                        },
+                        new ObserverChoice("choice", "넘기기", "1540,760,240,120", null, "넘기기")
+                        {
+                            Enabled = true,
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["cardSelectionScreenDetected"] = "true",
+                        ["cardSelectionScreenType"] = "reward-pick",
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "true",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "true",
+                        ["rewardVisibleButtonCount"] = "2",
+                        ["rewardEnabledButtonCount"] = "2",
+                        ["mapCurrentActiveScreen"] = "false",
+                    },
+                },
+                null,
+                null,
+                null);
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.WaitMap,
+                    rewardPickMixedStateObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitMapMixedStateLogger,
+                    17,
+                    true,
+                    out var rewardPickReopenPhase)
+                && rewardPickReopenPhase == GuiSmokePhase.HandleRewards,
+                "WaitMap should reopen HandleRewards while reward-pick card-selection authority remains foreground-active over the map.");
         }
         finally
         {

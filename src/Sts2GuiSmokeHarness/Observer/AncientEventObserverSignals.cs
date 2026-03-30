@@ -9,6 +9,42 @@ using static ObserverScreenProvenance;
 
 static class AncientEventObserverSignals
 {
+    private static bool HasExplicitMapForegroundOverride(ObserverSummary observer)
+    {
+        if (IsMapForegroundOwner(observer))
+        {
+            return true;
+        }
+
+        if (TryGetMetaBool(observer, "mapCurrentActiveScreen") == true
+            && HasExplicitMapActionSurface(observer))
+        {
+            return true;
+        }
+
+        if (IsMapScreenTypeName(TryGetMetaString(observer, "activeScreenType"))
+            && HasExplicitMapActionSurface(observer))
+        {
+            return true;
+        }
+
+        return MatchesControlFlowScreen(observer, "map")
+               && string.Equals(observer.ChoiceExtractorPath, "map", StringComparison.OrdinalIgnoreCase)
+               && HasExplicitMapActionSurface(observer);
+    }
+
+    private static bool HasExplicitMapActionSurface(ObserverSummary observer)
+    {
+        return observer.ActionNodes.Any(MapNodeSourceSupport.IsExplicitMapPointNode)
+               || observer.Choices.Any(MapNodeSourceSupport.IsExplicitMapPointChoice);
+    }
+
+    private static bool IsMapScreenTypeName(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string? GetForegroundOwner(ObserverSummary observer)
     {
         return TryGetMetaString(observer, "foregroundOwner");
@@ -42,6 +78,11 @@ static class AncientEventObserverSignals
 
     public static bool IsDialogueActive(ObserverSummary observer)
     {
+        if (HasExplicitMapForegroundOverride(observer))
+        {
+            return false;
+        }
+
         if (IsEventForegroundOwner(observer)
             && string.Equals(GetForegroundActionLane(observer), "ancient-dialogue", StringComparison.OrdinalIgnoreCase))
         {
@@ -54,6 +95,11 @@ static class AncientEventObserverSignals
 
     public static bool HasExplicitOptionSelection(ObserverSummary observer)
     {
+        if (HasExplicitMapForegroundOverride(observer))
+        {
+            return false;
+        }
+
         if (IsEventForegroundOwner(observer)
             && string.Equals(GetForegroundActionLane(observer), "ancient-option", StringComparison.OrdinalIgnoreCase))
         {
@@ -78,6 +124,11 @@ static class AncientEventObserverSignals
 
     public static bool HasExplicitCompletionAction(ObserverSummary observer)
     {
+        if (HasExplicitMapForegroundOverride(observer))
+        {
+            return false;
+        }
+
         if (IsEventForegroundOwner(observer)
             && string.Equals(GetForegroundActionLane(observer), "ancient-completion", StringComparison.OrdinalIgnoreCase))
         {
@@ -113,15 +164,9 @@ static class AncientEventObserverSignals
 
     public static bool HasMapReleaseAuthority(ObserverSummary observer, string? declaringType, string? instanceType)
     {
-        if (IsMapForegroundOwner(observer) || TryGetMetaBool(observer, "mapReleaseAuthority") == true)
+        if (HasExplicitMapForegroundOverride(observer) || TryGetMetaBool(observer, "mapReleaseAuthority") == true)
         {
             return true;
-        }
-
-        static bool IsMapScreenTypeName(string? typeName)
-        {
-            return !string.IsNullOrWhiteSpace(typeName)
-                   && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
         }
 
         if (!IsAncientEventDetected(observer))
@@ -149,7 +194,7 @@ static class AncientEventObserverSignals
 
     public static bool HasForegroundAuthority(ObserverSummary observer)
     {
-        if (IsMapForegroundOwner(observer))
+        if (HasExplicitMapForegroundOverride(observer))
         {
             return false;
         }

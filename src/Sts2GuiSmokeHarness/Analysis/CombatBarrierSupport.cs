@@ -231,6 +231,23 @@ static class CombatBarrierSupport
         CombatRuntimeState runtime,
         bool canResolveCombatEnemyTarget)
     {
+        var finishedCountAdvanced = source.Metadata?.HistoryFinishedCount is not null
+                                    && runtime.HistoryFinishedCount is not null
+                                    && runtime.HistoryFinishedCount > source.Metadata.HistoryFinishedCount;
+        var finishedCardChanged = !string.IsNullOrWhiteSpace(runtime.LastCardPlayFinishedCardId)
+                                  && !string.Equals(runtime.LastCardPlayFinishedCardId, source.Metadata?.LastFinishedCardId, StringComparison.OrdinalIgnoreCase);
+        var explicitClear = runtime.ExplicitlyClearedSelection
+                            && !runtime.HasExplicitTargetableEnemy
+                            && !runtime.HasExplicitHittableEnemy
+                            && runtime.TargetingInProgress != true;
+        var finishedOrClearedWithoutLiveOwnership = !canResolveCombatEnemyTarget
+                                                    && !runtime.HasLiveCardPlayOwnership
+                                                    && (finishedCountAdvanced || finishedCardChanged || explicitClear);
+        if (finishedOrClearedWithoutLiveOwnership)
+        {
+            return Released(source, "enemy click lane lost live ownership and now shows explicit finish or clear evidence");
+        }
+
         if (!freshSnapshotSeen)
         {
             return Active(source, "waiting for a fresh post-enemy-click snapshot", false, true);
@@ -241,15 +258,6 @@ static class CombatBarrierSupport
             return Released(source, "targeting authority is still alive after the click");
         }
 
-        var finishedCountAdvanced = source.Metadata?.HistoryFinishedCount is not null
-                                    && runtime.HistoryFinishedCount is not null
-                                    && runtime.HistoryFinishedCount > source.Metadata.HistoryFinishedCount;
-        var finishedCardChanged = !string.IsNullOrWhiteSpace(runtime.LastCardPlayFinishedCardId)
-                                  && !string.Equals(runtime.LastCardPlayFinishedCardId, source.Metadata?.LastFinishedCardId, StringComparison.OrdinalIgnoreCase);
-        var explicitClear = runtime.ExplicitlyClearedSelection
-                            && !runtime.HasExplicitTargetableEnemy
-                            && !runtime.HasExplicitHittableEnemy
-                            && runtime.TargetingInProgress != true;
         if (finishedCountAdvanced || finishedCardChanged || explicitClear)
         {
             return Released(source, "enemy click resolved into finish or clear evidence");
@@ -275,7 +283,6 @@ static class CombatBarrierSupport
 
         var attackTargetingSuperseded = freshSnapshotSeen
                                         && runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-                                        && runtime.PendingSelection.SlotIndex == source.SlotIndex
                                         && (runtime.HasExplicitEnemyTargetingEvidence
                                             || runtime.HasExplicitTargetableEnemy
                                             || runtime.HasExplicitHittableEnemy);

@@ -897,11 +897,6 @@ internal static partial class Program
 
         if (phase == GuiSmokePhase.HandleRewards)
         {
-            if (RewardObserverSignals.IsRewardAuthorityActive(observer.Summary))
-            {
-                return false;
-            }
-
             if (TryGetCanonicalForegroundModalBranch(observer, history, out var branchKind, out var canonicalForegroundPhase))
             {
                 if (canonicalForegroundPhase == GuiSmokePhase.HandleRewards)
@@ -960,10 +955,8 @@ internal static partial class Program
         nextPhase = GuiSmokePhase.WaitMap;
         string? branchKind = null;
 
-        if (CardSelectionObserverSignals.IsCardSelectionState(observer.Summary))
+        if (TryGetCardSelectionReopenBranchFromWaitMap(observer, out branchKind, out nextPhase))
         {
-            branchKind = "branch-card-selection";
-            nextPhase = GuiSmokePhase.ChooseFirstNode;
         }
         else if (TryGetCanonicalForegroundModalBranch(observer, history, out var canonicalBranchKind, out nextPhase))
         {
@@ -977,6 +970,32 @@ internal static partial class Program
 
         history.Add(new GuiSmokeHistoryEntry(GuiSmokePhase.WaitMap.ToString(), branchKind, null, DateTimeOffset.UtcNow));
         logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, GuiSmokePhase.WaitMap.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+        return true;
+    }
+
+    static bool TryGetCardSelectionReopenBranchFromWaitMap(
+        ObserverState observer,
+        out string? branchKind,
+        out GuiSmokePhase nextPhase)
+    {
+        branchKind = null;
+        nextPhase = GuiSmokePhase.WaitMap;
+
+        var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
+        if (cardSelectionState is null)
+        {
+            return false;
+        }
+
+        if (string.Equals(cardSelectionState.ScreenType, "reward-pick", StringComparison.OrdinalIgnoreCase))
+        {
+            branchKind = "branch-rewards";
+            nextPhase = GuiSmokePhase.HandleRewards;
+            return true;
+        }
+
+        branchKind = "branch-card-selection";
+        nextPhase = GuiSmokePhase.ChooseFirstNode;
         return true;
     }
 

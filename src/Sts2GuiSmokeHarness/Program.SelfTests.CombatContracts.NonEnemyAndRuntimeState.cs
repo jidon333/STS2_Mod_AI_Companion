@@ -715,10 +715,12 @@ internal static partial class Program
                 runtimeSimpleSelectKnowledge,
                 combatNoOpScreenshotPath,
                 pendingNonEnemySlot3History);
-            Assert(combatOverlaySimpleSelectActions.Contains("simple select choice", StringComparer.OrdinalIgnoreCase),
-                "Combat should expose the explicit simple-select overlay lane even before the choice extractor switches off generic combat.");
+            Assert(!combatOverlaySimpleSelectActions.Contains("simple select choice", StringComparer.OrdinalIgnoreCase),
+                "Combat should not reopen a broad simple-select overlay lane until explicit subtype card-selection choices are exported.");
             Assert(!combatOverlaySimpleSelectActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase),
                 "Combat simple-select overlay should keep end turn closed while the follow-up selection screen is foreground-owned.");
+            Assert(combatOverlaySimpleSelectActions.Contains("wait", StringComparer.OrdinalIgnoreCase),
+                "Combat simple-select overlay should wait when the owner screen is explicit but subtype choices are not yet exported.");
 
             var combatOverlaySimpleSelectExplicitObserver = combatOverlaySimpleSelectObserver with
             {
@@ -989,7 +991,8 @@ internal static partial class Program
                 runtimeTargetingKnowledge,
                 runtimeStateOnlyScreenshotPath,
                 runtimeAttackSelectionHistory);
-            Assert(!runtimeAttackSelectionActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase), "Runtime attack selection without targeting evidence should keep click-enemy closed.");
+            Assert(!runtimeAttackSelectionActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                $"Runtime attack selection without targeting evidence should keep click-enemy closed. actual=[{string.Join(", ", runtimeAttackSelectionActions)}]");
             var runtimeAttackSelectionDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
@@ -1215,22 +1218,22 @@ internal static partial class Program
                     targetSummaryOnlyCarryObserver,
                     targetSummaryOnlyCarryKnowledge,
                     CombatHistorySupport.TryGetPendingCombatSelection(targetSummaryOnlyCarryHistory),
-                    targetSummaryOnlyCarryHistory) is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: 1 },
-                "Unchanged post-select runtime metadata plus target summary should preserve the recent attack lane even when selected-card fields briefly clear.");
+                    targetSummaryOnlyCarryHistory) is null,
+                "Target summary alone should not resurrect a cleared attack lane after selected-card fields and in-card-play ownership are gone.");
             var targetSummaryOnlyCarryActions = BuildAllowedActions(
                 GuiSmokePhase.HandleCombat,
                 new ObserverState(targetSummaryOnlyCarryObserver, null, null, null),
                 targetSummaryOnlyCarryKnowledge,
                 runtimeStateOnlyScreenshotPath,
                 targetSummaryOnlyCarryHistory);
-            Assert(targetSummaryOnlyCarryActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
-                "Target summary carryover should reopen click-enemy instead of forcing another attack-slot hotkey.");
+            Assert(!targetSummaryOnlyCarryActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                "Target summary alone should keep click-enemy closed after the attack lane is explicitly cleared.");
             var targetSummaryOnlyCarryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
                 30,
                 GuiSmokePhase.HandleCombat.ToString(),
-                "Preserve a just-selected attack lane from unchanged runtime metadata before repeating the same hotkey.",
+                "Do not resurrect a cleared attack lane from target-summary diagnostics alone.",
                 DateTimeOffset.UtcNow,
                 runtimeStateOnlyScreenshotPath,
                 new WindowBounds(1, 32, 1280, 720),
@@ -1247,10 +1250,10 @@ internal static partial class Program
                 targetSummaryOnlyCarryKnowledge,
                 targetSummaryOnlyCarryActions,
                 targetSummaryOnlyCarryHistory,
-                "Use unchanged runtime metadata plus target summary to continue the current attack lane.",
+                "Target summary diagnostics alone should not reopen enemy targeting or confirm lanes.",
                 null));
-            Assert(targetSummaryOnlyCarryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) == true,
-                "Target summary carryover should target the enemy instead of repeating the same attack slot.");
+            Assert(targetSummaryOnlyCarryDecision.TargetLabel?.StartsWith("combat enemy target Jaw Worm", StringComparison.OrdinalIgnoreCase) != true,
+                "Target summary diagnostics alone should not emit a stale enemy-target click.");
 
             var staleTargetSummaryAfterTargetAttemptObserver = targetSummaryOnlyCarryObserver with
             {
@@ -1683,6 +1686,40 @@ internal static partial class Program
                 null));
             Assert(string.Equals(runtimeFinishedSelectionDecision.TargetLabel, "combat select non-enemy slot 2", StringComparison.OrdinalIgnoreCase), "Runtime cleared selection should drive a fresh non-enemy selection instead of stale enemy-target carryover.");
 
+            var staleNonAttackMetadataObserver = runtimeFinishedSelectionObserver with
+            {
+                InventoryId = "inv-runtime-stale-non-attack-metadata",
+                SceneEpisodeId = "episode-runtime-stale-non-attack-metadata",
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+                    ["combatCardPlayPending"] = "false",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatSelectedCardSlot"] = null,
+                    ["combatSelectedCardType"] = "Skill",
+                    ["combatSelectedCardTargetType"] = "Self",
+                    ["combatLastCardPlayFinishedCardId"] = "CARD.DEFEND_IRONCLAD",
+                },
+            };
+            var staleNonAttackMetadataContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(staleNonAttackMetadataObserver, null, null, null),
+                runtimeStateOnlyScreenshotPath,
+                stalePendingAttackHistory,
+                runtimeFinishedSelectionKnowledge);
+            Assert(staleNonAttackMetadataContext.RuntimeCombatState.ExplicitlyClearedSelection,
+                "Non-attack selection metadata should still count as a cleared attack lane.");
+            Assert(staleNonAttackMetadataContext.CombatMicroStage.Kind != CombatMicroStageKind.AwaitingCardPlayConfirm,
+                "Stale non-attack selection metadata should not reopen the selected-attack confirm lane.");
+            var staleNonAttackMetadataActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(staleNonAttackMetadataObserver, null, null, null),
+                runtimeFinishedSelectionKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                stalePendingAttackHistory);
+            Assert(!staleNonAttackMetadataActions.Contains("confirm selected attack card", StringComparer.OrdinalIgnoreCase),
+                "Stale non-attack selection metadata should keep confirm selected attack card closed.");
+
             var carryoverRandomEnemyHistory = new[]
             {
                 new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-2)),
@@ -1715,25 +1752,27 @@ internal static partial class Program
                 new CombatCardKnowledgeHint(2, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
                 new CombatCardKnowledgeHint(3, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
             };
+            Assert(!CombatRuntimeStateSupport.Read(carryoverRandomEnemyObserver, carryoverRandomEnemyKnowledge).ExplicitlyClearedSelection,
+                "Random-enemy attack metadata should not be treated as an explicit cleared selection.");
             Assert(CombatRuntimeStateSupport.ResolvePendingSelection(
                     carryoverRandomEnemyObserver,
                     carryoverRandomEnemyKnowledge,
                     CombatHistorySupport.TryGetPendingCombatSelection(carryoverRandomEnemyHistory)) is { Kind: AutoCombatCardKind.AttackLike, SlotIndex: 1 },
-                "Selected attack metadata without a slot id should still preserve the last attack lane when runtime reports a random-enemy attack selection.");
+                "Selected attack metadata may still preserve the last lane label, but it should not reopen a false confirm lane without live in-card-play ownership.");
             var carryoverRandomEnemyActions = BuildAllowedActions(
                 GuiSmokePhase.HandleCombat,
                 new ObserverState(carryoverRandomEnemyObserver, null, null, null),
                 carryoverRandomEnemyKnowledge,
                 runtimeStateOnlyScreenshotPath,
                 carryoverRandomEnemyHistory);
-            Assert(carryoverRandomEnemyActions.Contains("confirm selected attack card", StringComparer.OrdinalIgnoreCase),
-                "Random-enemy attack carryover should reopen confirm selected attack card instead of repeating the same slot.");
+            Assert(!carryoverRandomEnemyActions.Contains("confirm selected attack card", StringComparer.OrdinalIgnoreCase),
+                "Random-enemy attack metadata without live in-card-play ownership should keep confirm selected attack card closed.");
             var carryoverRandomEnemyDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
                 29,
                 GuiSmokePhase.HandleCombat.ToString(),
-                "Random-enemy attack carryover should rebuild the selected lane and confirm it instead of retrying the same slot key.",
+                "Random-enemy attack metadata without live in-card-play ownership should not reopen a synthetic confirm lane.",
                 DateTimeOffset.UtcNow,
                 runtimeStateOnlyScreenshotPath,
                 new WindowBounds(1, 32, 1280, 720),
@@ -1750,10 +1789,10 @@ internal static partial class Program
                 carryoverRandomEnemyKnowledge,
                 carryoverRandomEnemyActions,
                 carryoverRandomEnemyHistory,
-                "Preserve selected attack metadata when runtime drops slot id but still reports a random-enemy attack selection.",
+                "Do not synthesize confirm-selected-attack from stale random-enemy metadata alone.",
                 null));
-            Assert(string.Equals(carryoverRandomEnemyDecision.TargetLabel, "confirm selected attack card", StringComparison.OrdinalIgnoreCase),
-                "Random-enemy attack carryover should confirm the rebuilt selected attack lane.");
+            Assert(!string.Equals(carryoverRandomEnemyDecision.TargetLabel, "confirm selected attack card", StringComparison.OrdinalIgnoreCase),
+                "Random-enemy attack metadata without live in-card-play ownership should not emit confirm selected attack card.");
 
     }
 }

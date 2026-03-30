@@ -117,12 +117,9 @@ static class CombatEligibilitySupport
 
     public static bool HasSelectedAttackConfirmEvidence(GuiSmokeStepRequest request)
     {
-        var runtime = CombatRuntimeStateSupport.Read(request.Observer, request.CombatCardKnowledge);
-        return runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
-               && runtime.CardPlayPending == true
-               && runtime.TargetingInProgress != true
-               && !runtime.HasInFlightPlayerDrivenAction
-               && !CombatRuntimeStateSupport.RequiresExplicitTargetingBeforeEnemyClick(request.Observer, request.CombatCardKnowledge);
+        return CombatRuntimeStateSupport.HasPositiveAttackConfirmEvidence(
+            request.Observer,
+            request.CombatCardKnowledge);
     }
 
     private static bool IsAutoNonEnemyPromotionEligible(CombatCardKnowledgeHint card)

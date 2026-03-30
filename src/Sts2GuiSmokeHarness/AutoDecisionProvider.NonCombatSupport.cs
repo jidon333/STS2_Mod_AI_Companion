@@ -825,12 +825,6 @@ sealed partial class AutoDecisionProvider
                    0.86,
                    TryCreateMapBackNavigationDecision(request),
                    "map overlay back navigation is not available")
-               ?? GuiSmokeDecisionDebug.TraceCandidate(
-                   "visible reachable node",
-                   "screenshot-reachable-node",
-                   0.90,
-                   TryFindFirstReachableMapNodeDecision(request),
-                   "no screenshot-reachable next node was detected")
                ?? CreateForegroundAwareNonCombatWaitDecision(request, waitReason);
     }
 
