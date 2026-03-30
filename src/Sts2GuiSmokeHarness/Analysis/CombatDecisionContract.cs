@@ -102,6 +102,11 @@ static class CombatDecisionContract
             return false;
         }
 
+        if (TryMapCombatCardSelectionSemanticAction(request, decision, out semanticAction))
+        {
+            return true;
+        }
+
         if (CombatHistorySupport.TryParsePendingCombatSelection(decision.TargetLabel, out var selection)
             && selection is not null)
         {
@@ -153,6 +158,54 @@ static class CombatDecisionContract
         {
             semanticAction = $"select attack slot {decision.KeyText[0]}";
             allowLegacyCardAliases = true;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryMapCombatCardSelectionSemanticAction(
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision decision,
+        out string semanticAction)
+    {
+        semanticAction = string.Empty;
+        if (CardSelectionObserverSignals.TryGetState(request.Observer) is not { } state)
+        {
+            return false;
+        }
+
+        return state.ScreenType switch
+        {
+            "reward-pick" => TryMapCardSelectionSemanticAction(decision, "reward pick card", null, out semanticAction),
+            "simple-select" => TryMapCardSelectionSemanticAction(decision, "simple select choice", "simple select confirm", out semanticAction),
+            "bundle-select" => TryMapCardSelectionSemanticAction(decision, "bundle select choice", "bundle select confirm", out semanticAction),
+            "relic-select" => TryMapCardSelectionSemanticAction(decision, "relic select choice", null, out semanticAction),
+            "transform" => TryMapCardSelectionSemanticAction(decision, "transform select card", "transform confirm", out semanticAction),
+            "deck-remove" => TryMapCardSelectionSemanticAction(decision, "deck remove select card", "deck remove confirm", out semanticAction),
+            "upgrade" => TryMapCardSelectionSemanticAction(decision, "upgrade select card", "upgrade confirm", out semanticAction),
+            _ => false,
+        };
+    }
+
+    private static bool TryMapCardSelectionSemanticAction(
+        GuiSmokeStepDecision decision,
+        string selectPrefix,
+        string? confirmLabel,
+        out string semanticAction)
+    {
+        semanticAction = string.Empty;
+        if (!string.IsNullOrWhiteSpace(confirmLabel)
+            && string.Equals(decision.TargetLabel, confirmLabel, StringComparison.OrdinalIgnoreCase))
+        {
+            semanticAction = confirmLabel;
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(decision.TargetLabel)
+            && decision.TargetLabel.StartsWith(selectPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            semanticAction = selectPrefix;
             return true;
         }
 

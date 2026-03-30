@@ -28,6 +28,19 @@ sealed partial class AutoDecisionProvider
             return CreateCombatBarrierWaitDecision(combatBarrier, DisplayControlFlowScreen(request.Observer));
         }
 
+        if (CardSelectionObserverSignals.TryGetState(request.Observer) is not null)
+        {
+            if (TryUseCombatDecision(TryCreateCardSelectionDecision(request), out var allowedCardSelectionDecision))
+            {
+                return allowedCardSelectionDecision;
+            }
+
+            return CreatePhaseWaitDecision(
+                GuiSmokePhase.HandleCombat,
+                "waiting for explicit combat card-selection overlay action",
+                DisplayControlFlowScreen(request.Observer));
+        }
+
         var hasSelectedNonEnemyConfirmEvidence = context.HasSelectedNonEnemyConfirmEvidence;
         var enemyTargetOpportunity = context.CanResolveCombatEnemyTarget;
         var combatNoOpCountsBySlot = combatContext.CombatNoOpCountsBySlot;

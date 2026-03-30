@@ -41,6 +41,12 @@ internal static partial class Program
             return new[] { "wait" };
         }
 
+        var cardSelectionState = CardSelectionObserverSignals.TryGetState(observer.Summary);
+        if (cardSelectionState is not null)
+        {
+            return GuiSmokeNonCombatAllowedActionSupport.BuildCardSelectionAllowedActions(cardSelectionState);
+        }
+
         var actions = new List<string>();
         var combatContext = context.CombatContext;
         var blockedCombatNoOpCounts = combatContext.CombatNoOpCountsBySlot;

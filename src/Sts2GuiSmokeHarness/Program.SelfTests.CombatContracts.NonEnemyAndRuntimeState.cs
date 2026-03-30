@@ -669,6 +669,236 @@ internal static partial class Program
                 && string.Equals(handConfirmSemanticAction, "confirm selected hand card", StringComparison.OrdinalIgnoreCase),
                 "Combat hand-selection confirm should map to explicit confirm semantics.");
 
+            var combatOverlaySimpleSelectObserver = runtimePendingNonEnemyObserver with
+            {
+                InventoryId = "inv-combat-overlay-simple-select",
+                SceneEpisodeId = "episode-combat-overlay-simple-select",
+                PlayerEnergy = 0,
+                CurrentChoices = new[] { "DrawPile", "DiscardPile", "ExhaustPile", "1턴 종료" },
+                Choices = new[]
+                {
+                    new ObserverChoice("choice", "DrawPile", null),
+                    new ObserverChoice("choice", "DiscardPile", null),
+                    new ObserverChoice("choice", "ExhaustPile", null),
+                    new ObserverChoice("choice", "1턴 종료", null),
+                },
+                Meta = new Dictionary<string, string?>(runtimePendingNonEnemyObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi",
+                    ["combatCardPlayPending"] = "false",
+                    ["combatPlayMode"] = "Play",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatSelectedCardSlot"] = null,
+                    ["combatAwaitingPlaySlots"] = null,
+                    ["combatHistoryStartedCount"] = "7",
+                    ["combatHistoryFinishedCount"] = "6",
+                    ["combatInteractionRevision"] = "7:6:false:false:none",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen",
+                    ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen",
+                    ["rawTopOverlayType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen",
+                    ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NSimpleCardSelectScreen MegaCrit.Sts2.Core.Nodes.Rooms.NCombatRoom",
+                    ["cardSelectionScreenDetected"] = "false",
+                    ["cardSelectionScreenType"] = null,
+                    ["cardSelectionPrompt"] = null,
+                    ["cardSelectionMinSelect"] = null,
+                    ["cardSelectionMaxSelect"] = null,
+                    ["cardSelectionSelectedCount"] = "0",
+                    ["cardSelectionRequireManualConfirmation"] = null,
+                    ["cardSelectionCancelable"] = null,
+                    ["cardSelectionMainConfirmEnabled"] = "false",
+                    ["cardSelectionPreviewConfirmEnabled"] = "false",
+                },
+            };
+            var combatOverlaySimpleSelectActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(combatOverlaySimpleSelectObserver, null, null, null),
+                runtimeSimpleSelectKnowledge,
+                combatNoOpScreenshotPath,
+                pendingNonEnemySlot3History);
+            Assert(combatOverlaySimpleSelectActions.Contains("simple select choice", StringComparer.OrdinalIgnoreCase),
+                "Combat should expose the explicit simple-select overlay lane even before the choice extractor switches off generic combat.");
+            Assert(!combatOverlaySimpleSelectActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase),
+                "Combat simple-select overlay should keep end turn closed while the follow-up selection screen is foreground-owned.");
+
+            var combatOverlaySimpleSelectExplicitObserver = combatOverlaySimpleSelectObserver with
+            {
+                InventoryId = "inv-combat-overlay-simple-select-explicit",
+                SceneEpisodeId = "episode-combat-overlay-simple-select-explicit",
+                ChoiceExtractorPath = "card-selection-simple-select",
+                CurrentChoices = new[] { "DrawPile", "DiscardPile", "ExhaustPile", "1턴 종료", "Confirm", "타격", "수비" },
+                Choices = new[]
+                {
+                    new ObserverChoice("choice", "DrawPile", null),
+                    new ObserverChoice("choice", "DiscardPile", null),
+                    new ObserverChoice("choice", "ExhaustPile", null),
+                    new ObserverChoice("choice", "1턴 종료", null),
+                    new ObserverChoice("simple-select-confirm", "Confirm", "956,618,188,50")
+                    {
+                        BindingKind = "card-selection-confirm",
+                        BindingId = "main",
+                        SemanticHints = new[] { "card-selection:simple-select", "confirm-mode:main" },
+                        Enabled = false,
+                    },
+                    new ObserverChoice("simple-select-card", "타격", "360,164,144,192")
+                    {
+                        SemanticHints = new[] { "card-selection:simple-select" },
+                        Enabled = true,
+                    },
+                    new ObserverChoice("simple-select-card", "수비", "560,164,144,192")
+                    {
+                        SemanticHints = new[] { "card-selection:simple-select" },
+                        Enabled = true,
+                    },
+                },
+                Meta = new Dictionary<string, string?>(combatOverlaySimpleSelectObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cardSelectionScreenDetected"] = "true",
+                    ["cardSelectionScreenType"] = "simple-select",
+                    ["cardSelectionPrompt"] = "뽑을 카드 더미 맨 위에 놓을 카드를 선택하세요.",
+                    ["cardSelectionMinSelect"] = "1",
+                    ["cardSelectionMaxSelect"] = "1",
+                    ["cardSelectionSelectedCount"] = "0",
+                    ["cardSelectionRequireManualConfirmation"] = "false",
+                    ["cardSelectionCancelable"] = "false",
+                    ["cardSelectionMainConfirmEnabled"] = "false",
+                    ["cardSelectionPreviewConfirmEnabled"] = "false",
+                },
+            };
+            var combatOverlaySimpleSelectExplicitActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(combatOverlaySimpleSelectExplicitObserver, null, null, null),
+                runtimeSimpleSelectKnowledge,
+                combatNoOpScreenshotPath,
+                pendingNonEnemySlot3History);
+            Assert(combatOverlaySimpleSelectExplicitActions.Contains("simple select choice", StringComparer.OrdinalIgnoreCase),
+                "Explicit combat simple-select overlay should expose simple-select choice actions.");
+            Assert(!combatOverlaySimpleSelectExplicitActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase),
+                "Explicit combat simple-select overlay should not reopen end turn.");
+            var combatOverlaySimpleSelectDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                25,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Resolve the combat simple-select overlay before ending the turn.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|card-selection:simple-select|card-selection-selected:0",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                combatOverlaySimpleSelectExplicitObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                runtimeSimpleSelectKnowledge,
+                combatOverlaySimpleSelectExplicitActions,
+                pendingNonEnemySlot3History,
+                "Resolve the combat simple-select overlay.",
+                null));
+            Assert(combatOverlaySimpleSelectDecision.TargetLabel?.StartsWith("simple select choice", StringComparison.OrdinalIgnoreCase) == true,
+                "Combat should choose an explicit simple-select overlay card instead of ending the turn.");
+            Assert(CombatDecisionContract.IsAllowed(
+                    new GuiSmokeStepRequest(
+                        "run",
+                        "boot-to-long-run",
+                        25,
+                        GuiSmokePhase.HandleCombat.ToString(),
+                        "Resolve the combat simple-select overlay before ending the turn.",
+                        DateTimeOffset.UtcNow,
+                        combatNoOpScreenshotPath,
+                        new WindowBounds(1, 32, 1280, 720),
+                        "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|card-selection:simple-select|card-selection-selected:0",
+                        "0001",
+                        1,
+                        3,
+                        false,
+                        "tactical",
+                        null,
+                        combatOverlaySimpleSelectExplicitObserver,
+                        Array.Empty<KnownRecipeHint>(),
+                        Array.Empty<EventKnowledgeCandidate>(),
+                        runtimeSimpleSelectKnowledge,
+                        new[] { "simple select choice", "wait" },
+                        pendingNonEnemySlot3History,
+                        "Resolve the combat simple-select overlay.",
+                        null),
+                    combatOverlaySimpleSelectDecision,
+                    out var combatOverlaySimpleSelectSemanticAction)
+                && string.Equals(combatOverlaySimpleSelectSemanticAction, "simple select choice", StringComparison.OrdinalIgnoreCase),
+                "Combat simple-select overlay actions should map to explicit simple-select semantics.");
+
+            var combatOverlaySimpleSelectConfirmObserver = combatOverlaySimpleSelectExplicitObserver with
+            {
+                InventoryId = "inv-combat-overlay-simple-select-confirm",
+                SceneEpisodeId = "episode-combat-overlay-simple-select-confirm",
+                Meta = new Dictionary<string, string?>(combatOverlaySimpleSelectExplicitObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cardSelectionSelectedCount"] = "1",
+                    ["cardSelectionMainConfirmEnabled"] = "true",
+                },
+                Choices = new[]
+                {
+                    new ObserverChoice("choice", "DrawPile", null),
+                    new ObserverChoice("choice", "DiscardPile", null),
+                    new ObserverChoice("choice", "ExhaustPile", null),
+                    new ObserverChoice("choice", "1턴 종료", null),
+                    new ObserverChoice("simple-select-confirm", "Confirm", "956,618,188,50")
+                    {
+                        BindingKind = "card-selection-confirm",
+                        BindingId = "main",
+                        SemanticHints = new[] { "card-selection:simple-select", "confirm-mode:main" },
+                        Enabled = true,
+                    },
+                    new ObserverChoice("simple-select-card", "타격", "360,164,144,192")
+                    {
+                        SemanticHints = new[] { "card-selection:simple-select", "selected-card" },
+                        Enabled = true,
+                    },
+                    new ObserverChoice("simple-select-card", "수비", "560,164,144,192")
+                    {
+                        SemanticHints = new[] { "card-selection:simple-select" },
+                        Enabled = true,
+                    },
+                },
+            };
+            var combatOverlaySimpleSelectConfirmActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(combatOverlaySimpleSelectConfirmObserver, null, null, null),
+                runtimeSimpleSelectKnowledge,
+                combatNoOpScreenshotPath,
+                pendingNonEnemySlot3History);
+            Assert(combatOverlaySimpleSelectConfirmActions.Contains("simple select confirm", StringComparer.OrdinalIgnoreCase),
+                "Combat simple-select confirm-ready overlay should expose explicit confirm instead of end turn.");
+            var combatOverlaySimpleSelectConfirmDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                25,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Confirm the combat simple-select overlay.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable|card-selection:simple-select|card-selection-selected:1",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                combatOverlaySimpleSelectConfirmObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                runtimeSimpleSelectKnowledge,
+                combatOverlaySimpleSelectConfirmActions,
+                pendingNonEnemySlot3History,
+                "Confirm the combat simple-select overlay.",
+                null));
+            Assert(string.Equals(combatOverlaySimpleSelectConfirmDecision.TargetLabel, "simple select confirm", StringComparison.OrdinalIgnoreCase),
+                "Combat should confirm a selected simple-select overlay instead of reopening end turn.");
+
             var staleConfirmAfterObserver = runtimePendingNonEnemyObserver with
             {
                 InventoryId = "inv-runtime-pending-non-enemy-stale-clear",

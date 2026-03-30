@@ -3,6 +3,7 @@ using System.Globalization;
 enum CombatMicroStageKind
 {
     PlayerActionOpen,
+    ResolvingOverlayCardSelection,
     HandSelectRequired,
     ResolvingNonEnemy,
     ResolvingAttackTarget,
@@ -30,7 +31,8 @@ static class CombatMicroStageSupport
         var pendingSelection = context.PendingCombatSelection;
         var barrier = context.CombatBarrierEvaluation;
         var effectiveBarrierKind = barrier.IsActive ? barrier.Kind : CombatBarrierKind.None;
-        var kind = ResolveKind(context, runtime, pendingSelection, barrier, effectiveBarrierKind);
+        var cardSelectionState = CardSelectionObserverSignals.TryGetState(context.Observer.Summary);
+        var kind = ResolveKind(context, runtime, pendingSelection, barrier, effectiveBarrierKind, cardSelectionState);
         var laneLabel = ResolveLaneLabel(context.History, pendingSelection, barrier, effectiveBarrierKind);
         return new CombatMicroStageSnapshot(
             kind,
@@ -46,6 +48,7 @@ static class CombatMicroStageSupport
                 pendingSelection,
                 effectiveBarrierKind,
                 runtime,
+                cardSelectionState,
                 context.HasSelectedNonEnemyConfirmEvidence,
                 context.CanResolveCombatEnemyTarget));
     }
@@ -55,7 +58,8 @@ static class CombatMicroStageSupport
         CombatRuntimeState runtime,
         PendingCombatSelection? pendingSelection,
         CombatBarrierEvaluation barrier,
-        CombatBarrierKind effectiveBarrierKind)
+        CombatBarrierKind effectiveBarrierKind,
+        CardSelectionSubtypeState? cardSelectionState)
     {
         var attackLaneOpen = pendingSelection?.Kind == AutoCombatCardKind.AttackLike
                              || runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
@@ -69,6 +73,11 @@ static class CombatMicroStageSupport
         if (context.CombatPlayerActionWindowClosed)
         {
             return CombatMicroStageKind.EnemyTurnClosed;
+        }
+
+        if (cardSelectionState is not null)
+        {
+            return CombatMicroStageKind.ResolvingOverlayCardSelection;
         }
 
         if (runtime.RequiresHandCardSelection)
@@ -148,6 +157,7 @@ static class CombatMicroStageSupport
         PendingCombatSelection? pendingSelection,
         CombatBarrierKind barrierKind,
         CombatRuntimeState runtime,
+        CardSelectionSubtypeState? cardSelectionState,
         bool hasSelectedNonEnemyConfirmEvidence,
         bool canResolveCombatEnemyTarget)
     {
@@ -163,6 +173,9 @@ static class CombatMicroStageSupport
             $"blocking-card-play-resolution:{runtime.HasBlockingCardPlayResolution.ToString()}",
             $"hand-selected:{runtime.HandSelectionSelectedCount.ToString(CultureInfo.InvariantCulture)}",
             $"hand-confirm:{FormatNullableBool(runtime.HandSelectionConfirmEnabled)}",
+            $"card-selection:{cardSelectionState?.ScreenType ?? "none"}",
+            $"card-selection-selected:{cardSelectionState?.SelectedCount.ToString(CultureInfo.InvariantCulture) ?? "none"}",
+            $"card-selection-confirm:{(cardSelectionState is null ? "false" : CardSelectionObserverSignals.IsConfirmReady(cardSelectionState).ToString().ToLowerInvariant())}",
             $"confirm-evidence:{hasSelectedNonEnemyConfirmEvidence.ToString()}",
             $"can-resolve-enemy:{canResolveCombatEnemyTarget.ToString()}",
             $"interaction:{runtime.InteractionRevision ?? "none"}",
