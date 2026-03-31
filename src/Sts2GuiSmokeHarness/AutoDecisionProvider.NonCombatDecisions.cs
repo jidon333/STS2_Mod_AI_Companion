@@ -90,6 +90,18 @@ sealed partial class AutoDecisionProvider
             return DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, analysisContext);
         }
 
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.CombatTakeover)
+        {
+            if (handoffState.HasExplicitSurface)
+            {
+                return DecideHandleCombat(request with { Phase = GuiSmokePhase.HandleCombat.ToString() }, analysisContext);
+            }
+
+            GuiSmokeDecisionDebug.SetSceneModel("combat", "post-node-handoff");
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "wait" });
+            return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for combat takeover handoff to publish the first combat surface");
+        }
+
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice)
         {
             return DecideChooseFirstNodeRestSiteExplicitChoice(request);
@@ -139,11 +151,11 @@ sealed partial class AutoDecisionProvider
         }
 
         var mapOverlayState = analysisContext?.MapOverlayState ?? GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.MapPending)
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.MapSurfacePending)
         {
-            GuiSmokeDecisionDebug.SetSceneModel("map", "ancient-event");
+            GuiSmokeDecisionDebug.SetSceneModel("map", "post-node-surface-pending");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "wait" });
-            return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit post-node map handoff surface");
+            return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for post-node map surface to republish after room release");
         }
 
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.MapOverlay)
@@ -689,7 +701,7 @@ sealed partial class AutoDecisionProvider
         var claimableRewardChoices = GetClaimableRewardProgressionChoices(request.Observer, request.WindowBounds, rewardScene.ScreenState);
         var claimableRewardNodes = GetClaimableRewardProgressionNodes(request.Observer, request.WindowBounds, rewardScene.ScreenState);
         var activeRewardChoices = request.Observer.Choices
-            .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds))
+            .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds, rewardScene.ScreenState))
             .ToArray();
 
         if (!rewardScene.RewardForegroundOwned
@@ -720,7 +732,7 @@ sealed partial class AutoDecisionProvider
         }
 
         var proceedChoice = request.Observer.Choices
-            .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds))
+            .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds, rewardScene.ScreenState))
             .Where(choice => IsSkipOrProceedLabel(choice.Label))
             .OrderByDescending(ScoreExplicitRewardProgressionChoice)
             .ThenBy(GetChoiceSortY)
@@ -910,11 +922,12 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateCardRewardChoiceDecision(GuiSmokeStepRequest request)
     {
+        var rewardState = RewardObserverSignals.TryGetState(request.Observer);
         var rewardCardTarget = GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(request.Observer)
             ? "colorless card choice"
             : "reward card choice";
         var explicitRewardCardChoice = request.Observer.Choices
-            .Where(choice => IsRewardCardChoice(choice) && HasActiveRewardBounds(choice.ScreenBounds, request.WindowBounds))
+            .Where(choice => IsRewardCardChoice(choice, request.Observer) && HasActiveRewardBounds(choice.ScreenBounds, request.WindowBounds))
             .OrderByDescending(ScoreExplicitRewardProgressionChoice)
             .ThenBy(GetChoiceSortY)
             .ThenBy(GetChoiceSortX)
@@ -960,7 +973,7 @@ sealed partial class AutoDecisionProvider
                 && string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase))
             ?.TargetLabel;
         var confirmChoice = request.Observer.Choices
-            .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds) && IsConfirmLikeLabel(choice.Label))
+            .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds, rewardState) && IsConfirmLikeLabel(choice.Label))
             .OrderByDescending(GetChoiceSortX)
             .FirstOrDefault();
         var canChooseCard = !string.Equals(lastTarget, rewardCardTarget, StringComparison.OrdinalIgnoreCase);
@@ -1083,12 +1096,12 @@ sealed partial class AutoDecisionProvider
         ObserverSummary observer,
         string mode)
     {
-        if (GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(observer) && IsRewardCardChoice(choice))
+        if (GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(observer) && IsRewardCardChoice(choice, observer))
         {
             return ("colorless card choice", "Colorless reward choice is explicitly visible. Open it before using skip or proceed.", 0.95);
         }
 
-        if (IsRewardCardChoice(choice))
+        if (IsRewardCardChoice(choice, observer))
         {
             return ("reward card choice", "Reward card row is explicitly visible. Open it before using skip or proceed.", 0.95);
         }

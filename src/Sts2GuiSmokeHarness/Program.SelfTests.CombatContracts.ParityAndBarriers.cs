@@ -486,6 +486,93 @@ internal static partial class Program
                     .CombatBarrierEvaluation.IsActive,
                 "EnemyClick barrier should release once a fresh finished-card snapshot arrives.");
 
+            var enemyBarrierReleasedToEventObserver = new ObserverSummary(
+                "event",
+                "event",
+                false,
+                combatBarrierCapturedAt.AddMilliseconds(350),
+                "inv-enemy-click-barrier-event",
+                true,
+                "hook",
+                "stable",
+                "episode-enemy-click-barrier-event",
+                null,
+                "event",
+                71,
+                80,
+                null,
+                new[] { "계속" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("event-option:continue", "event-option", "계속", "860,560,260,88", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("event-option", "계속", "860,560,260,88", null, "Event continue")
+                    {
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:event", "source:event-option-button", "option-role:choice" },
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "event",
+                PublishedVisibleScreen = "event",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+                SnapshotVersion = 12,
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["foregroundOwner"] = "event",
+                    ["foregroundActionLane"] = "event-choice",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom",
+                    ["combatCardPlayPending"] = "false",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatHistoryFinishedCount"] = "1",
+                    ["combatInteractionRevision"] = "1:1:false:false:none",
+                    ["combatLastCardPlayFinishedCardId"] = "CARD.STRIKE_IRONCLAD",
+                },
+            };
+            var enemyBarrierReleasedToEventState = new ObserverState(enemyBarrierReleasedToEventObserver, null, null, null);
+            var enemyBarrierReleasedToEventContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                enemyBarrierReleasedToEventState,
+                runtimeStateOnlyScreenshotPath,
+                enemyBarrierHistory,
+                enemyBarrierKnowledge);
+            Assert(
+                enemyBarrierReleasedToEventContext.CombatResolutionHandoffState.Owner == NonCombatCanonicalForegroundOwner.Event
+                && enemyBarrierReleasedToEventContext.CombatResolutionHandoffState.HandoffTarget == NonCombatHandoffTarget.HandleEvent
+                && enemyBarrierReleasedToEventContext.CombatResolutionHandoffState.HasExplicitSurface,
+                "Combat resolution handoff should canonicalize explicit event foreground after combat release.");
+            Assert(
+                !enemyBarrierReleasedToEventContext.CombatBarrierEvaluation.IsActive,
+                "EnemyClick barrier should release when explicit event foreground takes ownership after combat.");
+            var enemyBarrierReleasedToEventActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                enemyBarrierReleasedToEventState,
+                enemyBarrierKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                enemyBarrierHistory);
+            Assert(
+                enemyBarrierReleasedToEventActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                "Stale HandleCombat requests should collapse to wait-only allowlists after combat ownership releases to an explicit event foreground.");
+            var enemyBarrierReleasedToEventRequest = BuildBarrierRequest(
+                "0004b",
+                31,
+                enemyBarrierReleasedToEventObserver,
+                enemyBarrierKnowledge,
+                enemyBarrierReleasedToEventActions,
+                enemyBarrierHistory,
+                "EnemyClick barrier should not reclaim combat once explicit event foreground owns the room.");
+            var enemyBarrierReleasedToEventDecision = AutoDecisionProvider.Decide(enemyBarrierReleasedToEventRequest);
+            Assert(
+                string.Equals(enemyBarrierReleasedToEventDecision.Status, "abort", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(enemyBarrierReleasedToEventDecision.DecisionRisk, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase),
+                "Stale HandleCombat requests with explicit event foreground should abort as combat-barrier-handoff-mismatch.");
+
             var attackBarrierCapturedAt = DateTimeOffset.UtcNow;
             var attackBarrierObserver = new ObserverSummary(
                 "combat",

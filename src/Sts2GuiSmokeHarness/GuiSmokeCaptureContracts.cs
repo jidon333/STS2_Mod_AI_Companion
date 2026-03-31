@@ -36,12 +36,14 @@ sealed record CaptureFaultInjectionOptions(
     CaptureBoundaryFailureKind FailureKind,
     string ScopeKind,
     string? PhaseName,
-    int? StepIndex);
+    int? StepIndex,
+    int? AttemptOrdinal);
 
 sealed record CaptureFaultInjectionContext(
     string ScopeKind,
     string? PhaseName,
-    int? StepIndex);
+    int? StepIndex,
+    int? AttemptOrdinal);
 
 sealed record CaptureBoundaryResult(
     bool Succeeded,

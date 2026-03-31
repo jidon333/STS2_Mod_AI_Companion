@@ -121,7 +121,7 @@ sealed class ScreenCaptureService
         }
     }
 
-    internal bool ShouldForceCapture(string scopeKind, GuiSmokePhase phase, int stepIndex)
+    internal bool ShouldForceCapture(string scopeKind, GuiSmokePhase phase, int stepIndex, int? attemptOrdinal)
     {
         if (_faultInjection is null || _faultConsumed)
         {
@@ -135,6 +135,11 @@ sealed class ScreenCaptureService
 
         if (!string.IsNullOrWhiteSpace(_faultInjection.PhaseName)
             && !string.Equals(_faultInjection.PhaseName, phase.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (_faultInjection.AttemptOrdinal is not null && _faultInjection.AttemptOrdinal != attemptOrdinal)
         {
             return false;
         }
@@ -161,6 +166,11 @@ sealed class ScreenCaptureService
         }
 
         if (_faultInjection.StepIndex is not null && _faultInjection.StepIndex != faultContext.StepIndex)
+        {
+            return null;
+        }
+
+        if (_faultInjection.AttemptOrdinal is not null && _faultInjection.AttemptOrdinal != faultContext.AttemptOrdinal)
         {
             return null;
         }

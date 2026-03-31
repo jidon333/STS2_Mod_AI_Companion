@@ -515,6 +515,316 @@ internal static partial class Program
                 {
                 }
             }
+
+            var combatTakeoverObserver = new ObserverState(
+                explicitProceedObserverState.Summary with
+                {
+                    CurrentScreen = "map",
+                    VisibleScreen = "map",
+                    InCombat = false,
+                    InventoryId = "inv-post-node-combat-takeover",
+                    SceneEpisodeId = "episode-post-node-combat-takeover",
+                    ChoiceExtractorPath = "combat",
+                    CurrentChoices = new[] { "DrawPile", "DiscardPile", "ExhaustPile", "3턴 종료", "핑" },
+                    ActionNodes = Array.Empty<ObserverActionNode>(),
+                    Choices = Array.Empty<ObserverChoice>(),
+                    CombatHand = new[]
+                    {
+                        new ObservedCombatHandCard(1, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                        new ObservedCombatHandCard(2, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                    },
+                    PublishedCurrentScreen = "map",
+                    PublishedVisibleScreen = "map",
+                    RawObservedScreen = "map",
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NCombatRoom",
+                        ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NCombatRoom",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["transitionInProgress"] = "true",
+                        ["combatPlayerActionsDisabled"] = "false",
+                        ["combatEndingPlayerTurnPhaseOne"] = "false",
+                        ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                    },
+                },
+                eventProceedStateDocument,
+                null,
+                new[]
+                {
+                    "{\"kind\":\"room-entered\",\"screen\":\"unknown\"}",
+                    "{\"kind\":\"combat-started\",\"screen\":\"combat\"}",
+                });
+            var combatTakeoverState = AutoDecisionProvider.BuildPostNodeHandoffState(
+                combatTakeoverObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                string.Empty);
+            Assert(
+                combatTakeoverState.Owner == NonCombatCanonicalForegroundOwner.Combat
+                && combatTakeoverState.HandoffTarget == NonCombatHandoffTarget.HandleCombat
+                && combatTakeoverState.ReleaseStage == NonCombatReleaseStage.ReleasePending
+                && !combatTakeoverState.HasExplicitSurface
+                && combatTakeoverState.SurfaceKind == PostNodeHandoffSurfaceKind.CombatTakeover,
+                "Post-node combat takeover should remain in a combat-owned pending handoff state instead of degrading into map routing.");
+            Assert(
+                NonCombatForegroundOwnership.Resolve(combatTakeoverObserver) == NonCombatForegroundOwner.Combat,
+                "Foreground ownership helper should agree with the canonical combat takeover handoff state.");
+            var combatTakeoverAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.ChooseFirstNode,
+                combatTakeoverObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(
+                combatTakeoverAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                "ChooseFirstNode combat takeover should stay wait-only until the first combat surface publishes.");
+            var combatTakeoverDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                47,
+                GuiSmokePhase.ChooseFirstNode.ToString(),
+                "Handoff into combat after selecting a post-node map point.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:choosefirstnode|screen:map|visible:map|encounter:monster|ready:unknown|stability:unknown",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                combatTakeoverObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                combatTakeoverAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "ChooseFirstNode should expose a combat-takeover-specific wait when the combat room already owns the handoff.",
+                null));
+            Assert(
+                string.Equals(combatTakeoverDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(combatTakeoverDecision.Reason, "waiting for combat takeover handoff to publish the first combat surface", StringComparison.OrdinalIgnoreCase),
+                "ChooseFirstNode should not reuse generic map wait wording during combat takeover residue.");
+            var combatTakeoverBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-takeover-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(combatTakeoverBranchRoot);
+            try
+            {
+                var combatTakeoverLogger = new ArtifactRecorder(combatTakeoverBranchRoot);
+                var combatTakeoverHistory = new List<GuiSmokeHistoryEntry>();
+                Assert(
+                    TryAdvanceAlternateBranch(
+                        GuiSmokePhase.ChooseFirstNode,
+                        combatTakeoverObserver,
+                        combatTakeoverHistory,
+                        combatTakeoverLogger,
+                        47,
+                        true,
+                        out var combatTakeoverPhase)
+                    && combatTakeoverPhase == GuiSmokePhase.HandleCombat,
+                    "ChooseFirstNode should branch directly to HandleCombat when the canonical post-node handoff owner is combat.");
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(combatTakeoverBranchRoot, true);
+                }
+                catch
+                {
+                }
+            }
+
+            var mapSurfacePendingObserver = new ObserverState(
+                explicitProceedObserverState.Summary with
+                {
+                    CurrentScreen = "map",
+                    VisibleScreen = "map",
+                    InCombat = false,
+                    InventoryId = "inv-post-node-map-surface-pending",
+                    SceneEpisodeId = "episode-post-node-map-surface-pending",
+                    ChoiceExtractorPath = "generic",
+                    CurrentChoices = Array.Empty<string>(),
+                    ActionNodes = Array.Empty<ObserverActionNode>(),
+                    Choices = Array.Empty<ObserverChoice>(),
+                    CombatHand = Array.Empty<ObservedCombatHandCard>(),
+                    PublishedCurrentScreen = "map",
+                    PublishedVisibleScreen = "map",
+                    RawObservedScreen = "map",
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                        ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                        ["mapCurrentActiveScreen"] = "true",
+                        ["transitionInProgress"] = "false",
+                    },
+                },
+                eventProceedStateDocument,
+                null,
+                null);
+            var mapSurfacePendingState = AutoDecisionProvider.BuildPostNodeHandoffState(
+                mapSurfacePendingObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                string.Empty);
+            Assert(
+                mapSurfacePendingState.Owner == NonCombatCanonicalForegroundOwner.Map
+                && mapSurfacePendingState.HandoffTarget == NonCombatHandoffTarget.WaitMap
+                && mapSurfacePendingState.ReleaseStage == NonCombatReleaseStage.ReleasePending
+                && !mapSurfacePendingState.HasExplicitSurface
+                && mapSurfacePendingState.SurfaceKind == PostNodeHandoffSurfaceKind.MapSurfacePending,
+                $"Map foreground without an exported node should stay in MapSurfacePending instead of promoting map routing authority. Actual owner={mapSurfacePendingState.Owner} target={mapSurfacePendingState.HandoffTarget} release={mapSurfacePendingState.ReleaseStage} explicit={mapSurfacePendingState.HasExplicitSurface} surface={mapSurfacePendingState.SurfaceKind} mismatch={mapSurfacePendingState.ContractMismatch}.");
+            Assert(
+                !NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(mapSurfacePendingObserver)
+                && NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(mapSurfacePendingObserver),
+                "Explicit map surface authority should stay narrower than authoritative map screen ownership.");
+            var mapSurfacePendingDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                48,
+                GuiSmokePhase.ChooseFirstNode.ToString(),
+                "Wait for the post-room map surface to republish after release.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:choosefirstnode|screen:map|visible:map|encounter:monster|ready:unknown|stability:unknown",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                mapSurfacePendingObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                BuildAllowedActions(
+                    GuiSmokePhase.ChooseFirstNode,
+                    mapSurfacePendingObserver,
+                    Array.Empty<CombatCardKnowledgeHint>(),
+                    string.Empty,
+                    Array.Empty<GuiSmokeHistoryEntry>()),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "ChooseFirstNode should use a family-specific map surface pending wait instead of generic map routing wait.",
+                null));
+            Assert(
+                string.Equals(mapSurfacePendingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(mapSurfacePendingDecision.Reason, "waiting for post-node map surface to republish after room release", StringComparison.OrdinalIgnoreCase),
+                "ChooseFirstNode should not say 'waiting for reachable map node' while the map surface itself has not republished yet.");
+
+            var weakEventChoiceFamilyObserver = new ObserverState(
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-weak-event-choice-family",
+                    true,
+                    "room",
+                    "stable",
+                    "episode-weak-event-choice-family",
+                    null,
+                    "generic",
+                    74,
+                    80,
+                    2,
+                    new[] { "홀로 탐색한다", "협력한다" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("event-option:solo", "event-option", "홀로 탐색한다", null, true)
+                        {
+                            TypeName = "event-option",
+                            SemanticHints = new[] { "source:event-option-button", "option-role:choice" },
+                        },
+                        new ObserverActionNode("event-option:cooperate", "event-option", "협력한다", null, true)
+                        {
+                            TypeName = "event-option",
+                            SemanticHints = new[] { "source:event-option-button", "option-role:choice" },
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("event-option", "홀로 탐색한다", null, "JUNGLE_MAZE_ADVENTURE.pages.INITIAL.options.SOLO_QUEST")
+                        {
+                            BindingKind = "event-option",
+                            BindingId = "JUNGLE_MAZE_ADVENTURE.pages.INITIAL.options.SOLO_QUEST",
+                            SemanticHints = new[] { "source:event-option-button", "option-role:choice" },
+                        },
+                        new ObserverChoice("event-option", "협력한다", null, "JUNGLE_MAZE_ADVENTURE.pages.INITIAL.options.JOIN_FORCES")
+                        {
+                            BindingKind = "event-option",
+                            BindingId = "JUNGLE_MAZE_ADVENTURE.pages.INITIAL.options.JOIN_FORCES",
+                            SemanticHints = new[] { "source:event-option-button", "option-role:choice" },
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["foregroundOwner"] = "event",
+                        ["foregroundActionLane"] = "event-choice",
+                        ["publishedVisibleScreen"] = "event",
+                        ["publishedCurrentScreen"] = "event",
+                        ["choiceExtractorPath"] = "generic",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.Event.NEventRoom",
+                        ["mapScreenOpen"] = "false",
+                        ["mapCurrentActiveScreen"] = "false",
+                    },
+                },
+                null,
+                null,
+                null);
+            var weakEventChoiceFamilyState = AutoDecisionProvider.BuildPostNodeHandoffState(
+                weakEventChoiceFamilyObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                string.Empty);
+            Assert(
+                weakEventChoiceFamilyState.Owner == NonCombatCanonicalForegroundOwner.Event
+                && weakEventChoiceFamilyState.HandoffTarget == NonCombatHandoffTarget.HandleEvent
+                && weakEventChoiceFamilyState.ReleaseStage == NonCombatReleaseStage.Active
+                && weakEventChoiceFamilyState.HasExplicitSurface,
+                $"True event-foreground event-option families without usable bounds should stay event-owned as an active handoff instead of collapsing to map wait. Actual owner={weakEventChoiceFamilyState.Owner} target={weakEventChoiceFamilyState.HandoffTarget} release={weakEventChoiceFamilyState.ReleaseStage} explicit={weakEventChoiceFamilyState.HasExplicitSurface} surface={weakEventChoiceFamilyState.SurfaceKind}.");
+            var weakEventChoiceAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.ChooseFirstNode,
+                weakEventChoiceFamilyObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(
+                weakEventChoiceAllowedActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase)
+                && !weakEventChoiceAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
+                "Weak event-option families without bounds should keep ChooseFirstNode on the event lane instead of reopening map routing.");
+            var weakEventChoiceDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                49,
+                GuiSmokePhase.ChooseFirstNode.ToString(),
+                "Weak event-option families without usable bounds should not fall back to reachable-map wait.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:choosefirstnode|screen:event|visible:event|encounter:none|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                weakEventChoiceFamilyObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                weakEventChoiceAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "ChooseFirstNode should preserve event ownership while event-option family bounds republish.",
+                null));
+            Assert(
+                string.Equals(weakEventChoiceDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(weakEventChoiceDecision.Reason, "waiting for an explicit event progression choice", StringComparison.OrdinalIgnoreCase),
+                "Weak event-option families should wait on explicit event progression instead of generic reachable-map routing.");
+
             var explicitProceedWaitDecision = InvokeForegroundAwareNonCombatWaitDecision(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",
@@ -1228,9 +1538,18 @@ internal static partial class Program
             };
             var mixedRestAftermathObserver = new ObserverState(mixedRestAftermathSummary, null, null, null);
             var mixedRestAftermathAllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, mixedRestAftermathObserver);
-            Assert(mixedRestAftermathAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
-                   && !mixedRestAftermathAllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase),
-                "Mixed rest-site aftermath should reopen ChooseFirstNode on the map lane instead of stale smith/wait allowlists once NMapScreen is current.");
+            var mixedRestAftermathHandoffState = AutoDecisionProvider.BuildPostNodeHandoffState(
+                mixedRestAftermathObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                null);
+            Assert(mixedRestAftermathAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase)
+                   && !mixedRestAftermathAllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase)
+                   && mixedRestAftermathHandoffState.Owner == NonCombatCanonicalForegroundOwner.Map
+                   && mixedRestAftermathHandoffState.HandoffTarget == NonCombatHandoffTarget.WaitMap
+                   && mixedRestAftermathHandoffState.ReleaseStage == NonCombatReleaseStage.ReleasePending
+                   && mixedRestAftermathHandoffState.SurfaceKind == PostNodeHandoffSurfaceKind.MapSurfacePending,
+                $"Mixed rest-site aftermath should demote stale smith residue into MapSurfacePending once NMapScreen is current. allowed=[{string.Join(", ", mixedRestAftermathAllowedActions)}] owner={mixedRestAftermathHandoffState.Owner} target={mixedRestAftermathHandoffState.HandoffTarget} release={mixedRestAftermathHandoffState.ReleaseStage} surface={mixedRestAftermathHandoffState.SurfaceKind}.");
             Assert(GuiSmokeObserverPhaseHeuristics.TryGetPostEmbarkPhase(mixedRestAftermathSummary, out var mixedRestAftermathPhase)
                    && mixedRestAftermathPhase == GuiSmokePhase.ChooseFirstNode,
                 "Post-embark reconciliation should prefer map progression over stale rest-site residue when mapCurrentActiveScreen is true.");
@@ -1261,10 +1580,10 @@ internal static partial class Program
                     $"Mixed rest-site aftermath replay {replayStep} must not recreate the old request/decision mismatch.");
 
                 var rebuiltReplayRequest = LoadReplayRequest(replayRequestPath, fullRequestRebuild: true).Request;
-                Assert(GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(rebuiltReplayRequest)
+                Assert(rebuiltReplayRequest.AllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase)
                        && !rebuiltReplayRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase)
                        && !rebuiltReplayRequest.AllowedActions.Contains("click smith confirm", StringComparer.OrdinalIgnoreCase),
-                    $"Mixed rest-site aftermath replay rebuild {replayStep} should reopen the legal map-routing lane instead of stale smith/wait actions. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
+                    $"Mixed rest-site aftermath replay rebuild {replayStep} should canonicalize to MapSurfacePending wait instead of stale smith/wait actions or premature map routing. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
             }
         }
         finally

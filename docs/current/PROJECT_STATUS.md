@@ -6,15 +6,15 @@
 
 ## 날짜
 
-- 2026-03-31
+- 2026-04-01
 
 ## 현재 마일스톤 위치
 
-- 현재 진행 축: `M5 authoritative long-run blocker loop` + post-refactor cleanup completion + `post-live8 anti-drift recovery`
+- 현재 진행 축: `M5 authoritative long-run blocker loop`, late acceptance-evidence stage
 - 현재 engineering focus:
-  1. anti-drift rules를 current docs와 current owner code에 다시 고정
-  2. fresh live baseline 위에서 `live21` ancient event option blocker를 explicit `NEventOptionButton` contract로 닫기
-  3. 그 다음에야 `deck-remove` coverage frontier와 low-priority smoothness gap으로 다시 돌아가기
+  1. fresh single-attempt endurance natural-terminal evidence를 current docs와 owner code 기준선으로 고정
+  2. `HandleRewards reward card choice same-action-stall`과 `HandleCombat combat-barrier-step-budget-exhausted / wait-plateau` family를 closed family를 reopen하지 않고 좁게 정리
+  3. live review capture black-video 문제를 gameplay blocker와 분리해 정리하고, 그 다음에야 `M6 replay/parity` 고정으로 넘어가기
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
 중요한 현재 해석:
@@ -24,9 +24,13 @@
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug는 current `main`에서 닫혔다
 - published-first observer provenance migration은 current `main`에서 active다
 - post-refactor cleanup program은 current `main`에서 완료 상태다
-- combat stale-end-turn / target plateau family는 current `main`에서 micro-stage + quiet convergence로 닫혔다
+- ancient option contract family는 live에서 닫혔다
+- `ChooseFirstNode <-> event` mixed-state와 post-node combat takeover -> generic map wait family도 live에서 닫혔다
+- explicit relic reward claim -> `proceed after resolving rewards` inversion은 replay exact repro 기준으로 닫혔고, fresh live rerun에서 재현되지 않았다
 - explicit shop foreground 위에 stale reward misroute가 끼어들던 `HandleShop -> HandleRewards -> decision-wait-plateau` family는 current `main`에서 즉시 `HandleRewards -> HandleShop` 회복으로 닫혔다
-- 현재 핵심은 **cleanup-complete baseline을 reopen하지 않고 explicit truth 기반 current-main authority contracts를 유지한 채 `live21` ancient event option blocker를 먼저 닫는 것**이다
+- fresh authoritative endurance root [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)는 valid-trust single attempt가 `player-defeated` natural terminal까지 `stepCount=479`로 진행될 수 있음을 보여줬다
+- 다만 short validation roots에서는 `reward card choice same-action-stall`과 `combat-barrier-step-budget-exhausted` family가 여전히 남아 있다
+- live ffmpeg metadata recording은 current `main`에서 붙지만, `window-hwnd gdigrab` review video는 아직 black frame이라 screenshot/request artifact가 source of truth다
 
 ## 현재 우선순위
 
@@ -51,78 +55,46 @@ cleanup program 완료 이후에도 current follow-up은 남아 있다.
 1. replay parity suite
    - status: green
    - 해석: old `reward-aftermath-map-handoff` known red는 current `main`에서 닫혔다
-2. latest combat blocker fix root
-   - root: [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2)
-   - result: original `combat select non-enemy slot -> stale observer -> auto-end turn -> combat-barrier-wait-plateau` family와 후속 attack-target plateau family가 모두 재현되지 않았다
-   - shape:
-     - unresolved non-enemy lane는 `end turn`으로 닫히지 않고 lane settle/confirm으로만 진행됐다
-     - `step=51`에서 `capture skipped reason=combat-explicit-target-runtime`, `action=click`, `target=combat enemy target 의식의-신수 recenter`
-     - `step=51` 이후 settle reason은 generic observer delta가 아니라 `combat-enemy-click-resolved`였다
-     - `step=55 -> 60`에서는 unresolved selected lane이 `right-click cancel unresolved selected card`로만 해소됐다
-     - run은 `attempt-completed:max-steps-reached`로 끝났고 `failure-summary.json`은 생성되지 않았다
-3. latest post-live9 closure commits
-   - commits:
-     - `15dd5cf` `Prioritize reward-pick child-screen export facts`
-     - `d9e4c01` `Make combat barrier self-test use live target ids`
-     - `10028f8` `Make combat target-selection self-test live-faithful`
-     - `ed0a379` `Wait on unresolved attack-lane churn`
-     - `9c6621b` `Narrow combat target-summary carryover`
+2. ancient / event / post-node handoff family
+   - roots:
+     - [boot-to-long-run-20260330-live21](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21)
+     - [ancient-contract-20260331-105147](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/ancient-contract-20260331-105147)
+     - [choosefirstnode-handoff-20260331-140432-live01](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/choosefirstnode-handoff-20260331-140432-live01)
    - result:
-     - repeated `reward-pick` plateau family는 [boot-to-long-run-20260330-live18](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live18)에서 재현되지 않았다
-     - combat target-selection / carryover self-test red는 current `main`에서 green으로 닫혔다
-     - stale `combatTargetSummary` 기반 attack-lane resurrection/no-op family는 current `main`에서 좁혀졌다
-4. latest live blocker
-   - root: [boot-to-long-run-20260330-live21](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21)
-   - result: combat family는 재현되지 않았지만, `HandleEvent`에서 `decision-wait-plateau`가 발생했다
-   - shape:
-     - [run.log](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21/attempts/0001/run.log) `step=92~101`은 계속 `waiting for explicit ancient event option buttons`
-     - [0101.request.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21/attempts/0001/steps/0101.request.json) 에는 이미 actionable `event-option` 버튼 두 개가 bounds와 함께 들어 있다
-     - 하지만 ancient explicit option 판정은 `ancient-event-option:*` / `source:ancient-option-button` / `ancient-event` semantic을 기대하고, live node는 generic `event-option:*` + `source:event-option-button`만 가진다
-     - 결과적으로 ancient lane은 active인데 decision은 generic explicit button을 ancient option으로 인정하지 못해 `wait`만 반복한다
-   - interpretation:
-     - broad mixed-state regression이 아니라 **ancient special-case lane과 generic explicit event-option button export의 contract mismatch**다
-5. latest anti-drift recovery commits
-   - commits:
-     - `bc53c34` `Retire broad card-selection subtype fallback`
-     - `f29cc5d` `Retire screenshot-first noncombat recovery paths`
-     - `52ebabd` `Reinforce harness anti-drift rules in current docs`
-     - `84e4647` `Recover explicit combat and noncombat authority contracts`
-     - `5ebe718` `Refresh replay fixtures for exported map routing`
-     - `3a24338` `Retire combat screenshot and stale target fallbacks`
+     - old `live21` ancient option contract mismatch는 current `main`에서 닫혔다
+     - `ChooseFirstNode <-> event` mixed-state도 live에서 재현되지 않았다
+     - `ChooseFirstNode -> combat takeover -> generic map wait` family도 current `main`에서 닫혔다
+3. reward claim contract recovery
+   - root: [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
    - result:
-     - `build`, `self-test`, `replay-test`, `replay-parity-test` are green on current `main`
-     - combat false-confirm lane, screenshot-primary combat selection, stale target recenter fallback, exported-map routing drift, and reward screenshot residue were tightened back toward explicit truth
-     - fresh authoritative live rerun root [boot-to-long-run-20260330-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live9) added current-main live closure evidence
-     - `live8` combat false-confirm plateau는 재현되지 않았고 run은 `max-steps-reached:120`으로 종료됐다
-6. latest anti-drift recovery live root
-   - root: [boot-to-long-run-20260330-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live9)
-   - result: post-recovery current `main`에서 combat false-confirm family는 재현되지 않았고, 첫 전투는 observer-first attack select + explicit target click으로 진행됐다
-   - shape:
-     - `step=41` attack slot select는 `captureMode=skipped`, `sceneReasoningMode=observer-only`였다
-     - `step=42`는 explicit combat enemy target click으로 이어졌다
-     - `deck-remove` child screen과 reward card choice에서만 transient `captured/enriched` recapture가 끼었다
-     - run은 `max-steps-reached:120`으로 끝났고 `failure-summary.json`은 생성되지 않았다
-7. latest cleanup proof root
-   - root: [20260329-162955-boot-to-long-run](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/20260329-162955-boot-to-long-run)
-   - result: representative fresh live root, cleanup-complete `main`에서 `WaitMainMenu -> EnterRun`, `WaitRunLoad -> HandleCombat`, combat wait/re-capture continuity가 모두 비회귀였다
-   - shape:
-     - `step=3`에서 `captureMode=skipped`, `sceneReasoningMode=observer-only`, `choices=[계속, 멀티플레이, 종료, 설정]` 뒤 `target=continue`
-     - `step=16`에서 `WaitRunLoad -> HandleCombat`
-     - `step=23 -> 24`, `step=45 -> 46`, `step=57 -> 58`에서 legitimate combat wait 뒤 다음 capture/request로 이어졌고 silent stall은 없었다
-     - run은 `max-steps-reached:60`로 종료됐고 `failure-summary.json`은 생성되지 않았다
-8. latest shop recovery root
-   - root: [boot-to-long-run-20260330-live4](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live4)
-   - result: old `HandleShop -> HandleRewards from screen=shop -> decision-wait-plateau phase=HandleRewards screen=shop` family는 current `main`에서 plateau 없이 회복됐다
-   - shape:
-     - `step=22`와 `step=42`에서 transient `HandleShop -> HandleRewards from screen=shop`가 여전히 관찰된다
-     - 하지만 각각 `step=24`, `step=43`에서 즉시 `HandleRewards -> HandleShop from screen=shop`가 일어나고 shop lane이 계속 진행된다
-     - 이후 `step=25 -> 27`, `step=44 -> 46`에서 open-inventory / buy / back / proceed가 실제로 진행됐다
-     - run은 combat, reward, rest-site까지 계속 이어진 뒤 `max-steps-reached:120`으로 종료됐고 `failure-summary.json`은 생성되지 않았다
+     - exact replay repro였던 explicit relic claim -> `proceed after resolving rewards` inversion은 current `main`에서 닫혔다
+     - fresh live rerun에서도 relic/proceed inversion은 다시 나오지 않았다
+     - 대신 attempt `0001`에서 `same-action-stall phase=HandleRewards target=reward card choice screen=rewards`가 새 front blocker로 드러났다
+4. combat barrier tail family
+   - roots:
+     - [combat-takeover-barrier-20260331-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-takeover-barrier-20260331-live1)
+     - [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
+   - result:
+     - short validation roots에서는 `combat-barrier-wait-plateau`와 `combat-barrier-step-budget-exhausted` family가 여전히 관찰된다
+     - dominant shape는 `HandleCombat`에서 `EnemyClick`/`EndTurn` barrier ownership이 늦게 풀리는 long-tail이다
+5. fresh endurance proof root
+   - root: [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)
+   - result:
+     - valid-trust single attempt가 `stepCount=479`까지 실제로 진행됐다
+     - 종료는 harness stall이 아니라 natural `player-defeated` terminal이었다
+     - 이번 root에서는 short triage roots에서 보였던 reward stall / combat barrier family가 authoritative terminal cause로 올라오지 않았다
+6. live review capture state
+   - roots:
+     - [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
+     - [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)
+   - result:
+     - ffmpeg metadata and retained review artifacts are emitted on current `main`
+     - but `window-hwnd gdigrab` review video is still black and cannot be treated as gameplay evidence
 
 즉 현재 질문은 더 이상
 
 ```text
-"reward aftermath 이후 ChooseFirstNode / WaitMap / map-node routing이 막힌다"
+"ancient option contract나 ChooseFirstNode event mixed-state가 아직 current blocker인가"
 ```
 
 가 아니다.
@@ -130,10 +102,9 @@ cleanup program 완료 이후에도 current follow-up은 남아 있다.
 historical frontier는
 
 ```text
-"mixed-state noncombat guard cleanup, combat EndTurn pre-actuation drift, combat post-wait recapture continuity는 current main에서 닫혔고,
-capture-boundary와 strict lifecycle proof도 current main에서 닫혔고,
-combat stale-end-turn / target plateau family도 current main에서 닫혔고,
-현재 next step은 `live9` 이후 남은 `deck-remove` / `reward-pick` child-screen explicit owner/export gap을 좁히는 것이다"
+"현재 `main`은 한 번의 authoritative long-run을 natural terminal까지 끌고 갈 수 있다.
+하지만 short validation roots에서는 `reward card choice same-action-stall`, `combat-barrier-step-budget-exhausted`, live review black-video가 아직 남아 있다.
+다음 step은 closed ancient/event/ChooseFirstNode family를 reopen하지 않고 이 세 gap을 분리해서 정리하는 것이다."
 ```
 
 ### 3. current speed baseline
@@ -161,9 +132,9 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
 | Harness Self-Test | green | `84e4647` current-main recovery 이후 self-test green |
 | Replay Golden Suite | green | `replay-test` 통과 |
 | Replay Parity Suite | green | `reward-aftermath-map-handoff` 포함 current parity fixtures green |
-| Non-Combat Stability | green | reward aftermath map-node continuity closure, fresh live root confirms post-reward progression |
-| Combat Stability | green | `live9`에서 false-confirm plateau가 재현되지 않았고 first combat가 observer-first select + explicit target click으로 진행 |
-| Live-Run Speed Recovery | partial | combat hot path fresh live proof는 회복됐지만 `deck-remove` / reward card child screen에서 transient `captured/enriched` residue가 남아 있음 |
+| Non-Combat Stability | partial | ancient/event/ChooseFirstNode family는 닫혔지만 `verify-reward-claim-20260401-live1` attempt `0001`의 `reward card choice` same-action-stall이 남아 있음 |
+| Combat Stability | partial | stale non-enemy/target family는 닫혔지만 short roots에서 `combat-barrier-step-budget-exhausted` / `combat-barrier-wait-plateau` long-tail이 남아 있음 |
+| Live-Run Speed Recovery | partial | hot path observer-first baseline은 유지되지만 `deck-remove` / reward card child screen transient capture와 black review video가 남아 있음 |
 | Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 compatibility는 legacy surface로만 남는다 |
 | Post-Refactor Cleanup Program | green | runner residual, noncombat residue, partial `Program` owner shedding, supervision health split까지 current `main`에 반영 |
 | Capture Boundary | green | bounded failure contract와 self-test 위에 fresh live proof [capture-boundary-proof-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1)이 추가됐다 |
@@ -182,7 +153,11 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
 - fresh live root `live9`에서 combat false-confirm plateau는 재현되지 않았고 first combat의 select/target chain은 다시 `observer-only` / explicit target authority로 진행됐다
 - `15dd5cf` 이후 repeated reward-pick plateau family는 current `main`에서 닫혔다
 - `9c6621b` 이후 stale combat carryover/no-op family도 current `main`에서 닫혔다
-- current `main`의 latest authoritative live blocker는 `live21` ancient event option wait plateau다
+- `7bb6512`, `4244a35`, `bf933cc` 이후 ancient option contract mismatch와 `ChooseFirstNode <-> event` mixed-state는 live에서 다시 authoritative blocker로 올라오지 않았다
+- [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)는 current `main`이 valid-trust single attempt를 natural `player-defeated` terminal까지 끌고 갈 수 있음을 보여준다
+- exact replay repro였던 explicit relic reward claim -> `proceed after resolving rewards` inversion은 current `main`에서 닫혔다
+- current short-root blocker family는 `reward card choice same-action-stall`과 `combat-barrier-step-budget-exhausted / wait-plateau`다
+- ffmpeg metadata recording은 current `main`에서 붙지만, `window-hwnd gdigrab` review video는 아직 black frame이다
 - current `main`의 control-flow observer provenance는 published-first이고, published provenance는 legacy `visibleScreen` / `sceneReady` 계열로 다시 채워지지 않는다
 - bridge node semantics는 compatibility scene winner를 다시 먹지 않는다
 - combat post-action은 더 이상 generic observer delta 하나로 다음 step을 열지 않고, lane micro-stage + quiet convergence로 settle된다
@@ -214,10 +189,18 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
 
 - fresh combat blocker fix root:
   - [combat-target-summary-20260330-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2)
+- fresh reward validation root:
+  - [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
+- fresh endurance proof root:
+  - [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)
 - fresh shop recovery root:
   - [boot-to-long-run-20260330-live4](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live4)
 - anti-drift recovery live root:
   - [boot-to-long-run-20260330-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live9)
+- ancient contract closure root:
+  - [ancient-contract-20260331-105147](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/ancient-contract-20260331-105147)
+- choose-first-node handoff closure root:
+  - [choosefirstnode-handoff-20260331-140432-live01](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/choosefirstnode-handoff-20260331-140432-live01)
 - combat blocker fix startup summary:
   - [startup-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-target-summary-20260330-live2/startup-summary.json)
 - combat blocker fix session summary:
@@ -312,10 +295,10 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
 ### 아직 열려 있는 것
 
 - no known red in `build` / `self-test` / `replay-test` / `replay-parity-test`
-- current authoritative live blocker는 `live21` ancient event option wait plateau다
-- ancient event option phase에서 explicit `NEventOptionButton` contract와 ancient special-case lane이 어긋난다
-- `deck-remove` child screen explicit owner/export gap 때문에 transient `captured/enriched` recapture가 남아 있다
-- some low-priority coverage rows (`event reward substate`, `reward-map loop sentinel`) remain partial
+- current short validation blocker는 `verify-reward-claim-20260401-live1` attempt `0001`의 `reward card choice same-action-stall`이다
+- combat long-tail blocker는 short roots에서 반복되는 `combat-barrier-step-budget-exhausted` / `combat-barrier-wait-plateau` family다
+- `window-hwnd gdigrab` review video는 current `main`에서 metadata는 남기지만 black frame이라 review evidence로는 아직 unusable이다
+- `deck-remove` child screen explicit owner/export gap과 some low-priority coverage rows (`event reward substate`, `reward-map loop sentinel`) remain partial
 
 ## 다음 작업 원칙
 
@@ -332,21 +315,19 @@ combat stale-end-turn / target plateau family도 current main에서 닫혔고,
      - [Analysis/CombatPostActionObservationSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatPostActionObservationSupport.cs)
      - [Program.AllowedActions.Combat.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.AllowedActions.Combat.cs)
      - [AutoDecisionProvider.CombatDecisions.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AutoDecisionProvider.CombatDecisions.cs)
-     - [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
-     - [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
+      - [Analysis/CombatBarrierSupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatBarrierSupport.cs)
+      - [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
 3. semantic blocker, speed evidence, coverage gap을 구분한다
-   - noncombat mixed-state와 combat EndTurn barrier family는 닫혔다
-   - explicit event/common combat speed baseline도 현재 `main`에서 회복됐다
-   - post-refactor cleanup program도 완료됐다
-   - 현재 immediate blocker는 ancient event option contract mismatch이고, 그 다음이 `deck-remove` coverage frontier와 일부 low-priority partial row다
+   - ancient/event/ChooseFirstNode family는 닫혔고, current `main`은 natural-terminal long-run sample 하나를 확보했다
+   - short-root reward/combat blocker와 live review black-video는 별도 family로 본다
+   - explicit event/common combat speed baseline과 post-refactor cleanup program은 유지한다
+   - 현재 immediate blocker는 `reward card choice` click progression drift이고, 그 다음이 combat barrier ownership release와 review-video capture quality다
 
 ## 한 줄 요약
 
 ```text
-current main의 smoke harness architecture refactor는 완료됐다.
-reward aftermath live/parity gap과 combat stale-end-turn / target plateau family도 current main에서 닫혔다.
-anti-drift recovery 뒤 `live9` fresh root까지 확보되어 combat false-confirm plateau는 재현되지 않았다.
-reward-pick repeated plateau와 combat target-summary carryover family도 current main에서 닫혔다.
-다만 새 authoritative live blocker로 `live21` ancient event option wait plateau가 올라왔다.
-다음 follow-up은 ancient option phase를 generic explicit `NEventOptionButton` contract와 다시 정렬한 뒤, 그 다음 `deck-remove` coverage frontier와 low-priority partial row를 보강하는 쪽이다.
+current `main`은 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion을 닫은 뒤,
+fresh authoritative endurance root에서 `stepCount=479` natural `player-defeated` terminal까지 도달했다.
+즉 M5 acceptance shape evidence는 late-stage까지 왔지만, short validation roots에는 `reward card choice same-action-stall`과 `combat-barrier-step-budget-exhausted` family가 아직 남아 있다.
+또한 live ffmpeg metadata recording은 붙지만 review video는 아직 black frame이므로 screenshot/request artifact를 source of truth로 유지해야 한다.
 ```

@@ -42,6 +42,7 @@ static partial class LongRunArtifacts
         var useMapTransitionAnalysis = string.Equals(diagnosisKind, "map-transition-stall", StringComparison.OrdinalIgnoreCase);
         var useOverlayAnalysis = string.Equals(diagnosisKind, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase);
         var useWaitAnalysis = string.Equals(diagnosisKind, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(diagnosisKind, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                               || string.Equals(diagnosisKind, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase);
         var phase = failureSummary?.Phase
                     ?? (useCombatAnalysis ? combatNoOpLoop.Phase : null)
@@ -210,7 +211,7 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "rest-site-post-click-noop" or "rest-site-selection-failed" or "rest-site-grid-not-visible-after-selection" or "rest-site-grid-observer-miss" or "ancient-event-option-contract-mismatch" or "post-node-handoff-contract-mismatch",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "combat-barrier-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "combat-barrier-step-budget-exhausted" or "combat-barrier-handoff-mismatch" or "rest-site-post-click-noop" or "rest-site-selection-failed" or "rest-site-grid-not-visible-after-selection" or "rest-site-grid-observer-miss" or "ancient-event-option-contract-mismatch" or "post-node-handoff-contract-mismatch",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
@@ -228,6 +229,8 @@ static partial class LongRunArtifacts
             || string.Equals(diagnosisKind, "rest-site-selection-failed", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "rest-site-grid-not-visible-after-selection", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase),
             backlogRoute,
@@ -256,6 +259,24 @@ static partial class LongRunArtifacts
         if (string.Equals(attemptEntry.FailureClass, "scene-authority-invalid", StringComparison.OrdinalIgnoreCase))
         {
             return "scene-authority-invalid";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "combat-barrier-step-budget-exhausted";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase))
+        {
+            return "combat-barrier-handoff-mismatch";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase))
+        {
+            return "combat-barrier-wait-plateau";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)

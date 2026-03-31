@@ -18,8 +18,9 @@ static class GuiSmokeNonCombatContractSupport
             return false;
         }
 
-        return observer.Choices.Any(IsExplicitRewardProgressionChoice)
-               || observer.ActionNodes.Any(IsExplicitRewardProgressionNode);
+        var rewardState = RewardObserverSignals.TryGetState(observer);
+        return observer.Choices.Any(choice => IsExplicitRewardProgressionChoice(choice, rewardState))
+               || observer.ActionNodes.Any(node => IsExplicitRewardProgressionNode(node, rewardState));
     }
 
     public static bool HasExplicitRestSiteChoiceAuthority(GuiSmokeStepRequest request)
@@ -324,11 +325,12 @@ static class GuiSmokeNonCombatContractSupport
                || node.Kind.Contains("proceed", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsExplicitRewardProgressionChoice(ObserverChoice choice)
+    private static bool IsExplicitRewardProgressionChoice(ObserverChoice choice, RewardScreenState? rewardState)
     {
+        var rewardOwnedRelicChoice = IsRewardOwnedExplicitRelicChoice(choice, rewardState);
         if (!TryParseBounds(choice.ScreenBounds, out _)
             || IsOverlayChoiceLabel(choice.Label)
-            || IsInspectPreviewChoice(choice)
+            || (IsInspectPreviewChoice(choice) && !rewardOwnedRelicChoice)
             || IsDismissLikeLabel(choice.Label))
         {
             return false;
@@ -344,7 +346,7 @@ static class GuiSmokeNonCombatContractSupport
                || HasLargeChoiceBounds(choice.ScreenBounds);
     }
 
-    private static bool IsExplicitRewardProgressionNode(ObserverActionNode node)
+    private static bool IsExplicitRewardProgressionNode(ObserverActionNode node, RewardScreenState? rewardState)
     {
         if (!node.Actionable
             || !TryParseBounds(node.ScreenBounds, out _)
@@ -358,8 +360,49 @@ static class GuiSmokeNonCombatContractSupport
         }
 
         return IsProceedNode(node)
+               || IsRewardOwnedExplicitRewardNode(node, rewardState)
                || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase)
                || node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasRewardForegroundClaimAuthority(RewardScreenState? rewardState)
+    {
+        return rewardState?.RewardIsCurrentActiveScreen == true
+               || rewardState?.ForegroundOwned == true;
+    }
+
+    private static bool IsRewardOwnedExplicitRelicChoice(ObserverChoice choice, RewardScreenState? rewardState)
+    {
+        return HasRewardForegroundClaimAuthority(rewardState)
+               && !HasConflictingNonRewardSceneHint(choice.SemanticHints)
+               && ((string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(choice.BindingId, "RelicReward", StringComparison.OrdinalIgnoreCase))
+                   || choice.SemanticHints.Any(static hint =>
+                       string.Equals(hint, "reward-relic", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(hint, "reward-type:RelicReward", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool IsRewardOwnedExplicitRewardNode(ObserverActionNode node, RewardScreenState? rewardState)
+    {
+        return HasRewardForegroundClaimAuthority(rewardState)
+               && !HasConflictingNonRewardSceneHint(node.SemanticHints)
+               && (string.Equals(node.TypeName, "reward-type", StringComparison.OrdinalIgnoreCase)
+                   || node.SemanticHints.Any(static hint =>
+                       hint.StartsWith("reward-type:", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(hint, "reward-pick", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(hint, "reward-relic", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(hint, "reward-gold", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(hint, "reward-potion", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool HasConflictingNonRewardSceneHint(IReadOnlyList<string> semanticHints)
+    {
+        return semanticHints.Any(static hint =>
+            (hint.StartsWith("scene:", StringComparison.OrdinalIgnoreCase)
+             || hint.StartsWith("scene-published:", StringComparison.OrdinalIgnoreCase)
+             || hint.StartsWith("scene-raw:", StringComparison.OrdinalIgnoreCase))
+            && !hint.Contains("reward", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsRewardCardChoice(ObserverChoice choice)
@@ -369,6 +412,14 @@ static class GuiSmokeNonCombatContractSupport
         var explicitRewardCardHint = choice.SemanticHints.Any(static hint => string.Equals(hint, "reward-card", StringComparison.OrdinalIgnoreCase)
                                                                              || string.Equals(hint, "reward-pick", StringComparison.OrdinalIgnoreCase)
                                                                              || string.Equals(hint, "reward-type:CardReward", StringComparison.OrdinalIgnoreCase));
+        var explicitRewardCardAuthority = explicitRewardCardBinding
+                                          || explicitRewardCardHint
+                                          || string.Equals(choice.Value, "CardReward", StringComparison.OrdinalIgnoreCase)
+                                          || ContainsAny(choice.Description, "카드 보상", "reward")
+                                          || choice.SemanticHints.Any(static hint =>
+                                              string.Equals(hint, "scene:rewards", StringComparison.OrdinalIgnoreCase)
+                                              || string.Equals(hint, "scene-published:rewards", StringComparison.OrdinalIgnoreCase)
+                                              || string.Equals(hint, "scene-raw:rewards", StringComparison.OrdinalIgnoreCase));
         return (string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(choice.Kind, "reward-card", StringComparison.OrdinalIgnoreCase)
                 || explicitRewardCardBinding
@@ -377,14 +428,14 @@ static class GuiSmokeNonCombatContractSupport
                && (!IsConfirmLikeLabel(choice.Label) || explicitRewardCardBinding || explicitRewardCardHint)
                && !IsDismissLikeLabel(choice.Label)
                && !IsOverlayChoiceLabel(choice.Label)
-               && HasRewardCardLikeBounds(choice.ScreenBounds);
+               && (HasRewardCardLikeBounds(choice.ScreenBounds) || explicitRewardCardAuthority);
     }
 
     private static bool HasRewardCardLikeBounds(string? screenBounds)
     {
         if (!TryParseBounds(screenBounds, out var bounds))
         {
-            return true;
+            return false;
         }
 
         return bounds.Width >= 120f || bounds.Height >= 150f;

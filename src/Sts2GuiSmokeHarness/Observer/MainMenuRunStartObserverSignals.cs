@@ -249,16 +249,40 @@ static class MainMenuRunStartObserverSignals
         => (choice.Enabled ?? true) && IsAbandonRunLabel(choice.Label) && HasUsableBounds(choice.ScreenBounds);
 
     private static bool IsBoundedPopupConfirmNode(ObserverActionNode node)
-        => node.Actionable && IsPopupConfirmLabel(node.Label) && HasUsableBounds(node.ScreenBounds);
+        => node.Actionable && IsPopupConfirmSurface(node.Kind, node.NodeId, node.Label, node.SemanticHints) && HasUsableBounds(node.ScreenBounds);
 
     private static bool IsBoundedPopupConfirmChoice(ObserverChoice choice)
-        => (choice.Enabled ?? true) && IsPopupConfirmLabel(choice.Label) && HasUsableBounds(choice.ScreenBounds);
+        => (choice.Enabled ?? true)
+           && IsPopupConfirmSurface(choice.Kind, choice.NodeId ?? choice.Value, choice.Label, choice.SemanticHints)
+           && HasUsableBounds(choice.ScreenBounds);
 
     private static bool IsBoundedPopupCancelNode(ObserverActionNode node)
-        => node.Actionable && IsPopupCancelLabel(node.Label) && HasUsableBounds(node.ScreenBounds);
+        => node.Actionable && IsPopupCancelSurface(node.Kind, node.NodeId, node.Label, node.SemanticHints) && HasUsableBounds(node.ScreenBounds);
 
     private static bool IsBoundedPopupCancelChoice(ObserverChoice choice)
-        => (choice.Enabled ?? true) && IsPopupCancelLabel(choice.Label) && HasUsableBounds(choice.ScreenBounds);
+        => (choice.Enabled ?? true)
+           && IsPopupCancelSurface(choice.Kind, choice.NodeId ?? choice.Value, choice.Label, choice.SemanticHints)
+           && HasUsableBounds(choice.ScreenBounds);
+
+    private static bool IsPopupConfirmSurface(string? kind, string? nodeId, string? label, System.Collections.Generic.IReadOnlyList<string> semanticHints)
+    {
+        return IsPopupConfirmLabel(label)
+               || string.Equals(kind, "confirm", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(nodeId, "main-menu:abandon-run-confirm", StringComparison.OrdinalIgnoreCase)
+               || semanticHints.Any(static hint =>
+                   !string.IsNullOrWhiteSpace(hint)
+                   && hint.Contains("abandon-run-confirm", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsPopupCancelSurface(string? kind, string? nodeId, string? label, System.Collections.Generic.IReadOnlyList<string> semanticHints)
+    {
+        return IsPopupCancelLabel(label)
+               || string.Equals(kind, "cancel", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(nodeId, "main-menu:abandon-run-cancel", StringComparison.OrdinalIgnoreCase)
+               || semanticHints.Any(static hint =>
+                   !string.IsNullOrWhiteSpace(hint)
+                   && hint.Contains("abandon-run-cancel", StringComparison.OrdinalIgnoreCase));
+    }
 
     private static bool HasCollapsedMainMenuActionLayout(ObserverSummary observer)
     {

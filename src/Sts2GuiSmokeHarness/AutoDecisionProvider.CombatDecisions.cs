@@ -9,14 +9,28 @@ sealed partial class AutoDecisionProvider
     private static GuiSmokeStepDecision DecideHandleCombat(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         var context = analysisContext ?? GuiSmokeStepAnalysisContext.CreateForHandleCombatRequest(request);
-        AutoCombatAnalysis? analysis = null;
-        AutoCombatAnalysis GetCombatAnalysis() => analysis ??= context.CombatAnalysis;
+        var combatResolutionHandoffState = context.CombatResolutionHandoffState;
         var combatContext = context.CombatContext;
         var historyPendingSelection = CombatHistorySupport.TryGetPendingCombatSelection(combatContext.CombatHistory);
         var pendingSelection = context.PendingCombatSelection;
         var runtimeCombatState = context.RuntimeCombatState;
         var combatBarrier = context.CombatBarrierEvaluation;
         var combatMicroStage = context.CombatMicroStage;
+        if (HasReleasedCombatOwnership(combatResolutionHandoffState))
+        {
+            if (ShouldAbortReleasedCombatPhase(combatResolutionHandoffState))
+            {
+                return CreateCombatBarrierHandoffMismatchAbortDecision(
+                    request,
+                    BuildCombatResolutionMismatchReason(combatResolutionHandoffState));
+            }
+
+            return CreatePhaseWaitDecision(
+                GuiSmokePhase.HandleCombat,
+                BuildCombatResolutionWaitReason(combatResolutionHandoffState),
+                DisplayControlFlowScreen(request.Observer));
+        }
+
         if (context.CombatPlayerActionWindowClosed)
         {
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "observer reports enemy turn or a closed combat play phase", DisplayControlFlowScreen(request.Observer));
@@ -224,6 +238,9 @@ sealed partial class AutoDecisionProvider
                                            request.CombatCardKnowledge,
                                            historyPendingSelection,
                                            combatContext.CombatHistory);
+        var allowsEndTurnFromStaleAttackTail = request.Observer.PlayerEnergy is <= 0
+                                               && (combatMicroStage.AllowsEndTurn
+                                                   || CombatRuntimeStateSupport.HasExplicitEndTurnAffordance(request.Observer, request.WindowBounds));
         if (combatMicroStage.Kind == CombatMicroStageKind.ResolvingNonEnemy)
         {
             if (hasSelectedNonEnemyConfirmEvidence
@@ -282,6 +299,17 @@ sealed partial class AutoDecisionProvider
 
         if (unresolvedAttackSelectionChurn)
         {
+            if (allowsEndTurnFromStaleAttackTail
+                && TryUseCombatDecision(CreateCombatPressKeyDecision(
+                    "E",
+                    "auto-end turn",
+                    "Stale combat target diagnostics still suppress attack reentry, but observer/runtime truth reports no remaining energy and an explicit end-turn affordance. Close the turn instead of plateauing behind stale attack residue.",
+                    0.91,
+                    200), out var allowedStaleChurnEndTurnDecision))
+            {
+                return allowedStaleChurnEndTurnDecision;
+            }
+
             return CreatePhaseWaitDecision(
                 GuiSmokePhase.HandleCombat,
                 "waiting for explicit combat selection truth before reopening another attack lane",
@@ -290,6 +318,17 @@ sealed partial class AutoDecisionProvider
 
         if (staleAttackSelectionTail)
         {
+            if (allowsEndTurnFromStaleAttackTail
+                && TryUseCombatDecision(CreateCombatPressKeyDecision(
+                    "E",
+                    "auto-end turn",
+                    "Stale attack-target residue still suppresses attack reentry, but observer/runtime truth reports no remaining energy and an explicit end-turn affordance. Close the turn instead of waiting for stale target diagnostics to disappear.",
+                    0.92,
+                    200), out var allowedStaleTailEndTurnDecision))
+            {
+                return allowedStaleTailEndTurnDecision;
+            }
+
             return CreatePhaseWaitDecision(
                 GuiSmokePhase.HandleCombat,
                 "waiting for fresh combat selection truth before reopening an attack lane from stale target diagnostics",
@@ -663,6 +702,71 @@ sealed partial class AutoDecisionProvider
         return slotIndex == 10
             ? "0"
             : slotIndex.ToString(CultureInfo.InvariantCulture);
+    }
+
+    internal static bool HasReleasedCombatOwnership(PostNodeHandoffState handoffState)
+    {
+        return handoffState.Owner != NonCombatCanonicalForegroundOwner.Combat
+               && handoffState.HandoffTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat;
+    }
+
+    internal static bool ShouldAbortReleasedCombatPhase(PostNodeHandoffState handoffState)
+    {
+        return handoffState.HasExplicitSurface
+               || handoffState.HandoffTarget is NonCombatHandoffTarget.HandleRewards
+                   or NonCombatHandoffTarget.HandleEvent
+                   or NonCombatHandoffTarget.HandleShop
+                   or NonCombatHandoffTarget.ChooseFirstNode;
+    }
+
+    internal static string BuildCombatResolutionWaitReason(PostNodeHandoffState handoffState)
+    {
+        return handoffState.HandoffTarget switch
+        {
+            NonCombatHandoffTarget.WaitEventRelease
+                => "waiting for combat barrier release into event release handoff",
+            NonCombatHandoffTarget.WaitMap when handoffState.SurfaceKind == PostNodeHandoffSurfaceKind.MapSurfacePending
+                => "waiting for combat barrier release into post-room map surface republish",
+            NonCombatHandoffTarget.WaitMap
+                => "waiting for combat barrier release into map handoff",
+            _ => $"waiting for combat barrier release into {FormatCombatResolutionOwner(handoffState.Owner)} foreground handoff",
+        };
+    }
+
+    internal static string BuildCombatResolutionMismatchReason(PostNodeHandoffState handoffState)
+    {
+        return $"combat barrier handoff mismatch: owner={FormatCombatResolutionOwner(handoffState.Owner)} target={handoffState.HandoffTarget} surface={handoffState.SurfaceKind}";
+    }
+
+    private static GuiSmokeStepDecision CreateCombatBarrierHandoffMismatchAbortDecision(
+        GuiSmokeStepRequest request,
+        string reason)
+    {
+        return new GuiSmokeStepDecision(
+            "abort",
+            null,
+            null,
+            null,
+            null,
+            null,
+            reason,
+            0.0,
+            ResolveObserverScreen(request.Observer),
+            null,
+            true,
+            reason,
+            null,
+            null,
+            "combat-barrier-handoff-mismatch");
+    }
+
+    private static string FormatCombatResolutionOwner(NonCombatCanonicalForegroundOwner owner)
+    {
+        return owner switch
+        {
+            NonCombatCanonicalForegroundOwner.RestSite => "rest-site",
+            _ => owner.ToString().ToLowerInvariant(),
+        };
     }
 
     private static ObserverActionNode? FindEndTurnActionNode(GuiSmokeStepRequest request)

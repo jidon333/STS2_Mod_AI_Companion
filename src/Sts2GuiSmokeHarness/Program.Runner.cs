@@ -422,7 +422,79 @@ internal static partial class Program
     static bool IsExplicitDecisionAbortRisk(string? decisionRisk)
     {
         return string.Equals(decisionRisk, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(decisionRisk, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase);
+               || string.Equals(decisionRisk, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionRisk, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase);
+    }
+
+    static bool TryClassifyMaxStepBudgetExhaustion(
+        string stepsRoot,
+        out string terminalCause,
+        out string failureClass,
+        out string message)
+    {
+        terminalCause = string.Empty;
+        failureClass = string.Empty;
+        message = string.Empty;
+
+        var runRoot = Path.GetDirectoryName(stepsRoot);
+        if (string.IsNullOrWhiteSpace(runRoot))
+        {
+            return false;
+        }
+
+        var progressPath = Path.Combine(runRoot, "progress.ndjson");
+        if (!File.Exists(progressPath))
+        {
+            return false;
+        }
+
+        var totalProgressCount = 0;
+        var handleCombatCount = 0;
+        foreach (var line in File.ReadLines(progressPath))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            totalProgressCount += 1;
+            if (line.Contains("\"phase\":\"HandleCombat\"", StringComparison.OrdinalIgnoreCase))
+            {
+                handleCombatCount += 1;
+            }
+        }
+
+        if (totalProgressCount == 0 || handleCombatCount < 20 || handleCombatCount * 2 < totalProgressCount)
+        {
+            return false;
+        }
+
+        var endTurnBarrierWaitCount = 0;
+        foreach (var decisionPath in Directory.EnumerateFiles(stepsRoot, "*.decision.json", SearchOption.TopDirectoryOnly))
+        {
+            using var decisionDocument = JsonDocument.Parse(File.ReadAllText(decisionPath));
+            var root = decisionDocument.RootElement;
+            var status = root.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : null;
+            var reason = root.TryGetProperty("reason", out var reasonElement) ? reasonElement.GetString() : null;
+            if (!string.Equals(status, "wait", StringComparison.OrdinalIgnoreCase)
+                || string.IsNullOrWhiteSpace(reason)
+                || !reason.Contains("combat barrier wait barrier=EndTurn", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            endTurnBarrierWaitCount += 1;
+        }
+
+        if (endTurnBarrierWaitCount < 8)
+        {
+            return false;
+        }
+
+        terminalCause = "combat-barrier-step-budget-exhausted";
+        failureClass = "combat-barrier-step-budget-exhausted";
+        message = $"combat-barrier-step-budget-exhausted handleCombatSteps={handleCombatCount}/{totalProgressCount} endTurnBarrierWaits={endTurnBarrierWaitCount}";
+        return true;
     }
 
     static string ClassifyFailureForAttempt(
@@ -445,6 +517,8 @@ internal static partial class Program
 
         return terminalCause switch
         {
+            "combat-barrier-step-budget-exhausted" => "combat-barrier-step-budget-exhausted",
+            "combat-barrier-handoff-mismatch" => "combat-barrier-handoff-mismatch",
             "reward-map-loop" => "reward-map-loop",
             "map-overlay-noop-loop" => "map-overlay-noop-loop",
             "map-transition-stall" => "map-transition-stall",
@@ -489,11 +563,14 @@ internal static partial class Program
         }
 
         return string.Equals(result.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
@@ -501,13 +578,16 @@ internal static partial class Program
                || IsRestSitePostClickFailureKind(result.TerminalCause)
                || string.Equals(result.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase)
                || IsRestSitePostClickFailureKind(result.FailureClass)

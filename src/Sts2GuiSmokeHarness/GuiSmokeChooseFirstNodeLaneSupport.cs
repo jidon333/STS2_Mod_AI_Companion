@@ -1,6 +1,7 @@
 internal enum GuiSmokeChooseFirstNodeLane
 {
     Unknown,
+    CombatTakeover,
     RewardForeground,
     EventForeground,
     RestSiteExplicitChoice,
@@ -9,7 +10,7 @@ internal enum GuiSmokeChooseFirstNodeLane
     RestSiteSelectionSettling,
     TreasureRoom,
     ShopRoom,
-    MapPending,
+    MapSurfacePending,
     MapOverlay,
     MapForeground,
     ContractMismatch,
@@ -29,6 +30,7 @@ internal static class GuiSmokeChooseFirstNodeLaneSupport
 
         return handoffState.Owner switch
         {
+            NonCombatCanonicalForegroundOwner.Combat => GuiSmokeChooseFirstNodeLane.CombatTakeover,
             NonCombatCanonicalForegroundOwner.Reward => GuiSmokeChooseFirstNodeLane.RewardForeground,
             NonCombatCanonicalForegroundOwner.Event => GuiSmokeChooseFirstNodeLane.EventForeground,
             NonCombatCanonicalForegroundOwner.Shop => GuiSmokeChooseFirstNodeLane.ShopRoom,
@@ -40,7 +42,10 @@ internal static class GuiSmokeChooseFirstNodeLaneSupport
                 _ => GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice,
             },
             NonCombatCanonicalForegroundOwner.Treasure => GuiSmokeChooseFirstNodeLane.TreasureRoom,
-            NonCombatCanonicalForegroundOwner.Map when !handoffState.HasExplicitSurface => GuiSmokeChooseFirstNodeLane.MapPending,
+            NonCombatCanonicalForegroundOwner.Map when handoffState.SurfaceKind == PostNodeHandoffSurfaceKind.MapSurfacePending
+                => GuiSmokeChooseFirstNodeLane.MapSurfacePending,
+            NonCombatCanonicalForegroundOwner.Map when !handoffState.HasExplicitSurface
+                => GuiSmokeChooseFirstNodeLane.MapSurfacePending,
             NonCombatCanonicalForegroundOwner.Map when handoffState.SurfaceKind == PostNodeHandoffSurfaceKind.MapOverlay => GuiSmokeChooseFirstNodeLane.MapOverlay,
             NonCombatCanonicalForegroundOwner.Map => GuiSmokeChooseFirstNodeLane.MapForeground,
             _ when handoffState.ContractMismatch => GuiSmokeChooseFirstNodeLane.ContractMismatch,

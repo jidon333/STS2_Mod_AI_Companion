@@ -135,7 +135,7 @@ internal static partial class Program
                 attemptWindowVideoRoot,
                 attemptId: "0001",
                 scopeKind: "attempt",
-                captureSupportOverride: new GuiSmokeFfmpegCaptureSupport(true));
+                captureSupportOverride: new GuiSmokeFfmpegCaptureSupport(true, SkipActualProcessLaunch: true));
             var started = recorder.TryStart(new WindowCaptureTarget(new IntPtr(12345), "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
             Assert(started, "Attempt review video should use single-window capture when gdigrab is available.");
             recorder.Complete(keepRecording: true, completionReason: "self-test-attempt-window-video");
@@ -172,7 +172,7 @@ internal static partial class Program
                 bootstrapWindowVideoRoot,
                 attemptId: null,
                 scopeKind: "bootstrap",
-                captureSupportOverride: new GuiSmokeFfmpegCaptureSupport(true));
+                captureSupportOverride: new GuiSmokeFfmpegCaptureSupport(true, SkipActualProcessLaunch: true));
             var started = recorder.TryStart(new WindowCaptureTarget(IntPtr.Zero, "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
             Assert(started, "Bootstrap recorder should use single-window capture when a window title is available.");
             recorder.Complete(keepRecording: false, completionReason: "self-test-bootstrap-window-video");
@@ -653,30 +653,32 @@ internal static partial class Program
                         ["--capture-fault-scope"] = "attempt",
                         ["--capture-fault-phase"] = GuiSmokePhase.EnterRun.ToString(),
                         ["--capture-fault-step"] = "3",
+                        ["--capture-fault-attempt"] = "1",
                     });
                 Assert(
                     faultOptions is not null
                     && faultOptions.FailureKind == CaptureBoundaryFailureKind.TimedOut
                     && string.Equals(faultOptions.ScopeKind, "attempt", StringComparison.OrdinalIgnoreCase)
                     && string.Equals(faultOptions.PhaseName, GuiSmokePhase.EnterRun.ToString(), StringComparison.OrdinalIgnoreCase)
-                    && faultOptions.StepIndex == 3,
+                    && faultOptions.StepIndex == 3
+                    && faultOptions.AttemptOrdinal == 1,
                     "Capture fault injector options should parse validation-only fault settings.");
                 var injectedCaptureService = new ScreenCaptureService(faultOptions);
                 Assert(
-                    injectedCaptureService.ShouldForceCapture("attempt", GuiSmokePhase.EnterRun, 3),
+                    injectedCaptureService.ShouldForceCapture("attempt", GuiSmokePhase.EnterRun, 3, attemptOrdinal: 1),
                     "Capture fault injector should force capture on the configured attempt phase.");
                 var injectedTimeoutResult = injectedCaptureService.TryCaptureDetailed(
                     new WindowCaptureTarget(IntPtr.Zero, "injector-self-test", Rectangle.Empty, true, false),
                     Path.Combine(detailedCaptureRoot, "injector-timeout.png"),
                     TimeSpan.FromMilliseconds(1),
-                    faultContext: new CaptureFaultInjectionContext("attempt", GuiSmokePhase.EnterRun.ToString(), 3));
+                    faultContext: new CaptureFaultInjectionContext("attempt", GuiSmokePhase.EnterRun.ToString(), 3, 1));
                 Assert(
                     !injectedTimeoutResult.Succeeded
                     && injectedTimeoutResult.FailureKind == CaptureBoundaryFailureKind.TimedOut
                     && injectedTimeoutResult.Exception is TimeoutException,
                     "Capture fault injector should emit a bounded timeout result without relying on a real capture.");
                 Assert(
-                    !injectedCaptureService.ShouldForceCapture("attempt", GuiSmokePhase.EnterRun, 3),
+                    !injectedCaptureService.ShouldForceCapture("attempt", GuiSmokePhase.EnterRun, 3, attemptOrdinal: 1),
                     "Capture fault injector should be one-shot and stop forcing capture after the first injected result.");
             }
             finally

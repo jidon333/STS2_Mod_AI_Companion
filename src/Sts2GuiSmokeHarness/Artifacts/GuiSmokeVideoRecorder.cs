@@ -126,6 +126,18 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         var commandPath = _ffmpegProcessPath ?? executablePath;
         var arguments = BuildFfmpegArguments(inputPattern, outputProcessPath);
         _metadata.CommandLine = QuoteCommand(commandPath, arguments);
+        if (_captureSupportOverride?.SkipActualProcessLaunch == true)
+        {
+            _metadata.Status = "recording";
+            _metadata.RecordingStartedAt = DateTimeOffset.UtcNow;
+            _metadata.CaptureModeNote = string.IsNullOrWhiteSpace(_metadata.CaptureModeNote)
+                ? "Single-window ffmpeg gdigrab capture contract validated in dry-run mode without spawning the encoder process."
+                : $"{_metadata.CaptureModeNote} Dry-run start skipped process launch for self-test validation.";
+            PersistMetadata();
+            LogVideo($"video scope={_metadata.ScopeKind} recording started dry-run ffmpeg={_metadata.FfmpegPath ?? "null"} output={_metadata.OutputPath}");
+            return true;
+        }
+
         try
         {
             _process = new Process

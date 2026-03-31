@@ -603,6 +603,108 @@ internal static partial class Program
             Assert(string.Equals(ObserverScreenProvenance.ControlFlowCurrentScreen(combatTrackerObserver), "combat", StringComparison.OrdinalIgnoreCase), "Control-flow current screen should prefer promoted tracker combat truth over stale published map provenance.");
             Assert(string.Equals(ObserverScreenProvenance.ControlFlowVisibleScreen(combatTrackerObserver), "combat", StringComparison.OrdinalIgnoreCase), "Control-flow visible screen should prefer promoted tracker combat truth over stale published map provenance.");
 
+            var staleInventoryCapturedAt = capturedAt.AddSeconds(-2);
+            var freshStateCapturedAt = capturedAt.AddSeconds(2);
+            File.WriteAllText(
+                harnessLayout.InventoryPath,
+                JsonSerializer.Serialize(
+                    new HarnessNodeInventory(
+                        "inventory-stale-main-menu-popup",
+                        staleInventoryCapturedAt,
+                        null,
+                        "main-menu",
+                        "main-menu",
+                        "dormant",
+                        null,
+                        null,
+                        null,
+                        null,
+                        new[]
+                        {
+                            new HarnessNodeInventoryItem(
+                                "main-menu:abandon-run-cancel",
+                                "menu-action",
+                                "No",
+                                "main-menu abandon run confirm popup",
+                                "cancel",
+                                null,
+                                true,
+                                null,
+                                true,
+                                "699,688,180,72",
+                                new[] { "node-id:main-menu:abandon-run-cancel" }),
+                            new HarnessNodeInventoryItem(
+                                "main-menu:abandon-run-confirm",
+                                "menu-action",
+                                "Yes",
+                                "main-menu abandon run confirm popup",
+                                "confirm",
+                                null,
+                                true,
+                                null,
+                                true,
+                                "1041,688,180,72",
+                                new[] { "node-id:main-menu:abandon-run-confirm" }),
+                        })
+                    {
+                        RawCurrentScreen = "main-menu",
+                        PublishedCurrentScreen = "main-menu",
+                        PublishedVisibleScreen = "main-menu",
+                        CompatibilityCurrentScreen = "main-menu",
+                    },
+                    GuiSmokeShared.JsonOptions));
+            File.WriteAllText(
+                liveLayout.SnapshotPath,
+                """
+                {
+                  "version": 9,
+                  "capturedAt": "REPLACE_CAPTURED_AT",
+                  "currentScreen": "main-menu",
+                  "publishedCurrentScreen": "main-menu",
+                  "publishedVisibleScreen": "main-menu",
+                  "encounter": {
+                    "inCombat": false
+                  },
+                  "meta": {
+                    "screen": "main-menu",
+                    "screen-episode": "main-menu",
+                    "choiceExtractorPath": "main-menu",
+                    "activeScreenType": "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    "rawObservedScreen": "main-menu",
+                    "rawCurrentScreen": "0"
+                  },
+                  "player": {},
+                  "currentChoices": [
+                    {
+                      "kind": "menu-action",
+                      "label": "Singleplayer",
+                      "value": "main-menu:singleplayer",
+                      "description": "Main menu",
+                      "nodeId": "main-menu:singleplayer",
+                      "screenBounds": "676,684,200,50",
+                      "enabled": true,
+                      "semanticHints": []
+                    },
+                    {
+                      "kind": "menu-action",
+                      "label": "Quit",
+                      "value": "main-menu:quit",
+                      "description": "Main menu",
+                      "nodeId": "main-menu:quit",
+                      "screenBounds": "676,934,200,50",
+                      "enabled": true,
+                      "semanticHints": []
+                    }
+                  ]
+                }
+                """.Replace("REPLACE_CAPTURED_AT", freshStateCapturedAt.ToString("O"), StringComparison.Ordinal));
+
+            var staleInventoryMainMenuObserver = aliasReader.Read();
+            Assert(!staleInventoryMainMenuObserver.ActionNodes.Any(node => string.Equals(node.NodeId, "main-menu:abandon-run-confirm", StringComparison.OrdinalIgnoreCase)), "Observer reader should discard stale popup action nodes when a fresher state snapshot exposes a new main-menu choice surface.");
+            Assert(staleInventoryMainMenuObserver.ActionNodes.Any(node => string.Equals(node.NodeId, "main-menu:singleplayer", StringComparison.OrdinalIgnoreCase)), "Observer reader should rebuild actionable main-menu nodes from the fresher state choice surface when the inventory surface lags behind.");
+            Assert(!MainMenuRunStartObserverSignals.HasAbandonRunConfirmSurface(staleInventoryMainMenuObserver), "Main-menu popup detection should not survive on stale inventory nodes once the fresher state snapshot has returned to the main-menu action surface.");
+            Assert(MainMenuRunStartObserverSignals.IsRunStartSurfaceReady(staleInventoryMainMenuObserver), "Main-menu run-start readiness should follow the fresher state-derived action surface instead of a lagging popup inventory.");
+
             File.WriteAllText(
                 harnessLayout.InventoryPath,
                 JsonSerializer.Serialize(

@@ -103,7 +103,7 @@ internal static partial class Program
                 => new[] { "click proceed", "wait" },
             GuiSmokePhase.HandleRewards
                 => BuildRewardAllowedActions(observer, context),
-            GuiSmokePhase.ChooseFirstNode
+            GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitMap or GuiSmokePhase.WaitPostMapNodeRoom
                 => BuildChooseFirstNodeAllowedActions(observer, combatCardKnowledge, screenshotPath, history, context),
             GuiSmokePhase.HandleEvent when LooksLikeInspectOverlayState(observer)
                 => new[] { "press escape", "click inspect overlay close", "wait" },
@@ -162,6 +162,9 @@ internal static partial class Program
     {
         return GuiSmokeChooseFirstNodeLaneSupport.Resolve(observer, context.WindowBounds, screenshotPath, history, context) switch
         {
+            GuiSmokeChooseFirstNodeLane.CombatTakeover => context.PostNodeHandoffState.HasExplicitSurface
+                ? BuildAllowedActionsCore(GuiSmokePhase.HandleCombat, observer, combatCardKnowledge, screenshotPath, history, context)
+                : new[] { "wait" },
             GuiSmokeChooseFirstNodeLane.RewardForeground => BuildAllowedActionsCore(GuiSmokePhase.HandleRewards, observer, combatCardKnowledge, screenshotPath, history, context),
             GuiSmokeChooseFirstNodeLane.EventForeground => BuildAllowedActionsCore(GuiSmokePhase.HandleEvent, observer, combatCardKnowledge, screenshotPath, history, context),
             GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
@@ -172,7 +175,7 @@ internal static partial class Program
             GuiSmokeChooseFirstNodeLane.ShopRoom => BuildShopAllowedActions(observer.Summary, history),
             GuiSmokeChooseFirstNodeLane.MapOverlay => BuildMapOverlayRoutingAllowedActions(context.MapOverlayState),
             GuiSmokeChooseFirstNodeLane.MapForeground => BuildMapForegroundRoutingAllowedActions(),
-            GuiSmokeChooseFirstNodeLane.MapPending => new[] { "wait" },
+            GuiSmokeChooseFirstNodeLane.MapSurfacePending => new[] { "wait" },
             GuiSmokeChooseFirstNodeLane.ContractMismatch => new[] { "wait" },
             _ => new[] { "wait" },
         };

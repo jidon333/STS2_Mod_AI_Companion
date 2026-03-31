@@ -229,6 +229,97 @@ internal static partial class Program
         Assert(
             GetPostEnterRunPhase(abandonRunConfirmDecision) == GuiSmokePhase.WaitRunLoad,
             "Confirming Abandon Run should stay on neutral run-load waiting until the fresh main-menu run-start surface is exported.");
+        var localizedAbandonRunConfirmDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            4,
+            GuiSmokePhase.EnterRun.ToString(),
+            "Confirm localized main-menu abandon-run cleanup.",
+            DateTimeOffset.UtcNow,
+            "screen.png",
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:enter-run|screen:main-menu|visible:main-menu|terminal-run-boundary",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-main-menu-abandon-confirm-localized",
+                true,
+                "main-menu",
+                "transient",
+                "main-menu-abandon-confirm",
+                null,
+                null,
+                12,
+                12,
+                null,
+                new[] { "\uC544\uB2C8\uC694", "\uC608" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("main-menu:abandon-run-cancel", "menu-action", "\uC544\uB2C8\uC694", "699,688,180,72", true)
+                    {
+                        SemanticHints = new[] { "node-id:main-menu:abandon-run-cancel" },
+                    },
+                    new ObserverActionNode("main-menu:abandon-run-confirm", "menu-action", "\uC608", "1041,688,180,72", true)
+                    {
+                        SemanticHints = new[] { "node-id:main-menu:abandon-run-confirm" },
+                    },
+                },
+                new[]
+                {
+                    new ObserverChoice("cancel", "\uC544\uB2C8\uC694", "699,688,180,72", "main-menu:abandon-run-cancel", "main-menu abandon run confirm popup")
+                    {
+                        NodeId = "main-menu:abandon-run-cancel",
+                        Enabled = true,
+                    },
+                    new ObserverChoice("confirm", "\uC608", "1041,688,180,72", "main-menu:abandon-run-confirm", "main-menu abandon run confirm popup")
+                    {
+                        NodeId = "main-menu:abandon-run-confirm",
+                        Enabled = true,
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = null,
+                PublishedSceneAuthority = null,
+                PublishedSceneStability = null,
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["terminalRunBoundary"] = "true",
+                    ["mainMenuReturnDetected"] = "true",
+                    ["choiceExtractorPath"] = "main-menu-abandon-confirm",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.CommonUi.NAbandonRunConfirmPopup",
+                    ["rootSceneIsMainMenu"] = "true",
+                    ["compatSceneReady"] = "false",
+                    ["compatSceneStability"] = "transient",
+                },
+            },
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            Array.Empty<string>(),
+            new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.EnterRun.ToString(), "abandon run", "main-menu", DateTimeOffset.UtcNow),
+            },
+            string.Empty,
+            null));
+        Assert(
+            string.Equals(localizedAbandonRunConfirmDecision.TargetLabel, "confirm abandon run", StringComparison.OrdinalIgnoreCase),
+            "EnterRun should use explicit popup node identity to confirm localized abandon-run popups instead of waiting for generic main-menu actions.");
+        Assert(
+            GetPostEnterRunPhase(localizedAbandonRunConfirmDecision) == GuiSmokePhase.WaitRunLoad,
+            "Localized abandon-run confirmation should also hand back to neutral run-load waiting.");
         var ambiguousRunStartDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
             "run",
             "boot-to-long-run",

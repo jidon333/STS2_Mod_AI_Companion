@@ -2,8 +2,15 @@
 
 > 상태: 현재 사용 중
 > 기준 브랜치: `main`
-> 최종 갱신: 2026-03-31
+> 최종 갱신: 2026-04-01
 > 대상: 새 구현 세션, 새 검증 세션, 새 참모 세션
+
+> 2026-04-01 current pointer:
+> 이 문서 본문은 `live21 ancient option` wave 중심의 historical handoff가 많이 남아 있다.
+> 현재 active pointer는 [PROJECT_STATUS.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/PROJECT_STATUS.md) 를 우선한다.
+> 최신 기준으로는 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion은 닫혔고,
+> 현재 short-root blocker는 `reward card choice same-action-stall`과 `combat-barrier-step-budget-exhausted / wait-plateau`, validation-quality gap은 live review black-video다.
+> fresh authoritative endurance root는 [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2) 이고, single attempt가 natural `player-defeated` terminal까지 `stepCount=479`로 진행됐다.
 
 ## 문서 목적
 

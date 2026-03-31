@@ -175,6 +175,26 @@ static class CombatAuthoritySupport
 
 static class CombatRuntimeStateSupport
 {
+    public static bool HasExplicitEndTurnAffordance(ObserverSummary observer, WindowBounds? windowBounds = null)
+    {
+        if (observer.ActionNodes.Any(node =>
+                node.Actionable
+                && CombatHistorySupport.IsCombatEndTurnLabel(node.Label)
+                && HasExplicitActionSurfaceBounds(node.ScreenBounds, windowBounds)))
+        {
+            return true;
+        }
+
+        if (observer.Choices.Any(choice =>
+                CombatHistorySupport.IsCombatEndTurnLabel(choice.Label)
+                && HasExplicitActionSurfaceBounds(choice.ScreenBounds, windowBounds)))
+        {
+            return true;
+        }
+
+        return observer.CurrentChoices.Any(CombatHistorySupport.IsCombatEndTurnLabel);
+    }
+
     public const string DefaultInteractionRevision = "none:none:false:false:none";
 
     public static CombatRuntimeState Read(ObserverSummary observer, IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge)
@@ -633,6 +653,75 @@ static class CombatRuntimeStateSupport
                     string.Equals(hint, "combat-targetable", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(hint, "combat-hittable", StringComparison.OrdinalIgnoreCase)
                     || hint.StartsWith("target-id:", StringComparison.OrdinalIgnoreCase))));
+    }
+
+    private static bool HasExplicitActionSurfaceBounds(string? screenBounds, WindowBounds? windowBounds)
+    {
+        if (HasUsableLogicalBounds(screenBounds))
+        {
+            return true;
+        }
+
+        return windowBounds is not null && IsBoundsInsideWindow(screenBounds, windowBounds);
+    }
+
+    private static bool HasUsableLogicalBounds(string? raw)
+    {
+        if (!TryParseCombatNodeBounds(raw, out var bounds))
+        {
+            return false;
+        }
+
+        var centerX = bounds.X + bounds.Width / 2f;
+        var centerY = bounds.Y + bounds.Height / 2f;
+        return centerX >= 0f
+               && centerY >= 0f
+               && centerX <= 1920f
+               && centerY <= 1080f;
+    }
+
+    private static bool IsBoundsInsideWindow(string? screenBounds, WindowBounds windowBounds)
+    {
+        if (!TryParseCombatNodeBounds(screenBounds, out var bounds))
+        {
+            return false;
+        }
+
+        return bounds.Right > windowBounds.X
+               && bounds.Bottom > windowBounds.Y
+               && bounds.X < windowBounds.X + windowBounds.Width
+               && bounds.Y < windowBounds.Y + windowBounds.Height;
+    }
+
+    private static bool TryParseCombatNodeBounds(string? raw, out RectangleF bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4)
+        {
+            return false;
+        }
+
+        if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+            || !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var y)
+            || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var width)
+            || !float.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+        {
+            return false;
+        }
+
+        if (width <= 0f || height <= 0f)
+        {
+            return false;
+        }
+
+        bounds = new RectangleF(x, y, width, height);
+        return true;
     }
 
     private static CombatBarrierHistoryMetadata? TryGetRecentAttackSelectionMetadata(

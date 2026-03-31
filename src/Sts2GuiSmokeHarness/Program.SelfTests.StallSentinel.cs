@@ -130,6 +130,74 @@ internal static partial class Program
                     "post-node-handoff-contract-mismatch",
                     GuiSmokeContractStates.TrustValid)),
             "Post-node handoff contract mismatch should count as a dead-end attempt for supervision.");
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.HandleCombat,
+                    observer: null,
+                    terminalCause: "combat-barrier-step-budget-exhausted",
+                    launchFailed: false),
+                "combat-barrier-step-budget-exhausted",
+                StringComparison.OrdinalIgnoreCase),
+            "Combat barrier step-budget exhaustion should stay a first-class failure class instead of collapsing to generic max-step failure.");
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.HandleCombat,
+                    observer: null,
+                    terminalCause: "combat-barrier-handoff-mismatch",
+                    launchFailed: false),
+                "combat-barrier-handoff-mismatch",
+                StringComparison.OrdinalIgnoreCase),
+            "Combat barrier handoff mismatch should stay a first-class failure class instead of collapsing to generic decision-abort.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
+                    "combat-barrier-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic combat barrier step-budget exhaustion",
+                    180,
+                    false,
+                    "combat-barrier-step-budget-exhausted",
+                    "combat-barrier-step-budget-exhausted",
+                    GuiSmokeContractStates.TrustValid)),
+            "Combat barrier step-budget exhaustion should count as a dead-end attempt for supervision.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
+                    "combat-barrier-handoff-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic combat barrier handoff mismatch",
+                    18,
+                    false,
+                    "combat-barrier-handoff-mismatch",
+                    "combat-barrier-handoff-mismatch",
+                    GuiSmokeContractStates.TrustValid)),
+            "Combat barrier handoff mismatch should count as a dead-end attempt for supervision.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
+                    "combat-barrier-wait-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic combat barrier wait plateau",
+                    18,
+                    false,
+                    "combat-barrier-wait-plateau",
+                    "combat-barrier-wait-plateau",
+                    GuiSmokeContractStates.TrustValid)),
+            "Combat barrier wait plateau should count as a dead-end attempt for supervision.");
 
         var ancientContractMismatchSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-ancient-contract-mismatch-sentinel-self-test-{Guid.NewGuid():N}");
         try
@@ -242,6 +310,120 @@ internal static partial class Program
             if (Directory.Exists(postNodeHandoffMismatchSentinelRoot))
             {
                 Directory.Delete(postNodeHandoffMismatchSentinelRoot, recursive: true);
+            }
+        }
+
+        var combatBarrierBudgetSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-barrier-budget-sentinel-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(combatBarrierBudgetSentinelRoot);
+            var runRoot = Path.Combine(combatBarrierBudgetSentinelRoot, "attempts", "0001");
+            Directory.CreateDirectory(runRoot);
+            LongRunArtifacts.InitializeSessionArtifacts(combatBarrierBudgetSentinelRoot, "combat-barrier-session", "boot-to-long-run", "headless");
+            File.WriteAllLines(
+                Path.Combine(combatBarrierBudgetSentinelRoot, "attempt-index.ndjson"),
+                new[]
+                {
+                    JsonSerializer.Serialize(
+                        new GuiSmokeAttemptIndexEntry(
+                            "0001",
+                            1,
+                            "combat-barrier-session",
+                            "completed",
+                            "synthetic combat barrier step-budget exhaustion",
+                            DateTimeOffset.UtcNow.AddSeconds(-30),
+                            DateTimeOffset.UtcNow.AddSeconds(-5),
+                            180,
+                            "combat-barrier-step-budget-exhausted",
+                            false,
+                            "combat-barrier-step-budget-exhausted",
+                            GuiSmokeContractStates.TrustValid),
+                        GuiSmokeShared.NdjsonOptions),
+                });
+            File.WriteAllText(
+                Path.Combine(runRoot, "failure-summary.json"),
+                JsonSerializer.Serialize(
+                    new GuiSmokeFailureSummary(
+                        GuiSmokePhase.HandleCombat.ToString(),
+                        "combat barrier step-budget exhaustion synthetic failure",
+                        "combat",
+                        false,
+                        "synthetic-combat-barrier-step-budget-exhausted.png"),
+                    GuiSmokeShared.JsonOptions));
+            LongRunArtifacts.RefreshStallSentinel(combatBarrierBudgetSentinelRoot);
+            var diagnosisEntries = File.ReadLines(Path.Combine(combatBarrierBudgetSentinelRoot, "stall-diagnosis.ndjson"))
+                .Where(static line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+                .Where(static entry => entry is not null)
+                .Cast<GuiSmokeStallDiagnosisEntry>()
+                .ToArray();
+            Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic combat barrier budget exhaustion attempt.");
+            Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+                   && diagnosisEntries[0].StallDetected,
+                "Stall sentinel should preserve combat-barrier-step-budget-exhausted as a first-class diagnosis kind.");
+        }
+        finally
+        {
+            if (Directory.Exists(combatBarrierBudgetSentinelRoot))
+            {
+                Directory.Delete(combatBarrierBudgetSentinelRoot, recursive: true);
+            }
+        }
+
+        var combatBarrierHandoffMismatchSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-barrier-handoff-mismatch-sentinel-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(combatBarrierHandoffMismatchSentinelRoot);
+            var runRoot = Path.Combine(combatBarrierHandoffMismatchSentinelRoot, "attempts", "0001");
+            Directory.CreateDirectory(runRoot);
+            LongRunArtifacts.InitializeSessionArtifacts(combatBarrierHandoffMismatchSentinelRoot, "combat-barrier-handoff-session", "boot-to-long-run", "headless");
+            File.WriteAllLines(
+                Path.Combine(combatBarrierHandoffMismatchSentinelRoot, "attempt-index.ndjson"),
+                new[]
+                {
+                    JsonSerializer.Serialize(
+                        new GuiSmokeAttemptIndexEntry(
+                            "0001",
+                            1,
+                            "combat-barrier-handoff-session",
+                            "failed",
+                            "synthetic combat barrier handoff mismatch",
+                            DateTimeOffset.UtcNow.AddSeconds(-30),
+                            DateTimeOffset.UtcNow.AddSeconds(-5),
+                            18,
+                            "combat-barrier-handoff-mismatch",
+                            false,
+                            "combat-barrier-handoff-mismatch",
+                            GuiSmokeContractStates.TrustValid),
+                        GuiSmokeShared.NdjsonOptions),
+                });
+            File.WriteAllText(
+                Path.Combine(runRoot, "failure-summary.json"),
+                JsonSerializer.Serialize(
+                    new GuiSmokeFailureSummary(
+                        GuiSmokePhase.HandleCombat.ToString(),
+                        "combat barrier handoff mismatch synthetic failure",
+                        "event",
+                        false,
+                        "synthetic-combat-barrier-handoff-mismatch.png"),
+                    GuiSmokeShared.JsonOptions));
+            LongRunArtifacts.RefreshStallSentinel(combatBarrierHandoffMismatchSentinelRoot);
+            var diagnosisEntries = File.ReadLines(Path.Combine(combatBarrierHandoffMismatchSentinelRoot, "stall-diagnosis.ndjson"))
+                .Where(static line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+                .Where(static entry => entry is not null)
+                .Cast<GuiSmokeStallDiagnosisEntry>()
+                .ToArray();
+            Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic combat barrier handoff mismatch attempt.");
+            Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
+                   && diagnosisEntries[0].StallDetected,
+                "Stall sentinel should preserve combat-barrier-handoff-mismatch as a first-class diagnosis kind.");
+        }
+        finally
+        {
+            if (Directory.Exists(combatBarrierHandoffMismatchSentinelRoot))
+            {
+                Directory.Delete(combatBarrierHandoffMismatchSentinelRoot, recursive: true);
             }
         }
 

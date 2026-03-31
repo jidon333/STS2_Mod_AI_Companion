@@ -64,4 +64,6 @@ sealed record GuiSmokeVideoRecordingMetadata(
 
 sealed record VideoPathBinding(string HostPath, string ProcessPath);
 
-sealed record GuiSmokeFfmpegCaptureSupport(bool SupportsGdigrab);
+sealed record GuiSmokeFfmpegCaptureSupport(
+    bool SupportsGdigrab,
+    bool SkipActualProcessLaunch = false);

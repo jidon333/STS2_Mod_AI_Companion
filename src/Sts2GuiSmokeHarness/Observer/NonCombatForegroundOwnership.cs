@@ -16,13 +16,10 @@ static class NonCombatForegroundOwnership
             return NonCombatForegroundOwner.Unknown;
         }
 
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+        var handoffState = AutoDecisionProvider.BuildPostNodeHandoffState(observer, null);
+        var resolved = handoffState.Owner switch
         {
-            return NonCombatForegroundOwner.Combat;
-        }
-
-        return AutoDecisionProvider.BuildPostNodeHandoffState(observer, null).Owner switch
-        {
+            NonCombatCanonicalForegroundOwner.Combat => NonCombatForegroundOwner.Combat,
             NonCombatCanonicalForegroundOwner.Reward => NonCombatForegroundOwner.Reward,
             NonCombatCanonicalForegroundOwner.Shop => NonCombatForegroundOwner.Shop,
             NonCombatCanonicalForegroundOwner.RestSite => NonCombatForegroundOwner.RestSite,
@@ -30,6 +27,14 @@ static class NonCombatForegroundOwnership
             NonCombatCanonicalForegroundOwner.Event => NonCombatForegroundOwner.Event,
             _ => NonCombatForegroundOwner.Unknown,
         };
+        if (resolved != NonCombatForegroundOwner.Unknown)
+        {
+            return resolved;
+        }
+
+        return GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)
+            ? NonCombatForegroundOwner.Combat
+            : NonCombatForegroundOwner.Unknown;
     }
 
     public static NonCombatForegroundOwner Resolve(ObserverSummary observer)
@@ -45,20 +50,8 @@ static class NonCombatForegroundOwnership
             return false;
         }
 
-        if (TryGetMetaBool(observer.Summary, "mapCurrentActiveScreen") == true
-            || IsMapScreenTypeName(TryGetMetaValue(observer.Summary, "activeScreenType")))
-        {
-            return true;
-        }
-
         if (HasExplicitMapPointSurface(observer)
             && MatchesControlFlowScreen(observer, "map"))
-        {
-            return true;
-        }
-
-        if (IsMapScreenTypeName(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"))
-            || IsMapScreenTypeName(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
         {
             return true;
         }

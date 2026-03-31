@@ -32,6 +32,7 @@ enum RewardExplicitActionKind
 enum NonCombatCanonicalForegroundOwner
 {
     Unknown,
+    Combat,
     Reward,
     Event,
     Shop,
@@ -51,6 +52,7 @@ enum NonCombatReleaseStage
 enum NonCombatHandoffTarget
 {
     None,
+    HandleCombat,
     HandleRewards,
     HandleEvent,
     HandleShop,
@@ -63,6 +65,8 @@ enum NonCombatHandoffTarget
 enum PostNodeHandoffSurfaceKind
 {
     None,
+    CombatTakeover,
+    CombatForeground,
     Reward,
     Event,
     Shop,
@@ -71,6 +75,7 @@ enum PostNodeHandoffSurfaceKind
     RestSiteProceed,
     RestSiteSelectionSettling,
     Treasure,
+    MapSurfacePending,
     MapOverlay,
     MapNode,
     ContractMismatch,
@@ -88,6 +93,7 @@ sealed record PostNodeHandoffState(
 {
     public bool IsMapOwner => Owner == NonCombatCanonicalForegroundOwner.Map;
     public bool IsEventOwner => Owner == NonCombatCanonicalForegroundOwner.Event;
+    public bool IsCombatOwner => Owner == NonCombatCanonicalForegroundOwner.Combat;
 }
 
 interface ICanonicalNonCombatSceneState

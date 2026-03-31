@@ -30,6 +30,11 @@ internal static partial class Program
         GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         var context = analysisContext ?? CreateStepAnalysisContext(GuiSmokePhase.HandleCombat, observer, screenshotPath, history, combatCardKnowledge);
+        if (AutoDecisionProvider.HasReleasedCombatOwnership(context.CombatResolutionHandoffState))
+        {
+            return new[] { "wait" };
+        }
+
         if (context.CombatPlayerActionWindowClosed)
         {
             return new[] { "wait" };
@@ -163,14 +168,21 @@ internal static partial class Program
                 .ToArray();
         }
 
+        var allowsEndTurnFromStaleAttackTail = observer.PlayerEnergy is <= 0
+                                               && (combatMicroStage.AllowsEndTurn
+                                                   || CombatRuntimeStateSupport.HasExplicitEndTurnAffordance(observer.Summary));
         if (unresolvedAttackSelectionChurn)
         {
-            return new[] { "wait" };
+            return allowsEndTurnFromStaleAttackTail
+                ? new[] { "click end turn", "wait" }
+                : new[] { "wait" };
         }
 
         if (staleAttackSelectionTail)
         {
-            return new[] { "wait" };
+            return allowsEndTurnFromStaleAttackTail
+                ? new[] { "click end turn", "wait" }
+                : new[] { "wait" };
         }
 
         foreach (var slotIndex in GetPlayableCombatAttackSlots(observer, combatCardKnowledge))

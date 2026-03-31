@@ -20,12 +20,14 @@
     "expectedBackgroundKind": "event",
     "requiredCandidateLabels": [],
     "requiredSuppressedLabels": [
-      "click event choice",
       "click exported reachable node",
+      "click first reachable node",
       "click map back"
     ],
     "forbiddenTargetLabels": [
-      "visible map advance"
+      "visible map advance",
+      "exported reachable map node",
+      "map back"
     ]
   },
   {
@@ -35,12 +37,14 @@
     "expectedBackgroundKind": "event",
     "requiredCandidateLabels": [],
     "requiredSuppressedLabels": [
-      "click event choice",
       "click exported reachable node",
+      "click first reachable node",
       "click map back"
     ],
     "forbiddenTargetLabels": [
-      "visible map advance"
+      "visible map advance",
+      "exported reachable map node",
+      "map back"
     ]
   },
   {
@@ -48,15 +52,17 @@
     "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-10/attempts/0001/steps/0008.request.json",
     "expectedForegroundKind": "map-overlay",
     "expectedBackgroundKind": "event",
-    "requiredCandidateLabels": [
+    "requiredCandidateLabels": [],
+    "requiredSuppressedLabels": [
       "click exported reachable node",
+      "click first reachable node",
+      "click visible map advance",
       "click map back"
     ],
-    "requiredSuppressedLabels": [
-      "click event choice"
-    ],
     "forbiddenTargetLabels": [
-      "visible map advance"
+      "visible map advance",
+      "exported reachable map node",
+      "map back"
     ]
   },
   {
@@ -76,6 +82,44 @@
     "forbiddenTargetLabels": [
       "visible map advance",
       "exported reachable map node",
+      "map back"
+    ]
+  },
+  {
+    "name": "choose-first-node-combat-takeover-suppresses-map-routing",
+    "requestPath": "artifacts/gui-smoke/choosefirstnode-handoff-20260331-140432-live01/attempts/0001/steps/0036.request.json",
+    "expectedForegroundKind": "combat",
+    "expectedBackgroundKind": null,
+    "requiredCandidateLabels": [],
+    "requiredSuppressedLabels": [
+      "click exported reachable node",
+      "click first reachable node",
+      "click visible map advance",
+      "click map back"
+    ],
+    "forbiddenTargetLabels": [
+      "exported reachable map node",
+      "first reachable node",
+      "visible map advance",
+      "map back"
+    ]
+  },
+  {
+    "name": "choose-first-node-combat-transition-residue-suppresses-map-routing",
+    "requestPath": "artifacts/gui-smoke/choosefirstnode-handoff-20260331-140432-live01/attempts/0001/steps/0101.request.json",
+    "expectedForegroundKind": "map",
+    "expectedBackgroundKind": null,
+    "requiredCandidateLabels": [],
+    "requiredSuppressedLabels": [
+      "click exported reachable node",
+      "click first reachable node",
+      "click visible map advance",
+      "click map back"
+    ],
+    "forbiddenTargetLabels": [
+      "exported reachable map node",
+      "first reachable node",
+      "visible map advance",
       "map back"
     ]
   }

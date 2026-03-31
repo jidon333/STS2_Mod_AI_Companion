@@ -22,10 +22,10 @@ coverage status 의미:
 
 | Gap | Meaning | Current Status |
 |---|---|---|
+| `REWARD-CARD-CLICK-PROGRESSION` | `HandleRewards` explicit card reward row가 same-action-stall 없이 실제 progression으로 이어지는지 | partial |
+| `COMBAT-BARRIER-BUDGET` | short validation roots에서 `HandleCombat` barrier long-tail이 step-budget 또는 plateau로 새는지 | partial |
+| `VAL-LIVE-VIDEO-REVIEW` | ffmpeg live metadata는 남지만 `gdigrab` review video가 usable한지 | partial |
 | `MAP-POSTNODE-REWARD-REOPEN` | `WaitPostMapNodeRoom` reward destination reopen contract | green |
-| `VAL-CAPTURE-BOUNDARY` | phase log 이후 capture/request/failure emission을 bounded contract로 고정 | green |
-| `TERM-LIFECYCLE-CHAIN` | terminal -> restart -> next-attempt first-screen evidence | green |
-| `REWARD-AFTERMATH-MAP-HANDOFF` | reward aftermath 이후 map-node continuity, `ChooseFirstNode` / parity alignment | green |
 
 ## Validation / Boot / Menu
 
@@ -33,7 +33,7 @@ coverage status 의미:
 |---|---|---|---|---|---|
 | `VAL-01` | validation | deploy/runtime identity | green | [SMOKE_TEST_CHECKLIST.md](../runbooks/SMOKE_TEST_CHECKLIST.md), [PROJECT_STATUS.md](./PROJECT_STATUS.md) startup/trust roots | current `main` 운영 규칙 고정 |
 | `VAL-02` | validation | manual-clean-boot | green | [ROADMAP.md](../ROADMAP.md) M4, [PROJECT_STATUS.md](./PROJECT_STATUS.md) bootstrap/trust roots | trust gate는 current baseline에 포함 |
-| `VAL-03` | any phase post-log | capture boundary | green | `Program.SelfTests.CaptureReplay.cs`, fresh live root [capture-boundary-proof-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1), [failure-summary.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1/attempts/0001/failure-summary.json) | validation-only capture fault injection으로 `capture-timeout` bounded failure가 fresh live로 고정됨 |
+| `VAL-03` | any phase post-log | capture boundary | green | `Program.SelfTests.CaptureReplay.cs`, fresh live root [capture-boundary-proof-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1), [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1), [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2) | capture timeout bounded failure contract는 green이고, current `main`은 live ffmpeg metadata도 남긴다. 다만 review video usable 여부는 별도 partial gap이다 |
 | `MENU-01` | `WaitMainMenu` / `EnterRun` | main menu | green | `Program.SelfTests.CliStartup.cs`, `Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs`, [wait-main-menu-run-start-readiness-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/wait-main-menu-run-start-readiness-20260329-live1), [SMOKE_TEST_CHECKLIST.md](../runbooks/SMOKE_TEST_CHECKLIST.md) | continue vs singleplayer contract 고정, logo-animation bootstrap frame는 accepted 금지 |
 | `MENU-02` | `EnterRun` | continue lane | green | `GetPostEnterRunPhase`, replay parity summaries, main-menu self-tests | continue preferred 유지 |
 | `MENU-03` | `WaitRunLoad` | transition wait | green | `Program.SelfTests.PhaseRouting.RunLoadRecovery.cs`의 explicit transition truth wait-only assertions | explicit transition truth wait-only |
@@ -82,9 +82,9 @@ coverage status 의미:
 
 | State ID | Canonical Phase | Owner / Lane | Coverage | Representative Evidence | Notes |
 |---|---|---|---|---|---|
-| `REWARD-01` | `HandleRewards` | claim lane | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` reward fast-path signature and `claim reward item` assertions | claim keeps the reward lane ahead of skip/proceed and map routing |
-| `REWARD-02` | `HandleRewards` | reward card / colorless | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` colorless and reward choice assertions | inspect overlay + card choice covered |
-| `REWARD-03` | `HandleRewards` | reward skip / proceed | green | canonical reward release contract + current self-tests | same-click reissue suppression and release-pending are covered |
+| `REWARD-01` | `HandleRewards` | claim lane | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` reward fast-path signature and explicit `RelicReward` claim assertions, replay-step exact repro `0031.request.json` from [combat-barrier-release-20260331-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-barrier-release-20260331-live2) | reward-owned explicit `reward-type:*Reward` row는 inspect preview보다 강하며, explicit claim이 남아 있으면 proceed보다 먼저 실행된다 |
+| `REWARD-02` | `HandleRewards` | reward card / colorless | partial | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs` colorless and reward choice assertions, fresh live root [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1) attempt `0001` | generic bare `card` residue는 reward authority가 아니지만, explicit `CardReward` row 클릭이 live attempt `0001`에서 `same-action-stall`로 끝난 새 front blocker가 남아 있다 |
+| `REWARD-03` | `HandleRewards` | reward skip / proceed | green | canonical reward release contract + current self-tests + fresh live root [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1) | same-click reissue suppression과 release-pending은 covered이고, explicit claim surface가 남아 있으면 proceed는 lower priority로 유지된다 |
 | `REWARD-04` | `HandleRewards` | reward back | green | `Program.SelfTests.NonCombatDecisionContracts.RewardContracts.cs`, parity fixture `reward-back.request.json` | stale reward residue 위의 explicit back navigation이 current `main`에서 canonical reward lane으로 고정됨 |
 | `REWARD-05` | `HandleRewards` | reward teardown / release wait | green | stale reward cleanup self-tests, layered reward state assertions, canonical reward release contract | teardown/release semantics are covered |
 | `REWARD-06` | `HandleRewards` / `WaitMap` | reward/map mixed aftermath | green | layered reward state self-tests, released-to-map canonical owner assertions, parity fixture `reward-aftermath-map-handoff`, fresh live root [reward-aftermath-owner-truth-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/reward-aftermath-owner-truth-20260328-live1) | map owner truth now reaches exported reachable node selection |
@@ -125,6 +125,10 @@ coverage status 의미:
   - [request-scoped-scene-cache-20260328-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/request-scoped-scene-cache-20260328-live1)
 - latest speed proof root:
   - [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
+- latest reward validation root:
+  - [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
+- latest endurance natural-terminal root:
+  - [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)
 
 ### Current-Main Self-Test Families
 

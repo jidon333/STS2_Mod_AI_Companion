@@ -23,6 +23,35 @@ sealed partial class AutoDecisionProvider
         return builder.Build(CreateWaitDecision("waiting for passive phase", DisplayControlFlowScreen(request.Observer)), actualDecision);
     }
 
+    private static GuiSmokeDecisionAnalysis AnalyzeHandleCombat(
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision? actualDecision,
+        GuiSmokeStepAnalysisContext analysisContext)
+    {
+        var handoffState = analysisContext.CombatResolutionHandoffState;
+        var (foregroundKind, backgroundKind) = DescribeCombatResolutionForegroundBackground(request, handoffState);
+        if (!HasReleasedCombatOwnership(handoffState))
+        {
+            return AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request, analysisContext), foregroundKind, backgroundKind);
+        }
+
+        var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
+        builder.AddSuppressed("select attack slot", "combat-ownership-released-to-noncombat-handoff");
+        builder.AddSuppressed("select non-enemy slot", "combat-ownership-released-to-noncombat-handoff");
+        builder.AddSuppressed("click enemy", "combat-ownership-released-to-noncombat-handoff");
+        builder.AddSuppressed("click end turn", "combat-ownership-released-to-noncombat-handoff");
+        var releaseDecision = DecideHandleCombat(request, analysisContext);
+        builder.Consider(
+            releaseDecision.TargetLabel ?? releaseDecision.ActionKind ?? releaseDecision.Status,
+            string.Equals(releaseDecision.Status, "abort", StringComparison.OrdinalIgnoreCase)
+                ? "combat-release-contract-mismatch"
+                : "combat-release-handoff",
+            releaseDecision.Confidence ?? 0.99d,
+            () => releaseDecision,
+            "combat-release-handoff-unavailable");
+        return builder.Build(releaseDecision, actualDecision);
+    }
+
     private static GuiSmokeDecisionAnalysis AnalyzeHandleRewards(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision, GuiSmokeStepAnalysisContext analysisContext)
     {
         var canonicalScene = TryBuildCanonicalNonCombatSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
@@ -114,6 +143,25 @@ sealed partial class AutoDecisionProvider
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.EventForeground)
         {
             return AnalyzeHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, actualDecision, analysisContext);
+        }
+
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.CombatTakeover)
+        {
+            if (handoffState.HasExplicitSurface)
+            {
+                var combatRequest = request with { Phase = GuiSmokePhase.HandleCombat.ToString() };
+                return AnalyzeGenericPhase(combatRequest, actualDecision, () => DecideHandleCombat(combatRequest, analysisContext), "combat", null);
+            }
+
+            var (combatForegroundKind, combatBackgroundKind) = DescribeForegroundBackground(request);
+            var combatBuilder = new DecisionAnalysisBuilder(request, combatForegroundKind, combatBackgroundKind);
+            combatBuilder.AddSuppressed("click exported reachable node", "combat-takeover-family-suppresses-map-routing");
+            combatBuilder.AddSuppressed("click first reachable node", "combat-takeover-family-suppresses-map-routing");
+            combatBuilder.AddSuppressed("click visible map advance", "combat-takeover-family-suppresses-map-routing");
+            combatBuilder.AddSuppressed("click map back", "combat-takeover-family-suppresses-map-routing");
+            return combatBuilder.Build(
+                CreateWaitDecision("waiting for combat takeover handoff to publish the first combat surface", DisplayControlFlowScreen(request.Observer)),
+                actualDecision);
         }
 
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.ShopRoom)
@@ -265,6 +313,17 @@ sealed partial class AutoDecisionProvider
             return builder.Build(CreateWaitDecision("waiting for treasure room progression", DisplayControlFlowScreen(request.Observer)), actualDecision);
         }
 
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.MapSurfacePending)
+        {
+            builder.AddSuppressed("click exported reachable node", "map-surface-pending-without-exported-node");
+            builder.AddSuppressed("click first reachable node", "map-surface-pending-without-exported-node");
+            builder.AddSuppressed("click visible map advance", "map-surface-pending-suppresses-arrow-fallback");
+            builder.AddSuppressed("click map back", "map-surface-pending-without-overlay-back-nav");
+            return builder.Build(
+                CreateWaitDecision("waiting for post-node map surface to republish after room release", DisplayControlFlowScreen(request.Observer)),
+                actualDecision);
+        }
+
         if (mapOverlayState.ForegroundVisible)
         {
             if (mapOverlayState.StaleEventChoicePresent)
@@ -325,6 +384,33 @@ sealed partial class AutoDecisionProvider
         }
 
         return builder.Build(CreateWaitDecision("waiting for reachable map node", DisplayControlFlowScreen(request.Observer)), actualDecision);
+    }
+
+    private static (string? ForegroundKind, string? BackgroundKind) DescribeCombatResolutionForegroundBackground(
+        GuiSmokeStepRequest request,
+        PostNodeHandoffState handoffState)
+    {
+        var foregroundKind = handoffState.Owner switch
+        {
+            NonCombatCanonicalForegroundOwner.Event when handoffState.ReleaseStage == NonCombatReleaseStage.ReleasePending
+                => "event-release-pending",
+            NonCombatCanonicalForegroundOwner.Event => "event",
+            NonCombatCanonicalForegroundOwner.Reward => "reward",
+            NonCombatCanonicalForegroundOwner.Shop => "shop",
+            NonCombatCanonicalForegroundOwner.RestSite => "rest-site",
+            NonCombatCanonicalForegroundOwner.Treasure => "treasure",
+            NonCombatCanonicalForegroundOwner.Map when handoffState.SurfaceKind == PostNodeHandoffSurfaceKind.MapSurfacePending
+                => "map-surface-pending",
+            NonCombatCanonicalForegroundOwner.Map => "map",
+            NonCombatCanonicalForegroundOwner.Combat when handoffState.SurfaceKind == PostNodeHandoffSurfaceKind.CombatTakeover
+                => "combat-takeover",
+            NonCombatCanonicalForegroundOwner.Combat => "combat",
+            _ => DisplayControlFlowScreen(request.Observer),
+        };
+        var backgroundKind = handoffState.MapOverlayVisible && handoffState.Owner != NonCombatCanonicalForegroundOwner.Map
+            ? "map"
+            : null;
+        return (foregroundKind, backgroundKind);
     }
 
     private static GuiSmokeDecisionAnalysis AnalyzeHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision, GuiSmokeStepAnalysisContext analysisContext)

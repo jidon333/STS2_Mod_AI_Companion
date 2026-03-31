@@ -722,20 +722,15 @@ internal static partial class Program
 
         if (phase is GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitPostMapNodeRoom or GuiSmokePhase.WaitCombat)
         {
-            if (ShouldOpenCombatAlternateBranch(observer))
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleCombat;
-                return true;
-            }
-
+            PostNodeHandoffState? ancientPostNodeHandoffState = (phase == GuiSmokePhase.ChooseFirstNode || phase == GuiSmokePhase.WaitPostMapNodeRoom)
+                ? AutoDecisionProvider.BuildPostNodeHandoffState(observer, null, history)
+                : default;
             if ((phase == GuiSmokePhase.ChooseFirstNode || phase == GuiSmokePhase.WaitPostMapNodeRoom)
                 && AncientEventObserverSignals.HasMapReleaseAuthority(
                     observer.Summary,
                     GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"),
                     GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType"))
-                && AutoDecisionProvider.BuildPostNodeHandoffState(observer, null, history).Owner == NonCombatCanonicalForegroundOwner.Map)
+                && ancientPostNodeHandoffState?.ContractMismatch != true)
             {
                 if (phase == GuiSmokePhase.WaitPostMapNodeRoom)
                 {
@@ -750,6 +745,14 @@ internal static partial class Program
 
             if (TryAdvancePostNodeHandoffBranch(phase, observer, history, logger, stepIndex, out nextPhase))
             {
+                return true;
+            }
+
+            if (ShouldOpenCombatAlternateBranch(observer))
+            {
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = GuiSmokePhase.HandleCombat;
                 return true;
             }
 
@@ -926,23 +929,8 @@ internal static partial class Program
 
         if (phase == GuiSmokePhase.HandleCombat)
         {
-            if (AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, history) is RewardSceneState { RewardForegroundOwned: true, ReleaseStage: RewardReleaseStage.Active })
+            if (TryAdvanceCombatResolutionHandoffBranch(phase, observer, history, logger, stepIndex, isLongRun, out nextPhase))
             {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-resolved-rewards", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-resolved-rewards", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = isLongRun
-                    ? GuiSmokePhase.HandleRewards
-                    : GuiSmokePhase.Completed;
-                return true;
-            }
-
-            if (MatchesControlFlowScreen(observer, "map") && observer.InCombat != true)
-            {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "combat-resolved-map", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "combat-resolved-map", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = isLongRun
-                    ? GuiSmokePhase.ChooseFirstNode
-                    : GuiSmokePhase.Completed;
                 return true;
             }
         }
@@ -1063,6 +1051,7 @@ internal static partial class Program
         var handoffState = AutoDecisionProvider.BuildPostNodeHandoffState(observer, null, history);
         var (branchKind, resolvedPhase) = handoffState.HandoffTarget switch
         {
+            NonCombatHandoffTarget.HandleCombat => ("branch-combat", GuiSmokePhase.HandleCombat),
             NonCombatHandoffTarget.HandleEvent => ("branch-event", GuiSmokePhase.HandleEvent),
             NonCombatHandoffTarget.HandleRewards => ("branch-rewards", GuiSmokePhase.HandleRewards),
             NonCombatHandoffTarget.HandleShop => ("branch-shop", GuiSmokePhase.HandleShop),
@@ -1079,6 +1068,45 @@ internal static partial class Program
         }
 
         if (phase == resolvedPhase)
+        {
+            return false;
+        }
+
+        history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
+        nextPhase = resolvedPhase;
+        return true;
+    }
+
+    static bool TryAdvanceCombatResolutionHandoffBranch(
+        GuiSmokePhase phase,
+        ObserverState observer,
+        List<GuiSmokeHistoryEntry> history,
+        ArtifactRecorder logger,
+        int stepIndex,
+        bool isLongRun,
+        out GuiSmokePhase nextPhase)
+    {
+        nextPhase = phase;
+        if (phase != GuiSmokePhase.HandleCombat)
+        {
+            return false;
+        }
+
+        var handoffState = AutoDecisionProvider.BuildCombatResolutionHandoffState(observer, null, history);
+        var (branchKind, resolvedPhase) = handoffState.HandoffTarget switch
+        {
+            NonCombatHandoffTarget.HandleRewards => ("combat-resolved-rewards", isLongRun ? GuiSmokePhase.HandleRewards : GuiSmokePhase.Completed),
+            NonCombatHandoffTarget.HandleEvent => ("combat-resolved-event", isLongRun ? GuiSmokePhase.HandleEvent : GuiSmokePhase.Completed),
+            NonCombatHandoffTarget.HandleShop => ("combat-resolved-shop", isLongRun ? GuiSmokePhase.HandleShop : GuiSmokePhase.Completed),
+            NonCombatHandoffTarget.WaitEventRelease => ("combat-resolved-event-release", isLongRun ? GuiSmokePhase.WaitEventRelease : GuiSmokePhase.Completed),
+            NonCombatHandoffTarget.WaitMap => ("combat-resolved-map", isLongRun ? GuiSmokePhase.WaitMap : GuiSmokePhase.Completed),
+            NonCombatHandoffTarget.ChooseFirstNode when handoffState.Owner == NonCombatCanonicalForegroundOwner.Map => ("combat-resolved-map", isLongRun ? GuiSmokePhase.ChooseFirstNode : GuiSmokePhase.Completed),
+            NonCombatHandoffTarget.ChooseFirstNode when handoffState.Owner == NonCombatCanonicalForegroundOwner.RestSite => ("combat-resolved-rest-site", isLongRun ? GuiSmokePhase.ChooseFirstNode : GuiSmokePhase.Completed),
+            NonCombatHandoffTarget.ChooseFirstNode when handoffState.Owner == NonCombatCanonicalForegroundOwner.Treasure => ("combat-resolved-treasure", isLongRun ? GuiSmokePhase.ChooseFirstNode : GuiSmokePhase.Completed),
+            _ => (string.Empty, phase),
+        };
+        if (string.IsNullOrWhiteSpace(branchKind))
         {
             return false;
         }

@@ -5,13 +5,13 @@ static class GuiSmokeNonCombatAllowedActionSupport
     public static string[] BuildMapOverlayRoutingAllowedActions(MapOverlayState mapOverlayState)
     {
         return mapOverlayState.MapBackNavigationAvailable
-            ? new[] { "click exported reachable node", "click first reachable node", "click map back", "wait" }
-            : new[] { "click exported reachable node", "click first reachable node", "wait" };
+            ? new[] { "click exported reachable node", "click map back", "wait" }
+            : new[] { "click exported reachable node", "wait" };
     }
 
     public static string[] BuildMapForegroundRoutingAllowedActions()
     {
-        return new[] { "click exported reachable node", "click visible map advance", "wait" };
+        return new[] { "click exported reachable node", "wait" };
     }
 
     public static bool LooksLikeInspectOverlayState(ObserverState observer)

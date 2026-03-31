@@ -11,12 +11,6 @@ static class WaitRunLoadRecoverySignals
 {
     public static bool ShouldRetryEnterRunFromWaitRunLoad(ObserverSummary observer)
     {
-        if (ControlFlowSceneReady(observer) == false
-            || !string.Equals(ControlFlowSceneStability(observer), "stable", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
         var transitionState = RootSceneTransitionObserverSignals.TryGetState(observer);
         if (transitionState?.TransitionInProgress == true
             || transitionState?.RootSceneIsRun == true
@@ -33,10 +27,53 @@ static class WaitRunLoadRecoverySignals
             return false;
         }
 
+        if (HasExplicitRunSaveRecoverySurface(observer))
+        {
+            return true;
+        }
+
+        if (HasExplicitMainMenuRetrySurface(observer))
+        {
+            return true;
+        }
+
+        if (ControlFlowSceneReady(observer) == false
+            || !string.Equals(ControlFlowSceneStability(observer), "stable", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         return MainMenuRunStartObserverSignals.HasMainMenuRunStartSurface(observer)
-               || MainMenuRunStartObserverSignals.HasRunSaveCleanupSurface(observer)
-               || MainMenuRunStartObserverSignals.HasAbandonRunConfirmSurface(observer)
                || observer.CurrentChoices.Any(IsContinueRunLabel);
+    }
+
+    private static bool HasExplicitRunSaveRecoverySurface(ObserverSummary observer)
+    {
+        return MainMenuRunStartObserverSignals.HasRunSaveCleanupSurface(observer)
+               || MainMenuRunStartObserverSignals.HasAbandonRunConfirmSurface(observer);
+    }
+
+    private static bool HasExplicitMainMenuRetrySurface(ObserverSummary observer)
+    {
+        var choiceExtractorPath = observer.ChoiceExtractorPath
+                                  ?? (observer.Meta.TryGetValue("choiceExtractorPath", out var publishedChoiceExtractorPath)
+                                      ? publishedChoiceExtractorPath
+                                      : null)
+                                  ?? (observer.Meta.TryGetValue("rawChoiceExtractorPath", out var rawChoiceExtractorPath)
+                                      ? rawChoiceExtractorPath
+                                      : null);
+
+        return string.Equals(choiceExtractorPath, "main-menu", StringComparison.OrdinalIgnoreCase)
+               && IsMainMenuScreenTypeName(observer.Meta.TryGetValue("activeScreenType", out var activeScreenType) ? activeScreenType : null)
+               && !MainMenuRunStartObserverSignals.IsLogoAnimationOnlyMainMenu(observer)
+               && !MainMenuRunStartObserverSignals.ShouldWaitForStableRunStartSurface(observer)
+               && MainMenuRunStartObserverSignals.HasMainMenuRunStartSurface(observer);
+    }
+
+    private static bool IsMainMenuScreenTypeName(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMainMenu", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsActionableContinueRunNode(ObserverActionNode node)

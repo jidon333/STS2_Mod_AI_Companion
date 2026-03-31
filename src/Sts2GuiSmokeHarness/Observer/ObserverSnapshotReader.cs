@@ -37,6 +37,8 @@ sealed class ObserverSnapshotReader
         JsonDocument? stateDocument = TryReadJson(_liveLayout.SnapshotPath);
         JsonDocument? inventoryDocument = TryReadJson(_harnessLayout.InventoryPath);
         var eventLines = includeEventTail ? TryReadTailCached(_liveLayout.EventsPath, 10) : null;
+        var stateCapturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt");
+        var inventoryCapturedAt = TryReadDateTimeOffset(inventoryDocument?.RootElement, "capturedAt");
 
         var inventorySceneType = TryReadString(inventoryDocument?.RootElement, "sceneType");
         var inventoryRawCurrentScreen = TryReadString(inventoryDocument?.RootElement, "rawCurrentScreen")
@@ -91,8 +93,8 @@ sealed class ObserverSnapshotReader
                         ?? currentScreen;
         visibleScreen = promotedTrackerCombatScreen
                         ?? visibleScreen;
-        var capturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt")
-                         ?? TryReadDateTimeOffset(inventoryDocument?.RootElement, "capturedAt");
+        var capturedAt = stateCapturedAt
+                         ?? inventoryCapturedAt;
         var inventoryId = inventoryDocument is null
             ? null
             : TryReadString(inventoryDocument.RootElement, "inventoryId");
@@ -126,6 +128,12 @@ sealed class ObserverSnapshotReader
         var playerEnergy = TryReadInt32(stateDocument?.RootElement, "player", "energy");
         var combatHand = ParseCombatHandSummary(TryReadNestedString(stateDocument?.RootElement, "meta", "combatHandSummary"));
         var currentChoices = ReadChoiceLabels(stateDocument);
+        var choices = ReadChoices(stateDocument);
+        var actionNodes = ReconcileActionNodes(
+            ReadActionNodes(inventoryDocument),
+            choices,
+            stateCapturedAt,
+            inventoryCapturedAt);
         var meta = ReadMetaDictionary(stateDocument);
 
         return new ObserverState(
@@ -146,8 +154,8 @@ sealed class ObserverSnapshotReader
                 playerEnergy,
                 currentChoices,
                 eventLines ?? Array.Empty<string>(),
-                ReadActionNodes(inventoryDocument),
-                ReadChoices(stateDocument),
+                actionNodes,
+                choices,
                 combatHand)
             {
                 SnapshotVersion = snapshotVersion,
@@ -173,6 +181,93 @@ sealed class ObserverSnapshotReader
     public static IReadOnlyList<ObserverChoice> ParseChoicesForTesting(JsonDocument? document)
     {
         return ReadChoices(document);
+    }
+
+    private static IReadOnlyList<ObserverActionNode> ReconcileActionNodes(
+        IReadOnlyList<ObserverActionNode> inventoryNodes,
+        IReadOnlyList<ObserverChoice> stateChoices,
+        DateTimeOffset? stateCapturedAt,
+        DateTimeOffset? inventoryCapturedAt)
+    {
+        var stateChoiceNodes = BuildActionNodesFromChoices(stateChoices);
+        if (stateChoiceNodes.Count == 0)
+        {
+            return inventoryNodes;
+        }
+
+        if (inventoryNodes.Count == 0)
+        {
+            return stateChoiceNodes;
+        }
+
+        if (inventoryCapturedAt is not null
+            && stateCapturedAt is not null
+            && inventoryCapturedAt < stateCapturedAt)
+        {
+            return stateChoiceNodes;
+        }
+
+        return HasInventoryNodeStateMismatch(inventoryNodes, stateChoiceNodes)
+            ? stateChoiceNodes
+            : inventoryNodes;
+    }
+
+    private static IReadOnlyList<ObserverActionNode> BuildActionNodesFromChoices(IReadOnlyList<ObserverChoice> choices)
+    {
+        var nodes = new List<ObserverActionNode>();
+        foreach (var choice in choices)
+        {
+            if (string.IsNullOrWhiteSpace(choice.Label))
+            {
+                continue;
+            }
+
+            var nodeId = choice.NodeId ?? choice.Value;
+            if (string.IsNullOrWhiteSpace(nodeId))
+            {
+                continue;
+            }
+
+            var kind = string.IsNullOrWhiteSpace(choice.Kind)
+                ? "choice"
+                : choice.Kind;
+            var semanticHints = choice.SemanticHints.Count == 0
+                ? new[] { $"node-id:{nodeId}" }
+                : choice.SemanticHints;
+
+            nodes.Add(new ObserverActionNode(
+                nodeId,
+                kind,
+                choice.Label,
+                choice.ScreenBounds,
+                choice.Enabled != false && !string.IsNullOrWhiteSpace(choice.ScreenBounds))
+            {
+                TypeName = choice.BindingKind ?? choice.Kind,
+                SemanticHints = semanticHints,
+            });
+        }
+
+        return nodes;
+    }
+
+    private static bool HasInventoryNodeStateMismatch(
+        IReadOnlyList<ObserverActionNode> inventoryNodes,
+        IReadOnlyList<ObserverActionNode> stateChoiceNodes)
+    {
+        return inventoryNodes.Any(inventoryNode => !stateChoiceNodes.Any(stateNode => MatchesActionSurface(inventoryNode, stateNode)));
+    }
+
+    private static bool MatchesActionSurface(ObserverActionNode left, ObserverActionNode right)
+    {
+        if (!string.IsNullOrWhiteSpace(left.NodeId)
+            && !string.IsNullOrWhiteSpace(right.NodeId))
+        {
+            return string.Equals(left.NodeId, right.NodeId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Equals(left.Label, right.Label, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(left.Kind, right.Kind, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(left.ScreenBounds, right.ScreenBounds, StringComparison.OrdinalIgnoreCase);
     }
 
     public static IReadOnlyDictionary<string, string?> ParseMetaForTesting(JsonDocument? document)

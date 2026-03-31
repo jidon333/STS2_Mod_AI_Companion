@@ -71,6 +71,7 @@ static class CombatBarrierSupport
     public static CombatBarrierEvaluation Evaluate(
         IReadOnlyList<GuiSmokeHistoryEntry> history,
         ObserverState observer,
+        PostNodeHandoffState combatResolutionHandoffState,
         ReconstructedHandleCombatContext combatContext,
         CombatRuntimeState runtime,
         AutoCombatAnalysis analysis,
@@ -96,6 +97,7 @@ static class CombatBarrierSupport
             CombatBarrierKind.EnemyClick => EvaluateEnemyClickBarrier(
                 source,
                 observer,
+                combatResolutionHandoffState,
                 freshSnapshotSeen,
                 runtime,
                 canResolveCombatEnemyTarget),
@@ -112,6 +114,7 @@ static class CombatBarrierSupport
             CombatBarrierKind.EndTurn => EvaluateEndTurnBarrier(
                 source,
                 observer,
+                combatResolutionHandoffState,
                 freshSnapshotSeen,
                 runtime,
                 combatPlayerActionWindowClosed),
@@ -227,6 +230,7 @@ static class CombatBarrierSupport
     private static CombatBarrierEvaluation EvaluateEnemyClickBarrier(
         BarrierSource source,
         ObserverState observer,
+        PostNodeHandoffState combatResolutionHandoffState,
         bool freshSnapshotSeen,
         CombatRuntimeState runtime,
         bool canResolveCombatEnemyTarget)
@@ -246,6 +250,11 @@ static class CombatBarrierSupport
         if (finishedOrClearedWithoutLiveOwnership)
         {
             return Released(source, "enemy click lane lost live ownership and now shows explicit finish or clear evidence");
+        }
+
+        if (CanReleaseIntoResolvedNonCombatHandoff(combatResolutionHandoffState, observer, runtime, canResolveCombatEnemyTarget))
+        {
+            return Released(source, BuildResolvedCombatHandoffReason(combatResolutionHandoffState));
         }
 
         if (!freshSnapshotSeen)
@@ -335,10 +344,16 @@ static class CombatBarrierSupport
     private static CombatBarrierEvaluation EvaluateEndTurnBarrier(
         BarrierSource source,
         ObserverState observer,
+        PostNodeHandoffState combatResolutionHandoffState,
         bool freshSnapshotSeen,
         CombatRuntimeState runtime,
         bool combatPlayerActionWindowClosed)
     {
+        if (CanReleaseIntoResolvedNonCombatHandoff(combatResolutionHandoffState, observer, runtime, canResolveCombatEnemyTarget: false))
+        {
+            return Released(source, BuildResolvedCombatHandoffReason(combatResolutionHandoffState));
+        }
+
         if (observer.InCombat != true
             || !MatchesControlFlowScreen(observer, "combat"))
         {
@@ -426,6 +441,28 @@ static class CombatBarrierSupport
             false => "false",
             _ => "null",
         };
+    }
+
+    private static bool CanReleaseIntoResolvedNonCombatHandoff(
+        PostNodeHandoffState combatResolutionHandoffState,
+        ObserverState observer,
+        CombatRuntimeState runtime,
+        bool canResolveCombatEnemyTarget)
+    {
+        return combatResolutionHandoffState.Owner != NonCombatCanonicalForegroundOwner.Combat
+               && combatResolutionHandoffState.HandoffTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat
+               && (combatResolutionHandoffState.HasExplicitSurface
+                   || combatResolutionHandoffState.ReleaseStage != NonCombatReleaseStage.None)
+               && !runtime.HasLiveCardPlayOwnership
+               && !canResolveCombatEnemyTarget;
+    }
+
+    private static string BuildResolvedCombatHandoffReason(PostNodeHandoffState combatResolutionHandoffState)
+    {
+        var owner = combatResolutionHandoffState.Owner.ToString().ToLowerInvariant();
+        var target = combatResolutionHandoffState.HandoffTarget.ToString().ToLowerInvariant();
+        var surface = combatResolutionHandoffState.SurfaceKind.ToString().ToLowerInvariant();
+        return $"combat authority released into {owner} foreground handoff target={target} surface={surface}";
     }
 
     private static CombatBarrierEvaluation Released(BarrierSource source, string reason)

@@ -312,7 +312,7 @@ internal static partial class Program
             Assert(string.Equals(lightweightSummary, rebuiltSummary, StringComparison.OrdinalIgnoreCase),
                 $"Replay parity scene '{fixture.Name}' drifted: lightweight='{lightweightSummary}' rebuilt='{rebuiltSummary}'.");
             Assert(string.Equals(lightweightAllowedActionKey, rebuiltAllowedActionKey, StringComparison.OrdinalIgnoreCase),
-                $"Replay parity scene '{fixture.Name}' changed allowed-action semantics between saved and rebuilt requests.");
+                $"Replay parity scene '{fixture.Name}' changed allowed-action semantics between saved and rebuilt requests. lightweight='{lightweightAllowedActionKey}' rebuilt='{rebuiltAllowedActionKey}'.");
 
             if (!string.IsNullOrWhiteSpace(fixture.ExpectedStatus))
             {

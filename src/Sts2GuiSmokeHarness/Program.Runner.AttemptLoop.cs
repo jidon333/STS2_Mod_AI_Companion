@@ -110,6 +110,16 @@ internal static partial class Program
         {
             if (maxSteps is int stepLimit && stepIndex >= stepLimit)
             {
+                if (TryClassifyMaxStepBudgetExhaustion(stepsRoot, out var dominantTerminalCause, out var dominantFailureClass, out var dominantMessage))
+                {
+                    return CompleteAttempt(
+                        0,
+                        "completed",
+                        $"{dominantMessage}; max-steps-reached:{stepLimit}",
+                        terminalCause: dominantTerminalCause,
+                        failureClass: dominantFailureClass);
+                }
+
                 return CompleteAttempt(
                     0,
                     "completed",

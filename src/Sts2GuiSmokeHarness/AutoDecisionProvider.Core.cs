@@ -211,9 +211,10 @@ sealed partial class AutoDecisionProvider : IGuiDecisionProvider
         {
             GuiSmokePhase.HandleEvent => AnalyzeHandleEvent(request, actualDecision, context),
             GuiSmokePhase.HandleRewards => AnalyzeHandleRewards(request, actualDecision, context),
-            GuiSmokePhase.ChooseFirstNode => AnalyzeChooseFirstNode(request, actualDecision, context),
+            GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitMap or GuiSmokePhase.WaitPostMapNodeRoom
+                => AnalyzeChooseFirstNode(request, actualDecision, context),
             GuiSmokePhase.HandleShop => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleShop(request), "shop", null),
-            GuiSmokePhase.HandleCombat => AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request, context), "combat", null),
+            GuiSmokePhase.HandleCombat => AnalyzeHandleCombat(request, actualDecision, context),
             GuiSmokePhase.EnterRun => AnalyzeGenericPhase(request, actualDecision, () => DecideEnterRun(request), "main-menu", null),
             GuiSmokePhase.WaitRunLoad => AnalyzeGenericPhase(request, actualDecision, () => DecideWaitRunLoad(request, context), DisplayControlFlowScreen(request.Observer), null),
             GuiSmokePhase.ChooseCharacter => AnalyzeGenericPhase(request, actualDecision, () => DecideChooseCharacter(request), "character-select", null),

@@ -392,6 +392,78 @@ internal static partial class Program
             !WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadTerminalMainMenuObserver.Summary),
             "Terminal main-menu returns without Continue should not be retried as run-load recovery.");
 
+        var waitRunLoadFreshMainMenuObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                true,
+                "mixed",
+                "stable",
+                "main-menu",
+                null,
+                null,
+                24,
+                24,
+                null,
+                new[] { "\uC2F1\uAE00\uD50C\uB808\uC774", "\uBA40\uD2F0\uD50C\uB808\uC774", "\uC124\uC815", "\uC885\uB8CC" },
+                Array.Empty<string>(),
+                Array.Empty<ObserverActionNode>(),
+                new[]
+                {
+                    new ObserverChoice("menu-action", "\uC2F1\uAE00\uD50C\uB808\uC774", "676,684,200,50", "main-menu:singleplayer", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuTextButton")
+                    {
+                        NodeId = "main-menu:singleplayer",
+                        Enabled = true,
+                    },
+                    new ObserverChoice("menu-action", "\uBA40\uD2F0\uD50C\uB808\uC774", "676,734,200,50", "main-menu:multiplayer", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuTextButton")
+                    {
+                        NodeId = "main-menu:multiplayer",
+                        Enabled = true,
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "bootstrap",
+                PublishedSceneReady = null,
+                PublishedSceneAuthority = null,
+                PublishedSceneStability = null,
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["transitionInProgress"] = "false",
+                    ["rootSceneIsMainMenu"] = "true",
+                    ["rootSceneIsRun"] = "false",
+                    ["currentRunNodePresent"] = "false",
+                    ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    ["terminalRunBoundary"] = "true",
+                    ["mainMenuReturnDetected"] = "true",
+                    ["choiceExtractorPath"] = "main-menu",
+                    ["publishedVisibleScreen"] = "bootstrap",
+                    ["compatLogicalScreen"] = "bootstrap",
+                    ["compatVisibleScreen"] = "bootstrap",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadFreshMainMenuObserver.Summary),
+            "Fresh main-menu singleplayer authority should reopen EnterRun from WaitRunLoad even when stale bootstrap visibility lingers in published meta.");
+        var waitRunLoadFreshActions = BuildAllowedActions(
+            GuiSmokePhase.WaitRunLoad,
+            waitRunLoadFreshMainMenuObserver,
+            Array.Empty<CombatCardKnowledgeHint>(),
+            null,
+            Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(
+            waitRunLoadFreshActions.Contains("click singleplayer", StringComparer.OrdinalIgnoreCase)
+            && waitRunLoadFreshActions.Contains("wait", StringComparer.OrdinalIgnoreCase),
+            "WaitRunLoad should reopen the singleplayer run-start lane when explicit NMainMenu choices outrank stale bootstrap visibility.");
+
         var waitRunLoadRunSaveCleanupObserver = new ObserverState(
             new ObserverSummary(
                 "main-menu",
@@ -465,6 +537,78 @@ internal static partial class Program
             && waitRunLoadRunSaveActions.Contains("wait", StringComparer.OrdinalIgnoreCase),
             "WaitRunLoad recovery should expose Abandon Run when a stale run-save surface remains on the main menu.");
 
+        var waitRunLoadAbandonConfirmObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                true,
+                "mixed",
+                "transient",
+                "main-menu-abandon-confirm",
+                null,
+                null,
+                36,
+                36,
+                null,
+                new[] { "\uC544\uB2C8\uC694", "\uC608" },
+                Array.Empty<string>(),
+                Array.Empty<ObserverActionNode>(),
+                new[]
+                {
+                    new ObserverChoice("cancel", "\uC544\uB2C8\uC694", "699,688,180,72", "main-menu:abandon-run-cancel", "main-menu abandon run confirm popup")
+                    {
+                        NodeId = "main-menu:abandon-run-cancel",
+                        Enabled = true,
+                    },
+                    new ObserverChoice("confirm", "\uC608", "1041,688,180,72", "main-menu:abandon-run-confirm", "main-menu abandon run confirm popup")
+                    {
+                        NodeId = "main-menu:abandon-run-confirm",
+                        Enabled = true,
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = null,
+                PublishedSceneAuthority = null,
+                PublishedSceneStability = null,
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["transitionInProgress"] = "false",
+                    ["rootSceneIsMainMenu"] = "true",
+                    ["rootSceneIsRun"] = "false",
+                    ["currentRunNodePresent"] = "false",
+                    ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.CommonUi.NAbandonRunConfirmPopup",
+                    ["terminalRunBoundary"] = "true",
+                    ["mainMenuReturnDetected"] = "true",
+                    ["choiceExtractorPath"] = "main-menu-abandon-confirm",
+                    ["compatSceneReady"] = "false",
+                    ["compatSceneStability"] = "transient",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadAbandonConfirmObserver.Summary),
+            "Explicit abandon-run confirm popup surfaces should reopen EnterRun from WaitRunLoad even before generic ready/stable heuristics settle.");
+        var waitRunLoadAbandonConfirmActions = BuildAllowedActions(
+            GuiSmokePhase.WaitRunLoad,
+            waitRunLoadAbandonConfirmObserver,
+            Array.Empty<CombatCardKnowledgeHint>(),
+            null,
+            Array.Empty<GuiSmokeHistoryEntry>());
+        Assert(
+            waitRunLoadAbandonConfirmActions.Contains("click confirm abandon run", StringComparer.OrdinalIgnoreCase)
+            && waitRunLoadAbandonConfirmActions.Contains("click cancel abandon run", StringComparer.OrdinalIgnoreCase)
+            && waitRunLoadAbandonConfirmActions.Contains("wait", StringComparer.OrdinalIgnoreCase),
+            "WaitRunLoad recovery should expose confirm/cancel while the abandon-run popup owns the foreground.");
+
         var waitCharacterSelectBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-wait-character-select-branch-{Guid.NewGuid():N}");
         Directory.CreateDirectory(waitCharacterSelectBranchRoot);
         try
@@ -492,6 +636,18 @@ internal static partial class Program
                     true,
                     out _),
                 "WaitRunLoad should not misclassify terminal main-menu returns without Continue as run-load retries.");
+
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.WaitRunLoad,
+                    waitRunLoadAbandonConfirmObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitCharacterSelectLogger,
+                    6,
+                    true,
+                    out var waitRunLoadAbandonConfirmPhase)
+                && waitRunLoadAbandonConfirmPhase == GuiSmokePhase.EnterRun,
+                "WaitRunLoad should bounce back to EnterRun when the abandon-run confirm popup is explicitly visible on the main menu.");
 
             Assert(
                 TryAdvanceAlternateBranch(

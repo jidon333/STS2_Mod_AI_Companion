@@ -451,6 +451,114 @@ internal static partial class Program
                     out _),
                 "Combat alternate-branch recovery should not promote unstable combat-looking snapshots into HandleCombat.");
 
+            var combatResolvedEventObserver = new ObserverState(
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    true,
+                    "hook",
+                    "stable",
+                    "episode-combat-resolved-event",
+                    null,
+                    "event",
+                    78,
+                    80,
+                    null,
+                    new[] { "계속" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("event-option:continue", "event-option", "계속", "860,560,260,88", true),
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("event-option", "계속", "860,560,260,88", null, "Event continue")
+                        {
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "source:event-option-button", "option-role:choice" },
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "event",
+                    PublishedVisibleScreen = "event",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stable",
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["foregroundOwner"] = "event",
+                        ["foregroundActionLane"] = "event-choice",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom",
+                    },
+                },
+                null,
+                null,
+                null);
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.HandleCombat,
+                    combatResolvedEventObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitMapMixedStateLogger,
+                    6,
+                    true,
+                    out var combatResolvedEventPhase)
+                && combatResolvedEventPhase == GuiSmokePhase.HandleEvent,
+                "HandleCombat should hand off to HandleEvent once explicit event foreground owns the post-combat room.");
+
+            var combatResolvedMapPendingObserver = new ObserverState(
+                new ObserverSummary(
+                    "map",
+                    "map",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    true,
+                    "hook",
+                    "stable",
+                    "episode-combat-resolved-map",
+                    null,
+                    "combat",
+                    79,
+                    80,
+                    null,
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    Array.Empty<ObserverChoice>(),
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "map",
+                    PublishedVisibleScreen = "map",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stable",
+                    ChoiceExtractorPath = "combat",
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["mapCurrentActiveScreen"] = "true",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.HandleCombat,
+                    combatResolvedMapPendingObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitMapMixedStateLogger,
+                    6,
+                    true,
+                    out var combatResolvedMapPendingPhase)
+                && combatResolvedMapPendingPhase == GuiSmokePhase.WaitMap,
+                "HandleCombat should hand off to WaitMap when combat has released but the post-room map surface has not republished yet.");
+
             Assert(
                 TryAdvanceAlternateBranch(
                     GuiSmokePhase.WaitMap,

@@ -38,6 +38,7 @@ sealed class GuiSmokeStepAnalysisContext
     private readonly Func<RewardSceneState> _rewardSceneFactory;
     private readonly Func<EventSceneState> _eventSceneFactory;
     private readonly Func<PostNodeHandoffState> _postNodeHandoffStateFactory;
+    private readonly Func<PostNodeHandoffState> _combatResolutionHandoffStateFactory;
     private readonly Func<ICanonicalNonCombatSceneState?> _canonicalNonCombatSceneFactory;
     private readonly Func<ReconstructedHandleCombatContext> _combatContextFactory;
     private readonly Func<PendingCombatSelection?> _pendingCombatSelectionFactory;
@@ -58,6 +59,7 @@ sealed class GuiSmokeStepAnalysisContext
     private RewardSceneState? _rewardScene;
     private EventSceneState? _eventScene;
     private PostNodeHandoffState? _postNodeHandoffState;
+    private PostNodeHandoffState? _combatResolutionHandoffState;
     private ICanonicalNonCombatSceneState? _canonicalNonCombatScene;
     private bool _canonicalNonCombatSceneComputed;
     private ReconstructedHandleCombatContext? _combatContext;
@@ -88,6 +90,7 @@ sealed class GuiSmokeStepAnalysisContext
         Func<RewardSceneState> rewardSceneFactory,
         Func<EventSceneState> eventSceneFactory,
         Func<PostNodeHandoffState> postNodeHandoffStateFactory,
+        Func<PostNodeHandoffState> combatResolutionHandoffStateFactory,
         Func<ICanonicalNonCombatSceneState?> canonicalNonCombatSceneFactory,
         Func<ReconstructedHandleCombatContext> combatContextFactory,
         Func<PendingCombatSelection?> pendingCombatSelectionFactory,
@@ -114,6 +117,7 @@ sealed class GuiSmokeStepAnalysisContext
         _rewardSceneFactory = rewardSceneFactory;
         _eventSceneFactory = eventSceneFactory;
         _postNodeHandoffStateFactory = postNodeHandoffStateFactory;
+        _combatResolutionHandoffStateFactory = combatResolutionHandoffStateFactory;
         _canonicalNonCombatSceneFactory = canonicalNonCombatSceneFactory;
         _combatContextFactory = combatContextFactory;
         _pendingCombatSelectionFactory = pendingCombatSelectionFactory;
@@ -159,6 +163,8 @@ sealed class GuiSmokeStepAnalysisContext
     public EventSceneState EventScene => _eventScene ??= _eventSceneFactory();
 
     public PostNodeHandoffState PostNodeHandoffState => _postNodeHandoffState ??= _postNodeHandoffStateFactory();
+
+    public PostNodeHandoffState CombatResolutionHandoffState => _combatResolutionHandoffState ??= _combatResolutionHandoffStateFactory();
 
     public ICanonicalNonCombatSceneState? CanonicalNonCombatScene
     {
@@ -222,6 +228,7 @@ sealed class GuiSmokeStepAnalysisContext
         RewardSceneState? rewardScene = null;
         EventSceneState? eventScene = null;
         PostNodeHandoffState? postNodeHandoffState = null;
+        PostNodeHandoffState? combatResolutionHandoffState = null;
         ICanonicalNonCombatSceneState? canonicalNonCombatScene = null;
         var canonicalNonCombatSceneComputed = false;
 
@@ -262,6 +269,7 @@ sealed class GuiSmokeStepAnalysisContext
             => combatBarrierEvaluation ??= CombatBarrierSupport.Evaluate(
                 history,
                 observer,
+                GetCombatResolutionHandoffState(),
                 GetCombatContext(),
                 GetRuntimeCombatState(),
                 string.IsNullOrWhiteSpace(screenshotPath)
@@ -279,6 +287,9 @@ sealed class GuiSmokeStepAnalysisContext
 
         PostNodeHandoffState GetPostNodeHandoffState()
             => postNodeHandoffState ??= AutoDecisionProvider.BuildPostNodeHandoffState(observer, request.WindowBounds, history, screenshotPath);
+
+        PostNodeHandoffState GetCombatResolutionHandoffState()
+            => combatResolutionHandoffState ??= AutoDecisionProvider.BuildCombatResolutionHandoffState(observer, request.WindowBounds, history, screenshotPath);
 
         ICanonicalNonCombatSceneState? GetCanonicalNonCombatScene()
         {
@@ -348,6 +359,7 @@ sealed class GuiSmokeStepAnalysisContext
             GetRewardScene,
             GetEventScene,
             GetPostNodeHandoffState,
+            GetCombatResolutionHandoffState,
             GetCanonicalNonCombatScene,
             GetCombatContext,
             GetPendingSelection,

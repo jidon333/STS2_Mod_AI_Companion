@@ -180,6 +180,56 @@ sealed partial class AutoDecisionProvider
             return false;
         }
 
+        return HasBoundedRawExplicitEventChoiceVisible(observer, windowBounds)
+               || HasForegroundGenericEventChoiceSurfaceWithoutBounds(observer, windowBounds);
+    }
+
+    internal static bool HasRawEventChoiceFamily(ObserverSummary observer)
+    {
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
+        {
+            return false;
+        }
+
+        if (TreasureRoomObserverSignals.LooksLikeTreasureState(observer))
+        {
+            return false;
+        }
+
+        if (string.Equals(observer.Meta.TryGetValue("foregroundOwner", out var foregroundOwner) ? foregroundOwner : null, "event", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(observer.Meta.TryGetValue("foregroundActionLane", out var foregroundLane) ? foregroundLane : null, "event-choice", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return observer.ActionNodes.Any(node =>
+                   node.Actionable
+                   && !MapNodeSourceSupport.IsExplicitMapPointNode(node)
+                   && !LooksLikeRewardProgressionNode(node)
+                   && !IsBackChoiceLabel(node.Label)
+                   && !EventProceedObserverSignals.IsExplicitEventProceedNode(node)
+                   && ((node.NodeId?.StartsWith("event-option:", StringComparison.OrdinalIgnoreCase) ?? false)
+                       || node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(node.TypeName, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || HasExplicitEventChoiceSemantic(node.SemanticHints)))
+               || observer.Choices.Any(choice =>
+                   !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
+                   && !LooksLikeRewardProgressionChoice(choice)
+                   && !IsBackChoiceLabel(choice.Label)
+                   && !EventProceedObserverSignals.IsExplicitEventProceedChoice(choice)
+                   && (string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.BindingKind, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || HasExplicitEventChoiceSemantic(choice.SemanticHints)));
+    }
+
+    internal static bool HasRawEventProgressionSurface(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return HasRawExplicitEventChoiceVisible(observer, windowBounds)
+               || EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
+    }
+
+    private static bool HasBoundedRawExplicitEventChoiceVisible(ObserverSummary observer, WindowBounds? windowBounds)
+    {
         return observer.ActionNodes.Any(node =>
                    node.Actionable
                    && HasActiveNodeBounds(node.ScreenBounds, windowBounds)
@@ -202,10 +252,46 @@ sealed partial class AutoDecisionProvider
                        || HasExplicitEventChoiceSemantic(choice.SemanticHints)));
     }
 
-    internal static bool HasRawEventProgressionSurface(ObserverSummary observer, WindowBounds? windowBounds)
+    internal static bool HasForegroundGenericEventChoiceSurfaceWithoutBounds(ObserverSummary observer, WindowBounds? windowBounds)
     {
-        return HasRawExplicitEventChoiceVisible(observer, windowBounds)
-               || EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
+        if (!HasAuthoritativeEventForegroundScreen(observer)
+            || observer.ActionNodes.Any(static node => node.Actionable && MapNodeSourceSupport.IsExplicitMapPointNode(node))
+            || observer.Choices.Any(MapNodeSourceSupport.IsExplicitMapPointChoice))
+        {
+            return false;
+        }
+
+        return observer.ActionNodes.Any(node =>
+                   node.Actionable
+                   && !HasActiveNodeBounds(node.ScreenBounds, windowBounds)
+                   && !EventProceedObserverSignals.IsExplicitEventProceedNode(node)
+                   && ((node.NodeId?.StartsWith("event-option:", StringComparison.OrdinalIgnoreCase) ?? false)
+                       || node.Kind.Contains("event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(node.TypeName, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || HasExplicitEventChoiceSemantic(node.SemanticHints)))
+               || observer.Choices.Any(choice =>
+                   !HasActiveNodeBounds(choice.ScreenBounds, windowBounds)
+                   && !EventProceedObserverSignals.IsExplicitEventProceedChoice(choice)
+                   && !MapNodeSourceSupport.IsExplicitMapPointChoice(choice)
+                   && (string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(choice.BindingKind, "event-option", StringComparison.OrdinalIgnoreCase)
+                       || HasExplicitEventChoiceSemantic(choice.SemanticHints)));
+    }
+
+    private static bool HasAuthoritativeEventForegroundScreen(ObserverSummary observer)
+    {
+        return MatchesDirectScreen(observer, "event")
+               || MatchesControlFlowScreen(observer, "event")
+               || IsEventForegroundScreenType(TryGetMetaValue(observer, "activeScreenType"))
+               || IsEventForegroundScreenType(TryGetMetaValue(observer, "rawCurrentActiveScreenType"))
+               || IsEventForegroundScreenType(TryGetMetaValue(observer, "publishedCurrentScreenType"));
+    }
+
+    private static bool IsEventForegroundScreenType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && (typeName.Contains("NEventRoom", StringComparison.OrdinalIgnoreCase)
+                   || typeName.Contains("NEventLayout", StringComparison.OrdinalIgnoreCase));
     }
 
     internal static bool HasObserverOnlyRestSiteUpgradeAuthority(ObserverSummary observer, WindowBounds? windowBounds)
@@ -253,7 +339,13 @@ sealed partial class AutoDecisionProvider
 
         eventScene ??= BuildEventSceneState(observer, windowBounds, history);
         var handoffState = BuildPostNodeHandoffState(observer, windowBounds, history);
-        return HasExplicitEventRecoveryAuthorityCore(observer, windowBounds, history, eventScene, handoffState);
+        return HasExplicitEventRecoveryAuthorityCore(
+            observer,
+            windowBounds,
+            history,
+            eventScene,
+            handoffState,
+            GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(new ObserverState(observer, null, null, null)));
     }
 
     internal static bool HasExplicitEventRecoveryAuthority(
@@ -274,7 +366,13 @@ sealed partial class AutoDecisionProvider
 
         eventScene ??= BuildEventSceneState(observer, windowBounds, history);
         var handoffState = BuildPostNodeHandoffState(observer, windowBounds, history);
-        return HasExplicitEventRecoveryAuthorityCore(observer.Summary, windowBounds, history, eventScene, handoffState);
+        return HasExplicitEventRecoveryAuthorityCore(
+            observer.Summary,
+            windowBounds,
+            history,
+            eventScene,
+            handoffState,
+            GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer));
     }
 
     private static bool HasExplicitEventRecoveryAuthorityCore(
@@ -282,7 +380,8 @@ sealed partial class AutoDecisionProvider
         WindowBounds? windowBounds,
         IReadOnlyList<GuiSmokeHistoryEntry>? history,
         EventSceneState eventScene,
-        PostNodeHandoffState handoffState)
+        PostNodeHandoffState handoffState,
+        bool strongMapTransitionEvidence)
     {
         if (eventScene.RewardSubstateActive)
         {
@@ -290,6 +389,13 @@ sealed partial class AutoDecisionProvider
         }
 
         if (handoffState.Owner is not NonCombatCanonicalForegroundOwner.Event and not NonCombatCanonicalForegroundOwner.Unknown)
+        {
+            return false;
+        }
+
+        if (handoffState.Owner == NonCombatCanonicalForegroundOwner.Unknown
+            && !eventScene.EventForegroundOwned
+            && strongMapTransitionEvidence)
         {
             return false;
         }
@@ -696,12 +802,13 @@ sealed partial class AutoDecisionProvider
 
     private static string? TryFindRewardBounds(GuiSmokeStepRequest request)
     {
+        var rewardState = RewardObserverSignals.TryGetState(request.Observer);
         return request.Observer.ActionNodes.FirstOrDefault(node =>
                    node.Actionable
-                   && IsExplicitRewardProgressionNode(node)
+                   && IsExplicitRewardProgressionNode(node, rewardState)
                    && HasActiveRewardBounds(node.ScreenBounds, request.WindowBounds))?.ScreenBounds
                ?? request.Observer.Choices.FirstOrDefault(choice =>
-                   IsExplicitRewardProgressionChoice(choice)
+                   IsExplicitRewardProgressionChoice(choice, rewardState)
                    && HasActiveRewardBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds;
     }
 

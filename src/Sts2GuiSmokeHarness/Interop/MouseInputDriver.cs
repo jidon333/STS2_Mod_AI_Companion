@@ -128,6 +128,38 @@ sealed class MouseInputDriver
         }
     }
 
+    public void ConfirmAttackCard(WindowCaptureTarget target, double normalizedX, double normalizedY, int primeMs, int holdMs)
+    {
+        PrepareWindow(target, 200);
+
+        var point = TransformNormalizedPoint(target, normalizedX, normalizedY);
+        NativeMethods.SetCursorPos(point.X, point.Y);
+        Thread.Sleep(Math.Max(primeMs, 16));
+
+        var down = new[]
+        {
+            NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_LEFTDOWN),
+        };
+        var sentDown = NativeMethods.SendInput((uint)down.Length, down, Marshal.SizeOf<NativeMethods.INPUT>());
+        if (sentDown != down.Length)
+        {
+            throw new InvalidOperationException("Failed to send attack confirm mouse-down input.");
+        }
+
+        // Shortcut-started multi-target card play is sampled across process frames.
+        Thread.Sleep(Math.Max(holdMs, 16));
+
+        var up = new[]
+        {
+            NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_LEFTUP),
+        };
+        var sentUp = NativeMethods.SendInput((uint)up.Length, up, Marshal.SizeOf<NativeMethods.INPUT>());
+        if (sentUp != up.Length)
+        {
+            throw new InvalidOperationException("Failed to send attack confirm mouse-up input.");
+        }
+    }
+
     public void RightClick(WindowCaptureTarget target, double normalizedX, double normalizedY)
     {
         PrepareWindow(target, 200);

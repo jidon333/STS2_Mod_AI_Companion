@@ -1135,6 +1135,47 @@ internal static partial class Program
                    && runtimeTargetSummaryHistoryCarryDecision.TargetLabel is null,
                 "Runtime target summary plus recent attack-lane history should wait instead of driving enemy targeting or reopening another slot.");
 
+            var runtimeTargetSummaryNoEnergyObserver = runtimeTargetSummaryHistoryCarryObserver with
+            {
+                PlayerEnergy = 0,
+            };
+            var runtimeTargetSummaryNoEnergyActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(runtimeTargetSummaryNoEnergyObserver, null, null, null),
+                runtimeTargetingKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                runtimeTargetSummaryHistoryCarryHistory);
+            Assert(runtimeTargetSummaryNoEnergyActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase)
+                   && runtimeTargetSummaryNoEnergyActions.Contains("wait", StringComparer.OrdinalIgnoreCase)
+                   && !runtimeTargetSummaryNoEnergyActions.Any(action => action.StartsWith("select attack slot ", StringComparison.OrdinalIgnoreCase)),
+                "Stale target diagnostics with no remaining energy should keep attack reentry closed but preserve legal end-turn authority.");
+            var runtimeTargetSummaryNoEnergyDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                27,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "No-energy stale target diagnostics should end the turn instead of plateauing behind attack-lane residue.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:monster|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                runtimeTargetSummaryNoEnergyObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                runtimeTargetingKnowledge,
+                runtimeTargetSummaryNoEnergyActions,
+                runtimeTargetSummaryHistoryCarryHistory,
+                "Do not let stale target diagnostics suppress legal end-turn closure after attack ownership clears.",
+                null));
+            Assert(string.Equals(runtimeTargetSummaryNoEnergyDecision.TargetLabel, "auto-end turn", StringComparison.OrdinalIgnoreCase),
+                "No-energy stale target diagnostics should fall through to auto-end turn instead of a wait-only plateau.");
+
             var runtimeTargetSummaryAfterDriftHistory = new[]
             {
                 new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 3", DateTimeOffset.UtcNow.AddSeconds(-2)),

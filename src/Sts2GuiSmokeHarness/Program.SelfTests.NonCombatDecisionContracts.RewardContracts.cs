@@ -960,6 +960,208 @@ internal static partial class Program
             Assert(string.Equals(staleMapPotionNodeDecision.TargetLabel, "reward card choice", StringComparison.OrdinalIgnoreCase),
                 "Reward decision should choose the current card reward instead of stale potion residue.");
 
+            var explicitRelicRewardObserver = new ObserverState(
+                new ObserverSummary(
+                    "rewards",
+                    "rewards",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-explicit-relic-reward",
+                    true,
+                    "room",
+                    "stable",
+                    "episode-explicit-relic-reward",
+                    null,
+                    "event",
+                    80,
+                    80,
+                    null,
+                    new[] { "기묘하게 매끄러운 돌", "넘기기" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("reward-relic-node", "relic", "기묘하게 매끄러운 돌", "758,374,402,86", true)
+                        {
+                            TypeName = "reward-type",
+                            SemanticHints = new[] { "reward", "reward-relic", "reward-type:RelicReward" },
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("relic", "기묘하게 매끄러운 돌", "758,374,402,86", "기묘하게 매끄러운 돌")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "RelicReward",
+                            SemanticHints = new[] { "reward", "reward-relic", "reward-type:RelicReward" },
+                        },
+                        new ObserverChoice("choice", "넘기기", "1983,764,269,108"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "true",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "true",
+                        ["rewardVisibleButtonCount"] = "2",
+                        ["rewardEnabledButtonCount"] = "2",
+                        ["hasOpenPotionSlots"] = "true",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                        ["rewardScreenRootType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            var explicitRelicRewardScene = AutoDecisionProvider.BuildRewardSceneState(
+                explicitRelicRewardObserver,
+                new WindowBounds(0, 0, 1920, 1080),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardRankingScreenshotPath);
+            Assert(GuiSmokeNonCombatContractSupport.HasExplicitRewardProgressionAffordance(explicitRelicRewardObserver.Summary),
+                "Observer reward contract support should expose the same explicit relic reward affordance as the reward scene-state.");
+            Assert(explicitRelicRewardScene.ExplicitAction == RewardExplicitActionKind.Claim,
+                "Explicit relic rewards must stay on the claim lane instead of being promoted to reward card-choice.");
+            var explicitRelicRewardAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                explicitRelicRewardObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardRankingScreenshotPath,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(explicitRelicRewardAllowedActions.Contains("click reward", StringComparer.OrdinalIgnoreCase)
+                   && !explicitRelicRewardAllowedActions.Contains("click reward card choice", StringComparer.OrdinalIgnoreCase),
+                "Relic reward claim states should expose reward claim actions, not reward card-choice actions.");
+            var explicitRelicRewardDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                49,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "Explicit relic rewards should claim the relic instead of waiting for a reward card surface.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1920, 1080),
+                ComputeSceneSignature(rewardRankingScreenshotPath, explicitRelicRewardObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                explicitRelicRewardObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                explicitRelicRewardAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Relic reward claim states should not stall behind the reward card-choice contract.",
+                null));
+            Assert(string.Equals(explicitRelicRewardDecision.TargetLabel, "claim reward relic", StringComparison.OrdinalIgnoreCase),
+                "Reward decision should claim the relic reward directly instead of waiting for a reward card surface.");
+
+            var nodeOnlyRelicRewardObserver = new ObserverState(
+                new ObserverSummary(
+                    "rewards",
+                    "rewards",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-node-only-relic-reward",
+                    true,
+                    "room",
+                    "stable",
+                    "episode-node-only-relic-reward",
+                    null,
+                    "event",
+                    80,
+                    80,
+                    null,
+                    new[] { "기묘하게 매끄러운 돌", "넘기기" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("reward-relic-node-only", "relic", "기묘하게 매끄러운 돌", "758,374,402,86", true)
+                        {
+                            TypeName = "reward-type",
+                            SemanticHints = new[] { "reward", "reward-relic", "reward-type:RelicReward" },
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("choice", "넘기기", "1983,764,269,108"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "true",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "true",
+                        ["rewardVisibleButtonCount"] = "2",
+                        ["rewardEnabledButtonCount"] = "2",
+                        ["hasOpenPotionSlots"] = "true",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                        ["rewardScreenRootType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            var nodeOnlyRelicRewardScene = AutoDecisionProvider.BuildRewardSceneState(
+                nodeOnlyRelicRewardObserver,
+                new WindowBounds(0, 0, 1920, 1080),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardRankingScreenshotPath);
+            Assert(GuiSmokeNonCombatContractSupport.HasExplicitRewardProgressionAffordance(nodeOnlyRelicRewardObserver.Summary),
+                "Observer reward contract support should keep reward-type relic nodes claimable when the rewards screen is foreground-owned.");
+            Assert(nodeOnlyRelicRewardScene.ExplicitAction == RewardExplicitActionKind.Claim,
+                "Reward-type relic nodes must stay on the claim lane even when only the node is exported.");
+            var nodeOnlyRelicRewardAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleRewards,
+                nodeOnlyRelicRewardObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                rewardRankingScreenshotPath,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(nodeOnlyRelicRewardAllowedActions.Contains("click reward", StringComparer.OrdinalIgnoreCase)
+                   && !nodeOnlyRelicRewardAllowedActions.Contains("click reward card choice", StringComparer.OrdinalIgnoreCase),
+                "Node-only relic rewards should still expose reward claim actions and keep proceed secondary.");
+            var nodeOnlyRelicRewardDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                50,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "Reward-type relic nodes should claim the reward before using proceed.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1920, 1080),
+                ComputeSceneSignature(rewardRankingScreenshotPath, nodeOnlyRelicRewardObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                nodeOnlyRelicRewardObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                nodeOnlyRelicRewardAllowedActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Node-only relic reward surfaces should outrank proceed in the rewards screen.",
+                null));
+            Assert(string.Equals(nodeOnlyRelicRewardDecision.TargetLabel, "claim reward relic", StringComparison.OrdinalIgnoreCase),
+                "Reward decision should claim the reward-type relic node before any proceed fallback.");
+
             var postShopRewardMixedObserver = new ObserverState(
                 new ObserverSummary(
                     "shop",
