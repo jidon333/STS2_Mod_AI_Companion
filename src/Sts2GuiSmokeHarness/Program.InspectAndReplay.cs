@@ -347,6 +347,18 @@ internal static partial class Program
                     $"Replay parity scene '{fixture.Name}' expected foreground action lane '{fixture.ExpectedForegroundActionLane}'.");
             }
 
+            if (!string.IsNullOrWhiteSpace(fixture.ExpectedRebuiltForegroundOwner))
+            {
+                Assert(string.Equals(TryGetObserverMeta(rebuiltLoad.Request.Observer, "foregroundOwner"), fixture.ExpectedRebuiltForegroundOwner, StringComparison.OrdinalIgnoreCase),
+                    $"Replay parity scene '{fixture.Name}' expected rebuilt foreground owner '{fixture.ExpectedRebuiltForegroundOwner}'.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(fixture.ExpectedRebuiltForegroundActionLane))
+            {
+                Assert(string.Equals(TryGetObserverMeta(rebuiltLoad.Request.Observer, "foregroundActionLane"), fixture.ExpectedRebuiltForegroundActionLane, StringComparison.OrdinalIgnoreCase),
+                    $"Replay parity scene '{fixture.Name}' expected rebuilt foreground action lane '{fixture.ExpectedRebuiltForegroundActionLane}'.");
+            }
+
             if (!string.IsNullOrWhiteSpace(fixture.ExpectedChoiceExtractorPath))
             {
                 Assert(string.Equals(lightweightLoad.Request.Observer.ChoiceExtractorPath, fixture.ExpectedChoiceExtractorPath, StringComparison.OrdinalIgnoreCase),
@@ -364,8 +376,10 @@ internal static partial class Program
                 },
                 RequestContract = new
                 {
-                    ForegroundOwner = TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundOwner"),
-                    ForegroundActionLane = TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundActionLane"),
+                    LightweightForegroundOwner = TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundOwner"),
+                    LightweightForegroundActionLane = TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundActionLane"),
+                    RebuiltForegroundOwner = TryGetObserverMeta(rebuiltLoad.Request.Observer, "foregroundOwner"),
+                    RebuiltForegroundActionLane = TryGetObserverMeta(rebuiltLoad.Request.Observer, "foregroundActionLane"),
                     ChoiceExtractorPath = lightweightLoad.Request.Observer.ChoiceExtractorPath,
                 },
                 Lightweight = new
@@ -382,7 +396,7 @@ internal static partial class Program
                 },
                 ElapsedMs = trace.Entries.Sum(static entry => entry.ElapsedMs),
             });
-            trace.Info($"ok summary={lightweightSummary} foreground={TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundOwner") ?? "null"} lane={TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundActionLane") ?? "null"}");
+            trace.Info($"ok summary={lightweightSummary} foreground={TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundOwner") ?? "null"} rebuiltForeground={TryGetObserverMeta(rebuiltLoad.Request.Observer, "foregroundOwner") ?? "null"} lane={TryGetObserverMeta(lightweightLoad.Request.Observer, "foregroundActionLane") ?? "null"} rebuiltLane={TryGetObserverMeta(rebuiltLoad.Request.Observer, "foregroundActionLane") ?? "null"}");
         }
 
         Console.WriteLine(JsonSerializer.Serialize(new

@@ -283,6 +283,7 @@ sealed partial class AutoDecisionProvider
     private static GuiSmokeDecisionAnalysis AnalyzeHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision, GuiSmokeStepAnalysisContext analysisContext)
     {
         var eventScene = analysisContext.EventScene;
+        var ancientContract = eventScene.AncientContract;
         if (eventScene.RewardSubstateActive)
         {
             return AnalyzeHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, actualDecision, analysisContext);
@@ -354,7 +355,7 @@ sealed partial class AutoDecisionProvider
             "no-ancient-dialogue-hitbox",
             rawBounds: TryFindEventChoiceBounds(request),
             boundsSource: "observer-ancient-dialogue");
-        if (AncientEventObserverSignals.IsDialogueActive(request.Observer))
+        if (ancientContract.HasExplicitDialogueSurface)
         {
             builder.AddSuppressed("click event choice", "ancient-dialogue-must-finish-before-option-selection");
             builder.AddSuppressed("click proceed", "ancient-dialogue-does-not-use-generic-proceed");
@@ -373,7 +374,7 @@ sealed partial class AutoDecisionProvider
             "no-explicit-ancient-completion-button",
             rawBounds: TryFindEventChoiceBounds(request),
             boundsSource: "observer-ancient-completion");
-        if (AncientEventObserverSignals.HasExplicitCompletionAction(request.Observer))
+        if (ancientContract.HasExplicitCompletionSurface)
         {
             builder.AddSuppressed("click proceed", "ancient-completion-remains-event-owned-through-explicit-proceed-button");
             builder.AddSuppressed("click exported reachable node", "event-owner-active-preserves-room-lane");
@@ -401,7 +402,7 @@ sealed partial class AutoDecisionProvider
             "no-explicit-ancient-option-button",
             rawBounds: TryFindEventChoiceBounds(request),
             boundsSource: "observer-ancient-option");
-        if (AncientEventObserverSignals.HasExplicitOptionSelection(request.Observer))
+        if (ancientContract.HasExplicitOptionSurface)
         {
             builder.AddSuppressed("click proceed", "ancient-event-options-should-use-explicit-option-buttons");
             builder.AddSuppressed("click exported reachable node", "event-owner-active-preserves-room-lane");
@@ -410,7 +411,7 @@ sealed partial class AutoDecisionProvider
             return builder.Build(CreateWaitDecision("waiting for explicit ancient event option buttons", DisplayControlFlowScreen(request.Observer)), actualDecision);
         }
 
-        var ancientOptionContractReconciliationDecision = TryCreateAncientOptionContractReconciliationDecision(request);
+        var ancientOptionContractReconciliationDecision = TryCreateAncientOptionContractReconciliationDecision(request, eventScene);
         builder.Consider(
             "click event choice",
             "ancient-option-contract-reconciliation",
@@ -419,7 +420,7 @@ sealed partial class AutoDecisionProvider
             "no-same-family-event-option-button-for-bounded-reconciliation",
             rawBounds: TryFindEventChoiceBounds(request),
             boundsSource: "observer-event-option-button");
-        if (AncientEventObserverSignals.HasOptionContractMismatch(request.Observer))
+        if (ancientContract.HasLaneSurfaceMismatch)
         {
             builder.AddSuppressed("click proceed", "ancient-option-contract-mismatch-suppresses-stale-proceed-inference");
             builder.AddSuppressed("click exported reachable node", "event-owner-active-preserves-room-lane");
@@ -428,7 +429,7 @@ sealed partial class AutoDecisionProvider
             return builder.Build(
                 CreateAncientOptionContractMismatchAbortDecision(
                     request,
-                    "ancient option contract mismatch: foreground lane claims explicit ancient buttons, but only generic event-option buttons remain actionable",
+                    "ancient option contract mismatch: foreground lane claims explicit ancient buttons, but the actionable event-option surface is generic",
                     "ancient-event-option-contract-mismatch"),
                 actualDecision);
         }

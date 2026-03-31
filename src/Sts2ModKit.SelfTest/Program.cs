@@ -2126,12 +2126,12 @@ static void TestRuntimeReflectionAncientAwaitOptionsReconcilesToGenericEventButt
         .Where(choice => string.Equals(choice.Kind, "event-option", StringComparison.OrdinalIgnoreCase))
         .OrderBy(choice => choice.NodeId, StringComparer.OrdinalIgnoreCase)
         .ToArray();
-    Assert(exportedOptions.Length == 4,
-        $"Await-options reconciliation should preserve the live-faithful mixed event-option export shape. Actual options: {string.Join(" | ", exportedOptions.Select(choice => $"{choice.NodeId}:{choice.Label}:{string.Join(",", choice.SemanticHints ?? Array.Empty<string>())}"))}");
+    Assert(exportedOptions.Length == 2,
+        $"Await-options reconciliation should keep only the canonical actionable event-option button family once the final lane is generic event-choice. Actual options: {string.Join(" | ", exportedOptions.Select(choice => $"{choice.NodeId}:{choice.Label}:{string.Join(",", choice.SemanticHints ?? Array.Empty<string>())}"))}");
     Assert(exportedOptions.Count(choice => choice.SemanticHints.Contains("source:event-option-button", StringComparer.OrdinalIgnoreCase)) == 2,
         "Await-options reconciliation should keep the two actionable generic NEventOptionButton choices.");
-    Assert(exportedOptions.Count(choice => choice.SemanticHints.Contains("source:event-option", StringComparer.OrdinalIgnoreCase)) == 2,
-        "Await-options reconciliation should keep the paired raw EventOption entries that still appear in live choice exports.");
+    Assert(exportedOptions.All(choice => !choice.SemanticHints.Contains("source:event-option", StringComparer.OrdinalIgnoreCase)),
+        "Await-options reconciliation should drop raw EventOption residue once the final exported lane is canonicalized to generic event-choice.");
     Assert(exportedOptions.All(choice => !choice.SemanticHints.Contains("source:ancient-option-button", StringComparer.OrdinalIgnoreCase)),
         "Await-options reconciliation should not relabel any live event-option surface as an ancient explicit button source.");
 }

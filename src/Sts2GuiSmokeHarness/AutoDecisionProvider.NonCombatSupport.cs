@@ -44,6 +44,11 @@ sealed partial class AutoDecisionProvider
             return ("ancient-event-completion", "event");
         }
 
+        if (eventScene.ExplicitAction == EventExplicitActionKind.AncientOptionContractMismatch)
+        {
+            return ("event-option-contract-mismatch", "event");
+        }
+
         if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)
         {
             return ("event-release-pending", eventScene.MapContextVisible ? "map" : null);
@@ -257,9 +262,7 @@ sealed partial class AutoDecisionProvider
             return false;
         }
 
-        if (AncientEventObserverSignals.IsDialogueActive(observer)
-            || AncientEventObserverSignals.HasExplicitCompletionAction(observer)
-            || AncientEventObserverSignals.HasExplicitOptionSelection(observer))
+        if (eventScene.AncientContract.HasForegroundContractAuthority)
         {
             return true;
         }

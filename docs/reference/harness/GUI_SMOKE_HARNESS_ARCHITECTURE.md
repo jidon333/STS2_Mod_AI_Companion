@@ -118,6 +118,7 @@ flowchart TD
 - `currentScreen`은 logical/flow screen이고, foreground owner와 동일어가 아니다.
 - `visible/open != canonical foreground owner` 규칙은 observer layer에서 enforced된다.
 - final lane metadata는 final exported actionable surface를 따라야 한다. ancient residue facts는 diagnostic transport만 허용하고, lane promotion에 쓰지 않는다.
+- ancient family에서는 lane-vs-surface contradiction이 보이면 explicit contract mismatch가 우선이다. bounded reconciliation은 같은 event owner와 같은 actionable `NEventOptionButton` family가 동시에 보일 때만 허용하고, map/reward contamination이 있으면 허용하지 않는다.
 
 ### 2.4 Analysis
 

@@ -178,9 +178,11 @@ sealed partial class AutoDecisionProvider
     {
         var rewardScene = BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath);
-        var ancientDialogueActive = AncientEventObserverSignals.IsDialogueActive(observer);
-        var ancientCompletionActive = AncientEventObserverSignals.HasExplicitCompletionAction(observer);
-        var ancientOptionActive = AncientEventObserverSignals.HasExplicitOptionSelection(observer);
+        var ancientContract = AncientEventObserverSignals.GetAncientEventOptionContractState(observer, windowBounds);
+        var ancientDialogueActive = ancientContract.HasExplicitDialogueSurface;
+        var ancientCompletionActive = ancientContract.HasExplicitCompletionSurface;
+        var ancientOptionActive = ancientContract.HasExplicitOptionSurface;
+        var ancientOptionContractMismatch = ancientContract.ContractLane == AncientEventObserverSignals.AncientEventContractLane.OptionContractMismatch;
         var eventChoiceAuthority = EventProceedObserverSignals.HasEventChoiceAuthority(observer);
         var eventReleaseToMapActive = HasRecentEventReleaseIntent(history)
                                       && (mapExplicitOwner || mapOverlayState.ForegroundVisible);
@@ -204,12 +206,14 @@ sealed partial class AutoDecisionProvider
         var hasExplicitProgression = ancientDialogueActive
                                      || ancientCompletionActive
                                      || ancientOptionActive
+                                     || ancientOptionContractMismatch
                                      || explicitProceedVisible
                                      || activeEventChoiceVisible
                                      || forceProgressionAfterCardSelection;
         var strongForegroundChoice = ancientDialogueActive
                                      || ancientCompletionActive
                                      || ancientOptionActive
+                                     || ancientOptionContractMismatch
                                      || explicitProceedVisible
                                      || activeEventChoiceVisible
                                      || forceProgressionAfterCardSelection;
@@ -242,6 +246,8 @@ sealed partial class AutoDecisionProvider
                     ? EventExplicitActionKind.AncientCompletion
                     : ancientOptionActive
                         ? EventExplicitActionKind.AncientOption
+                        : ancientOptionContractMismatch
+                            ? EventExplicitActionKind.AncientOptionContractMismatch
                         : explicitProceedVisible
                             ? EventExplicitActionKind.Proceed
                             : activeEventChoiceVisible || forceProgressionAfterCardSelection
@@ -254,6 +260,7 @@ sealed partial class AutoDecisionProvider
             explicitAction,
             rewardScene,
             mapOverlayState,
+            ancientContract,
             mapContextVisible,
             rewardSubstateActive,
             hasExplicitProgression,

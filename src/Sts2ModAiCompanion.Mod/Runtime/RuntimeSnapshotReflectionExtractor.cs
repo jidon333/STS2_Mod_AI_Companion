@@ -1439,8 +1439,9 @@ internal static class RuntimeSnapshotReflectionExtractor
             if (genericEventAttempt is not null
                 && TryResolveEventForegroundActionLane(genericEventAttempt) is { } eventForegroundLane)
             {
+                var canonicalGenericEventAttempt = NormalizeEventForegroundSurface(genericEventAttempt, eventForegroundLane);
                 return WithForegroundMetadata(
-                    genericEventAttempt,
+                    canonicalGenericEventAttempt,
                     BuildAncientDiagnosticsMetadata(ancientEventStrict.Meta),
                     "event",
                     eventForegroundLane,
@@ -1567,6 +1568,87 @@ internal static class RuntimeSnapshotReflectionExtractor
         return result.Choices.Any(IsBoundedEventOptionButtonProceedChoice)
             ? "event-proceed"
             : null;
+    }
+
+    private static ChoiceExtractionResult NormalizeEventForegroundSurface(
+        ChoiceExtractionResult result,
+        string eventForegroundLane)
+    {
+        // Keep the final exported event surface aligned to the resolved lane family.
+        var canonicalChoices = string.Equals(eventForegroundLane, "event-proceed", StringComparison.OrdinalIgnoreCase)
+            ? result.Choices.Where(IsBoundedEventOptionButtonProceedChoice).ToArray()
+            : result.Choices.Where(IsBoundedEventOptionButtonChoice).ToArray();
+        if (canonicalChoices.Length == 0)
+        {
+            return result;
+        }
+
+        var canonicalChoiceKeys = canonicalChoices
+            .Select(BuildEventChoiceIdentity)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var canonicalCandidates = result.Candidates
+            .Select(candidate => new
+            {
+                Candidate = candidate,
+                Identity = BuildEventChoiceIdentity("event-option", candidate.Label, candidate.Value, candidate.Description),
+                IsButtonType = IsEventOptionButtonType(candidate.TypeName),
+            })
+            .Where(entry => canonicalChoiceKeys.Contains(entry.Identity))
+            .GroupBy(entry => entry.Identity, StringComparer.OrdinalIgnoreCase)
+            .Select(static group => group
+                .OrderByDescending(static entry => entry.IsButtonType)
+                .ThenByDescending(static entry => entry.Candidate.Score)
+                .First()
+                .Candidate)
+            .ToArray();
+        if (canonicalCandidates.Length == 0)
+        {
+            return result with
+            {
+                Choices = canonicalChoices,
+                Decision = result.Decision with
+                {
+                    AcceptedCount = canonicalChoices.Length,
+                    Outcome = "accepted",
+                },
+            };
+        }
+
+        var placeholderLabels = canonicalCandidates
+            .Where(static candidate => string.Equals(candidate.RejectReason, "placeholder-label", StringComparison.Ordinal))
+            .Select(static candidate => candidate.Label)
+            .Where(static label => !string.IsNullOrWhiteSpace(label))
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static label => label, StringComparer.Ordinal)
+            .ToArray();
+
+        return result with
+        {
+            Choices = canonicalChoices,
+            Candidates = canonicalCandidates,
+            Decision = result.Decision with
+            {
+                CandidateCount = canonicalCandidates.Length,
+                AcceptedCount = canonicalChoices.Length,
+                Outcome = canonicalChoices.Length > 0 ? "accepted" : result.Decision.Outcome,
+                PlaceholderLabels = placeholderLabels,
+            },
+        };
+    }
+
+    private static string BuildEventChoiceIdentity(LiveExportChoiceSummary choice)
+    {
+        return BuildEventChoiceIdentity(choice.Kind, choice.Label, choice.Value, choice.Description);
+    }
+
+    private static string BuildEventChoiceIdentity(
+        string kind,
+        string? label,
+        string? value,
+        string? description)
+    {
+        return $"{kind ?? string.Empty}|{label ?? string.Empty}|{value ?? string.Empty}|{description ?? string.Empty}";
     }
 
     private static Dictionary<string, string?> BuildAncientBackgroundMetadata(IReadOnlyDictionary<string, string?> metadata)

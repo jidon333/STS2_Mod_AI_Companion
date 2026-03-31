@@ -147,6 +147,7 @@ enum EventExplicitActionKind
     AncientDialogue,
     AncientCompletion,
     AncientOption,
+    AncientOptionContractMismatch,
     EventChoice,
     Proceed,
 }
@@ -157,6 +158,7 @@ sealed record EventSceneState(
     EventExplicitActionKind ExplicitAction,
     RewardSceneState RewardScene,
     MapOverlayState MapOverlayState,
+    AncientEventObserverSignals.AncientEventOptionContractState AncientContract,
     bool MapContextVisible,
     bool RewardSubstateActive,
     bool HasExplicitProgression,
@@ -211,6 +213,7 @@ sealed record EventSceneState(
             EventExplicitActionKind.AncientDialogue => "ancient-event-dialogue",
             EventExplicitActionKind.AncientCompletion => "ancient-event-completion",
             EventExplicitActionKind.AncientOption => "ancient-event-options",
+            EventExplicitActionKind.AncientOptionContractMismatch => "event-option-contract-mismatch",
             _ when EventForegroundOwned && ReleaseStage == EventReleaseStage.ReleasePending => "event-release-pending",
             _ when EventForegroundOwned => "event",
             _ when MapForegroundOwned => "map",

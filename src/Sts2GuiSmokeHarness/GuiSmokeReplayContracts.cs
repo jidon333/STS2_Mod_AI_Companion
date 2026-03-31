@@ -16,6 +16,8 @@ sealed record GuiSmokeReplayParityFixture(
     string? ExpectedTargetContains,
     string? ExpectedForegroundOwner,
     string? ExpectedForegroundActionLane,
+    string? ExpectedRebuiltForegroundOwner,
+    string? ExpectedRebuiltForegroundActionLane,
     string? ExpectedChoiceExtractorPath);
 
 sealed record GuiSmokeReplayTimingEntry(

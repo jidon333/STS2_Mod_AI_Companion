@@ -308,6 +308,7 @@ sealed partial class AutoDecisionProvider
     private static GuiSmokeStepDecision DecideHandleEvent(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         var eventScene = analysisContext?.EventScene ?? BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        var ancientContract = eventScene.AncientContract;
         if (eventScene.RewardSubstateActive)
         {
             return DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, analysisContext);
@@ -383,7 +384,7 @@ sealed partial class AutoDecisionProvider
             0.95,
             TryCreateAncientDialogueAdvanceDecision(request),
             "no explicit ancient dialogue hitbox has usable bounds");
-        if (AncientEventObserverSignals.IsDialogueActive(request.Observer))
+        if (ancientContract.HasExplicitDialogueSurface)
         {
             GuiSmokeDecisionDebug.SetSceneModel("ancient-event-dialogue", "event-context");
             GuiSmokeDecisionDebug.Suppress("click event choice", "ancient dialogue must finish before option selection");
@@ -400,7 +401,7 @@ sealed partial class AutoDecisionProvider
             0.94,
             TryCreateAncientEventCompletionDecision(request),
             "no explicit ancient completion button has usable bounds");
-        if (AncientEventObserverSignals.HasExplicitCompletionAction(request.Observer))
+        if (ancientContract.HasExplicitCompletionSurface)
         {
             GuiSmokeDecisionDebug.SetSceneModel("ancient-event-completion", "event-context");
             GuiSmokeDecisionDebug.Suppress("click proceed", "ancient completion remains event-owned through the explicit NEventOptionButton proceed lane");
@@ -427,7 +428,7 @@ sealed partial class AutoDecisionProvider
             0.93,
             TryCreateAncientEventOptionDecision(request),
             "no explicit ancient event option button has usable bounds");
-        if (AncientEventObserverSignals.HasExplicitOptionSelection(request.Observer))
+        if (ancientContract.HasExplicitOptionSurface)
         {
             GuiSmokeDecisionDebug.SetSceneModel("ancient-event-options", "event-context");
             GuiSmokeDecisionDebug.Suppress("click proceed", "ancient options should be selected from explicit option buttons");
@@ -441,11 +442,11 @@ sealed partial class AutoDecisionProvider
             "ancient option contract reconciliation",
             "ancient-option-contract-reconciliation",
             0.935,
-            TryCreateAncientOptionContractReconciliationDecision(request),
+            TryCreateAncientOptionContractReconciliationDecision(request, eventScene),
             "no same-family event-option button remains for bounded reconciliation");
-        if (AncientEventObserverSignals.HasOptionContractMismatch(request.Observer))
+        if (ancientContract.HasLaneSurfaceMismatch)
         {
-            GuiSmokeDecisionDebug.SetSceneModel("event-choice", "event-context");
+            GuiSmokeDecisionDebug.SetSceneModel("event-option-contract-mismatch", "event-context");
             GuiSmokeDecisionDebug.Suppress("click proceed", "ancient option contract mismatch suppresses stale proceed inference");
             GuiSmokeDecisionDebug.Suppress("click exported reachable node", "event-owner-active-preserves-room-lane");
             GuiSmokeDecisionDebug.Suppress("click first reachable node", "event-owner-active-preserves-room-lane");
@@ -453,7 +454,7 @@ sealed partial class AutoDecisionProvider
             return ancientOptionContractReconciliationDecision
                    ?? CreateAncientOptionContractMismatchAbortDecision(
                        request,
-                       "ancient option contract mismatch: foreground lane claims explicit ancient buttons, but only generic event-option buttons remain actionable",
+                       "ancient option contract mismatch: foreground lane claims explicit ancient buttons, but the actionable event-option surface is generic",
                        "ancient-event-option-contract-mismatch");
         }
 
@@ -1281,9 +1282,18 @@ sealed partial class AutoDecisionProvider
         return null;
     }
 
-    private static GuiSmokeStepDecision? TryCreateAncientOptionContractReconciliationDecision(GuiSmokeStepRequest request)
+    private static GuiSmokeStepDecision? TryCreateAncientOptionContractReconciliationDecision(
+        GuiSmokeStepRequest request,
+        EventSceneState? eventScene = null)
     {
-        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click event choice"))
+        var ancientContract = AncientEventObserverSignals.GetAncientEventOptionContractState(request.Observer, request.WindowBounds);
+        eventScene ??= BuildEventSceneState(request.Observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        if (!ancientContract.HasSameFamilyReconciliationSurface
+            || eventScene.RewardSubstateActive
+            || eventScene.MapForegroundOwned
+            || eventScene.MapOverlayState.ForegroundVisible
+            || !eventScene.EventForegroundOwned
+            || !GuiSmokeNonCombatContractSupport.AllowsAction(request, "click event choice"))
         {
             return null;
         }

@@ -63,6 +63,7 @@ internal static partial class Program
         var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
         var explicitEventProceedAuthority = eventScene.ExplicitProceedVisible;
         var explicitEventRecoveryAuthority = AutoDecisionProvider.HasExplicitEventRecoveryAuthority(observer, context.WindowBounds, history, eventScene);
+        var ancientContract = eventScene.AncientContract;
         var eventOwnerActive = eventScene.EventForegroundOwned
                                && eventScene.ReleaseStage == EventReleaseStage.Active;
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
@@ -114,13 +115,15 @@ internal static partial class Program
                 => new[] { "wait" },
             GuiSmokePhase.HandleEvent when ancientMapOwner && ancientMapSurfacePending
                 => new[] { "wait" },
-            GuiSmokePhase.HandleEvent when AncientEventObserverSignals.IsDialogueActive(observer.Summary)
+            GuiSmokePhase.HandleEvent when ancientContract.HasExplicitDialogueSurface
                 => new[] { "click ancient dialogue advance", "wait" },
-            GuiSmokePhase.HandleEvent when AncientEventObserverSignals.HasExplicitCompletionAction(observer.Summary)
+            GuiSmokePhase.HandleEvent when ancientContract.HasExplicitCompletionSurface
                 => new[] { "click ancient event completion", "wait" },
-            GuiSmokePhase.HandleEvent when AncientEventObserverSignals.HasOptionContractMismatch(observer.Summary)
-                => new[] { "click event choice", "wait" },
-            GuiSmokePhase.HandleEvent when AncientEventObserverSignals.HasExplicitOptionSelection(observer.Summary)
+            GuiSmokePhase.HandleEvent when ancientContract.HasLaneSurfaceMismatch
+                => ancientContract.HasSameFamilyReconciliationSurface
+                    ? new[] { "click event choice", "wait" }
+                    : new[] { "wait" },
+            GuiSmokePhase.HandleEvent when ancientContract.HasExplicitOptionSurface
                 => new[] { "click event choice", "wait" },
             GuiSmokePhase.HandleEvent when forceEventProgressionAfterCardSelection
                 => new[] { "click event choice", "click proceed", "wait" },

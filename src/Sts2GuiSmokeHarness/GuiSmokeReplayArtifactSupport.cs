@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using static ObserverScreenProvenance;
@@ -40,16 +41,24 @@ static class GuiSmokeReplayArtifactSupport
             null,
             request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>());
         var phase = Enum.Parse<GuiSmokePhase>(request.Phase, ignoreCase: true);
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, request.WindowBounds, request.History, request.ScreenshotPath);
+        var canonicalObserver = fullRequestRebuild
+            ? new ObserverState(
+                NormalizeReplayObserverMeta(observer.Summary, eventScene),
+                stateDocument,
+                null,
+                observer.LastEventsTail?.ToArray() ?? Array.Empty<string>())
+            : observer;
         var analysisContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
             phase,
-            observer,
+            canonicalObserver,
             request.ScreenshotPath,
             request.History,
             request.CombatCardKnowledge,
             request.WindowBounds);
         var sceneSignature = tracer.Measure(
             "scene-signature",
-            () => GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(request.ScreenshotPath, observer, phase, analysisContext),
+            () => GuiSmokeSceneReasoningSupport.ComputeSceneSignatureCore(request.ScreenshotPath, canonicalObserver, phase, analysisContext),
             Path.GetFileName(request.ScreenshotPath),
             alwaysLog: false);
         string[] allowedActions;
@@ -59,17 +68,17 @@ static class GuiSmokeReplayArtifactSupport
         {
             allowedActions = tracer.Measure(
                 "allowed-actions",
-                () => Program.BuildAllowedActionsCore(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History, analysisContext),
+                () => Program.BuildAllowedActionsCore(phase, canonicalObserver, request.CombatCardKnowledge, request.ScreenshotPath, request.History, analysisContext),
                 request.Phase,
                 alwaysLog: false);
             failureModeHint = tracer.Measure(
                 "failure-mode-hint",
-                () => GuiSmokePromptContractSupport.BuildFailureModeHintCoreWithContext(phase, observer, request.CombatCardKnowledge, request.ScreenshotPath, request.History, analysisContext),
+                () => GuiSmokePromptContractSupport.BuildFailureModeHintCoreWithContext(phase, canonicalObserver, request.CombatCardKnowledge, request.ScreenshotPath, request.History, analysisContext),
                 request.Phase,
                 alwaysLog: false);
             semanticGoal = tracer.Measure(
                 "semantic-goal",
-                () => GuiSmokeSceneReasoningSupport.BuildSemanticGoal(phase, observer, request.ReasoningMode),
+                () => GuiSmokeSceneReasoningSupport.BuildSemanticGoal(phase, canonicalObserver, request.ReasoningMode),
                 request.ReasoningMode,
                 alwaysLog: false);
         }
@@ -90,7 +99,7 @@ static class GuiSmokeReplayArtifactSupport
                 EventKnowledgeCandidates = request.EventKnowledgeCandidates ?? Array.Empty<EventKnowledgeCandidate>(),
                 CombatCardKnowledge = request.CombatCardKnowledge ?? Array.Empty<CombatCardKnowledgeHint>(),
                 History = request.History ?? Array.Empty<GuiSmokeHistoryEntry>(),
-                Observer = observer.Summary,
+                Observer = canonicalObserver.Summary,
                 SceneSignature = sceneSignature,
                 AllowedActions = allowedActions,
                 FailureModeHint = failureModeHint,
@@ -99,6 +108,46 @@ static class GuiSmokeReplayArtifactSupport
             fullRequestRebuild,
             stateDocument is not null,
             tracer.Entries.ToArray());
+    }
+
+    private static ObserverSummary NormalizeReplayObserverMeta(ObserverSummary observer, EventSceneState eventScene)
+    {
+        if (!eventScene.AncientContract.HasLaneSurfaceMismatch)
+        {
+            return observer;
+        }
+
+        var meta = new Dictionary<string, string?>(observer.Meta, StringComparer.OrdinalIgnoreCase)
+        {
+            ["foregroundOwner"] = "event",
+            ["foregroundActionLane"] = "event-choice",
+            ["choiceExtractorPath"] = "event",
+            ["eventTeardownInProgress"] = "false",
+            ["mapReleaseAuthority"] = "false",
+            ["mapSurfacePending"] = "false",
+        };
+
+        foreach (var key in new[]
+                 {
+                     "ancientPhase",
+                     "ancientEventExtractionPath",
+                     "ancientOptionCount",
+                     "ancientCompletionCount",
+                     "ancientOptionSummary",
+                     "ancientCompletionSummary",
+                     "ancientCompletionBoundsSource",
+                     "ancientCompletionControlType",
+                     "ancientCompletionUsesDefaultFocus",
+                     "ancientCompletionHasFocus",
+                 })
+        {
+            meta.Remove(key);
+        }
+
+        return observer with
+        {
+            Meta = meta,
+        };
     }
 
     internal static GuiSmokeReplayEvaluation EvaluateAutoDecisionWithDiagnostics(

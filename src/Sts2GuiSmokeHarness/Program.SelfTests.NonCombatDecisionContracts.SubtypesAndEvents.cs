@@ -480,10 +480,25 @@ internal static partial class Program
                 null,
                 null,
                 null);
+            var ancientContractState = AncientEventObserverSignals.GetAncientEventOptionContractState(
+                ancientContractMismatchObserver.Summary,
+                new WindowBounds(26, 75, 1280, 720));
             Assert(!AncientEventObserverSignals.HasExplicitOptionSelection(ancientContractMismatchObserver.Summary),
                 "Metadata-only ancient-option lane promotion must not resurrect explicit ancient option authority.");
             Assert(AncientEventObserverSignals.HasOptionContractMismatch(ancientContractMismatchObserver.Summary),
                 "Ancient option lane mismatch should be surfaced when only generic event-option buttons remain actionable.");
+            Assert(ancientContractState.HasForegroundContractAuthority
+                   && ancientContractState.HasLaneSurfaceMismatch
+                   && ancientContractState.HasSameFamilyReconciliationSurface,
+                "Ancient option contract state should distinguish foreground authority, mismatch, and same-family reconciliation from the same shared contract truth.");
+            var ancientContractScene = AutoDecisionProvider.BuildEventSceneState(
+                ancientContractMismatchObserver,
+                new WindowBounds(26, 75, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                string.Empty);
+            Assert(ancientContractScene.EventForegroundOwned
+                   && ancientContractScene.ExplicitAction == EventExplicitActionKind.AncientOptionContractMismatch,
+                "Event scene-state should preserve ancient option contract mismatches as an explicit event-owned contract lane.");
             var ancientContractMismatchActions = BuildAllowedActions(GuiSmokePhase.HandleEvent, ancientContractMismatchObserver, Array.Empty<CombatCardKnowledgeHint>(), string.Empty, Array.Empty<GuiSmokeHistoryEntry>());
             Assert(ancientContractMismatchActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase),
                 "Ancient option contract mismatch should keep click event choice available for bounded reconciliation.");
@@ -538,6 +553,15 @@ internal static partial class Program
                 null,
                 null,
                 null);
+            var ancientContractFailureActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                ancientContractFailureObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(ancientContractFailureActions.Length == 1
+                   && string.Equals(ancientContractFailureActions[0], "wait", StringComparison.OrdinalIgnoreCase),
+                "Ancient option mismatch without a same-family reconciliation surface should not reopen click event choice in the allowlist.");
             var ancientContractFailureDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",

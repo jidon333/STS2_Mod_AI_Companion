@@ -17,6 +17,8 @@
     "expectedTargetContains": "event progression choice",
     "expectedForegroundOwner": "event",
     "expectedForegroundActionLane": "ancient-option",
+    "expectedRebuiltForegroundOwner": "event",
+    "expectedRebuiltForegroundActionLane": "event-choice",
     "expectedChoiceExtractorPath": "event"
   },
   {

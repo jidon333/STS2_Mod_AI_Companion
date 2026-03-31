@@ -57,7 +57,7 @@
 3. truth가 부족하면 fallback을 넓히지 말고 export를 늘리거나 `wait`로 남긴다
 4. `LooksLike*`, `HasRaw*Visible`, `HasRaw*Surface` 류 broad helper는 primary owner 결정에서 이기지 못한다
 5. 새 precise path가 들어가면 obsolete fallback은 같은 wave에서 같이 제거한다
-6. final lane은 final actionable surface로만 승격한다. metadata-only lane promotion과 plateau masking은 허용하지 않는다.
+6. final lane은 final actionable surface로만 승격한다. metadata-only lane promotion과 plateau masking은 허용하지 않는다. lane-vs-surface contradiction은 explicit contract mismatch로 드러내고, bounded reconciliation은 같은 event owner와 같은 actionable `NEventOptionButton` family일 때만 허용한다.
 
 ## Startup / Validation
 

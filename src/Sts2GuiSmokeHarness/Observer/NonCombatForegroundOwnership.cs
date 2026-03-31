@@ -35,7 +35,8 @@ static class NonCombatForegroundOwnership
         if (eventScene.EventForegroundOwned
             && eventScene.ExplicitAction is EventExplicitActionKind.AncientDialogue
                 or EventExplicitActionKind.AncientCompletion
-                or EventExplicitActionKind.AncientOption)
+                or EventExplicitActionKind.AncientOption
+                or EventExplicitActionKind.AncientOptionContractMismatch)
         {
             return NonCombatForegroundOwner.Event;
         }
@@ -86,7 +87,8 @@ static class NonCombatForegroundOwnership
         if (eventScene.EventForegroundOwned
             && eventScene.ExplicitAction is EventExplicitActionKind.AncientDialogue
                 or EventExplicitActionKind.AncientCompletion
-                or EventExplicitActionKind.AncientOption)
+                or EventExplicitActionKind.AncientOption
+                or EventExplicitActionKind.AncientOptionContractMismatch)
         {
             return NonCombatForegroundOwner.Event;
         }

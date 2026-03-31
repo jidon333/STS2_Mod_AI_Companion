@@ -9,6 +9,54 @@ using static ObserverScreenProvenance;
 
 static class AncientEventObserverSignals
 {
+    internal enum AncientEventContractLane
+    {
+        None,
+        Dialogue,
+        Completion,
+        Option,
+        OptionContractMismatch,
+    }
+
+    internal sealed record AncientEventOptionContractState(
+        bool AncientEventDetected,
+        bool MapForegroundOverride,
+        bool EventForegroundOwner,
+        string? ForegroundActionLane,
+        bool HasExplicitDialogueSurface,
+        bool HasExplicitCompletionSurface,
+        bool HasExplicitOptionSurface,
+        bool HasReconciledEventOptionSurface)
+    {
+        public bool HasExplicitAncientSurface => HasExplicitDialogueSurface
+                                                 || HasExplicitCompletionSurface
+                                                 || HasExplicitOptionSurface;
+
+        public AncientEventContractLane ContractLane => HasExplicitDialogueSurface
+            ? AncientEventContractLane.Dialogue
+            : HasExplicitCompletionSurface
+                ? AncientEventContractLane.Completion
+                : HasExplicitOptionSurface
+                    ? AncientEventContractLane.Option
+                    : HasLaneSurfaceMismatch
+                        ? AncientEventContractLane.OptionContractMismatch
+                        : AncientEventContractLane.None;
+
+        public bool HasAncientOptionLaneClaim => string.Equals(ForegroundActionLane, "ancient-option", StringComparison.OrdinalIgnoreCase);
+
+        public bool HasForegroundContractAuthority => HasExplicitAncientSurface
+                                                      || HasLaneSurfaceMismatch;
+
+        public bool HasSameFamilyReconciliationSurface => HasLaneSurfaceMismatch
+                                                          && HasReconciledEventOptionSurface;
+
+        public bool HasLaneSurfaceMismatch => AncientEventDetected
+                                              && EventForegroundOwner
+                                              && !MapForegroundOverride
+                                              && HasAncientOptionLaneClaim
+                                              && !HasExplicitAncientSurface;
+    }
+
     private static bool HasExplicitMapForegroundOverride(ObserverSummary observer)
     {
         if (IsMapForegroundOwner(observer))
@@ -188,31 +236,50 @@ static class AncientEventObserverSignals
             return false;
         }
 
-        return IsDialogueActive(observer)
-               || HasExplicitCompletionAction(observer)
-               || HasExplicitOptionSelection(observer);
+        return GetAncientEventOptionContractState(observer, null).HasForegroundContractAuthority;
+    }
+
+    public static AncientEventOptionContractState GetAncientEventOptionContractState(
+        ObserverSummary observer,
+        WindowBounds? windowBounds)
+    {
+        return new AncientEventOptionContractState(
+            AncientEventDetected: IsAncientEventDetected(observer),
+            MapForegroundOverride: HasExplicitMapForegroundOverride(observer),
+            EventForegroundOwner: IsEventForegroundOwner(observer),
+            ForegroundActionLane: GetForegroundActionLane(observer),
+            HasExplicitDialogueSurface: IsDialogueActive(observer),
+            HasExplicitCompletionSurface: HasExplicitCompletionAction(observer),
+            HasExplicitOptionSurface: HasExplicitOptionSelection(observer),
+            HasReconciledEventOptionSurface: GetActiveReconciledOptionNodes(observer, windowBounds).Count > 0
+                                             || GetActiveReconciledOptionChoices(observer, windowBounds).Count > 0);
     }
 
     public static bool HasOptionContractMismatch(ObserverSummary observer)
     {
-        if (HasExplicitMapForegroundOverride(observer)
-            || !IsAncientEventDetected(observer)
-            || !IsEventForegroundOwner(observer)
-            || !string.Equals(GetForegroundActionLane(observer), "ancient-option", StringComparison.OrdinalIgnoreCase)
-            || HasExplicitOptionSelection(observer))
+        return HasOptionContractMismatch(observer, null);
+    }
+
+    public static bool HasOptionContractMismatch(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        return HasAncientOptionContractMismatch(GetAncientEventOptionContractState(observer, windowBounds));
+    }
+
+    private static bool HasAncientOptionContractMismatch(AncientEventOptionContractState contractState)
+    {
+        if (!contractState.AncientEventDetected
+            || contractState.MapForegroundOverride
+            || !contractState.EventForegroundOwner)
         {
             return false;
         }
 
-        return string.Equals(TryGetMetaString(observer, "ancientPhase"), "await-options", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(TryGetMetaString(observer, "ancientEventExtractionPath"), "ancient-await-options", StringComparison.OrdinalIgnoreCase)
-               || (TryGetMetaInt(observer, "ancientOptionCount") ?? 0) == 0;
+        return contractState.HasLaneSurfaceMismatch;
     }
 
     public static bool HasOptionContractReconciliationSurface(ObserverSummary observer, WindowBounds? windowBounds)
     {
-        return GetActiveReconciledOptionNodes(observer, windowBounds).Count > 0
-               || GetActiveReconciledOptionChoices(observer, windowBounds).Count > 0;
+        return GetAncientEventOptionContractState(observer, windowBounds).HasSameFamilyReconciliationSurface;
     }
 
     public static bool IsAncientDialogueNode(ObserverActionNode node)
