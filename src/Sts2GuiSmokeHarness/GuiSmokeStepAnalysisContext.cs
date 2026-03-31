@@ -37,6 +37,7 @@ sealed class GuiSmokeStepAnalysisContext
     private readonly Func<MapOverlayState> _mapOverlayStateFactory;
     private readonly Func<RewardSceneState> _rewardSceneFactory;
     private readonly Func<EventSceneState> _eventSceneFactory;
+    private readonly Func<PostNodeHandoffState> _postNodeHandoffStateFactory;
     private readonly Func<ICanonicalNonCombatSceneState?> _canonicalNonCombatSceneFactory;
     private readonly Func<ReconstructedHandleCombatContext> _combatContextFactory;
     private readonly Func<PendingCombatSelection?> _pendingCombatSelectionFactory;
@@ -56,6 +57,7 @@ sealed class GuiSmokeStepAnalysisContext
     private MapOverlayState? _mapOverlayState;
     private RewardSceneState? _rewardScene;
     private EventSceneState? _eventScene;
+    private PostNodeHandoffState? _postNodeHandoffState;
     private ICanonicalNonCombatSceneState? _canonicalNonCombatScene;
     private bool _canonicalNonCombatSceneComputed;
     private ReconstructedHandleCombatContext? _combatContext;
@@ -85,6 +87,7 @@ sealed class GuiSmokeStepAnalysisContext
         Func<MapOverlayState> mapOverlayStateFactory,
         Func<RewardSceneState> rewardSceneFactory,
         Func<EventSceneState> eventSceneFactory,
+        Func<PostNodeHandoffState> postNodeHandoffStateFactory,
         Func<ICanonicalNonCombatSceneState?> canonicalNonCombatSceneFactory,
         Func<ReconstructedHandleCombatContext> combatContextFactory,
         Func<PendingCombatSelection?> pendingCombatSelectionFactory,
@@ -110,6 +113,7 @@ sealed class GuiSmokeStepAnalysisContext
         _mapOverlayStateFactory = mapOverlayStateFactory;
         _rewardSceneFactory = rewardSceneFactory;
         _eventSceneFactory = eventSceneFactory;
+        _postNodeHandoffStateFactory = postNodeHandoffStateFactory;
         _canonicalNonCombatSceneFactory = canonicalNonCombatSceneFactory;
         _combatContextFactory = combatContextFactory;
         _pendingCombatSelectionFactory = pendingCombatSelectionFactory;
@@ -153,6 +157,8 @@ sealed class GuiSmokeStepAnalysisContext
     public RewardSceneState RewardScene => _rewardScene ??= _rewardSceneFactory();
 
     public EventSceneState EventScene => _eventScene ??= _eventSceneFactory();
+
+    public PostNodeHandoffState PostNodeHandoffState => _postNodeHandoffState ??= _postNodeHandoffStateFactory();
 
     public ICanonicalNonCombatSceneState? CanonicalNonCombatScene
     {
@@ -215,6 +221,7 @@ sealed class GuiSmokeStepAnalysisContext
         CombatBarrierEvaluation? combatBarrierEvaluation = null;
         RewardSceneState? rewardScene = null;
         EventSceneState? eventScene = null;
+        PostNodeHandoffState? postNodeHandoffState = null;
         ICanonicalNonCombatSceneState? canonicalNonCombatScene = null;
         var canonicalNonCombatSceneComputed = false;
 
@@ -269,6 +276,9 @@ sealed class GuiSmokeStepAnalysisContext
 
         EventSceneState GetEventScene()
             => eventScene ??= AutoDecisionProvider.BuildEventSceneState(observer, request.WindowBounds, history, screenshotPath);
+
+        PostNodeHandoffState GetPostNodeHandoffState()
+            => postNodeHandoffState ??= AutoDecisionProvider.BuildPostNodeHandoffState(observer, request.WindowBounds, history, screenshotPath);
 
         ICanonicalNonCombatSceneState? GetCanonicalNonCombatScene()
         {
@@ -337,6 +347,7 @@ sealed class GuiSmokeStepAnalysisContext
             () => EmptyMapOverlayState,
             GetRewardScene,
             GetEventScene,
+            GetPostNodeHandoffState,
             GetCanonicalNonCombatScene,
             GetCombatContext,
             GetPendingSelection,

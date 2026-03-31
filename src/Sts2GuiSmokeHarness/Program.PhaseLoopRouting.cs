@@ -682,7 +682,14 @@ internal static partial class Program
 
         if (phase == GuiSmokePhase.WaitMap)
         {
-            if (TryReopenMixedStateModalBranchFromWaitMap(observer, history, logger, stepIndex, out nextPhase))
+            if (TryGetCardSelectionReopenBranchFromWaitMap(observer, out var waitMapBranchKind, out nextPhase))
+            {
+                history.Add(new GuiSmokeHistoryEntry(GuiSmokePhase.WaitMap.ToString(), waitMapBranchKind!, null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, GuiSmokePhase.WaitMap.ToString(), waitMapBranchKind!, observer.CurrentScreen, observer.InCombat, null));
+                return true;
+            }
+
+            if (TryAdvancePostNodeHandoffBranch(phase, observer, history, logger, stepIndex, out nextPhase))
             {
                 return true;
             }
@@ -727,7 +734,8 @@ internal static partial class Program
                 && AncientEventObserverSignals.HasMapReleaseAuthority(
                     observer.Summary,
                     GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"),
-                    GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
+                    GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType"))
+                && AutoDecisionProvider.BuildPostNodeHandoffState(observer, null, history).Owner == NonCombatCanonicalForegroundOwner.Map)
             {
                 if (phase == GuiSmokePhase.WaitPostMapNodeRoom)
                 {
@@ -740,11 +748,8 @@ internal static partial class Program
                 return false;
             }
 
-            if (AncientEventObserverSignals.HasForegroundAuthority(observer.Summary))
+            if (TryAdvancePostNodeHandoffBranch(phase, observer, history, logger, stepIndex, out nextPhase))
             {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-event", null, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-event", observer.CurrentScreen, observer.InCombat, null));
-                nextPhase = GuiSmokePhase.HandleEvent;
                 return true;
             }
 
@@ -1035,6 +1040,51 @@ internal static partial class Program
         out GuiSmokePhase nextPhase)
     {
         branchKind = resolvedBranchKind;
+        nextPhase = resolvedPhase;
+        return true;
+    }
+
+    static bool TryAdvancePostNodeHandoffBranch(
+        GuiSmokePhase phase,
+        ObserverState observer,
+        List<GuiSmokeHistoryEntry> history,
+        ArtifactRecorder logger,
+        int stepIndex,
+        out GuiSmokePhase nextPhase)
+    {
+        nextPhase = phase;
+        if (phase is not GuiSmokePhase.ChooseFirstNode
+            and not GuiSmokePhase.WaitPostMapNodeRoom
+            and not GuiSmokePhase.WaitMap)
+        {
+            return false;
+        }
+
+        var handoffState = AutoDecisionProvider.BuildPostNodeHandoffState(observer, null, history);
+        var (branchKind, resolvedPhase) = handoffState.HandoffTarget switch
+        {
+            NonCombatHandoffTarget.HandleEvent => ("branch-event", GuiSmokePhase.HandleEvent),
+            NonCombatHandoffTarget.HandleRewards => ("branch-rewards", GuiSmokePhase.HandleRewards),
+            NonCombatHandoffTarget.HandleShop => ("branch-shop", GuiSmokePhase.HandleShop),
+            NonCombatHandoffTarget.WaitEventRelease => ("branch-event-release", GuiSmokePhase.WaitEventRelease),
+            NonCombatHandoffTarget.WaitMap => ("branch-map", GuiSmokePhase.WaitMap),
+            NonCombatHandoffTarget.ChooseFirstNode when handoffState.Owner == NonCombatCanonicalForegroundOwner.Treasure => ("branch-treasure", GuiSmokePhase.ChooseFirstNode),
+            NonCombatHandoffTarget.ChooseFirstNode when handoffState.Owner == NonCombatCanonicalForegroundOwner.RestSite => ("branch-rest-site", GuiSmokePhase.ChooseFirstNode),
+            NonCombatHandoffTarget.ChooseFirstNode when handoffState.Owner == NonCombatCanonicalForegroundOwner.Map => ("branch-map", GuiSmokePhase.ChooseFirstNode),
+            _ => (string.Empty, phase),
+        };
+        if (string.IsNullOrWhiteSpace(branchKind))
+        {
+            return false;
+        }
+
+        if (phase == resolvedPhase)
+        {
+            return false;
+        }
+
+        history.Add(new GuiSmokeHistoryEntry(phase.ToString(), branchKind, null, DateTimeOffset.UtcNow));
+        logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), branchKind, observer.CurrentScreen, observer.InCombat, null));
         nextPhase = resolvedPhase;
         return true;
     }

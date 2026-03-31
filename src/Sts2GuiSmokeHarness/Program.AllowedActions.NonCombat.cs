@@ -162,17 +162,19 @@ internal static partial class Program
     {
         return GuiSmokeChooseFirstNodeLaneSupport.Resolve(observer, context.WindowBounds, screenshotPath, history, context) switch
         {
-            GuiSmokeChooseFirstNodeLane.AncientMapPending => new[] { "wait" },
-            GuiSmokeChooseFirstNodeLane.AncientMapForeground => BuildMapForegroundRoutingAllowedActions(),
+            GuiSmokeChooseFirstNodeLane.RewardForeground => BuildAllowedActionsCore(GuiSmokePhase.HandleRewards, observer, combatCardKnowledge, screenshotPath, history, context),
+            GuiSmokeChooseFirstNodeLane.EventForeground => BuildAllowedActionsCore(GuiSmokePhase.HandleEvent, observer, combatCardKnowledge, screenshotPath, history, context),
             GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice => GuiSmokeNonCombatContractSupport.BuildExplicitRestSiteAllowedActions(observer.Summary),
             GuiSmokeChooseFirstNodeLane.RestSiteSmithUpgrade => new[] { "click smith card", "click smith confirm", "wait" },
             GuiSmokeChooseFirstNodeLane.RestSiteProceed => new[] { "click proceed", "wait" },
             GuiSmokeChooseFirstNodeLane.RestSiteSelectionSettling => new[] { "wait" },
             GuiSmokeChooseFirstNodeLane.TreasureRoom => TreasureRoomObserverSignals.BuildAllowedActions(TreasureRoomObserverSignals.TryGetState(observer.Summary)!),
             GuiSmokeChooseFirstNodeLane.ShopRoom => BuildShopAllowedActions(observer.Summary, history),
-            GuiSmokeChooseFirstNodeLane.EventRecovery => BuildAllowedActionsCore(GuiSmokePhase.HandleEvent, observer, combatCardKnowledge, screenshotPath, history, context),
             GuiSmokeChooseFirstNodeLane.MapOverlay => BuildMapOverlayRoutingAllowedActions(context.MapOverlayState),
-            _ => BuildMapForegroundRoutingAllowedActions(),
+            GuiSmokeChooseFirstNodeLane.MapForeground => BuildMapForegroundRoutingAllowedActions(),
+            GuiSmokeChooseFirstNodeLane.MapPending => new[] { "wait" },
+            GuiSmokeChooseFirstNodeLane.ContractMismatch => new[] { "wait" },
+            _ => new[] { "wait" },
         };
     }
 

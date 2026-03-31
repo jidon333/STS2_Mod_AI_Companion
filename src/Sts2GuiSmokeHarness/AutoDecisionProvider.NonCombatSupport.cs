@@ -251,13 +251,45 @@ sealed partial class AutoDecisionProvider
             return false;
         }
 
-        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
+        eventScene ??= BuildEventSceneState(observer, windowBounds, history);
+        var handoffState = BuildPostNodeHandoffState(observer, windowBounds, history);
+        return HasExplicitEventRecoveryAuthorityCore(observer, windowBounds, history, eventScene, handoffState);
+    }
+
+    internal static bool HasExplicitEventRecoveryAuthority(
+        ObserverState observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        EventSceneState? eventScene = null)
+    {
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+        {
+            return false;
+        }
+
+        if (TreasureRoomObserverSignals.LooksLikeTreasureState(observer.Summary))
         {
             return false;
         }
 
         eventScene ??= BuildEventSceneState(observer, windowBounds, history);
+        var handoffState = BuildPostNodeHandoffState(observer, windowBounds, history);
+        return HasExplicitEventRecoveryAuthorityCore(observer.Summary, windowBounds, history, eventScene, handoffState);
+    }
+
+    private static bool HasExplicitEventRecoveryAuthorityCore(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history,
+        EventSceneState eventScene,
+        PostNodeHandoffState handoffState)
+    {
         if (eventScene.RewardSubstateActive)
+        {
+            return false;
+        }
+
+        if (handoffState.Owner is not NonCombatCanonicalForegroundOwner.Event and not NonCombatCanonicalForegroundOwner.Unknown)
         {
             return false;
         }
@@ -278,30 +310,6 @@ sealed partial class AutoDecisionProvider
 
         return HasRawExplicitEventChoiceVisible(observer, windowBounds)
                || HasExplicitEventProceedAuthority(observer, windowBounds);
-    }
-
-    internal static bool HasExplicitEventRecoveryAuthority(
-        ObserverState observer,
-        WindowBounds? windowBounds,
-        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
-        EventSceneState? eventScene = null)
-    {
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
-        {
-            return false;
-        }
-
-        if (TreasureRoomObserverSignals.LooksLikeTreasureState(observer.Summary))
-        {
-            return false;
-        }
-
-        if (NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
-        {
-            return false;
-        }
-
-        return HasExplicitEventRecoveryAuthority(observer.Summary, windowBounds, history, eventScene);
     }
 
     private static bool MatchesRestSiteTarget(string? label, string targetLabel)

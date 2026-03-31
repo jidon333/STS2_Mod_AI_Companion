@@ -18,12 +18,11 @@
     "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-9/attempts/0001/steps/0015.request.json",
     "expectedForegroundKind": "map-overlay",
     "expectedBackgroundKind": "event",
-    "requiredCandidateLabels": [
+    "requiredCandidateLabels": [],
+    "requiredSuppressedLabels": [
+      "click event choice",
       "click exported reachable node",
       "click map back"
-    ],
-    "requiredSuppressedLabels": [
-      "click event choice"
     ],
     "forbiddenTargetLabels": [
       "visible map advance"
@@ -34,12 +33,11 @@
     "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-9/attempts/0001/steps/0064.request.json",
     "expectedForegroundKind": "map-overlay",
     "expectedBackgroundKind": "event",
-    "requiredCandidateLabels": [
+    "requiredCandidateLabels": [],
+    "requiredSuppressedLabels": [
+      "click event choice",
       "click exported reachable node",
       "click map back"
-    ],
-    "requiredSuppressedLabels": [
-      "click event choice"
     ],
     "forbiddenTargetLabels": [
       "visible map advance"

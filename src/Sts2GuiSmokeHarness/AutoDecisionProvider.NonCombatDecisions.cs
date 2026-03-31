@@ -68,12 +68,28 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision DecideChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
+        var handoffState = analysisContext?.PostNodeHandoffState
+                           ?? BuildPostNodeHandoffState(
+                               new ObserverState(request.Observer, null, null, request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>()),
+                               request.WindowBounds,
+                               request.History,
+                               request.ScreenshotPath);
         var chooseFirstNodeLane = GuiSmokeChooseFirstNodeLaneSupport.Resolve(
             new ObserverState(request.Observer, null, null, request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>()),
             request.WindowBounds,
             request.ScreenshotPath,
             request.History,
             analysisContext);
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RewardForeground)
+        {
+            return DecideHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, analysisContext);
+        }
+
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.EventForeground)
+        {
+            return DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, analysisContext);
+        }
+
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice)
         {
             return DecideChooseFirstNodeRestSiteExplicitChoice(request);
@@ -115,17 +131,19 @@ sealed partial class AutoDecisionProvider
                 : shopDecision;
         }
 
-        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.EventRecovery)
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.ContractMismatch)
         {
-            return DecideHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, analysisContext);
+            return CreatePostNodeHandoffContractMismatchAbortDecision(
+                request,
+                $"post-node handoff contract mismatch: phase=ChooseFirstNode owner={handoffState.Owner} target={handoffState.HandoffTarget} surface={handoffState.SurfaceKind}");
         }
 
         var mapOverlayState = analysisContext?.MapOverlayState ?? GuiSmokeMapOverlayHeuristics.BuildState(request.Observer, request.WindowBounds, request.ScreenshotPath);
-        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.AncientMapPending)
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.MapPending)
         {
             GuiSmokeDecisionDebug.SetSceneModel("map", "ancient-event");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "wait" });
-            return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for ancient event post-proceed map surface");
+            return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit post-node map handoff surface");
         }
 
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.MapOverlay)
@@ -153,9 +171,13 @@ sealed partial class AutoDecisionProvider
                    "no exported reachable map node bounds available")
                ?? (GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(request)
                    ? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for reachable map node")
-                   : GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
-                       request,
-                       "map progression evidence is present but request allowlist does not permit map routing; waiting for exporter/phase reconciliation"));
+                   : handoffState.ContractMismatch
+                       ? CreatePostNodeHandoffContractMismatchAbortDecision(
+                           request,
+                           $"post-node handoff contract mismatch: owner={handoffState.Owner} target={handoffState.HandoffTarget} surface={handoffState.SurfaceKind}")
+                       : GuiSmokeNonCombatContractSupport.CreateMapRoutingContractWaitDecision(
+                           request,
+                           "map progression evidence is present but request allowlist does not permit map routing; waiting for exporter/phase reconciliation"));
     }
 
     private static GuiSmokeStepDecision DecideHandleShop(GuiSmokeStepRequest request)
@@ -1350,6 +1372,16 @@ sealed partial class AutoDecisionProvider
             null,
             null,
             decisionRisk);
+    }
+
+    private static GuiSmokeStepDecision CreatePostNodeHandoffContractMismatchAbortDecision(
+        GuiSmokeStepRequest request,
+        string reason)
+    {
+        return CreateAncientOptionContractMismatchAbortDecision(
+            request,
+            reason,
+            "post-node-handoff-contract-mismatch");
     }
 
     private static GuiSmokeStepDecision? TryCreateAncientEventCompletionDecision(GuiSmokeStepRequest request)

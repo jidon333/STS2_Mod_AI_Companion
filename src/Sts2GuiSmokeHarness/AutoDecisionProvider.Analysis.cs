@@ -99,6 +99,45 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeDecisionAnalysis AnalyzeChooseFirstNode(GuiSmokeStepRequest request, GuiSmokeStepDecision? actualDecision, GuiSmokeStepAnalysisContext analysisContext)
     {
+        var handoffState = analysisContext.PostNodeHandoffState;
+        var chooseFirstNodeLane = GuiSmokeChooseFirstNodeLaneSupport.Resolve(
+            new ObserverState(request.Observer, null, null, request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>()),
+            analysisContext.WindowBounds,
+            request.ScreenshotPath,
+            request.History,
+            analysisContext);
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RewardForeground)
+        {
+            return AnalyzeHandleRewards(request with { Phase = GuiSmokePhase.HandleRewards.ToString() }, actualDecision, analysisContext);
+        }
+
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.EventForeground)
+        {
+            return AnalyzeHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, actualDecision, analysisContext);
+        }
+
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.ShopRoom)
+        {
+            var shopRequest = request with { Phase = GuiSmokePhase.HandleShop.ToString() };
+            return AnalyzeGenericPhase(shopRequest, actualDecision, () => DecideHandleShop(shopRequest), "shop", null);
+        }
+
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.ContractMismatch)
+        {
+            var (mismatchForegroundKind, mismatchBackgroundKind) = DescribeForegroundBackground(request);
+            var mismatchBuilder = new DecisionAnalysisBuilder(request, mismatchForegroundKind, mismatchBackgroundKind);
+            var mismatchDecision = CreatePostNodeHandoffContractMismatchAbortDecision(
+                request,
+                $"post-node handoff contract mismatch: owner={handoffState.Owner} target={handoffState.HandoffTarget} surface={handoffState.SurfaceKind}");
+            mismatchBuilder.Consider(
+                "abort handoff contract mismatch",
+                "post-node-handoff-contract",
+                1.00d,
+                () => mismatchDecision,
+                "no-post-node-handoff-contract-mismatch");
+            return mismatchBuilder.Build(mismatchDecision, actualDecision);
+        }
+
         var mapOverlayState = analysisContext.MapOverlayState;
         var (foregroundKind, backgroundKind) = DescribeForegroundBackground(request);
         var builder = new DecisionAnalysisBuilder(request, foregroundKind, backgroundKind);
@@ -226,12 +265,6 @@ sealed partial class AutoDecisionProvider
             return builder.Build(CreateWaitDecision("waiting for treasure room progression", DisplayControlFlowScreen(request.Observer)), actualDecision);
         }
 
-        if (!LooksLikeInspectOverlayState(request.Observer)
-            && HasExplicitEventRecoveryAuthority(request.Observer, analysisContext.WindowBounds, request.History, analysisContext.EventScene))
-        {
-            return AnalyzeHandleEvent(request with { Phase = GuiSmokePhase.HandleEvent.ToString() }, actualDecision, analysisContext);
-        }
-
         if (mapOverlayState.ForegroundVisible)
         {
             if (mapOverlayState.StaleEventChoicePresent)
@@ -277,6 +310,20 @@ sealed partial class AutoDecisionProvider
             "no-exported-reachable-node",
             rawBounds: TryFindMapNodeBounds(request),
             boundsSource: "observer-map-node");
+        if (handoffState.ContractMismatch)
+        {
+            var mismatchDecision = CreatePostNodeHandoffContractMismatchAbortDecision(
+                request,
+                $"post-node handoff contract mismatch: owner={handoffState.Owner} target={handoffState.HandoffTarget} surface={handoffState.SurfaceKind}");
+            builder.Consider(
+                "abort handoff contract mismatch",
+                "post-node-handoff-contract",
+                0.99d,
+                () => mismatchDecision,
+                "no-post-node-handoff-contract-mismatch");
+            return builder.Build(mismatchDecision, actualDecision);
+        }
+
         return builder.Build(CreateWaitDecision("waiting for reachable map node", DisplayControlFlowScreen(request.Observer)), actualDecision);
     }
 

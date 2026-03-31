@@ -1421,6 +1421,12 @@ internal static class RuntimeSnapshotReflectionExtractor
             ? phaseValue
             : null;
         var mapReleaseAuthority = HasAncientMapReleaseAuthority(mapAttempt, currentActiveScreenType, rootSceneObservation);
+        var eventForegroundLane = genericEventAttempt is not null
+            ? TryResolveEventForegroundActionLane(genericEventAttempt)
+            : null;
+        var canonicalGenericEventAttempt = genericEventAttempt is not null && !string.IsNullOrWhiteSpace(eventForegroundLane)
+            ? NormalizeEventForegroundSurface(genericEventAttempt, eventForegroundLane)
+            : null;
         if (!mapReleaseAuthority)
         {
             if (TryResolveAncientForegroundActionLane(ancientEventStrict) is { } ancientForegroundLane)
@@ -1436,10 +1442,9 @@ internal static class RuntimeSnapshotReflectionExtractor
                     ancientPhase: ancientPhase);
             }
 
-            if (genericEventAttempt is not null
-                && TryResolveEventForegroundActionLane(genericEventAttempt) is { } eventForegroundLane)
+            if (canonicalGenericEventAttempt is not null
+                && eventForegroundLane is not null)
             {
-                var canonicalGenericEventAttempt = NormalizeEventForegroundSurface(genericEventAttempt, eventForegroundLane);
                 return WithForegroundMetadata(
                     canonicalGenericEventAttempt,
                     BuildAncientDiagnosticsMetadata(ancientEventStrict.Meta),
@@ -1463,6 +1468,21 @@ internal static class RuntimeSnapshotReflectionExtractor
                 mapReleaseAuthority: false,
                 mapSurfacePending: false,
                 ancientPhase: ancientPhase);
+        }
+
+        if (canonicalGenericEventAttempt is not null
+            && eventForegroundLane is not null
+            && (mapAttempt is null || mapAttempt.Choices.Count == 0))
+        {
+            return WithForegroundMetadata(
+                canonicalGenericEventAttempt,
+                BuildAncientDiagnosticsMetadata(ancientEventStrict.Meta),
+                "event",
+                eventForegroundLane,
+                eventTeardownInProgress: false,
+                mapReleaseAuthority: false,
+                mapSurfacePending: false,
+                ancientPhase: null);
         }
 
         if (mapAttempt is not null && mapAttempt.Choices.Count > 0)

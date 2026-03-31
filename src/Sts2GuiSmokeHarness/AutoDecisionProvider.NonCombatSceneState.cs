@@ -147,12 +147,13 @@ sealed partial class AutoDecisionProvider
         IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
         string? screenshotPath = null)
     {
-        return BuildEventSceneState(
+        return BuildEventSceneStateCore(
             observer.Summary,
             windowBounds,
             history,
             screenshotPath,
-            NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer));
+            NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer),
+            NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(observer));
     }
 
     internal static EventSceneState BuildEventSceneState(
@@ -161,48 +162,51 @@ sealed partial class AutoDecisionProvider
         IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
         string? screenshotPath = null)
     {
-        return BuildEventSceneState(
+        return BuildEventSceneStateCore(
             observer,
             windowBounds,
             history,
             screenshotPath,
-            NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer));
+            NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer),
+            NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(observer));
     }
 
-    private static EventSceneState BuildEventSceneState(
+    private static EventSceneState BuildEventSceneStateCore(
         ObserverSummary observer,
         WindowBounds? windowBounds,
         IReadOnlyList<GuiSmokeHistoryEntry>? history,
         string? screenshotPath,
-        bool mapExplicitOwner)
+        bool mapExplicitOwner,
+        bool mapForegroundSuppressesEventSurface)
     {
         var rewardScene = BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath);
+        var mapReleaseSignal = HasPostNodeMapReleaseSignal(observer, mapOverlayState, mapExplicitOwner);
         var ancientContract = AncientEventObserverSignals.GetAncientEventOptionContractState(observer, windowBounds);
         var ancientDialogueActive = ancientContract.HasExplicitDialogueSurface;
         var ancientCompletionActive = ancientContract.HasExplicitCompletionSurface;
         var ancientOptionActive = ancientContract.HasExplicitOptionSurface;
         var ancientOptionContractMismatch = ancientContract.ContractLane == AncientEventObserverSignals.AncientEventContractLane.OptionContractMismatch;
         var eventChoiceAuthority = EventProceedObserverSignals.HasEventChoiceAuthority(observer);
+        var rawExplicitProceedVisible = eventChoiceAuthority
+                                        && !mapForegroundSuppressesEventSurface
+                                        && !rewardScene.RewardForegroundOwned
+                                        && EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
+        var rawActiveEventChoiceVisible = eventChoiceAuthority
+                                          && !mapForegroundSuppressesEventSurface
+                                          && !rewardScene.RewardForegroundOwned
+                                          && HasRawExplicitEventChoiceVisible(observer, windowBounds);
         var eventReleaseToMapActive = HasRecentEventReleaseIntent(history)
-                                      && (mapExplicitOwner || mapOverlayState.ForegroundVisible);
-        var explicitProceedVisible = eventChoiceAuthority
-                                     && !eventReleaseToMapActive
-                                     && !mapExplicitOwner
-                                     && !rewardScene.RewardForegroundOwned
-                                     && EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
-        var activeEventChoiceVisible = eventChoiceAuthority
-                                       && !eventReleaseToMapActive
-                                       && !mapExplicitOwner
-                                       && !rewardScene.RewardForegroundOwned
-                                       && HasRawExplicitEventChoiceVisible(observer, windowBounds);
+                                      && (mapReleaseSignal || mapOverlayState.ForegroundVisible);
+        var explicitProceedVisible = rawExplicitProceedVisible && !eventReleaseToMapActive;
+        var activeEventChoiceVisible = rawActiveEventChoiceVisible && !eventReleaseToMapActive;
         var forceProgressionAfterCardSelection = HasRecentCardSelectionSubtypeAftermath(history ?? Array.Empty<GuiSmokeHistoryEntry>())
                                                 && (explicitProceedVisible || activeEventChoiceVisible);
         var rewardSubstateActive = rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage == RewardReleaseStage.ReleasePending;
         var mapContextVisible = mapOverlayState.ForegroundVisible
                                 || MatchesControlFlowScreen(observer, "map")
                                 || rewardScene.LayerState.MapContextVisible
-                                || mapExplicitOwner;
+                                || mapReleaseSignal;
         var hasExplicitProgression = ancientDialogueActive
                                      || ancientCompletionActive
                                      || ancientOptionActive
@@ -218,15 +222,17 @@ sealed partial class AutoDecisionProvider
                                      || activeEventChoiceVisible
                                      || forceProgressionAfterCardSelection;
         var suppressSameProceedReissue = !rewardSubstateActive
-                                         && (ancientCompletionActive || explicitProceedVisible)
+                                         && (ancientCompletionActive || rawExplicitProceedVisible)
                                          && HasRecentEventReleaseIntent(history);
         var canonicalOwner = rewardSubstateActive
             ? NonCombatForegroundOwner.Reward
-            : strongForegroundChoice || (eventChoiceAuthority && hasExplicitProgression)
+            : strongForegroundChoice
+              || suppressSameProceedReissue
+              || (eventChoiceAuthority && hasExplicitProgression)
                 ? NonCombatForegroundOwner.Event
             : mapExplicitOwner
                 ? NonCombatForegroundOwner.Map
-                : mapOverlayState.ForegroundVisible && !strongForegroundChoice
+            : (mapOverlayState.ForegroundVisible || mapReleaseSignal) && !strongForegroundChoice
                     ? NonCombatForegroundOwner.Map
                     : NonCombatForegroundOwner.Unknown;
         var releaseStage = rewardSubstateActive
@@ -235,7 +241,7 @@ sealed partial class AutoDecisionProvider
                 ? suppressSameProceedReissue
                     ? EventReleaseStage.ReleasePending
                     : EventReleaseStage.Active
-                : HasRecentEventReleaseIntent(history) && (mapExplicitOwner || mapOverlayState.ForegroundVisible)
+                : HasRecentEventReleaseIntent(history) && (mapReleaseSignal || mapOverlayState.ForegroundVisible)
                     ? EventReleaseStage.Released
                     : EventReleaseStage.None;
         var explicitAction = rewardSubstateActive
@@ -336,6 +342,96 @@ sealed partial class AutoDecisionProvider
         return BuildTreasureSceneState(new ObserverState(observer, null, null, null));
     }
 
+    internal static PostNodeHandoffState BuildPostNodeHandoffState(
+        ObserverState observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null)
+    {
+        if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+        {
+            return new PostNodeHandoffState(
+                NonCombatCanonicalForegroundOwner.Unknown,
+                NonCombatHandoffTarget.None,
+                NonCombatReleaseStage.None,
+                HasExplicitSurface: false,
+                PostNodeHandoffSurfaceKind.None,
+                ContractMismatch: false,
+                MapOverlayVisible: false,
+                StaleBackgroundPresent: false);
+        }
+
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath);
+        var mapExplicitOwner = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer);
+        var mapReleaseSignal = HasPostNodeMapReleaseSignal(observer.Summary, mapOverlayState, mapExplicitOwner);
+
+        var rewardScene = BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
+        if (rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage != RewardReleaseStage.None)
+        {
+            return BuildRewardPostNodeHandoffState(observer.Summary, rewardScene, mapOverlayState, mapExplicitOwner);
+        }
+
+        if (BuildShopSceneState(observer, history) is { ReleaseStage: not NonCombatReleaseStage.None } shopScene)
+        {
+            return BuildShopPostNodeHandoffState(observer.Summary, shopScene, mapOverlayState, mapExplicitOwner);
+        }
+
+        if (BuildRestSiteSceneState(observer) is { } restSiteScene)
+        {
+            return BuildRestSitePostNodeHandoffState(observer.Summary, restSiteScene, mapOverlayState, mapExplicitOwner);
+        }
+
+        if (BuildTreasureSceneState(observer) is { } treasureScene)
+        {
+            return BuildTreasurePostNodeHandoffState(observer.Summary, treasureScene, mapOverlayState, mapExplicitOwner);
+        }
+
+        if (mapExplicitOwner && NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(observer))
+        {
+            return BuildMapPostNodeHandoffState(
+                observer.Summary,
+                mapOverlayState,
+                mapExplicitOwner: true,
+                staleBackgroundPresent: HasObserverStaleRoomBackground(observer.Summary));
+        }
+
+        var eventScene = BuildEventSceneState(observer, windowBounds, history, screenshotPath);
+        if (eventScene.RewardSubstateActive)
+        {
+            return BuildRewardPostNodeHandoffState(observer.Summary, eventScene.RewardScene, mapOverlayState, mapExplicitOwner);
+        }
+
+        if (eventScene.EventForegroundOwned || eventScene.ReleaseStage != EventReleaseStage.None || eventScene.MapForegroundOwned)
+        {
+            return BuildEventPostNodeHandoffState(observer.Summary, eventScene, mapOverlayState, mapExplicitOwner, mapReleaseSignal);
+        }
+
+        if (mapReleaseSignal)
+        {
+            return BuildMapPostNodeHandoffState(observer.Summary, mapOverlayState, mapExplicitOwner, staleBackgroundPresent: HasObserverStaleRoomBackground(observer.Summary));
+        }
+
+        return new PostNodeHandoffState(
+            NonCombatCanonicalForegroundOwner.Unknown,
+            NonCombatHandoffTarget.None,
+            NonCombatReleaseStage.None,
+            HasExplicitSurface: false,
+            PostNodeHandoffSurfaceKind.None,
+            ContractMismatch: false,
+            MapOverlayVisible: mapOverlayState.ForegroundVisible,
+            StaleBackgroundPresent: HasObserverStaleRoomBackground(observer.Summary));
+    }
+
+    internal static PostNodeHandoffState BuildPostNodeHandoffState(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null)
+    {
+        return BuildPostNodeHandoffState(new ObserverState(observer, null, null, null), windowBounds, history, screenshotPath);
+    }
+
     internal static ICanonicalNonCombatSceneState? TryBuildCanonicalNonCombatSceneState(
         ObserverState observer,
         WindowBounds? windowBounds,
@@ -418,6 +514,169 @@ sealed partial class AutoDecisionProvider
         return false;
     }
 
+    private static PostNodeHandoffState BuildRewardPostNodeHandoffState(
+        ObserverSummary observer,
+        RewardSceneState rewardScene,
+        MapOverlayState mapOverlayState,
+        bool mapExplicitOwner)
+    {
+        var owner = ((ICanonicalNonCombatSceneState)rewardScene).CanonicalForegroundOwner;
+        var releaseStage = ((ICanonicalNonCombatSceneState)rewardScene).ReleaseStage;
+        var handoffTarget = ((ICanonicalNonCombatSceneState)rewardScene).HandoffTarget;
+        var mapSurfaceOwned = owner == NonCombatCanonicalForegroundOwner.Map && mapExplicitOwner;
+        var resolvedReleaseStage = mapSurfaceOwned ? NonCombatReleaseStage.Active : releaseStage;
+        var resolvedHandoffTarget = mapSurfaceOwned ? NonCombatHandoffTarget.ChooseFirstNode : handoffTarget;
+        var hasExplicitSurface = mapSurfaceOwned
+                                 || (rewardScene.ExplicitAction != RewardExplicitActionKind.None
+                                     && releaseStage == NonCombatReleaseStage.Active);
+        return new PostNodeHandoffState(
+            owner,
+            resolvedHandoffTarget,
+            resolvedReleaseStage,
+            hasExplicitSurface,
+            mapSurfaceOwned
+                ? mapOverlayState.ForegroundVisible ? PostNodeHandoffSurfaceKind.MapOverlay : PostNodeHandoffSurfaceKind.MapNode
+                : hasExplicitSurface ? PostNodeHandoffSurfaceKind.Reward : PostNodeHandoffSurfaceKind.None,
+            ContractMismatch: owner != NonCombatCanonicalForegroundOwner.Map
+                              && hasExplicitSurface
+                              && HasExporterMapForegroundClaim(observer)
+                              && !mapExplicitOwner,
+            MapOverlayVisible: mapOverlayState.ForegroundVisible,
+            StaleBackgroundPresent: rewardScene.LayerState.MapContextVisible);
+    }
+
+    private static PostNodeHandoffState BuildShopPostNodeHandoffState(
+        ObserverSummary observer,
+        ShopSceneState shopScene,
+        MapOverlayState mapOverlayState,
+        bool mapExplicitOwner)
+    {
+        var owner = shopScene.CanonicalForegroundOwner;
+        var releaseStage = shopScene.ReleaseStage;
+        var mapSurfaceOwned = owner == NonCombatCanonicalForegroundOwner.Map && mapExplicitOwner;
+        var resolvedReleaseStage = mapSurfaceOwned ? NonCombatReleaseStage.Active : releaseStage;
+        var resolvedHandoffTarget = mapSurfaceOwned ? NonCombatHandoffTarget.ChooseFirstNode : shopScene.HandoffTarget;
+        var hasExplicitSurface = mapSurfaceOwned || releaseStage == NonCombatReleaseStage.Active;
+        return new PostNodeHandoffState(
+            owner,
+            resolvedHandoffTarget,
+            resolvedReleaseStage,
+            hasExplicitSurface,
+            mapSurfaceOwned
+                ? mapOverlayState.ForegroundVisible ? PostNodeHandoffSurfaceKind.MapOverlay : PostNodeHandoffSurfaceKind.MapNode
+                : hasExplicitSurface ? PostNodeHandoffSurfaceKind.Shop : PostNodeHandoffSurfaceKind.None,
+            ContractMismatch: owner != NonCombatCanonicalForegroundOwner.Map
+                              && hasExplicitSurface
+                              && HasExporterMapForegroundClaim(observer)
+                              && !mapExplicitOwner,
+            MapOverlayVisible: mapOverlayState.ForegroundVisible,
+            StaleBackgroundPresent: string.Equals(shopScene.BackgroundDebugKind, "map", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static PostNodeHandoffState BuildRestSitePostNodeHandoffState(
+        ObserverSummary observer,
+        RestSiteSceneState restSiteScene,
+        MapOverlayState mapOverlayState,
+        bool mapExplicitOwner)
+    {
+        var surfaceKind = restSiteScene.SmithUpgradeActive
+            ? PostNodeHandoffSurfaceKind.RestSiteSmithUpgrade
+            : restSiteScene.ProceedVisible
+                ? PostNodeHandoffSurfaceKind.RestSiteProceed
+                : restSiteScene.SelectionSettling
+                    ? PostNodeHandoffSurfaceKind.RestSiteSelectionSettling
+                    : PostNodeHandoffSurfaceKind.RestSiteChoice;
+        return new PostNodeHandoffState(
+            restSiteScene.CanonicalForegroundOwner,
+            restSiteScene.HandoffTarget,
+            restSiteScene.ReleaseStage,
+            HasExplicitSurface: true,
+            surfaceKind,
+            ContractMismatch: HasExporterMapForegroundClaim(observer) && !mapExplicitOwner,
+            MapOverlayVisible: mapOverlayState.ForegroundVisible,
+            StaleBackgroundPresent: restSiteScene.MapContextVisible);
+    }
+
+    private static PostNodeHandoffState BuildTreasurePostNodeHandoffState(
+        ObserverSummary observer,
+        TreasureSceneState treasureScene,
+        MapOverlayState mapOverlayState,
+        bool mapExplicitOwner)
+    {
+        return new PostNodeHandoffState(
+            treasureScene.CanonicalForegroundOwner,
+            treasureScene.HandoffTarget,
+            treasureScene.ReleaseStage,
+            HasExplicitSurface: true,
+            PostNodeHandoffSurfaceKind.Treasure,
+            ContractMismatch: HasExporterMapForegroundClaim(observer) && !mapExplicitOwner,
+            MapOverlayVisible: mapOverlayState.ForegroundVisible,
+            StaleBackgroundPresent: false);
+    }
+
+    private static PostNodeHandoffState BuildEventPostNodeHandoffState(
+        ObserverSummary observer,
+        EventSceneState eventScene,
+        MapOverlayState mapOverlayState,
+        bool mapExplicitOwner,
+        bool mapReleaseSignal)
+    {
+        var owner = ((ICanonicalNonCombatSceneState)eventScene).CanonicalForegroundOwner;
+        var releaseStage = ((ICanonicalNonCombatSceneState)eventScene).ReleaseStage;
+        var handoffTarget = ((ICanonicalNonCombatSceneState)eventScene).HandoffTarget;
+        var mapSurfaceOwned = owner == NonCombatCanonicalForegroundOwner.Map && mapExplicitOwner;
+        var hasExplicitSurface = eventScene.ExplicitAction != EventExplicitActionKind.None
+                                 && owner == NonCombatCanonicalForegroundOwner.Event;
+        var contractMismatch = eventScene.ExplicitAction == EventExplicitActionKind.AncientOptionContractMismatch
+                               || (owner != NonCombatCanonicalForegroundOwner.Map
+                                   && hasExplicitSurface
+                                   && HasExporterMapForegroundClaim(observer)
+                                   && !mapExplicitOwner)
+                               || (owner == NonCombatCanonicalForegroundOwner.Map
+                                   && hasExplicitSurface
+                                   && !mapExplicitOwner
+                                   && mapReleaseSignal);
+        var surfaceKind = eventScene.ExplicitAction switch
+        {
+            EventExplicitActionKind.None when owner == NonCombatCanonicalForegroundOwner.Map && mapExplicitOwner && mapOverlayState.ForegroundVisible
+                => PostNodeHandoffSurfaceKind.MapOverlay,
+            EventExplicitActionKind.None when owner == NonCombatCanonicalForegroundOwner.Map && mapExplicitOwner
+                => PostNodeHandoffSurfaceKind.MapNode,
+            EventExplicitActionKind.None => PostNodeHandoffSurfaceKind.None,
+            EventExplicitActionKind.AncientOptionContractMismatch => PostNodeHandoffSurfaceKind.ContractMismatch,
+            _ => PostNodeHandoffSurfaceKind.Event,
+        };
+        return new PostNodeHandoffState(
+            owner,
+            mapSurfaceOwned ? NonCombatHandoffTarget.ChooseFirstNode : handoffTarget,
+            mapSurfaceOwned ? NonCombatReleaseStage.Active : releaseStage,
+            hasExplicitSurface || mapSurfaceOwned,
+            surfaceKind,
+            contractMismatch,
+            MapOverlayVisible: mapOverlayState.ForegroundVisible,
+            StaleBackgroundPresent: eventScene.MapContextVisible
+                                    || mapOverlayState.EventBackgroundPresent);
+    }
+
+    private static PostNodeHandoffState BuildMapPostNodeHandoffState(
+        ObserverSummary observer,
+        MapOverlayState mapOverlayState,
+        bool mapExplicitOwner,
+        bool staleBackgroundPresent)
+    {
+        return new PostNodeHandoffState(
+            NonCombatCanonicalForegroundOwner.Map,
+            mapExplicitOwner ? NonCombatHandoffTarget.ChooseFirstNode : NonCombatHandoffTarget.WaitMap,
+            mapExplicitOwner ? NonCombatReleaseStage.Active : NonCombatReleaseStage.ReleasePending,
+            mapExplicitOwner,
+            mapExplicitOwner
+                ? mapOverlayState.ForegroundVisible ? PostNodeHandoffSurfaceKind.MapOverlay : PostNodeHandoffSurfaceKind.MapNode
+                : PostNodeHandoffSurfaceKind.None,
+            ContractMismatch: false,
+            MapOverlayVisible: mapOverlayState.ForegroundVisible,
+            StaleBackgroundPresent: staleBackgroundPresent);
+    }
+
     internal static bool HasRecentEventReleaseIntent(IReadOnlyList<GuiSmokeHistoryEntry>? history)
     {
         if (history is null || history.Count == 0)
@@ -446,6 +705,58 @@ sealed partial class AutoDecisionProvider
         }
 
         return false;
+    }
+
+    private static bool HasPostNodeMapReleaseSignal(
+        ObserverSummary observer,
+        MapOverlayState mapOverlayState,
+        bool mapExplicitOwner)
+    {
+        if (mapExplicitOwner)
+        {
+            return true;
+        }
+
+        return mapOverlayState.ForegroundVisible
+               || TryGetMetaBool(observer, "mapCurrentActiveScreen") == true
+               || IsMapScreenType(TryGetMetaValue(observer, "activeScreenType"))
+               || MatchesControlFlowScreen(observer, "map");
+    }
+
+    private static bool HasExporterMapForegroundClaim(ObserverSummary observer)
+    {
+        return string.Equals(TryGetMetaValue(observer, "foregroundOwner"), "map", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "foregroundActionLane"), "map-node", StringComparison.OrdinalIgnoreCase)
+               || TryGetMetaBool(observer, "mapReleaseAuthority") == true;
+    }
+
+    private static bool HasObserverStaleRoomBackground(ObserverSummary observer)
+    {
+        return EventProceedObserverSignals.HasEventChoiceAuthority(observer)
+               || GuiSmokeRewardSceneSignals.LooksLikeRewardChoiceState(observer)
+               || GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(observer)
+               || ShopObserverSignals.IsShopAuthorityActive(observer)
+               || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer)
+               || NonCombatForegroundOwnership.HasExplicitRestSiteForegroundAuthority(observer);
+    }
+
+    private static bool? TryGetMetaBool(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value)
+               && bool.TryParse(value, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static string? TryGetMetaValue(ObserverSummary observer, string key)
+    {
+        return observer.Meta.TryGetValue(key, out var value) ? value : null;
+    }
+
+    private static bool IsMapScreenType(string? typeName)
+    {
+        return !string.IsNullOrWhiteSpace(typeName)
+               && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
     }
 
     private static RewardMapLayerState BuildRewardMapLayerState(ObserverSummary observer, WindowBounds? windowBounds)

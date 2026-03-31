@@ -210,7 +210,7 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "rest-site-post-click-noop" or "rest-site-selection-failed" or "rest-site-grid-not-visible-after-selection" or "rest-site-grid-observer-miss" or "ancient-event-option-contract-mismatch",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "rest-site-post-click-noop" or "rest-site-selection-failed" or "rest-site-grid-not-visible-after-selection" or "rest-site-grid-observer-miss" or "ancient-event-option-contract-mismatch" or "post-node-handoff-contract-mismatch",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
@@ -228,7 +228,8 @@ static partial class LongRunArtifacts
             || string.Equals(diagnosisKind, "rest-site-selection-failed", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "rest-site-grid-not-visible-after-selection", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(diagnosisKind, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase),
+            || string.Equals(diagnosisKind, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase),
             backlogRoute,
             evidence);
         UpsertNdjson(GetStallDiagnosisPath(sessionRoot), diagnosis, static existing => existing.AttemptId, diagnosis.AttemptId);
@@ -357,6 +358,12 @@ static partial class LongRunArtifacts
             || string.Equals(attemptEntry.FailureClass, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase))
         {
             return "ancient-event-option-contract-mismatch";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase))
+        {
+            return "post-node-handoff-contract-mismatch";
         }
 
         if (string.Equals(attemptEntry.FailureClass, "launch-runtime-noise", StringComparison.OrdinalIgnoreCase))

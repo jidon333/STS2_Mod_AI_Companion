@@ -386,6 +386,135 @@ internal static partial class Program
                 {
                 }
             }
+
+            var chooseFirstNodeMapClaimObserver = new ObserverState(
+                explicitProceedObserverState.Summary with
+                {
+                    InventoryId = "inv-choose-first-node-map-claim",
+                    SceneEpisodeId = "episode-choose-first-node-map-claim",
+                    CurrentChoices = new[] { "검을 집는다", "물로 뛰어든다" },
+                    ActionNodes = new[]
+                    {
+                        new ObserverActionNode("event-option:0", "event-option", "검을 집는다", "922,596,800,100", true)
+                        {
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                        },
+                        new ObserverActionNode("event-option:1", "event-option", "물로 뛰어든다", "922,700,800,100", true)
+                        {
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                        },
+                    },
+                    Choices = new[]
+                    {
+                        new ObserverChoice("event-option", "검을 집는다", "922,596,800,100", "검을 집는다")
+                        {
+                            NodeId = "event-option:0",
+                            BindingKind = "event-option",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                        },
+                        new ObserverChoice("event-option", "물로 뛰어든다", "922,700,800,100", "물로 뛰어든다")
+                        {
+                            NodeId = "event-option:1",
+                            BindingKind = "event-option",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                        },
+                    },
+                    ChoiceExtractorPath = "event",
+                    Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["foregroundOwner"] = "map",
+                        ["foregroundActionLane"] = "map-node",
+                        ["mapReleaseAuthority"] = "true",
+                        ["eventTeardownInProgress"] = "true",
+                        ["ancientEventDetected"] = "true",
+                        ["ancientPhase"] = "teardown",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom",
+                        ["mapCurrentActiveScreen"] = "false",
+                    },
+                },
+                eventProceedStateDocument,
+                null,
+                null);
+            var chooseFirstNodeMapClaimState = AutoDecisionProvider.BuildPostNodeHandoffState(
+                chooseFirstNodeMapClaimObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                string.Empty);
+            Assert(
+                chooseFirstNodeMapClaimState.Owner == NonCombatCanonicalForegroundOwner.Event
+                && chooseFirstNodeMapClaimState.HandoffTarget == NonCombatHandoffTarget.HandleEvent
+                && chooseFirstNodeMapClaimState.ContractMismatch,
+                "ChooseFirstNode handoff state should keep event ownership when actionable event-option buttons remain foreground-backed, even if exporter residue still claims map handoff.");
+            Assert(
+                NonCombatForegroundOwnership.Resolve(chooseFirstNodeMapClaimObserver) == NonCombatForegroundOwner.Event,
+                "Foreground ownership helper should agree with the canonical handoff state on event-first mixed ChooseFirstNode scenes.");
+            var chooseFirstNodeMapClaimActions = BuildAllowedActions(
+                GuiSmokePhase.ChooseFirstNode,
+                chooseFirstNodeMapClaimObserver,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                string.Empty,
+                Array.Empty<GuiSmokeHistoryEntry>());
+            Assert(
+                chooseFirstNodeMapClaimActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase)
+                && !chooseFirstNodeMapClaimActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
+                "ChooseFirstNode should expose event actions instead of map routing when the canonical handoff owner is event.");
+            var chooseFirstNodeMapClaimDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                46,
+                GuiSmokePhase.ChooseFirstNode.ToString(),
+                "Resolve the post-node event handoff from a stale map-first request.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(0, 0, 1280, 720),
+                "phase:choosefirstnode|screen:event|visible:event|encounter:none|ready:true|stability:stable|layer:event-foreground|layer:event-background",
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                chooseFirstNodeMapClaimObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                chooseFirstNodeMapClaimActions,
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "ChooseFirstNode should hand off to event progression when explicit event options remain actionable.",
+                null));
+            Assert(
+                string.Equals(chooseFirstNodeMapClaimDecision.TargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase),
+                $"ChooseFirstNode should click an event progression choice instead of waiting for map routing. Actual decision={chooseFirstNodeMapClaimDecision.Status}/{chooseFirstNodeMapClaimDecision.ActionKind}/{chooseFirstNodeMapClaimDecision.TargetLabel ?? "null"}.");
+            var chooseFirstNodeMapClaimBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-event-handoff-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(chooseFirstNodeMapClaimBranchRoot);
+            try
+            {
+                var chooseFirstNodeMapClaimLogger = new ArtifactRecorder(chooseFirstNodeMapClaimBranchRoot);
+                var chooseFirstNodeMapClaimHistory = new List<GuiSmokeHistoryEntry>();
+                Assert(
+                    TryAdvanceAlternateBranch(
+                        GuiSmokePhase.ChooseFirstNode,
+                        chooseFirstNodeMapClaimObserver,
+                        chooseFirstNodeMapClaimHistory,
+                        chooseFirstNodeMapClaimLogger,
+                        46,
+                        true,
+                        out var chooseFirstNodeMapClaimPhase)
+                    && chooseFirstNodeMapClaimPhase == GuiSmokePhase.HandleEvent,
+                    "ChooseFirstNode should branch to HandleEvent when canonical handoff ownership is event even if the request residue still claims map.");
+            }
+            finally
+            {
+                try
+                {
+                    Directory.Delete(chooseFirstNodeMapClaimBranchRoot, true);
+                }
+                catch
+                {
+                }
+            }
             var explicitProceedWaitDecision = InvokeForegroundAwareNonCombatWaitDecision(new GuiSmokeStepRequest(
                 "run",
                 "boot-to-long-run",

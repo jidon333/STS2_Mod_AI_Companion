@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using static GuiSmokeChoicePrimitiveSupport;
+using static ObserverScreenProvenance;
 
 static class NonCombatForegroundOwnership
 {
@@ -20,119 +21,76 @@ static class NonCombatForegroundOwnership
             return NonCombatForegroundOwner.Combat;
         }
 
-        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observer, null);
-        if (rewardScene.RewardForegroundOwned)
+        return AutoDecisionProvider.BuildPostNodeHandoffState(observer, null).Owner switch
         {
-            return NonCombatForegroundOwner.Reward;
-        }
-
-        if (AutoDecisionProvider.BuildShopSceneState(observer) is { ReleaseStage: NonCombatReleaseStage.Active })
-        {
-            return NonCombatForegroundOwner.Shop;
-        }
-
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
-        if (eventScene.EventForegroundOwned
-            && eventScene.ExplicitAction is EventExplicitActionKind.AncientDialogue
-                or EventExplicitActionKind.AncientCompletion
-                or EventExplicitActionKind.AncientOption
-                or EventExplicitActionKind.AncientOptionContractMismatch)
-        {
-            return NonCombatForegroundOwner.Event;
-        }
-
-        if (HasExplicitMapForegroundAuthority(observer))
-        {
-            return NonCombatForegroundOwner.Map;
-        }
-
-        if (AutoDecisionProvider.BuildRestSiteSceneState(observer) is { ReleaseStage: NonCombatReleaseStage.Active })
-        {
-            return NonCombatForegroundOwner.RestSite;
-        }
-
-        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active)
-        {
-            return NonCombatForegroundOwner.Event;
-        }
-
-        return NonCombatForegroundOwner.Unknown;
+            NonCombatCanonicalForegroundOwner.Reward => NonCombatForegroundOwner.Reward,
+            NonCombatCanonicalForegroundOwner.Shop => NonCombatForegroundOwner.Shop,
+            NonCombatCanonicalForegroundOwner.RestSite => NonCombatForegroundOwner.RestSite,
+            NonCombatCanonicalForegroundOwner.Map => NonCombatForegroundOwner.Map,
+            NonCombatCanonicalForegroundOwner.Event => NonCombatForegroundOwner.Event,
+            _ => NonCombatForegroundOwner.Unknown,
+        };
     }
 
     public static NonCombatForegroundOwner Resolve(ObserverSummary observer)
     {
-        if (RewardObserverSignals.IsTerminalRunBoundary(observer))
-        {
-            return NonCombatForegroundOwner.Unknown;
-        }
-
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
-        {
-            return NonCombatForegroundOwner.Combat;
-        }
-
-        var observerState = new ObserverState(observer, null, null, null);
-        var rewardScene = AutoDecisionProvider.BuildRewardSceneState(observerState, null);
-        if (rewardScene.RewardForegroundOwned)
-        {
-            return NonCombatForegroundOwner.Reward;
-        }
-
-        if (AutoDecisionProvider.BuildShopSceneState(observerState) is { ReleaseStage: NonCombatReleaseStage.Active })
-        {
-            return NonCombatForegroundOwner.Shop;
-        }
-
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observerState, null);
-        if (eventScene.EventForegroundOwned
-            && eventScene.ExplicitAction is EventExplicitActionKind.AncientDialogue
-                or EventExplicitActionKind.AncientCompletion
-                or EventExplicitActionKind.AncientOption
-                or EventExplicitActionKind.AncientOptionContractMismatch)
-        {
-            return NonCombatForegroundOwner.Event;
-        }
-
-        if (HasExplicitMapForegroundAuthority(observer))
-        {
-            return NonCombatForegroundOwner.Map;
-        }
-
-        if (AutoDecisionProvider.BuildRestSiteSceneState(observerState) is { ReleaseStage: NonCombatReleaseStage.Active })
-        {
-            return NonCombatForegroundOwner.RestSite;
-        }
-
-        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.Active)
-        {
-            return NonCombatForegroundOwner.Event;
-        }
-
-        return NonCombatForegroundOwner.Unknown;
+        return Resolve(new ObserverState(observer, null, null, null));
     }
 
     public static bool HasExplicitMapForegroundAuthority(ObserverState observer)
     {
-        if (HasExplicitMapForegroundAuthority(observer.Summary))
-        {
-            return true;
-        }
-
-        return IsMapScreenTypeName(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"))
-               || IsMapScreenTypeName(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType"));
-    }
-
-    public static bool HasExplicitMapForegroundAuthority(ObserverSummary observer)
-    {
-        if (RewardObserverSignals.IsTerminalRunBoundary(observer)
-            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
+        if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
         {
             return false;
         }
 
-        return AncientEventObserverSignals.IsMapForegroundOwner(observer)
-               || TryGetMetaBool(observer, "mapCurrentActiveScreen") == true
-               || IsMapScreenTypeName(TryGetMetaValue(observer, "activeScreenType"));
+        if (TryGetMetaBool(observer.Summary, "mapCurrentActiveScreen") == true
+            || IsMapScreenTypeName(TryGetMetaValue(observer.Summary, "activeScreenType")))
+        {
+            return true;
+        }
+
+        if (HasExplicitMapPointSurface(observer)
+            && MatchesControlFlowScreen(observer, "map"))
+        {
+            return true;
+        }
+
+        if (IsMapScreenTypeName(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"))
+            || IsMapScreenTypeName(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType")))
+        {
+            return true;
+        }
+
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, null, null);
+        return mapOverlayState.ForegroundVisible
+               && (mapOverlayState.ExportedReachableNodeCandidatePresent
+                   || mapOverlayState.MapBackNavigationAvailable);
+    }
+
+    public static bool HasExplicitMapForegroundAuthority(ObserverSummary observer)
+    {
+        return HasExplicitMapForegroundAuthority(new ObserverState(observer, null, null, null));
+    }
+
+    public static bool HasAuthoritativeMapForegroundScreen(ObserverState observer)
+    {
+        if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
+            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+        {
+            return false;
+        }
+
+        return TryGetMetaBool(observer.Summary, "mapCurrentActiveScreen") == true
+               || IsMapScreenTypeName(TryGetMetaValue(observer.Summary, "activeScreenType"))
+               || IsMapScreenTypeName(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType"))
+               || IsMapScreenTypeName(GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "instanceType"));
+    }
+
+    public static bool HasAuthoritativeMapForegroundScreen(ObserverSummary observer)
+    {
+        return HasAuthoritativeMapForegroundScreen(new ObserverState(observer, null, null, null));
     }
 
     public static bool HasExplicitRestSiteForegroundAuthority(ObserverSummary observer)
@@ -150,10 +108,10 @@ static class NonCombatForegroundOwnership
 
     public static bool HasExplicitEventForegroundAuthority(ObserverSummary observer)
     {
-        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
-        return eventScene.EventForegroundOwned
-               && eventScene.ReleaseStage == EventReleaseStage.Active
-               && eventScene.HasExplicitProgression;
+        var handoffState = AutoDecisionProvider.BuildPostNodeHandoffState(observer, null);
+        return handoffState.IsEventOwner
+               && handoffState.ReleaseStage == NonCombatReleaseStage.Active
+               && handoffState.HasExplicitSurface;
     }
 
     private static bool? TryGetMetaBool(ObserverSummary observer, string key)
@@ -171,5 +129,11 @@ static class NonCombatForegroundOwnership
     {
         return !string.IsNullOrWhiteSpace(typeName)
                && typeName.Contains("NMapScreen", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasExplicitMapPointSurface(ObserverState observer)
+    {
+        return observer.Choices.Any(MapNodeSourceSupport.IsExplicitMapPointChoice)
+               || observer.ActionNodes.Any(static node => node.Actionable && MapNodeSourceSupport.IsExplicitMapPointNode(node));
     }
 }

@@ -50,6 +50,7 @@ static class GuiSmokeStepRequestFactory
         CombatBarrierEvaluation? combatBarrierEvaluation = null;
         RewardSceneState? rewardScene = null;
         EventSceneState? eventScene = null;
+        PostNodeHandoffState? postNodeHandoffState = null;
         ICanonicalNonCombatSceneState? canonicalNonCombatScene = null;
         var canonicalNonCombatSceneComputed = false;
 
@@ -106,6 +107,9 @@ static class GuiSmokeStepRequestFactory
 
         EventSceneState GetEventScene()
             => eventScene ??= AutoDecisionProvider.BuildEventSceneState(observer, windowBounds, history, screenshotPath);
+
+        PostNodeHandoffState GetPostNodeHandoffState()
+            => postNodeHandoffState ??= AutoDecisionProvider.BuildPostNodeHandoffState(observer, windowBounds, history, screenshotPath);
 
         ICanonicalNonCombatSceneState? GetCanonicalNonCombatScene()
         {
@@ -172,6 +176,7 @@ static class GuiSmokeStepRequestFactory
             () => GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath),
             GetRewardScene,
             GetEventScene,
+            GetPostNodeHandoffState,
             GetCanonicalNonCombatScene,
             GetCombatContext,
             GetPendingSelection,

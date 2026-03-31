@@ -60,6 +60,36 @@ enum NonCombatHandoffTarget
     WaitPostMapNodeRoom,
 }
 
+enum PostNodeHandoffSurfaceKind
+{
+    None,
+    Reward,
+    Event,
+    Shop,
+    RestSiteChoice,
+    RestSiteSmithUpgrade,
+    RestSiteProceed,
+    RestSiteSelectionSettling,
+    Treasure,
+    MapOverlay,
+    MapNode,
+    ContractMismatch,
+}
+
+sealed record PostNodeHandoffState(
+    NonCombatCanonicalForegroundOwner Owner,
+    NonCombatHandoffTarget HandoffTarget,
+    NonCombatReleaseStage ReleaseStage,
+    bool HasExplicitSurface,
+    PostNodeHandoffSurfaceKind SurfaceKind,
+    bool ContractMismatch,
+    bool MapOverlayVisible,
+    bool StaleBackgroundPresent)
+{
+    public bool IsMapOwner => Owner == NonCombatCanonicalForegroundOwner.Map;
+    public bool IsEventOwner => Owner == NonCombatCanonicalForegroundOwner.Event;
+}
+
 interface ICanonicalNonCombatSceneState
 {
     NonCombatCanonicalForegroundOwner CanonicalForegroundOwner { get; }

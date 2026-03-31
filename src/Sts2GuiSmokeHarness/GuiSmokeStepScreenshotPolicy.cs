@@ -65,26 +65,23 @@ static class GuiSmokeStepScreenshotPolicy
 
         if (analysisContext.Phase == GuiSmokePhase.ChooseFirstNode)
         {
+            var handoffState = analysisContext.PostNodeHandoffState;
             if (AutoDecisionProvider.HasObserverOnlyRestSiteUpgradeAuthority(observer.Summary, analysisContext.WindowBounds))
             {
                 return (false, "rest-site-upgrade-runtime");
             }
 
-            if (GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, analysisContext.ScreenshotPath)
-                || RestSiteObserverSignals.IsRestSiteSelectionSettlingState(observer.Summary)
-                || GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary)
-                || TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer.Summary)
-                || ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
+            if (handoffState.Owner is NonCombatCanonicalForegroundOwner.RestSite
+                or NonCombatCanonicalForegroundOwner.Treasure
+                or NonCombatCanonicalForegroundOwner.Shop
+                or NonCombatCanonicalForegroundOwner.Reward)
             {
                 return (false, "room-explicit-authority");
             }
 
             if (!LooksLikeInspectOverlayState(observer)
-                && AutoDecisionProvider.HasExplicitEventRecoveryAuthority(
-                    observer,
-                    analysisContext.WindowBounds,
-                    analysisContext.History,
-                    analysisContext.EventScene))
+                && handoffState.Owner == NonCombatCanonicalForegroundOwner.Event
+                && (handoffState.HasExplicitSurface || handoffState.ContractMismatch))
             {
                 return (false, "event-explicit-authority");
             }

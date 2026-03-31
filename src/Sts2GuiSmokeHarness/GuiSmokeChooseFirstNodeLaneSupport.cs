@@ -1,16 +1,18 @@
 internal enum GuiSmokeChooseFirstNodeLane
 {
-    AncientMapPending,
-    AncientMapForeground,
+    Unknown,
+    RewardForeground,
+    EventForeground,
     RestSiteExplicitChoice,
     RestSiteSmithUpgrade,
     RestSiteProceed,
     RestSiteSelectionSettling,
     TreasureRoom,
     ShopRoom,
-    EventRecovery,
+    MapPending,
     MapOverlay,
     MapForeground,
+    ContractMismatch,
 }
 
 internal static class GuiSmokeChooseFirstNodeLaneSupport
@@ -22,83 +24,27 @@ internal static class GuiSmokeChooseFirstNodeLaneSupport
         IReadOnlyList<GuiSmokeHistoryEntry> history,
         GuiSmokeStepAnalysisContext? analysisContext = null)
     {
-        var eventScene = analysisContext?.EventScene
-                         ?? AutoDecisionProvider.BuildEventSceneState(observer, windowBounds, history, screenshotPath);
-        var mapOverlayState = analysisContext?.MapOverlayState
-                              ?? GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath);
-        var restSiteScene = AutoDecisionProvider.BuildRestSiteSceneState(observer);
-        var explicitRestSiteChoiceAuthority = GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
-        var restSiteSmithUpgradeActive = (restSiteScene?.SmithUpgradeActive ?? false)
-                                         || (CardSelectionObserverSignals.IsUpgradeState(observer.Summary)
-                                             && string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase));
-        var restSiteProceedVisible = restSiteScene is
+        var handoffState = analysisContext?.PostNodeHandoffState
+                           ?? AutoDecisionProvider.BuildPostNodeHandoffState(observer, windowBounds, history, screenshotPath);
+
+        return handoffState.Owner switch
+        {
+            NonCombatCanonicalForegroundOwner.Reward => GuiSmokeChooseFirstNodeLane.RewardForeground,
+            NonCombatCanonicalForegroundOwner.Event => GuiSmokeChooseFirstNodeLane.EventForeground,
+            NonCombatCanonicalForegroundOwner.Shop => GuiSmokeChooseFirstNodeLane.ShopRoom,
+            NonCombatCanonicalForegroundOwner.RestSite => handoffState.SurfaceKind switch
             {
-                ProceedVisible: true,
-                ExplicitChoiceVisible: false,
-                SmithUpgradeActive: false,
-            }
-            || GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary);
-        var restSiteSelectionSettling = restSiteScene is
-        {
-            SelectionSettling: true,
-            ProceedVisible: false,
-            SmithUpgradeActive: false,
+                PostNodeHandoffSurfaceKind.RestSiteSmithUpgrade => GuiSmokeChooseFirstNodeLane.RestSiteSmithUpgrade,
+                PostNodeHandoffSurfaceKind.RestSiteProceed => GuiSmokeChooseFirstNodeLane.RestSiteProceed,
+                PostNodeHandoffSurfaceKind.RestSiteSelectionSettling => GuiSmokeChooseFirstNodeLane.RestSiteSelectionSettling,
+                _ => GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice,
+            },
+            NonCombatCanonicalForegroundOwner.Treasure => GuiSmokeChooseFirstNodeLane.TreasureRoom,
+            NonCombatCanonicalForegroundOwner.Map when !handoffState.HasExplicitSurface => GuiSmokeChooseFirstNodeLane.MapPending,
+            NonCombatCanonicalForegroundOwner.Map when handoffState.SurfaceKind == PostNodeHandoffSurfaceKind.MapOverlay => GuiSmokeChooseFirstNodeLane.MapOverlay,
+            NonCombatCanonicalForegroundOwner.Map => GuiSmokeChooseFirstNodeLane.MapForeground,
+            _ when handoffState.ContractMismatch => GuiSmokeChooseFirstNodeLane.ContractMismatch,
+            _ => GuiSmokeChooseFirstNodeLane.Unknown,
         };
-        var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
-        var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
-        var explicitEventRecoveryAuthority = !GuiSmokeNonCombatAllowedActionSupport.LooksLikeInspectOverlayState(observer)
-                                             && AutoDecisionProvider.HasExplicitEventRecoveryAuthority(observer, windowBounds, history, eventScene);
-
-        if (ancientMapOwner && ancientMapSurfacePending)
-        {
-            return GuiSmokeChooseFirstNodeLane.AncientMapPending;
-        }
-
-        if (ancientMapOwner)
-        {
-            return GuiSmokeChooseFirstNodeLane.AncientMapForeground;
-        }
-
-        if (restSiteSmithUpgradeActive)
-        {
-            return GuiSmokeChooseFirstNodeLane.RestSiteSmithUpgrade;
-        }
-
-        if (restSiteProceedVisible)
-        {
-            return GuiSmokeChooseFirstNodeLane.RestSiteProceed;
-        }
-
-        if (restSiteSelectionSettling)
-        {
-            return GuiSmokeChooseFirstNodeLane.RestSiteSelectionSettling;
-        }
-
-        if (explicitRestSiteChoiceAuthority)
-        {
-            return GuiSmokeChooseFirstNodeLane.RestSiteExplicitChoice;
-        }
-
-        if (TreasureRoomObserverSignals.TryGetState(observer.Summary) is { RoomDetected: true })
-        {
-            return GuiSmokeChooseFirstNodeLane.TreasureRoom;
-        }
-
-        if (ShopObserverSignals.IsShopAuthorityActive(observer.Summary))
-        {
-            return GuiSmokeChooseFirstNodeLane.ShopRoom;
-        }
-
-        if (explicitEventRecoveryAuthority)
-        {
-            return GuiSmokeChooseFirstNodeLane.EventRecovery;
-        }
-
-        if (mapOverlayState.ForegroundVisible)
-        {
-            return GuiSmokeChooseFirstNodeLane.MapOverlay;
-        }
-
-        return GuiSmokeChooseFirstNodeLane.MapForeground;
     }
 }

@@ -104,6 +104,32 @@ internal static partial class Program
                     "ancient-event-option-contract-mismatch",
                     GuiSmokeContractStates.TrustValid)),
             "Ancient event option contract mismatch should count as a dead-end attempt for supervision.");
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.ChooseFirstNode,
+                    observer: null,
+                    terminalCause: "post-node-handoff-contract-mismatch",
+                    launchFailed: false),
+                "post-node-handoff-contract-mismatch",
+                StringComparison.OrdinalIgnoreCase),
+            "Post-node handoff contract mismatch should stay a first-class failure class instead of collapsing to generic decision-abort.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
+                    "post-node-handoff-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic post-node handoff contract mismatch",
+                    12,
+                    false,
+                    "post-node-handoff-contract-mismatch",
+                    "post-node-handoff-contract-mismatch",
+                    GuiSmokeContractStates.TrustValid)),
+            "Post-node handoff contract mismatch should count as a dead-end attempt for supervision.");
 
         var ancientContractMismatchSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-ancient-contract-mismatch-sentinel-self-test-{Guid.NewGuid():N}");
         try
@@ -159,6 +185,63 @@ internal static partial class Program
             if (Directory.Exists(ancientContractMismatchSentinelRoot))
             {
                 Directory.Delete(ancientContractMismatchSentinelRoot, recursive: true);
+            }
+        }
+
+        var postNodeHandoffMismatchSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-post-node-handoff-mismatch-sentinel-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(postNodeHandoffMismatchSentinelRoot);
+            var runRoot = Path.Combine(postNodeHandoffMismatchSentinelRoot, "attempts", "0001");
+            Directory.CreateDirectory(runRoot);
+            LongRunArtifacts.InitializeSessionArtifacts(postNodeHandoffMismatchSentinelRoot, "post-node-handoff-session", "boot-to-long-run", "headless");
+            File.WriteAllLines(
+                Path.Combine(postNodeHandoffMismatchSentinelRoot, "attempt-index.ndjson"),
+                new[]
+                {
+                    JsonSerializer.Serialize(
+                        new GuiSmokeAttemptIndexEntry(
+                            "0001",
+                            1,
+                            "post-node-handoff-session",
+                            "failed",
+                            "synthetic post-node handoff contract mismatch",
+                            DateTimeOffset.UtcNow.AddSeconds(-30),
+                            DateTimeOffset.UtcNow.AddSeconds(-5),
+                            9,
+                            "post-node-handoff-contract-mismatch",
+                            false,
+                            "post-node-handoff-contract-mismatch",
+                            GuiSmokeContractStates.TrustValid),
+                        GuiSmokeShared.NdjsonOptions),
+                });
+            File.WriteAllText(
+                Path.Combine(runRoot, "failure-summary.json"),
+                JsonSerializer.Serialize(
+                    new GuiSmokeFailureSummary(
+                        GuiSmokePhase.ChooseFirstNode.ToString(),
+                        "post-node handoff contract mismatch synthetic failure",
+                        "event",
+                        false,
+                        "synthetic-post-node-handoff-contract-mismatch.png"),
+                    GuiSmokeShared.JsonOptions));
+            LongRunArtifacts.RefreshStallSentinel(postNodeHandoffMismatchSentinelRoot);
+            var diagnosisEntries = File.ReadLines(Path.Combine(postNodeHandoffMismatchSentinelRoot, "stall-diagnosis.ndjson"))
+                .Where(static line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+                .Where(static entry => entry is not null)
+                .Cast<GuiSmokeStallDiagnosisEntry>()
+                .ToArray();
+            Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic post-node handoff mismatch attempt.");
+            Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase)
+                   && diagnosisEntries[0].StallDetected,
+                "Stall sentinel should preserve post-node-handoff-contract-mismatch as a first-class diagnosis kind.");
+        }
+        finally
+        {
+            if (Directory.Exists(postNodeHandoffMismatchSentinelRoot))
+            {
+                Directory.Delete(postNodeHandoffMismatchSentinelRoot, recursive: true);
             }
         }
 
