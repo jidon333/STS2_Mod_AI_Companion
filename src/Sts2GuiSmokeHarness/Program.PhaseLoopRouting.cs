@@ -1011,7 +1011,7 @@ internal static partial class Program
                 => SetCanonicalForegroundModalBranch("branch-rewards", GuiSmokePhase.HandleRewards, out branchKind, out nextPhase),
             ShopSceneState { ReleaseStage: NonCombatReleaseStage.Active }
                 => SetCanonicalForegroundModalBranch("branch-shop", GuiSmokePhase.HandleShop, out branchKind, out nextPhase),
-            RestSiteSceneState { ReleaseStage: NonCombatReleaseStage.Active }
+            RestSiteSceneState { ReleaseStage: not NonCombatReleaseStage.None }
                 => SetCanonicalForegroundModalBranch("branch-rest-site", GuiSmokePhase.ChooseFirstNode, out branchKind, out nextPhase),
             TreasureSceneState
                 => SetCanonicalForegroundModalBranch("branch-treasure", GuiSmokePhase.ChooseFirstNode, out branchKind, out nextPhase),
@@ -1093,8 +1093,9 @@ internal static partial class Program
             return false;
         }
 
-        var handoffState = AutoDecisionProvider.BuildCombatResolutionHandoffState(observer, null, history);
-        var (branchKind, resolvedPhase) = handoffState.HandoffTarget switch
+        var releaseState = AutoDecisionProvider.BuildCombatReleaseState(observer, null, history);
+        var handoffState = releaseState.HandoffState;
+        var (branchKind, resolvedPhase) = releaseState.ReleaseTarget switch
         {
             NonCombatHandoffTarget.HandleRewards => ("combat-resolved-rewards", isLongRun ? GuiSmokePhase.HandleRewards : GuiSmokePhase.Completed),
             NonCombatHandoffTarget.HandleEvent => ("combat-resolved-event", isLongRun ? GuiSmokePhase.HandleEvent : GuiSmokePhase.Completed),

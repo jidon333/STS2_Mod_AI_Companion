@@ -78,6 +78,63 @@ internal static partial class Program
             }
         }
 
+        var restSiteReleaseSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-rest-site-release-sentinel-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(restSiteReleaseSentinelRoot);
+            var runRoot = Path.Combine(restSiteReleaseSentinelRoot, "attempts", "0001");
+            Directory.CreateDirectory(runRoot);
+            LongRunArtifacts.InitializeSessionArtifacts(restSiteReleaseSentinelRoot, "rest-site-release-session", "boot-to-long-run", "headless");
+            File.WriteAllLines(
+                Path.Combine(restSiteReleaseSentinelRoot, "attempt-index.ndjson"),
+                new[]
+                {
+                    JsonSerializer.Serialize(
+                        new GuiSmokeAttemptIndexEntry(
+                            "0001",
+                            1,
+                            "rest-site-release-session",
+                            "failed",
+                            "synthetic rest-site release pending stall",
+                            DateTimeOffset.UtcNow.AddSeconds(-30),
+                            DateTimeOffset.UtcNow.AddSeconds(-5),
+                            8,
+                            "rest-site-release-map-handoff-stall",
+                            false,
+                            "rest-site-release-map-handoff-stall",
+                            GuiSmokeContractStates.TrustValid),
+                        GuiSmokeShared.NdjsonOptions),
+                });
+            File.WriteAllText(
+                Path.Combine(runRoot, "failure-summary.json"),
+                JsonSerializer.Serialize(
+                    new GuiSmokeFailureSummary(
+                        GuiSmokePhase.ChooseFirstNode.ToString(),
+                        "rest-site-release-map-handoff-stall synthetic failure",
+                        "rest-site",
+                        false,
+                        "synthetic-rest-site-release-map-handoff-stall.png"),
+                    GuiSmokeShared.JsonOptions));
+            LongRunArtifacts.RefreshStallSentinel(restSiteReleaseSentinelRoot);
+            var diagnosisEntries = File.ReadLines(Path.Combine(restSiteReleaseSentinelRoot, "stall-diagnosis.ndjson"))
+                .Where(static line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+                .Where(static entry => entry is not null)
+                .Cast<GuiSmokeStallDiagnosisEntry>()
+                .ToArray();
+            Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic rest-site release-pending attempt.");
+            Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "rest-site-release-map-handoff-stall", StringComparison.OrdinalIgnoreCase)
+                   && diagnosisEntries[0].StallDetected,
+                "Stall sentinel should preserve rest-site-release-map-handoff-stall as a first-class diagnosis kind.");
+        }
+        finally
+        {
+            if (Directory.Exists(restSiteReleaseSentinelRoot))
+            {
+                Directory.Delete(restSiteReleaseSentinelRoot, recursive: true);
+            }
+        }
+
         Assert(
             string.Equals(
                 ClassifyFailureForAttempt(
@@ -145,11 +202,11 @@ internal static partial class Program
                 ClassifyFailureForAttempt(
                     GuiSmokePhase.HandleCombat,
                     observer: null,
-                    terminalCause: "combat-barrier-handoff-mismatch",
+                    terminalCause: "combat-release-failure-under-noncombat-foreground",
                     launchFailed: false),
-                "combat-barrier-handoff-mismatch",
+                "combat-release-failure-under-noncombat-foreground",
                 StringComparison.OrdinalIgnoreCase),
-            "Combat barrier handoff mismatch should stay a first-class failure class instead of collapsing to generic decision-abort.");
+            "Combat release failure under noncombat foreground should stay a first-class failure class instead of collapsing to generic decision-abort.");
         Assert(
             IsSceneDeadEndAttempt(
                 new GuiSmokeAttemptResult(
@@ -171,17 +228,17 @@ internal static partial class Program
                 new GuiSmokeAttemptResult(
                     "0001",
                     1,
-                    "combat-barrier-handoff-session",
+                    "combat-release-session",
                     "synthetic-run-root",
                     1,
                     "failed",
-                    "synthetic combat barrier handoff mismatch",
+                    "synthetic combat release failure under noncombat foreground",
                     18,
                     false,
-                    "combat-barrier-handoff-mismatch",
-                    "combat-barrier-handoff-mismatch",
+                    "combat-release-failure-under-noncombat-foreground",
+                    "combat-release-failure-under-noncombat-foreground",
                     GuiSmokeContractStates.TrustValid)),
-            "Combat barrier handoff mismatch should count as a dead-end attempt for supervision.");
+            "Combat release failure under noncombat foreground should count as a dead-end attempt for supervision.");
         Assert(
             IsSceneDeadEndAttempt(
                 new GuiSmokeAttemptResult(
@@ -370,30 +427,30 @@ internal static partial class Program
             }
         }
 
-        var combatBarrierHandoffMismatchSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-barrier-handoff-mismatch-sentinel-self-test-{Guid.NewGuid():N}");
+        var combatReleaseFailureSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-release-failure-sentinel-self-test-{Guid.NewGuid():N}");
         try
         {
-            Directory.CreateDirectory(combatBarrierHandoffMismatchSentinelRoot);
-            var runRoot = Path.Combine(combatBarrierHandoffMismatchSentinelRoot, "attempts", "0001");
+            Directory.CreateDirectory(combatReleaseFailureSentinelRoot);
+            var runRoot = Path.Combine(combatReleaseFailureSentinelRoot, "attempts", "0001");
             Directory.CreateDirectory(runRoot);
-            LongRunArtifacts.InitializeSessionArtifacts(combatBarrierHandoffMismatchSentinelRoot, "combat-barrier-handoff-session", "boot-to-long-run", "headless");
+            LongRunArtifacts.InitializeSessionArtifacts(combatReleaseFailureSentinelRoot, "combat-release-session", "boot-to-long-run", "headless");
             File.WriteAllLines(
-                Path.Combine(combatBarrierHandoffMismatchSentinelRoot, "attempt-index.ndjson"),
+                Path.Combine(combatReleaseFailureSentinelRoot, "attempt-index.ndjson"),
                 new[]
                 {
                     JsonSerializer.Serialize(
                         new GuiSmokeAttemptIndexEntry(
                             "0001",
                             1,
-                            "combat-barrier-handoff-session",
+                            "combat-release-session",
                             "failed",
-                            "synthetic combat barrier handoff mismatch",
+                            "synthetic combat release failure under noncombat foreground",
                             DateTimeOffset.UtcNow.AddSeconds(-30),
                             DateTimeOffset.UtcNow.AddSeconds(-5),
                             18,
-                            "combat-barrier-handoff-mismatch",
+                            "combat-release-failure-under-noncombat-foreground",
                             false,
-                            "combat-barrier-handoff-mismatch",
+                            "combat-release-failure-under-noncombat-foreground",
                             GuiSmokeContractStates.TrustValid),
                         GuiSmokeShared.NdjsonOptions),
                 });
@@ -402,28 +459,28 @@ internal static partial class Program
                 JsonSerializer.Serialize(
                     new GuiSmokeFailureSummary(
                         GuiSmokePhase.HandleCombat.ToString(),
-                        "combat barrier handoff mismatch synthetic failure",
+                        "combat release failure under noncombat foreground synthetic failure",
                         "event",
                         false,
-                        "synthetic-combat-barrier-handoff-mismatch.png"),
+                        "synthetic-combat-release-failure.png"),
                     GuiSmokeShared.JsonOptions));
-            LongRunArtifacts.RefreshStallSentinel(combatBarrierHandoffMismatchSentinelRoot);
-            var diagnosisEntries = File.ReadLines(Path.Combine(combatBarrierHandoffMismatchSentinelRoot, "stall-diagnosis.ndjson"))
+            LongRunArtifacts.RefreshStallSentinel(combatReleaseFailureSentinelRoot);
+            var diagnosisEntries = File.ReadLines(Path.Combine(combatReleaseFailureSentinelRoot, "stall-diagnosis.ndjson"))
                 .Where(static line => !string.IsNullOrWhiteSpace(line))
                 .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
                 .Where(static entry => entry is not null)
                 .Cast<GuiSmokeStallDiagnosisEntry>()
                 .ToArray();
-            Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic combat barrier handoff mismatch attempt.");
-            Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
+            Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic combat release failure attempt.");
+            Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                    && diagnosisEntries[0].StallDetected,
-                "Stall sentinel should preserve combat-barrier-handoff-mismatch as a first-class diagnosis kind.");
+                "Stall sentinel should preserve combat-release-failure-under-noncombat-foreground as a first-class diagnosis kind.");
         }
         finally
         {
-            if (Directory.Exists(combatBarrierHandoffMismatchSentinelRoot))
+            if (Directory.Exists(combatReleaseFailureSentinelRoot))
             {
-                Directory.Delete(combatBarrierHandoffMismatchSentinelRoot, recursive: true);
+                Directory.Delete(combatReleaseFailureSentinelRoot, recursive: true);
             }
         }
 

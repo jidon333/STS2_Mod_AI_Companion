@@ -28,9 +28,9 @@ sealed partial class AutoDecisionProvider
         GuiSmokeStepDecision? actualDecision,
         GuiSmokeStepAnalysisContext analysisContext)
     {
-        var handoffState = analysisContext.CombatResolutionHandoffState;
-        var (foregroundKind, backgroundKind) = DescribeCombatResolutionForegroundBackground(request, handoffState);
-        if (!HasReleasedCombatOwnership(handoffState))
+        var releaseState = analysisContext.CombatReleaseState;
+        var (foregroundKind, backgroundKind) = DescribeCombatResolutionForegroundBackground(request, releaseState.HandoffState);
+        if (!HasReleasedCombatOwnership(releaseState))
         {
             return AnalyzeGenericPhase(request, actualDecision, () => DecideHandleCombat(request, analysisContext), foregroundKind, backgroundKind);
         }
@@ -44,7 +44,7 @@ sealed partial class AutoDecisionProvider
         builder.Consider(
             releaseDecision.TargetLabel ?? releaseDecision.ActionKind ?? releaseDecision.Status,
             string.Equals(releaseDecision.Status, "abort", StringComparison.OrdinalIgnoreCase)
-                ? "combat-release-contract-mismatch"
+                ? "combat-release-failure-under-noncombat-foreground"
                 : "combat-release-handoff",
             releaseDecision.Confidence ?? 0.99d,
             () => releaseDecision,
@@ -61,7 +61,7 @@ sealed partial class AutoDecisionProvider
             return AnalyzeGenericPhase(shopRequest, actualDecision, () => DecideHandleShop(shopRequest), "shop", null);
         }
 
-        if (canonicalScene is RestSiteSceneState { ReleaseStage: NonCombatReleaseStage.Active })
+        if (canonicalScene is RestSiteSceneState { ReleaseStage: not NonCombatReleaseStage.None })
         {
             return AnalyzeChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, actualDecision, analysisContext);
         }
@@ -294,6 +294,23 @@ sealed partial class AutoDecisionProvider
             builder.AddSuppressed("click map back", "rest-site-selection-settling-preserves-room-lane");
             return builder.Build(
                 CreateWaitDecision("waiting for rest-site selection to settle into smith upgrade or proceed", DisplayControlFlowScreen(request.Observer)),
+                actualDecision);
+        }
+
+        if (BuildRestSiteSceneState(request.Observer) is
+            {
+                ReleaseStage: NonCombatReleaseStage.ReleasePending,
+                ProceedVisible: false,
+                SmithUpgradeActive: false,
+                ExplicitChoiceVisible: false,
+            })
+        {
+            builder.AddSuppressed("click exported reachable node", "rest-site-release-pending-suppresses-map-routing");
+            builder.AddSuppressed("click first reachable node", "rest-site-release-pending-suppresses-map-routing");
+            builder.AddSuppressed("click visible map advance", "rest-site-release-pending-suppresses-map-arrow-contamination");
+            builder.AddSuppressed("click map back", "rest-site-release-pending-suppresses-map-back");
+            return builder.Build(
+                CreateWaitDecision("waiting for rest-site release to publish proceed or true map foreground", DisplayControlFlowScreen(request.Observer)),
                 actualDecision);
         }
 

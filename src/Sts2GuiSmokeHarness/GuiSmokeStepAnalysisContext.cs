@@ -39,6 +39,7 @@ sealed class GuiSmokeStepAnalysisContext
     private readonly Func<EventSceneState> _eventSceneFactory;
     private readonly Func<PostNodeHandoffState> _postNodeHandoffStateFactory;
     private readonly Func<PostNodeHandoffState> _combatResolutionHandoffStateFactory;
+    private readonly Func<CombatReleaseState> _combatReleaseStateFactory;
     private readonly Func<ICanonicalNonCombatSceneState?> _canonicalNonCombatSceneFactory;
     private readonly Func<ReconstructedHandleCombatContext> _combatContextFactory;
     private readonly Func<PendingCombatSelection?> _pendingCombatSelectionFactory;
@@ -60,6 +61,7 @@ sealed class GuiSmokeStepAnalysisContext
     private EventSceneState? _eventScene;
     private PostNodeHandoffState? _postNodeHandoffState;
     private PostNodeHandoffState? _combatResolutionHandoffState;
+    private CombatReleaseState? _combatReleaseState;
     private ICanonicalNonCombatSceneState? _canonicalNonCombatScene;
     private bool _canonicalNonCombatSceneComputed;
     private ReconstructedHandleCombatContext? _combatContext;
@@ -91,6 +93,7 @@ sealed class GuiSmokeStepAnalysisContext
         Func<EventSceneState> eventSceneFactory,
         Func<PostNodeHandoffState> postNodeHandoffStateFactory,
         Func<PostNodeHandoffState> combatResolutionHandoffStateFactory,
+        Func<CombatReleaseState> combatReleaseStateFactory,
         Func<ICanonicalNonCombatSceneState?> canonicalNonCombatSceneFactory,
         Func<ReconstructedHandleCombatContext> combatContextFactory,
         Func<PendingCombatSelection?> pendingCombatSelectionFactory,
@@ -118,6 +121,7 @@ sealed class GuiSmokeStepAnalysisContext
         _eventSceneFactory = eventSceneFactory;
         _postNodeHandoffStateFactory = postNodeHandoffStateFactory;
         _combatResolutionHandoffStateFactory = combatResolutionHandoffStateFactory;
+        _combatReleaseStateFactory = combatReleaseStateFactory;
         _canonicalNonCombatSceneFactory = canonicalNonCombatSceneFactory;
         _combatContextFactory = combatContextFactory;
         _pendingCombatSelectionFactory = pendingCombatSelectionFactory;
@@ -165,6 +169,8 @@ sealed class GuiSmokeStepAnalysisContext
     public PostNodeHandoffState PostNodeHandoffState => _postNodeHandoffState ??= _postNodeHandoffStateFactory();
 
     public PostNodeHandoffState CombatResolutionHandoffState => _combatResolutionHandoffState ??= _combatResolutionHandoffStateFactory();
+
+    public CombatReleaseState CombatReleaseState => _combatReleaseState ??= _combatReleaseStateFactory();
 
     public ICanonicalNonCombatSceneState? CanonicalNonCombatScene
     {
@@ -229,6 +235,7 @@ sealed class GuiSmokeStepAnalysisContext
         EventSceneState? eventScene = null;
         PostNodeHandoffState? postNodeHandoffState = null;
         PostNodeHandoffState? combatResolutionHandoffState = null;
+        CombatReleaseState? combatReleaseState = null;
         ICanonicalNonCombatSceneState? canonicalNonCombatScene = null;
         var canonicalNonCombatSceneComputed = false;
 
@@ -290,6 +297,15 @@ sealed class GuiSmokeStepAnalysisContext
 
         PostNodeHandoffState GetCombatResolutionHandoffState()
             => combatResolutionHandoffState ??= AutoDecisionProvider.BuildCombatResolutionHandoffState(observer, request.WindowBounds, history, screenshotPath);
+
+        CombatReleaseState GetCombatReleaseState()
+            => combatReleaseState ??= AutoDecisionProvider.BuildCombatReleaseState(
+                observer,
+                request.WindowBounds,
+                history,
+                screenshotPath,
+                GetCombatResolutionHandoffState(),
+                GetCombatBarrierEvaluation());
 
         ICanonicalNonCombatSceneState? GetCanonicalNonCombatScene()
         {
@@ -360,6 +376,7 @@ sealed class GuiSmokeStepAnalysisContext
             GetEventScene,
             GetPostNodeHandoffState,
             GetCombatResolutionHandoffState,
+            GetCombatReleaseState,
             GetCanonicalNonCombatScene,
             GetCombatContext,
             GetPendingSelection,

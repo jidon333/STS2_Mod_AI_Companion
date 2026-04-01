@@ -77,6 +77,7 @@ coverage status 의미:
 | `TREASURE-01` | `ChooseFirstNode` / `HandleEvent` | treasure room | green | treasure room self-tests, WaitMap reopen to treasure, status doc continuity roots | explicit treasure room state strong |
 | `REST-01` | `ChooseFirstNode` | rest-site explicit choice | green | rest-site metadata-first self-tests | authoritative metadata contract strong |
 | `REST-02` | `ChooseFirstNode` | rest-site post-click release | green | grace / noop / selection-failed self-tests | explicit release/no-op guard present |
+| `REST-03` | `ChooseFirstNode` / `WaitPostMapNodeRoom` | rest-site release pending over map overlay | partial | `Program.SelfTests.NonCombatForegroundOwnership.cs` synthetic release-pending assertions + `Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs` rest-site branch assertions + decisive live root [combat-release-reward-aftermath-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-release-reward-aftermath-20260401-live1) attempt `0001` step `0398` | current code canonicalizes `screen=rest-site` + exported node residue into rest-site release-pending, but fresh live rerun before green promotion is still required |
 
 ## Rewards
 

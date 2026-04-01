@@ -13,7 +13,7 @@
 - 현재 진행 축: `M5 authoritative long-run blocker loop`, late acceptance-evidence stage
 - 현재 engineering focus:
   1. fresh single-attempt endurance natural-terminal evidence를 current docs와 owner code 기준선으로 고정
-  2. `HandleRewards reward card choice same-action-stall`과 `HandleCombat combat-barrier-step-budget-exhausted / wait-plateau` family를 closed family를 reopen하지 않고 좁게 정리
+  2. `rest-site -> map handoff` mixed-state를 `RestSiteReleasePending` canonical contract로 닫고, closed family를 reopen하지 않고 next blocker를 더 좁은 이름으로 드러내기
   3. live review capture black-video 문제를 gameplay blocker와 분리해 정리하고, 그 다음에야 `M6 replay/parity` 고정으로 넘어가기
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
@@ -29,7 +29,7 @@
 - explicit relic reward claim -> `proceed after resolving rewards` inversion은 replay exact repro 기준으로 닫혔고, fresh live rerun에서 재현되지 않았다
 - explicit shop foreground 위에 stale reward misroute가 끼어들던 `HandleShop -> HandleRewards -> decision-wait-plateau` family는 current `main`에서 즉시 `HandleRewards -> HandleShop` 회복으로 닫혔다
 - fresh authoritative endurance root [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)는 valid-trust single attempt가 `player-defeated` natural terminal까지 `stepCount=479`로 진행될 수 있음을 보여줬다
-- 다만 short validation roots에서는 `reward card choice same-action-stall`과 `combat-barrier-step-budget-exhausted` family가 여전히 남아 있다
+- `Combat Release + Reward Aftermath` wave는 live root [combat-release-reward-aftermath-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-release-reward-aftermath-20260401-live1) 에서 target family 기준으로 먹혔고, 새 front blocker는 `rest-site -> map handoff same-action-stall`이다
 - live ffmpeg metadata recording은 current `main`에서 붙지만, `window-hwnd gdigrab` review video는 아직 black frame이라 screenshot/request artifact가 source of truth다
 
 ## 현재 우선순위
@@ -70,20 +70,26 @@ cleanup program 완료 이후에도 current follow-up은 남아 있다.
      - exact replay repro였던 explicit relic claim -> `proceed after resolving rewards` inversion은 current `main`에서 닫혔다
      - fresh live rerun에서도 relic/proceed inversion은 다시 나오지 않았다
      - 대신 attempt `0001`에서 `same-action-stall phase=HandleRewards target=reward card choice screen=rewards`가 새 front blocker로 드러났다
-4. combat barrier tail family
+4. combat release + reward aftermath live proof
+   - root: [combat-release-reward-aftermath-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-release-reward-aftermath-20260401-live1)
+   - result:
+     - `ChooseFirstNode -> combat takeover -> generic map wait`는 재발하지 않았다
+     - `HandleCombat -> HandleRewards` handoff와 reward precedence는 live에서 정상 동작했다
+     - 새 authoritative blocker는 `same-action-stall phase=ChooseFirstNode target=exported reachable map node screen=rest-site`이고, family 해석은 `rest-site release pending over map overlay`다
+5. combat barrier tail family
    - roots:
      - [combat-takeover-barrier-20260331-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-takeover-barrier-20260331-live1)
      - [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
    - result:
      - short validation roots에서는 `combat-barrier-wait-plateau`와 `combat-barrier-step-budget-exhausted` family가 여전히 관찰된다
      - dominant shape는 `HandleCombat`에서 `EnemyClick`/`EndTurn` barrier ownership이 늦게 풀리는 long-tail이다
-5. fresh endurance proof root
+6. fresh endurance proof root
    - root: [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)
    - result:
      - valid-trust single attempt가 `stepCount=479`까지 실제로 진행됐다
      - 종료는 harness stall이 아니라 natural `player-defeated` terminal이었다
      - 이번 root에서는 short triage roots에서 보였던 reward stall / combat barrier family가 authoritative terminal cause로 올라오지 않았다
-6. live review capture state
+7. live review capture state
    - roots:
      - [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
      - [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)

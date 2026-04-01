@@ -148,6 +148,66 @@ internal static partial class Program
                 ShouldContinueLoop: false);
         }
 
+        if (TryClassifyRewardAftermathCardProgressionWait(
+                phase,
+                request,
+                decision,
+                stepAnalysisContext,
+                loopTracking.ConsecutiveDecisionWaitCount,
+                out var rewardAftermathWaitCause,
+                out var rewardAftermathWaitMessage))
+        {
+            LogHarness($"step={stepIndex} abort {rewardAftermathWaitMessage}");
+            AppendProgressIfLongRun(
+                isLongRun,
+                logger,
+                EvaluateStepProgress(
+                    stepIndex,
+                    phase,
+                    request.SceneSignature,
+                    observer,
+                    null,
+                    decision,
+                    request.FirstSeenScene,
+                    request.ReasoningMode,
+                    false,
+                    loopTracking.SameActionStallCount,
+                    "reward-aftermath-card-progression-stall"));
+            return new GuiSmokeDecisionStatusResult(
+                CompleteFailure(rewardAftermathWaitMessage, rewardAftermathWaitCause),
+                ShouldContinueLoop: false);
+        }
+
+        if (TryClassifyRestSiteReleaseMapHandoffWait(
+                phase,
+                request,
+                decision,
+                stepAnalysisContext,
+                loopTracking.ConsecutiveDecisionWaitCount,
+                out var restSiteReleaseWaitCause,
+                out var restSiteReleaseWaitMessage))
+        {
+            LogHarness($"step={stepIndex} abort {restSiteReleaseWaitMessage}");
+            AppendProgressIfLongRun(
+                isLongRun,
+                logger,
+                EvaluateStepProgress(
+                    stepIndex,
+                    phase,
+                    request.SceneSignature,
+                    observer,
+                    null,
+                    decision,
+                    request.FirstSeenScene,
+                    request.ReasoningMode,
+                    false,
+                    loopTracking.SameActionStallCount,
+                    "rest-site-release-map-handoff-stall"));
+            return new GuiSmokeDecisionStatusResult(
+                CompleteFailure(restSiteReleaseWaitMessage, restSiteReleaseWaitCause),
+                ShouldContinueLoop: false);
+        }
+
         if (TryClassifyDecisionWaitPlateau(phase, observer, loopTracking.ConsecutiveDecisionWaitCount, out var plateauTerminalCause, out var plateauMessage))
         {
             LogHarness($"step={stepIndex} abort {plateauMessage}");
@@ -248,6 +308,7 @@ internal static partial class Program
         ObserverState observer,
         GuiSmokeStepRequest request,
         GuiSmokeStepDecision decision,
+        GuiSmokeStepAnalysisContext stepAnalysisContext,
         bool isLongRun,
         ArtifactRecorder logger,
         ObserverSnapshotReader observerReader,
@@ -552,6 +613,72 @@ internal static partial class Program
 
         if (loopTracking.SameActionStallCount >= GetSameActionStallLimit(phase, decision))
         {
+            if (TryClassifyRewardAftermathCardProgressionActionStall(
+                    phase,
+                    request,
+                    decision,
+                    stepAnalysisContext,
+                    loopTracking.SameActionStallCount,
+                    out var rewardAftermathActionCause,
+                    out var rewardAftermathActionMessage))
+            {
+                LogHarness($"step={stepIndex} abort {rewardAftermathActionMessage}");
+                AppendProgressIfLongRun(
+                    isLongRun,
+                    logger,
+                    EvaluateStepProgress(
+                        stepIndex,
+                        phase,
+                        request.SceneSignature,
+                        observer,
+                        latestObserver,
+                        decision,
+                        request.FirstSeenScene,
+                        request.ReasoningMode,
+                        false,
+                        loopTracking.SameActionStallCount,
+                        "reward-aftermath-card-progression-stall"));
+                return new GuiSmokeActuationPreparationResult(
+                    CompleteFailure(rewardAftermathActionMessage, rewardAftermathActionCause),
+                    ShouldContinueLoop: false,
+                    LatestObserver: latestObserver,
+                    ClickWindow: null,
+                    RewardMapRecoveryAttempt: false);
+            }
+
+            if (TryClassifyRestSiteReleaseMapHandoffActionStall(
+                    phase,
+                    request,
+                    decision,
+                    stepAnalysisContext,
+                    loopTracking.SameActionStallCount,
+                    out var restSiteReleaseActionCause,
+                    out var restSiteReleaseActionMessage))
+            {
+                LogHarness($"step={stepIndex} abort {restSiteReleaseActionMessage}");
+                AppendProgressIfLongRun(
+                    isLongRun,
+                    logger,
+                    EvaluateStepProgress(
+                        stepIndex,
+                        phase,
+                        request.SceneSignature,
+                        observer,
+                        latestObserver,
+                        decision,
+                        request.FirstSeenScene,
+                        request.ReasoningMode,
+                        false,
+                        loopTracking.SameActionStallCount,
+                        "rest-site-release-map-handoff-stall"));
+                return new GuiSmokeActuationPreparationResult(
+                    CompleteFailure(restSiteReleaseActionMessage, restSiteReleaseActionCause),
+                    ShouldContinueLoop: false,
+                    LatestObserver: latestObserver,
+                    ClickWindow: null,
+                    RewardMapRecoveryAttempt: false);
+            }
+
             var abortReason = $"same-action-stall phase={phase} target={decision.TargetLabel ?? "null"} screen={observer.CurrentScreen ?? "null"} inventory={observer.InventoryId ?? "null"}";
             LogHarness($"step={stepIndex} abort {abortReason}");
             AppendProgressIfLongRun(
@@ -635,5 +762,136 @@ internal static partial class Program
             LatestObserver: latestObserver,
             ClickWindow: clickWindow,
             RewardMapRecoveryAttempt: rewardMapRecoveryAttempt);
+    }
+
+    static bool TryClassifyRewardAftermathCardProgressionWait(
+        GuiSmokePhase phase,
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision decision,
+        GuiSmokeStepAnalysisContext analysisContext,
+        int consecutiveDecisionWaitCount,
+        out string terminalCause,
+        out string message)
+    {
+        terminalCause = string.Empty;
+        message = string.Empty;
+        if (phase != GuiSmokePhase.HandleRewards
+            || consecutiveDecisionWaitCount < 4
+            || !string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var rewardScene = analysisContext.RewardScene;
+        if (!rewardScene.RewardForegroundOwned
+            || rewardScene.ReleaseStage != RewardReleaseStage.Active
+            || rewardScene.ExplicitAction is not RewardExplicitActionKind.CardChoice and not RewardExplicitActionKind.ColorlessChoice)
+        {
+            return false;
+        }
+
+        if (!(decision.Reason?.Contains("reward card progression", StringComparison.OrdinalIgnoreCase) ?? false))
+        {
+            return false;
+        }
+
+        terminalCause = "reward-aftermath-card-progression-stall";
+        message = $"reward-aftermath-card-progression-stall phase=HandleRewards target={decision.TargetLabel ?? "wait"} screen={request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "null"} waits={consecutiveDecisionWaitCount} extractor={request.Observer.ChoiceExtractorPath ?? "null"} aftermath={rewardScene.AftermathResiduePresent}";
+        return true;
+    }
+
+    static bool TryClassifyRewardAftermathCardProgressionActionStall(
+        GuiSmokePhase phase,
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision decision,
+        GuiSmokeStepAnalysisContext analysisContext,
+        int sameActionStallCount,
+        out string terminalCause,
+        out string message)
+    {
+        terminalCause = string.Empty;
+        message = string.Empty;
+        if (phase != GuiSmokePhase.HandleRewards
+            || sameActionStallCount < GetSameActionStallLimit(phase, decision)
+            || (!string.Equals(decision.TargetLabel, "reward card choice", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(decision.TargetLabel, "colorless card choice", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var rewardScene = analysisContext.RewardScene;
+        if (!rewardScene.RewardForegroundOwned
+            || rewardScene.ReleaseStage != RewardReleaseStage.Active
+            || rewardScene.ExplicitAction is not RewardExplicitActionKind.CardChoice and not RewardExplicitActionKind.ColorlessChoice)
+        {
+            return false;
+        }
+
+        terminalCause = "reward-aftermath-card-progression-stall";
+        message = $"reward-aftermath-card-progression-stall phase=HandleRewards target={decision.TargetLabel ?? "null"} screen={request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "null"} repeats={sameActionStallCount + 1} extractor={request.Observer.ChoiceExtractorPath ?? "null"} aftermath={rewardScene.AftermathResiduePresent}";
+        return true;
+    }
+
+    static bool TryClassifyRestSiteReleaseMapHandoffWait(
+        GuiSmokePhase phase,
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision decision,
+        GuiSmokeStepAnalysisContext analysisContext,
+        int consecutiveDecisionWaitCount,
+        out string terminalCause,
+        out string message)
+    {
+        terminalCause = string.Empty;
+        message = string.Empty;
+        if (phase is not (GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitMap or GuiSmokePhase.WaitPostMapNodeRoom)
+            || consecutiveDecisionWaitCount < 4
+            || !string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+            || !(decision.Reason?.Contains("rest-site release", StringComparison.OrdinalIgnoreCase) ?? false)
+            || !IsRestSiteReleasePendingHandoff(request.Observer, analysisContext))
+        {
+            return false;
+        }
+
+        var restSiteScene = analysisContext.CanonicalNonCombatScene as RestSiteSceneState;
+        terminalCause = "rest-site-release-map-handoff-stall";
+        message = $"rest-site-release-map-handoff-stall phase={phase} screen={request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "null"} waits={consecutiveDecisionWaitCount} extractor={request.Observer.ChoiceExtractorPath ?? "null"} selectionAccepted={restSiteScene?.SelectionAcceptedRecently ?? false} proceedVisible={restSiteScene?.ProceedVisible ?? false} mapCurrentActive={NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(request.Observer)} exportedReachable={analysisContext.MapOverlayState.ExportedReachableNodeCandidatePresent}";
+        return true;
+    }
+
+    static bool TryClassifyRestSiteReleaseMapHandoffActionStall(
+        GuiSmokePhase phase,
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision decision,
+        GuiSmokeStepAnalysisContext analysisContext,
+        int sameActionStallCount,
+        out string terminalCause,
+        out string message)
+    {
+        terminalCause = string.Empty;
+        message = string.Empty;
+        if (phase is not (GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitMap or GuiSmokePhase.WaitPostMapNodeRoom)
+            || sameActionStallCount < GetSameActionStallLimit(phase, decision)
+            || !string.Equals(decision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase)
+            || !IsRestSiteReleasePendingHandoff(request.Observer, analysisContext))
+        {
+            return false;
+        }
+
+        var restSiteScene = analysisContext.CanonicalNonCombatScene as RestSiteSceneState;
+        terminalCause = "rest-site-release-map-handoff-stall";
+        message = $"rest-site-release-map-handoff-stall phase={phase} target={decision.TargetLabel ?? "null"} screen={request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "null"} repeats={sameActionStallCount + 1} extractor={request.Observer.ChoiceExtractorPath ?? "null"} selectionAccepted={restSiteScene?.SelectionAcceptedRecently ?? false} proceedVisible={restSiteScene?.ProceedVisible ?? false} mapCurrentActive={NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(request.Observer)} exportedReachable={analysisContext.MapOverlayState.ExportedReachableNodeCandidatePresent}";
+        return true;
+    }
+
+    static bool IsRestSiteReleasePendingHandoff(ObserverSummary observer, GuiSmokeStepAnalysisContext analysisContext)
+    {
+        var handoffState = analysisContext.PostNodeHandoffState;
+        return string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(observer.CurrentScreen ?? observer.VisibleScreen, "rest-site", StringComparison.OrdinalIgnoreCase)
+               && handoffState.Owner == NonCombatCanonicalForegroundOwner.RestSite
+               && handoffState.ReleaseStage == NonCombatReleaseStage.ReleasePending
+               && handoffState.SurfaceKind == PostNodeHandoffSurfaceKind.RestSiteReleasePending
+               && !handoffState.HasExplicitSurface
+               && analysisContext.CanonicalNonCombatScene is RestSiteSceneState { SelectionAcceptedRecently: true };
     }
 }

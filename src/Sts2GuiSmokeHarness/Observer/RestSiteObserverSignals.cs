@@ -85,6 +85,13 @@ static class RestSiteObserverSignals
                || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase);
     }
 
+    public static bool HasSelectionAcceptedRecently(ObserverSummary observer)
+    {
+        return string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSignal"), "after-select-success", StringComparison.OrdinalIgnoreCase)
+               || IsRestSiteSelectionSettlingState(observer);
+    }
+
     public static bool HasExportedSmithUpgradeChoices(ObserverSummary observer)
     {
         return observer.Choices.Any(static choice =>

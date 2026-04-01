@@ -211,7 +211,7 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "combat-barrier-wait-plateau" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "combat-barrier-step-budget-exhausted" or "combat-barrier-handoff-mismatch" or "rest-site-post-click-noop" or "rest-site-selection-failed" or "rest-site-grid-not-visible-after-selection" or "rest-site-grid-observer-miss" or "ancient-event-option-contract-mismatch" or "post-node-handoff-contract-mismatch",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "combat-barrier-wait-plateau" or "combat-release-failure-under-noncombat-foreground" or "reward-aftermath-card-progression-stall" or "rest-site-release-map-handoff-stall" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "combat-barrier-step-budget-exhausted" or "combat-barrier-handoff-mismatch" or "rest-site-post-click-noop" or "rest-site-selection-failed" or "rest-site-grid-not-visible-after-selection" or "rest-site-grid-observer-miss" or "ancient-event-option-contract-mismatch" or "post-node-handoff-contract-mismatch",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
@@ -231,6 +231,9 @@ static partial class LongRunArtifacts
             || string.Equals(diagnosisKind, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "reward-aftermath-card-progression-stall", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "rest-site-release-map-handoff-stall", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase),
             backlogRoute,
@@ -273,10 +276,28 @@ static partial class LongRunArtifacts
             return "combat-barrier-handoff-mismatch";
         }
 
+        if (string.Equals(attemptEntry.TerminalCause, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase))
+        {
+            return "combat-release-failure-under-noncombat-foreground";
+        }
+
         if (string.Equals(attemptEntry.TerminalCause, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
             || string.Equals(attemptEntry.FailureClass, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase))
         {
             return "combat-barrier-wait-plateau";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "reward-aftermath-card-progression-stall", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "reward-aftermath-card-progression-stall", StringComparison.OrdinalIgnoreCase))
+        {
+            return "reward-aftermath-card-progression-stall";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "rest-site-release-map-handoff-stall", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "rest-site-release-map-handoff-stall", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rest-site-release-map-handoff-stall";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)

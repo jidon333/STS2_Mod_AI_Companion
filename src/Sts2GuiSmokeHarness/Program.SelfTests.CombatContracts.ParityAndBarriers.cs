@@ -570,8 +570,12 @@ internal static partial class Program
             var enemyBarrierReleasedToEventDecision = AutoDecisionProvider.Decide(enemyBarrierReleasedToEventRequest);
             Assert(
                 string.Equals(enemyBarrierReleasedToEventDecision.Status, "abort", StringComparison.OrdinalIgnoreCase)
-                && string.Equals(enemyBarrierReleasedToEventDecision.DecisionRisk, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase),
-                "Stale HandleCombat requests with explicit event foreground should abort as combat-barrier-handoff-mismatch.");
+                && string.Equals(enemyBarrierReleasedToEventDecision.DecisionRisk, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase),
+                "Stale HandleCombat requests with explicit event foreground should abort as combat-release-failure-under-noncombat-foreground.");
+            Assert(
+                enemyBarrierReleasedToEventContext.CombatReleaseState.HasReleasedOwnership
+                && enemyBarrierReleasedToEventContext.CombatReleaseState.ReleaseSubtype == CombatReleaseSubtype.EnemyClickResidue,
+                "Combat release state should preserve the EnemyClick residue subtype once explicit event foreground owns the room.");
 
             var attackBarrierCapturedAt = DateTimeOffset.UtcNow;
             var attackBarrierObserver = new ObserverSummary(

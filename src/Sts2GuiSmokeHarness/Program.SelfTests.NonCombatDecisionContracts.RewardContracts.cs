@@ -1385,6 +1385,171 @@ internal static partial class Program
                    && !string.Equals(rewardPolicyDecision.TargetLabel, "proceed after resolving rewards", StringComparison.OrdinalIgnoreCase),
                 "Reward policy should prefer a visible card or claimable reward over default gold/skip choices.");
 
+            var explicitMixedRewardObserver = new ObserverState(
+                new ObserverSummary(
+                    "rewards",
+                    "rewards",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-explicit-mixed-reward",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-explicit-mixed-reward",
+                    "Monster",
+                    "event",
+                    80,
+                    80,
+                    null,
+                    new[] { "{gold} 골드", "덱에 추가할 카드를 선택하세요.", "넘기기" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("reward-gold-node", "gold", "{gold} 골드", "758,374,402,86", true)
+                        {
+                            TypeName = "reward-type",
+                            SemanticHints = new[] { "reward", "reward-gold", "reward-type:GoldReward" },
+                        },
+                        new ObserverActionNode("reward-card-node", "card", "덱에 추가할 카드를 선택하세요.", "758,470,402,86", true)
+                        {
+                            TypeName = "reward-type",
+                            SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("gold", "{gold} 골드", "758,374,402,86", "{gold} 골드", "16 골드")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "GoldReward",
+                            SemanticHints = new[] { "reward", "reward-gold", "reward-type:GoldReward" },
+                        },
+                        new ObserverChoice("card", "덱에 추가할 카드를 선택하세요.", "758,470,402,86", "CardReward", "카드 보상")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "CardReward",
+                            SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                        },
+                        new ObserverChoice("choice", "넘기기", "1583,764,269,108"),
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "true",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "true",
+                        ["rewardVisibleButtonCount"] = "3",
+                        ["rewardEnabledButtonCount"] = "3",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                        ["rewardScreenRootType"] = "MegaCrit.Sts2.Core.Nodes.Screens.NRewardsScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            var explicitMixedRewardScene = AutoDecisionProvider.BuildRewardSceneState(
+                explicitMixedRewardObserver,
+                new WindowBounds(0, 0, 1920, 1080),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardRankingScreenshotPath);
+            Assert(explicitMixedRewardScene.ExplicitAction == RewardExplicitActionKind.Claim
+                   && explicitMixedRewardScene.ClaimSurfacePresent
+                   && explicitMixedRewardScene.CardProgressionSurfacePresent,
+                "Immediate gold claims must outrank reward card rows while preserving the remaining card row as secondary progression.");
+            var explicitMixedRewardDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                39,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "Immediate reward claims should outrank reward card-row progression when both are visible.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1920, 1080),
+                ComputeSceneSignature(rewardRankingScreenshotPath, explicitMixedRewardObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                explicitMixedRewardObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                GetAllowedActions(GuiSmokePhase.HandleRewards, explicitMixedRewardObserver),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Gold claims should not be delayed behind reward card-row progression when both are explicit.",
+                null));
+            Assert(string.Equals(explicitMixedRewardDecision.TargetLabel, "claim reward gold", StringComparison.OrdinalIgnoreCase),
+                "Immediate gold rewards should be claimed before clicking reward card rows.");
+
+            var rewardCardProgressionObserver = explicitMixedRewardObserver with
+            {
+                Summary = explicitMixedRewardObserver.Summary with
+                {
+                    CurrentChoices = new[] { "덱에 추가할 카드를 선택하세요.", "넘기기" },
+                    ActionNodes = new[]
+                    {
+                        new ObserverActionNode("reward-card-node", "card", "덱에 추가할 카드를 선택하세요.", "758,470,402,86", true)
+                        {
+                            TypeName = "reward-type",
+                            SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                        },
+                    },
+                    Choices = new[]
+                    {
+                        new ObserverChoice("card", "덱에 추가할 카드를 선택하세요.", "758,470,402,86", "CardReward", "카드 보상")
+                        {
+                            BindingKind = "reward-type",
+                            BindingId = "CardReward",
+                            SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                        },
+                        new ObserverChoice("choice", "넘기기", "1583,764,269,108"),
+                    },
+                    Meta = new Dictionary<string, string?>(explicitMixedRewardObserver.Summary.Meta ?? new Dictionary<string, string?>())
+                    {
+                        ["choiceExtractorPath"] = "event",
+                    },
+                },
+            };
+            var rewardCardProgressionDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                40,
+                GuiSmokePhase.HandleRewards.ToString(),
+                "Repeated reward card clicks without subtype publish should degrade to a reward-family wait, not a repeated click.",
+                DateTimeOffset.UtcNow,
+                rewardRankingScreenshotPath,
+                new WindowBounds(0, 0, 1920, 1080),
+                ComputeSceneSignature(rewardRankingScreenshotPath, rewardCardProgressionObserver, GuiSmokePhase.HandleRewards),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                rewardCardProgressionObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                GetAllowedActions(GuiSmokePhase.HandleRewards, rewardCardProgressionObserver),
+                new[]
+                {
+                    new GuiSmokeHistoryEntry(GuiSmokePhase.HandleRewards.ToString(), "click", "reward card choice", DateTimeOffset.UtcNow.AddSeconds(-2)),
+                },
+                "Reward aftermath card rows should wait for subtype publish instead of repeating the same click.",
+                null));
+            Assert(string.Equals(rewardCardProgressionDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(rewardCardProgressionDecision.Reason, "waiting for reward card progression to publish card-selection state", StringComparison.OrdinalIgnoreCase),
+                "Repeated reward card rows should transition into reward-family progression wait instead of reissuing the same click.");
+
             var rewardPromptObserver = new ObserverState(
                 new ObserverSummary(
                     "rewards",

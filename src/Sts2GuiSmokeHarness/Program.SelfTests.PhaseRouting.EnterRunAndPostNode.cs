@@ -902,6 +902,60 @@ internal static partial class Program
                 && waitPostMapNodeRestSitePhase == GuiSmokePhase.ChooseFirstNode,
                 "WaitPostMapNodeRoom should reopen rest-site handling instead of stalling in combat wait.");
 
+            using var waitPostMapNodeRestSiteReleaseDocument = JsonDocument.Parse("""{"meta":{"mapOverlayVisible":"true"}}""");
+            var waitPostMapNodeRestSiteReleaseHistory = new List<GuiSmokeHistoryEntry>();
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.WaitPostMapNodeRoom,
+                    new ObserverState(
+                        new ObserverSummary(
+                            "rest-site",
+                            "rest-site",
+                            false,
+                            DateTimeOffset.UtcNow,
+                            null,
+                            true,
+                            "map",
+                            "stable",
+                            null,
+                            "RestSite",
+                            "map",
+                            64,
+                            80,
+                            null,
+                            Array.Empty<string>(),
+                            Array.Empty<string>(),
+                            new[]
+                            {
+                                new ObserverActionNode("map:6:5", "map-node", "Unknown (6,5)", "770,528,56,56", true)
+                                {
+                                    TypeName = "map-node",
+                                },
+                            },
+                            new[]
+                            {
+                                new ObserverChoice("map-node", "Unknown (6,5)", "770,528,56,56", "6,5", "type:Unknown;state:Travelable;coord:6,5"),
+                            },
+                            Array.Empty<ObservedCombatHandCard>())
+                        {
+                            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["restSiteSelectionLastSignal"] = "after-select-success",
+                                ["restSiteSelectionLastSuccess"] = "true",
+                            },
+                        },
+                        waitPostMapNodeRestSiteReleaseDocument,
+                        null,
+                        null),
+                    waitPostMapNodeRestSiteReleaseHistory,
+                    waitPostMapNodeLogger,
+                    11,
+                    true,
+                    out var waitPostMapNodeRestSiteReleasePhase)
+                && waitPostMapNodeRestSiteReleasePhase == GuiSmokePhase.ChooseFirstNode
+                && string.Equals(waitPostMapNodeRestSiteReleaseHistory[^1].Action, "branch-rest-site", StringComparison.OrdinalIgnoreCase),
+                "WaitPostMapNodeRoom should keep rest-site release-pending as the owner instead of reopening branch-map from exported node residue.");
+
             Assert(
                 TryAdvanceAlternateBranch(
                     GuiSmokePhase.WaitPostMapNodeRoom,

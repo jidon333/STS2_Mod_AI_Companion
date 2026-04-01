@@ -104,7 +104,8 @@ static class GuiSmokeNonCombatContractSupport
 
     public static bool LooksLikeRestSiteState(ObserverSummary observer)
     {
-        if (MapAuthorityOutranksStaleRestSiteResidue(observer))
+        if (MapAuthorityOutranksStaleRestSiteResidue(observer)
+            && !HasRestSiteReleasePendingAuthority(observer))
         {
             return false;
         }
@@ -131,7 +132,8 @@ static class GuiSmokeNonCombatContractSupport
     public static bool LooksLikeRestSiteProceedState(ObserverSummary observer)
     {
         if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
-            || MapAuthorityOutranksStaleRestSiteResidue(observer))
+            || (MapAuthorityOutranksStaleRestSiteResidue(observer)
+                && !HasRestSiteReleasePendingAuthority(observer)))
         {
             return false;
         }
@@ -166,8 +168,7 @@ static class GuiSmokeNonCombatContractSupport
             return true;
         }
 
-        return string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(RestSiteObserverSignals.TryGetMetaValue(observer, "restSiteSelectionLastSignal"), "after-select-success", StringComparison.OrdinalIgnoreCase)
+        return RestSiteObserverSignals.HasSelectionAcceptedRecently(observer)
                || (hasProceedLabel
                    && !observer.CurrentChoices.Any(static label =>
                        ContainsAny(label, "휴식", "Rest", "재련", "Smith", "부화", "Hatch")));
@@ -317,6 +318,36 @@ static class GuiSmokeNonCombatContractSupport
 
         return !RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
                && (!explicitRestSiteChoiceAffordance || staleExplicitRestSiteResidue);
+    }
+
+    private static bool HasRestSiteReleasePendingAuthority(ObserverSummary observer)
+    {
+        var onRestSiteScreen = MatchesControlFlowScreen(observer, "rest-site")
+                               || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase);
+        if (!onRestSiteScreen
+            || HasMapCurrentActiveScreen(observer)
+            || MatchesControlFlowScreen(observer, "map")
+            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
+            || RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
+            || HasVisibleRestSiteProceedAffordance(observer))
+        {
+            return false;
+        }
+
+        return RestSiteObserverSignals.HasSelectionAcceptedRecently(observer);
+    }
+
+    private static bool HasVisibleRestSiteProceedAffordance(ObserverSummary observer)
+    {
+        var hasProceedActionNode = observer.ActionNodes.Any(static node =>
+            node.Actionable
+            && IsProceedNode(node)
+            && TryParseBounds(node.ScreenBounds, out _));
+        var hasProceedChoice = observer.Choices.Any(static choice =>
+            IsProceedChoice(choice)
+            && HasLargeChoiceBounds(choice.ScreenBounds));
+        var hasProceedLabel = observer.CurrentChoices.Any(IsProceedLikeLabel);
+        return hasProceedActionNode || hasProceedChoice || hasProceedLabel;
     }
 
     private static bool IsProceedNode(ObserverActionNode node)

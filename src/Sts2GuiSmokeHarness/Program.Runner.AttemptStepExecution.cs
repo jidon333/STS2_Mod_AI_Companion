@@ -143,6 +143,7 @@ internal static partial class Program
                 observer,
                 request,
                 decision,
+                stepAnalysisContext,
                 isLongRun,
                 logger,
                 observerReader,

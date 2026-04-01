@@ -14,7 +14,7 @@ sealed partial class AutoDecisionProvider
             return DecideHandleShop(request with { Phase = GuiSmokePhase.HandleShop.ToString() });
         }
 
-        if (canonicalScene is RestSiteSceneState { ReleaseStage: NonCombatReleaseStage.Active })
+        if (canonicalScene is RestSiteSceneState { ReleaseStage: not NonCombatReleaseStage.None })
         {
             return DecideChooseFirstNode(
                 request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() },
@@ -156,6 +156,17 @@ sealed partial class AutoDecisionProvider
             GuiSmokeDecisionDebug.SetSceneModel("map", "post-node-surface-pending");
             GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "wait" });
             return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for post-node map surface to republish after room release");
+        }
+
+        if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.RestSiteReleasePending)
+        {
+            GuiSmokeDecisionDebug.SetSceneModel("rest-site", "release-pending");
+            GuiSmokeDecisionDebug.ReplaceActiveCandidates(new[] { "wait" });
+            GuiSmokeDecisionDebug.Suppress("click exported reachable node", "rest-site-release-pending-suppresses-map-routing");
+            GuiSmokeDecisionDebug.Suppress("click first reachable node", "rest-site-release-pending-suppresses-map-routing");
+            GuiSmokeDecisionDebug.Suppress("click visible map advance", "rest-site-release-pending-suppresses-current-node-arrow");
+            GuiSmokeDecisionDebug.Suppress("click map back", "rest-site-release-pending-suppresses-map-back");
+            return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for rest-site release to publish proceed or true map foreground");
         }
 
         if (chooseFirstNodeLane == GuiSmokeChooseFirstNodeLane.MapOverlay)
@@ -692,14 +703,12 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateExplicitRewardResolutionDecision(GuiSmokeStepRequest request, RewardSceneState rewardScene)
     {
-        var rewardChoiceDecision = TryCreateRewardChoiceDecision(request, rewardScene);
-        if (rewardChoiceDecision is not null)
-        {
-            return rewardChoiceDecision;
-        }
-
-        var claimableRewardChoices = GetClaimableRewardProgressionChoices(request.Observer, request.WindowBounds, rewardScene.ScreenState);
-        var claimableRewardNodes = GetClaimableRewardProgressionNodes(request.Observer, request.WindowBounds, rewardScene.ScreenState);
+        var claimableRewardChoices = GetClaimableRewardProgressionChoices(request.Observer, request.WindowBounds, rewardScene.ScreenState)
+            .Where(choice => !ShouldSuppressRewardClaimCandidate(choice, request.Observer, rewardScene, request.History))
+            .ToArray();
+        var claimableRewardNodes = GetClaimableRewardProgressionNodes(request.Observer, request.WindowBounds, rewardScene.ScreenState)
+            .Where(node => !ShouldSuppressRewardClaimCandidate(node, request.Observer, rewardScene, request.History))
+            .ToArray();
         var activeRewardChoices = request.Observer.Choices
             .Where(choice => IsCurrentRewardProgressionChoice(choice, request.WindowBounds, rewardScene.ScreenState))
             .ToArray();
@@ -729,6 +738,22 @@ sealed partial class AutoDecisionProvider
         if (rewardChoice is not null)
         {
             return CreateExplicitRewardDecisionFromChoice(request, rewardChoice, "claim");
+        }
+
+        var rewardChoiceScene = rewardScene.CardProgressionSurfacePresent
+                                && claimableRewardChoices.Length == 0
+                                && claimableRewardNodes.Length == 0
+            ? rewardScene with
+            {
+                ExplicitAction = rewardScene.ColorlessChoiceVisible
+                    ? RewardExplicitActionKind.ColorlessChoice
+                    : RewardExplicitActionKind.CardChoice,
+            }
+            : rewardScene;
+        var rewardChoiceDecision = TryCreateRewardChoiceDecision(request, rewardChoiceScene);
+        if (rewardChoiceDecision is not null)
+        {
+            return rewardChoiceDecision;
         }
 
         var proceedChoice = request.Observer.Choices
@@ -781,6 +806,68 @@ sealed partial class AutoDecisionProvider
         }
 
         return null;
+    }
+
+    private static bool ShouldSuppressRewardClaimCandidate(
+        ObserverChoice choice,
+        ObserverSummary observer,
+        RewardSceneState rewardScene,
+        IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        if (!rewardScene.CardProgressionSurfacePresent)
+        {
+            return false;
+        }
+
+        var targetLabel = BuildExplicitRewardDecisionMetadata(choice, observer, "claim").TargetLabel;
+        return HasRecentRewardClaimAttempt(history, targetLabel);
+    }
+
+    private static bool ShouldSuppressRewardClaimCandidate(
+        ObserverActionNode node,
+        ObserverSummary observer,
+        RewardSceneState rewardScene,
+        IReadOnlyList<GuiSmokeHistoryEntry> history)
+    {
+        if (!rewardScene.CardProgressionSurfacePresent)
+        {
+            return false;
+        }
+
+        var activeRewardChoices = observer.Choices
+            .Where(choice => IsCurrentRewardProgressionChoice(choice, null, rewardScene.ScreenState))
+            .ToArray();
+        var targetLabel = BuildExplicitRewardDecisionMetadata(node, activeRewardChoices, observer, "claim").TargetLabel;
+        return HasRecentRewardClaimAttempt(history, targetLabel);
+    }
+
+    private static bool HasRecentRewardClaimAttempt(IReadOnlyList<GuiSmokeHistoryEntry> history, string targetLabel)
+    {
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (entry.Phase is not nameof(GuiSmokePhase.HandleRewards) and not "HandleRewards")
+            {
+                break;
+            }
+
+            if (string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(entry.TargetLabel, targetLabel, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("observer-", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        return false;
     }
 
     private static GuiSmokeStepDecision? TryCreateRoomOverlayCleanupDecision(GuiSmokeStepRequest request)
@@ -891,10 +978,9 @@ sealed partial class AutoDecisionProvider
         if (rewardScene.ExplicitAction is RewardExplicitActionKind.CardChoice or RewardExplicitActionKind.ColorlessChoice)
         {
             return TryCreateCardRewardChoiceDecision(request)
-                   ?? CreatePhaseWaitDecision(
-                       GuiSmokePhase.HandleRewards,
-                       "waiting for explicit reward card surface",
-                       ResolveObserverScreen(request.Observer, "rewards"));
+                   ?? CreateForegroundAwareNonCombatWaitDecision(
+                       request,
+                       "waiting for reward card progression to publish card-selection state");
         }
 
         var bestChoice = claimableRewardChoices
@@ -926,6 +1012,11 @@ sealed partial class AutoDecisionProvider
         var rewardCardTarget = GuiSmokeRewardSceneSignals.LooksLikeColorlessCardChoiceState(request.Observer)
             ? "colorless card choice"
             : "reward card choice";
+        if (HasRecentRewardCardProgressionAttempt(request.History, request.Phase, rewardCardTarget))
+        {
+            return null;
+        }
+
         var explicitRewardCardChoice = request.Observer.Choices
             .Where(choice => IsRewardCardChoice(choice, request.Observer) && HasActiveRewardBounds(choice.ScreenBounds, request.WindowBounds))
             .OrderByDescending(ScoreExplicitRewardProgressionChoice)
@@ -949,6 +1040,11 @@ sealed partial class AutoDecisionProvider
             .ToArray();
         if (semanticRewardCardChoices.Length > 0)
         {
+            if (HasRecentRewardCardProgressionAttempt(request.History, request.Phase, rewardCardTarget) && semanticRewardCardChoices.Length <= 1)
+            {
+                return null;
+            }
+
             var preferredSemanticChoice = SelectRewardCardSemanticChoice(request, semanticRewardCardChoices);
             var semanticChoiceIndex = Array.IndexOf(semanticRewardCardChoices, preferredSemanticChoice);
             var rewardCardPoint = ResolveRewardCardChoiceAnchor(semanticChoiceIndex, semanticRewardCardChoices.Length);
@@ -995,6 +1091,38 @@ sealed partial class AutoDecisionProvider
         }
 
         return null;
+    }
+
+    private static bool HasRecentRewardCardProgressionAttempt(
+        IReadOnlyList<GuiSmokeHistoryEntry> history,
+        string phase,
+        string rewardCardTarget)
+    {
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (!string.Equals(entry.Phase, phase, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            if (string.Equals(entry.Action, "click", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(entry.TargetLabel, rewardCardTarget, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("observer-", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("branch-", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        return false;
     }
 
     private static ObserverChoice SelectRewardCardSemanticChoice(

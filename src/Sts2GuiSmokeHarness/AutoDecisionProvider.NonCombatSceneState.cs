@@ -92,6 +92,10 @@ sealed partial class AutoDecisionProvider
         var claimableRewardPresent = !strongerRoomForegroundAuthority
                                      && (claimableRewardChoices.Length > 0
                                          || claimableRewardNodes.Length > 0);
+        var aftermathResiduePresent = rewardForegroundOwned
+                                      && !string.IsNullOrWhiteSpace(observer.ChoiceExtractorPath)
+                                      && !string.Equals(observer.ChoiceExtractorPath, "reward", StringComparison.OrdinalIgnoreCase)
+                                      && !string.Equals(observer.ChoiceExtractorPath, "rewards", StringComparison.OrdinalIgnoreCase);
         var suppressSameSkipReissue = rewardForegroundOwned
                                       && explicitProceedVisible
                                       && !claimableRewardPresent
@@ -110,10 +114,12 @@ sealed partial class AutoDecisionProvider
                 : RewardReleaseStage.None);
         var explicitAction = releaseStage != RewardReleaseStage.Active
             ? RewardExplicitActionKind.None
-            : colorlessChoiceVisible
-                ? RewardExplicitActionKind.ColorlessChoice
-                : rewardChoiceVisible || claimableRewardPresent
-                    ? (rewardChoiceVisible ? RewardExplicitActionKind.CardChoice : RewardExplicitActionKind.Claim)
+            : claimableRewardPresent
+                ? RewardExplicitActionKind.Claim
+                : colorlessChoiceVisible
+                    ? RewardExplicitActionKind.ColorlessChoice
+                    : rewardChoiceVisible
+                        ? RewardExplicitActionKind.CardChoice
                     : rewardBackNavigationAvailable && mapContextVisible && staleRewardChoicePresent && !layerState.MapCurrentActiveScreen
                         ? RewardExplicitActionKind.Back
                         : explicitProceedVisible
@@ -130,7 +136,64 @@ sealed partial class AutoDecisionProvider
             colorlessChoiceVisible,
             claimableRewardPresent,
             explicitProceedVisible,
-            suppressSameSkipReissue);
+            suppressSameSkipReissue,
+            rewardChoiceVisible || colorlessChoiceVisible,
+            claimableRewardPresent,
+            aftermathResiduePresent);
+    }
+
+    internal static CombatReleaseState BuildCombatReleaseState(
+        ObserverState observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null,
+        PostNodeHandoffState? handoffState = null,
+        CombatBarrierEvaluation? combatBarrier = null)
+    {
+        handoffState ??= BuildCombatResolutionHandoffState(observer, windowBounds, history, screenshotPath);
+        combatBarrier ??= CombatBarrierSupport.Inactive;
+
+        var releaseTarget = handoffState.HandoffTarget;
+        var foregroundOwner = handoffState.Owner;
+        var hasExplicitForegroundSurface = handoffState.HasExplicitSurface;
+        var releaseMismatch = handoffState.ContractMismatch
+                              || (foregroundOwner != NonCombatCanonicalForegroundOwner.Combat
+                                  && releaseTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat
+                                  && handoffState.ReleaseStage == NonCombatReleaseStage.None
+                                  && !hasExplicitForegroundSurface);
+        var releaseSubtype = combatBarrier.Kind switch
+        {
+            CombatBarrierKind.EnemyClick => CombatReleaseSubtype.EnemyClickResidue,
+            CombatBarrierKind.EndTurn => CombatReleaseSubtype.EndTurnReopenLatency,
+            _ => CombatReleaseSubtype.None,
+        };
+        var combatAuthorityState = releaseTarget is NonCombatHandoffTarget.None or NonCombatHandoffTarget.HandleCombat
+            ? CombatAuthorityState.Active
+            : hasExplicitForegroundSurface
+                ? CombatAuthorityState.Released
+                : CombatAuthorityState.ResidueOnly;
+
+        return new CombatReleaseState(
+            combatBarrier.Kind,
+            combatAuthorityState,
+            foregroundOwner,
+            releaseTarget,
+            handoffState.ReleaseStage,
+            hasExplicitForegroundSurface,
+            releaseMismatch,
+            releaseSubtype,
+            handoffState);
+    }
+
+    internal static CombatReleaseState BuildCombatReleaseState(
+        ObserverSummary observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null,
+        PostNodeHandoffState? handoffState = null,
+        CombatBarrierEvaluation? combatBarrier = null)
+    {
+        return BuildCombatReleaseState(new ObserverState(observer, null, null, null), windowBounds, history, screenshotPath, handoffState, combatBarrier);
     }
 
     internal static EventSceneState BuildEventSceneState(
@@ -309,27 +372,45 @@ sealed partial class AutoDecisionProvider
                                 && !smithUpgradeActive
                                 && !proceedVisible
                                 && RestSiteObserverSignals.IsRestSiteSelectionSettlingState(observer.Summary);
+        var selectionAcceptedRecently = explicitScreenAuthority
+                                        && RestSiteObserverSignals.HasSelectionAcceptedRecently(observer.Summary);
+        var releasePending = explicitScreenAuthority
+                             && selectionAcceptedRecently
+                             && !explicitChoiceVisible
+                             && !smithUpgradeActive
+                             && !proceedVisible
+                             && !selectionSettling;
         if (authoritativeMapForegroundScreen
             && !explicitChoiceVisible
             && !smithUpgradeActive
-            && !proceedVisible)
+            && !proceedVisible
+            && !selectionSettling)
         {
             return null;
         }
 
-        if (!smithUpgradeActive && !explicitChoiceVisible && !proceedVisible && !selectionSettling)
+        if (!smithUpgradeActive && !explicitChoiceVisible && !proceedVisible && !selectionSettling && !releasePending)
         {
             return null;
         }
 
         var mapContextVisible = MatchesControlFlowScreen(observer, "map")
                                 || NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer.Summary);
+        var mapOverlayResiduePresent = !authoritativeMapForegroundScreen
+                                       && NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer.Summary);
+        var aftermathResiduePresent = releasePending
+                                      || (!string.IsNullOrWhiteSpace(observer.ChoiceExtractorPath)
+                                          && !string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
+                                          && explicitScreenAuthority);
         return new RestSiteSceneState(
             explicitChoiceVisible,
             smithUpgradeActive,
             RestSiteObserverSignals.HasSmithConfirmVisible(observer.Summary),
             proceedVisible,
             selectionSettling,
+            selectionAcceptedRecently,
+            aftermathResiduePresent,
+            mapOverlayResiduePresent,
             mapContextVisible);
     }
 
@@ -750,16 +831,18 @@ sealed partial class AutoDecisionProvider
                 ? PostNodeHandoffSurfaceKind.RestSiteProceed
                 : restSiteScene.SelectionSettling
                     ? PostNodeHandoffSurfaceKind.RestSiteSelectionSettling
-                    : PostNodeHandoffSurfaceKind.RestSiteChoice;
+                    : restSiteScene.ReleaseStage == NonCombatReleaseStage.ReleasePending
+                        ? PostNodeHandoffSurfaceKind.RestSiteReleasePending
+                        : PostNodeHandoffSurfaceKind.RestSiteChoice;
         return new PostNodeHandoffState(
             restSiteScene.CanonicalForegroundOwner,
             restSiteScene.HandoffTarget,
             restSiteScene.ReleaseStage,
-            HasExplicitSurface: true,
+            HasExplicitSurface: restSiteScene.ReleaseStage == NonCombatReleaseStage.Active,
             surfaceKind,
             ContractMismatch: HasExporterMapForegroundClaim(observer) && !mapExplicitOwner,
             MapOverlayVisible: mapOverlayState.ForegroundVisible,
-            StaleBackgroundPresent: restSiteScene.MapContextVisible);
+            StaleBackgroundPresent: restSiteScene.MapContextVisible || restSiteScene.AftermathResiduePresent);
     }
 
     private static PostNodeHandoffState BuildTreasurePostNodeHandoffState(
@@ -1104,6 +1187,11 @@ sealed partial class AutoDecisionProvider
             return false;
         }
 
+        if (IsRewardCardChoice(choice))
+        {
+            return false;
+        }
+
         return !IsPotionRewardChoice(choice) || AllowsPotionRewardClaim(rewardState);
     }
 
@@ -1113,6 +1201,11 @@ sealed partial class AutoDecisionProvider
         IReadOnlyList<ObserverChoice> activeRewardChoices)
     {
         if (IsProceedNode(node))
+        {
+            return false;
+        }
+
+        if (IsCardRewardNode(node, activeRewardChoices))
         {
             return false;
         }

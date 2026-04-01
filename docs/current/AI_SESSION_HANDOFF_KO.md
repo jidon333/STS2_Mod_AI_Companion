@@ -8,9 +8,11 @@
 > 2026-04-01 current pointer:
 > 이 문서 본문은 `live21 ancient option` wave 중심의 historical handoff가 많이 남아 있다.
 > 현재 active pointer는 [PROJECT_STATUS.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/PROJECT_STATUS.md) 를 우선한다.
-> 최신 기준으로는 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion은 닫혔고,
-> 현재 short-root blocker는 `reward card choice same-action-stall`과 `combat-barrier-step-budget-exhausted / wait-plateau`, validation-quality gap은 live review black-video다.
+> 최신 기준으로는 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion은 닫혔다.
+> current `main`에는 `HandleCombat` release truth를 위한 `combat-release-failure-under-noncombat-foreground` family와 reward aftermath용 `reward-aftermath-card-progression-stall` family가 들어가 있다.
+> exact reward mixed-state repro는 [0031.request.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-barrier-release-20260331-live2/attempts/0003/steps/0031.request.json) 에서 `claim reward relic`, [0104.request.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1/attempts/0001/steps/0104.request.json) 에서 `claim reward gold`로 복구된다.
 > fresh authoritative endurance root는 [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2) 이고, single attempt가 natural `player-defeated` terminal까지 `stepCount=479`로 진행됐다.
+> 아직 남은 short-root follow-up은 `combat release under noncombat foreground` family와 `reward card progression aftermath` family이며, validation-quality gap은 live review black-video다.
 
 ## 문서 목적
 
@@ -172,6 +174,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `compatibility retirement` 1단계도 current `main`에 반영됐다
 - combat stale-end-turn / target plateau family는 current `main`에서 micro-stage + quiet convergence + runtime target-summary authority로 닫혔다
 - explicit shop foreground 위 stale reward misroute plateau family는 current `main`에서 immediate reward-to-shop recovery로 닫혔다
+- `Combat Release + Reward Aftermath` wave live root [combat-release-reward-aftermath-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-release-reward-aftermath-20260401-live1) 에서 target family는 닫혔고, 새 front blocker는 `rest-site -> map handoff same-action-stall`로 이동했다
 - anti-drift recovery wave `bc53c34`, `f29cc5d`, `52ebabd`, `84e4647`, `5ebe718`, `3a24338`도 current `main`에 반영됐다
 - `MAP-04` reward reopen self-test regression은 current `main`에서 닫혔다
 - `build`, `self-test`, `replay-test`, `replay-parity-test`는 current `main`에서 green이다

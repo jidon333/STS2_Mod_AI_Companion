@@ -93,6 +93,8 @@ internal static partial class Program
             GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
             GuiSmokePhase.HandleRewards when ShopObserverSignals.IsShopAuthorityActive(observer.Summary)
                 => BuildShopAllowedActions(observer.Summary, history),
+            GuiSmokePhase.HandleRewards when restSiteScene is { ReleaseStage: NonCombatReleaseStage.ReleasePending }
+                => new[] { "wait" },
             GuiSmokePhase.HandleRewards when restSiteScene is { SelectionSettling: true }
                 => new[] { "wait" },
             GuiSmokePhase.HandleRewards when explicitRestSiteChoiceAuthority
@@ -171,6 +173,7 @@ internal static partial class Program
             GuiSmokeChooseFirstNodeLane.RestSiteSmithUpgrade => new[] { "click smith card", "click smith confirm", "wait" },
             GuiSmokeChooseFirstNodeLane.RestSiteProceed => new[] { "click proceed", "wait" },
             GuiSmokeChooseFirstNodeLane.RestSiteSelectionSettling => new[] { "wait" },
+            GuiSmokeChooseFirstNodeLane.RestSiteReleasePending => new[] { "wait" },
             GuiSmokeChooseFirstNodeLane.TreasureRoom => TreasureRoomObserverSignals.BuildAllowedActions(TreasureRoomObserverSignals.TryGetState(observer.Summary)!),
             GuiSmokeChooseFirstNodeLane.ShopRoom => BuildShopAllowedActions(observer.Summary, history),
             GuiSmokeChooseFirstNodeLane.MapOverlay => BuildMapOverlayRoutingAllowedActions(context.MapOverlayState),

@@ -30,7 +30,7 @@ internal static partial class Program
         GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         var context = analysisContext ?? CreateStepAnalysisContext(GuiSmokePhase.HandleCombat, observer, screenshotPath, history, combatCardKnowledge);
-        if (AutoDecisionProvider.HasReleasedCombatOwnership(context.CombatResolutionHandoffState))
+        if (AutoDecisionProvider.HasReleasedCombatOwnership(context.CombatReleaseState))
         {
             return new[] { "wait" };
         }

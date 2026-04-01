@@ -413,9 +413,11 @@ internal static partial class Program
     {
         return (result.TerminalCause?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
                || (result.TerminalCause?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false)
+               || string.Equals(result.TerminalCause, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                || IsRestSitePostClickFailureKind(result.TerminalCause)
                || (result.FailureClass?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
                || (result.FailureClass?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false)
+               || string.Equals(result.FailureClass, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                || IsRestSitePostClickFailureKind(result.FailureClass);
     }
 
@@ -423,7 +425,8 @@ internal static partial class Program
     {
         return string.Equals(decisionRisk, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
                || string.Equals(decisionRisk, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(decisionRisk, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase);
+               || string.Equals(decisionRisk, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(decisionRisk, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase);
     }
 
     static bool TryClassifyMaxStepBudgetExhaustion(
@@ -519,6 +522,9 @@ internal static partial class Program
         {
             "combat-barrier-step-budget-exhausted" => "combat-barrier-step-budget-exhausted",
             "combat-barrier-handoff-mismatch" => "combat-barrier-handoff-mismatch",
+            "combat-release-failure-under-noncombat-foreground" => "combat-release-failure-under-noncombat-foreground",
+            "reward-aftermath-card-progression-stall" => "reward-aftermath-card-progression-stall",
+            "rest-site-release-map-handoff-stall" => "rest-site-release-map-handoff-stall",
             "reward-map-loop" => "reward-map-loop",
             "map-overlay-noop-loop" => "map-overlay-noop-loop",
             "map-transition-stall" => "map-transition-stall",
@@ -565,6 +571,9 @@ internal static partial class Program
         return string.Equals(result.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "reward-aftermath-card-progression-stall", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "rest-site-release-map-handoff-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
@@ -579,6 +588,9 @@ internal static partial class Program
                || string.Equals(result.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "reward-aftermath-card-progression-stall", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "rest-site-release-map-handoff-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "map-transition-stall", StringComparison.OrdinalIgnoreCase)

@@ -1554,6 +1554,56 @@ internal static partial class Program
                    && mixedRestAftermathPhase == GuiSmokePhase.ChooseFirstNode,
                 "Post-embark reconciliation should prefer map progression over stale rest-site residue when mapCurrentActiveScreen is true.");
 
+            using var restSiteReleasePendingStateDocument = JsonDocument.Parse("""{"meta":{"mapOverlayVisible":"true"}}""");
+            var restSiteReleasePendingSummary = restSiteProceedSummary with
+            {
+                CurrentScreen = "rest-site",
+                VisibleScreen = "rest-site",
+                EncounterKind = "RestSite",
+                ChoiceExtractorPath = "map",
+                CurrentChoices = Array.Empty<string>(),
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("map:6:5", "map-node", "Unknown (6,5)", "770.838,528.498,56,56", true)
+                    {
+                        TypeName = "map-node",
+                    },
+                },
+                Choices = new[]
+                {
+                    new ObserverChoice("map-node", "Unknown (6,5)", "770.838,528.498,56,56", "6,5", "type:Unknown;state:Travelable;coord:6,5"),
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                },
+            };
+            var restSiteReleasePendingObserver = new ObserverState(restSiteReleasePendingSummary, restSiteReleasePendingStateDocument, null, null);
+            var restSiteReleasePendingAllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteReleasePendingObserver);
+            var restSiteReleasePendingHandoffState = AutoDecisionProvider.BuildPostNodeHandoffState(
+                restSiteReleasePendingObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                null);
+            Assert(restSiteReleasePendingAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase)
+                   && !restSiteReleasePendingAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+                   && restSiteReleasePendingHandoffState.Owner == NonCombatCanonicalForegroundOwner.RestSite
+                   && restSiteReleasePendingHandoffState.HandoffTarget == NonCombatHandoffTarget.ChooseFirstNode
+                   && restSiteReleasePendingHandoffState.ReleaseStage == NonCombatReleaseStage.ReleasePending
+                   && !restSiteReleasePendingHandoffState.HasExplicitSurface
+                   && restSiteReleasePendingHandoffState.SurfaceKind == PostNodeHandoffSurfaceKind.RestSiteReleasePending,
+                $"Rest-site release-pending should suppress exported map routing until true map foreground exists. allowed=[{string.Join(", ", restSiteReleasePendingAllowedActions)}] owner={restSiteReleasePendingHandoffState.Owner} target={restSiteReleasePendingHandoffState.HandoffTarget} release={restSiteReleasePendingHandoffState.ReleaseStage} explicit={restSiteReleasePendingHandoffState.HasExplicitSurface} surface={restSiteReleasePendingHandoffState.SurfaceKind}.");
+            var restSiteReleasePendingDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteReleasePendingSummary,
+                AllowedActions = restSiteReleasePendingAllowedActions,
+                SceneSignature = "phase:choosefirstnode|screen:rest-site|visible:rest-site|encounter:restsite|ready:unknown|stability:unknown|layer:map-overlay-foreground|reachable-node-candidate-present|exported-reachable-node-present",
+            });
+            Assert(string.Equals(restSiteReleasePendingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(restSiteReleasePendingDecision.Reason, "waiting for rest-site release to publish proceed or true map foreground", StringComparison.OrdinalIgnoreCase),
+                $"Rest-site release-pending should wait for proceed or true map foreground instead of clicking exported nodes. actual={restSiteReleasePendingDecision.Status}/{restSiteReleasePendingDecision.Reason}");
+
             var mixedRestAftermathReplayRoot = Path.Combine(
                 Directory.GetCurrentDirectory(),
                 "artifacts",
@@ -1584,6 +1634,27 @@ internal static partial class Program
                        && !rebuiltReplayRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase)
                        && !rebuiltReplayRequest.AllowedActions.Contains("click smith confirm", StringComparer.OrdinalIgnoreCase),
                     $"Mixed rest-site aftermath replay rebuild {replayStep} should canonicalize to MapSurfacePending wait instead of stale smith/wait actions or premature map routing. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
+            }
+
+            var restSiteReleaseReplayPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "artifacts",
+                "gui-smoke",
+                "combat-release-reward-aftermath-20260401-live1",
+                "attempts",
+                "0001",
+                "steps",
+                "0398.request.json");
+            if (File.Exists(restSiteReleaseReplayPath))
+            {
+                var rebuiltReplayRequest = LoadReplayRequest(restSiteReleaseReplayPath, fullRequestRebuild: true).Request;
+                var rebuiltReplayArtifact = EvaluateAutoDecisionWithDiagnostics(restSiteReleaseReplayPath, rebuiltReplayRequest).CandidateDump;
+                Assert(rebuiltReplayRequest.AllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase)
+                       && !rebuiltReplayRequest.AllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
+                    $"Rest-site release replay rebuild should suppress exported node routing while rest-site release is pending. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
+                Assert(string.Equals(rebuiltReplayArtifact.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(rebuiltReplayArtifact.FinalDecision.Reason, "waiting for rest-site release to publish proceed or true map foreground", StringComparison.OrdinalIgnoreCase),
+                    $"Rest-site release replay rebuild should wait on rest-site release instead of re-clicking the exported node. Actual={rebuiltReplayArtifact.FinalDecision.Status}/{rebuiltReplayArtifact.FinalDecision.Reason}");
             }
         }
         finally

@@ -52,6 +52,7 @@ static class GuiSmokeStepRequestFactory
         EventSceneState? eventScene = null;
         PostNodeHandoffState? postNodeHandoffState = null;
         PostNodeHandoffState? combatResolutionHandoffState = null;
+        CombatReleaseState? combatReleaseState = null;
         ICanonicalNonCombatSceneState? canonicalNonCombatScene = null;
         var canonicalNonCombatSceneComputed = false;
 
@@ -115,6 +116,15 @@ static class GuiSmokeStepRequestFactory
 
         PostNodeHandoffState GetCombatResolutionHandoffState()
             => combatResolutionHandoffState ??= AutoDecisionProvider.BuildCombatResolutionHandoffState(observer, windowBounds, history, screenshotPath);
+
+        CombatReleaseState GetCombatReleaseState()
+            => combatReleaseState ??= AutoDecisionProvider.BuildCombatReleaseState(
+                observer,
+                windowBounds,
+                history,
+                screenshotPath,
+                GetCombatResolutionHandoffState(),
+                GetCombatBarrierEvaluation());
 
         ICanonicalNonCombatSceneState? GetCanonicalNonCombatScene()
         {
@@ -183,6 +193,7 @@ static class GuiSmokeStepRequestFactory
             GetEventScene,
             GetPostNodeHandoffState,
             GetCombatResolutionHandoffState,
+            GetCombatReleaseState,
             GetCanonicalNonCombatScene,
             GetCombatContext,
             GetPendingSelection,

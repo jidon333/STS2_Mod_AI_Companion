@@ -186,6 +186,16 @@ static class CombatBarrierSupport
             return false;
         }
 
+        var releaseState = context.CombatReleaseState;
+        if (releaseState.HasReleasedOwnership
+            && releaseState.ReleaseTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat
+            && releaseState.ReleaseSubtype != CombatReleaseSubtype.None)
+        {
+            terminalCause = "combat-release-failure-under-noncombat-foreground";
+            message = $"combat-release-failure-under-noncombat-foreground phase=HandleCombat barrier={barrier.Kind} subtype={releaseState.ReleaseSubtype} owner={releaseState.ForegroundOwner} target={releaseState.ReleaseTarget} screen={request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "null"} waits={consecutiveDecisionWaitCount}";
+            return true;
+        }
+
         terminalCause = "combat-barrier-wait-plateau";
         message = $"combat-barrier-wait-plateau phase=HandleCombat barrier={barrier.Kind} source={barrier.SourceAction ?? "null"} waits={consecutiveDecisionWaitCount} armedSnapshot={barrier.ArmedSnapshotVersion?.ToString(CultureInfo.InvariantCulture) ?? "none"} currentSnapshot={request.Observer.SnapshotVersion?.ToString(CultureInfo.InvariantCulture) ?? "none"} inventory={request.Observer.InventoryId ?? "null"}";
         return true;

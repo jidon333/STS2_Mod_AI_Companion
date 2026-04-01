@@ -74,6 +74,7 @@ enum PostNodeHandoffSurfaceKind
     RestSiteSmithUpgrade,
     RestSiteProceed,
     RestSiteSelectionSettling,
+    RestSiteReleasePending,
     Treasure,
     MapSurfacePending,
     MapOverlay,
@@ -94,6 +95,35 @@ sealed record PostNodeHandoffState(
     public bool IsMapOwner => Owner == NonCombatCanonicalForegroundOwner.Map;
     public bool IsEventOwner => Owner == NonCombatCanonicalForegroundOwner.Event;
     public bool IsCombatOwner => Owner == NonCombatCanonicalForegroundOwner.Combat;
+}
+
+enum CombatAuthorityState
+{
+    Active,
+    ResidueOnly,
+    Released,
+}
+
+enum CombatReleaseSubtype
+{
+    None,
+    EnemyClickResidue,
+    EndTurnReopenLatency,
+}
+
+sealed record CombatReleaseState(
+    CombatBarrierKind BarrierKind,
+    CombatAuthorityState CombatAuthorityState,
+    NonCombatCanonicalForegroundOwner ForegroundOwner,
+    NonCombatHandoffTarget ReleaseTarget,
+    NonCombatReleaseStage ReleaseStage,
+    bool HasExplicitForegroundSurface,
+    bool ReleaseMismatch,
+    CombatReleaseSubtype ReleaseSubtype,
+    PostNodeHandoffState HandoffState)
+{
+    public bool HasReleasedOwnership => CombatAuthorityState != CombatAuthorityState.Active
+                                        && ReleaseTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat;
 }
 
 interface ICanonicalNonCombatSceneState
@@ -123,7 +153,10 @@ sealed record RewardSceneState(
     bool ColorlessChoiceVisible,
     bool ClaimableRewardPresent,
     bool ExplicitProceedVisible,
-    bool SuppressSameSkipReissue) : ICanonicalNonCombatSceneState
+    bool SuppressSameSkipReissue,
+    bool CardProgressionSurfacePresent,
+    bool ClaimSurfacePresent,
+    bool AftermathResiduePresent) : ICanonicalNonCombatSceneState
 {
     public bool RewardForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Reward;
     public bool MapForegroundOwned => CanonicalForegroundOwner == NonCombatForegroundOwner.Map;
@@ -304,11 +337,21 @@ sealed record RestSiteSceneState(
     bool SmithConfirmVisible,
     bool ProceedVisible,
     bool SelectionSettling,
+    bool SelectionAcceptedRecently,
+    bool AftermathResiduePresent,
+    bool MapOverlayResiduePresent,
     bool MapContextVisible) : ICanonicalNonCombatSceneState
 {
     public NonCombatCanonicalForegroundOwner CanonicalForegroundOwner => NonCombatCanonicalForegroundOwner.RestSite;
 
-    public NonCombatReleaseStage ReleaseStage => NonCombatReleaseStage.Active;
+    public NonCombatReleaseStage ReleaseStage => SelectionSettling
+                                                 || ExplicitChoiceVisible
+                                                 || SmithUpgradeActive
+                                                 || ProceedVisible
+        ? NonCombatReleaseStage.Active
+        : SelectionAcceptedRecently
+            ? NonCombatReleaseStage.ReleasePending
+            : NonCombatReleaseStage.None;
 
     public NonCombatHandoffTarget HandoffTarget => NonCombatHandoffTarget.ChooseFirstNode;
 
@@ -320,9 +363,13 @@ sealed record RestSiteSceneState(
         ? SmithConfirmVisible ? "rest-site-smith-confirm" : "rest-site-smith-grid"
         : SelectionSettling
             ? "rest-site-selection-settling"
-        : "rest-site";
+        : ReleaseStage == NonCombatReleaseStage.ReleasePending
+            ? "rest-site-release-pending"
+            : "rest-site";
 
-    public string? BackgroundDebugKind => MapContextVisible ? "map" : null;
+    public string? BackgroundDebugKind => MapOverlayResiduePresent
+        ? "map-overlay"
+        : MapContextVisible ? "map" : null;
 }
 
 sealed record TreasureSceneState(

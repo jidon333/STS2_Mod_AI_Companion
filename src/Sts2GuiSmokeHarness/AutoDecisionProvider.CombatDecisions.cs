@@ -9,25 +9,25 @@ sealed partial class AutoDecisionProvider
     private static GuiSmokeStepDecision DecideHandleCombat(GuiSmokeStepRequest request, GuiSmokeStepAnalysisContext? analysisContext = null)
     {
         var context = analysisContext ?? GuiSmokeStepAnalysisContext.CreateForHandleCombatRequest(request);
-        var combatResolutionHandoffState = context.CombatResolutionHandoffState;
+        var combatReleaseState = context.CombatReleaseState;
         var combatContext = context.CombatContext;
         var historyPendingSelection = CombatHistorySupport.TryGetPendingCombatSelection(combatContext.CombatHistory);
         var pendingSelection = context.PendingCombatSelection;
         var runtimeCombatState = context.RuntimeCombatState;
         var combatBarrier = context.CombatBarrierEvaluation;
         var combatMicroStage = context.CombatMicroStage;
-        if (HasReleasedCombatOwnership(combatResolutionHandoffState))
+        if (HasReleasedCombatOwnership(combatReleaseState))
         {
-            if (ShouldAbortReleasedCombatPhase(combatResolutionHandoffState))
+            if (ShouldAbortReleasedCombatPhase(combatReleaseState))
             {
-                return CreateCombatBarrierHandoffMismatchAbortDecision(
+                return CreateCombatReleaseAbortDecision(
                     request,
-                    BuildCombatResolutionMismatchReason(combatResolutionHandoffState));
+                    BuildCombatReleaseMismatchReason(combatReleaseState));
             }
 
             return CreatePhaseWaitDecision(
                 GuiSmokePhase.HandleCombat,
-                BuildCombatResolutionWaitReason(combatResolutionHandoffState),
+                BuildCombatReleaseWaitReason(combatReleaseState),
                 DisplayControlFlowScreen(request.Observer));
         }
 
@@ -704,41 +704,54 @@ sealed partial class AutoDecisionProvider
             : slotIndex.ToString(CultureInfo.InvariantCulture);
     }
 
+    internal static bool HasReleasedCombatOwnership(CombatReleaseState releaseState)
+    {
+        return releaseState.HasReleasedOwnership;
+    }
+
     internal static bool HasReleasedCombatOwnership(PostNodeHandoffState handoffState)
     {
         return handoffState.Owner != NonCombatCanonicalForegroundOwner.Combat
                && handoffState.HandoffTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat;
     }
 
-    internal static bool ShouldAbortReleasedCombatPhase(PostNodeHandoffState handoffState)
+    internal static bool ShouldAbortReleasedCombatPhase(CombatReleaseState releaseState)
     {
-        return handoffState.HasExplicitSurface
-               || handoffState.HandoffTarget is NonCombatHandoffTarget.HandleRewards
+        return releaseState.HasExplicitForegroundSurface
+               || releaseState.ReleaseMismatch
+               || releaseState.ReleaseTarget is NonCombatHandoffTarget.HandleRewards
                    or NonCombatHandoffTarget.HandleEvent
                    or NonCombatHandoffTarget.HandleShop
                    or NonCombatHandoffTarget.ChooseFirstNode;
     }
 
-    internal static string BuildCombatResolutionWaitReason(PostNodeHandoffState handoffState)
+    internal static string BuildCombatReleaseWaitReason(CombatReleaseState releaseState)
     {
-        return handoffState.HandoffTarget switch
+        var subtypePrefix = releaseState.ReleaseSubtype switch
+        {
+            CombatReleaseSubtype.EnemyClickResidue => "waiting for combat release after EnemyClick residue",
+            CombatReleaseSubtype.EndTurnReopenLatency => "waiting for combat release after EndTurn reopen latency",
+            _ => "waiting for combat release",
+        };
+
+        return releaseState.ReleaseTarget switch
         {
             NonCombatHandoffTarget.WaitEventRelease
-                => "waiting for combat barrier release into event release handoff",
-            NonCombatHandoffTarget.WaitMap when handoffState.SurfaceKind == PostNodeHandoffSurfaceKind.MapSurfacePending
-                => "waiting for combat barrier release into post-room map surface republish",
+                => $"{subtypePrefix} into event release handoff",
+            NonCombatHandoffTarget.WaitMap when releaseState.HandoffState.SurfaceKind == PostNodeHandoffSurfaceKind.MapSurfacePending
+                => $"{subtypePrefix} into post-room map surface republish",
             NonCombatHandoffTarget.WaitMap
-                => "waiting for combat barrier release into map handoff",
-            _ => $"waiting for combat barrier release into {FormatCombatResolutionOwner(handoffState.Owner)} foreground handoff",
+                => $"{subtypePrefix} into map handoff",
+            _ => $"{subtypePrefix} into {FormatCombatResolutionOwner(releaseState.ForegroundOwner)} foreground handoff",
         };
     }
 
-    internal static string BuildCombatResolutionMismatchReason(PostNodeHandoffState handoffState)
+    internal static string BuildCombatReleaseMismatchReason(CombatReleaseState releaseState)
     {
-        return $"combat barrier handoff mismatch: owner={FormatCombatResolutionOwner(handoffState.Owner)} target={handoffState.HandoffTarget} surface={handoffState.SurfaceKind}";
+        return $"combat release failure under noncombat foreground: barrier={releaseState.BarrierKind} subtype={releaseState.ReleaseSubtype} owner={FormatCombatResolutionOwner(releaseState.ForegroundOwner)} target={releaseState.ReleaseTarget} surface={releaseState.HandoffState.SurfaceKind}";
     }
 
-    private static GuiSmokeStepDecision CreateCombatBarrierHandoffMismatchAbortDecision(
+    private static GuiSmokeStepDecision CreateCombatReleaseAbortDecision(
         GuiSmokeStepRequest request,
         string reason)
     {
@@ -757,7 +770,7 @@ sealed partial class AutoDecisionProvider
             reason,
             null,
             null,
-            "combat-barrier-handoff-mismatch");
+            "combat-release-failure-under-noncombat-foreground");
     }
 
     private static string FormatCombatResolutionOwner(NonCombatCanonicalForegroundOwner owner)
