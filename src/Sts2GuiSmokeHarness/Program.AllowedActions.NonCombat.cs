@@ -63,9 +63,13 @@ internal static partial class Program
         var forceEventProgressionAfterCardSelection = eventScene.ForceProgressionAfterCardSelection;
         var explicitEventProceedAuthority = eventScene.ExplicitProceedVisible;
         var explicitEventRecoveryAuthority = AutoDecisionProvider.HasExplicitEventRecoveryAuthority(observer, context.WindowBounds, history, eventScene);
+        var explicitEventRoomEntrySurface = eventScene.ExplicitRoomEntrySurfacePresent;
         var ancientContract = eventScene.AncientContract;
         var eventOwnerActive = eventScene.EventForegroundOwned
                                && eventScene.ReleaseStage == EventReleaseStage.Active;
+        var eventPhaseActionable = eventOwnerActive
+                                   || explicitEventRecoveryAuthority
+                                   || explicitEventRoomEntrySurface;
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
         var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
         var restSiteScene = AutoDecisionProvider.BuildRestSiteSceneState(observer.Summary);
@@ -113,9 +117,9 @@ internal static partial class Program
                 => BuildCardSelectionAllowedActions(observer.Summary, cardSelectionState),
             GuiSmokePhase.HandleEvent when eventScene.RewardSubstateActive
                 => BuildRewardAllowedActionsFromState(observer, eventScene.RewardScene),
-            GuiSmokePhase.HandleEvent when eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending
+            GuiSmokePhase.HandleEvent when eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending && !eventScene.ExplicitRoomEntrySurfacePresent
                 => new[] { "wait" },
-            GuiSmokePhase.HandleEvent when ancientMapOwner && ancientMapSurfacePending
+            GuiSmokePhase.HandleEvent when ancientMapOwner && ancientMapSurfacePending && !eventScene.ExplicitRoomEntrySurfacePresent
                 => new[] { "wait" },
             GuiSmokePhase.HandleEvent when ancientContract.HasExplicitDialogueSurface
                 => new[] { "click ancient dialogue advance", "wait" },
@@ -129,23 +133,25 @@ internal static partial class Program
                 => new[] { "click event choice", "wait" },
             GuiSmokePhase.HandleEvent when forceEventProgressionAfterCardSelection
                 => new[] { "click event choice", "click proceed", "wait" },
-            GuiSmokePhase.HandleEvent when eventOwnerActive || explicitEventRecoveryAuthority
+            GuiSmokePhase.HandleEvent when eventPhaseActionable
                 => explicitEventProceedAuthority
                     ? new[] { "click event choice", "click proceed", "wait" }
                     : new[] { "click event choice", "wait" },
             GuiSmokePhase.HandleEvent when treasureState is { RoomDetected: true }
                 => TreasureRoomObserverSignals.BuildAllowedActions(treasureState),
-            GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !eventScene.StrongForegroundChoice && !explicitEventProceedAuthority && !explicitEventRecoveryAuthority
+            GuiSmokePhase.HandleEvent when mapOverlayState.ForegroundVisible && !eventScene.StrongForegroundChoice && !explicitEventProceedAuthority && !explicitEventRecoveryAuthority && !explicitEventRoomEntrySurface
                 => BuildMapOverlayRoutingAllowedActions(mapOverlayState),
             GuiSmokePhase.HandleEvent when (MapForegroundReconciliation.HasMapForegroundOwnership(observer, history) || NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer))
                                             && !forceEventProgressionAfterCardSelection
                                             && !eventOwnerActive
                                             && !explicitEventProceedAuthority
                                             && !explicitEventRecoveryAuthority
+                                            && !explicitEventRoomEntrySurface
                 => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.HandleEvent when GuiSmokeNonCombatContractSupport.HasStrongMapTransitionEvidence(observer)
                                             && !forceEventProgressionAfterCardSelection
                                             && !eventOwnerActive
+                                            && !explicitEventRoomEntrySurface
                 => BuildMapForegroundRoutingAllowedActions(),
             GuiSmokePhase.HandleEvent => new[] { "wait" },
             GuiSmokePhase.WaitEventRelease => new[] { "wait" },

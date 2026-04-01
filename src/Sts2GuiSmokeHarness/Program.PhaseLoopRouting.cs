@@ -722,6 +722,14 @@ internal static partial class Program
 
         if (phase is GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitPostMapNodeRoom or GuiSmokePhase.WaitCombat)
         {
+            var explicitNextRoomWinner = phase == GuiSmokePhase.WaitPostMapNodeRoom
+                ? AutoDecisionProvider.BuildNextRoomEntryState(
+                    observer,
+                    null,
+                    history,
+                    null,
+                    assumeRecentMapClickAccepted: true)
+                : null;
             PostNodeHandoffState? ancientPostNodeHandoffState = (phase == GuiSmokePhase.ChooseFirstNode || phase == GuiSmokePhase.WaitPostMapNodeRoom)
                 ? AutoDecisionProvider.BuildPostNodeHandoffState(observer, null, history)
                 : default;
@@ -748,7 +756,8 @@ internal static partial class Program
                 return true;
             }
 
-            if (ShouldOpenCombatAlternateBranch(observer))
+            if ((explicitNextRoomWinner?.HasExplicitWinner != true)
+                && ShouldOpenCombatAlternateBranch(observer))
             {
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "branch-combat", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "branch-combat", observer.CurrentScreen, observer.InCombat, null));
@@ -767,7 +776,7 @@ internal static partial class Program
             }
 
             if (phase == GuiSmokePhase.WaitPostMapNodeRoom
-                && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(observer, out var postMapNodePhase))
+                && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(observer, history, out var postMapNodePhase))
             {
                 var postMapNodeBranchKind = postMapNodePhase switch
                 {

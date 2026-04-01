@@ -17,6 +17,7 @@ using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
 using static GuiSmokeChoicePrimitiveSupport;
 using static GuiSmokePostActionPhaseSupport;
+using static GuiSmokeReplayArtifactSupport;
 
 internal static partial class Program
 {
@@ -996,6 +997,71 @@ internal static partial class Program
                     GuiSmokePhase.WaitPostMapNodeRoom,
                     new ObserverState(
                         new ObserverSummary(
+                            "shop",
+                            "shop",
+                            false,
+                            DateTimeOffset.UtcNow,
+                            null,
+                            true,
+                            "shop",
+                            "transient",
+                            null,
+                            "None",
+                            "shop",
+                            80,
+                            80,
+                            null,
+                            new[] { "회중시계", "카드 제거 서비스" },
+                            Array.Empty<string>(),
+                            Array.Empty<ObserverActionNode>(),
+                            new[]
+                            {
+                                new ObserverChoice("relic", "회중시계", null),
+                                new ObserverChoice("card", "카드 제거 서비스", null),
+                            },
+                            Array.Empty<ObservedCombatHandCard>())
+                        {
+                            PublishedCurrentScreen = "shop",
+                            PublishedVisibleScreen = "shop",
+                            PublishedSceneReady = false,
+                            PublishedSceneAuthority = "hook",
+                            PublishedSceneStability = "transient",
+                            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["shopRoomDetected"] = "false",
+                                ["shopForegroundOwned"] = "false",
+                                ["shopRoomVisible"] = "false",
+                                ["shopInventoryOpen"] = "false",
+                                ["shopMerchantButtonVisible"] = "false",
+                                ["shopMerchantButtonEnabled"] = "false",
+                                ["shopProceedEnabled"] = "false",
+                                ["shopBackVisible"] = "false",
+                                ["shopBackEnabled"] = "false",
+                                ["shopOptionCount"] = "0",
+                                ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom",
+                                ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom",
+                                ["transitionInProgress"] = "true",
+                            },
+                        },
+                        null,
+                        null,
+                        null),
+                    new List<GuiSmokeHistoryEntry>
+                    {
+                        new(GuiSmokePhase.ChooseFirstNode.ToString(), "click", "exported reachable map node", DateTimeOffset.UtcNow.AddMilliseconds(-200)),
+                    },
+                    waitPostMapNodeLogger,
+                    13,
+                    true,
+                    out var waitPostMapNodeShopMetaFalsePhase)
+                && waitPostMapNodeShopMetaFalsePhase == GuiSmokePhase.HandleShop,
+                "WaitPostMapNodeRoom should trust explicit shop room-entry surfaces even when stale shop meta still says false.");
+
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.WaitPostMapNodeRoom,
+                    new ObserverState(
+                        new ObserverSummary(
                             "rewards",
                             "rewards",
                             false,
@@ -1372,6 +1438,71 @@ internal static partial class Program
                 && postShopPhase == GuiSmokePhase.WaitMap,
                 "HandleShop should release ownership to map aftermath reconciliation when shop teardown is active.");
 
+            var shopWithFalseMetaObserver = CreateShopObserver(
+                inventoryOpen: false,
+                merchantButtonVisible: false,
+                merchantButtonEnabled: false,
+                proceedEnabled: false,
+                backVisible: false,
+                backEnabled: false,
+                roomVisible: false,
+                foregroundOwned: false,
+                shopIsCurrentActiveScreen: false,
+                choices: new[]
+                {
+                    new ObserverChoice("shop-option:relic", "회중시계", "420,320,180,180")
+                    {
+                        BindingKind = "shop-option",
+                        BindingId = "RELIC.POCKETWATCH",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:shop", "shop-type:relic" },
+                    },
+                },
+                extraMeta: new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["shopRoomDetected"] = "false",
+                    ["shopForegroundOwned"] = "false",
+                    ["shopRoomVisible"] = "false",
+                    ["shopInventoryOpen"] = "false",
+                    ["choiceExtractorPath"] = "shop",
+                });
+            Assert(AutoDecisionProvider.BuildShopSceneState(shopWithFalseMetaObserver, Array.Empty<GuiSmokeHistoryEntry>()) is ShopSceneState
+                {
+                    CanonicalForegroundOwner: NonCombatCanonicalForegroundOwner.Shop,
+                    ReleaseStage: NonCombatReleaseStage.Active,
+                },
+                "Explicit shop room-entry surfaces should outrank stale false shop metadata during mixed post-map entry.");
+
+            var laggingScreenShopObserver = shopWithFalseMetaObserver with
+            {
+                Summary = shopWithFalseMetaObserver.Summary with
+                {
+                    CurrentScreen = "map",
+                    VisibleScreen = "map",
+                    ChoiceExtractorPath = "map",
+                },
+            };
+            var laggingScreenNextRoomEntryState = AutoDecisionProvider.BuildNextRoomEntryState(
+                laggingScreenShopObserver,
+                null,
+                new[]
+                {
+                    new GuiSmokeHistoryEntry(
+                        GuiSmokePhase.ChooseFirstNode.ToString(),
+                        "click",
+                        "exported reachable map node",
+                        DateTimeOffset.UtcNow.AddSeconds(-1)),
+                });
+            Assert(
+                laggingScreenNextRoomEntryState is
+                {
+                    Owner: NonCombatCanonicalForegroundOwner.Shop,
+                    HandoffTarget: NonCombatHandoffTarget.HandleShop,
+                    ExplicitSurfacePresent: true,
+                    MapTransitPending: false,
+                },
+                $"Post-map winner selection should still promote an active shop room when the screen/extractor strings lag behind the explicit shop surface. Actual owner={laggingScreenNextRoomEntryState.Owner} target={laggingScreenNextRoomEntryState.HandoffTarget} explicit={laggingScreenNextRoomEntryState.ExplicitSurfacePresent} pending={laggingScreenNextRoomEntryState.MapTransitPending}.");
+
             var shopWithStaleRewardObserver = CreateShopObserver(
                 inventoryOpen: true,
                 backVisible: true,
@@ -1546,6 +1677,122 @@ internal static partial class Program
                     out var waitPostMapNodeEventPhase)
                 && waitPostMapNodeEventPhase == GuiSmokePhase.HandleEvent,
                 "WaitPostMapNodeRoom should reopen event handling when the destination room is an event.");
+
+            Assert(
+                !GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(
+                    new ObserverState(
+                        new ObserverSummary(
+                            "event",
+                            "event",
+                            false,
+                            DateTimeOffset.UtcNow,
+                            null,
+                            true,
+                            "event",
+                            "stable",
+                            null,
+                            "None",
+                            "event",
+                            80,
+                            80,
+                            null,
+                            Array.Empty<string>(),
+                            Array.Empty<string>(),
+                            Array.Empty<ObserverActionNode>(),
+                            Array.Empty<ObserverChoice>(),
+                            Array.Empty<ObservedCombatHandCard>())
+                        {
+                            PublishedCurrentScreen = "event",
+                            PublishedVisibleScreen = "event",
+                            PublishedSceneReady = true,
+                            PublishedSceneAuthority = "hook",
+                            PublishedSceneStability = "stable",
+                            Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                            {
+                                ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom",
+                                ["foregroundOwner"] = "map",
+                                ["foregroundActionLane"] = "none",
+                            },
+                        },
+                        null,
+                        null,
+                        null),
+                    out _),
+                "WaitPostMapNodeRoom should not reopen event handling from screen-only event residue without an explicit event room-entry surface.");
+
+            var postMapEventReplayPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "artifacts",
+                "gui-smoke",
+                "rest-site-release-pending-20260401-live2",
+                "attempts",
+                "0002",
+                "steps",
+                "0152.request.json");
+            if (File.Exists(postMapEventReplayPath))
+            {
+                var rebuiltReplayRequest = LoadReplayRequest(postMapEventReplayPath, fullRequestRebuild: true).Request;
+                Assert(
+                    rebuiltReplayRequest.AllowedActions.Contains("click event choice", StringComparer.OrdinalIgnoreCase)
+                    && !rebuiltReplayRequest.AllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                    $"Explicit event room-entry replay rebuild should open event actions instead of a wait-only allowlist. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
+
+                var rebuiltReplayArtifact = EvaluateAutoDecisionWithDiagnostics(postMapEventReplayPath, rebuiltReplayRequest).CandidateDump;
+                Assert(
+                    string.Equals(rebuiltReplayArtifact.FinalDecision.Status, "act", StringComparison.OrdinalIgnoreCase)
+                    && (rebuiltReplayArtifact.FinalDecision.TargetLabel?.Contains("event option", StringComparison.OrdinalIgnoreCase) ?? false),
+                    $"Explicit event room-entry replay rebuild should still choose an event option. Actual={rebuiltReplayArtifact.FinalDecision.Status}/{rebuiltReplayArtifact.FinalDecision.TargetLabel ?? rebuiltReplayArtifact.FinalDecision.ActionKind ?? "null"}.");
+            }
+
+            var postMapShopReplayPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "artifacts",
+                "gui-smoke",
+                "combat-release-room-entry-20260401-live1",
+                "attempts",
+                "0002",
+                "steps",
+                "0106.request.json");
+            if (File.Exists(postMapShopReplayPath))
+            {
+                var rebuiltReplayRequest = LoadReplayRequest(postMapShopReplayPath, fullRequestRebuild: true).Request;
+                var rebuiltReplayObserver = new ObserverState(rebuiltReplayRequest.Observer, null, null, null);
+                var nextRoomEntryState = AutoDecisionProvider.BuildNextRoomEntryState(
+                    rebuiltReplayObserver,
+                    rebuiltReplayRequest.WindowBounds,
+                    rebuiltReplayRequest.History,
+                    rebuiltReplayRequest.ScreenshotPath);
+                Assert(
+                    nextRoomEntryState is
+                    {
+                        Owner: NonCombatCanonicalForegroundOwner.Shop,
+                        HandoffTarget: NonCombatHandoffTarget.HandleShop,
+                        ExplicitSurfacePresent: true,
+                        MapTransitPending: false,
+                    },
+                    $"Post-map mixed replay should promote explicit shop entry as the next-room winner. Actual owner={nextRoomEntryState.Owner} target={nextRoomEntryState.HandoffTarget} explicit={nextRoomEntryState.ExplicitSurfacePresent} pending={nextRoomEntryState.MapTransitPending}.");
+
+                var releaseState = AutoDecisionProvider.BuildCombatReleaseState(
+                    rebuiltReplayObserver,
+                    rebuiltReplayRequest.WindowBounds,
+                    rebuiltReplayRequest.History,
+                    rebuiltReplayRequest.ScreenshotPath);
+                Assert(
+                    releaseState is
+                    {
+                        ForegroundOwner: NonCombatCanonicalForegroundOwner.Shop,
+                        ReleaseTarget: NonCombatHandoffTarget.HandleShop,
+                        HasExplicitForegroundSurface: true,
+                        ReleaseMismatch: false,
+                    },
+                    $"Combat release should hand off to shop when explicit shop entry wins over reward/combat residue. Actual owner={releaseState.ForegroundOwner} target={releaseState.ReleaseTarget} explicit={releaseState.HasExplicitForegroundSurface} mismatch={releaseState.ReleaseMismatch}.");
+
+                var rebuiltReplayArtifact = EvaluateAutoDecisionWithDiagnostics(postMapShopReplayPath, rebuiltReplayRequest).CandidateDump;
+                Assert(
+                    string.Equals(rebuiltReplayArtifact.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(rebuiltReplayArtifact.FinalDecision.Reason, "waiting for combat release after EnemyClick residue into shop foreground handoff", StringComparison.OrdinalIgnoreCase),
+                    $"Explicit shop room-entry replay rebuild should keep HandleCombat in canonical handoff wait instead of aborting to stale reward/combat residue. Actual={rebuiltReplayArtifact.FinalDecision.Status}/{rebuiltReplayArtifact.FinalDecision.Reason ?? rebuiltReplayArtifact.FinalDecision.TargetLabel ?? rebuiltReplayArtifact.FinalDecision.ActionKind ?? "null"}.");
+            }
         }
         finally
         {

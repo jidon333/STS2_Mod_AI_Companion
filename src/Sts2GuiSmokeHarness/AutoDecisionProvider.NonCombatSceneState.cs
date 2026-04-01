@@ -150,8 +150,15 @@ sealed partial class AutoDecisionProvider
         PostNodeHandoffState? handoffState = null,
         CombatBarrierEvaluation? combatBarrier = null)
     {
+        var nextRoomEntryState = BuildNextRoomEntryState(observer, windowBounds, history, screenshotPath);
         handoffState ??= BuildCombatResolutionHandoffState(observer, windowBounds, history, screenshotPath);
         combatBarrier ??= CombatBarrierSupport.Inactive;
+
+        if (nextRoomEntryState.HasExplicitWinner
+            && nextRoomEntryState.HandoffTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat)
+        {
+            handoffState = BuildPostNodeHandoffStateForNextRoomEntry(nextRoomEntryState, observer, screenshotPath);
+        }
 
         var releaseTarget = handoffState.HandoffTarget;
         var foregroundOwner = handoffState.Owner;
@@ -183,6 +190,148 @@ sealed partial class AutoDecisionProvider
             releaseMismatch,
             releaseSubtype,
             handoffState);
+    }
+
+    internal static NextRoomEntryState BuildNextRoomEntryState(
+        ObserverState observer,
+        WindowBounds? windowBounds,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
+        string? screenshotPath = null,
+        bool assumeRecentMapClickAccepted = false)
+    {
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath);
+        var rewardScene = BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
+        var eventScene = BuildEventSceneState(observer, windowBounds, history, screenshotPath);
+        var shopScene = BuildShopSceneState(observer, history);
+        var restSiteScene = BuildRestSiteSceneState(observer);
+        var treasureScene = BuildTreasureSceneState(observer);
+        var mapExplicitOwner = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer);
+        var recentMapClickAccepted = assumeRecentMapClickAccepted || HasRecentMapClickAccepted(history);
+        var combatResiduePresent = HasCombatResolutionAuthority(observer.Summary);
+        var rewardResiduePresent = rewardScene.ReleaseStage != RewardReleaseStage.None || rewardScene.AftermathResiduePresent;
+
+        if (HasExplicitShopRoomEntrySurface(observer.Summary, shopScene))
+        {
+            return new NextRoomEntryState(
+                NonCombatCanonicalForegroundOwner.Shop,
+                NonCombatHandoffTarget.HandleShop,
+                NonCombatReleaseStage.Active,
+                recentMapClickAccepted ? NextRoomTransitStage.Settled : NextRoomTransitStage.None,
+                ExplicitSurfacePresent: true,
+                SurfaceKind: PostNodeHandoffSurfaceKind.Shop,
+                RecentMapClickAccepted: recentMapClickAccepted,
+                MapTransitPending: false,
+                CombatResiduePresent: combatResiduePresent,
+                RewardResiduePresent: rewardResiduePresent,
+                MapOverlayResiduePresent: mapOverlayState.ForegroundVisible);
+        }
+
+        if (eventScene.EventForegroundOwned
+            && eventScene.ReleaseStage == EventReleaseStage.Active
+            && eventScene.ExplicitRoomEntrySurfacePresent)
+        {
+            return new NextRoomEntryState(
+                NonCombatCanonicalForegroundOwner.Event,
+                NonCombatHandoffTarget.HandleEvent,
+                NonCombatReleaseStage.Active,
+                recentMapClickAccepted ? NextRoomTransitStage.Settled : NextRoomTransitStage.None,
+                ExplicitSurfacePresent: true,
+                SurfaceKind: PostNodeHandoffSurfaceKind.Event,
+                RecentMapClickAccepted: recentMapClickAccepted,
+                MapTransitPending: false,
+                CombatResiduePresent: combatResiduePresent,
+                RewardResiduePresent: rewardResiduePresent,
+                MapOverlayResiduePresent: mapOverlayState.ForegroundVisible);
+        }
+
+        if (!recentMapClickAccepted
+            && rewardScene.RewardForegroundOwned
+            && rewardScene.ReleaseStage == RewardReleaseStage.Active
+            && (rewardScene.ClaimSurfacePresent
+                || rewardScene.CardProgressionSurfacePresent
+                || rewardScene.ExplicitProceedVisible))
+        {
+            return new NextRoomEntryState(
+                NonCombatCanonicalForegroundOwner.Reward,
+                NonCombatHandoffTarget.HandleRewards,
+                NonCombatReleaseStage.Active,
+                NextRoomTransitStage.None,
+                ExplicitSurfacePresent: true,
+                SurfaceKind: PostNodeHandoffSurfaceKind.Reward,
+                RecentMapClickAccepted: false,
+                MapTransitPending: false,
+                CombatResiduePresent: combatResiduePresent,
+                RewardResiduePresent: rewardResiduePresent,
+                MapOverlayResiduePresent: mapOverlayState.ForegroundVisible);
+        }
+
+        if (restSiteScene is { ReleaseStage: NonCombatReleaseStage.Active })
+        {
+            var surfaceKind = restSiteScene.SmithUpgradeActive
+                ? PostNodeHandoffSurfaceKind.RestSiteSmithUpgrade
+                : restSiteScene.ProceedVisible
+                    ? PostNodeHandoffSurfaceKind.RestSiteProceed
+                    : restSiteScene.SelectionSettling
+                        ? PostNodeHandoffSurfaceKind.RestSiteSelectionSettling
+                        : PostNodeHandoffSurfaceKind.RestSiteChoice;
+            return new NextRoomEntryState(
+                NonCombatCanonicalForegroundOwner.RestSite,
+                NonCombatHandoffTarget.ChooseFirstNode,
+                NonCombatReleaseStage.Active,
+                recentMapClickAccepted ? NextRoomTransitStage.Settled : NextRoomTransitStage.None,
+                ExplicitSurfacePresent: true,
+                SurfaceKind: surfaceKind,
+                RecentMapClickAccepted: recentMapClickAccepted,
+                MapTransitPending: false,
+                CombatResiduePresent: combatResiduePresent,
+                RewardResiduePresent: rewardResiduePresent,
+                MapOverlayResiduePresent: mapOverlayState.ForegroundVisible);
+        }
+
+        if (treasureScene is not null)
+        {
+            return new NextRoomEntryState(
+                NonCombatCanonicalForegroundOwner.Treasure,
+                NonCombatHandoffTarget.ChooseFirstNode,
+                NonCombatReleaseStage.Active,
+                recentMapClickAccepted ? NextRoomTransitStage.Settled : NextRoomTransitStage.None,
+                ExplicitSurfacePresent: true,
+                SurfaceKind: PostNodeHandoffSurfaceKind.Treasure,
+                RecentMapClickAccepted: recentMapClickAccepted,
+                MapTransitPending: false,
+                CombatResiduePresent: combatResiduePresent,
+                RewardResiduePresent: rewardResiduePresent,
+                MapOverlayResiduePresent: mapOverlayState.ForegroundVisible);
+        }
+
+        if (!recentMapClickAccepted && mapExplicitOwner)
+        {
+            return new NextRoomEntryState(
+                NonCombatCanonicalForegroundOwner.Map,
+                NonCombatHandoffTarget.ChooseFirstNode,
+                NonCombatReleaseStage.Active,
+                NextRoomTransitStage.Settled,
+                ExplicitSurfacePresent: true,
+                SurfaceKind: mapOverlayState.ForegroundVisible ? PostNodeHandoffSurfaceKind.MapOverlay : PostNodeHandoffSurfaceKind.MapNode,
+                RecentMapClickAccepted: false,
+                MapTransitPending: false,
+                CombatResiduePresent: combatResiduePresent,
+                RewardResiduePresent: rewardResiduePresent,
+                MapOverlayResiduePresent: mapOverlayState.ForegroundVisible);
+        }
+
+        return new NextRoomEntryState(
+            NonCombatCanonicalForegroundOwner.Unknown,
+            NonCombatHandoffTarget.None,
+            NonCombatReleaseStage.None,
+            recentMapClickAccepted ? NextRoomTransitStage.RoomEntryPending : NextRoomTransitStage.None,
+            ExplicitSurfacePresent: false,
+            SurfaceKind: PostNodeHandoffSurfaceKind.None,
+            RecentMapClickAccepted: recentMapClickAccepted,
+            MapTransitPending: recentMapClickAccepted,
+            CombatResiduePresent: combatResiduePresent,
+            RewardResiduePresent: rewardResiduePresent,
+            MapOverlayResiduePresent: mapOverlayState.ForegroundVisible);
     }
 
     internal static CombatReleaseState BuildCombatReleaseState(
@@ -247,22 +396,31 @@ sealed partial class AutoDecisionProvider
         var rawEventChoiceFamilyPresent = (!mapForegroundSuppressesEventSurface || foregroundGenericEventChoiceSurfaceWithoutBounds)
                                           && !rewardScene.RewardForegroundOwned
                                           && HasRawEventChoiceFamily(observer);
-        var rawExplicitProceedVisible = eventChoiceAuthority
-                                        && !mapForegroundSuppressesEventSurface
+        var rawExplicitProceedVisible = !mapForegroundSuppressesEventSurface
                                         && !rewardScene.RewardForegroundOwned
                                         && EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
-        var rawActiveEventChoiceVisible = eventChoiceAuthority
-                                          && (!mapForegroundSuppressesEventSurface || foregroundGenericEventChoiceSurfaceWithoutBounds)
+        var rawActiveEventChoiceVisible = (!mapForegroundSuppressesEventSurface || foregroundGenericEventChoiceSurfaceWithoutBounds)
                                           && !rewardScene.RewardForegroundOwned
                                           && HasRawExplicitEventChoiceVisible(observer, windowBounds);
         var weakEventChoiceFamilyPresent = rawEventChoiceFamilyPresent && !rawActiveEventChoiceVisible;
+        var rawExplicitRoomEntrySurfacePresent = HasExplicitEventRoomEntrySurface(observer, windowBounds)
+                                                 && (ancientDialogueActive
+                                                     || ancientCompletionActive
+                                                     || ancientOptionActive
+                                                     || ancientOptionContractMismatch
+                                                     || rawActiveEventChoiceVisible);
         var eventReleaseToMapActive = HasRecentEventReleaseIntent(history)
-                                      && (mapReleaseSignal || mapOverlayState.ForegroundVisible);
+                                      && (mapReleaseSignal || mapOverlayState.ForegroundVisible)
+                                      && !rawExplicitRoomEntrySurfacePresent;
         var explicitProceedVisible = rawExplicitProceedVisible && !eventReleaseToMapActive;
         var activeEventChoiceVisible = rawActiveEventChoiceVisible && !eventReleaseToMapActive;
         var forceProgressionAfterCardSelection = HasRecentCardSelectionSubtypeAftermath(history ?? Array.Empty<GuiSmokeHistoryEntry>())
                                                 && (explicitProceedVisible || activeEventChoiceVisible);
-        var rewardSubstateActive = rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage == RewardReleaseStage.ReleasePending;
+        var explicitRoomEntrySurfacePresent = rawExplicitRoomEntrySurfacePresent
+                                              || (HasExplicitEventRoomEntrySurface(observer, windowBounds)
+                                                  && forceProgressionAfterCardSelection);
+        var rewardSubstateActive = !explicitRoomEntrySurfacePresent
+                                   && (rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage == RewardReleaseStage.ReleasePending);
         var mapContextVisible = mapOverlayState.ForegroundVisible
                                 || MatchesControlFlowScreen(observer, "map")
                                 || rewardScene.LayerState.MapContextVisible
@@ -274,7 +432,8 @@ sealed partial class AutoDecisionProvider
                                      || explicitProceedVisible
                                      || activeEventChoiceVisible
                                      || forceProgressionAfterCardSelection;
-        var strongForegroundChoice = ancientDialogueActive
+        var strongForegroundChoice = explicitRoomEntrySurfacePresent
+                                     || ancientDialogueActive
                                      || ancientCompletionActive
                                      || ancientOptionActive
                                      || ancientOptionContractMismatch
@@ -282,6 +441,7 @@ sealed partial class AutoDecisionProvider
                                      || activeEventChoiceVisible
                                      || forceProgressionAfterCardSelection;
         var suppressSameProceedReissue = !rewardSubstateActive
+                                         && !explicitRoomEntrySurfacePresent
                                          && (ancientCompletionActive || rawExplicitProceedVisible)
                                          && HasRecentEventReleaseIntent(history);
         var eventChoiceFamilyAuthority = eventChoiceAuthority || rawEventChoiceFamilyPresent;
@@ -331,6 +491,7 @@ sealed partial class AutoDecisionProvider
             mapContextVisible,
             rewardSubstateActive,
             hasExplicitProgression,
+            explicitRoomEntrySurfacePresent,
             strongForegroundChoice,
             forceProgressionAfterCardSelection,
             explicitProceedVisible,
@@ -555,6 +716,13 @@ sealed partial class AutoDecisionProvider
         var mapAuthoritativeScreen = NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(observer);
         var mapReleaseSignal = HasPostNodeMapReleaseSignal(observer.Summary, mapOverlayState, mapExplicitOwner);
         var combatResolutionAuthority = HasCombatResolutionAuthority(observer.Summary);
+        var nextRoomEntryState = BuildNextRoomEntryState(observer, windowBounds, history, screenshotPath);
+
+        if (nextRoomEntryState.HasExplicitWinner
+            && nextRoomEntryState.Owner is not (NonCombatCanonicalForegroundOwner.Unknown or NonCombatCanonicalForegroundOwner.Combat))
+        {
+            return BuildPostNodeHandoffStateForNextRoomEntry(nextRoomEntryState, observer.Summary, mapOverlayState);
+        }
 
         var rewardScene = BuildRewardSceneState(observer, windowBounds, history, screenshotPath);
         if (rewardScene.RewardForegroundOwned || rewardScene.ReleaseStage != RewardReleaseStage.None)
@@ -989,6 +1157,34 @@ sealed partial class AutoDecisionProvider
         return false;
     }
 
+    internal static bool HasRecentMapClickAccepted(IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
+        if (history is null || history.Count == 0)
+        {
+            return false;
+        }
+
+        for (var index = history.Count - 1; index >= 0; index -= 1)
+        {
+            var entry = history[index];
+            if (string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "observer-accepted", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.Action, "recapture-required", StringComparison.OrdinalIgnoreCase)
+                || entry.Action.StartsWith("observer-", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return string.Equals(entry.Action, "branch-map", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.TargetLabel, "visible map advance", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.TargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.TargetLabel, "first reachable node", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(entry.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
     private static bool HasPostNodeMapReleaseSignal(
         ObserverSummary observer,
         MapOverlayState mapOverlayState,
@@ -1080,6 +1276,44 @@ sealed partial class AutoDecisionProvider
                || string.Equals(label, "DiscardPile", StringComparison.OrdinalIgnoreCase)
                || string.Equals(label, "ExhaustPile", StringComparison.OrdinalIgnoreCase)
                || string.Equals(label, "핑", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasExplicitShopRoomEntrySurface(ObserverSummary observer, ShopSceneState? shopScene)
+    {
+        if (shopScene is not { ReleaseStage: NonCombatReleaseStage.Active })
+        {
+            return false;
+        }
+
+        return ShopObserverSignals.HasExplicitForegroundSurface(observer);
+    }
+
+    private static PostNodeHandoffState BuildPostNodeHandoffStateForNextRoomEntry(
+        NextRoomEntryState nextRoomEntryState,
+        ObserverState observer,
+        string? screenshotPath)
+    {
+        var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, null, screenshotPath);
+        return BuildPostNodeHandoffStateForNextRoomEntry(nextRoomEntryState, observer.Summary, mapOverlayState);
+    }
+
+    private static PostNodeHandoffState BuildPostNodeHandoffStateForNextRoomEntry(
+        NextRoomEntryState nextRoomEntryState,
+        ObserverSummary observer,
+        MapOverlayState mapOverlayState)
+    {
+        return new PostNodeHandoffState(
+            nextRoomEntryState.Owner,
+            nextRoomEntryState.HandoffTarget,
+            nextRoomEntryState.ReleaseStage,
+            nextRoomEntryState.ExplicitSurfacePresent,
+            nextRoomEntryState.SurfaceKind,
+            ContractMismatch: false,
+            MapOverlayVisible: mapOverlayState.ForegroundVisible,
+            StaleBackgroundPresent: nextRoomEntryState.CombatResiduePresent
+                                    || nextRoomEntryState.RewardResiduePresent
+                                    || nextRoomEntryState.MapOverlayResiduePresent
+                                    || HasObserverStaleRoomBackground(observer));
     }
 
     private static bool HasExporterMapForegroundClaim(ObserverSummary observer)

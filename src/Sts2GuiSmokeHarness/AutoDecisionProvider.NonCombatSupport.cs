@@ -228,6 +228,29 @@ sealed partial class AutoDecisionProvider
                || EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
     }
 
+    internal static bool HasExplicitEventRoomEntrySurface(ObserverSummary observer, WindowBounds? windowBounds)
+    {
+        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer))
+        {
+            return false;
+        }
+
+        if (TreasureRoomObserverSignals.LooksLikeTreasureState(observer))
+        {
+            return false;
+        }
+
+        return HasAuthoritativeEventForegroundScreen(observer)
+               && (AncientEventObserverSignals.HasForegroundAuthority(observer)
+                   || HasRawExplicitEventChoiceVisible(observer, windowBounds)
+                   || EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds));
+    }
+
+    internal static bool HasExplicitEventRoomEntrySurface(ObserverState observer, WindowBounds? windowBounds)
+    {
+        return HasExplicitEventRoomEntrySurface(observer.Summary, windowBounds);
+    }
+
     private static bool HasBoundedRawExplicitEventChoiceVisible(ObserverSummary observer, WindowBounds? windowBounds)
     {
         return observer.ActionNodes.Any(node =>

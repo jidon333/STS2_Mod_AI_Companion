@@ -569,9 +569,9 @@ internal static partial class Program
                 "EnemyClick barrier should not reclaim combat once explicit event foreground owns the room.");
             var enemyBarrierReleasedToEventDecision = AutoDecisionProvider.Decide(enemyBarrierReleasedToEventRequest);
             Assert(
-                string.Equals(enemyBarrierReleasedToEventDecision.Status, "abort", StringComparison.OrdinalIgnoreCase)
-                && string.Equals(enemyBarrierReleasedToEventDecision.DecisionRisk, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase),
-                "Stale HandleCombat requests with explicit event foreground should abort as combat-release-failure-under-noncombat-foreground.");
+                string.Equals(enemyBarrierReleasedToEventDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(enemyBarrierReleasedToEventDecision.Reason, "waiting for combat release after EnemyClick residue into event foreground handoff", StringComparison.OrdinalIgnoreCase),
+                $"Stale HandleCombat requests with explicit event foreground should wait for the canonical handoff instead of aborting immediately. actual={enemyBarrierReleasedToEventDecision.Status}/{enemyBarrierReleasedToEventDecision.Reason}");
             Assert(
                 enemyBarrierReleasedToEventContext.CombatReleaseState.HasReleasedOwnership
                 && enemyBarrierReleasedToEventContext.CombatReleaseState.ReleaseSubtype == CombatReleaseSubtype.EnemyClickResidue,

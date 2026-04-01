@@ -112,7 +112,10 @@ static class GuiSmokeReplayArtifactSupport
 
     private static ObserverSummary NormalizeReplayObserverMeta(ObserverSummary observer, EventSceneState eventScene)
     {
-        if (!eventScene.AncientContract.HasLaneSurfaceMismatch)
+        var normalizeExplicitEventForeground = eventScene.EventForegroundOwned
+                                              && eventScene.ExplicitRoomEntrySurfacePresent;
+        if (!eventScene.AncientContract.HasLaneSurfaceMismatch
+            && !normalizeExplicitEventForeground)
         {
             return observer;
         }
@@ -126,6 +129,14 @@ static class GuiSmokeReplayArtifactSupport
             ["mapReleaseAuthority"] = "false",
             ["mapSurfacePending"] = "false",
         };
+
+        if (normalizeExplicitEventForeground && !eventScene.AncientContract.HasLaneSurfaceMismatch)
+        {
+            return observer with
+            {
+                Meta = meta,
+            };
+        }
 
         foreach (var key in new[]
                  {

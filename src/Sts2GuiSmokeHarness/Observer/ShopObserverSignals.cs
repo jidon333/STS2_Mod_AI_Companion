@@ -11,10 +11,15 @@ static class ShopObserverSignals
 {
     public static ShopRoomState? TryGetState(ObserverSummary observer)
     {
-        var roomDetected = TryGetMetaBool(observer, "shopRoomDetected")
-                           ?? (MatchesControlFlowScreen(observer, "shop")
-                               || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
-                               || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase));
+        var fallbackRoomDetected = MatchesControlFlowScreen(observer, "shop")
+                                   || string.Equals(observer.EncounterKind, "Shop", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase)
+                                   || IsMerchantRoomType(TryGetMetaValue(observer, "activeScreenType"))
+                                   || IsMerchantRoomType(TryGetMetaValue(observer, "rawCurrentActiveScreenType"));
+        var explicitForegroundSurface = HasExplicitForegroundSurface(observer);
+        var roomDetected = TryGetMetaBool(observer, "shopRoomDetected") == true
+                           || fallbackRoomDetected
+                           || explicitForegroundSurface;
         if (!roomDetected)
         {
             return null;
@@ -26,26 +31,46 @@ static class ShopObserverSignals
         var proceedEnabled = TryGetMetaBool(observer, "shopProceedEnabled") == true;
         var backVisible = TryGetMetaBool(observer, "shopBackVisible") == true;
         var backEnabled = TryGetMetaBool(observer, "shopBackEnabled") == true;
-        var roomVisible = TryGetMetaBool(observer, "shopRoomVisible")
-                          ?? (inventoryOpen
-                              || merchantButtonVisible
-                              || backVisible
-                              || proceedEnabled
-                              || MatchesControlFlowScreen(observer, "shop"));
-        var foregroundOwned = TryGetMetaBool(observer, "shopForegroundOwned")
-                              ?? (inventoryOpen
-                                  || merchantButtonEnabled
-                                  || proceedEnabled
-                                  || (backVisible && backEnabled)
-                                  || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase));
         var teardownInProgress = TryGetMetaBool(observer, "shopTeardownInProgress") == true;
         var shopIsCurrentActiveScreen = TryGetMetaBool(observer, "shopIsCurrentActiveScreen") == true;
         var mapIsCurrentActiveScreen = TryGetMetaBool(observer, "mapCurrentActiveScreen") == true;
+        var explicitInventoryChoicesPresent = observer.Choices.Any(static choice =>
+                                                 choice.Enabled != false
+                                                 && (choice.Kind.StartsWith("shop-option", StringComparison.OrdinalIgnoreCase)
+                                                     || string.Equals(choice.Kind, "shop-card-removal", StringComparison.OrdinalIgnoreCase)
+                                                     || (string.Equals(choice.Kind, "relic", StringComparison.OrdinalIgnoreCase)
+                                                         || string.Equals(choice.Kind, "potion", StringComparison.OrdinalIgnoreCase)
+                                                         || string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase))
+                                                        && !string.IsNullOrWhiteSpace(choice.Label)))
+                                             && (MatchesControlFlowScreen(observer, "shop")
+                                                 || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase)
+                                                 || IsMerchantRoomType(TryGetMetaValue(observer, "activeScreenType"))
+                                                 || IsMerchantRoomType(TryGetMetaValue(observer, "rawCurrentActiveScreenType")));
+        var roomVisible = TryGetMetaBool(observer, "shopRoomVisible") == true
+                          || inventoryOpen
+                          || merchantButtonVisible
+                          || backVisible
+                          || proceedEnabled
+                          || explicitForegroundSurface
+                          || explicitInventoryChoicesPresent
+                          || MatchesControlFlowScreen(observer, "shop");
+        var foregroundOwned = TryGetMetaBool(observer, "shopForegroundOwned") == true
+                              || inventoryOpen
+                              || merchantButtonEnabled
+                              || proceedEnabled
+                              || (backVisible && backEnabled)
+                              || (explicitForegroundSurface
+                                  && !teardownInProgress
+                                  && !mapIsCurrentActiveScreen)
+                              || explicitInventoryChoicesPresent
+                              || (string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase)
+                                  && !teardownInProgress
+                                  && !mapIsCurrentActiveScreen);
 
         return new ShopRoomState(
             RoomDetected: true,
-            RoomVisible: roomVisible == true,
-            ForegroundOwned: foregroundOwned == true,
+            RoomVisible: roomVisible,
+            ForegroundOwned: foregroundOwned,
             TeardownInProgress: teardownInProgress,
             ShopIsCurrentActiveScreen: shopIsCurrentActiveScreen,
             MapIsCurrentActiveScreen: mapIsCurrentActiveScreen,
@@ -71,6 +96,29 @@ static class ShopObserverSignals
 
     public static bool IsShopAuthorityActive(ObserverSummary observer)
         => TryGetState(observer) is { RoomDetected: true, ForegroundOwned: true };
+
+    public static bool HasExplicitForegroundSurface(ObserverSummary observer)
+    {
+        var shopChoiceSurfacePresent = observer.Choices.Any(choice =>
+                                          choice.Enabled != false
+                                          && (choice.Kind.StartsWith("shop-", StringComparison.OrdinalIgnoreCase)
+                                              || choice.SemanticHints.Any(static hint =>
+                                              hint.StartsWith("shop-", StringComparison.OrdinalIgnoreCase)
+                                              || string.Equals(hint, "scene:shop", StringComparison.OrdinalIgnoreCase))))
+                                      || (observer.CurrentChoices.Count > 0
+                                          && (MatchesControlFlowScreen(observer, "shop")
+                                              || string.Equals(observer.ChoiceExtractorPath, "shop", StringComparison.OrdinalIgnoreCase)
+                                              || IsMerchantRoomType(TryGetMetaValue(observer, "activeScreenType"))
+                                              || IsMerchantRoomType(TryGetMetaValue(observer, "rawCurrentActiveScreenType"))));
+        return TryGetMetaBool(observer, "shopInventoryOpen") == true
+               || TryGetMetaBool(observer, "shopMerchantButtonEnabled") == true
+               || TryGetMetaBool(observer, "shopProceedEnabled") == true
+               || (TryGetMetaBool(observer, "shopBackVisible") == true
+                   && TryGetMetaBool(observer, "shopBackEnabled") == true)
+               || (TryGetMetaInt(observer, "shopOptionCount") ?? 0) > 0
+               || TryGetMetaBool(observer, "shopCardRemovalVisible") == true
+               || shopChoiceSurfacePresent;
+    }
 
     public static bool HasRecentPurchase(IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
@@ -234,6 +282,10 @@ static class ShopObserverSignals
         => observer.Meta.TryGetValue(key, out var value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+
+    private static bool IsMerchantRoomType(string? typeName)
+        => !string.IsNullOrWhiteSpace(typeName)
+           && typeName.Contains("NMerchantRoom", StringComparison.OrdinalIgnoreCase);
 
     private static IReadOnlyList<string> ParseStringList(string? value)
     {

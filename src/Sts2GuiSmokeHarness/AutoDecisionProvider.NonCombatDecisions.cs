@@ -364,7 +364,12 @@ sealed partial class AutoDecisionProvider
                                && eventScene.ReleaseStage == EventReleaseStage.Active;
         var mapOverlayState = eventScene.MapOverlayState;
         var explicitEventRecoveryAuthority = HasExplicitEventRecoveryAuthority(request.Observer, request.WindowBounds, request.History, eventScene);
+        var explicitEventRoomEntrySurface = eventScene.ExplicitRoomEntrySurfacePresent;
+        var eventProgressionActionable = eventOwnerActive
+                                         || explicitEventRecoveryAuthority
+                                         || explicitEventRoomEntrySurface;
         var strongEventForegroundChoice = eventScene.StrongForegroundChoice
+                                         || explicitEventRoomEntrySurface
                                          || forceEventProgressionAfterCardSelection
                                          || explicitEventRecoveryAuthority;
         if (mapOverlayState.ForegroundVisible && !strongEventForegroundChoice)
@@ -456,7 +461,7 @@ sealed partial class AutoDecisionProvider
             return ancientCompletionDecision ?? CreateForegroundAwareNonCombatWaitDecision(request, "waiting for explicit ancient event completion");
         }
 
-        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending)
+        if (eventScene.EventForegroundOwned && eventScene.ReleaseStage == EventReleaseStage.ReleasePending && !explicitEventRoomEntrySurface)
         {
             GuiSmokeDecisionDebug.SetSceneModel("event-release-pending", eventScene.MapContextVisible ? "map-context" : "event-context");
             GuiSmokeDecisionDebug.Suppress("click proceed", "event release-pending suppresses same proceed reissue");
@@ -514,7 +519,7 @@ sealed partial class AutoDecisionProvider
             return explicitProceedDecision;
         }
 
-        if (eventOwnerActive)
+        if (eventProgressionActionable)
         {
             var eventProgressionDecision = TryCreateEventProgressionDecision(request);
             if (eventProgressionDecision is not null)
@@ -523,18 +528,9 @@ sealed partial class AutoDecisionProvider
             }
         }
 
-        if (LooksLikeMapTransitionState(request))
+        if (!eventProgressionActionable && LooksLikeMapTransitionState(request))
         {
             return DecideChooseFirstNode(request with { Phase = GuiSmokePhase.ChooseFirstNode.ToString() }, analysisContext);
-        }
-
-        if (!eventOwnerActive)
-        {
-            var eventProgressionDecision = TryCreateEventProgressionDecision(request);
-            if (eventProgressionDecision is not null)
-            {
-                return eventProgressionDecision;
-            }
         }
 
         return CreateForegroundAwareNonCombatWaitDecision(request, "waiting for an explicit event progression choice");

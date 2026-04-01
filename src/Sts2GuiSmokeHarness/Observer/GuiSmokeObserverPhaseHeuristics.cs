@@ -169,12 +169,116 @@ static class GuiSmokeObserverPhaseHeuristics
 
     public static bool TryGetPostMapNodePhase(ObserverState observer, out GuiSmokePhase nextPhase)
     {
-        return TryGetPostEmbarkPhase(observer, out nextPhase);
+        return TryGetPostMapNodePhase(observer, null, out nextPhase);
+    }
+
+    public static bool TryGetPostMapNodePhase(ObserverState observer, IReadOnlyList<GuiSmokeHistoryEntry>? history, out GuiSmokePhase nextPhase)
+    {
+        var nextRoomEntryState = AutoDecisionProvider.BuildNextRoomEntryState(observer, null, history);
+        if (nextRoomEntryState.MapTransitPending)
+        {
+            nextPhase = default;
+            return false;
+        }
+
+        if (nextRoomEntryState.HasExplicitWinner)
+        {
+            nextPhase = nextRoomEntryState.HandoffTarget switch
+            {
+                NonCombatHandoffTarget.HandleRewards => GuiSmokePhase.HandleRewards,
+                NonCombatHandoffTarget.HandleCombat => GuiSmokePhase.HandleCombat,
+                NonCombatHandoffTarget.HandleEvent => GuiSmokePhase.HandleEvent,
+                NonCombatHandoffTarget.HandleShop => GuiSmokePhase.HandleShop,
+                NonCombatHandoffTarget.ChooseFirstNode => GuiSmokePhase.ChooseFirstNode,
+                NonCombatHandoffTarget.WaitMap => GuiSmokePhase.WaitMap,
+                _ => default,
+            };
+            return nextPhase != default;
+        }
+
+        return TryGetPostMapNodePhase(observer.Summary, out nextPhase);
     }
 
     public static bool TryGetPostMapNodePhase(ObserverSummary observer, out GuiSmokePhase nextPhase)
     {
-        return TryGetPostEmbarkPhase(observer, out nextPhase);
+        var nextRoomEntryState = AutoDecisionProvider.BuildNextRoomEntryState(
+            new ObserverState(observer, null, null, null),
+            null,
+            null,
+            null,
+            assumeRecentMapClickAccepted: true);
+        if (nextRoomEntryState.HasExplicitWinner)
+        {
+            switch (nextRoomEntryState.HandoffTarget)
+            {
+                case NonCombatHandoffTarget.HandleRewards:
+                    nextPhase = GuiSmokePhase.HandleRewards;
+                    return true;
+                case NonCombatHandoffTarget.HandleEvent:
+                    nextPhase = GuiSmokePhase.HandleEvent;
+                    return true;
+                case NonCombatHandoffTarget.HandleShop:
+                    nextPhase = GuiSmokePhase.HandleShop;
+                    return true;
+                case NonCombatHandoffTarget.ChooseFirstNode when nextRoomEntryState.Owner == NonCombatCanonicalForegroundOwner.Treasure:
+                    nextPhase = GuiSmokePhase.ChooseFirstNode;
+                    return true;
+                case NonCombatHandoffTarget.ChooseFirstNode when nextRoomEntryState.Owner == NonCombatCanonicalForegroundOwner.RestSite:
+                    nextPhase = GuiSmokePhase.ChooseFirstNode;
+                    return true;
+                case NonCombatHandoffTarget.ChooseFirstNode when nextRoomEntryState.Owner == NonCombatCanonicalForegroundOwner.Map:
+                    nextPhase = GuiSmokePhase.ChooseFirstNode;
+                    return true;
+            }
+        }
+
+        if (TreasureRoomObserverSignals.IsTreasureAuthorityActive(observer))
+        {
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        if (RewardObserverSignals.IsRewardAuthorityActive(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleRewards;
+            return true;
+        }
+
+        if (LooksLikeCombatState(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleCombat;
+            return true;
+        }
+
+        if (LooksLikeShopState(observer))
+        {
+            nextPhase = GuiSmokePhase.HandleShop;
+            return true;
+        }
+
+        if (LooksLikeRestSiteState(observer))
+        {
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        var eventScene = AutoDecisionProvider.BuildEventSceneState(observer, null);
+        if (eventScene.EventForegroundOwned
+            && eventScene.ReleaseStage == EventReleaseStage.Active
+            && eventScene.ExplicitRoomEntrySurfacePresent)
+        {
+            nextPhase = GuiSmokePhase.HandleEvent;
+            return true;
+        }
+
+        if (LooksLikeMapState(observer))
+        {
+            nextPhase = GuiSmokePhase.ChooseFirstNode;
+            return true;
+        }
+
+        nextPhase = default;
+        return false;
     }
 
     public static bool TryGetPostEventReleasePhase(ObserverState observer, out GuiSmokePhase nextPhase)

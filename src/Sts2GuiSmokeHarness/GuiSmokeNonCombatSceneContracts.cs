@@ -111,6 +111,31 @@ enum CombatReleaseSubtype
     EndTurnReopenLatency,
 }
 
+enum NextRoomTransitStage
+{
+    None,
+    MapClickAccepted,
+    RoomEntryPending,
+    Settled,
+}
+
+sealed record NextRoomEntryState(
+    NonCombatCanonicalForegroundOwner Owner,
+    NonCombatHandoffTarget HandoffTarget,
+    NonCombatReleaseStage ReleaseStage,
+    NextRoomTransitStage TransitStage,
+    bool ExplicitSurfacePresent,
+    PostNodeHandoffSurfaceKind SurfaceKind,
+    bool RecentMapClickAccepted,
+    bool MapTransitPending,
+    bool CombatResiduePresent,
+    bool RewardResiduePresent,
+    bool MapOverlayResiduePresent)
+{
+    public bool HasExplicitWinner => Owner != NonCombatCanonicalForegroundOwner.Unknown
+                                     && ExplicitSurfacePresent;
+}
+
 sealed record CombatReleaseState(
     CombatBarrierKind BarrierKind,
     CombatAuthorityState CombatAuthorityState,
@@ -231,6 +256,7 @@ sealed record EventSceneState(
     bool MapContextVisible,
     bool RewardSubstateActive,
     bool HasExplicitProgression,
+    bool ExplicitRoomEntrySurfacePresent,
     bool StrongForegroundChoice,
     bool ForceProgressionAfterCardSelection,
     bool ExplicitProceedVisible,

@@ -284,7 +284,7 @@ internal static partial class Program
         }
 
         if (phase == GuiSmokePhase.WaitPostMapNodeRoom
-            && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(postActionObserver, out var postMapNodePhase))
+            && GuiSmokeObserverPhaseHeuristics.TryGetPostMapNodePhase(postActionObserver, history, out var postMapNodePhase))
         {
             LogHarness($"step={stepIndex} post-action phase reconciliation WaitPostMapNodeRoom -> {postMapNodePhase} from screen={postActionObserver.CurrentScreen ?? "null"}");
             phase = postMapNodePhase;

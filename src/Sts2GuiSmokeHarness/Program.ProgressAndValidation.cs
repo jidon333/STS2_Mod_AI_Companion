@@ -480,6 +480,19 @@ internal static partial class Program
 
         if (request.AllowedActions.Length == 1 && string.Equals(request.AllowedActions[0], "wait", StringComparison.OrdinalIgnoreCase))
         {
+            if (phase == GuiSmokePhase.HandleEvent)
+            {
+                var eventScene = AutoDecisionProvider.BuildEventSceneState(
+                    request.Observer,
+                    request.WindowBounds,
+                    request.History,
+                    request.ScreenshotPath);
+                if (eventScene.ExplicitRoomEntrySurfacePresent)
+                {
+                    throw new InvalidOperationException("post-map-room-entry-contract-mismatch: explicit event foreground exported wait-only allowlist.");
+                }
+            }
+
             throw new InvalidOperationException($"Phase {phase} does not allow actions.");
         }
 

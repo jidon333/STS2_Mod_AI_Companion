@@ -717,12 +717,7 @@ sealed partial class AutoDecisionProvider
 
     internal static bool ShouldAbortReleasedCombatPhase(CombatReleaseState releaseState)
     {
-        return releaseState.HasExplicitForegroundSurface
-               || releaseState.ReleaseMismatch
-               || releaseState.ReleaseTarget is NonCombatHandoffTarget.HandleRewards
-                   or NonCombatHandoffTarget.HandleEvent
-                   or NonCombatHandoffTarget.HandleShop
-                   or NonCombatHandoffTarget.ChooseFirstNode;
+        return releaseState.ReleaseMismatch;
     }
 
     internal static string BuildCombatReleaseWaitReason(CombatReleaseState releaseState)
