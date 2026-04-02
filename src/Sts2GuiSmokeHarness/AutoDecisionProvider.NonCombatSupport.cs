@@ -1232,26 +1232,7 @@ sealed partial class AutoDecisionProvider
         {
             return null;
         }
-
-        var analysis = AutoRestSiteCardGridAnalyzer.Analyze(request.ScreenshotPath);
-        if (!analysis.HasSelectableCard)
-        {
-            return null;
-        }
-
-        return new GuiSmokeStepDecision(
-            "act",
-            "click",
-            null,
-            analysis.CardNormalizedX,
-            analysis.CardNormalizedY,
-            "rest site: smith card",
-            "Rest site upgrade card grid is visible. Select a visible card before confirming with V.",
-            0.91,
-            "map",
-            1400,
-            true,
-            null);
+        return null;
     }
 
     private static GuiSmokeStepDecision? TryCreateRestSiteUpgradeCardSelectionDecision(GuiSmokeStepRequest request)
@@ -1384,8 +1365,16 @@ sealed partial class AutoDecisionProvider
 
     private static string? TryFindRestSiteUpgradeBounds(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
     {
+        var upgradeState = CardSelectionObserverSignals.TryGetState(request.Observer);
         return decision.TargetLabel switch
         {
+            { } label when label.Contains("smith confirm", StringComparison.OrdinalIgnoreCase)
+                && upgradeState is { ScreenType: "upgrade" }
+                => CardSelectionObserverSignals.TryGetConfirmChoice(request.Observer, upgradeState)?.ScreenBounds,
+            { } label when label.Contains("smith card", StringComparison.OrdinalIgnoreCase)
+                && upgradeState is { ScreenType: "upgrade" }
+                => CardSelectionObserverSignals.GetCardChoices(request.Observer, upgradeState)
+                    .FirstOrDefault(choice => choice.Enabled != false)?.ScreenBounds,
             { } label when label.Contains("smith confirm", StringComparison.OrdinalIgnoreCase)
                 => RestSiteObserverSignals.TryGetSmithConfirmChoice(request.Observer)?.ScreenBounds,
             { } label when label.Contains("smith card", StringComparison.OrdinalIgnoreCase)
@@ -1396,13 +1385,20 @@ sealed partial class AutoDecisionProvider
 
     private static string? TryResolveRestSiteUpgradeBoundsSource(GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
     {
+        var upgradeState = CardSelectionObserverSignals.TryGetState(request.Observer);
         return decision.TargetLabel switch
         {
+            { } label when label.Contains("smith confirm", StringComparison.OrdinalIgnoreCase)
+                && upgradeState is { ScreenType: "upgrade" }
+                && CardSelectionObserverSignals.TryGetConfirmChoice(request.Observer, upgradeState) is not null => "observer-upgrade-confirm",
+            { } label when label.Contains("smith card", StringComparison.OrdinalIgnoreCase)
+                && upgradeState is { ScreenType: "upgrade" }
+                && CardSelectionObserverSignals.GetCardChoices(request.Observer, upgradeState).Count > 0 => "observer-upgrade-card",
             { } label when label.Contains("smith confirm", StringComparison.OrdinalIgnoreCase)
                 && RestSiteObserverSignals.TryGetSmithConfirmChoice(request.Observer) is not null => "observer-rest-site-smith-confirm",
             { } label when label.Contains("smith card", StringComparison.OrdinalIgnoreCase)
                 && RestSiteObserverSignals.TryGetFirstSmithCardChoice(request.Observer) is not null => "observer-rest-site-smith-card",
-            _ => "screenshot-rest-site-upgrade",
+            _ => "decision-normalized",
         };
     }
 

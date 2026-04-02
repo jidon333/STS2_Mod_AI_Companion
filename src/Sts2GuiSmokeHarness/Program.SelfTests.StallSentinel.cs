@@ -192,6 +192,16 @@ internal static partial class Program
                 ClassifyFailureForAttempt(
                     GuiSmokePhase.HandleCombat,
                     observer: null,
+                    terminalCause: "combat-lifecycle-transit-step-budget-exhausted",
+                    launchFailed: false),
+                "combat-lifecycle-transit-step-budget-exhausted",
+                StringComparison.OrdinalIgnoreCase),
+            "Combat lifecycle transit step-budget exhaustion should stay a first-class failure class instead of collapsing to generic max-step failure.");
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.HandleCombat,
+                    observer: null,
                     terminalCause: "combat-barrier-step-budget-exhausted",
                     launchFailed: false),
                 "combat-barrier-step-budget-exhausted",
@@ -207,6 +217,22 @@ internal static partial class Program
                 "combat-release-failure-under-noncombat-foreground",
                 StringComparison.OrdinalIgnoreCase),
             "Combat release failure under noncombat foreground should stay a first-class failure class instead of collapsing to generic decision-abort.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
+                    "combat-lifecycle-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic combat lifecycle transit step-budget exhaustion",
+                    180,
+                    false,
+                    "combat-lifecycle-transit-step-budget-exhausted",
+                    "combat-lifecycle-transit-step-budget-exhausted",
+                    GuiSmokeContractStates.TrustValid)),
+            "Combat lifecycle transit step-budget exhaustion should count as a dead-end attempt for supervision.");
         Assert(
             IsSceneDeadEndAttempt(
                 new GuiSmokeAttemptResult(
@@ -239,6 +265,22 @@ internal static partial class Program
                     "combat-release-failure-under-noncombat-foreground",
                     GuiSmokeContractStates.TrustValid)),
             "Combat release failure under noncombat foreground should count as a dead-end attempt for supervision.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
+                    "combat-lifecycle-plateau-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic combat lifecycle transit wait plateau",
+                    18,
+                    false,
+                    "combat-lifecycle-transit-wait-plateau",
+                    "combat-lifecycle-transit-wait-plateau",
+                    GuiSmokeContractStates.TrustValid)),
+            "Combat lifecycle transit wait plateau should count as a dead-end attempt for supervision.");
         Assert(
             IsSceneDeadEndAttempt(
                 new GuiSmokeAttemptResult(
@@ -424,6 +466,63 @@ internal static partial class Program
             if (Directory.Exists(combatBarrierBudgetSentinelRoot))
             {
                 Directory.Delete(combatBarrierBudgetSentinelRoot, recursive: true);
+            }
+        }
+
+        var combatLifecycleBudgetSentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-combat-lifecycle-budget-sentinel-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(combatLifecycleBudgetSentinelRoot);
+            var runRoot = Path.Combine(combatLifecycleBudgetSentinelRoot, "attempts", "0001");
+            Directory.CreateDirectory(runRoot);
+            LongRunArtifacts.InitializeSessionArtifacts(combatLifecycleBudgetSentinelRoot, "combat-lifecycle-session", "boot-to-long-run", "headless");
+            File.WriteAllLines(
+                Path.Combine(combatLifecycleBudgetSentinelRoot, "attempt-index.ndjson"),
+                new[]
+                {
+                    JsonSerializer.Serialize(
+                        new GuiSmokeAttemptIndexEntry(
+                            "0001",
+                            1,
+                            "combat-lifecycle-session",
+                            "completed",
+                            "synthetic combat lifecycle transit step-budget exhaustion",
+                            DateTimeOffset.UtcNow.AddSeconds(-30),
+                            DateTimeOffset.UtcNow.AddSeconds(-5),
+                            180,
+                            "combat-lifecycle-transit-step-budget-exhausted",
+                            false,
+                            "combat-lifecycle-transit-step-budget-exhausted",
+                            GuiSmokeContractStates.TrustValid),
+                        GuiSmokeShared.NdjsonOptions),
+                });
+            File.WriteAllText(
+                Path.Combine(runRoot, "failure-summary.json"),
+                JsonSerializer.Serialize(
+                    new GuiSmokeFailureSummary(
+                        GuiSmokePhase.HandleCombat.ToString(),
+                        "combat lifecycle transit step-budget exhaustion synthetic failure",
+                        "combat",
+                        false,
+                        "synthetic-combat-lifecycle-transit-step-budget-exhausted.png"),
+                    GuiSmokeShared.JsonOptions));
+            LongRunArtifacts.RefreshStallSentinel(combatLifecycleBudgetSentinelRoot);
+            var diagnosisEntries = File.ReadLines(Path.Combine(combatLifecycleBudgetSentinelRoot, "stall-diagnosis.ndjson"))
+                .Where(static line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+                .Where(static entry => entry is not null)
+                .Cast<GuiSmokeStallDiagnosisEntry>()
+                .ToArray();
+            Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic combat lifecycle budget exhaustion attempt.");
+            Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+                   && diagnosisEntries[0].StallDetected,
+                "Stall sentinel should preserve combat-lifecycle-transit-step-budget-exhausted as a first-class diagnosis kind.");
+        }
+        finally
+        {
+            if (Directory.Exists(combatLifecycleBudgetSentinelRoot))
+            {
+                Directory.Delete(combatLifecycleBudgetSentinelRoot, recursive: true);
             }
         }
 

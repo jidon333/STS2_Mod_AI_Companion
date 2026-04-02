@@ -52,9 +52,13 @@ internal static partial class Program
             : CombatBarrierSupport.Inactive;
         if (phase == GuiSmokePhase.HandleCombat
             && activeCombatBarrier.IsActive
-            && activeCombatBarrier.IsHardWaitBarrier)
+            && activeCombatBarrier.IsHardWaitBarrier
+            && stepAnalysisContext.CombatReleaseState.LifecycleStage is not CombatLifecycleStage.EndTurnTransit
+                and not CombatLifecycleStage.EnemyTurn
+                and not CombatLifecycleStage.PlayerReopenPending
+                and not CombatLifecycleStage.Inactive)
         {
-            decision = AutoDecisionProvider.CreateCombatBarrierWaitDecision(activeCombatBarrier, request.Observer.CurrentScreen);
+            decision = AutoDecisionProvider.CreateCombatBarrierWaitDecision(activeCombatBarrier, stepAnalysisContext.CombatReleaseState, request.Observer.CurrentScreen);
             replayEvaluation = EvaluateAutoDecisionWithDiagnostics(requestPath, request, decision, stepAnalysisContext);
         }
         else if (provider is AutoDecisionProvider)

@@ -142,7 +142,7 @@ internal static partial class Program
                     false,
                     loopTracking.SameActionStallCount,
                     "decision-wait",
-                    "combat-barrier-wait-plateau"));
+                    barrierPlateauCause));
             return new GuiSmokeDecisionStatusResult(
                 CompleteFailure(barrierPlateauMessage, barrierPlateauCause),
                 ShouldContinueLoop: false);

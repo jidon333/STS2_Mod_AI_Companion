@@ -1092,6 +1092,10 @@ internal static partial class Program
                     string.Equals(candidate.Label, "click option:MEND", StringComparison.OrdinalIgnoreCase)
                     && string.Equals(candidate.RejectReason, "not-default-auto-pick", StringComparison.OrdinalIgnoreCase)),
                 "Additional rest-site options should be visible in candidates but excluded from default auto-pick.");
+            Assert(
+                GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(restSiteMetadataObserver, null)
+                && GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(restSiteMetadataObserver, restSiteMetadataScreenshotPath),
+                "Explicit rest-site choice authority should come from exported rest-site truth, not from screenshot analyzer suppression.");
 
             var missingHitboxSummary = restSiteMetadataSummary with
             {

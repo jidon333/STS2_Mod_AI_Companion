@@ -389,8 +389,15 @@ sealed partial class AutoDecisionProvider
             null);
     }
 
-    public static GuiSmokeStepDecision CreateCombatBarrierWaitDecision(CombatBarrierEvaluation barrier, string? expectedScreen)
+    public static GuiSmokeStepDecision CreateCombatBarrierWaitDecision(CombatBarrierEvaluation barrier, CombatReleaseState releaseState, string? expectedScreen)
     {
+        var waitMs = releaseState.LifecycleStage switch
+        {
+            CombatLifecycleStage.EnemyTurn => 1600,
+            CombatLifecycleStage.EndTurnTransit => 1200,
+            CombatLifecycleStage.PlayerReopenPending => 1200,
+            _ => CombatBarrierPolicy.HandleCombatWaitMinimumMs,
+        };
         return new GuiSmokeStepDecision(
             "wait",
             null,
@@ -401,7 +408,7 @@ sealed partial class AutoDecisionProvider
             $"combat barrier wait barrier={barrier.Kind} source={barrier.SourceAction ?? "null"} reason={barrier.Reason}",
             0.66,
             expectedScreen,
-            CombatBarrierPolicy.HandleCombatWaitMinimumMs,
+            waitMs,
             true,
             null);
     }

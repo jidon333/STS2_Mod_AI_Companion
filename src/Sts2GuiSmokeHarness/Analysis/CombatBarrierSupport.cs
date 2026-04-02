@@ -176,17 +176,14 @@ static class CombatBarrierSupport
         out string message)
     {
         var barrier = context.CombatBarrierEvaluation;
-        if (!barrier.IsActive
-            || !barrier.IsHardWaitBarrier
-            || !barrier.OverWaitRisk
-            || consecutiveDecisionWaitCount < CombatBarrierPolicy.HandleCombatWaitPlateauLimit)
+        var releaseState = context.CombatReleaseState;
+        if (consecutiveDecisionWaitCount < CombatBarrierPolicy.HandleCombatWaitPlateauLimit)
         {
             terminalCause = string.Empty;
             message = string.Empty;
             return false;
         }
 
-        var releaseState = context.CombatReleaseState;
         if (releaseState.HasReleasedOwnership
             && releaseState.ReleaseTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat
             && releaseState.ReleaseSubtype != CombatReleaseSubtype.None)
@@ -194,6 +191,24 @@ static class CombatBarrierSupport
             terminalCause = "combat-release-failure-under-noncombat-foreground";
             message = $"combat-release-failure-under-noncombat-foreground phase=HandleCombat barrier={barrier.Kind} subtype={releaseState.ReleaseSubtype} owner={releaseState.ForegroundOwner} target={releaseState.ReleaseTarget} screen={request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "null"} waits={consecutiveDecisionWaitCount}";
             return true;
+        }
+
+        if (releaseState.LifecycleStage is CombatLifecycleStage.EndTurnTransit
+            or CombatLifecycleStage.EnemyTurn
+            or CombatLifecycleStage.PlayerReopenPending)
+        {
+            terminalCause = "combat-lifecycle-transit-wait-plateau";
+            message = $"combat-lifecycle-transit-wait-plateau phase=HandleCombat lifecycle={releaseState.LifecycleStage} barrier={barrier.Kind} waits={consecutiveDecisionWaitCount} round={context.RuntimeCombatState.RoundNumber?.ToString(CultureInfo.InvariantCulture) ?? "none"} interactionRevision={context.RuntimeCombatState.InteractionRevision ?? "none"} inventory={request.Observer.InventoryId ?? "null"}";
+            return true;
+        }
+
+        if (!barrier.IsActive
+            || !barrier.IsHardWaitBarrier
+            || !barrier.OverWaitRisk)
+        {
+            terminalCause = string.Empty;
+            message = string.Empty;
+            return false;
         }
 
         terminalCause = "combat-barrier-wait-plateau";

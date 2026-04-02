@@ -413,10 +413,12 @@ internal static partial class Program
     {
         return (result.TerminalCause?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
                || (result.TerminalCause?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false)
+               || string.Equals(result.TerminalCause, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                || IsRestSitePostClickFailureKind(result.TerminalCause)
                || (result.FailureClass?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
                || (result.FailureClass?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false)
+               || string.Equals(result.FailureClass, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                || IsRestSitePostClickFailureKind(result.FailureClass);
     }
@@ -472,32 +474,112 @@ internal static partial class Program
             return false;
         }
 
-        var endTurnBarrierWaitCount = 0;
-        foreach (var decisionPath in Directory.EnumerateFiles(stepsRoot, "*.decision.json", SearchOption.TopDirectoryOnly))
+        var lifecycleWaitCount = 0;
+        var maxConsecutiveLifecycleFingerprint = 0;
+        string? lastLifecycleFingerprint = null;
+        var consecutiveLifecycleFingerprint = 0;
+        var lifecycleStageCounts = new Dictionary<CombatLifecycleStage, int>();
+        foreach (var requestPath in Directory.EnumerateFiles(stepsRoot, "*.request.json", SearchOption.TopDirectoryOnly)
+                     .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase))
         {
-            using var decisionDocument = JsonDocument.Parse(File.ReadAllText(decisionPath));
-            var root = decisionDocument.RootElement;
-            var status = root.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : null;
-            var reason = root.TryGetProperty("reason", out var reasonElement) ? reasonElement.GetString() : null;
-            if (!string.Equals(status, "wait", StringComparison.OrdinalIgnoreCase)
-                || string.IsNullOrWhiteSpace(reason)
-                || !reason.Contains("combat barrier wait barrier=EndTurn", StringComparison.OrdinalIgnoreCase))
+            if (!TryReadCombatLifecycleWaitEvidence(requestPath, out var lifecycleStage, out var waitFingerprint))
             {
                 continue;
             }
 
-            endTurnBarrierWaitCount += 1;
+            lifecycleWaitCount += 1;
+            lifecycleStageCounts[lifecycleStage] = lifecycleStageCounts.TryGetValue(lifecycleStage, out var existingCount)
+                ? existingCount + 1
+                : 1;
+            consecutiveLifecycleFingerprint = string.Equals(lastLifecycleFingerprint, waitFingerprint, StringComparison.Ordinal)
+                ? consecutiveLifecycleFingerprint + 1
+                : 1;
+            lastLifecycleFingerprint = waitFingerprint;
+            maxConsecutiveLifecycleFingerprint = Math.Max(maxConsecutiveLifecycleFingerprint, consecutiveLifecycleFingerprint);
         }
 
-        if (endTurnBarrierWaitCount < 8)
+        if (lifecycleWaitCount < 8 || maxConsecutiveLifecycleFingerprint < 4)
         {
             return false;
         }
 
-        terminalCause = "combat-barrier-step-budget-exhausted";
-        failureClass = "combat-barrier-step-budget-exhausted";
-        message = $"combat-barrier-step-budget-exhausted handleCombatSteps={handleCombatCount}/{totalProgressCount} endTurnBarrierWaits={endTurnBarrierWaitCount}";
+        terminalCause = "combat-lifecycle-transit-step-budget-exhausted";
+        failureClass = "combat-lifecycle-transit-step-budget-exhausted";
+        message = $"combat-lifecycle-transit-step-budget-exhausted handleCombatSteps={handleCombatCount}/{totalProgressCount} lifecycleWaits={lifecycleWaitCount} maxRepeatedLifecycleFingerprint={maxConsecutiveLifecycleFingerprint} lifecycleStages={FormatLifecycleStageCounts(lifecycleStageCounts)}";
         return true;
+    }
+
+    static bool TryReadCombatLifecycleWaitEvidence(
+        string requestPath,
+        out CombatLifecycleStage lifecycleStage,
+        out string waitFingerprint)
+    {
+        lifecycleStage = CombatLifecycleStage.Unknown;
+        waitFingerprint = string.Empty;
+
+        var decisionPath = requestPath.EndsWith(".request.json", StringComparison.OrdinalIgnoreCase)
+            ? requestPath[..^".request.json".Length] + ".decision.json"
+            : Path.ChangeExtension(requestPath, ".decision.json");
+        if (!File.Exists(decisionPath))
+        {
+            return false;
+        }
+
+        using var requestStream = new FileStream(requestPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var request = JsonSerializer.Deserialize<GuiSmokeStepRequest>(requestStream, GuiSmokeShared.JsonOptions);
+        if (request is null
+            || !Enum.TryParse<GuiSmokePhase>(request.Phase, ignoreCase: true, out var phase)
+            || phase != GuiSmokePhase.HandleCombat)
+        {
+            return false;
+        }
+
+        using var decisionStream = new FileStream(decisionPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var decisionDocument = JsonDocument.Parse(decisionStream);
+        var decisionRoot = decisionDocument.RootElement;
+        var status = decisionRoot.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : null;
+        if (!string.Equals(status, "wait", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var observer = new ObserverState(
+            request.Observer with
+            {
+                LastEventsTail = request.Observer.LastEventsTail ?? Array.Empty<string>(),
+                ActionNodes = request.Observer.ActionNodes ?? Array.Empty<ObserverActionNode>(),
+                Choices = request.Observer.Choices ?? Array.Empty<ObserverChoice>(),
+                CombatHand = request.Observer.CombatHand ?? Array.Empty<ObservedCombatHandCard>(),
+            },
+            null,
+            null,
+            request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>());
+        var analysisContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+            phase,
+            observer,
+            request.ScreenshotPath,
+            request.History ?? Array.Empty<GuiSmokeHistoryEntry>(),
+            request.CombatCardKnowledge ?? Array.Empty<CombatCardKnowledgeHint>(),
+            request.WindowBounds);
+        lifecycleStage = analysisContext.CombatReleaseState.LifecycleStage;
+        if (lifecycleStage is not (CombatLifecycleStage.EndTurnTransit
+            or CombatLifecycleStage.EnemyTurn
+            or CombatLifecycleStage.PlayerReopenPending))
+        {
+            return false;
+        }
+
+        waitFingerprint = BuildDecisionWaitFingerprint(phase, request.SceneSignature, observer, analysisContext);
+        return true;
+    }
+
+    static string FormatLifecycleStageCounts(IReadOnlyDictionary<CombatLifecycleStage, int> lifecycleStageCounts)
+    {
+        return string.Join(
+            ",",
+            lifecycleStageCounts
+                .OrderBy(static entry => entry.Key)
+                .Select(static entry => $"{entry.Key}:{entry.Value.ToString(CultureInfo.InvariantCulture)}"));
     }
 
     static string ClassifyFailureForAttempt(
@@ -520,6 +602,7 @@ internal static partial class Program
 
         return terminalCause switch
         {
+            "combat-lifecycle-transit-step-budget-exhausted" => "combat-lifecycle-transit-step-budget-exhausted",
             "combat-barrier-step-budget-exhausted" => "combat-barrier-step-budget-exhausted",
             "combat-barrier-handoff-mismatch" => "combat-barrier-handoff-mismatch",
             "combat-release-failure-under-noncombat-foreground" => "combat-release-failure-under-noncombat-foreground",
@@ -530,6 +613,7 @@ internal static partial class Program
             "map-transition-stall" => "map-transition-stall",
             "phase-mismatch-stall" => "phase-mismatch-stall",
             "decision-wait-plateau" => "decision-wait-plateau",
+            "combat-lifecycle-transit-wait-plateau" => "combat-lifecycle-transit-wait-plateau",
             "combat-barrier-wait-plateau" => "combat-barrier-wait-plateau",
             "inspect-overlay-loop" => "inspect-overlay-loop",
             "combat-noop-loop" => "combat-noop-loop",
@@ -569,6 +653,7 @@ internal static partial class Program
         }
 
         return string.Equals(result.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
@@ -579,6 +664,7 @@ internal static partial class Program
                || string.Equals(result.TerminalCause, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)
@@ -587,6 +673,7 @@ internal static partial class Program
                || IsRestSitePostClickFailureKind(result.TerminalCause)
                || string.Equals(result.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "reward-aftermath-card-progression-stall", StringComparison.OrdinalIgnoreCase)
@@ -596,6 +683,7 @@ internal static partial class Program
                || string.Equals(result.FailureClass, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-noop-loop", StringComparison.OrdinalIgnoreCase)

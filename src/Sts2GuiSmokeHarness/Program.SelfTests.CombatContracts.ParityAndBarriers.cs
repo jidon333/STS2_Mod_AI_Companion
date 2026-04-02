@@ -1240,12 +1240,13 @@ internal static partial class Program
             }
             Assert(frozenTransitRequest is not null && frozenTransitContext is not null, "Frozen transit fixtures should be created for stall classification.");
             Assert(
-                !CombatBarrierSupport.TryClassifyWaitPlateau(frozenTransitRequest!, frozenTransitContext!, frozenEndTurnTransitWaitCount, out _, out _),
-                "Acknowledged EndTurn transit should not use combat-barrier-wait-plateau even when frozen.");
+                CombatBarrierSupport.TryClassifyWaitPlateau(frozenTransitRequest!, frozenTransitContext!, frozenEndTurnTransitWaitCount, out var frozenTransitCause, out _)
+                && string.Equals(frozenTransitCause, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase),
+                "Frozen acknowledged EndTurn transit should now classify as a lifecycle transit plateau.");
             Assert(
-                TryClassifyDecisionWaitPlateau(GuiSmokePhase.HandleCombat, new ObserverState(frozenEndTurnTransitObserver, null, null, null), frozenEndTurnTransitWaitCount, out var frozenTransitCause, out _)
-                && string.Equals(frozenTransitCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase),
-                "Frozen acknowledged EndTurn transit should still be stallable via the generic wait plateau path.");
+                TryClassifyDecisionWaitPlateau(GuiSmokePhase.HandleCombat, new ObserverState(frozenEndTurnTransitObserver, null, null, null), frozenEndTurnTransitWaitCount, out var frozenGenericTransitCause, out _)
+                && string.Equals(frozenGenericTransitCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase),
+                "Frozen acknowledged EndTurn transit may still satisfy the generic wait plateau fingerprint, but combat-specific classification should now win first.");
 
             var playerReopenPendingObserver = endTurnBarrierSeedObserver with
             {

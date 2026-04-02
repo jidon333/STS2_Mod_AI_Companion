@@ -30,6 +30,7 @@ static class GuiSmokeNonCombatContractSupport
 
     public static bool HasExplicitRestSiteChoiceAuthority(ObserverSummary observer, string? screenshotPath)
     {
+        _ = screenshotPath;
         if (MapAuthorityOutranksStaleRestSiteResidue(observer)
             || !HasRestSiteAuthority(observer)
             || !RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
@@ -39,12 +40,7 @@ static class GuiSmokeNonCombatContractSupport
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(screenshotPath))
-        {
-            return true;
-        }
-
-        return !AutoRestSiteCardGridAnalyzer.Analyze(screenshotPath).HasSelectableCard;
+        return true;
     }
 
     public static bool HasExplicitRestSiteChoiceAuthority(ObserverState observer, string? screenshotPath)
