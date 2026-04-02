@@ -1282,6 +1282,53 @@ internal static partial class Program
                 && playerReopenPendingDecision.Reason?.Contains("combat barrier wait", StringComparison.OrdinalIgnoreCase) != true,
                 $"Player-reopen pending should prefer lifecycle wait wording instead of barrier wait. actual={playerReopenPendingDecision.Reason ?? playerReopenPendingDecision.Status}");
 
+            var combatEntryPendingReplayPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                "artifacts",
+                "gui-smoke",
+                "post-retirement-triage-20260402-live1",
+                "attempts",
+                "0001",
+                "steps",
+                "0037.request.json");
+            if (File.Exists(combatEntryPendingReplayPath))
+            {
+                var rebuiltEntryReplay = LoadReplayRequest(combatEntryPendingReplayPath, fullRequestRebuild: true).Request;
+                var rebuiltEntryAnalysis = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+                    GuiSmokePhase.HandleCombat,
+                    new ObserverState(
+                        rebuiltEntryReplay.Observer with
+                        {
+                            LastEventsTail = rebuiltEntryReplay.Observer.LastEventsTail ?? Array.Empty<string>(),
+                            ActionNodes = rebuiltEntryReplay.Observer.ActionNodes ?? Array.Empty<ObserverActionNode>(),
+                            Choices = rebuiltEntryReplay.Observer.Choices ?? Array.Empty<ObserverChoice>(),
+                            CombatHand = rebuiltEntryReplay.Observer.CombatHand ?? Array.Empty<ObservedCombatHandCard>(),
+                        },
+                        null,
+                        null,
+                        rebuiltEntryReplay.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>()),
+                    rebuiltEntryReplay.ScreenshotPath,
+                    rebuiltEntryReplay.History ?? Array.Empty<GuiSmokeHistoryEntry>(),
+                    rebuiltEntryReplay.CombatCardKnowledge ?? Array.Empty<CombatCardKnowledgeHint>(),
+                    rebuiltEntryReplay.WindowBounds);
+                Assert(
+                    rebuiltEntryAnalysis.CombatReleaseState.LifecycleStage == CombatLifecycleStage.CombatEntryPending,
+                    "Fresh combat bootstrap replay should classify as CombatEntryPending, not PlayerReopenPending.");
+                Assert(
+                    rebuiltEntryReplay.AllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                    $"CombatEntryPending replay rebuild should remain wait-only. Actual allowlist=[{string.Join(", ", rebuiltEntryReplay.AllowedActions)}].");
+                var rebuiltEntryReplayArtifact = EvaluateAutoDecisionWithDiagnostics(combatEntryPendingReplayPath, rebuiltEntryReplay).CandidateDump;
+                Assert(
+                    string.Equals(rebuiltEntryReplayArtifact.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                    && rebuiltEntryReplayArtifact.FinalDecision.Reason?.Contains("initial combat player surface", StringComparison.OrdinalIgnoreCase) == true
+                    && rebuiltEntryReplayArtifact.FinalDecision.Reason?.Contains("next player turn to reopen", StringComparison.OrdinalIgnoreCase) != true,
+                    $"CombatEntryPending replay should wait for the initial combat surface instead of reusing player-reopen wording. actual={rebuiltEntryReplayArtifact.FinalDecision.Status}/{rebuiltEntryReplayArtifact.FinalDecision.Reason}");
+                Assert(
+                    CombatBarrierSupport.TryClassifyWaitPlateau(rebuiltEntryReplay, rebuiltEntryAnalysis, CombatBarrierPolicy.HandleCombatWaitPlateauLimit, out var combatEntryPendingCause, out _)
+                    && string.Equals(combatEntryPendingCause, "combat-entry-surface-pending-wait-plateau", StringComparison.OrdinalIgnoreCase),
+                    "Repeated fresh combat entry waits should classify as combat-entry-surface-pending-wait-plateau.");
+            }
+
             var endTurnBarrierReopenedObserver = endTurnBarrierSeedObserver with
             {
                 CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(650),

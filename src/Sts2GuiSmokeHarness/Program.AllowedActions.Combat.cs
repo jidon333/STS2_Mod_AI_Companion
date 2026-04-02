@@ -40,7 +40,8 @@ internal static partial class Program
             return new[] { "wait" };
         }
 
-        if (context.CombatReleaseState.LifecycleStage is CombatLifecycleStage.EndTurnTransit
+        if (context.CombatReleaseState.LifecycleStage is CombatLifecycleStage.CombatEntryPending
+            or CombatLifecycleStage.EndTurnTransit
             or CombatLifecycleStage.EnemyTurn
             or CombatLifecycleStage.PlayerReopenPending)
         {

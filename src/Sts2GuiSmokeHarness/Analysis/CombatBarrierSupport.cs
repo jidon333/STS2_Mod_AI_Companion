@@ -193,6 +193,13 @@ static class CombatBarrierSupport
             return true;
         }
 
+        if (releaseState.LifecycleStage == CombatLifecycleStage.CombatEntryPending)
+        {
+            terminalCause = "combat-entry-surface-pending-wait-plateau";
+            message = $"combat-entry-surface-pending-wait-plateau phase=HandleCombat lifecycle={releaseState.LifecycleStage} barrier={barrier.Kind} waits={consecutiveDecisionWaitCount} round={context.RuntimeCombatState.RoundNumber?.ToString(CultureInfo.InvariantCulture) ?? "none"} interactionRevision={context.RuntimeCombatState.InteractionRevision ?? "none"} inventory={request.Observer.InventoryId ?? "null"}";
+            return true;
+        }
+
         if (releaseState.LifecycleStage is CombatLifecycleStage.EndTurnTransit
             or CombatLifecycleStage.EnemyTurn
             or CombatLifecycleStage.PlayerReopenPending)

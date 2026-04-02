@@ -53,7 +53,8 @@ internal static partial class Program
         if (phase == GuiSmokePhase.HandleCombat
             && activeCombatBarrier.IsActive
             && activeCombatBarrier.IsHardWaitBarrier
-            && stepAnalysisContext.CombatReleaseState.LifecycleStage is not CombatLifecycleStage.EndTurnTransit
+            && stepAnalysisContext.CombatReleaseState.LifecycleStage is not CombatLifecycleStage.CombatEntryPending
+                and not CombatLifecycleStage.EndTurnTransit
                 and not CombatLifecycleStage.EnemyTurn
                 and not CombatLifecycleStage.PlayerReopenPending
                 and not CombatLifecycleStage.Inactive)

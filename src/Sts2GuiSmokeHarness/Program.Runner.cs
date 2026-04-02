@@ -413,11 +413,13 @@ internal static partial class Program
     {
         return (result.TerminalCause?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
                || (result.TerminalCause?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false)
+               || string.Equals(result.TerminalCause, "combat-entry-surface-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                || IsRestSitePostClickFailureKind(result.TerminalCause)
                || (result.FailureClass?.Contains("loop", StringComparison.OrdinalIgnoreCase) ?? false)
                || (result.FailureClass?.Contains("stall", StringComparison.OrdinalIgnoreCase) ?? false)
+               || string.Equals(result.FailureClass, "combat-entry-surface-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                || IsRestSitePostClickFailureKind(result.FailureClass);
@@ -503,9 +505,13 @@ internal static partial class Program
             return false;
         }
 
-        terminalCause = "combat-lifecycle-transit-step-budget-exhausted";
-        failureClass = "combat-lifecycle-transit-step-budget-exhausted";
-        message = $"combat-lifecycle-transit-step-budget-exhausted handleCombatSteps={handleCombatCount}/{totalProgressCount} lifecycleWaits={lifecycleWaitCount} maxRepeatedLifecycleFingerprint={maxConsecutiveLifecycleFingerprint} lifecycleStages={FormatLifecycleStageCounts(lifecycleStageCounts)}";
+        var entryPendingOnly = lifecycleStageCounts.Count > 0
+                               && lifecycleStageCounts.Keys.All(static stage => stage == CombatLifecycleStage.CombatEntryPending);
+        terminalCause = entryPendingOnly
+            ? "combat-entry-surface-pending-step-budget-exhausted"
+            : "combat-lifecycle-transit-step-budget-exhausted";
+        failureClass = terminalCause;
+        message = $"{terminalCause} handleCombatSteps={handleCombatCount}/{totalProgressCount} lifecycleWaits={lifecycleWaitCount} maxRepeatedLifecycleFingerprint={maxConsecutiveLifecycleFingerprint} lifecycleStages={FormatLifecycleStageCounts(lifecycleStageCounts)}";
         return true;
     }
 
@@ -562,7 +568,8 @@ internal static partial class Program
             request.CombatCardKnowledge ?? Array.Empty<CombatCardKnowledgeHint>(),
             request.WindowBounds);
         lifecycleStage = analysisContext.CombatReleaseState.LifecycleStage;
-        if (lifecycleStage is not (CombatLifecycleStage.EndTurnTransit
+        if (lifecycleStage is not (CombatLifecycleStage.CombatEntryPending
+            or CombatLifecycleStage.EndTurnTransit
             or CombatLifecycleStage.EnemyTurn
             or CombatLifecycleStage.PlayerReopenPending))
         {
@@ -602,6 +609,7 @@ internal static partial class Program
 
         return terminalCause switch
         {
+            "combat-entry-surface-pending-step-budget-exhausted" => "combat-entry-surface-pending-step-budget-exhausted",
             "combat-lifecycle-transit-step-budget-exhausted" => "combat-lifecycle-transit-step-budget-exhausted",
             "combat-barrier-step-budget-exhausted" => "combat-barrier-step-budget-exhausted",
             "combat-barrier-handoff-mismatch" => "combat-barrier-handoff-mismatch",
@@ -613,6 +621,7 @@ internal static partial class Program
             "map-transition-stall" => "map-transition-stall",
             "phase-mismatch-stall" => "phase-mismatch-stall",
             "decision-wait-plateau" => "decision-wait-plateau",
+            "combat-entry-surface-pending-wait-plateau" => "combat-entry-surface-pending-wait-plateau",
             "combat-lifecycle-transit-wait-plateau" => "combat-lifecycle-transit-wait-plateau",
             "combat-barrier-wait-plateau" => "combat-barrier-wait-plateau",
             "inspect-overlay-loop" => "inspect-overlay-loop",
@@ -653,6 +662,7 @@ internal static partial class Program
         }
 
         return string.Equals(result.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-entry-surface-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
@@ -664,6 +674,7 @@ internal static partial class Program
                || string.Equals(result.TerminalCause, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-entry-surface-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
@@ -673,6 +684,7 @@ internal static partial class Program
                || IsRestSitePostClickFailureKind(result.TerminalCause)
                || string.Equals(result.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-entry-surface-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
@@ -683,6 +695,7 @@ internal static partial class Program
                || string.Equals(result.FailureClass, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-entry-surface-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)

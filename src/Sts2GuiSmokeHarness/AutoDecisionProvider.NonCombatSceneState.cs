@@ -228,6 +228,13 @@ sealed partial class AutoDecisionProvider
             return CombatLifecycleStage.Inactive;
         }
 
+        var hasExplicitCombatPlayerSurface = HasExplicitCombatPlayerSurface(observer);
+        if (CombatRuntimeStateSupport.LooksLikeFreshCombatEncounterStart(runtime)
+            && !hasExplicitCombatPlayerSurface)
+        {
+            return CombatLifecycleStage.CombatEntryPending;
+        }
+
         var playerWindowOpen = isPlayPhase == true
                                && isEnemyTurnStarted == false
                                && runtime.PlayerActionsDisabled == false
@@ -1291,6 +1298,33 @@ sealed partial class AutoDecisionProvider
                || observer.CurrentChoices.Any(IsCombatTakeoverChoiceLabel)
                || observer.ActionNodes.Any(static node => node.Actionable && IsCombatTakeoverChoiceLabel(node.Label))
                || string.Equals(observer.ChoiceExtractorPath, "combat-targets", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasExplicitCombatPlayerSurface(ObserverSummary observer)
+    {
+        if (observer.CombatHand.Count > 0
+            || string.Equals(observer.ChoiceExtractorPath, "combat-targets", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return observer.Choices.Any(static choice => IsExplicitCombatPlayerSurfaceChoice(choice.Kind, choice.Label))
+               || observer.ActionNodes.Any(static node => node.Actionable && IsExplicitCombatPlayerSurfaceChoice(node.Kind, node.Label));
+    }
+
+    private static bool IsExplicitCombatPlayerSurfaceChoice(string? kind, string? label)
+    {
+        if (IsCombatTakeoverChoiceLabel(label))
+        {
+            return false;
+        }
+
+        if (string.Equals(kind, "map-node", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !string.IsNullOrWhiteSpace(label);
     }
 
     private static bool IsCombatTakeoverPending(ObserverSummary observer, bool hasExplicitCombatSurface)

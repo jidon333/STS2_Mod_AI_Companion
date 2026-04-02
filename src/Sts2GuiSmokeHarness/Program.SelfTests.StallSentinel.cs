@@ -192,6 +192,16 @@ internal static partial class Program
                 ClassifyFailureForAttempt(
                     GuiSmokePhase.HandleCombat,
                     observer: null,
+                    terminalCause: "combat-entry-surface-pending-step-budget-exhausted",
+                    launchFailed: false),
+                "combat-entry-surface-pending-step-budget-exhausted",
+                StringComparison.OrdinalIgnoreCase),
+            "Combat entry surface pending step-budget exhaustion should stay a first-class failure class instead of collapsing to generic max-step failure.");
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.HandleCombat,
+                    observer: null,
                     terminalCause: "combat-lifecycle-transit-step-budget-exhausted",
                     launchFailed: false),
                 "combat-lifecycle-transit-step-budget-exhausted",
@@ -222,6 +232,22 @@ internal static partial class Program
                 new GuiSmokeAttemptResult(
                     "0001",
                     1,
+                    "combat-entry-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic combat entry surface pending step-budget exhaustion",
+                    180,
+                    false,
+                    "combat-entry-surface-pending-step-budget-exhausted",
+                    "combat-entry-surface-pending-step-budget-exhausted",
+                    GuiSmokeContractStates.TrustValid)),
+            "Combat entry surface pending step-budget exhaustion should count as a dead-end attempt for supervision.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
                     "combat-lifecycle-session",
                     "synthetic-run-root",
                     1,
@@ -233,6 +259,16 @@ internal static partial class Program
                     "combat-lifecycle-transit-step-budget-exhausted",
                     GuiSmokeContractStates.TrustValid)),
             "Combat lifecycle transit step-budget exhaustion should count as a dead-end attempt for supervision.");
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.HandleCombat,
+                    observer: null,
+                    terminalCause: "combat-entry-surface-pending-wait-plateau",
+                    launchFailed: false),
+                "combat-entry-surface-pending-wait-plateau",
+                StringComparison.OrdinalIgnoreCase),
+            "Combat entry surface pending wait plateau should stay a first-class failure class instead of collapsing to generic decision-wait-plateau.");
         Assert(
             IsSceneDeadEndAttempt(
                 new GuiSmokeAttemptResult(

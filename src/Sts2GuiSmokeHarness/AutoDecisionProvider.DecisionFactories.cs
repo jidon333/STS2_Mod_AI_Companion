@@ -393,6 +393,7 @@ sealed partial class AutoDecisionProvider
     {
         var waitMs = releaseState.LifecycleStage switch
         {
+            CombatLifecycleStage.CombatEntryPending => 800,
             CombatLifecycleStage.EnemyTurn => 1600,
             CombatLifecycleStage.EndTurnTransit => 1200,
             CombatLifecycleStage.PlayerReopenPending => 1200,

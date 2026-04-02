@@ -743,6 +743,7 @@ sealed partial class AutoDecisionProvider
         };
         var lifecycleSuffix = releaseState.LifecycleStage switch
         {
+            CombatLifecycleStage.CombatEntryPending => " while the initial combat surface is still publishing",
             CombatLifecycleStage.EnemyTurn => " while enemy turn is active",
             CombatLifecycleStage.EndTurnTransit => " during end-turn transit",
             CombatLifecycleStage.PlayerReopenPending => " while waiting for the next player reopen",
@@ -772,6 +773,7 @@ sealed partial class AutoDecisionProvider
     {
         var reason = releaseState.LifecycleStage switch
         {
+            CombatLifecycleStage.CombatEntryPending => "waiting for initial combat player surface to publish after combat entry",
             CombatLifecycleStage.EndTurnTransit => "waiting for end-turn transit to settle before player control can reopen",
             CombatLifecycleStage.EnemyTurn => "waiting for enemy turn to finish before player control reopens",
             CombatLifecycleStage.PlayerReopenPending => "waiting for the next player turn to reopen after end-turn transit",

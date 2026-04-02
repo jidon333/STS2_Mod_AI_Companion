@@ -115,6 +115,7 @@ enum CombatLifecycleStage
 {
     Unknown,
     Inactive,
+    CombatEntryPending,
     PlayerPlayOpen,
     EndTurnTransit,
     EnemyTurn,
