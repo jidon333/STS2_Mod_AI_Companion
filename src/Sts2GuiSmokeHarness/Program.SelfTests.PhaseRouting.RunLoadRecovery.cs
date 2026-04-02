@@ -336,6 +336,133 @@ internal static partial class Program
             && string.Equals(waitRunLoadRetryDecision.TargetLabel, "continue", StringComparison.OrdinalIgnoreCase),
             "WaitRunLoad should retry Continue instead of returning a passive wait decision when the stable main-menu continue surface persists.");
 
+        var waitRunLoadContinuePendingResidueObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                null,
+                false,
+                "mixed",
+                "transition",
+                null,
+                null,
+                null,
+                24,
+                24,
+                null,
+                new[] { "멀티플레이", "종료", "설정", "백과사전", "연대표", "전투 포기" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("main-menu:multiplayer", "menu-action", "멀티플레이", "676,734,200,50", true),
+                    new ObserverActionNode("main-menu:전투-포기", "menu-action", "전투 포기", "676,984,200,50", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("menu-action", "멀티플레이", "676,734,200,50", "main-menu:multiplayer", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuTextButton")
+                    {
+                        NodeId = "main-menu:multiplayer",
+                        Enabled = true,
+                    },
+                    new ObserverChoice("menu-action", "전투 포기", "676,984,200,50", "main-menu:전투-포기", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuTextButton")
+                    {
+                        NodeId = "main-menu:전투-포기",
+                        Enabled = true,
+                    },
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = null,
+                PublishedSceneAuthority = null,
+                PublishedSceneStability = null,
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["transitionInProgress"] = "false",
+                    ["rootSceneIsMainMenu"] = "true",
+                    ["rootSceneIsRun"] = "false",
+                    ["currentRunNodePresent"] = "false",
+                    ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    ["terminalRunBoundary"] = "true",
+                    ["mainMenuReturnDetected"] = "true",
+                    ["choiceExtractorPath"] = "main-menu",
+                },
+            },
+            null,
+            null,
+            null);
+        var continuePendingHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.EnterRun.ToString(), "click", "continue", DateTimeOffset.UtcNow.AddSeconds(-1)),
+        };
+        Assert(
+            !WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadContinuePendingResidueObserver.Summary, continuePendingHistory),
+            "WaitRunLoad should not reopen EnterRun while a recently submitted Continue action is still pending and only main-menu residue remains.");
+        var waitRunLoadContinuePendingActions = BuildAllowedActions(
+            GuiSmokePhase.WaitRunLoad,
+            waitRunLoadContinuePendingResidueObserver,
+            Array.Empty<CombatCardKnowledgeHint>(),
+            null,
+            continuePendingHistory);
+        Assert(
+            waitRunLoadContinuePendingActions.SequenceEqual(new[] { "wait" }),
+            "WaitRunLoad should stay wait-only while the submitted Continue action is still pending.");
+        var waitRunLoadContinuePendingDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            7,
+            GuiSmokePhase.WaitRunLoad.ToString(),
+            "Wait for run-load readiness.",
+            DateTimeOffset.UtcNow,
+            "screen.png",
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:wait-run-load|screen:main-menu|visible:main-menu|ready:unknown|stability:unknown|terminal-run-boundary",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            waitRunLoadContinuePendingResidueObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            waitRunLoadContinuePendingActions,
+            continuePendingHistory,
+            string.Empty,
+            null));
+        Assert(
+            string.Equals(waitRunLoadContinuePendingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+            && waitRunLoadContinuePendingDecision.Reason?.Contains("submitted Continue action", StringComparison.OrdinalIgnoreCase) == true,
+            "WaitRunLoad should explain that the submitted Continue action is still resolving instead of reopening EnterRun from residue.");
+
+        var continueFailedRetryHistory = new List<GuiSmokeHistoryEntry>
+        {
+            new(GuiSmokePhase.EnterRun.ToString(), "click", "continue", DateTimeOffset.UtcNow.AddSeconds(-3)),
+        };
+        continueFailedRetryHistory.AddRange(Enumerable.Range(0, 10)
+            .Select(waitIndex => new GuiSmokeHistoryEntry(
+                GuiSmokePhase.WaitRunLoad.ToString(),
+                "wait",
+                null,
+                DateTimeOffset.UtcNow.AddMilliseconds(-2000 + (waitIndex * 100)))));
+        Assert(
+            WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadStuckContinueObserver.Summary, continueFailedRetryHistory),
+            "WaitRunLoad should reopen EnterRun after a submitted Continue action keeps the explicit continue surface visible through a bounded series of wait steps.");
+        var waitRunLoadContinueRetryActions = BuildAllowedActions(
+            GuiSmokePhase.WaitRunLoad,
+            waitRunLoadStuckContinueObserver,
+            Array.Empty<CombatCardKnowledgeHint>(),
+            null,
+            continueFailedRetryHistory);
+        Assert(
+            waitRunLoadContinueRetryActions.Contains("click continue", StringComparer.OrdinalIgnoreCase),
+            "WaitRunLoad should expose Continue again once the submitted Continue action has clearly failed back to a fresh retry surface.");
+
         var waitRunLoadTerminalMainMenuObserver = new ObserverState(
             new ObserverSummary(
                 "main-menu",
@@ -480,21 +607,14 @@ internal static partial class Program
                 24,
                 24,
                 null,
-                new[] { "\uACC4\uC18D", "\uC804\uD22C \uD3EC\uAE30" },
+                new[] { "\uC804\uD22C \uD3EC\uAE30" },
                 Array.Empty<string>(),
                 new[]
                 {
-                    new ObserverActionNode("main-menu:continue", "continue-run", "\uACC4\uC18D", "676,659,200,50", true),
                     new ObserverActionNode("main-menu:\uC804\uD22C-\uD3EC\uAE30", "menu-action", "\uC804\uD22C \uD3EC\uAE30", "676,709,200,50", true),
                 },
                 new[]
                 {
-                    new ObserverChoice("continue-run", "\uACC4\uC18D", "676,659,200,50", "main-menu:continue", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuContinueButton")
-                    {
-                        NodeId = "main-menu:continue",
-                        BindingKind = "continue-run",
-                        Enabled = true,
-                    },
                     new ObserverChoice("menu-action", "\uC804\uD22C \uD3EC\uAE30", "676,709,200,50", "main-menu:\uC804\uD22C-\uD3EC\uAE30", "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenuTextButton")
                     {
                         NodeId = "main-menu:\uC804\uD22C-\uD3EC\uAE30",

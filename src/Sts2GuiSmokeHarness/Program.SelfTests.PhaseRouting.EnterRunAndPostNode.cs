@@ -85,12 +85,12 @@ internal static partial class Program
         Assert(
             GetPostEnterRunPhase(continuePreferredDecision) == GuiSmokePhase.WaitRunLoad,
             "Continue should hand off to neutral run-load waiting, not WaitCharacterSelect.");
-        var runSaveCleanupDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+        var continueReturnedMainMenuDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
             "run",
             "boot-to-long-run",
             2,
             GuiSmokePhase.EnterRun.ToString(),
-            "Clear a stale run-save surface before entering a fresh run.",
+            "Prefer Continue when a stable main-menu retry surface is visible, even if Abandon Run is also present.",
             DateTimeOffset.UtcNow,
             "screen.png",
             new WindowBounds(0, 0, 1280, 720),
@@ -106,7 +106,7 @@ internal static partial class Program
                 "main-menu",
                 false,
                 DateTimeOffset.UtcNow,
-                "inv-main-menu-run-save",
+                "inv-main-menu-run-start-and-abandon",
                 true,
                 "main-menu",
                 "stable",
@@ -151,8 +151,77 @@ internal static partial class Program
             string.Empty,
             null));
         Assert(
+            string.Equals(continueReturnedMainMenuDecision.TargetLabel, "continue", StringComparison.OrdinalIgnoreCase),
+            "EnterRun should prefer Continue on a stable returned main menu when an explicit continue-run surface is visible, even if Abandon Run is also published.");
+        Assert(
+            GetPostEnterRunPhase(continueReturnedMainMenuDecision) == GuiSmokePhase.WaitRunLoad,
+            "Continue retries from the returned main menu should hand off to neutral run-load waiting.");
+        var runSaveCleanupDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            3,
+            GuiSmokePhase.EnterRun.ToString(),
+            "Clear a stale run-save surface before entering a fresh run.",
+            DateTimeOffset.UtcNow,
+            "screen.png",
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:enter-run|screen:main-menu|visible:main-menu|ready:true|terminal-run-boundary",
+            "0001",
+            1,
+            3,
+            true,
+            "tactical",
+            null,
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-main-menu-run-save",
+                true,
+                "main-menu",
+                "stable",
+                null,
+                null,
+                "main-menu",
+                null,
+                null,
+                null,
+                new[] { "Abandon Run" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("main-menu:abandon-run", "menu-action", "Abandon Run", "620,680,420,96", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("menu-action", "Abandon Run", "620,680,420,96"),
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["terminalRunBoundary"] = "true",
+                    ["mainMenuReturnDetected"] = "true",
+                    ["choiceExtractorPath"] = "main-menu",
+                    ["rootSceneIsMainMenu"] = "true",
+                },
+            },
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            Array.Empty<string>(),
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            string.Empty,
+            null));
+        Assert(
             string.Equals(runSaveCleanupDecision.TargetLabel, "abandon run", StringComparison.OrdinalIgnoreCase),
-            "EnterRun should clear a persisted run-save surface with Abandon Run before reopening the fresh new-run path.");
+            "EnterRun should clear a persisted run-save surface with Abandon Run when no explicit continue or singleplayer run-start surface is available.");
         Assert(
             GetPostEnterRunPhase(runSaveCleanupDecision) == GuiSmokePhase.WaitRunLoad,
             "Abandon Run should hand off to neutral run-load waiting so the main-menu cleanup popup and follow-up recovery can be observed.");

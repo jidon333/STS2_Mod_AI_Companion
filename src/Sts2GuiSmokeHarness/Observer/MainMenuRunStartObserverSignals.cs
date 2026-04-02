@@ -16,6 +16,12 @@ static class MainMenuRunStartObserverSignals
             return false;
         }
 
+        if (HasContinueRunStartSurface(observer)
+            || HasSingleplayerRunStartSurface(observer))
+        {
+            return false;
+        }
+
         return observer.ActionNodes.Any(IsBoundedAbandonRunActionNode)
                || observer.Choices.Any(IsBoundedAbandonRunChoice);
     }

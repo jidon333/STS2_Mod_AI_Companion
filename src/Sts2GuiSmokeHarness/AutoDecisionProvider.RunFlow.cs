@@ -118,9 +118,15 @@ sealed partial class AutoDecisionProvider
             };
         }
 
-        if (WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(request.Observer))
+        var waitRunLoadRecoveryState = WaitRunLoadRecoverySignals.GetState(request.Observer, request.History);
+        if (waitRunLoadRecoveryState.ShouldRetryEnterRun)
         {
             return DecideEnterRun(request with { Phase = GuiSmokePhase.EnterRun.ToString() });
+        }
+
+        if (waitRunLoadRecoveryState.RecentContinueSubmissionPending)
+        {
+            return CreateWaitDecision("waiting for the submitted Continue action to resolve into a concrete run-load outcome", ControlFlowCurrentScreen(request.Observer));
         }
 
         return CreateWaitDecision("waiting for root-scene transition and run load readiness", ControlFlowCurrentScreen(request.Observer));

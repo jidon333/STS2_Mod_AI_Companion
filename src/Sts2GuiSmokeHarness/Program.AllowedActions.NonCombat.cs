@@ -79,7 +79,10 @@ internal static partial class Program
             return BuildAllowedActionsCore(postRunLoadPhase, observer, combatCardKnowledge, screenshotPath, history, context);
         }
 
-        if (phase == GuiSmokePhase.WaitRunLoad && WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(observer.Summary))
+        var waitRunLoadRecoveryState = phase == GuiSmokePhase.WaitRunLoad
+            ? WaitRunLoadRecoverySignals.GetState(observer.Summary, history)
+            : default;
+        if (phase == GuiSmokePhase.WaitRunLoad && waitRunLoadRecoveryState.ShouldRetryEnterRun)
         {
             return BuildAllowedActionsCore(GuiSmokePhase.EnterRun, observer, combatCardKnowledge, screenshotPath, history, context);
         }

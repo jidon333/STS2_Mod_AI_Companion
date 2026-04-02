@@ -579,10 +579,14 @@ internal static partial class Program
                 return true;
             }
 
-            if (WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(observer.Summary))
+            var waitRunLoadRecoveryState = WaitRunLoadRecoverySignals.GetState(observer.Summary, history);
+            if (waitRunLoadRecoveryState.ShouldRetryEnterRun)
             {
-                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "retry-enter-run", observer.CurrentScreen, DateTimeOffset.UtcNow));
-                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "retry-enter-run", observer.CurrentScreen, observer.InCombat, null));
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "retry-enter-run", observer.CurrentScreen, DateTimeOffset.UtcNow)
+                {
+                    Metadata = waitRunLoadRecoveryState.RetryReason,
+                });
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "retry-enter-run", observer.CurrentScreen, observer.InCombat, waitRunLoadRecoveryState.RetryReason));
                 nextPhase = GuiSmokePhase.EnterRun;
                 return true;
             }
