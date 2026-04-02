@@ -111,6 +111,17 @@ enum CombatReleaseSubtype
     EndTurnReopenLatency,
 }
 
+enum CombatLifecycleStage
+{
+    Unknown,
+    Inactive,
+    PlayerPlayOpen,
+    EndTurnTransit,
+    EnemyTurn,
+    PlayerReopenPending,
+    ReleasedToNonCombat,
+}
+
 enum NextRoomTransitStage
 {
     None,
@@ -138,6 +149,7 @@ sealed record NextRoomEntryState(
 
 sealed record CombatReleaseState(
     CombatBarrierKind BarrierKind,
+    CombatLifecycleStage LifecycleStage,
     CombatAuthorityState CombatAuthorityState,
     NonCombatCanonicalForegroundOwner ForegroundOwner,
     NonCombatHandoffTarget ReleaseTarget,

@@ -31,6 +31,19 @@ sealed partial class AutoDecisionProvider
                 DisplayControlFlowScreen(request.Observer));
         }
 
+        if (combatReleaseState.LifecycleStage == CombatLifecycleStage.Inactive)
+        {
+            return CreatePhaseWaitDecision(
+                GuiSmokePhase.HandleCombat,
+                "waiting for post-combat room entry to settle after combat finished",
+                DisplayControlFlowScreen(request.Observer));
+        }
+
+        if (TryCreateCombatLifecycleWaitDecision(request, combatReleaseState) is { } lifecycleWaitDecision)
+        {
+            return lifecycleWaitDecision;
+        }
+
         if (context.CombatPlayerActionWindowClosed)
         {
             return CreatePhaseWaitDecision(GuiSmokePhase.HandleCombat, "observer reports enemy turn or a closed combat play phase", DisplayControlFlowScreen(request.Observer));
@@ -38,7 +51,7 @@ sealed partial class AutoDecisionProvider
 
         if (combatBarrier.IsActive && combatBarrier.IsHardWaitBarrier)
         {
-            return CreateCombatBarrierWaitDecision(combatBarrier, DisplayControlFlowScreen(request.Observer));
+            return CreateCombatBarrierWaitDecision(combatBarrier, combatReleaseState, DisplayControlFlowScreen(request.Observer));
         }
 
         if (CardSelectionObserverSignals.TryGetState(request.Observer) is not null)
@@ -728,22 +741,52 @@ sealed partial class AutoDecisionProvider
             CombatReleaseSubtype.EndTurnReopenLatency => "waiting for combat release after EndTurn reopen latency",
             _ => "waiting for combat release",
         };
+        var lifecycleSuffix = releaseState.LifecycleStage switch
+        {
+            CombatLifecycleStage.EnemyTurn => " while enemy turn is active",
+            CombatLifecycleStage.EndTurnTransit => " during end-turn transit",
+            CombatLifecycleStage.PlayerReopenPending => " while waiting for the next player reopen",
+            _ => string.Empty,
+        };
 
         return releaseState.ReleaseTarget switch
         {
             NonCombatHandoffTarget.WaitEventRelease
-                => $"{subtypePrefix} into event release handoff",
+                => $"{subtypePrefix} into event release handoff{lifecycleSuffix}",
             NonCombatHandoffTarget.WaitMap when releaseState.HandoffState.SurfaceKind == PostNodeHandoffSurfaceKind.MapSurfacePending
-                => $"{subtypePrefix} into post-room map surface republish",
+                => $"{subtypePrefix} into post-room map surface republish{lifecycleSuffix}",
             NonCombatHandoffTarget.WaitMap
-                => $"{subtypePrefix} into map handoff",
-            _ => $"{subtypePrefix} into {FormatCombatResolutionOwner(releaseState.ForegroundOwner)} foreground handoff",
+                => $"{subtypePrefix} into map handoff{lifecycleSuffix}",
+            _ => $"{subtypePrefix} into {FormatCombatResolutionOwner(releaseState.ForegroundOwner)} foreground handoff{lifecycleSuffix}",
         };
     }
 
     internal static string BuildCombatReleaseMismatchReason(CombatReleaseState releaseState)
     {
         return $"combat release failure under noncombat foreground: barrier={releaseState.BarrierKind} subtype={releaseState.ReleaseSubtype} owner={FormatCombatResolutionOwner(releaseState.ForegroundOwner)} target={releaseState.ReleaseTarget} surface={releaseState.HandoffState.SurfaceKind}";
+    }
+
+    private static GuiSmokeStepDecision? TryCreateCombatLifecycleWaitDecision(
+        GuiSmokeStepRequest request,
+        CombatReleaseState releaseState)
+    {
+        var reason = releaseState.LifecycleStage switch
+        {
+            CombatLifecycleStage.EndTurnTransit => "waiting for end-turn transit to settle before player control can reopen",
+            CombatLifecycleStage.EnemyTurn => "waiting for enemy turn to finish before player control reopens",
+            CombatLifecycleStage.PlayerReopenPending => "waiting for the next player turn to reopen after end-turn transit",
+            _ => null,
+        };
+
+        if (reason is null)
+        {
+            return null;
+        }
+
+        return CreatePhaseWaitDecision(
+            GuiSmokePhase.HandleCombat,
+            reason,
+            DisplayControlFlowScreen(request.Observer));
     }
 
     private static GuiSmokeStepDecision CreateCombatReleaseAbortDecision(

@@ -1522,6 +1522,66 @@ internal static partial class Program
                    && !mixedSmithGridAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
                 $"Rest-site smith grid should keep smith-card allowlists ahead of stale map-overlay routing. allowed=[{string.Join(", ", mixedSmithGridAllowedActions)}]");
 
+            var genericUpgradeGridSummary = mixedSmithGridSummary with
+            {
+                Choices = Array.Empty<ObserverChoice>(),
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("upgrade-card:0", "upgrade-card", "Strike", "420,220,150,210", true)
+                    {
+                        TypeName = "card-selection-card",
+                        SemanticHints = new[] { "card-selection:upgrade", "source:grid-holder" },
+                    },
+                },
+                Meta = new Dictionary<string, string?>(mixedSmithGridSummary.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cardSelectionScreenType"] = "upgrade",
+                    ["cardSelectionSelectedCount"] = "0",
+                    ["cardSelectionPreviewVisible"] = "false",
+                    ["cardSelectionMainConfirmEnabled"] = "false",
+                    ["rootTypeSummary"] = "NDeckUpgradeSelectScreen",
+                    ["restSiteUpgradeScreenVisible"] = "true",
+                    ["restSiteUpgradeCardCount"] = "1",
+                    ["restSiteViewKind"] = "smith-grid",
+                },
+            };
+            var genericUpgradeGridRequest = restSiteMetadataRequest with
+            {
+                Observer = genericUpgradeGridSummary,
+                AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(genericUpgradeGridSummary, null, null, null)),
+            };
+            var genericUpgradeGridDecision = AutoDecisionProvider.Decide(genericUpgradeGridRequest);
+            Assert(string.Equals(genericUpgradeGridDecision.TargetLabel, "rest site: smith card", StringComparison.OrdinalIgnoreCase),
+                $"Generic upgrade card-selection surfaces should still drive the smith lane after the upgrade screen opens. actual={genericUpgradeGridDecision.TargetLabel ?? genericUpgradeGridDecision.Reason ?? genericUpgradeGridDecision.Status}");
+
+            var genericUpgradeConfirmSummary = genericUpgradeGridSummary with
+            {
+                ActionNodes = Array.Empty<ObserverActionNode>(),
+                Meta = new Dictionary<string, string?>(genericUpgradeGridSummary.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["cardSelectionScreenType"] = "upgrade",
+                    ["cardSelectionSelectedCount"] = "1",
+                    ["cardSelectionPreviewVisible"] = "true",
+                    ["cardSelectionPreviewConfirmEnabled"] = "true",
+                    ["restSiteUpgradePreviewMode"] = "single",
+                    ["restSiteUpgradeConfirmVisible"] = "true",
+                    ["restSiteUpgradeConfirmEnabled"] = "true",
+                    ["restSiteUpgradeConfirmBounds"] = "980,520,150,80",
+                    ["rootTypeSummary"] = "NDeckUpgradeSelectScreen",
+                    ["restSiteUpgradeScreenVisible"] = "true",
+                    ["restSiteUpgradeCardCount"] = "1",
+                    ["restSiteViewKind"] = "smith-confirm",
+                },
+            };
+            var genericUpgradeConfirmRequest = restSiteMetadataRequest with
+            {
+                Observer = genericUpgradeConfirmSummary,
+                AllowedActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, new ObserverState(genericUpgradeConfirmSummary, null, null, null)),
+            };
+            var genericUpgradeConfirmDecision = AutoDecisionProvider.Decide(genericUpgradeConfirmRequest);
+            Assert(string.Equals(genericUpgradeConfirmDecision.TargetLabel, "rest site: smith confirm", StringComparison.OrdinalIgnoreCase),
+                $"Upgrade preview confirm should keep the smith lane active even when only card-selection confirm metadata is exported. actual={genericUpgradeConfirmDecision.TargetLabel ?? genericUpgradeConfirmDecision.Reason ?? genericUpgradeConfirmDecision.Status}");
+
             var mixedRestAftermathSummary = restSiteMetadataSummary with
             {
                 CurrentScreen = "rest-site",

@@ -40,6 +40,13 @@ internal static partial class Program
         var safeTransitFingerprint = phase == GuiSmokePhase.HandleCombat && analysisContext is not null
             ? CombatBarrierSupport.TryBuildSafeTransitProgressFingerprint(analysisContext.CombatBarrierEvaluation, observer.Summary)
             : null;
+        var combatLifecycleFingerprint = phase == GuiSmokePhase.HandleCombat && analysisContext is not null
+            ? string.Join(":",
+                "lifecycle",
+                analysisContext.CombatReleaseState.LifecycleStage.ToString(),
+                analysisContext.RuntimeCombatState.RoundNumber?.ToString(CultureInfo.InvariantCulture) ?? "none",
+                analysisContext.RuntimeCombatState.InteractionRevision ?? "none")
+            : "lifecycle:none";
         return string.Join("|",
             phase.ToString(),
             NormalizeSceneSignatureForPlateau(sceneSignature),
@@ -49,7 +56,8 @@ internal static partial class Program
             GuiSmokeObserverPhaseHeuristics.TryReadObserverMetaString(observer.StateDocument, "declaringType") ?? "unknown",
             observer.InventoryId ?? "unknown",
             BuildActionableStateSignature(observer.ActionNodes),
-            safeTransitFingerprint ?? "transit:none");
+            safeTransitFingerprint ?? "transit:none",
+            combatLifecycleFingerprint);
     }
 
     static string BuildOverlayLoopFingerprint(string sceneSignature, ObserverState observer)

@@ -98,7 +98,8 @@ static class RestSiteObserverSignals
             string.Equals(choice.Kind, "rest-site-smith-card", StringComparison.OrdinalIgnoreCase)
             || string.Equals(choice.BindingKind, "rest-site-smith-card", StringComparison.OrdinalIgnoreCase)
             || string.Equals(choice.Kind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(choice.BindingKind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase));
+            || string.Equals(choice.BindingKind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase))
+               || HasUpgradeCardSelectionSurface(observer);
     }
 
     public static ObserverChoice? TryGetSmithConfirmChoice(ObserverSummary observer)
@@ -138,13 +139,12 @@ static class RestSiteObserverSignals
         var currentOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionCurrentOptionId"));
         var lastSignal = TryGetMetaValue(observer, "restSiteSelectionLastSignal");
         var lastOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionLastOptionId"));
+        var upgradeActionSurfacePresent = HasUpgradeCardSelectionSurface(observer);
         var upgradeChoiceObserverMiss = string.Equals(TryGetMetaValue(observer, "restSiteUpgradeObserverMiss"), "true", StringComparison.OrdinalIgnoreCase)
                                         || (string.Equals(currentStatus, "grid-visible", StringComparison.OrdinalIgnoreCase)
                                             || string.Equals(currentStatus, "confirm-visible", StringComparison.OrdinalIgnoreCase)
                                             || upgradeScreenVisible)
-                                        && !observer.Choices.Any(static choice =>
-                                            string.Equals(choice.Kind, "rest-site-smith-card", StringComparison.OrdinalIgnoreCase)
-                                            || string.Equals(choice.Kind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase));
+                                        && !upgradeActionSurfacePresent;
 
         var classification = "rest-site-post-click-noop";
         if (string.Equals(normalizedTarget, "SMITH", StringComparison.OrdinalIgnoreCase))
@@ -189,6 +189,17 @@ static class RestSiteObserverSignals
             smithGridVisible,
             smithConfirmVisible,
             upgradeChoiceObserverMiss);
+    }
+
+    private static bool HasUpgradeCardSelectionSurface(ObserverSummary observer)
+    {
+        if (CardSelectionObserverSignals.TryGetState(observer) is not { ScreenType: "upgrade" } upgradeState)
+        {
+            return false;
+        }
+
+        return CardSelectionObserverSignals.GetCardChoices(observer, upgradeState).Count > 0
+               || CardSelectionObserverSignals.TryGetConfirmChoice(observer, upgradeState) is not null;
     }
 
     private static int TryParseMetaInt(ObserverSummary observer, string key)

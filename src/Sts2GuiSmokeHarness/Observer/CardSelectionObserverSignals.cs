@@ -77,7 +77,30 @@ static class CardSelectionObserverSignals
             .ThenBy(static choice => GetSortX(choice.ScreenBounds))
             .ThenBy(static choice => GetSortY(choice.ScreenBounds))
             .ToArray();
-        return explicitChoices;
+        if (explicitChoices.Length > 0)
+        {
+            return explicitChoices;
+        }
+
+        return observer.ActionNodes
+            .Where(node => IsSubtypeCardNode(node, state.ScreenType))
+            .OrderBy(static node => node.Actionable == false ? 1 : 0)
+            .ThenBy(static node => GetSortX(node.ScreenBounds))
+            .ThenBy(static node => GetSortY(node.ScreenBounds))
+            .Select(node => new ObserverChoice(
+                BuildSubtypeCardChoiceKind(state.ScreenType),
+                node.Label,
+                node.ScreenBounds,
+                node.NodeId ?? node.Label,
+                $"{state.ScreenType} card-selection node")
+            {
+                NodeId = node.NodeId,
+                BindingKind = "card-selection-card",
+                BindingId = state.ScreenType,
+                Enabled = node.Actionable,
+                SemanticHints = BuildSubtypeCardSemanticHints(state.ScreenType, node.SemanticHints),
+            })
+            .ToArray();
     }
 
     public static ObserverChoice? TryGetConfirmChoice(ObserverSummary observer, CardSelectionSubtypeState state)
@@ -140,7 +163,37 @@ static class CardSelectionObserverSignals
 
     public static bool IsSubtypeCardChoice(ObserverChoice choice, string screenType)
     {
-        var expectedKind = screenType switch
+        var expectedKind = BuildSubtypeCardChoiceKind(screenType);
+        if (expectedKind is not null && string.Equals(choice.Kind, expectedKind, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return choice.SemanticHints.Any(hint => string.Equals(hint, $"card-selection:{screenType}", StringComparison.OrdinalIgnoreCase))
+               && !choice.SemanticHints.Any(static hint => string.Equals(hint, "confirm-mode:main", StringComparison.OrdinalIgnoreCase)
+                                                           || string.Equals(hint, "confirm-mode:preview", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsSubtypeCardNode(ObserverActionNode node, string screenType)
+    {
+        if (!node.Actionable)
+        {
+            return false;
+        }
+
+        var expectedKind = BuildSubtypeCardChoiceKind(screenType);
+        if (expectedKind is not null && string.Equals(node.Kind, expectedKind, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return string.Equals(node.TypeName, "card-selection-card", StringComparison.OrdinalIgnoreCase)
+               || node.SemanticHints.Any(hint => string.Equals(hint, $"card-selection:{screenType}", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? BuildSubtypeCardChoiceKind(string screenType)
+    {
+        return screenType switch
         {
             "transform" => "transform-card",
             "deck-remove" => "deck-remove-card",
@@ -151,14 +204,13 @@ static class CardSelectionObserverSignals
             "relic-select" => "relic-select-card",
             _ => null,
         };
-        if (expectedKind is not null && string.Equals(choice.Kind, expectedKind, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
+    }
 
-        return choice.SemanticHints.Any(hint => string.Equals(hint, $"card-selection:{screenType}", StringComparison.OrdinalIgnoreCase))
-               && !choice.SemanticHints.Any(static hint => string.Equals(hint, "confirm-mode:main", StringComparison.OrdinalIgnoreCase)
-                                                           || string.Equals(hint, "confirm-mode:preview", StringComparison.OrdinalIgnoreCase));
+    private static string[] BuildSubtypeCardSemanticHints(string screenType, IReadOnlyList<string> semanticHints)
+    {
+        return semanticHints.Any(hint => string.Equals(hint, $"card-selection:{screenType}", StringComparison.OrdinalIgnoreCase))
+            ? semanticHints.ToArray()
+            : semanticHints.Concat(new[] { $"card-selection:{screenType}" }).ToArray();
     }
 
     private static ObserverChoice? TryCreateMetaBackedConfirmChoice(

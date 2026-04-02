@@ -243,6 +243,21 @@ sealed partial class AutoDecisionProvider
             builder.AddSuppressed("click first reachable node", "rest-site-upgrade-observer-state-suppresses-map-routing");
             builder.AddSuppressed("click visible map advance", "rest-site-upgrade-observer-state-suppresses-current-node-arrow");
             builder.AddSuppressed("click map back", "rest-site-upgrade-observer-state-remains-foreground-authority");
+            if (TryCreateRestSiteUpgradeDecision(request) is { } upgradeDecision)
+            {
+                builder.Consider(
+                    ToCandidateLabel(upgradeDecision, "click smith card"),
+                    "rest-site-upgrade",
+                    upgradeDecision.TargetLabel?.Contains("confirm", StringComparison.OrdinalIgnoreCase) == true ? 0.95d : 0.92d,
+                    () => upgradeDecision,
+                    "rest-site-upgrade-grid-not-visible",
+                    rawBounds: TryFindRestSiteUpgradeBounds(request, upgradeDecision),
+                    boundsSource: TryResolveRestSiteUpgradeBoundsSource(request, upgradeDecision));
+                return builder.Build(
+                    CreateWaitDecision("waiting for smith grid or confirm state", DisplayControlFlowScreen(request.Observer)),
+                    actualDecision);
+            }
+
             var observerMissDecision = CreateRestSitePostClickNoOpWaitDecision(request, "rest site: smith", DisplayControlFlowScreen(request.Observer));
             builder.Consider(
                 "click smith card",

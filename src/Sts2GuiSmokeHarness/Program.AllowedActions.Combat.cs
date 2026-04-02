@@ -35,6 +35,18 @@ internal static partial class Program
             return new[] { "wait" };
         }
 
+        if (context.CombatReleaseState.LifecycleStage == CombatLifecycleStage.Inactive)
+        {
+            return new[] { "wait" };
+        }
+
+        if (context.CombatReleaseState.LifecycleStage is CombatLifecycleStage.EndTurnTransit
+            or CombatLifecycleStage.EnemyTurn
+            or CombatLifecycleStage.PlayerReopenPending)
+        {
+            return new[] { "wait" };
+        }
+
         if (context.CombatPlayerActionWindowClosed)
         {
             return new[] { "wait" };

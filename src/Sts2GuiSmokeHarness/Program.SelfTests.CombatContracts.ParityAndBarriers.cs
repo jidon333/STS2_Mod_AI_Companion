@@ -1030,6 +1030,14 @@ internal static partial class Program
                     endTurnBarrierKnowledge)
                     .CombatBarrierEvaluation.IsActive,
                 "EndTurn barrier should remain active during the acknowledged closed-window band.");
+            Assert(CreateStepAnalysisContext(
+                    GuiSmokePhase.HandleCombat,
+                    new ObserverState(endTurnBarrierAckObserver, null, null, null),
+                    runtimeStateOnlyScreenshotPath,
+                    endTurnBarrierHistory,
+                    endTurnBarrierKnowledge)
+                    .CombatReleaseState.LifecycleStage == CombatLifecycleStage.EndTurnTransit,
+                "Acknowledged end-turn close should surface as EndTurnTransit before enemy turn or player reopen.");
             Assert(!CreateStepAnalysisContext(
                     GuiSmokePhase.HandleCombat,
                     new ObserverState(endTurnBarrierAckObserver, null, null, null),
@@ -1139,10 +1147,45 @@ internal static partial class Program
                 Assert(
                     !CombatBarrierSupport.TryClassifyWaitPlateau(transitRequest, transitContext, endTurnTransitWaitCount, out _, out _),
                     "Acknowledged EndTurn transit with authority progress should not classify as combat-barrier-wait-plateau.");
-                Assert(
-                    !TryClassifyDecisionWaitPlateau(GuiSmokePhase.HandleCombat, transitObserverState, endTurnTransitWaitCount, out _, out _),
-                    "Acknowledged EndTurn transit with authority progress should not classify as generic decision-wait-plateau.");
+            Assert(
+                !TryClassifyDecisionWaitPlateau(GuiSmokePhase.HandleCombat, transitObserverState, endTurnTransitWaitCount, out _, out _),
+                "Acknowledged EndTurn transit with authority progress should not classify as generic decision-wait-plateau.");
             }
+
+            var acknowledgedTransitDecision = AutoDecisionProvider.Decide(BuildBarrierRequest(
+                "0007-ack",
+                39,
+                endTurnBarrierAckObserver,
+                endTurnBarrierKnowledge,
+                endTurnBarrierAckActions,
+                endTurnBarrierHistory,
+                "Acknowledged EndTurn transit should prefer lifecycle wait wording."));
+            Assert(
+                string.Equals(acknowledgedTransitDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                && acknowledgedTransitDecision.Reason?.Contains("end-turn transit", StringComparison.OrdinalIgnoreCase) == true
+                && acknowledgedTransitDecision.Reason?.Contains("combat barrier wait", StringComparison.OrdinalIgnoreCase) != true,
+                $"Acknowledged end-turn transit should now speak in lifecycle terms instead of barrier terms. actual={acknowledgedTransitDecision.Reason ?? acknowledgedTransitDecision.Status}");
+
+            var enemyTurnTransitObserver = endTurnTransitProgressObservers[1];
+            var enemyTurnTransitActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(enemyTurnTransitObserver, null, null, null),
+                endTurnBarrierKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory);
+            var enemyTurnTransitDecision = AutoDecisionProvider.Decide(BuildBarrierRequest(
+                "0007-enemy-turn",
+                41,
+                enemyTurnTransitObserver,
+                endTurnBarrierKnowledge,
+                enemyTurnTransitActions,
+                endTurnBarrierHistory,
+                "Enemy turn transit should use lifecycle ownership."));
+            Assert(
+                string.Equals(enemyTurnTransitDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                && enemyTurnTransitDecision.Reason?.Contains("enemy turn", StringComparison.OrdinalIgnoreCase) == true
+                && enemyTurnTransitDecision.Reason?.Contains("combat barrier wait", StringComparison.OrdinalIgnoreCase) != true,
+                $"Enemy-turn transit should prefer lifecycle wait wording instead of barrier wait. actual={enemyTurnTransitDecision.Reason ?? enemyTurnTransitDecision.Status}");
 
             var frozenEndTurnTransitObserver = endTurnBarrierSeedObserver with
             {
@@ -1203,6 +1246,40 @@ internal static partial class Program
                 TryClassifyDecisionWaitPlateau(GuiSmokePhase.HandleCombat, new ObserverState(frozenEndTurnTransitObserver, null, null, null), frozenEndTurnTransitWaitCount, out var frozenTransitCause, out _)
                 && string.Equals(frozenTransitCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase),
                 "Frozen acknowledged EndTurn transit should still be stallable via the generic wait plateau path.");
+
+            var playerReopenPendingObserver = endTurnBarrierSeedObserver with
+            {
+                CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(1300),
+                InventoryId = "inv-end-turn-reopen-pending",
+                SnapshotVersion = 58,
+                Meta = new Dictionary<string, string?>(endTurnBarrierSeedObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatRoundNumber"] = "2",
+                    ["combatPlayerActionsDisabled"] = "false",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=false;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false",
+                },
+            };
+            var playerReopenPendingActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(playerReopenPendingObserver, null, null, null),
+                endTurnBarrierKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory);
+            var playerReopenPendingDecision = AutoDecisionProvider.Decide(BuildBarrierRequest(
+                "0007-reopen-pending",
+                54,
+                playerReopenPendingObserver,
+                endTurnBarrierKnowledge,
+                playerReopenPendingActions,
+                endTurnBarrierHistory,
+                "Pending player reopen should use lifecycle wait wording."));
+            Assert(
+                string.Equals(playerReopenPendingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                && playerReopenPendingDecision.Reason?.Contains("next player turn to reopen", StringComparison.OrdinalIgnoreCase) == true
+                && playerReopenPendingDecision.Reason?.Contains("combat barrier wait", StringComparison.OrdinalIgnoreCase) != true,
+                $"Player-reopen pending should prefer lifecycle wait wording instead of barrier wait. actual={playerReopenPendingDecision.Reason ?? playerReopenPendingDecision.Status}");
 
             var endTurnBarrierReopenedObserver = endTurnBarrierSeedObserver with
             {

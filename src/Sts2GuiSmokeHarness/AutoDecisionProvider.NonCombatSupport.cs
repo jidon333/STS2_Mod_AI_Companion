@@ -671,6 +671,12 @@ sealed partial class AutoDecisionProvider
             return RestSiteExplicitChoiceRepeatState.None;
         }
 
+        if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(request.Observer)
+            || CardSelectionObserverSignals.TryGetState(request.Observer) is { ScreenType: "upgrade" })
+        {
+            return RestSiteExplicitChoiceRepeatState.None;
+        }
+
         var fingerprint = RestSiteChoiceSupport.BuildExplicitChoiceFingerprint(request.Observer);
         for (var index = request.History.Count - 1; index >= 0; index -= 1)
         {
@@ -1178,9 +1184,16 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateRestSiteUpgradeDecision(GuiSmokeStepRequest request)
     {
-        if (!GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(request.Observer))
+        if (!GuiSmokeNonCombatContractSupport.LooksLikeRestSiteState(request.Observer)
+            && CardSelectionObserverSignals.TryGetState(request.Observer) is not { ScreenType: "upgrade" })
         {
             return null;
+        }
+
+        var upgradeCardSelectionDecision = TryCreateRestSiteUpgradeCardSelectionDecision(request);
+        if (upgradeCardSelectionDecision is not null)
+        {
+            return upgradeCardSelectionDecision;
         }
 
         var observerConfirmChoice = RestSiteObserverSignals.TryGetSmithConfirmChoice(request.Observer);
@@ -1239,6 +1252,49 @@ sealed partial class AutoDecisionProvider
             1400,
             true,
             null);
+    }
+
+    private static GuiSmokeStepDecision? TryCreateRestSiteUpgradeCardSelectionDecision(GuiSmokeStepRequest request)
+    {
+        if (CardSelectionObserverSignals.TryGetState(request.Observer) is not { ScreenType: "upgrade" } state)
+        {
+            return null;
+        }
+
+        if (CardSelectionObserverSignals.IsConfirmReady(state))
+        {
+            var confirmChoice = CardSelectionObserverSignals.TryGetConfirmChoice(request.Observer, state);
+            if (confirmChoice is not null
+                && confirmChoice.Enabled != false
+                && HasActiveNodeBounds(confirmChoice.ScreenBounds, request.WindowBounds))
+            {
+                return CreateClickDecisionFromChoice(
+                    request,
+                    confirmChoice,
+                    "rest site: smith confirm",
+                    "Smith upgrade preview is confirm-ready. Confirm the selected upgrade instead of reopening the rest-site smith lane.",
+                    0.96,
+                    ResolveObserverScreen(request.Observer, "upgrade"),
+                    1400);
+            }
+        }
+
+        var cardChoice = CardSelectionObserverSignals.GetCardChoices(request.Observer, state)
+            .Where(choice => choice.Enabled != false && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))
+            .FirstOrDefault();
+        if (cardChoice is null)
+        {
+            return null;
+        }
+
+        return CreateClickDecisionFromChoice(
+            request,
+            cardChoice,
+            "rest site: smith card",
+            "Smith upgrade screen is foreground-active. Select an explicit upgrade card surface before any rest-site fallback.",
+            0.95,
+            ResolveObserverScreen(request.Observer, "upgrade"),
+            1400);
     }
 
     private static GuiSmokeStepDecision? TryCreateRestSiteProceedDecision(GuiSmokeStepRequest request)

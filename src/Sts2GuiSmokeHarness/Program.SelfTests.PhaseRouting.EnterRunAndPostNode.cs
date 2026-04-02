@@ -1780,12 +1780,13 @@ internal static partial class Program
                 Assert(
                     releaseState is
                     {
+                        LifecycleStage: CombatLifecycleStage.ReleasedToNonCombat,
                         ForegroundOwner: NonCombatCanonicalForegroundOwner.Shop,
                         ReleaseTarget: NonCombatHandoffTarget.HandleShop,
                         HasExplicitForegroundSurface: true,
                         ReleaseMismatch: false,
                     },
-                    $"Combat release should hand off to shop when explicit shop entry wins over reward/combat residue. Actual owner={releaseState.ForegroundOwner} target={releaseState.ReleaseTarget} explicit={releaseState.HasExplicitForegroundSurface} mismatch={releaseState.ReleaseMismatch}.");
+                    $"Combat release should hand off to shop when explicit shop entry wins over reward/combat residue. Actual lifecycle={releaseState.LifecycleStage} owner={releaseState.ForegroundOwner} target={releaseState.ReleaseTarget} explicit={releaseState.HasExplicitForegroundSurface} mismatch={releaseState.ReleaseMismatch}.");
 
                 var rebuiltReplayArtifact = EvaluateAutoDecisionWithDiagnostics(postMapShopReplayPath, rebuiltReplayRequest).CandidateDump;
                 Assert(

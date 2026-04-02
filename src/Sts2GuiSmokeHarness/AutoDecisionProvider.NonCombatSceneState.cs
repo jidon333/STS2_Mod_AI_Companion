@@ -153,6 +153,7 @@ sealed partial class AutoDecisionProvider
         var nextRoomEntryState = BuildNextRoomEntryState(observer, windowBounds, history, screenshotPath);
         handoffState ??= BuildCombatResolutionHandoffState(observer, windowBounds, history, screenshotPath);
         combatBarrier ??= CombatBarrierSupport.Inactive;
+        var runtime = CombatRuntimeStateSupport.Read(observer.Summary, Array.Empty<CombatCardKnowledgeHint>());
 
         if (nextRoomEntryState.HasExplicitWinner
             && nextRoomEntryState.HandoffTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat)
@@ -174,14 +175,21 @@ sealed partial class AutoDecisionProvider
             CombatBarrierKind.EndTurn => CombatReleaseSubtype.EndTurnReopenLatency,
             _ => CombatReleaseSubtype.None,
         };
+        var lifecycleStage = DetermineCombatLifecycleStage(observer.Summary, runtime, nextRoomEntryState, handoffState);
         var combatAuthorityState = releaseTarget is NonCombatHandoffTarget.None or NonCombatHandoffTarget.HandleCombat
             ? CombatAuthorityState.Active
             : hasExplicitForegroundSurface
                 ? CombatAuthorityState.Released
                 : CombatAuthorityState.ResidueOnly;
+        if (lifecycleStage == CombatLifecycleStage.Inactive
+            && combatAuthorityState == CombatAuthorityState.Active)
+        {
+            combatAuthorityState = CombatAuthorityState.ResidueOnly;
+        }
 
         return new CombatReleaseState(
             combatBarrier.Kind,
+            lifecycleStage,
             combatAuthorityState,
             foregroundOwner,
             releaseTarget,
@@ -190,6 +198,64 @@ sealed partial class AutoDecisionProvider
             releaseMismatch,
             releaseSubtype,
             handoffState);
+    }
+
+    private static CombatLifecycleStage DetermineCombatLifecycleStage(
+        ObserverSummary observer,
+        CombatRuntimeState runtime,
+        NextRoomEntryState nextRoomEntryState,
+        PostNodeHandoffState handoffState)
+    {
+        if ((nextRoomEntryState.HasExplicitWinner
+             && nextRoomEntryState.Owner is not (NonCombatCanonicalForegroundOwner.Unknown or NonCombatCanonicalForegroundOwner.Combat))
+            || (handoffState.Owner is not NonCombatCanonicalForegroundOwner.Combat
+                && handoffState.HandoffTarget is not NonCombatHandoffTarget.None and not NonCombatHandoffTarget.HandleCombat
+                && handoffState.HasExplicitSurface))
+        {
+            return CombatLifecycleStage.ReleasedToNonCombat;
+        }
+
+        bool? combatInProgress = observer.InCombat;
+        if (combatInProgress is null
+            && bool.TryParse(CombatAuthoritySupport.TryGetMetaValue(observer, "combatPrimaryValue"), out var parsedPrimary))
+        {
+            combatInProgress = parsedPrimary;
+        }
+        var isPlayPhase = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsPlayPhase", "CombatManager.IsPlayPhase");
+        var isEnemyTurnStarted = CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsEnemyTurnStarted", "CombatManager.IsEnemyTurnStarted");
+        if (combatInProgress == false)
+        {
+            return CombatLifecycleStage.Inactive;
+        }
+
+        var playerWindowOpen = isPlayPhase == true
+                               && isEnemyTurnStarted == false
+                               && runtime.PlayerActionsDisabled == false
+                               && runtime.EndingPlayerTurnPhaseOne == false
+                               && runtime.EndingPlayerTurnPhaseTwo == false;
+        if (playerWindowOpen)
+        {
+            return CombatLifecycleStage.PlayerPlayOpen;
+        }
+
+        if (isEnemyTurnStarted == true)
+        {
+            return CombatLifecycleStage.EnemyTurn;
+        }
+
+        if (runtime.PlayerActionsDisabled == true
+            || runtime.EndingPlayerTurnPhaseOne == true
+            || runtime.EndingPlayerTurnPhaseTwo == true)
+        {
+            return CombatLifecycleStage.EndTurnTransit;
+        }
+
+        if (isPlayPhase == false)
+        {
+            return CombatLifecycleStage.PlayerReopenPending;
+        }
+
+        return CombatLifecycleStage.Unknown;
     }
 
     internal static NextRoomEntryState BuildNextRoomEntryState(
