@@ -208,6 +208,35 @@ internal static partial class Program
                 ShouldContinueLoop: false);
         }
 
+        if (TryClassifyRestSiteChoiceNotReadyWait(
+                phase,
+                request,
+                decision,
+                loopTracking.ConsecutiveDecisionWaitCount,
+                out var restSiteChoiceNotReadyCause,
+                out var restSiteChoiceNotReadyMessage))
+        {
+            LogHarness($"step={stepIndex} abort {restSiteChoiceNotReadyMessage}");
+            AppendProgressIfLongRun(
+                isLongRun,
+                logger,
+                EvaluateStepProgress(
+                    stepIndex,
+                    phase,
+                    request.SceneSignature,
+                    observer,
+                    null,
+                    decision,
+                    request.FirstSeenScene,
+                    request.ReasoningMode,
+                    false,
+                    loopTracking.SameActionStallCount,
+                    "rest-site-choice-not-click-ready"));
+            return new GuiSmokeDecisionStatusResult(
+                CompleteFailure(restSiteChoiceNotReadyMessage, restSiteChoiceNotReadyCause),
+                ShouldContinueLoop: false);
+        }
+
         if (TryClassifyDecisionWaitPlateau(phase, observer, loopTracking.ConsecutiveDecisionWaitCount, out var plateauTerminalCause, out var plateauMessage))
         {
             LogHarness($"step={stepIndex} abort {plateauMessage}");
@@ -893,5 +922,28 @@ internal static partial class Program
                && handoffState.SurfaceKind == PostNodeHandoffSurfaceKind.RestSiteReleasePending
                && !handoffState.HasExplicitSurface
                && analysisContext.CanonicalNonCombatScene is RestSiteSceneState { SelectionAcceptedRecently: true };
+    }
+
+    static bool TryClassifyRestSiteChoiceNotReadyWait(
+        GuiSmokePhase phase,
+        GuiSmokeStepRequest request,
+        GuiSmokeStepDecision decision,
+        int consecutiveDecisionWaitCount,
+        out string terminalCause,
+        out string message)
+    {
+        terminalCause = string.Empty;
+        message = string.Empty;
+        if (phase is not (GuiSmokePhase.ChooseFirstNode or GuiSmokePhase.WaitMap or GuiSmokePhase.WaitPostMapNodeRoom)
+            || consecutiveDecisionWaitCount < 4
+            || !string.Equals(decision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(decision.DecisionRisk, "rest-site-choice-not-click-ready", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        terminalCause = "rest-site-choice-not-click-ready";
+        message = $"rest-site-choice-not-click-ready phase={phase} screen={request.Observer.CurrentScreen ?? request.Observer.VisibleScreen ?? "null"} waits={consecutiveDecisionWaitCount} extractor={request.Observer.ChoiceExtractorPath ?? "null"} clickReady={RestSiteObserverSignals.TryGetMetaValue(request.Observer, "restSiteClickReadyOptionIds") ?? "null"} currentStatus={RestSiteObserverSignals.TryGetMetaValue(request.Observer, "restSiteSelectionCurrentStatus") ?? "null"} visibleSummary={RestSiteObserverSignals.TryGetMetaValue(request.Observer, "restSiteVisibleOptionSummary") ?? "null"}";
+        return true;
     }
 }

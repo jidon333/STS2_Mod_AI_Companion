@@ -43,6 +43,7 @@ static partial class LongRunArtifacts
         var useOverlayAnalysis = string.Equals(diagnosisKind, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase);
         var useWaitAnalysis = string.Equals(diagnosisKind, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
                               || string.Equals(diagnosisKind, "combat-entry-surface-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(diagnosisKind, "combat-enemy-click-resolution-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
                               || string.Equals(diagnosisKind, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase)
                               || string.Equals(diagnosisKind, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                               || string.Equals(diagnosisKind, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase);
@@ -213,7 +214,7 @@ static partial class LongRunArtifacts
             attemptEntry.AttemptId,
             attemptEntry.AttemptOrdinal,
             diagnosisKind,
-            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "combat-entry-surface-pending-wait-plateau" or "combat-lifecycle-transit-wait-plateau" or "combat-barrier-wait-plateau" or "combat-release-failure-under-noncombat-foreground" or "reward-aftermath-card-progression-stall" or "rest-site-release-map-handoff-stall" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "combat-entry-surface-pending-step-budget-exhausted" or "combat-lifecycle-transit-step-budget-exhausted" or "combat-barrier-step-budget-exhausted" or "combat-barrier-handoff-mismatch" or "rest-site-post-click-noop" or "rest-site-selection-failed" or "rest-site-grid-not-visible-after-selection" or "rest-site-grid-observer-miss" or "ancient-event-option-contract-mismatch" or "post-node-handoff-contract-mismatch",
+            diagnosisKind is "same-action-stall" or "scene-authority-invalid" or "phase-timeout" or "decision-abort" or "phase-mismatch-stall" or "decision-wait-plateau" or "combat-entry-surface-pending-wait-plateau" or "combat-enemy-click-resolution-pending-wait-plateau" or "combat-lifecycle-transit-wait-plateau" or "combat-barrier-wait-plateau" or "combat-release-failure-under-noncombat-foreground" or "reward-aftermath-card-progression-stall" or "rest-site-release-map-handoff-stall" or "rest-site-choice-not-click-ready" or "inspect-overlay-loop" or "reward-map-loop" or "map-overlay-noop-loop" or "map-transition-stall" or "combat-noop-loop" or "combat-entry-surface-pending-step-budget-exhausted" or "combat-enemy-click-resolution-pending-step-budget-exhausted" or "combat-lifecycle-transit-step-budget-exhausted" or "combat-barrier-step-budget-exhausted" or "combat-barrier-handoff-mismatch" or "rest-site-post-click-noop" or "rest-site-selection-failed" or "rest-site-grid-not-visible-after-selection" or "rest-site-grid-observer-miss" or "ancient-event-option-contract-mismatch" or "post-node-handoff-contract-mismatch",
             attemptEntry.FailureClass,
             attemptEntry.TerminalCause,
             phase,
@@ -232,14 +233,17 @@ static partial class LongRunArtifacts
             || string.Equals(diagnosisKind, "rest-site-grid-not-visible-after-selection", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "combat-entry-surface-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "combat-enemy-click-resolution-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "combat-entry-surface-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "combat-enemy-click-resolution-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "reward-aftermath-card-progression-stall", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "rest-site-release-map-handoff-stall", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(diagnosisKind, "rest-site-choice-not-click-ready", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "ancient-event-option-contract-mismatch", StringComparison.OrdinalIgnoreCase)
             || string.Equals(diagnosisKind, "post-node-handoff-contract-mismatch", StringComparison.OrdinalIgnoreCase),
             backlogRoute,
@@ -276,6 +280,12 @@ static partial class LongRunArtifacts
             return "combat-entry-surface-pending-step-budget-exhausted";
         }
 
+        if (string.Equals(attemptEntry.TerminalCause, "combat-enemy-click-resolution-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "combat-enemy-click-resolution-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "combat-enemy-click-resolution-pending-step-budget-exhausted";
+        }
+
         if (string.Equals(attemptEntry.TerminalCause, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
             || string.Equals(attemptEntry.FailureClass, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase))
         {
@@ -304,6 +314,12 @@ static partial class LongRunArtifacts
             || string.Equals(attemptEntry.FailureClass, "combat-entry-surface-pending-wait-plateau", StringComparison.OrdinalIgnoreCase))
         {
             return "combat-entry-surface-pending-wait-plateau";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "combat-enemy-click-resolution-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "combat-enemy-click-resolution-pending-wait-plateau", StringComparison.OrdinalIgnoreCase))
+        {
+            return "combat-enemy-click-resolution-pending-wait-plateau";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase)
@@ -380,6 +396,12 @@ static partial class LongRunArtifacts
             || string.Equals(attemptEntry.FailureClass, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase))
         {
             return "rest-site-grid-observer-miss";
+        }
+
+        if (string.Equals(attemptEntry.TerminalCause, "rest-site-choice-not-click-ready", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(attemptEntry.FailureClass, "rest-site-choice-not-click-ready", StringComparison.OrdinalIgnoreCase))
+        {
+            return "rest-site-choice-not-click-ready";
         }
 
         if (string.Equals(attemptEntry.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)

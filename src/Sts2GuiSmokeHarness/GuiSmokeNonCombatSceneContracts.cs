@@ -372,6 +372,7 @@ sealed record ShopSceneState(
 
 sealed record RestSiteSceneState(
     bool ExplicitChoiceVisible,
+    bool ExplicitChoiceReady,
     bool SmithUpgradeActive,
     bool SmithConfirmVisible,
     bool ProceedVisible,

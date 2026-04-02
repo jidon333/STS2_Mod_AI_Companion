@@ -54,15 +54,27 @@ static class RestSiteChoiceSupport
 
     public static IReadOnlyList<string> BuildAllowedActions(ObserverSummary observer)
     {
-        return GetObservedChoices(observer)
-            .Select(static choice => choice.CandidateLabel)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Concat(new[] { "click smith card", "click smith confirm", "wait" })
-            .ToArray();
+        var selectedChoice = TryGetSelectedObservedChoice(observer);
+        if (selectedChoice is null)
+        {
+            return new[] { "wait" };
+        }
+
+        var selectedChoiceHasSurface = selectedChoice.Choice is not null || selectedChoice.ActionNode is not null;
+        return RestSiteObserverSignals.IsRestSiteChoiceClickReady(observer, selectedChoice.OptionId)
+               && selectedChoiceHasSurface
+            ? new[] { selectedChoice.CandidateLabel, "wait" }
+            : new[] { "wait" };
     }
 
     public static IReadOnlyList<string> BuildCandidateLabels(ObserverSummary observer)
-        => BuildAllowedActions(observer);
+    {
+        return GetObservedChoices(observer)
+            .Select(static choice => choice.CandidateLabel)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Append("wait")
+            .ToArray();
+    }
 
     public static bool HasAuthoritativeMetadata(ObserverSummary observer)
         => GetObservedChoices(observer).Any(static choice => choice.HasMetadata);
@@ -240,6 +252,18 @@ static class RestSiteChoiceSupport
         }
 
         return null;
+    }
+
+    public static RestSiteObservedChoice? TryGetSelectedObservedChoice(ObserverSummary observer)
+    {
+        var selectedOptionId = DetermineAutoPickOptionId(observer);
+        if (string.IsNullOrWhiteSpace(selectedOptionId))
+        {
+            return null;
+        }
+
+        return GetObservedChoices(observer)
+            .FirstOrDefault(choice => string.Equals(choice.OptionId, selectedOptionId, StringComparison.OrdinalIgnoreCase));
     }
 
     private static RestSiteObservedChoice? CreateObservedChoiceFromMetadata(ObserverSummary observer, ObserverChoice choice)

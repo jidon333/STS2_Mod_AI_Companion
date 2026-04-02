@@ -67,6 +67,34 @@ static class NonCombatForegroundOwnership
         return HasExplicitMapForegroundAuthority(new ObserverState(observer, null, null, null));
     }
 
+    public static bool HasPostNodeMapForegroundAuthority(ObserverState observer)
+    {
+        var rawMapAuthority = HasExplicitMapForegroundAuthority(observer);
+        if (!rawMapAuthority
+            || HasAuthoritativeMapForegroundScreen(observer))
+        {
+            return rawMapAuthority;
+        }
+
+        if (AutoDecisionProvider.BuildRestSiteSceneState(observer) is
+            {
+                ReleaseStage: NonCombatReleaseStage.ReleasePending,
+                ProceedVisible: false,
+                SmithUpgradeActive: false,
+                ExplicitChoiceVisible: false,
+            })
+        {
+            return false;
+        }
+
+        return rawMapAuthority;
+    }
+
+    public static bool HasPostNodeMapForegroundAuthority(ObserverSummary observer)
+    {
+        return HasPostNodeMapForegroundAuthority(new ObserverState(observer, null, null, null));
+    }
+
     public static bool HasAuthoritativeMapForegroundScreen(ObserverState observer)
     {
         if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)

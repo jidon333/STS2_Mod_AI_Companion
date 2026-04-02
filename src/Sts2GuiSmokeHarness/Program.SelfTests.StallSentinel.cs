@@ -135,6 +135,89 @@ internal static partial class Program
             }
         }
 
+        var restSiteClickReadySentinelRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-rest-site-click-ready-sentinel-self-test-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(restSiteClickReadySentinelRoot);
+            var runRoot = Path.Combine(restSiteClickReadySentinelRoot, "attempts", "0001");
+            Directory.CreateDirectory(runRoot);
+            LongRunArtifacts.InitializeSessionArtifacts(restSiteClickReadySentinelRoot, "rest-site-click-ready-session", "boot-to-long-run", "headless");
+            File.WriteAllLines(
+                Path.Combine(restSiteClickReadySentinelRoot, "attempt-index.ndjson"),
+                new[]
+                {
+                    JsonSerializer.Serialize(
+                        new GuiSmokeAttemptIndexEntry(
+                            "0001",
+                            1,
+                            "rest-site-click-ready-session",
+                            "failed",
+                            "synthetic rest-site click-ready stall",
+                            DateTimeOffset.UtcNow.AddSeconds(-30),
+                            DateTimeOffset.UtcNow.AddSeconds(-5),
+                            7,
+                            "rest-site-choice-not-click-ready",
+                            false,
+                            "rest-site-choice-not-click-ready",
+                            GuiSmokeContractStates.TrustValid),
+                        GuiSmokeShared.NdjsonOptions),
+                });
+            File.WriteAllText(
+                Path.Combine(runRoot, "failure-summary.json"),
+                JsonSerializer.Serialize(
+                    new GuiSmokeFailureSummary(
+                        GuiSmokePhase.ChooseFirstNode.ToString(),
+                        "rest-site-choice-not-click-ready synthetic failure",
+                        "rest-site",
+                        false,
+                        "synthetic-rest-site-choice-not-click-ready.png"),
+                    GuiSmokeShared.JsonOptions));
+            LongRunArtifacts.RefreshStallSentinel(restSiteClickReadySentinelRoot);
+            var diagnosisEntries = File.ReadLines(Path.Combine(restSiteClickReadySentinelRoot, "stall-diagnosis.ndjson"))
+                .Where(static line => !string.IsNullOrWhiteSpace(line))
+                .Select(line => JsonSerializer.Deserialize<GuiSmokeStallDiagnosisEntry>(line, GuiSmokeShared.JsonOptions))
+                .Where(static entry => entry is not null)
+                .Cast<GuiSmokeStallDiagnosisEntry>()
+                .ToArray();
+            Assert(diagnosisEntries.Length == 1, "Expected a single stall diagnosis entry for the synthetic rest-site click-ready attempt.");
+            Assert(string.Equals(diagnosisEntries[0].DiagnosisKind, "rest-site-choice-not-click-ready", StringComparison.OrdinalIgnoreCase)
+                   && diagnosisEntries[0].StallDetected,
+                "Stall sentinel should preserve rest-site-choice-not-click-ready as a first-class diagnosis kind.");
+        }
+        finally
+        {
+            if (Directory.Exists(restSiteClickReadySentinelRoot))
+            {
+                Directory.Delete(restSiteClickReadySentinelRoot, recursive: true);
+            }
+        }
+
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.ChooseFirstNode,
+                    observer: null,
+                    terminalCause: "rest-site-choice-not-click-ready",
+                    launchFailed: false),
+                "rest-site-choice-not-click-ready",
+                StringComparison.OrdinalIgnoreCase),
+            "Rest-site click-ready stalls should stay a first-class failure class instead of collapsing to generic wait plateau.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
+                    "rest-site-click-ready-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic rest-site click-ready stall",
+                    7,
+                    false,
+                    "rest-site-choice-not-click-ready",
+                    "rest-site-choice-not-click-ready",
+                    GuiSmokeContractStates.TrustValid)),
+            "Rest-site click-ready stalls should count as dead-end attempts for supervision.");
         Assert(
             string.Equals(
                 ClassifyFailureForAttempt(
@@ -202,6 +285,16 @@ internal static partial class Program
                 ClassifyFailureForAttempt(
                     GuiSmokePhase.HandleCombat,
                     observer: null,
+                    terminalCause: "combat-enemy-click-resolution-pending-step-budget-exhausted",
+                    launchFailed: false),
+                "combat-enemy-click-resolution-pending-step-budget-exhausted",
+                StringComparison.OrdinalIgnoreCase),
+            "EnemyClick resolution pending step-budget exhaustion should stay a first-class failure class instead of collapsing to generic max-step failure.");
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.HandleCombat,
+                    observer: null,
                     terminalCause: "combat-lifecycle-transit-step-budget-exhausted",
                     launchFailed: false),
                 "combat-lifecycle-transit-step-budget-exhausted",
@@ -248,6 +341,22 @@ internal static partial class Program
                 new GuiSmokeAttemptResult(
                     "0001",
                     1,
+                    "combat-enemy-click-resolution-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic enemy-click resolution pending step-budget exhaustion",
+                    180,
+                    false,
+                    "combat-enemy-click-resolution-pending-step-budget-exhausted",
+                    "combat-enemy-click-resolution-pending-step-budget-exhausted",
+                    GuiSmokeContractStates.TrustValid)),
+            "EnemyClick resolution pending step-budget exhaustion should count as a dead-end attempt for supervision.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
                     "combat-lifecycle-session",
                     "synthetic-run-root",
                     1,
@@ -269,6 +378,16 @@ internal static partial class Program
                 "combat-entry-surface-pending-wait-plateau",
                 StringComparison.OrdinalIgnoreCase),
             "Combat entry surface pending wait plateau should stay a first-class failure class instead of collapsing to generic decision-wait-plateau.");
+        Assert(
+            string.Equals(
+                ClassifyFailureForAttempt(
+                    GuiSmokePhase.HandleCombat,
+                    observer: null,
+                    terminalCause: "combat-enemy-click-resolution-pending-wait-plateau",
+                    launchFailed: false),
+                "combat-enemy-click-resolution-pending-wait-plateau",
+                StringComparison.OrdinalIgnoreCase),
+            "EnemyClick resolution pending wait plateau should stay a first-class failure class instead of collapsing to generic decision-wait-plateau.");
         Assert(
             IsSceneDeadEndAttempt(
                 new GuiSmokeAttemptResult(
@@ -317,6 +436,22 @@ internal static partial class Program
                     "combat-lifecycle-transit-wait-plateau",
                     GuiSmokeContractStates.TrustValid)),
             "Combat lifecycle transit wait plateau should count as a dead-end attempt for supervision.");
+        Assert(
+            IsSceneDeadEndAttempt(
+                new GuiSmokeAttemptResult(
+                    "0001",
+                    1,
+                    "combat-enemy-click-wait-session",
+                    "synthetic-run-root",
+                    1,
+                    "failed",
+                    "synthetic enemy-click resolution pending wait plateau",
+                    18,
+                    false,
+                    "combat-enemy-click-resolution-pending-wait-plateau",
+                    "combat-enemy-click-resolution-pending-wait-plateau",
+                    GuiSmokeContractStates.TrustValid)),
+            "EnemyClick resolution pending wait plateau should count as a dead-end attempt for supervision.");
         Assert(
             IsSceneDeadEndAttempt(
                 new GuiSmokeAttemptResult(

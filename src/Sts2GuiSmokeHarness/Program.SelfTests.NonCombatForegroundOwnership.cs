@@ -1097,6 +1097,113 @@ internal static partial class Program
                 && GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(restSiteMetadataObserver, restSiteMetadataScreenshotPath),
                 "Explicit rest-site choice authority should come from exported rest-site truth, not from screenshot analyzer suppression.");
 
+            var restSiteChoiceNotReadySummary = restSiteMetadataSummary with
+            {
+                CurrentScreen = "rest-site",
+                VisibleScreen = "rest-site",
+                PlayerCurrentHp = 17,
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteButtonsVisible"] = "true",
+                    ["restSiteButtonsClickReady"] = "false",
+                    ["restSiteClickReadyOptionIds"] = "SMITH,HATCH,MEND",
+                    ["restSiteSelectionCurrentStatus"] = "explicit-choice",
+                    ["restSiteViewKind"] = "explicit-choice",
+                },
+            };
+            var restSiteChoiceNotReadyObserver = new ObserverState(restSiteChoiceNotReadySummary, null, null, null);
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(restSiteChoiceNotReadyObserver) is
+                {
+                    ExplicitChoiceVisible: true,
+                    ExplicitChoiceReady: false,
+                    ProceedVisible: false,
+                },
+                "Rest-site scene state should keep explicit choices visible while separating click-ready from mere visibility.");
+            var restSiteChoiceNotReadyActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteChoiceNotReadyObserver);
+            Assert(restSiteChoiceNotReadyActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Rest-site explicit choices should collapse to wait-only until the selected option becomes click-ready. actual=[{string.Join(", ", restSiteChoiceNotReadyActions)}]");
+            var restSiteChoiceNotReadyDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteChoiceNotReadySummary,
+                AllowedActions = restSiteChoiceNotReadyActions,
+            });
+            Assert(string.Equals(restSiteChoiceNotReadyDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(restSiteChoiceNotReadyDecision.DecisionRisk, "rest-site-choice-not-click-ready", StringComparison.OrdinalIgnoreCase),
+                $"Selected rest-site option should wait on click readiness before the first click. actual={restSiteChoiceNotReadyDecision.Status}/{restSiteChoiceNotReadyDecision.DecisionRisk ?? "null"}");
+
+            var restSiteChoiceReadySummary = restSiteChoiceNotReadySummary with
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteButtonsVisible"] = "true",
+                    ["restSiteButtonsClickReady"] = "false",
+                    ["restSiteClickReadyOptionIds"] = "HEAL",
+                    ["restSiteSelectionCurrentStatus"] = "explicit-choice",
+                    ["restSiteViewKind"] = "explicit-choice",
+                },
+            };
+            var restSiteChoiceReadyObserver = new ObserverState(restSiteChoiceReadySummary, null, null, null);
+            var restSiteChoiceReadyActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteChoiceReadyObserver);
+            Assert(restSiteChoiceReadyActions.Contains("click rest site choice", StringComparer.OrdinalIgnoreCase)
+                   && !restSiteChoiceReadyActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Rest-site explicit choice should reopen only after the selected option becomes click-ready. actual=[{string.Join(", ", restSiteChoiceReadyActions)}]");
+            var restSiteChoiceReadyDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteChoiceReadySummary,
+                AllowedActions = restSiteChoiceReadyActions,
+            });
+            Assert(string.Equals(restSiteChoiceReadyDecision.TargetLabel, "rest site: rest", StringComparison.OrdinalIgnoreCase),
+                $"Rest-site ready state should click the selected heal option after readiness arrives. actual={restSiteChoiceReadyDecision.TargetLabel ?? restSiteChoiceReadyDecision.Reason ?? restSiteChoiceReadyDecision.Status}");
+
+            var restSiteProceedWithLingeringChoicesSummary = restSiteChoiceReadySummary with
+            {
+                CurrentChoices = new[] { "진행", "Rest", "Smith" },
+                Choices = restSiteChoiceReadySummary.Choices.Concat(new[]
+                {
+                    new ObserverChoice("choice", "진행", "1576.3,761.3,282.45,113.4", null, "진행"),
+                }).ToArray(),
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                    ["restSiteProceedVisible"] = "true",
+                    ["restSiteProceedEnabled"] = "true",
+                    ["restSiteProceedBounds"] = "1576.3,761.3,282.45,113.4",
+                    ["restSiteSelectionCurrentStatus"] = "proceed-visible",
+                    ["restSiteSelectionOutcome"] = "success",
+                    ["restSiteSelectionOutcomeEvidence"] = "runtime-poll:rest-site-proceed",
+                    ["restSiteViewKind"] = "proceed",
+                },
+            };
+            var restSiteProceedWithLingeringChoicesObserver = new ObserverState(restSiteProceedWithLingeringChoicesSummary, null, null, null);
+            Assert(!GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(restSiteProceedWithLingeringChoicesObserver, restSiteMetadataScreenshotPath)
+                   && GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(restSiteProceedWithLingeringChoicesSummary),
+                "Proceed-enabled rest-site truth should outrank lingering explicit rest choices once heal succeeds.");
+            var restSiteProceedWithLingeringChoicesActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteProceedWithLingeringChoicesObserver);
+            Assert(restSiteProceedWithLingeringChoicesActions.SequenceEqual(new[] { "click proceed", "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Rest-site proceed should win over lingering explicit choices after heal succeeds. actual=[{string.Join(", ", restSiteProceedWithLingeringChoicesActions)}]");
+            var restSiteProceedWithLingeringChoicesDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteProceedWithLingeringChoicesSummary,
+                AllowedActions = restSiteProceedWithLingeringChoicesActions,
+            });
+            Assert(string.Equals(restSiteProceedWithLingeringChoicesDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
+                $"Proceed-enabled rest-site truth should click proceed instead of reopening rest choices. actual={restSiteProceedWithLingeringChoicesDecision.TargetLabel ?? restSiteProceedWithLingeringChoicesDecision.Reason ?? restSiteProceedWithLingeringChoicesDecision.Status}");
+
+            var legacyRestSiteProceedWithLingeringChoicesSummary = restSiteProceedWithLingeringChoicesSummary with
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                },
+            };
+            var legacyRestSiteProceedWithLingeringChoicesObserver = new ObserverState(legacyRestSiteProceedWithLingeringChoicesSummary, null, null, null);
+            var legacyRestSiteProceedWithLingeringChoicesActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, legacyRestSiteProceedWithLingeringChoicesObserver);
+            Assert(legacyRestSiteProceedWithLingeringChoicesActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
+                   && !legacyRestSiteProceedWithLingeringChoicesActions.Contains("click rest site choice", StringComparer.OrdinalIgnoreCase),
+                $"Legacy rest-site proceed fallback should remain generic even when explicit choices linger and new proceed meta is absent. actual=[{string.Join(", ", legacyRestSiteProceedWithLingeringChoicesActions)}]");
+
             var missingHitboxSummary = restSiteMetadataSummary with
             {
                 Choices = new[]
@@ -1650,14 +1757,19 @@ internal static partial class Program
                 new WindowBounds(0, 0, 1280, 720),
                 Array.Empty<GuiSmokeHistoryEntry>(),
                 null);
+            Assert(
+                NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(restSiteReleasePendingObserver)
+                && !NonCombatForegroundOwnership.HasPostNodeMapForegroundAuthority(restSiteReleasePendingObserver),
+                "Rest-site release-pending should keep raw map residue visible but block post-node map authority promotion until true map foreground wins.");
             Assert(restSiteReleasePendingAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase)
                    && !restSiteReleasePendingAllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
                    && restSiteReleasePendingHandoffState.Owner == NonCombatCanonicalForegroundOwner.RestSite
                    && restSiteReleasePendingHandoffState.HandoffTarget == NonCombatHandoffTarget.ChooseFirstNode
                    && restSiteReleasePendingHandoffState.ReleaseStage == NonCombatReleaseStage.ReleasePending
                    && !restSiteReleasePendingHandoffState.HasExplicitSurface
+                   && !restSiteReleasePendingHandoffState.ContractMismatch
                    && restSiteReleasePendingHandoffState.SurfaceKind == PostNodeHandoffSurfaceKind.RestSiteReleasePending,
-                $"Rest-site release-pending should suppress exported map routing until true map foreground exists. allowed=[{string.Join(", ", restSiteReleasePendingAllowedActions)}] owner={restSiteReleasePendingHandoffState.Owner} target={restSiteReleasePendingHandoffState.HandoffTarget} release={restSiteReleasePendingHandoffState.ReleaseStage} explicit={restSiteReleasePendingHandoffState.HasExplicitSurface} surface={restSiteReleasePendingHandoffState.SurfaceKind}.");
+                $"Rest-site release-pending should suppress exported map routing until true map foreground exists. allowed=[{string.Join(", ", restSiteReleasePendingAllowedActions)}] owner={restSiteReleasePendingHandoffState.Owner} target={restSiteReleasePendingHandoffState.HandoffTarget} release={restSiteReleasePendingHandoffState.ReleaseStage} explicit={restSiteReleasePendingHandoffState.HasExplicitSurface} mismatch={restSiteReleasePendingHandoffState.ContractMismatch} surface={restSiteReleasePendingHandoffState.SurfaceKind}.");
             var restSiteReleasePendingDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
             {
                 Observer = restSiteReleasePendingSummary,
@@ -1711,6 +1823,13 @@ internal static partial class Program
                 "0398.request.json");
             if (File.Exists(restSiteReleaseReplayPath))
             {
+                var replayRequest = LoadReplayRequest(restSiteReleaseReplayPath).Request;
+                var replayArtifact = EvaluateAutoDecisionWithDiagnostics(restSiteReleaseReplayPath, replayRequest).CandidateDump;
+                Assert(replayRequest.AllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+                       && string.Equals(replayArtifact.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(replayArtifact.FinalDecision.Reason, "waiting for rest-site release to publish proceed or true map foreground", StringComparison.OrdinalIgnoreCase)
+                       && !string.Equals(replayArtifact.FinalDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase),
+                    $"Rest-site release exact replay should now trust canonical release-pending ownership over the stale exported-node allowlist. Actual allowlist=[{string.Join(", ", replayRequest.AllowedActions)}] decision={replayArtifact.FinalDecision.Status}/{replayArtifact.FinalDecision.TargetLabel ?? "null"}/{replayArtifact.FinalDecision.Reason ?? "null"}.");
                 var rebuiltReplayRequest = LoadReplayRequest(restSiteReleaseReplayPath, fullRequestRebuild: true).Request;
                 var rebuiltReplayArtifact = EvaluateAutoDecisionWithDiagnostics(restSiteReleaseReplayPath, rebuiltReplayRequest).CandidateDump;
                 Assert(rebuiltReplayRequest.AllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase)

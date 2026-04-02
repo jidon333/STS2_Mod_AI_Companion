@@ -14,6 +14,64 @@ static class RestSiteObserverSignals
         return observer.Meta.TryGetValue(key, out var value) ? value : null;
     }
 
+    public static bool TryGetMetaBool(ObserverSummary observer, string key)
+    {
+        return string.Equals(TryGetMetaValue(observer, key), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static IReadOnlyList<string> GetClickReadyOptionIds(ObserverSummary observer)
+    {
+        var raw = TryGetMetaValue(observer, "restSiteClickReadyOptionIds");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return Array.Empty<string>();
+        }
+
+        return raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(RestSiteChoiceSupport.NormalizeOptionId)
+            .Where(static optionId => !string.IsNullOrWhiteSpace(optionId))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public static bool IsRestSiteChoiceClickReady(ObserverSummary observer, string? optionId)
+    {
+        var normalizedOptionId = RestSiteChoiceSupport.NormalizeOptionId(optionId);
+        if (string.IsNullOrWhiteSpace(normalizedOptionId))
+        {
+            return false;
+        }
+
+        var clickReadyOptionIds = GetClickReadyOptionIds(observer);
+        if (clickReadyOptionIds.Count > 0)
+        {
+            return clickReadyOptionIds.Contains(normalizedOptionId, StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (observer.Meta.ContainsKey("restSiteButtonsClickReady") && TryGetMetaBool(observer, "restSiteButtonsClickReady"))
+        {
+            return true;
+        }
+
+        if (observer.Meta.ContainsKey("restSiteOptionsInteractive"))
+        {
+            return string.Equals(TryGetMetaValue(observer, "restSiteOptionsInteractive"), "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return true;
+    }
+
+    public static bool HasProceedVisible(ObserverSummary observer)
+    {
+        return TryGetMetaBool(observer, "restSiteProceedVisible");
+    }
+
+    public static bool HasProceedEnabled(ObserverSummary observer)
+    {
+        return TryGetMetaBool(observer, "restSiteProceedEnabled");
+    }
+
     public static bool HasSmithUpgradeVisible(ObserverSummary observer)
     {
         return HasSmithGridVisible(observer) || HasSmithConfirmVisible(observer) || HasSmithUpgradeScreenVisible(observer);

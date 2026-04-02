@@ -52,6 +52,7 @@ Run("runtime reflection exports explicit shop room semantics and typed shop choi
 Run("runtime reflection exports reward foreground ownership and teardown semantics", TestRuntimeReflectionRewardOwnershipExport, failures);
 Run("runtime reflection exports map-node from mixed rest-site aftermath authority", TestRuntimeReflectionMixedRestAftermathMapExport, failures);
 Run("runtime reflection reports filtered mixed-aftermath map-point diagnostics", TestRuntimeReflectionMixedRestAftermathMapDiagnostics, failures);
+Run("runtime reflection exports rest-site click-ready and proceed semantics", TestRuntimeReflectionRestSiteClickReadyAndProceedExport, failures);
 Run("runtime reflection exports explicit ancient dialogue advance before Neow options", TestRuntimeReflectionAncientEventDialogueExport, failures);
 Run("runtime reflection exports explicit ancient option buttons and suppresses pseudo-choice duplicates", TestRuntimeReflectionAncientEventOptionExport, failures);
 Run("runtime reflection marks ancient post-choice completion buttons explicitly", TestRuntimeReflectionAncientEventCompletionExport, failures);
@@ -1822,6 +1823,110 @@ static void TestRuntimeReflectionMixedRestAftermathMapDiagnostics()
     Assert(observation.Meta.TryGetValue("mapPointRejectSummary", out var mapPointRejectSummary)
            && mapPointRejectSummary?.Contains("disabled=1", StringComparison.OrdinalIgnoreCase) == true,
         "Mixed-aftermath map diagnostics should explain when all seen map points were filtered as disabled.");
+}
+
+static void TestRuntimeReflectionRestSiteClickReadyAndProceedExport()
+{
+    var healOption = new FakeRestSiteOption
+    {
+        OptionId = "HEAL",
+        Label = "Rest",
+        IsEnabled = true,
+    };
+    var smithOption = new FakeRestSiteOption
+    {
+        OptionId = "SMITH",
+        Label = "Smith",
+        IsEnabled = true,
+    };
+    var healButtonNotReady = new FakeNRestSiteButton
+    {
+        Visible = true,
+        Enabled = true,
+        Option = healOption,
+        MouseFilter = "Ignore",
+        Position = new FakeVector2(520, 260),
+        Size = new FakeVector2(200, 110),
+    };
+    var smithButtonReady = new FakeNRestSiteButton
+    {
+        Visible = true,
+        Enabled = true,
+        Option = smithOption,
+        MouseFilter = "Stop",
+        Position = new FakeVector2(820, 260),
+        Size = new FakeVector2(200, 110),
+    };
+    var notReadyRoom = new FakeNRestSiteRoom
+    {
+        Visible = true,
+        _lastFocused = healButtonNotReady,
+    };
+    var notReadyObservation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            notReadyRoom,
+            healButtonNotReady,
+            smithButtonReady,
+        },
+        "rest-site");
+    Assert(notReadyObservation.Meta.TryGetValue("restSiteButtonsVisible", out var buttonsVisible)
+           && string.Equals(buttonsVisible, "true", StringComparison.OrdinalIgnoreCase),
+        "Rest-site observation should export visible buttons when explicit rest-site choices are on screen.");
+    Assert(notReadyObservation.Meta.TryGetValue("restSiteButtonsClickReady", out var buttonsClickReady)
+           && string.Equals(buttonsClickReady, "false", StringComparison.OrdinalIgnoreCase),
+        "Rest-site observation should not treat visible buttons as click-ready before input opens.");
+    Assert(notReadyObservation.Meta.TryGetValue("restSiteClickReadyOptionIds", out var clickReadyOptionIds)
+           && string.Equals(clickReadyOptionIds, "SMITH", StringComparison.OrdinalIgnoreCase),
+        $"Rest-site click-ready export should preserve only input-ready options. actual={clickReadyOptionIds ?? "null"}");
+    Assert(notReadyObservation.Meta.TryGetValue("restSiteSelectionCurrentStatus", out var currentStatus)
+           && string.Equals(currentStatus, "explicit-choice", StringComparison.OrdinalIgnoreCase),
+        "Rest-site observation should stay in explicit-choice while no proceed or smith overlay is visible.");
+
+    var proceedButton = new FakeNProceedButton
+    {
+        Visible = true,
+        Enabled = true,
+        Position = new FakeVector2(1576.3, 761.3),
+        Size = new FakeVector2(282.45, 113.4),
+    };
+    var healButtonReady = new FakeNRestSiteButton
+    {
+        Visible = true,
+        Enabled = true,
+        Option = healOption,
+        MouseFilter = "Stop",
+        Position = new FakeVector2(520, 260),
+        Size = new FakeVector2(200, 110),
+    };
+    var proceedRoom = new FakeNRestSiteRoom
+    {
+        Visible = true,
+        _lastFocused = healButtonReady,
+        ProceedButton = proceedButton,
+    };
+    var proceedObservation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            proceedRoom,
+            healButtonReady,
+            smithButtonReady,
+            proceedButton,
+        },
+        "rest-site");
+    Assert(proceedObservation.Meta.TryGetValue("restSiteProceedVisible", out var proceedVisible)
+           && string.Equals(proceedVisible, "true", StringComparison.OrdinalIgnoreCase)
+           && proceedObservation.Meta.TryGetValue("restSiteProceedEnabled", out var proceedEnabled)
+           && string.Equals(proceedEnabled, "true", StringComparison.OrdinalIgnoreCase),
+        "Rest-site observation should export proceed visibility and enabled state once the room publishes proceed.");
+    Assert(proceedObservation.Meta.TryGetValue("restSiteSelectionCurrentStatus", out var proceedStatus)
+           && string.Equals(proceedStatus, "proceed-visible", StringComparison.OrdinalIgnoreCase),
+        $"Proceed-visible rest-site observation should promote room-local proceed status. actual={proceedStatus ?? "null"}");
+    proceedObservation.Meta.TryGetValue("restSiteSelectionOutcome", out var selectionOutcome);
+    proceedObservation.Meta.TryGetValue("restSiteSelectionOutcomeEvidence", out var outcomeEvidence);
+    Assert(string.Equals(selectionOutcome, "success", StringComparison.OrdinalIgnoreCase)
+           && string.Equals(outcomeEvidence, "runtime-poll:rest-site-proceed", StringComparison.OrdinalIgnoreCase),
+        $"Rest-site proceed should count as heal success even without a hook signal. actual={selectionOutcome ?? "null"}/{outcomeEvidence ?? "null"}");
 }
 
 static void TestRuntimeReflectionAncientEventDialogueExport()
@@ -5580,6 +5685,43 @@ file sealed class FakeRestSiteOption
     public string? OptionId { get; init; }
 
     public string? Label { get; init; }
+
+    public bool IsEnabled { get; init; }
+}
+
+file sealed class FakeNRestSiteRoom
+{
+    public bool Visible { get; init; }
+
+    public object? _lastFocused { get; init; }
+
+    public object? ProceedButton { get; init; }
+}
+
+file sealed class FakeNRestSiteButton
+{
+    public bool Visible { get; init; }
+
+    public bool Enabled { get; init; }
+
+    public object? Option { get; init; }
+
+    public object? MouseFilter { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+}
+
+file sealed class FakeNProceedButton
+{
+    public bool Visible { get; init; }
+
+    public bool Enabled { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
 }
 
 file class FakeNMapPoint

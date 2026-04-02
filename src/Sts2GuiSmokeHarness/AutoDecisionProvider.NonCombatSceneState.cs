@@ -175,7 +175,7 @@ sealed partial class AutoDecisionProvider
             CombatBarrierKind.EndTurn => CombatReleaseSubtype.EndTurnReopenLatency,
             _ => CombatReleaseSubtype.None,
         };
-        var lifecycleStage = DetermineCombatLifecycleStage(observer.Summary, runtime, nextRoomEntryState, handoffState);
+        var lifecycleStage = DetermineCombatLifecycleStage(observer.Summary, runtime, nextRoomEntryState, handoffState, combatBarrier);
         var combatAuthorityState = releaseTarget is NonCombatHandoffTarget.None or NonCombatHandoffTarget.HandleCombat
             ? CombatAuthorityState.Active
             : hasExplicitForegroundSurface
@@ -204,7 +204,8 @@ sealed partial class AutoDecisionProvider
         ObserverSummary observer,
         CombatRuntimeState runtime,
         NextRoomEntryState nextRoomEntryState,
-        PostNodeHandoffState handoffState)
+        PostNodeHandoffState handoffState,
+        CombatBarrierEvaluation combatBarrier)
     {
         if ((nextRoomEntryState.HasExplicitWinner
              && nextRoomEntryState.Owner is not (NonCombatCanonicalForegroundOwner.Unknown or NonCombatCanonicalForegroundOwner.Combat))
@@ -233,6 +234,15 @@ sealed partial class AutoDecisionProvider
             && !hasExplicitCombatPlayerSurface)
         {
             return CombatLifecycleStage.CombatEntryPending;
+        }
+
+        var recentEndTurnSubmissionPending = combatBarrier.IsActive
+                                             && combatBarrier.Kind == CombatBarrierKind.EndTurn
+                                             && !HasLifecycleEndTurnTransitionAcknowledgement(observer, runtime)
+                                             && IsEndTurnSubmissionSource(combatBarrier.SourceAction);
+        if (recentEndTurnSubmissionPending)
+        {
+            return CombatLifecycleStage.EndTurnTransit;
         }
 
         var playerWindowOpen = isPlayPhase == true
@@ -265,6 +275,23 @@ sealed partial class AutoDecisionProvider
         return CombatLifecycleStage.Unknown;
     }
 
+    private static bool IsEndTurnSubmissionSource(string? sourceAction)
+    {
+        return !string.IsNullOrWhiteSpace(sourceAction)
+               && (sourceAction.Contains("auto-end turn", StringComparison.OrdinalIgnoreCase)
+                   || sourceAction.Contains("end turn", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasLifecycleEndTurnTransitionAcknowledgement(ObserverSummary observer, CombatRuntimeState runtime)
+    {
+        return CombatEligibilitySupport.IsCombatPlayerActionWindowClosed(observer)
+               || runtime.PlayerActionsDisabled == true
+               || runtime.EndingPlayerTurnPhaseOne == true
+               || runtime.EndingPlayerTurnPhaseTwo == true
+               || CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsEnemyTurnStarted", "CombatManager.IsEnemyTurnStarted") == true
+               || CombatAuthoritySupport.TryGetBoolOrCrossCheck(observer, "CombatManager.IsPlayPhase", "CombatManager.IsPlayPhase") == false;
+    }
+
     internal static NextRoomEntryState BuildNextRoomEntryState(
         ObserverState observer,
         WindowBounds? windowBounds,
@@ -278,7 +305,7 @@ sealed partial class AutoDecisionProvider
         var shopScene = BuildShopSceneState(observer, history);
         var restSiteScene = BuildRestSiteSceneState(observer);
         var treasureScene = BuildTreasureSceneState(observer);
-        var mapExplicitOwner = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer);
+        var mapExplicitOwner = NonCombatForegroundOwnership.HasPostNodeMapForegroundAuthority(observer);
         var recentMapClickAccepted = assumeRecentMapClickAccepted || HasRecentMapClickAccepted(history);
         var combatResiduePresent = HasCombatResolutionAuthority(observer.Summary);
         var rewardResiduePresent = rewardScene.ReleaseStage != RewardReleaseStage.None || rewardScene.AftermathResiduePresent;
@@ -599,6 +626,9 @@ sealed partial class AutoDecisionProvider
         var explicitChoiceVisible = hasAuthoritativeChoiceMetadata
                                     || (explicitScreenAuthority
                                         && RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer.Summary));
+        var explicitChoiceReady = explicitChoiceVisible
+                                  && RestSiteChoiceSupport.TryGetSelectedObservedChoice(observer.Summary) is { } selectedChoice
+                                  && RestSiteObserverSignals.IsRestSiteChoiceClickReady(observer.Summary, selectedChoice.OptionId);
         var proceedVisible = explicitScreenAuthority
                              && GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary);
         var selectionSettling = explicitScreenAuthority
@@ -638,6 +668,7 @@ sealed partial class AutoDecisionProvider
                                           && explicitScreenAuthority);
         return new RestSiteSceneState(
             explicitChoiceVisible,
+            explicitChoiceReady,
             smithUpgradeActive,
             RestSiteObserverSignals.HasSmithConfirmVisible(observer.Summary),
             proceedVisible,
@@ -684,7 +715,7 @@ sealed partial class AutoDecisionProvider
         }
 
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath);
-        var mapExplicitOwner = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer);
+        var mapExplicitOwner = NonCombatForegroundOwnership.HasPostNodeMapForegroundAuthority(observer);
         var mapAuthoritativeScreen = NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(observer);
         var mapReleaseSignal = HasPostNodeMapReleaseSignal(observer.Summary, mapOverlayState, mapExplicitOwner);
         var combatHandoffState = TryBuildCombatPostNodeHandoffState(observer.Summary, mapOverlayState, mapExplicitOwner);
@@ -785,7 +816,7 @@ sealed partial class AutoDecisionProvider
         }
 
         var mapOverlayState = GuiSmokeMapOverlayHeuristics.BuildState(observer, windowBounds, screenshotPath);
-        var mapExplicitOwner = NonCombatForegroundOwnership.HasExplicitMapForegroundAuthority(observer);
+        var mapExplicitOwner = NonCombatForegroundOwnership.HasPostNodeMapForegroundAuthority(observer);
         var mapAuthoritativeScreen = NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(observer);
         var mapReleaseSignal = HasPostNodeMapReleaseSignal(observer.Summary, mapOverlayState, mapExplicitOwner);
         var combatResolutionAuthority = HasCombatResolutionAuthority(observer.Summary);
@@ -1075,13 +1106,16 @@ sealed partial class AutoDecisionProvider
                     : restSiteScene.ReleaseStage == NonCombatReleaseStage.ReleasePending
                         ? PostNodeHandoffSurfaceKind.RestSiteReleasePending
                         : PostNodeHandoffSurfaceKind.RestSiteChoice;
+        var hasExplicitSurface = restSiteScene.ReleaseStage == NonCombatReleaseStage.Active;
         return new PostNodeHandoffState(
             restSiteScene.CanonicalForegroundOwner,
             restSiteScene.HandoffTarget,
             restSiteScene.ReleaseStage,
-            HasExplicitSurface: restSiteScene.ReleaseStage == NonCombatReleaseStage.Active,
+            HasExplicitSurface: hasExplicitSurface,
             surfaceKind,
-            ContractMismatch: HasExporterMapForegroundClaim(observer) && !mapExplicitOwner,
+            ContractMismatch: hasExplicitSurface
+                              && HasExporterMapForegroundClaim(observer)
+                              && !mapExplicitOwner,
             MapOverlayVisible: mapOverlayState.ForegroundVisible,
             StaleBackgroundPresent: restSiteScene.MapContextVisible || restSiteScene.AftermathResiduePresent);
     }

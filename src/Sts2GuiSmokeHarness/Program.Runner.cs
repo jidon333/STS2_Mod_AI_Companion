@@ -481,9 +481,24 @@ internal static partial class Program
         string? lastLifecycleFingerprint = null;
         var consecutiveLifecycleFingerprint = 0;
         var lifecycleStageCounts = new Dictionary<CombatLifecycleStage, int>();
+        var enemyClickResolutionWaitCount = 0;
+        var maxConsecutiveEnemyClickResolutionFingerprint = 0;
+        string? lastEnemyClickResolutionFingerprint = null;
+        var consecutiveEnemyClickResolutionFingerprint = 0;
         foreach (var requestPath in Directory.EnumerateFiles(stepsRoot, "*.request.json", SearchOption.TopDirectoryOnly)
                      .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase))
         {
+            if (TryReadEnemyClickResolutionWaitEvidence(requestPath, out var enemyClickResolutionFingerprint))
+            {
+                enemyClickResolutionWaitCount += 1;
+                consecutiveEnemyClickResolutionFingerprint = string.Equals(lastEnemyClickResolutionFingerprint, enemyClickResolutionFingerprint, StringComparison.Ordinal)
+                    ? consecutiveEnemyClickResolutionFingerprint + 1
+                    : 1;
+                lastEnemyClickResolutionFingerprint = enemyClickResolutionFingerprint;
+                maxConsecutiveEnemyClickResolutionFingerprint = Math.Max(maxConsecutiveEnemyClickResolutionFingerprint, consecutiveEnemyClickResolutionFingerprint);
+                continue;
+            }
+
             if (!TryReadCombatLifecycleWaitEvidence(requestPath, out var lifecycleStage, out var waitFingerprint))
             {
                 continue;
@@ -498,6 +513,14 @@ internal static partial class Program
                 : 1;
             lastLifecycleFingerprint = waitFingerprint;
             maxConsecutiveLifecycleFingerprint = Math.Max(maxConsecutiveLifecycleFingerprint, consecutiveLifecycleFingerprint);
+        }
+
+        if (enemyClickResolutionWaitCount >= 8 && maxConsecutiveEnemyClickResolutionFingerprint >= 4)
+        {
+            terminalCause = "combat-enemy-click-resolution-pending-step-budget-exhausted";
+            failureClass = terminalCause;
+            message = $"{terminalCause} handleCombatSteps={handleCombatCount}/{totalProgressCount} enemyClickResolutionWaits={enemyClickResolutionWaitCount} maxRepeatedEnemyClickResolutionFingerprint={maxConsecutiveEnemyClickResolutionFingerprint}";
+            return true;
         }
 
         if (lifecycleWaitCount < 8 || maxConsecutiveLifecycleFingerprint < 4)
@@ -580,6 +603,66 @@ internal static partial class Program
         return true;
     }
 
+    static bool TryReadEnemyClickResolutionWaitEvidence(
+        string requestPath,
+        out string waitFingerprint)
+    {
+        waitFingerprint = string.Empty;
+
+        var decisionPath = requestPath.EndsWith(".request.json", StringComparison.OrdinalIgnoreCase)
+            ? requestPath[..^".request.json".Length] + ".decision.json"
+            : Path.ChangeExtension(requestPath, ".decision.json");
+        if (!File.Exists(decisionPath))
+        {
+            return false;
+        }
+
+        using var requestStream = new FileStream(requestPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var request = JsonSerializer.Deserialize<GuiSmokeStepRequest>(requestStream, GuiSmokeShared.JsonOptions);
+        if (request is null
+            || !Enum.TryParse<GuiSmokePhase>(request.Phase, ignoreCase: true, out var phase)
+            || phase != GuiSmokePhase.HandleCombat)
+        {
+            return false;
+        }
+
+        using var decisionStream = new FileStream(decisionPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var decisionDocument = JsonDocument.Parse(decisionStream);
+        var decisionRoot = decisionDocument.RootElement;
+        var status = decisionRoot.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : null;
+        if (!string.Equals(status, "wait", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var observer = new ObserverState(
+            request.Observer with
+            {
+                LastEventsTail = request.Observer.LastEventsTail ?? Array.Empty<string>(),
+                ActionNodes = request.Observer.ActionNodes ?? Array.Empty<ObserverActionNode>(),
+                Choices = request.Observer.Choices ?? Array.Empty<ObserverChoice>(),
+                CombatHand = request.Observer.CombatHand ?? Array.Empty<ObservedCombatHandCard>(),
+            },
+            null,
+            null,
+            request.Observer.LastEventsTail?.ToArray() ?? Array.Empty<string>());
+        var analysisContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+            phase,
+            observer,
+            request.ScreenshotPath,
+            request.History ?? Array.Empty<GuiSmokeHistoryEntry>(),
+            request.CombatCardKnowledge ?? Array.Empty<CombatCardKnowledgeHint>(),
+            request.WindowBounds);
+        if (analysisContext.CombatMicroStage.Kind != CombatMicroStageKind.EnemyClickResolutionPending
+            || analysisContext.CombatBarrierEvaluation.Kind != CombatBarrierKind.EnemyClick)
+        {
+            return false;
+        }
+
+        waitFingerprint = BuildDecisionWaitFingerprint(phase, request.SceneSignature, observer, analysisContext);
+        return true;
+    }
+
     static string FormatLifecycleStageCounts(IReadOnlyDictionary<CombatLifecycleStage, int> lifecycleStageCounts)
     {
         return string.Join(
@@ -610,18 +693,21 @@ internal static partial class Program
         return terminalCause switch
         {
             "combat-entry-surface-pending-step-budget-exhausted" => "combat-entry-surface-pending-step-budget-exhausted",
+            "combat-enemy-click-resolution-pending-step-budget-exhausted" => "combat-enemy-click-resolution-pending-step-budget-exhausted",
             "combat-lifecycle-transit-step-budget-exhausted" => "combat-lifecycle-transit-step-budget-exhausted",
             "combat-barrier-step-budget-exhausted" => "combat-barrier-step-budget-exhausted",
             "combat-barrier-handoff-mismatch" => "combat-barrier-handoff-mismatch",
             "combat-release-failure-under-noncombat-foreground" => "combat-release-failure-under-noncombat-foreground",
             "reward-aftermath-card-progression-stall" => "reward-aftermath-card-progression-stall",
             "rest-site-release-map-handoff-stall" => "rest-site-release-map-handoff-stall",
+            "rest-site-choice-not-click-ready" => "rest-site-choice-not-click-ready",
             "reward-map-loop" => "reward-map-loop",
             "map-overlay-noop-loop" => "map-overlay-noop-loop",
             "map-transition-stall" => "map-transition-stall",
             "phase-mismatch-stall" => "phase-mismatch-stall",
             "decision-wait-plateau" => "decision-wait-plateau",
             "combat-entry-surface-pending-wait-plateau" => "combat-entry-surface-pending-wait-plateau",
+            "combat-enemy-click-resolution-pending-wait-plateau" => "combat-enemy-click-resolution-pending-wait-plateau",
             "combat-lifecycle-transit-wait-plateau" => "combat-lifecycle-transit-wait-plateau",
             "combat-barrier-wait-plateau" => "combat-barrier-wait-plateau",
             "inspect-overlay-loop" => "inspect-overlay-loop",
@@ -663,18 +749,21 @@ internal static partial class Program
 
         return string.Equals(result.TerminalCause, "same-action-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-entry-surface-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-enemy-click-resolution-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-handoff-mismatch", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "reward-aftermath-card-progression-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "rest-site-release-map-handoff-stall", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "rest-site-choice-not-click-ready", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-entry-surface-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.TerminalCause, "combat-enemy-click-resolution-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)
@@ -685,17 +774,20 @@ internal static partial class Program
                || string.Equals(result.TerminalCause, "decision-abort", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.TerminalCause, "phase-timeout", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-entry-surface-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-enemy-click-resolution-pending-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-lifecycle-transit-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-barrier-step-budget-exhausted", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-release-failure-under-noncombat-foreground", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "reward-aftermath-card-progression-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "rest-site-release-map-handoff-stall", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "rest-site-choice-not-click-ready", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "reward-map-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "map-overlay-noop-loop", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "map-transition-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "phase-mismatch-stall", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "decision-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-entry-surface-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(result.FailureClass, "combat-enemy-click-resolution-pending-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-lifecycle-transit-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "combat-barrier-wait-plateau", StringComparison.OrdinalIgnoreCase)
                || string.Equals(result.FailureClass, "inspect-overlay-loop", StringComparison.OrdinalIgnoreCase)

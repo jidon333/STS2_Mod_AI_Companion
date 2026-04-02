@@ -130,8 +130,15 @@ internal static class RuntimeSnapshotReflectionExtractor
         int VisibleButtonCount,
         string? HoveredOptionId,
         string? ExecutingOptionId,
+        bool ButtonsClickReady,
+        IReadOnlyList<string> ClickReadyOptionIds,
         bool OptionsInteractive,
         string? VisibleOptionSummary);
+
+    private sealed record RestSiteProceedObservation(
+        bool Visible,
+        bool Enabled,
+        string? Bounds);
 
     private sealed record RestSiteUpgradeCardCandidate(
         object Holder,
@@ -2771,7 +2778,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static RestSiteButtonObservation ObserveRestSiteButtons(IEnumerable<object> roots)
     {
-        var visibleButtons = new List<(string OptionId, bool Enabled, bool Executing)>();
+        var visibleButtons = new List<(string OptionId, bool Enabled, bool Executing, bool ClickReady)>();
         string? hoveredOptionId = null;
 
         foreach (var room in roots.Where(static root =>
@@ -2804,23 +2811,52 @@ internal static class RuntimeSnapshotReflectionExtractor
 
             var enabled = TryResolveRestSiteButtonEnabled(button, option);
             var executing = TryReadBool(button, "_executingOption") == true;
-            visibleButtons.Add((optionId, enabled, executing));
+            var clickReady = TryResolveRestSiteButtonClickReady(button) ?? (enabled && !executing);
+            visibleButtons.Add((optionId, enabled, executing, clickReady));
         }
 
         var optionsInteractive = visibleButtons.Count > 0 && visibleButtons.All(static button => button.Enabled && !button.Executing);
+        var buttonsClickReady = visibleButtons.Count > 0 && visibleButtons.All(static button => button.ClickReady && !button.Executing);
+        var clickReadyOptionIds = visibleButtons
+            .Where(static button => button.ClickReady && !button.Executing)
+            .Select(static button => button.OptionId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         var visibleOptionSummary = visibleButtons.Count == 0
             ? null
             : string.Join(
                 ",",
                 visibleButtons.Select(static button =>
-                    $"{button.OptionId}:{(button.Executing ? "executing" : button.Enabled ? "enabled" : "disabled")}"));
+                    $"{button.OptionId}:{(button.Executing ? "executing" : button.ClickReady ? "click-ready" : button.Enabled ? "enabled" : "disabled")}"));
 
         return new RestSiteButtonObservation(
             visibleButtons.Count,
             hoveredOptionId,
             visibleButtons.FirstOrDefault(static button => button.Executing).OptionId,
+            buttonsClickReady,
+            clickReadyOptionIds,
             optionsInteractive,
             visibleOptionSummary);
+    }
+
+    private static RestSiteProceedObservation ObserveRestSiteProceed(IEnumerable<object> roots)
+    {
+        object? proceedButton = null;
+
+        foreach (var room in roots.Where(static root =>
+                     (root.GetType().FullName ?? root.GetType().Name).Contains("NRestSiteRoom", StringComparison.OrdinalIgnoreCase))
+                     .DistinctBy(RuntimeHelpers.GetHashCode))
+        {
+            proceedButton ??= TryGetMemberValue(room, "ProceedButton")
+                              ?? TryGetMemberValue(room, "_proceedButton")
+                              ?? TryGetMemberValue(room, "proceedButton");
+        }
+
+        proceedButton ??= roots.FirstOrDefault(static root => IsProceedButtonType(root.GetType().FullName ?? root.GetType().Name));
+        var bounds = TryResolveInteractiveScreenBounds(proceedButton, out _);
+        var visible = !string.IsNullOrWhiteSpace(bounds);
+        var enabled = visible && (TryResolveInteractiveEnabled(proceedButton) ?? TryResolveControlEnabled(proceedButton) ?? true);
+        return new RestSiteProceedObservation(visible, enabled, bounds);
     }
 
     private static RestSiteUpgradeObservation ObserveRestSiteUpgrade(IEnumerable<object> roots, string? screenHint)
@@ -3365,6 +3401,25 @@ internal static class RuntimeSnapshotReflectionExtractor
         return TryResolveControlEnabled(button)
                ?? TryReadBool(option, "IsEnabled")
                ?? true;
+    }
+
+    private static bool? TryResolveRestSiteButtonClickReady(object button)
+    {
+        var mouseFilter = TryGetMemberValue(button, "MouseFilter")
+                          ?? TryGetMemberValue(TryGetMemberValue(button, "Hitbox") ?? TryGetMemberValue(button, "_hitbox"), "MouseFilter");
+        var mouseFilterName = TryConvertToDisplayString(mouseFilter);
+        if (string.Equals(mouseFilterName, "Ignore", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var mouseFilterValue = TryConvertToInt(mouseFilter);
+        if (mouseFilterValue == 2)
+        {
+            return false;
+        }
+
+        return mouseFilter is null ? null : true;
     }
 
     private static TreasureRoomObservation ObserveTreasureRoom(IEnumerable<object> roots, string? screenHint)
@@ -6021,12 +6076,14 @@ internal static class RuntimeSnapshotReflectionExtractor
         IDictionary<string, object?> payload)
     {
         var buttonObservation = ObserveRestSiteButtons(roots);
+        var proceedObservation = ObserveRestSiteProceed(roots);
         var upgradeObservation = ObserveRestSiteUpgrade(roots, screen);
         var restSiteRelevant = choices.Any(static choice =>
                                   string.Equals(choice.Kind, "rest-option", StringComparison.OrdinalIgnoreCase)
                                   || string.Equals(choice.Kind, "rest-site-smith-card", StringComparison.OrdinalIgnoreCase)
                                   || string.Equals(choice.Kind, "rest-site-smith-confirm", StringComparison.OrdinalIgnoreCase))
                                || upgradeObservation.ScreenDetected
+                               || proceedObservation.Visible
                                || roots.Any(static root =>
                                {
                                    var typeName = root.GetType().FullName ?? root.GetType().Name;
@@ -6037,19 +6094,26 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         var lastSignal = meta.TryGetValue("restSiteSelectionLastSignal", out var rawLastSignal) ? rawLastSignal : null;
         var lastOptionId = meta.TryGetValue("restSiteSelectionLastOptionId", out var rawLastOptionId) ? rawLastOptionId : null;
-        var currentStatus = DetermineRestSiteCurrentStatus(buttonObservation, upgradeObservation, choices, lastSignal);
+        var currentStatus = DetermineRestSiteCurrentStatus(buttonObservation, proceedObservation, upgradeObservation, choices, lastSignal);
         var currentOptionId = DetermineRestSiteCurrentOptionId(buttonObservation, upgradeObservation);
-        var viewKind = DetermineRestSiteViewKind(buttonObservation, upgradeObservation, choices);
-        var transitionAuthority = DetermineRestSiteTransitionAuthority(buttonObservation, upgradeObservation);
-        var selectionOutcome = DetermineRestSiteSelectionOutcome(buttonObservation, upgradeObservation, lastSignal);
-        var selectionOutcomeEvidence = DetermineRestSiteSelectionOutcomeEvidence(buttonObservation, upgradeObservation, lastSignal);
+        var viewKind = DetermineRestSiteViewKind(buttonObservation, proceedObservation, upgradeObservation, choices);
+        var transitionAuthority = DetermineRestSiteTransitionAuthority(buttonObservation, proceedObservation, upgradeObservation);
+        var selectionOutcome = DetermineRestSiteSelectionOutcome(buttonObservation, proceedObservation, upgradeObservation, lastSignal);
+        var selectionOutcomeEvidence = DetermineRestSiteSelectionOutcomeEvidence(buttonObservation, proceedObservation, upgradeObservation, lastSignal);
         var observedOptionId = currentOptionId ?? lastOptionId;
 
         meta["restSiteButtonsVisible"] = buttonObservation.VisibleButtonCount > 0 ? "true" : "false";
+        meta["restSiteButtonsClickReady"] = buttonObservation.ButtonsClickReady ? "true" : "false";
+        meta["restSiteClickReadyOptionIds"] = restSiteRelevant && buttonObservation.ClickReadyOptionIds.Count > 0
+            ? string.Join(",", buttonObservation.ClickReadyOptionIds)
+            : null;
         meta["restSiteHoveredOptionId"] = restSiteRelevant ? buttonObservation.HoveredOptionId : null;
         meta["restSiteExecutingOptionId"] = restSiteRelevant ? buttonObservation.ExecutingOptionId : null;
         meta["restSiteOptionsInteractive"] = buttonObservation.OptionsInteractive ? "true" : "false";
         meta["restSiteVisibleOptionSummary"] = restSiteRelevant ? buttonObservation.VisibleOptionSummary : null;
+        meta["restSiteProceedVisible"] = proceedObservation.Visible ? "true" : "false";
+        meta["restSiteProceedEnabled"] = proceedObservation.Enabled ? "true" : "false";
+        meta["restSiteProceedBounds"] = restSiteRelevant ? proceedObservation.Bounds : null;
         meta["restSiteUpgradeScreenVisible"] = upgradeObservation.ScreenVisible ? "true" : "false";
         meta["restSiteUpgradeScreenDetected"] = upgradeObservation.ScreenDetected ? "true" : "false";
         meta["restSiteUpgradeObserverMiss"] = upgradeObservation.ObserverMiss ? "true" : "false";
@@ -6072,12 +6136,20 @@ internal static class RuntimeSnapshotReflectionExtractor
         meta["restSiteTransitionAuthority"] = restSiteRelevant ? transitionAuthority : null;
 
         payload["restSiteButtonsVisible"] = buttonObservation.VisibleButtonCount > 0;
+        payload["restSiteButtonsClickReady"] = buttonObservation.ButtonsClickReady;
+        payload["restSiteClickReadyOptionIds"] = buttonObservation.ClickReadyOptionIds;
+        payload["restSiteProceedVisible"] = proceedObservation.Visible;
+        payload["restSiteProceedEnabled"] = proceedObservation.Enabled;
         payload["restSiteUpgradeScreenVisible"] = upgradeObservation.ScreenVisible;
         payload["restSiteUpgradeScreenDetected"] = upgradeObservation.ScreenDetected;
         payload["restSiteUpgradeObserverMiss"] = upgradeObservation.ObserverMiss;
         payload["restSiteUpgradeCardCount"] = upgradeObservation.VisibleCards.Count;
         payload["restSiteUpgradeConfirmVisible"] = upgradeObservation.ConfirmVisible;
         payload["restSiteUpgradeConfirmEnabled"] = upgradeObservation.ConfirmEnabled;
+        if (!string.IsNullOrWhiteSpace(proceedObservation.Bounds))
+        {
+            payload["restSiteProceedBounds"] = proceedObservation.Bounds;
+        }
         if (!string.IsNullOrWhiteSpace(currentStatus))
         {
             payload["restSiteSelectionCurrentStatus"] = currentStatus;
@@ -6789,6 +6861,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static string? DetermineRestSiteCurrentStatus(
         RestSiteButtonObservation buttonObservation,
+        RestSiteProceedObservation proceedObservation,
         RestSiteUpgradeObservation upgradeObservation,
         IReadOnlyList<LiveExportChoiceSummary> choices,
         string? lastSignal)
@@ -6806,6 +6879,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (upgradeObservation.ObserverMiss)
         {
             return "grid-observer-miss";
+        }
+
+        if (proceedObservation.Visible)
+        {
+            return "proceed-visible";
         }
 
         if (!string.IsNullOrWhiteSpace(buttonObservation.ExecutingOptionId))
@@ -6846,6 +6924,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static string? DetermineRestSiteViewKind(
         RestSiteButtonObservation buttonObservation,
+        RestSiteProceedObservation proceedObservation,
         RestSiteUpgradeObservation upgradeObservation,
         IReadOnlyList<LiveExportChoiceSummary> choices)
     {
@@ -6864,6 +6943,11 @@ internal static class RuntimeSnapshotReflectionExtractor
             return "smith-grid-observer-miss";
         }
 
+        if (proceedObservation.Visible)
+        {
+            return "proceed";
+        }
+
         if (buttonObservation.VisibleButtonCount > 0
             || choices.Any(static choice => string.Equals(choice.Kind, "rest-option", StringComparison.OrdinalIgnoreCase)))
         {
@@ -6875,6 +6959,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static string? DetermineRestSiteTransitionAuthority(
         RestSiteButtonObservation buttonObservation,
+        RestSiteProceedObservation proceedObservation,
         RestSiteUpgradeObservation upgradeObservation)
     {
         if (upgradeObservation.ConfirmVisible || upgradeObservation.VisibleCards.Count > 0)
@@ -6887,6 +6972,11 @@ internal static class RuntimeSnapshotReflectionExtractor
             return "runtime-screen:upgrade";
         }
 
+        if (proceedObservation.Visible)
+        {
+            return "runtime-poll:rest-site-proceed";
+        }
+
         if (buttonObservation.VisibleButtonCount > 0 || !string.IsNullOrWhiteSpace(buttonObservation.ExecutingOptionId))
         {
             return "runtime-poll:rest-site-button";
@@ -6897,6 +6987,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static string? DetermineRestSiteSelectionOutcome(
         RestSiteButtonObservation buttonObservation,
+        RestSiteProceedObservation proceedObservation,
         RestSiteUpgradeObservation upgradeObservation,
         string? lastSignal)
     {
@@ -6906,6 +6997,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         if (upgradeObservation.ScreenVisible
+            || proceedObservation.Enabled
             || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase))
         {
             return "success";
@@ -6922,6 +7014,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static string? DetermineRestSiteSelectionOutcomeEvidence(
         RestSiteButtonObservation buttonObservation,
+        RestSiteProceedObservation proceedObservation,
         RestSiteUpgradeObservation upgradeObservation,
         string? lastSignal)
     {
@@ -6943,6 +7036,11 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (upgradeObservation.ObserverMiss)
         {
             return "runtime-screen:upgrade-without-exported-hitboxes";
+        }
+
+        if (proceedObservation.Enabled)
+        {
+            return "runtime-poll:rest-site-proceed";
         }
 
         if (string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase))

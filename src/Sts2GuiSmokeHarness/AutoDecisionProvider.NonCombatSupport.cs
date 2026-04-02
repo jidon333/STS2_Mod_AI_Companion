@@ -548,6 +548,11 @@ sealed partial class AutoDecisionProvider
                 {
                     rejectReason = "stale-hitbox-for-explicit-choice";
                 }
+                else if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, choice.CandidateLabel))
+                {
+                    decision = CreateRestSiteChoiceNotReadyWaitDecision(targetLabel, ResolveObserverScreen(request.Observer));
+                    rejectReason = "selected-choice-not-click-ready";
+                }
                 else
                 {
                     var currentHp = request.Observer.PlayerCurrentHp ?? 0;
@@ -565,9 +570,17 @@ sealed partial class AutoDecisionProvider
             else
             {
                 decision = TryCreateLegacyRestSiteDecision(request, choice);
-                rejectReason = decision is null
-                    ? "legacy-rest-site-choice-without-bounds"
-                    : "legacy-rest-site-choice-selected";
+                if (decision is not null && !GuiSmokeNonCombatContractSupport.AllowsAction(request, choice.CandidateLabel))
+                {
+                    decision = CreateRestSiteChoiceNotReadyWaitDecision(targetLabel, ResolveObserverScreen(request.Observer));
+                    rejectReason = "selected-choice-not-click-ready";
+                }
+                else
+                {
+                    rejectReason = decision is null
+                        ? "legacy-rest-site-choice-without-bounds"
+                        : "legacy-rest-site-choice-selected";
+                }
             }
         }
 
@@ -635,6 +648,24 @@ sealed partial class AutoDecisionProvider
             true,
             null,
             DecisionRisk: "rest-site-post-click-recapture-grace");
+    }
+
+    private static GuiSmokeStepDecision CreateRestSiteChoiceNotReadyWaitDecision(string targetLabel, string? expectedScreen)
+    {
+        return new GuiSmokeStepDecision(
+            "wait",
+            null,
+            null,
+            null,
+            null,
+            targetLabel,
+            $"Rest-site explicit choice '{targetLabel}' is visible, but the selected button is not yet click-ready. Wait for room-local input readiness before committing the first click.",
+            0.74d,
+            expectedScreen,
+            250,
+            true,
+            null,
+            DecisionRisk: "rest-site-choice-not-click-ready");
     }
 
     private static GuiSmokeStepDecision CreateRestSitePostClickNoOpWaitDecision(GuiSmokeStepRequest request, string targetLabel, string? expectedScreen)
@@ -1288,7 +1319,6 @@ sealed partial class AutoDecisionProvider
         if (BuildRestSiteSceneState(request.Observer) is not
             {
                 ProceedVisible: true,
-                ExplicitChoiceVisible: false,
                 SmithUpgradeActive: false,
             })
         {

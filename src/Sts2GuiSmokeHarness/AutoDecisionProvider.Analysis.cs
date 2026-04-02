@@ -277,7 +277,6 @@ sealed partial class AutoDecisionProvider
         if (BuildRestSiteSceneState(request.Observer) is
             {
                 ProceedVisible: true,
-                ExplicitChoiceVisible: false,
                 SmithUpgradeActive: false,
             })
         {

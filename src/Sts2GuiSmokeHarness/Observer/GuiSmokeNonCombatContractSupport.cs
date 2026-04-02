@@ -34,6 +34,7 @@ static class GuiSmokeNonCombatContractSupport
         if (MapAuthorityOutranksStaleRestSiteResidue(observer)
             || !HasRestSiteAuthority(observer)
             || !RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
+            || LooksLikeRestSiteProceedState(observer)
             || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
             || RestSiteObserverSignals.IsRestSiteSelectionSettlingState(observer))
         {
@@ -137,6 +138,19 @@ static class GuiSmokeNonCombatContractSupport
         var onRestSiteScreen = MatchesControlFlowScreen(observer, "rest-site")
                                || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase);
         if (!onRestSiteScreen)
+        {
+            return false;
+        }
+
+        if (RestSiteObserverSignals.HasProceedEnabled(observer))
+        {
+            return true;
+        }
+
+        var hasProceedMeta = observer.Meta.ContainsKey("restSiteProceedVisible")
+                             || observer.Meta.ContainsKey("restSiteProceedEnabled")
+                             || observer.Meta.ContainsKey("restSiteProceedBounds");
+        if (hasProceedMeta)
         {
             return false;
         }
