@@ -20,6 +20,7 @@ using Sts2ModKit.Core.LiveExport;
 sealed class GuiSmokeVideoRecorder : IDisposable
 {
     private const int StopTimeoutMs = 5000;
+    private const int ComposeTimeoutMs = 30000;
     private const int MinimumCaptureDimension = 2;
     private const int CaptureFramerate = 15;
     private const int MaxDiagnosticLines = 8;
@@ -104,19 +105,25 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             return false;
         }
 
-        var inputPattern = TryBuildWindowCaptureInputPattern(target);
-        if (string.IsNullOrWhiteSpace(inputPattern))
+        if (UsesStepScreenComposition())
         {
-            MarkSkipped("window-input-unavailable");
-            return false;
+            _metadata.WindowScopedCaptureRequested = !target.IsFallback;
+            _metadata.CaptureMode = "step-screens";
+            _metadata.CaptureInputPattern = "steps/*.screen.png|steps/*.review.png";
+            _metadata.CaptureModeNote = "Attempt review artifact composed after scope completion from per-step game-window screenshots. Authoritative .screen frames win when present; .review frames backfill skipped steps.";
+            _metadata.WindowTitle = target.Title;
+            _metadata.CaptureBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+            _metadata.Status = "recording";
+            _metadata.RecordingStartedAt = DateTimeOffset.UtcNow;
+            PersistMetadata();
+            LogVideo($"video scope={_metadata.ScopeKind} step-screen composition armed output={_metadata.OutputPath}");
+            return true;
         }
 
         _metadata.WindowScopedCaptureRequested = !target.IsFallback;
-        _metadata.CaptureMode = inputPattern.StartsWith("hwnd=", StringComparison.OrdinalIgnoreCase)
-            ? "window-hwnd"
-            : "window-title";
-        _metadata.CaptureInputPattern = inputPattern;
-        _metadata.CaptureModeNote = "Single-window ffmpeg gdigrab capture of the detected game window.";
+        _metadata.CaptureMode = "desktop-crop";
+        _metadata.CaptureInputPattern = $"desktop@{bounds.X.ToString(CultureInfo.InvariantCulture)},{bounds.Y.ToString(CultureInfo.InvariantCulture)} {bounds.Width.ToString(CultureInfo.InvariantCulture)}x{bounds.Height.ToString(CultureInfo.InvariantCulture)}";
+        _metadata.CaptureModeNote = "Best-effort desktop crop of the detected game-window bounds via ffmpeg gdigrab. Review aid only; overlapping windows can contaminate capture.";
         _metadata.WindowTitle = target.Title;
         _metadata.CaptureBounds = new WindowBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height);
 
@@ -124,14 +131,14 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         var workingDirectory = GetProcessCompatiblePath(_workspaceRoot);
         var executablePath = _metadata.FfmpegPath!;
         var commandPath = _ffmpegProcessPath ?? executablePath;
-        var arguments = BuildFfmpegArguments(inputPattern, outputProcessPath);
+        var arguments = BuildFfmpegArguments(bounds, outputProcessPath);
         _metadata.CommandLine = QuoteCommand(commandPath, arguments);
         if (_captureSupportOverride?.SkipActualProcessLaunch == true)
         {
             _metadata.Status = "recording";
             _metadata.RecordingStartedAt = DateTimeOffset.UtcNow;
             _metadata.CaptureModeNote = string.IsNullOrWhiteSpace(_metadata.CaptureModeNote)
-                ? "Single-window ffmpeg gdigrab capture contract validated in dry-run mode without spawning the encoder process."
+                ? "Desktop-crop ffmpeg gdigrab capture contract validated in dry-run mode without spawning the encoder process."
                 : $"{_metadata.CaptureModeNote} Dry-run start skipped process launch for self-test validation.";
             PersistMetadata();
             LogVideo($"video scope={_metadata.ScopeKind} recording started dry-run ffmpeg={_metadata.FfmpegPath ?? "null"} output={_metadata.OutputPath}");
@@ -200,6 +207,14 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             _process = null;
         }
 
+        if (_process is null
+            && string.Equals(_metadata.Status, "recording", StringComparison.OrdinalIgnoreCase)
+            && UsesStepScreenComposition()
+            && keepRecording)
+        {
+            TryComposeAttemptReviewFromStepScreens();
+        }
+
         var outputExists = File.Exists(_metadata.OutputPath);
         if (string.Equals(_metadata.Status, "recording", StringComparison.OrdinalIgnoreCase))
         {
@@ -237,6 +252,16 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         AppendDiagnosticSummary();
         PersistMetadata();
         LogVideo($"video scope={_metadata.ScopeKind} completed status={_metadata.Status} kept={_metadata.Kept?.ToString() ?? "null"} reason={_metadata.CompletionReason ?? "none"} skipReason={_metadata.SkipReason ?? "none"} exitCode={_metadata.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "null"} captureMode={_metadata.CaptureMode ?? "null"}");
+    }
+
+    private bool UsesStepScreenComposition()
+    {
+        return string.Equals(_metadata.ScopeKind, "attempt", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool RequiresLiveDesktopCapture()
+    {
+        return !UsesStepScreenComposition();
     }
 
     public void Dispose()
@@ -304,7 +329,9 @@ sealed class GuiSmokeVideoRecorder : IDisposable
 
             _metadata.Status = "skipped";
             _metadata.FfmpegAvailable = false;
-            _metadata.SkipReason = "ffmpeg-missing-gdigrab";
+            _metadata.SkipReason ??= RequiresLiveDesktopCapture()
+                ? "ffmpeg-missing-gdigrab"
+                : "ffmpeg-not-compatible";
             PersistMetadata();
             LogVideo($"video scope={_metadata.ScopeKind} availability skipped reason={_metadata.SkipReason} ffmpeg={_metadata.FfmpegPath ?? "null"}");
             return;
@@ -408,30 +435,24 @@ sealed class GuiSmokeVideoRecorder : IDisposable
         return new Rectangle(bounds.X, bounds.Y, width, height);
     }
 
-    private static string? TryBuildWindowCaptureInputPattern(WindowCaptureTarget target)
-    {
-        if (target.Handle != IntPtr.Zero)
-        {
-            return $"hwnd={target.Handle.ToInt64().ToString(CultureInfo.InvariantCulture)}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(target.Title))
-        {
-            return $"title={target.Title}";
-        }
-
-        return null;
-    }
-
     private bool TryBindCaptureReadyFfmpeg(VideoPathBinding ffmpegPath)
     {
         _metadata.FfmpegPath = ffmpegPath.HostPath;
         _ffmpegProcessPath = ffmpegPath.ProcessPath;
 
         var captureSupport = _captureSupportOverride ?? ProbeCaptureSupport(ffmpegPath);
-        if (!captureSupport.SupportsGdigrab)
+        if (!captureSupport.IsFfmpegBinary)
         {
             _metadata.FfmpegAvailable = false;
+            _metadata.SkipReason = "ffmpeg-not-compatible";
+            RecordDiagnosticLine($"ffmpeg path={ffmpegPath.HostPath} missing ffmpeg identity");
+            return false;
+        }
+
+        if (RequiresLiveDesktopCapture() && !captureSupport.SupportsGdigrab)
+        {
+            _metadata.FfmpegAvailable = false;
+            _metadata.SkipReason = "ffmpeg-missing-gdigrab";
             RecordDiagnosticLine($"ffmpeg path={ffmpegPath.HostPath} missing gdigrab support");
             return false;
         }
@@ -450,7 +471,7 @@ sealed class GuiSmokeVideoRecorder : IDisposable
                 StartInfo = new ProcessStartInfo
                 {
                     FileName = ffmpegPath.HostPath,
-                    Arguments = "-hide_banner -devices",
+                    Arguments = "-devices",
                     WorkingDirectory = Path.GetDirectoryName(ffmpegPath.HostPath) ?? Environment.CurrentDirectory,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -471,20 +492,23 @@ sealed class GuiSmokeVideoRecorder : IDisposable
                 {
                 }
 
-                return new GuiSmokeFfmpegCaptureSupport(false);
+                return new GuiSmokeFfmpegCaptureSupport(false, IsFfmpegBinary: false);
             }
 
+            var isFfmpegBinary = standardOutput.Contains("ffmpeg version", StringComparison.OrdinalIgnoreCase)
+                                 || standardError.Contains("ffmpeg version", StringComparison.OrdinalIgnoreCase);
             return new GuiSmokeFfmpegCaptureSupport(
                 standardOutput.Contains("gdigrab", StringComparison.OrdinalIgnoreCase)
-                || standardError.Contains("gdigrab", StringComparison.OrdinalIgnoreCase));
+                || standardError.Contains("gdigrab", StringComparison.OrdinalIgnoreCase),
+                IsFfmpegBinary: isFfmpegBinary);
         }
         catch
         {
-            return new GuiSmokeFfmpegCaptureSupport(false);
+            return new GuiSmokeFfmpegCaptureSupport(false, IsFfmpegBinary: false);
         }
     }
 
-    private static string BuildFfmpegArguments(string inputPattern, string outputPath)
+    private static string BuildFfmpegArguments(Rectangle bounds, string outputPath)
     {
         return string.Join(
             " ",
@@ -494,13 +518,179 @@ sealed class GuiSmokeVideoRecorder : IDisposable
             "-y",
             "-f gdigrab",
             $"-framerate {CaptureFramerate.ToString(CultureInfo.InvariantCulture)}",
+            $"-offset_x {bounds.X.ToString(CultureInfo.InvariantCulture)}",
+            $"-offset_y {bounds.Y.ToString(CultureInfo.InvariantCulture)}",
+            $"-video_size {bounds.Width.ToString(CultureInfo.InvariantCulture)}x{bounds.Height.ToString(CultureInfo.InvariantCulture)}",
             "-draw_mouse 0",
             "-i",
-            QuoteArgument(inputPattern),
+            QuoteArgument("desktop"),
             "-c:v libx264",
             "-preset ultrafast",
             "-pix_fmt yuv420p",
             QuoteArgument(outputPath));
+    }
+
+    private string BuildStepScreenComposeArguments(string concatManifestPath, string outputPath)
+    {
+        return string.Join(
+            " ",
+            "-hide_banner",
+            "-loglevel error",
+            "-nostats",
+            "-y",
+            "-safe 0",
+            "-f concat",
+            "-i",
+            QuoteArgument(concatManifestPath),
+            "-vsync vfr",
+            "-c:v libx264",
+            "-preset ultrafast",
+            "-pix_fmt yuv420p",
+            QuoteArgument(outputPath));
+    }
+
+    private void TryComposeAttemptReviewFromStepScreens()
+    {
+        var stepsRoot = Path.Combine(_metadata.RootPath, "steps");
+        if (!Directory.Exists(stepsRoot))
+        {
+            RecordDiagnosticLine($"step-screens-root-missing path={stepsRoot}");
+            return;
+        }
+
+        var frameMap = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var reviewPath in Directory.EnumerateFiles(stepsRoot, "*.review.png", SearchOption.TopDirectoryOnly))
+        {
+            if (TryGetStepFrameKey(reviewPath, ".review.png", out var frameKey))
+            {
+                frameMap[frameKey] = reviewPath;
+            }
+        }
+
+        foreach (var screenPath in Directory.EnumerateFiles(stepsRoot, "*.screen.png", SearchOption.TopDirectoryOnly))
+        {
+            if (TryGetStepFrameKey(screenPath, ".screen.png", out var frameKey))
+            {
+                frameMap[frameKey] = screenPath;
+            }
+        }
+
+        var framePaths = frameMap.Values.ToArray();
+        if (framePaths.Length == 0)
+        {
+            RecordDiagnosticLine("step-screens-none");
+            return;
+        }
+
+        if (_captureSupportOverride?.SkipActualProcessLaunch == true)
+        {
+            RecordDiagnosticLine("step-screen-compose-dry-run");
+            return;
+        }
+
+        var manifestPath = Path.Combine(_metadata.RootPath, "video.review.ffconcat");
+        try
+        {
+            File.WriteAllText(manifestPath, BuildStepScreenConcatManifest(framePaths));
+            var concatProcessPath = GetProcessCompatiblePath(manifestPath).Replace('\\', '/');
+            var outputProcessPath = GetProcessCompatiblePath(_metadata.OutputPath);
+            var executablePath = _metadata.FfmpegPath!;
+            var commandPath = _ffmpegProcessPath ?? executablePath;
+            var arguments = BuildStepScreenComposeArguments(concatProcessPath, outputProcessPath);
+            _metadata.CommandLine = QuoteCommand(commandPath, arguments);
+
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = executablePath,
+                    Arguments = arguments,
+                    WorkingDirectory = GetProcessCompatiblePath(_workspaceRoot),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                },
+            };
+            process.OutputDataReceived += (_, eventArgs) => RecordDiagnosticLine(eventArgs.Data);
+            process.ErrorDataReceived += (_, eventArgs) => RecordDiagnosticLine(eventArgs.Data);
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            if (!process.WaitForExit(ComposeTimeoutMs))
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                }
+
+                RecordDiagnosticLine("step-screen-compose-timeout");
+                _metadata.ExitCode = null;
+                return;
+            }
+
+            _metadata.ExitCode = process.ExitCode;
+            if (process.ExitCode != 0)
+            {
+                RecordDiagnosticLine($"step-screen-compose-exit={process.ExitCode.ToString(CultureInfo.InvariantCulture)}");
+            }
+        }
+        catch (Exception exception)
+        {
+            RecordDiagnosticLine($"step-screen-compose-failed:{exception.GetType().Name}:{SanitizeText(exception.Message)}");
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(manifestPath))
+                {
+                    File.Delete(manifestPath);
+                }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static string BuildStepScreenConcatManifest(IReadOnlyList<string> framePaths)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("ffconcat version 1.0");
+        foreach (var framePath in framePaths)
+        {
+            builder.Append("file '")
+                .Append(EscapeConcatPath(GetProcessCompatiblePath(framePath).Replace('\\', '/')))
+                .AppendLine("'");
+            builder.AppendLine("duration 0.25");
+        }
+
+        builder.Append("file '")
+            .Append(EscapeConcatPath(GetProcessCompatiblePath(framePaths[^1]).Replace('\\', '/')))
+            .AppendLine("'");
+        return builder.ToString();
+    }
+
+    private static string EscapeConcatPath(string path)
+    {
+        return path.Replace("'", "'\\''", StringComparison.Ordinal);
+    }
+
+    private static bool TryGetStepFrameKey(string path, string suffix, out string frameKey)
+    {
+        frameKey = string.Empty;
+        var fileName = Path.GetFileName(path);
+        if (!fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        frameKey = fileName[..^suffix.Length];
+        return !string.IsNullOrWhiteSpace(frameKey);
     }
 
     private static string QuoteArgument(string value)

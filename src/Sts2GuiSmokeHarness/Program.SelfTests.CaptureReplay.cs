@@ -103,13 +103,13 @@ internal static partial class Program
                 attemptId: "0001",
                 scopeKind: "attempt");
             var started = recorder.TryStart(new WindowCaptureTarget(IntPtr.Zero, "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
-            Assert(!started, "Video recorder should skip when the selected executable lacks gdigrab window capture support.");
+            Assert(!started, "Attempt review composition should skip when the selected executable is not a usable ffmpeg binary.");
             recorder.Complete(keepRecording: true, completionReason: "self-test-unsupported-window-video");
 
             var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(unsupportedWindowVideoRoot, "video-recording.json"))
                            ?? throw new InvalidOperationException("Expected unsupported-window video metadata.");
             Assert(string.Equals(metadata.Status, "skipped", StringComparison.OrdinalIgnoreCase), "Unsupported ffmpeg should produce skipped video metadata.");
-            Assert(metadata.SkipReason is not null && metadata.SkipReason.Contains("ffmpeg-missing-gdigrab", StringComparison.OrdinalIgnoreCase), "Unsupported ffmpeg metadata should explain missing gdigrab support.");
+            Assert(metadata.SkipReason is not null && metadata.SkipReason.Contains("ffmpeg-not-compatible", StringComparison.OrdinalIgnoreCase), "Unsupported attempt video metadata should explain missing ffmpeg compatibility.");
         }
         finally
         {
@@ -123,6 +123,22 @@ internal static partial class Program
         try
         {
             Directory.CreateDirectory(attemptWindowVideoRoot);
+            var attemptStepsRoot = Path.Combine(attemptWindowVideoRoot, "steps");
+            Directory.CreateDirectory(attemptStepsRoot);
+            using (var frameA = new Bitmap(8, 8))
+            {
+                using var graphics = Graphics.FromImage(frameA);
+                graphics.Clear(Color.DarkSlateBlue);
+                frameA.Save(Path.Combine(attemptStepsRoot, "0001.screen.png"), ImageFormat.Png);
+            }
+
+            using (var frameB = new Bitmap(8, 8))
+            {
+                using var graphics = Graphics.FromImage(frameB);
+                graphics.Clear(Color.Goldenrod);
+                frameB.Save(Path.Combine(attemptStepsRoot, "0002.screen.png"), ImageFormat.Png);
+            }
+
             using var recorder = GuiSmokeVideoRecorder.Create(
                 workspaceRoot,
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -137,16 +153,17 @@ internal static partial class Program
                 scopeKind: "attempt",
                 captureSupportOverride: new GuiSmokeFfmpegCaptureSupport(true, SkipActualProcessLaunch: true));
             var started = recorder.TryStart(new WindowCaptureTarget(new IntPtr(12345), "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
-            Assert(started, "Attempt review video should use single-window capture when gdigrab is available.");
+            Assert(started, "Attempt review video should arm step-screen composition when authoritative step screenshots are available.");
             recorder.Complete(keepRecording: true, completionReason: "self-test-attempt-window-video");
 
             var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(attemptWindowVideoRoot, "video-recording.json"))
                            ?? throw new InvalidOperationException("Expected attempt window video metadata.");
             Assert(!string.Equals(metadata.Status, "recording", StringComparison.OrdinalIgnoreCase), "Attempt video metadata must finalize out of transient recording state.");
-            Assert(string.Equals(metadata.CaptureMode, "window-hwnd", StringComparison.OrdinalIgnoreCase), "Attempt metadata should honestly report window-handle capture mode.");
+            Assert(string.Equals(metadata.CaptureMode, "step-screens", StringComparison.OrdinalIgnoreCase), "Attempt metadata should honestly report screenshot-composed review mode.");
             Assert(metadata.WindowScopedCaptureRequested, "Attempt window capture should preserve the requested window-scoped intent.");
-            Assert(metadata.CaptureInputPattern is not null && metadata.CaptureInputPattern.Contains("hwnd=12345", StringComparison.OrdinalIgnoreCase), "Attempt window capture should record the handle-based input pattern.");
-            Assert(metadata.CommandLine is not null && metadata.CommandLine.Contains("-f gdigrab", StringComparison.OrdinalIgnoreCase) && metadata.CommandLine.Contains("hwnd=12345", StringComparison.OrdinalIgnoreCase), "Attempt window capture should record the live ffmpeg gdigrab command.");
+            Assert(metadata.CaptureInputPattern is not null && metadata.CaptureInputPattern.Contains("steps/*.screen.png", StringComparison.OrdinalIgnoreCase), "Attempt review should record the authoritative step-screen input pattern.");
+            Assert(metadata.CaptureModeNote is not null && metadata.CaptureModeNote.Contains("game-window screenshots", StringComparison.OrdinalIgnoreCase), "Attempt review metadata should explain game-window screenshot composition.");
+            Assert(metadata.CompletionReason is not null && metadata.CompletionReason.Contains("step-screen-compose-dry-run", StringComparison.OrdinalIgnoreCase), "Attempt screenshot composition self-test should record the dry-run compose diagnostic.");
         }
         finally
         {
@@ -174,15 +191,15 @@ internal static partial class Program
                 scopeKind: "bootstrap",
                 captureSupportOverride: new GuiSmokeFfmpegCaptureSupport(true, SkipActualProcessLaunch: true));
             var started = recorder.TryStart(new WindowCaptureTarget(IntPtr.Zero, "self-test-window", new Rectangle(100, 200, 401, 301), false, false));
-            Assert(started, "Bootstrap recorder should use single-window capture when a window title is available.");
+            Assert(started, "Bootstrap recorder should use desktop-crop capture when window bounds are available.");
             recorder.Complete(keepRecording: false, completionReason: "self-test-bootstrap-window-video");
 
             var metadata = TryReadJson<GuiSmokeVideoRecordingMetadata>(Path.Combine(bootstrapWindowVideoRoot, "video-recording.json"))
                            ?? throw new InvalidOperationException("Expected bootstrap window video metadata.");
             Assert(!string.Equals(metadata.Status, "recording", StringComparison.OrdinalIgnoreCase), "Bootstrap video metadata must finalize out of transient recording state.");
-            Assert(string.Equals(metadata.CaptureMode, "window-title", StringComparison.OrdinalIgnoreCase), "Bootstrap metadata should honestly report window-title capture mode.");
+            Assert(string.Equals(metadata.CaptureMode, "desktop-crop", StringComparison.OrdinalIgnoreCase), "Bootstrap metadata should honestly report desktop-crop capture mode.");
             Assert(metadata.WindowScopedCaptureRequested, "Bootstrap window capture should preserve the requested window-scoped intent.");
-            Assert(metadata.CaptureModeNote is not null && metadata.CaptureModeNote.Contains("Single-window", StringComparison.OrdinalIgnoreCase), "Bootstrap metadata should explain single-window capture semantics.");
+            Assert(metadata.CaptureModeNote is not null && metadata.CaptureModeNote.Contains("desktop crop", StringComparison.OrdinalIgnoreCase), "Bootstrap metadata should explain desktop-crop capture semantics.");
         }
         finally
         {

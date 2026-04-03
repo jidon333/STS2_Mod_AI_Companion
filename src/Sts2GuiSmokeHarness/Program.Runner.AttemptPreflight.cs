@@ -549,6 +549,7 @@ internal static partial class Program
         var captureSkipReason = capturePolicy.SkipReason;
         if (!capturePolicy.NeedsScreenshot)
         {
+            TryCaptureReviewFrame(stepIndex, stepPrefix + ".review.png", window, captureService);
             if (isLongRun && !attemptStartedRecorded && stepIndex == 1)
             {
                 LongRunArtifacts.RecordAttemptStarted(sessionRoot, attemptId, attemptOrdinal, runId, trustStateAtStart, screenshotPath);
@@ -798,5 +799,30 @@ internal static partial class Program
             attemptStartedRecorded,
             consecutiveBlackFrames,
             consecutiveFallbackCapturesWithoutProcess);
+    }
+
+    static void TryCaptureReviewFrame(
+        int stepIndex,
+        string reviewFramePath,
+        WindowCaptureTarget window,
+        ScreenCaptureService captureService)
+    {
+        var captureResult = captureService.TryCaptureDetailed(window, reviewFramePath, ScreenCaptureService.CaptureTimeout);
+        if (captureResult.Succeeded)
+        {
+            LogHarness($"step={stepIndex} review frame captured={reviewFramePath}");
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(reviewFramePath))
+            {
+                File.Delete(reviewFramePath);
+            }
+        }
+        catch
+        {
+        }
     }
 }

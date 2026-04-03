@@ -66,4 +66,5 @@ sealed record VideoPathBinding(string HostPath, string ProcessPath);
 
 sealed record GuiSmokeFfmpegCaptureSupport(
     bool SupportsGdigrab,
+    bool IsFfmpegBinary = true,
     bool SkipActualProcessLaunch = false);
