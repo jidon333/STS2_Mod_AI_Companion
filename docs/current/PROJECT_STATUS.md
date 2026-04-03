@@ -157,7 +157,7 @@ historical frontier는
 | Harness Self-Test | green | `84e4647` current-main recovery 이후 self-test green |
 | Replay Golden Suite | green | `replay-test` 통과 |
 | Replay Parity Suite | green | `reward-aftermath-map-handoff` 포함 current parity fixtures green |
-| Non-Combat Stability | partial | ancient/event/ChooseFirstNode family는 닫혔지만 `verify-reward-claim-20260401-live1` attempt `0001`의 `reward card choice` same-action-stall이 남아 있음 |
+| Non-Combat Stability | partial | ancient/event/ChooseFirstNode family와 rest-site release-pending family는 닫혔고, bounded `Slippery Bridge` progression도 code/self-test + smoke evidence가 있다. 다만 direct post-fix live repro와 some child-screen smoothness evidence는 아직 partial이다 |
 | Combat Stability | partial | stale non-enemy/target family는 닫혔지만 short roots에서 `combat-barrier-step-budget-exhausted` / `combat-barrier-wait-plateau` long-tail이 남아 있음 |
 | Live-Run Speed Recovery | partial | hot path observer-first baseline은 유지되지만 `deck-remove` / reward card child screen transient capture와 black review video가 남아 있음 |
 | Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 compatibility는 legacy surface로만 남는다 |

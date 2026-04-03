@@ -74,7 +74,7 @@ currentScreen = logical/flow screen
 
 semantic fix는 기존 owner 구조를 다시 우회하지 않고 current owner 파일 안에서만 좁게 한다.
 
-## 2026-03-31 즉시 상태
+## Historical Snapshot (2026-03-31)
 
 새 세션이 가장 먼저 알아야 하는 것은 아래 다섯 가지다.
 
@@ -82,7 +82,7 @@ semantic fix는 기존 owner 구조를 다시 우회하지 않고 current owner 
 2. repeated `reward-pick` plateau family는 `15dd5cf` `Prioritize reward-pick child-screen export facts` 이후 [boot-to-long-run-20260330-live18](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live18)에서 재현되지 않았다.
 3. combat target-selection / carryover self-test red는 `d9e4c01`, `10028f8`, `ed0a379`, `9c6621b` 이후 green으로 닫혔다.
 4. stale `combatTargetSummary` 기반 attack-lane churn/no-op family는 [boot-to-long-run-20260330-live21](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21)에서 재현되지 않았다.
-5. latest authoritative live blocker는 combat이 아니라 `HandleEvent` ancient option wait plateau다.
+5. 이 섹션의 blocker 서술은 2026-03-31 historical snapshot이다. current blocker/current follow-up은 문서 상단 current pointer와 [PROJECT_STATUS.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/PROJECT_STATUS.md)를 우선한다.
 
 latest important commits:
 
@@ -176,7 +176,7 @@ current `main`에는 아래 구조화 커밋이 이미 들어가 있다.
 - `compatibility retirement` 1단계도 current `main`에 반영됐다
 - combat stale-end-turn / target plateau family는 current `main`에서 micro-stage + quiet convergence + runtime target-summary authority로 닫혔다
 - explicit shop foreground 위 stale reward misroute plateau family는 current `main`에서 immediate reward-to-shop recovery로 닫혔다
-- `Combat Release + Reward Aftermath` wave live root [combat-release-reward-aftermath-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-release-reward-aftermath-20260401-live1) 에서 target family는 닫혔고, 새 front blocker는 `rest-site -> map handoff same-action-stall`로 이동했다
+- `Combat Release + Reward Aftermath` wave live root [combat-release-reward-aftermath-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-release-reward-aftermath-20260401-live1) 는 historical pivot root이고, 그 뒤 2026-04-03 wave에서 rest-site와 bounded `Slippery Bridge` follow-up까지 current pointer가 갱신됐다
 - anti-drift recovery wave `bc53c34`, `f29cc5d`, `52ebabd`, `84e4647`, `5ebe718`, `3a24338`도 current `main`에 반영됐다
 - `MAP-04` reward reopen self-test regression은 current `main`에서 닫혔다
 - `build`, `self-test`, `replay-test`, `replay-parity-test`는 current `main`에서 green이다
