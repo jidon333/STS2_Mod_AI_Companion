@@ -2,17 +2,19 @@
 
 > 상태: 현재 사용 중
 > 기준 브랜치: `main`
-> 최종 갱신: 2026-04-01
+> 최종 갱신: 2026-04-03
 > 대상: 새 구현 세션, 새 검증 세션, 새 참모 세션
 
-> 2026-04-01 current pointer:
+> 2026-04-03 current pointer:
 > 이 문서 본문은 `live21 ancient option` wave 중심의 historical handoff가 많이 남아 있다.
 > 현재 active pointer는 [PROJECT_STATUS.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/PROJECT_STATUS.md) 를 우선한다.
-> 최신 기준으로는 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion은 닫혔다.
-> current `main`에는 `HandleCombat` release truth를 위한 `combat-release-failure-under-noncombat-foreground` family와 reward aftermath용 `reward-aftermath-card-progression-stall` family가 들어가 있다.
-> exact reward mixed-state repro는 [0031.request.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-barrier-release-20260331-live2/attempts/0003/steps/0031.request.json) 에서 `claim reward relic`, [0104.request.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1/attempts/0001/steps/0104.request.json) 에서 `claim reward gold`로 복구된다.
-> fresh authoritative endurance root는 [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2) 이고, single attempt가 natural `player-defeated` terminal까지 `stepCount=479`로 진행됐다.
-> 아직 남은 short-root follow-up은 `combat release under noncombat foreground` family와 `reward card progression aftermath` family이며, validation-quality gap은 live review black-video다.
+> 최신 기준으로는 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion, `rest-site release pending over map overlay`, rest-site click-ready/proceed family가 닫혔다.
+> decisive 2026-04-03 roots:
+> - [rest-site-click-ready-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/rest-site-click-ready-20260403-live1): rest-site `rest -> visible proceed -> treasure/event continuity`를 live에서 확인했고, 이후 first blocker는 `HandleEvent` `미끄러운 다리` same-action family로 이동했다.
+> - [slippery-bridge-overcome-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live1): old semantic `버틴다` loop가 `player-defeated`까지 가는 failure shape를 남겼다.
+> - [slippery-bridge-overcome-20260403-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live2): `c8f6766` 이후 fresh authoritative smoke root로 `max-steps-reached:260` no-stall까지 진행했지만, 이번 seed는 `미끄러운 다리`를 직접 다시 밟지 않았다.
+> current `main`의 event wave는 `afbee31` + `c8f6766` 기준으로 rest-site click readiness/proceed authority, bounded `Slippery Bridge` exit (`OVERCOME`), event-choice lineage-aware same-action fingerprint를 포함한다.
+> 아직 남은 short-root follow-up은 reward card progression, combat barrier long-tail, direct post-fix `Slippery Bridge` live repro, review-video usable-state다.
 
 ## 문서 목적
 

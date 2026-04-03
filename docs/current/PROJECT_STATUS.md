@@ -6,15 +6,15 @@
 
 ## 날짜
 
-- 2026-04-01
+- 2026-04-03
 
 ## 현재 마일스톤 위치
 
 - 현재 진행 축: `M5 authoritative long-run blocker loop`, late acceptance-evidence stage
 - 현재 engineering focus:
   1. fresh single-attempt endurance natural-terminal evidence를 current docs와 owner code 기준선으로 고정
-  2. `rest-site -> map handoff` mixed-state를 `RestSiteReleasePending` canonical contract로 닫고, closed family를 reopen하지 않고 next blocker를 더 좁은 이름으로 드러내기
-  3. live review capture black-video 문제를 gameplay blocker와 분리해 정리하고, 그 다음에야 `M6 replay/parity` 고정으로 넘어가기
+  2. `rest-site -> map handoff`와 `rest-site click-ready/proceed` closure를 current baseline으로 승격하고, closed family를 reopen하지 않고 next blocker를 더 좁은 이름으로 드러내기
+  3. bounded `Slippery Bridge` event contract와 event-lineage stall semantics를 fresh live evidence에 맞춰 고정하고, live review capture usable-state gap은 gameplay blocker와 분리해 유지하기
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
 중요한 현재 해석:
@@ -29,8 +29,12 @@
 - explicit relic reward claim -> `proceed after resolving rewards` inversion은 replay exact repro 기준으로 닫혔고, fresh live rerun에서 재현되지 않았다
 - explicit shop foreground 위에 stale reward misroute가 끼어들던 `HandleShop -> HandleRewards -> decision-wait-plateau` family는 current `main`에서 즉시 `HandleRewards -> HandleShop` 회복으로 닫혔다
 - fresh authoritative endurance root [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)는 valid-trust single attempt가 `player-defeated` natural terminal까지 `stepCount=479`로 진행될 수 있음을 보여줬다
-- `Combat Release + Reward Aftermath` wave는 live root [combat-release-reward-aftermath-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-release-reward-aftermath-20260401-live1) 에서 target family 기준으로 먹혔고, 새 front blocker는 `rest-site -> map handoff same-action-stall`이다
-- live ffmpeg metadata recording은 current `main`에서 붙지만, `window-hwnd gdigrab` review video는 아직 black frame이라 screenshot/request artifact가 source of truth다
+- `rest-site -> map handoff release-pending`과 `rest-site click-ready -> proceed` family는 live root [rest-site-click-ready-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/rest-site-click-ready-20260403-live1)에서 닫혔고, run은 rest-site 이후 treasure/event continuity까지 진행한 뒤에야 새 event blocker를 드러냈다
+- `rest-site-click-ready-20260403-live1`의 새 blocker는 `HandleEvent` `미끄러운 다리`에서 semantic `버틴다`를 label-only same-action처럼 소비하던 false progression family였다
+- current `main`에는 `afbee31`과 `c8f6766`가 반영돼 있고, bounded `Slippery Bridge` exit (`OVERCOME`) + event-choice lineage-aware stall fingerprint가 들어가 있다
+- exact live artifact root [slippery-bridge-overcome-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live1)는 old semantic `버틴다` loop가 `player-defeated`까지 이어지는 failure shape를 남긴다
+- fresh smoke root [slippery-bridge-overcome-20260403-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live2)는 valid-trust attempt `0001`이 `max-steps-reached:260`까지 no-stall로 진행됐음을 보여주지만, 이번 seed는 `미끄러운 다리`를 직접 다시 밟지는 않았다
+- live ffmpeg review artifact retention은 2026-04-03 roots에서 success/failure 둘 다 확인됐지만, `window-hwnd gdigrab` review video usable-state는 아직 partial이라 screenshot/request artifact가 source of truth다
 
 ## 현재 우선순위
 
@@ -75,21 +79,36 @@ cleanup program 완료 이후에도 current follow-up은 남아 있다.
    - result:
      - `ChooseFirstNode -> combat takeover -> generic map wait`는 재발하지 않았다
      - `HandleCombat -> HandleRewards` handoff와 reward precedence는 live에서 정상 동작했다
-     - 새 authoritative blocker는 `same-action-stall phase=ChooseFirstNode target=exported reachable map node screen=rest-site`이고, family 해석은 `rest-site release pending over map overlay`다
-5. combat barrier tail family
+     - 이 root가 드러낸 `same-action-stall phase=ChooseFirstNode target=exported reachable map node screen=rest-site` family는 이후 2026-04-03 wave에서 current `main` 기준으로 닫혔다
+5. rest-site release-pending + click-ready proof
+   - roots:
+     - [rest-site-click-ready-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/rest-site-click-ready-20260403-live1)
+   - result:
+     - `rest site: rest -> visible proceed -> treasure/event continuity`가 live에서 다시 확인됐다
+     - repeated exported node click / generic map wait는 rest-site aftermath에서 재발하지 않았다
+     - 새 front blocker는 rest-site가 아니라 `HandleEvent` `미끄러운 다리` same-action family로 이동했다
+6. bounded slippery bridge wave
+   - roots:
+     - [slippery-bridge-overcome-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live1)
+     - [slippery-bridge-overcome-20260403-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live2)
+   - result:
+     - old failure shape는 semantic `버틴다` loop가 `player-defeated`로 이어지는 bounded event misrouting이다
+     - current code는 exact live artifact replay에서 `OVERCOME`와 event-choice lineage를 우선한다
+     - fresh live smoke root `live2`는 `max-steps-reached:260`까지 no-stall로 진행됐지만, direct post-fix in-game `미끄러운 다리` repro는 아직 남아 있다
+7. combat barrier tail family
    - roots:
      - [combat-takeover-barrier-20260331-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-takeover-barrier-20260331-live1)
      - [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
    - result:
      - short validation roots에서는 `combat-barrier-wait-plateau`와 `combat-barrier-step-budget-exhausted` family가 여전히 관찰된다
      - dominant shape는 `HandleCombat`에서 `EnemyClick`/`EndTurn` barrier ownership이 늦게 풀리는 long-tail이다
-6. fresh endurance proof root
+8. fresh endurance proof root
    - root: [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)
    - result:
      - valid-trust single attempt가 `stepCount=479`까지 실제로 진행됐다
      - 종료는 harness stall이 아니라 natural `player-defeated` terminal이었다
      - 이번 root에서는 short triage roots에서 보였던 reward stall / combat barrier family가 authoritative terminal cause로 올라오지 않았다
-7. live review capture state
+9. live review capture state
    - roots:
      - [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
      - [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)
@@ -109,8 +128,8 @@ historical frontier는
 
 ```text
 "현재 `main`은 한 번의 authoritative long-run을 natural terminal까지 끌고 갈 수 있다.
-하지만 short validation roots에서는 `reward card choice same-action-stall`, `combat-barrier-step-budget-exhausted`, live review black-video가 아직 남아 있다.
-다음 step은 closed ancient/event/ChooseFirstNode family를 reopen하지 않고 이 세 gap을 분리해서 정리하는 것이다."
+하지만 2026-04-03 wave 이후 short validation follow-up은 `reward card progression`, `combat-barrier-step-budget-exhausted`, direct `Slippery Bridge` live repro, live review usable-state로 재정렬됐다.
+다음 step은 closed ancient/event/ChooseFirstNode/rest-site family를 reopen하지 않고 이 네 gap을 분리해서 정리하는 것이다."
 ```
 
 ### 3. current speed baseline
@@ -162,8 +181,8 @@ historical frontier는
 - `7bb6512`, `4244a35`, `bf933cc` 이후 ancient option contract mismatch와 `ChooseFirstNode <-> event` mixed-state는 live에서 다시 authoritative blocker로 올라오지 않았다
 - [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)는 current `main`이 valid-trust single attempt를 natural `player-defeated` terminal까지 끌고 갈 수 있음을 보여준다
 - exact replay repro였던 explicit relic reward claim -> `proceed after resolving rewards` inversion은 current `main`에서 닫혔다
-- current short-root blocker family는 `reward card choice same-action-stall`과 `combat-barrier-step-budget-exhausted / wait-plateau`다
-- ffmpeg metadata recording은 current `main`에서 붙지만, `window-hwnd gdigrab` review video는 아직 black frame이다
+- current short-root follow-up family는 `reward card choice progression`, `combat-barrier-step-budget-exhausted / wait-plateau`, direct post-fix `Slippery Bridge` live repro, review-video usable-state다
+- ffmpeg metadata recording과 review artifact retention은 current `main`에서 붙지만, `window-hwnd gdigrab` review video usable-state는 아직 partial이다
 - current `main`의 control-flow observer provenance는 published-first이고, published provenance는 legacy `visibleScreen` / `sceneReady` 계열로 다시 채워지지 않는다
 - bridge node semantics는 compatibility scene winner를 다시 먹지 않는다
 - combat post-action은 더 이상 generic observer delta 하나로 다음 step을 열지 않고, lane micro-stage + quiet convergence로 settle된다
@@ -301,9 +320,10 @@ historical frontier는
 ### 아직 열려 있는 것
 
 - no known red in `build` / `self-test` / `replay-test` / `replay-parity-test`
-- current short validation blocker는 `verify-reward-claim-20260401-live1` attempt `0001`의 `reward card choice same-action-stall`이다
-- combat long-tail blocker는 short roots에서 반복되는 `combat-barrier-step-budget-exhausted` / `combat-barrier-wait-plateau` family다
-- `window-hwnd gdigrab` review video는 current `main`에서 metadata는 남기지만 black frame이라 review evidence로는 아직 unusable이다
+- current short validation frontier는 단일 blocker 하나로 고정돼 있지 않다
+- fresh live root [rest-site-click-ready-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/rest-site-click-ready-20260403-live1)는 rest-site family를 닫은 뒤 `HandleEvent` `미끄러운 다리` same-action family를 드러냈다
+- current code는 [slippery-bridge-overcome-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live1) exact artifact 기준 bounded `OVERCOME` exit로 수정됐고, fresh smoke root [slippery-bridge-overcome-20260403-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live2)는 `max-steps-reached:260` no-stall이다
+- 다만 post-fix direct in-game `미끄러운 다리` continuation repro는 아직 없고, reward card progression / combat barrier long-tail / review-video usable-state는 계속 partial이다
 - `deck-remove` child screen explicit owner/export gap과 some low-priority coverage rows (`event reward substate`, `reward-map loop sentinel`) remain partial
 
 ## 다음 작업 원칙
@@ -325,15 +345,15 @@ historical frontier는
       - [Analysis/CombatTargetabilitySupport.cs](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Analysis/CombatTargetabilitySupport.cs)
 3. semantic blocker, speed evidence, coverage gap을 구분한다
    - ancient/event/ChooseFirstNode family는 닫혔고, current `main`은 natural-terminal long-run sample 하나를 확보했다
-   - short-root reward/combat blocker와 live review black-video는 별도 family로 본다
+   - short-root reward/combat/video gap과 `Slippery Bridge` direct live repro gap은 별도 family로 본다
    - explicit event/common combat speed baseline과 post-refactor cleanup program은 유지한다
-   - 현재 immediate blocker는 `reward card choice` click progression drift이고, 그 다음이 combat barrier ownership release와 review-video capture quality다
+   - rest-site release-pending family는 current `main`에서 닫혔고, immediate follow-up은 reward card progression, combat barrier ownership release, `Slippery Bridge` direct live repro, review-video capture usability다
 
 ## 한 줄 요약
 
 ```text
 current `main`은 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion을 닫은 뒤,
 fresh authoritative endurance root에서 `stepCount=479` natural `player-defeated` terminal까지 도달했다.
-즉 M5 acceptance shape evidence는 late-stage까지 왔지만, short validation roots에는 `reward card choice same-action-stall`과 `combat-barrier-step-budget-exhausted` family가 아직 남아 있다.
-또한 live ffmpeg metadata recording은 붙지만 review video는 아직 black frame이므로 screenshot/request artifact를 source of truth로 유지해야 한다.
+이후 2026-04-03 wave는 `rest-site -> map handoff`와 rest-site click-ready/proceed family를 live에서 닫았고, bounded `Slippery Bridge` routing과 event-lineage stall semantics를 current `main`에 올렸다.
+즉 M5 acceptance shape evidence는 late-stage까지 왔지만, short validation follow-up에는 reward card progression, combat barrier long-tail, direct `Slippery Bridge` live repro, review-video usable-state가 아직 남아 있다.
 ```

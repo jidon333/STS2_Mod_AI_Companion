@@ -25,7 +25,7 @@ coverage status 의미:
 | `REWARD-CARD-CLICK-PROGRESSION` | `HandleRewards` explicit card reward row가 same-action-stall 없이 실제 progression으로 이어지는지 | partial |
 | `COMBAT-BARRIER-BUDGET` | short validation roots에서 `HandleCombat` barrier long-tail이 step-budget 또는 plateau로 새는지 | partial |
 | `VAL-LIVE-VIDEO-REVIEW` | ffmpeg live metadata는 남지만 `gdigrab` review video가 usable한지 | partial |
-| `MAP-POSTNODE-REWARD-REOPEN` | `WaitPostMapNodeRoom` reward destination reopen contract | green |
+| `EVENT-SLIPPERY-BRIDGE-LIVE-DIRECT` | bounded `Slippery Bridge` contract가 post-fix direct live repro까지 확보됐는지 | partial |
 
 ## Validation / Boot / Menu
 
@@ -74,10 +74,11 @@ coverage status 의미:
 | `EVENT-04` | `HandleEvent` / `WaitEventRelease` | ancient dialogue / completion | green | `Program.SelfTests.EventRewardSubstates.cs` ancient allowlist, post-phase, release assertions | ancient lane split strong |
 | `EVENT-05` | `HandleEvent` | event reward substate | partial | `Program.SelfTests.EventRewardSubstates.cs` canonical `EventSceneState` assertions delegate colorless/reward follow-up into reward lane; reward/event mixed tests still exist | owner/action/release now route through canonical event state, but fresh current-main live evidence is still thin |
 | `EVENT-06` | `HandleEvent` / `ChooseFirstNode` | event/map mixed aftermath | green | `Program.SelfTests.NonCombatForegroundOwnership.cs` event/map mixed foreground assertions | event/map mixed aftermath now reads canonical owner truth end-to-end |
+| `EVENT-07` | `HandleEvent` | bounded slippery bridge progression | partial | [Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs](../../src/Sts2GuiSmokeHarness/Program.SelfTests.NonCombatDecisionContracts.SubtypesAndEvents.cs) `SLIPPERY_BRIDGE` `OVERCOME` assertions, [Program.SelfTests.StallSentinel.cs](../../src/Sts2GuiSmokeHarness/Program.SelfTests.StallSentinel.cs) event-lineage fingerprint assertions, failing live root [slippery-bridge-overcome-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live1), smoke root [slippery-bridge-overcome-20260403-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live2) | current code prefers bounded `OVERCOME` and no longer treats changing `HOLD_ON_n` lineage as label-only same action, but direct post-fix in-game repro is still missing |
 | `TREASURE-01` | `ChooseFirstNode` / `HandleEvent` | treasure room | green | treasure room self-tests, WaitMap reopen to treasure, status doc continuity roots | explicit treasure room state strong |
 | `REST-01` | `ChooseFirstNode` | rest-site explicit choice | green | rest-site metadata-first self-tests | authoritative metadata contract strong |
 | `REST-02` | `ChooseFirstNode` | rest-site post-click release | green | grace / noop / selection-failed self-tests | explicit release/no-op guard present |
-| `REST-03` | `ChooseFirstNode` / `WaitPostMapNodeRoom` | rest-site release pending over map overlay | partial | `Program.SelfTests.NonCombatForegroundOwnership.cs` synthetic release-pending assertions + `Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs` rest-site branch assertions + decisive live root [combat-release-reward-aftermath-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/combat-release-reward-aftermath-20260401-live1) attempt `0001` step `0398` | current code canonicalizes `screen=rest-site` + exported node residue into rest-site release-pending, but fresh live rerun before green promotion is still required |
+| `REST-03` | `ChooseFirstNode` / `WaitPostMapNodeRoom` | rest-site release pending over map overlay | green | `Program.SelfTests.NonCombatForegroundOwnership.cs` synthetic release-pending assertions + `Program.SelfTests.PhaseRouting.EnterRunAndPostNode.cs` rest-site branch assertions + fresh live root [rest-site-click-ready-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/rest-site-click-ready-20260403-live1) | current `main` keeps rest-site owner truth over exported map residue, advances `rest -> visible proceed`, and continues into treasure/event without reopening repeated map-node click |
 
 ## Rewards
 
@@ -128,6 +129,11 @@ coverage status 의미:
   - [observer-first-speed-20260328-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/observer-first-speed-20260328-live9)
 - latest reward validation root:
   - [verify-reward-claim-20260401-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/verify-reward-claim-20260401-live1)
+- latest rest-site closure root:
+  - [rest-site-click-ready-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/rest-site-click-ready-20260403-live1)
+- latest bounded slippery bridge roots:
+  - [slippery-bridge-overcome-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live1)
+  - [slippery-bridge-overcome-20260403-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live2)
 - latest endurance natural-terminal root:
   - [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)
 
@@ -136,8 +142,10 @@ coverage status 의미:
 - WaitRunLoad transition hold / stale continue recovery / resumed room branching
 - map-overlay foreground / canonical foreground owner
 - explicit event proceed / ancient completion / event release
+- bounded slippery bridge `OVERCOME` routing / event-choice lineage-aware stall fingerprint
 - reward fast-path / layered reward state / stale reward cleanup / reward-map-loop sentinel
 - rest-site explicit metadata / post-click grace / no-op classification
+- rest-site click-ready / proceed visibility / release-pending diagnostics
 - treasure room explicit lane
 - WaitCombat acceptance / combat opener
 
@@ -145,6 +153,7 @@ coverage status 의미:
 
 | Priority | Work Item | Why |
 |---|---|---|
+| P1 | direct post-fix `Slippery Bridge` live repro | self-test + exact artifact replay + smoke root는 생겼지만, 실제 in-game continuation proof는 아직 없다 |
 | P1 | `deck-remove` child-screen explicit owner/export cleanup | `live9`에서 correctness blocker는 없었지만 child-screen에서 transient `captured/enriched` recapture가 남아 있다 |
 | P1 | reward card child-screen smoothness cleanup | reward card choice가 `captured/enriched wait` 뒤 observer-first로 회복되며, subtype owner/export를 더 좁힐 여지가 있다 |
 | P1 | event reward substate live evidence | `EVENT-05` remains partial |
