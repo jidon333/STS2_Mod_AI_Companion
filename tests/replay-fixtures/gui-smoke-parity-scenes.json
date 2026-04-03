@@ -102,6 +102,26 @@
     "expectedChoiceExtractorPath": "combat"
   },
   {
+    "name": "enter-run-abandons-stale-save-after-failed-continue-retry",
+    "requestPath": "tests/replay-fixtures/m6-parity/enter-run-abandon-after-failed-continue.request.json",
+    "expectedStatus": "act",
+    "expectedActionKind": "click",
+    "expectedTargetContains": "abandon run",
+    "expectedForegroundOwner": null,
+    "expectedForegroundActionLane": null,
+    "expectedChoiceExtractorPath": "main-menu"
+  },
+  {
+    "name": "combat-retires-stale-end-turn-after-resolved-rewards",
+    "requestPath": "tests/replay-fixtures/m6-parity/combat-retires-stale-end-turn-after-resolved-rewards.request.json",
+    "expectedStatus": "act",
+    "expectedActionKind": "press-key",
+    "expectedTargetContains": "combat select attack slot 1",
+    "expectedForegroundOwner": null,
+    "expectedForegroundActionLane": null,
+    "expectedChoiceExtractorPath": "combat"
+  },
+  {
     "name": "reward-back-dismisses-stale-reward-residue",
     "requestPath": "tests/replay-fixtures/m6-parity/reward-back.request.json",
     "expectedStatus": "act",

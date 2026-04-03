@@ -79,7 +79,7 @@ static class CombatBarrierSupport
         bool canResolveCombatEnemyTarget,
         bool combatPlayerActionWindowClosed)
     {
-        var source = TryFindSource(history);
+        var source = TryFindSource(combatContext.CombatHistory);
         if (source is null)
         {
             return Inactive;

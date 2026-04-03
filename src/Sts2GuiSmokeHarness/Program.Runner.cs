@@ -653,7 +653,7 @@ internal static partial class Program
             request.History ?? Array.Empty<GuiSmokeHistoryEntry>(),
             request.CombatCardKnowledge ?? Array.Empty<CombatCardKnowledgeHint>(),
             request.WindowBounds);
-        if (analysisContext.CombatMicroStage.Kind != CombatMicroStageKind.EnemyClickResolutionPending
+        if (analysisContext.CombatMicroStage.Kind != CombatMicroStageKind.ResolvingAttackTarget
             || analysisContext.CombatBarrierEvaluation.Kind != CombatBarrierKind.EnemyClick)
         {
             return false;

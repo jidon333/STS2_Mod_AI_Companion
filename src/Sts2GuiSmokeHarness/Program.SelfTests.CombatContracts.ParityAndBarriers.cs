@@ -1378,6 +1378,81 @@ internal static partial class Program
                    || endTurnBarrierReopenedDecision.Reason?.Contains("combat barrier wait", StringComparison.OrdinalIgnoreCase) != true,
                 "EndTurn barrier release should prevent combat barrier wait reentry on the reopened player turn.");
 
+            var freshCombatAfterResolvedRewardsObserver = endTurnBarrierSeedObserver with
+            {
+                CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(1600),
+                InventoryId = "inv-fresh-combat-after-rewards",
+                SceneEpisodeId = "episode-fresh-combat-after-rewards",
+                EncounterKind = "Elite",
+                PlayerCurrentHp = 41,
+                PlayerMaxHp = 80,
+                PlayerEnergy = 3,
+                CurrentChoices = new[] { "1턴 종료" },
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                    new ObservedCombatHandCard(2, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                    new ObservedCombatHandCard(3, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                },
+                ActionNodes = new[] { new ObserverActionNode("end-turn", "button", "1턴 종료", "1604,846,220,90", true) },
+                Meta = new Dictionary<string, string?>(endTurnBarrierSeedObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatRoundNumber"] = "1",
+                    ["combatPlayerActionsDisabled"] = "false",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                    ["combatHistoryStartedCount"] = null,
+                    ["combatHistoryFinishedCount"] = null,
+                    ["combatInteractionRevision"] = "none:none:none:none:none",
+                    ["combatCardPlayPending"] = null,
+                    ["combatTargetingInProgress"] = null,
+                    ["combatSelectedCardSlot"] = null,
+                    ["combatSelectedCardId"] = null,
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;CombatState.RoundNumber=1;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                    ["transitionInProgress"] = "false",
+                    ["semanticKind"] = "runtime-poll",
+                },
+            };
+            var freshCombatAfterResolvedRewardsHistory = endTurnBarrierHistory
+                .Concat(new[]
+                {
+                    new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "combat-resolved-rewards", null, DateTimeOffset.UtcNow.AddMilliseconds(1200)),
+                    new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "wait", null, DateTimeOffset.UtcNow.AddMilliseconds(1300)),
+                })
+                .ToArray();
+            var freshCombatAfterResolvedRewardsState = new ObserverState(freshCombatAfterResolvedRewardsObserver, null, null, null);
+            var freshCombatAfterResolvedRewardsContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                freshCombatAfterResolvedRewardsState,
+                runtimeStateOnlyScreenshotPath,
+                freshCombatAfterResolvedRewardsHistory,
+                endTurnBarrierKnowledge);
+            var freshCombatAfterResolvedRewardsActions = BuildAllowedActionsCore(
+                GuiSmokePhase.HandleCombat,
+                freshCombatAfterResolvedRewardsState,
+                endTurnBarrierKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                freshCombatAfterResolvedRewardsHistory,
+                freshCombatAfterResolvedRewardsContext);
+            Assert(!freshCombatAfterResolvedRewardsContext.CombatBarrierEvaluation.IsActive,
+                "A fresh combat encounter after resolved rewards should retire any stale EndTurn barrier from the previous combat.");
+            Assert(freshCombatAfterResolvedRewardsContext.CombatReleaseState.LifecycleStage == CombatLifecycleStage.PlayerPlayOpen,
+                "Fresh combat with an open player window should not stay trapped in PlayerReopenPending from a previous combat.");
+            Assert(freshCombatAfterResolvedRewardsActions.Contains("select attack slot 1", StringComparer.OrdinalIgnoreCase),
+                $"Fresh combat after resolved rewards should reopen attack-slot actions instead of remaining wait-only. actual=[{string.Join(", ", freshCombatAfterResolvedRewardsActions)}]");
+            var freshCombatAfterResolvedRewardsDecision = AutoDecisionProvider.Decide(BuildBarrierRequest(
+                "0008-fresh-combat",
+                36,
+                freshCombatAfterResolvedRewardsObserver,
+                endTurnBarrierKnowledge,
+                freshCombatAfterResolvedRewardsActions,
+                freshCombatAfterResolvedRewardsHistory,
+                "Fresh combat should retire stale end-turn barriers from the prior combat."));
+            Assert(!string.Equals(freshCombatAfterResolvedRewardsDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && freshCombatAfterResolvedRewardsDecision.Reason?.Contains("next player turn to reopen", StringComparison.OrdinalIgnoreCase) != true
+                   && freshCombatAfterResolvedRewardsDecision.Reason?.Contains("end-turn transit", StringComparison.OrdinalIgnoreCase) != true,
+                $"Fresh combat should no longer inherit stale end-turn wait wording. actual={freshCombatAfterResolvedRewardsDecision.Status}/{freshCombatAfterResolvedRewardsDecision.Reason}");
+
             var endTurnObserverDriftOnlyHistory = new[]
             {
                 new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "observer-drift", "auto-end turn", DateTimeOffset.UtcNow),

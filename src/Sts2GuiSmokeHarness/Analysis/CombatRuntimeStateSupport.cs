@@ -455,8 +455,25 @@ static class CombatRuntimeStateSupport
 
     public static bool IsDefaultInteractionRevision(string? interactionRevision)
     {
-        return string.IsNullOrWhiteSpace(interactionRevision)
-               || string.Equals(interactionRevision, DefaultInteractionRevision, StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(interactionRevision)
+            || string.Equals(interactionRevision, DefaultInteractionRevision, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var segments = interactionRevision.Split(':', StringSplitOptions.TrimEntries);
+        if (segments.Length != 5)
+        {
+            return false;
+        }
+
+        return string.Equals(segments[0], "none", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(segments[1], "none", StringComparison.OrdinalIgnoreCase)
+               && (string.Equals(segments[2], "none", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(segments[2], "false", StringComparison.OrdinalIgnoreCase))
+               && (string.Equals(segments[3], "none", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(segments[3], "false", StringComparison.OrdinalIgnoreCase))
+               && string.Equals(segments[4], "none", StringComparison.OrdinalIgnoreCase);
     }
 
     private static PendingCombatSelection? TryResolvePendingSelection(
