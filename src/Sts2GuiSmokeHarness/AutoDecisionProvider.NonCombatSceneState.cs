@@ -1128,9 +1128,7 @@ sealed partial class AutoDecisionProvider
             restSiteScene.ReleaseStage,
             HasExplicitSurface: hasExplicitSurface,
             surfaceKind,
-            ContractMismatch: hasExplicitSurface
-                              && HasExporterMapForegroundClaim(observer)
-                              && !mapExplicitOwner,
+            ContractMismatch: false,
             MapOverlayVisible: mapOverlayState.ForegroundVisible,
             StaleBackgroundPresent: restSiteScene.MapContextVisible || restSiteScene.AftermathResiduePresent);
     }

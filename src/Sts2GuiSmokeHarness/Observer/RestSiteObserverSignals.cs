@@ -113,6 +113,11 @@ static class RestSiteObserverSignals
 
     public static bool IsRestSiteSmithUpgradeState(ObserverSummary observer)
     {
+        if (IsRestSiteSmithUpgradeReleasedToProceed(observer))
+        {
+            return false;
+        }
+
         return string.Equals(observer.ChoiceExtractorPath, "rest-smith-upgrade", StringComparison.OrdinalIgnoreCase)
                || HasSmithUpgradeScreenVisible(observer)
                || string.Equals(TryGetMetaValue(observer, "restSiteViewKind"), "smith-grid", StringComparison.OrdinalIgnoreCase)
@@ -357,6 +362,59 @@ static class RestSiteObserverSignals
                || string.Equals(lastSignal, "before-select", StringComparison.OrdinalIgnoreCase)
                || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase)
                || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsRestSiteSmithUpgradeReleasedToProceed(ObserverSummary observer)
+    {
+        if (!HasFreshSelectionSignalForCurrentRoom(observer)
+            || !HasSmithUpgradeScreenVisible(observer)
+            || HasSmithGridVisible(observer)
+            || HasSmithConfirmVisible(observer)
+            || HasUpgradeCardSelectionSurface(observer))
+        {
+            return false;
+        }
+
+        var currentOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionCurrentOptionId"));
+        var observedOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionObservedOptionId"));
+        var lastOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionLastOptionId"));
+        var activeOptionId = currentOptionId ?? observedOptionId ?? lastOptionId;
+        if (!string.Equals(activeOptionId, "SMITH", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var outcome = TryGetMetaValue(observer, "restSiteSelectionOutcome");
+        var lastSignal = TryGetMetaValue(observer, "restSiteSelectionLastSignal");
+        var selectionAccepted =
+            string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase);
+        if (!selectionAccepted)
+        {
+            return false;
+        }
+
+        var selectedCardPersisted =
+            TryParseMetaInt(observer, "cardSelectionSelectedCount") > 0
+            || TryParseMetaInt(observer, "restSiteUpgradeSelectedCardCount") > 0
+            || !string.IsNullOrWhiteSpace(TryGetMetaValue(observer, "cardSelectionSelectedCardIds"))
+            || !string.IsNullOrWhiteSpace(TryGetMetaValue(observer, "restSiteUpgradeSelectedCards"));
+        if (!selectedCardPersisted)
+        {
+            return false;
+        }
+
+        var roomSurfaceRepublished =
+            RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
+            && HasProceedEnabled(observer)
+            && !string.IsNullOrWhiteSpace(GetProceedBounds(observer));
+        if (!roomSurfaceRepublished)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static bool HasUpgradeCardSelectionSurface(ObserverSummary observer)

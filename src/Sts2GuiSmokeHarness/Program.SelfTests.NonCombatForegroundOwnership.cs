@@ -1819,6 +1819,119 @@ internal static partial class Program
             Assert(string.Equals(restSiteProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
                 "Observer-visible rest-site proceed choice should create a visible proceed decision without waiting for screenshot arrows.");
 
+            var restSiteSmithConfirmReleaseSummary = restSiteProceedSummary with
+            {
+                CurrentScreen = "upgrade",
+                VisibleScreen = "upgrade",
+                ChoiceExtractorPath = "card-selection-upgrade",
+                CurrentChoices = new[] { "휴식", "재련" },
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("rest-site:HEAL", "rest-option", "휴식", "664,255,246.786,162.879", true)
+                    {
+                        SemanticHints = new[] { "scene:rest-site", "option-id:HEAL", "source:button" },
+                    },
+                    new ObserverActionNode("rest-site:SMITH", "rest-option", "재련", "1010,255,246.786,162.879", true)
+                    {
+                        SemanticHints = new[] { "scene:rest-site", "option-id:SMITH", "source:button" },
+                    },
+                },
+                Choices = new[]
+                {
+                    new ObserverChoice("rest-option", "휴식", "664,255,246.786,162.879", "HEAL", "휴식")
+                    {
+                        NodeId = "rest-site:HEAL",
+                        BindingKind = "rest-site-option",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:rest-site", "option-id:HEAL", "source:button" },
+                    },
+                    new ObserverChoice("rest-option", "재련", "1010,255,246.786,162.879", "SMITH", "재련")
+                    {
+                        NodeId = "rest-site:SMITH",
+                        BindingKind = "rest-site-option",
+                        Enabled = true,
+                        SemanticHints = new[] { "scene:rest-site", "option-id:SMITH", "source:button" },
+                    },
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["foregroundOwner"] = "map",
+                    ["foregroundActionLane"] = "map-node",
+                    ["mapReleaseAuthority"] = "true",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NRestSiteRoom",
+                    ["cardSelectionScreenDetected"] = "true",
+                    ["cardSelectionScreenType"] = "upgrade",
+                    ["cardSelectionSelectedCount"] = "1",
+                    ["cardSelectionSelectedCardIds"] = "CARD.STRIKE_IRONCLAD",
+                    ["cardSelectionRequireManualConfirmation"] = "true",
+                    ["cardSelectionMainConfirmEnabled"] = "false",
+                    ["cardSelectionPreviewConfirmEnabled"] = "false",
+                    ["restSiteProceedVisible"] = "true",
+                    ["restSiteProceedEnabled"] = "true",
+                    ["restSiteProceedBounds"] = "1609.88,761.3,282.45,113.4",
+                    ["restSiteUpgradeScreenVisible"] = "true",
+                    ["restSiteUpgradeObserverMiss"] = "true",
+                    ["restSiteUpgradeCardCount"] = "0",
+                    ["restSiteUpgradeConfirmVisible"] = "false",
+                    ["restSiteUpgradeConfirmEnabled"] = "false",
+                    ["restSiteUpgradeSelectedCardCount"] = "1",
+                    ["restSiteUpgradeSelectedCards"] = "CARD.STRIKE_IRONCLAD",
+                    ["restSiteSelectionCurrentStatus"] = "grid-observer-miss",
+                    ["restSiteSelectionCurrentOptionId"] = "SMITH",
+                    ["restSiteSelectionObservedOptionId"] = "SMITH",
+                    ["restSiteSelectionOutcome"] = "success",
+                    ["restSiteSelectionOutcomeEvidence"] = "runtime-screen:upgrade-without-exported-hitboxes",
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastOptionId"] = "SMITH",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                    ["restSiteSelectionLastSignalAt"] = DateTimeOffset.UtcNow.ToString("O"),
+                    ["restSiteViewKind"] = "smith-grid-observer-miss",
+                },
+            };
+            var restSiteSmithConfirmReleaseObserver = new ObserverState(restSiteSmithConfirmReleaseSummary, null, null, null);
+            Assert(RestSiteObserverSignals.IsRestSiteSmithUpgradeReleasedToProceed(restSiteSmithConfirmReleaseSummary),
+                "Smith confirm aftermath should classify as room-local proceed release once the rest-site controls republish and the upgrade surface is no longer actionable.");
+            Assert(!RestSiteObserverSignals.IsRestSiteSmithUpgradeState(restSiteSmithConfirmReleaseSummary),
+                "Stale smith-upgrade screen residue should not keep the smith lane foreground-owned after the room-local proceed surface has republished.");
+            Assert(GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(restSiteSmithConfirmReleaseSummary),
+                "Room-local proceed should reopen after smith confirm even if stale map foreground residue still lingers in exporter metadata.");
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(restSiteSmithConfirmReleaseObserver) is
+                {
+                    SmithUpgradeActive: false,
+                    ProceedVisible: true,
+                    SelectionSettling: false,
+                },
+                "Rest-site scene state should hand smith-confirm aftermath back to the proceed lane instead of keeping smith upgrade active.");
+            var restSiteSmithConfirmReleaseActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteSmithConfirmReleaseObserver);
+            Assert(restSiteSmithConfirmReleaseActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
+                   && !restSiteSmithConfirmReleaseActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase)
+                   && !restSiteSmithConfirmReleaseActions.Contains("click smith confirm", StringComparer.OrdinalIgnoreCase),
+                $"Smith confirm aftermath should reopen proceed instead of the stale smith lane. actual=[{string.Join(", ", restSiteSmithConfirmReleaseActions)}]");
+            var restSiteSmithConfirmReleaseHandoffState = AutoDecisionProvider.BuildPostNodeHandoffState(
+                restSiteSmithConfirmReleaseObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                null);
+            Assert(restSiteSmithConfirmReleaseHandoffState.Owner == NonCombatCanonicalForegroundOwner.RestSite
+                   && restSiteSmithConfirmReleaseHandoffState.HandoffTarget == NonCombatHandoffTarget.ChooseFirstNode
+                   && !restSiteSmithConfirmReleaseHandoffState.ContractMismatch
+                   && restSiteSmithConfirmReleaseHandoffState.SurfaceKind == PostNodeHandoffSurfaceKind.RestSiteProceed,
+                $"Smith confirm aftermath should keep RestSite proceed ownership without escalating stale map residue into a handoff contract mismatch. owner={restSiteSmithConfirmReleaseHandoffState.Owner} target={restSiteSmithConfirmReleaseHandoffState.HandoffTarget} mismatch={restSiteSmithConfirmReleaseHandoffState.ContractMismatch} surface={restSiteSmithConfirmReleaseHandoffState.SurfaceKind}");
+            var restSiteSmithConfirmReleaseDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteSmithConfirmReleaseSummary,
+                AllowedActions = restSiteSmithConfirmReleaseActions,
+                SceneSignature = "phase:choosefirstnode|screen:upgrade|visible:upgrade|encounter:restsite|ready:unknown|stability:unknown|card-selection:upgrade|card-selection-selected:1|room:rest-site",
+                History = new[]
+                {
+                    new GuiSmokeHistoryEntry(GuiSmokePhase.ChooseFirstNode.ToString(), "click", "rest site: smith card", DateTimeOffset.UtcNow.AddMilliseconds(-600)),
+                    new GuiSmokeHistoryEntry(GuiSmokePhase.ChooseFirstNode.ToString(), "click", "rest site: smith confirm", DateTimeOffset.UtcNow.AddMilliseconds(-250)),
+                    new GuiSmokeHistoryEntry(GuiSmokePhase.WaitMap.ToString(), "branch-card-selection", null, DateTimeOffset.UtcNow.AddMilliseconds(-100)),
+                },
+            });
+            Assert(string.Equals(restSiteSmithConfirmReleaseDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
+                $"Smith confirm aftermath should proceed instead of aborting on stale map-owner residue. actual={restSiteSmithConfirmReleaseDecision.TargetLabel ?? restSiteSmithConfirmReleaseDecision.Reason ?? restSiteSmithConfirmReleaseDecision.Status}");
+
             var restSiteProceedMetaOnlySummary = restSiteProceedSummary with
             {
                 ChoiceExtractorPath = "map",
