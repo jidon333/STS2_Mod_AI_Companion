@@ -1176,6 +1176,109 @@ internal static partial class Program
             Assert(string.Equals(runtimeTargetSummaryNoEnergyDecision.TargetLabel, "auto-end turn", StringComparison.OrdinalIgnoreCase),
                 "No-energy stale target diagnostics should fall through to auto-end turn instead of a wait-only plateau.");
 
+            var reopenedAttackSelectionMetadata = JsonSerializer.Serialize(
+                new CombatBarrierHistoryMetadata(
+                    55,
+                    DateTimeOffset.UtcNow.AddSeconds(-1),
+                    "combat",
+                    "7:6:false:false:none",
+                    7,
+                    6,
+                    "CARD.STRIKE_IRONCLAD")
+                {
+                    RoundNumber = 3,
+                    PlayerActionsDisabled = false,
+                    EndingPlayerTurnPhaseOne = false,
+                    EndingPlayerTurnPhaseTwo = false,
+                },
+                GuiSmokeShared.JsonOptions);
+            var reopenedAttackSelectionHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-1))
+                {
+                    Metadata = reopenedAttackSelectionMetadata,
+                },
+            };
+            var reopenedAttackSelectionObserver = runtimeTargetSummaryHistoryCarryObserver with
+            {
+                InventoryId = "inv-runtime-attack-reopen-after-cleared-selection",
+                SceneEpisodeId = "episode-runtime-attack-reopen-after-cleared-selection",
+                PlayerEnergy = 1,
+                CurrentChoices = new[] { "DrawPile", "DiscardPile", "ExhaustPile", "3턴 종료", "핑" },
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("end-turn", "choice", "3턴 종료", "1604,846,220,90", true),
+                },
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.BASH", "Attack", 2),
+                    new ObservedCombatHandCard(2, "CARD.SPOILS_MAP", "Quest", 0),
+                    new ObservedCombatHandCard(3, "CARD.IRON_WAVE", "Attack", 1),
+                },
+                Meta = new Dictionary<string, string?>(runtimeTargetSummaryHistoryCarryObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatTargetSummary"] = null,
+                    ["combatSelectedCardSlot"] = null,
+                    ["combatSelectedCardType"] = "Attack",
+                    ["combatSelectedCardTargetType"] = "AnyEnemy",
+                    ["combatCardPlayPending"] = "false",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatInteractionRevision"] = "7:7:false:false:none",
+                    ["combatHistoryStartedCount"] = "7",
+                    ["combatHistoryFinishedCount"] = "7",
+                    ["combatLastCardPlayStartedCardId"] = "CARD.IRON_WAVE",
+                    ["combatLastCardPlayFinishedCardId"] = "CARD.IRON_WAVE",
+                    ["combatTargetableEnemyCount"] = "0",
+                    ["combatTargetableEnemyIds"] = null,
+                    ["combatHittableEnemyCount"] = "0",
+                    ["combatHittableEnemyIds"] = null,
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi;CombatState.RoundNumber=3;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                },
+            };
+            var reopenedAttackSelectionKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.BASH", "Attack", "AnyEnemy", 2, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.SPOILS_MAP", "Quest", "None", 0, "self-test"),
+                new CombatCardKnowledgeHint(3, "CARD.IRON_WAVE", "Attack", "AnyEnemy", 1, "self-test"),
+            };
+            var reopenedAttackSelectionActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(reopenedAttackSelectionObserver, null, null, null),
+                reopenedAttackSelectionKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                reopenedAttackSelectionHistory);
+            Assert(reopenedAttackSelectionActions.Contains("select attack slot 3", StringComparer.OrdinalIgnoreCase),
+                $"Post-selection progress with player-play reopen should reopen the next explicit attack lane instead of staying wait-only. actual=[{string.Join(", ", reopenedAttackSelectionActions)}]");
+            Assert(!reopenedAttackSelectionActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                "Resolved attack selection metadata should not collapse a reopened player-play frame into wait-only.");
+            var reopenedAttackSelectionDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                28,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Retire stale AnyEnemy attack-selection residue once post-selection progress confirms the player-play lane reopened.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:boss|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                reopenedAttackSelectionObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                reopenedAttackSelectionKnowledge,
+                reopenedAttackSelectionActions,
+                reopenedAttackSelectionHistory,
+                "Do not let stale selected-attack metadata block a reopened AnyEnemy attack slot after post-selection progress.",
+                null));
+            Assert(!string.Equals(reopenedAttackSelectionDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(reopenedAttackSelectionDecision.TargetLabel, "combat select attack slot 3", StringComparison.OrdinalIgnoreCase),
+                $"Reopened player-play combat after cleared attack selection should reissue the remaining explicit playable attack slot. actual={reopenedAttackSelectionDecision.Status}/{reopenedAttackSelectionDecision.TargetLabel}/{reopenedAttackSelectionDecision.Reason}");
+
             var runtimeTargetSummaryAfterDriftHistory = new[]
             {
                 new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 3", DateTimeOffset.UtcNow.AddSeconds(-2)),

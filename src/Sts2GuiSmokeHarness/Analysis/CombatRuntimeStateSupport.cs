@@ -576,9 +576,50 @@ static class CombatRuntimeStateSupport
             return false;
         }
 
+        if (ShouldRetireResolvedAttackSelectionTail(observer, runtime, historyPendingSelection.SlotIndex, history))
+        {
+            return false;
+        }
+
         return HasSelectedAttackMetadata(runtime.SelectedCardType, runtime.SelectedCardTargetType)
                || observer.Meta.TryGetValue("combatTargetSummary", out var rawTargetSummary)
                && !string.IsNullOrWhiteSpace(rawTargetSummary);
+    }
+
+    private static bool ShouldRetireResolvedAttackSelectionTail(
+        ObserverSummary observer,
+        CombatRuntimeState runtime,
+        int slotIndex,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
+        if (!runtime.ExplicitlyClearedSelection
+            || runtime.HasInFlightPlayerDrivenAction
+            || runtime.PlayerActionsDisabled == true
+            || runtime.EndingPlayerTurnPhaseOne == true
+            || runtime.EndingPlayerTurnPhaseTwo == true
+            || HasLiveEnemyTargetSurface(observer, runtime))
+        {
+            return false;
+        }
+
+        if (string.Equals(runtime.SelectedCardTargetType, "RandomEnemy", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (observer.Meta.TryGetValue("combatTargetSummary", out var rawTargetSummary)
+            && !string.IsNullOrWhiteSpace(rawTargetSummary))
+        {
+            return false;
+        }
+
+        var sourceMetadata = TryGetRecentAttackSelectionMetadata(history, slotIndex);
+        if (sourceMetadata is null || !HasPostSelectionProgress(runtime, sourceMetadata))
+        {
+            return false;
+        }
+
+        return HasSelectedAttackMetadata(runtime.SelectedCardType, runtime.SelectedCardTargetType);
     }
 
     private static bool HasDownstreamAttackResolutionAttempt(
