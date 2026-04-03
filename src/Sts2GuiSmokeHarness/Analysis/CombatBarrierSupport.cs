@@ -405,6 +405,13 @@ static class CombatBarrierSupport
                 $"next player turn reopened after round advanced from {source.Metadata!.RoundNumber!.Value.ToString(CultureInfo.InvariantCulture)} to {runtime.RoundNumber!.Value.ToString(CultureInfo.InvariantCulture)}");
         }
 
+        if (freshSnapshotSeen
+            && reopenedPlayerWindow
+            && !HasEndTurnTransitionAcknowledgement(observer.Summary, runtime, combatPlayerActionWindowClosed))
+        {
+            return Released(source, "player action window remained open after end-turn submission");
+        }
+
         if (!freshSnapshotSeen)
         {
             return Active(source, "waiting for a fresh post-end-turn snapshot", false, true);

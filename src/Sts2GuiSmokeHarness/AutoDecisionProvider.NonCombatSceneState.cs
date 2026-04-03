@@ -236,15 +236,6 @@ sealed partial class AutoDecisionProvider
             return CombatLifecycleStage.CombatEntryPending;
         }
 
-        var recentEndTurnSubmissionPending = combatBarrier.IsActive
-                                             && combatBarrier.Kind == CombatBarrierKind.EndTurn
-                                             && !HasLifecycleEndTurnTransitionAcknowledgement(observer, runtime)
-                                             && IsEndTurnSubmissionSource(combatBarrier.SourceAction);
-        if (recentEndTurnSubmissionPending)
-        {
-            return CombatLifecycleStage.EndTurnTransit;
-        }
-
         var playerWindowOpen = isPlayPhase == true
                                && isEnemyTurnStarted == false
                                && runtime.PlayerActionsDisabled == false
@@ -253,6 +244,15 @@ sealed partial class AutoDecisionProvider
         if (playerWindowOpen)
         {
             return CombatLifecycleStage.PlayerPlayOpen;
+        }
+
+        var recentEndTurnSubmissionPending = combatBarrier.IsActive
+                                             && combatBarrier.Kind == CombatBarrierKind.EndTurn
+                                             && !HasLifecycleEndTurnTransitionAcknowledgement(observer, runtime)
+                                             && IsEndTurnSubmissionSource(combatBarrier.SourceAction);
+        if (recentEndTurnSubmissionPending)
+        {
+            return CombatLifecycleStage.EndTurnTransit;
         }
 
         if (isEnemyTurnStarted == true)

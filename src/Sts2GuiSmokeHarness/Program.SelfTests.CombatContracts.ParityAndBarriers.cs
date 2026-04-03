@@ -1047,6 +1047,69 @@ internal static partial class Program
                     .CombatBarrierEvaluation.OverWaitRisk,
                 "Acknowledged EndTurn transit should not be flagged as an over-wait plateau risk by itself.");
 
+            var reopenedPlayerWindowAfterEndTurnObserver = endTurnBarrierSeedObserver with
+            {
+                CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(250),
+                InventoryId = "inv-end-turn-reopen-no-ack",
+                SnapshotVersion = 84,
+                PlayerEnergy = 0,
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                    new ObservedCombatHandCard(2, "CARD.STRIKE_IRONCLAD", "Attack", 1),
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatRoundNumber"] = "2",
+                    ["combatPlayerActionsDisabled"] = "false",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                    ["combatHistoryStartedCount"] = "6",
+                    ["combatHistoryFinishedCount"] = "5",
+                    ["combatInteractionRevision"] = "6:5:false:false:none",
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;CombatState.RoundNumber=2;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                },
+            };
+            var reopenedPlayerWindowAfterEndTurnKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.STRIKE_IRONCLAD", "Attack", "AnyEnemy", 1, "self-test"),
+            };
+            var reopenedPlayerWindowAfterEndTurnRequest = BuildBarrierRequest(
+                "0007-reopen-no-ack",
+                39,
+                reopenedPlayerWindowAfterEndTurnObserver,
+                reopenedPlayerWindowAfterEndTurnKnowledge,
+                new[] { "wait" },
+                endTurnBarrierHistory,
+                "If the player window is already open after an end-turn submission, retire the stale EndTurn transit barrier and allow a new action lane.");
+            var reopenedPlayerWindowAfterEndTurnState = new ObserverState(reopenedPlayerWindowAfterEndTurnObserver, null, null, null);
+            var reopenedPlayerWindowAfterEndTurnContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                reopenedPlayerWindowAfterEndTurnState,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory,
+                reopenedPlayerWindowAfterEndTurnKnowledge);
+            var reopenedPlayerWindowAfterEndTurnActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                reopenedPlayerWindowAfterEndTurnState,
+                reopenedPlayerWindowAfterEndTurnKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory);
+            Assert(!reopenedPlayerWindowAfterEndTurnContext.CombatBarrierEvaluation.IsActive,
+                $"A reopened player window should retire stale EndTurn transit instead of staying in a hard wait barrier. actualBarrier={reopenedPlayerWindowAfterEndTurnContext.CombatBarrierEvaluation.Kind} reason={reopenedPlayerWindowAfterEndTurnContext.CombatBarrierEvaluation.Reason}");
+            Assert(reopenedPlayerWindowAfterEndTurnContext.CombatReleaseState.LifecycleStage == CombatLifecycleStage.PlayerPlayOpen,
+                $"Explicit player-play reopen truth should outrank stale EndTurn transit residue. actualLifecycle={reopenedPlayerWindowAfterEndTurnContext.CombatReleaseState.LifecycleStage}");
+            Assert(reopenedPlayerWindowAfterEndTurnActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase)
+                   && !reopenedPlayerWindowAfterEndTurnActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"A reopened player window after stale end-turn submission should reopen the combat lane instead of staying wait-only. actual=[{string.Join(", ", reopenedPlayerWindowAfterEndTurnActions)}]");
+            var reopenedPlayerWindowAfterEndTurnDecision = AutoDecisionProvider.Decide(reopenedPlayerWindowAfterEndTurnRequest with
+            {
+                AllowedActions = reopenedPlayerWindowAfterEndTurnActions,
+            });
+            Assert(string.Equals(reopenedPlayerWindowAfterEndTurnDecision.TargetLabel, "auto-end turn", StringComparison.OrdinalIgnoreCase),
+                $"A reopened player window with zero energy should retry explicit end turn instead of waiting on stale transit residue. actual={reopenedPlayerWindowAfterEndTurnDecision.Status}/{reopenedPlayerWindowAfterEndTurnDecision.TargetLabel ?? reopenedPlayerWindowAfterEndTurnDecision.Reason ?? "null"}");
+
             var endTurnTransitProgressObservers = new[]
             {
                 endTurnBarrierSeedObserver with
