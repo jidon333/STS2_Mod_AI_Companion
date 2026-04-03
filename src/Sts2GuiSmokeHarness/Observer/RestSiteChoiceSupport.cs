@@ -266,6 +266,102 @@ static class RestSiteChoiceSupport
             .FirstOrDefault(choice => string.Equals(choice.OptionId, selectedOptionId, StringComparison.OrdinalIgnoreCase));
     }
 
+    public static string? GetLastChosenOptionId(ObserverSummary observer)
+    {
+        if (observer.Meta.TryGetValue("restSiteSelectionLastChosenOptionId", out var lastChosenOptionId))
+        {
+            return NormalizeOptionId(lastChosenOptionId);
+        }
+
+        if (observer.Meta.TryGetValue("restSiteSelectionCurrentOptionId", out var currentOptionId))
+        {
+            return NormalizeOptionId(currentOptionId);
+        }
+
+        if (observer.Meta.TryGetValue("restSiteSelectionLastOptionId", out var lastOptionId))
+        {
+            return NormalizeOptionId(lastOptionId);
+        }
+
+        return TryGetSelectedObservedChoice(observer)?.OptionId;
+    }
+
+    public static bool IsTargetStillVisible(ObserverSummary observer, string? optionId)
+    {
+        var normalizedOptionId = NormalizeOptionId(optionId);
+        if (string.IsNullOrWhiteSpace(normalizedOptionId))
+        {
+            return false;
+        }
+
+        return GetVisibleOptionIds(observer).Contains(normalizedOptionId, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public static bool HasChoiceSurfaceAmbiguity(ObserverSummary observer)
+    {
+        if (observer.Meta.TryGetValue("restSiteChoiceSurfaceAmbiguous", out var rawAmbiguous))
+        {
+            return string.Equals(rawAmbiguous, "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return BuildChoiceSurfaceGroups(observer)
+            .Any(static group => group.OptionIds.Count > 1);
+    }
+
+    public static IReadOnlyList<string> GetVisibleOptionIds(ObserverSummary observer)
+    {
+        if (observer.Meta.TryGetValue("restSiteVisibleOptionIds", out var rawVisibleOptionIds)
+            && !string.IsNullOrWhiteSpace(rawVisibleOptionIds))
+        {
+            return rawVisibleOptionIds
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Select(NormalizeOptionId)
+                .Where(static optionId => !string.IsNullOrWhiteSpace(optionId))
+                .Cast<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        return GetObservedChoices(observer)
+            .Select(static choice => choice.OptionId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    public static string? GetChoiceSurfaceAmbiguitySummary(ObserverSummary observer)
+    {
+        if (observer.Meta.TryGetValue("restSiteChoiceSurfaceSummary", out var summary)
+            && !string.IsNullOrWhiteSpace(summary))
+        {
+            return summary;
+        }
+
+        var groupedChoices = BuildChoiceSurfaceGroups(observer)
+            .Select(static group => $"{group.Bounds}=>{string.Join("+", group.OptionIds)}")
+            .ToArray();
+
+        return groupedChoices.Length == 0 ? null : string.Join(" | ", groupedChoices);
+    }
+
+    private static IReadOnlyList<RestSiteChoiceSurfaceGroup> BuildChoiceSurfaceGroups(ObserverSummary observer)
+    {
+        return GetObservedChoices(observer)
+            .Select(static choice => new
+            {
+                choice.OptionId,
+                Bounds = choice.Choice?.ScreenBounds ?? choice.ActionNode?.ScreenBounds,
+            })
+            .Where(static choice => !string.IsNullOrWhiteSpace(choice.Bounds))
+            .GroupBy(static choice => choice.Bounds!, StringComparer.OrdinalIgnoreCase)
+            .Select(static group => new RestSiteChoiceSurfaceGroup(
+                group.Key,
+                group.Select(choice => choice.OptionId)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(static optionId => optionId, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()))
+            .ToArray();
+    }
+
     private static RestSiteObservedChoice? CreateObservedChoiceFromMetadata(ObserverSummary observer, ObserverChoice choice)
     {
         var optionId = TryResolveOptionId(choice);
@@ -408,4 +504,8 @@ static class RestSiteChoiceSupport
         bounds = new RectangleF(x, y, width, height);
         return true;
     }
+
+    private sealed record RestSiteChoiceSurfaceGroup(
+        string Bounds,
+        IReadOnlyList<string> OptionIds);
 }

@@ -252,11 +252,18 @@ sealed record RestSitePostClickEvidence(
     string? CurrentOptionId,
     string? LastSignal,
     string? LastOptionId,
+    string? LastChosenOptionId,
     bool UpgradeScreenVisible,
     bool ExplicitChoiceVisible,
+    bool ProceedVisible,
+    bool ProceedEnabled,
     bool SmithGridVisible,
     bool SmithConfirmVisible,
-    bool UpgradeChoiceObserverMiss);
+    bool UpgradeChoiceObserverMiss,
+    bool TargetStillVisible,
+    bool ChoiceSurfaceAmbiguous,
+    string? VisibleOptionIds,
+    string? ChoiceSurfaceSummary);
 
 sealed record CardSelectionSubtypeState(
     string ScreenType,

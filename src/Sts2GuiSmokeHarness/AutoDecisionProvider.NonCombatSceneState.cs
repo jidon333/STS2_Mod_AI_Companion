@@ -684,7 +684,7 @@ sealed partial class AutoDecisionProvider
             mapContextVisible);
     }
 
-    internal static RestSiteSceneState? BuildRestSiteSceneState(ObserverSummary observer)
+    internal static RestSiteSceneState? BuildRestSiteSceneState(ObserverSummary observer, IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
     {
         return BuildRestSiteSceneState(new ObserverState(observer, null, null, null));
     }
