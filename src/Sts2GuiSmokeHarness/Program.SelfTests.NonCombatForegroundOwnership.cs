@@ -1643,6 +1643,58 @@ internal static partial class Program
             Assert(string.Equals(restSiteStaleProceedMetaDecision.Reason, "waiting for rest-site selection to settle into smith upgrade or proceed", StringComparison.OrdinalIgnoreCase),
                 $"Meta-only rest-site proceed should wait on settling instead of proceeding immediately. actual={restSiteStaleProceedMetaDecision.Reason}");
 
+            var restSiteFreshRoomReopenSummary = restSiteMetadataSummary with
+            {
+                CurrentScreen = "rest-site",
+                VisibleScreen = "rest-site",
+                ChoiceExtractorPath = "rest",
+                PlayerCurrentHp = 21,
+                PlayerMaxHp = 80,
+                CapturedAt = DateTimeOffset.Parse("2026-04-03T18:22:16.4603455+00:00", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+                LastEventsTail = new[]
+                {
+                    "{\"ts\":\"2026-04-03T18:22:11.3581213+00:00\",\"kind\":\"choice-list-presented\",\"screen\":\"rest-site\",\"payload\":{\"method\":\"Create\",\"declaringType\":\"MegaCrit.Sts2.Core.Nodes.Rooms.NRestSiteRoom\"}}",
+                    "{\"ts\":\"2026-04-03T18:22:11.3852474+00:00\",\"kind\":\"choice-list-presented\",\"screen\":\"rest-site\",\"payload\":{\"method\":\"UpdateRestSiteOptions\",\"declaringType\":\"MegaCrit.Sts2.Core.Nodes.Rooms.NRestSiteRoom\"}}",
+                    "{\"ts\":\"2026-04-03T18:22:11.4070874+00:00\",\"kind\":\"choice-list-presented\",\"screen\":\"rest-site\",\"payload\":{\"method\":\"_Ready\",\"declaringType\":\"MegaCrit.Sts2.Core.Nodes.Rooms.NRestSiteRoom\"}}",
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteButtonsVisible"] = "true",
+                    ["restSiteButtonsClickReady"] = "true",
+                    ["restSiteClickReadyOptionIds"] = "HEAL,SMITH",
+                    ["restSiteProceedVisible"] = "true",
+                    ["restSiteProceedEnabled"] = "false",
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastOptionId"] = "HEAL",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                    ["restSiteSelectionLastSignalAt"] = "2026-04-03T18:21:06.8384658+00:00",
+                    ["restSiteSelectionCurrentStatus"] = "proceed-visible",
+                    ["restSiteViewKind"] = "proceed",
+                },
+            };
+            var restSiteFreshRoomReopenObserver = new ObserverState(restSiteFreshRoomReopenSummary, null, null, null);
+            Assert(GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(restSiteFreshRoomReopenObserver, restSiteMetadataScreenshotPath),
+                "Fresh rest-site room entry should reopen explicit choice authority instead of staying trapped in stale proceed-visible settling.");
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(restSiteFreshRoomReopenObserver) is
+                {
+                    ExplicitChoiceVisible: true,
+                    ExplicitChoiceReady: true,
+                    SelectionSettling: false,
+                    ProceedVisible: false,
+                },
+                "Fresh rest-site entry should demote stale proceed-visible residue and reopen the selected heal choice once click-ready buttons republish.");
+            var restSiteFreshRoomReopenActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteFreshRoomReopenObserver);
+            Assert(restSiteFreshRoomReopenActions.Contains("click rest site choice", StringComparer.OrdinalIgnoreCase)
+                   && !restSiteFreshRoomReopenActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Fresh rest-site room entry should reopen explicit rest actions instead of staying wait-only. actual=[{string.Join(", ", restSiteFreshRoomReopenActions)}]");
+            var restSiteFreshRoomReopenDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteFreshRoomReopenSummary,
+                AllowedActions = restSiteFreshRoomReopenActions,
+            });
+            Assert(string.Equals(restSiteFreshRoomReopenDecision.TargetLabel, "rest site: rest", StringComparison.OrdinalIgnoreCase),
+                $"Fresh rest-site room entry should click heal again when HP is low instead of waiting on stale proceed residue. actual={restSiteFreshRoomReopenDecision.TargetLabel ?? restSiteFreshRoomReopenDecision.Reason ?? restSiteFreshRoomReopenDecision.Status}");
+
             var restSiteSelectionInProgressSummary = restSiteMetadataSummary with
             {
                 CurrentScreen = "rest-site",
@@ -2174,18 +2226,17 @@ internal static partial class Program
                 var replayRequest = LoadReplayRequest(restSiteReleaseReplayPath).Request;
                 var replayArtifact = EvaluateAutoDecisionWithDiagnostics(restSiteReleaseReplayPath, replayRequest).CandidateDump;
                 Assert(replayRequest.AllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
-                       && string.Equals(replayArtifact.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(replayArtifact.FinalDecision.Reason, "waiting for rest-site release to publish proceed or true map foreground", StringComparison.OrdinalIgnoreCase)
-                       && !string.Equals(replayArtifact.FinalDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase),
-                    $"Rest-site release exact replay should now trust canonical release-pending ownership over the stale exported-node allowlist. Actual allowlist=[{string.Join(", ", replayRequest.AllowedActions)}] decision={replayArtifact.FinalDecision.Status}/{replayArtifact.FinalDecision.TargetLabel ?? "null"}/{replayArtifact.FinalDecision.Reason ?? "null"}.");
+                       && string.Equals(replayArtifact.FinalDecision.Status, "act", StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(replayArtifact.FinalDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase),
+                    $"Rest-site release exact replay should now trust canonical map handoff once only the exported reachable node remains. Actual allowlist=[{string.Join(", ", replayRequest.AllowedActions)}] decision={replayArtifact.FinalDecision.Status}/{replayArtifact.FinalDecision.TargetLabel ?? "null"}/{replayArtifact.FinalDecision.Reason ?? "null"}.");
                 var rebuiltReplayRequest = LoadReplayRequest(restSiteReleaseReplayPath, fullRequestRebuild: true).Request;
                 var rebuiltReplayArtifact = EvaluateAutoDecisionWithDiagnostics(restSiteReleaseReplayPath, rebuiltReplayRequest).CandidateDump;
-                Assert(rebuiltReplayRequest.AllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase)
-                       && !rebuiltReplayRequest.AllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase),
-                    $"Rest-site release replay rebuild should suppress exported node routing while rest-site release is pending. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
-                Assert(string.Equals(rebuiltReplayArtifact.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
-                       && string.Equals(rebuiltReplayArtifact.FinalDecision.Reason, "waiting for rest-site release to publish proceed or true map foreground", StringComparison.OrdinalIgnoreCase),
-                    $"Rest-site release replay rebuild should wait on rest-site release instead of re-clicking the exported node. Actual={rebuiltReplayArtifact.FinalDecision.Status}/{rebuiltReplayArtifact.FinalDecision.Reason}");
+                Assert(rebuiltReplayRequest.AllowedActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+                       && !rebuiltReplayRequest.AllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
+                    $"Rest-site release replay rebuild should retire stale rest-site ownership once explicit rest-site affordances are gone and exported map routing is the only canonical lane. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
+                Assert(string.Equals(rebuiltReplayArtifact.FinalDecision.Status, "act", StringComparison.OrdinalIgnoreCase)
+                       && string.Equals(rebuiltReplayArtifact.FinalDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase),
+                    $"Rest-site release replay rebuild should route through the exported node once canonical map handoff is complete. Actual={rebuiltReplayArtifact.FinalDecision.Status}/{rebuiltReplayArtifact.FinalDecision.TargetLabel ?? rebuiltReplayArtifact.FinalDecision.Reason ?? "null"}");
             }
         }
         finally

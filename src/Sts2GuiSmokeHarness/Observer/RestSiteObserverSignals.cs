@@ -389,14 +389,7 @@ static class RestSiteObserverSignals
         var found = false;
         foreach (var tail in observer.LastEventsTail)
         {
-            if (string.IsNullOrWhiteSpace(tail)
-                || !tail.Contains("\"kind\":\"room-entered\"", StringComparison.OrdinalIgnoreCase)
-                || !tail.Contains("\"screen\":\"rest-site\"", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (!TryParseEventTailTimestamp(tail, out var parsedTimestamp))
+            if (!TryParseRestSiteRoomEntryEventTimestamp(tail, out var parsedTimestamp))
             {
                 continue;
             }
@@ -428,6 +421,72 @@ static class RestSiteObserverSignals
                        CultureInfo.InvariantCulture,
                        DateTimeStyles.RoundtripKind,
                        out timestamp);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryParseRestSiteRoomEntryEventTimestamp(string? eventTail, out DateTimeOffset timestamp)
+    {
+        timestamp = default;
+        if (string.IsNullOrWhiteSpace(eventTail))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(eventTail);
+            var root = document.RootElement;
+            var screen = root.TryGetProperty("screen", out var screenElement) && screenElement.ValueKind == JsonValueKind.String
+                ? screenElement.GetString()
+                : null;
+            if (!string.Equals(screen, "rest-site", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var kind = root.TryGetProperty("kind", out var kindElement) && kindElement.ValueKind == JsonValueKind.String
+                ? kindElement.GetString()
+                : null;
+            if (string.Equals(kind, "room-entered", StringComparison.OrdinalIgnoreCase))
+            {
+                return TryParseEventTailTimestamp(eventTail, out timestamp);
+            }
+
+            if (!string.Equals(kind, "choice-list-presented", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var payload = root.TryGetProperty("payload", out var payloadElement) && payloadElement.ValueKind == JsonValueKind.Object
+                ? payloadElement
+                : default;
+            var method = payload.ValueKind == JsonValueKind.Object
+                         && payload.TryGetProperty("method", out var methodElement)
+                         && methodElement.ValueKind == JsonValueKind.String
+                ? methodElement.GetString()
+                : null;
+            var declaringType = payload.ValueKind == JsonValueKind.Object
+                                && payload.TryGetProperty("declaringType", out var declaringTypeElement)
+                                && declaringTypeElement.ValueKind == JsonValueKind.String
+                ? declaringTypeElement.GetString()
+                : null;
+            var hasChoices = payload.ValueKind == JsonValueKind.Object
+                             && payload.TryGetProperty("choices", out var choicesElement)
+                             && choicesElement.ValueKind == JsonValueKind.Array
+                             && choicesElement.GetArrayLength() > 0;
+
+            var looksLikeRestSiteRoomEntry = string.Equals(method, "Create", StringComparison.OrdinalIgnoreCase)
+                                             || string.Equals(method, "_Ready", StringComparison.OrdinalIgnoreCase)
+                                             || string.Equals(method, "UpdateRestSiteOptions", StringComparison.OrdinalIgnoreCase)
+                                             || (!string.IsNullOrWhiteSpace(declaringType)
+                                                 && declaringType.Contains("NRestSiteRoom", StringComparison.OrdinalIgnoreCase))
+                                             || hasChoices;
+            return looksLikeRestSiteRoomEntry
+                   && TryParseEventTailTimestamp(eventTail, out timestamp);
         }
         catch (JsonException)
         {
