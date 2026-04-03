@@ -43,6 +43,32 @@ internal static partial class Program
         WindowCaptureTarget? ClickWindow,
         bool RewardMapRecoveryAttempt);
 
+    static string BuildActionFingerprint(GuiSmokePhase phase, GuiSmokeStepRequest request, GuiSmokeStepDecision decision)
+    {
+        var eventActionLineage = TryGetEventActionLineage(phase, decision);
+        return string.IsNullOrWhiteSpace(eventActionLineage)
+            ? string.Join("|",
+                phase.ToString(),
+                request.SceneSignature,
+                decision.ActionKind ?? "null",
+                decision.TargetLabel ?? "null")
+            : string.Join("|",
+                phase.ToString(),
+                request.SceneSignature,
+                decision.ActionKind ?? "null",
+                decision.TargetLabel ?? "null",
+                eventActionLineage);
+    }
+
+    static string? TryGetEventActionLineage(GuiSmokePhase phase, GuiSmokeStepDecision decision)
+    {
+        return phase == GuiSmokePhase.HandleEvent
+               && string.Equals(decision.ActionKind, "click", StringComparison.OrdinalIgnoreCase)
+               && decision.ExpectedDelta?.StartsWith("event-choice-lineage:", StringComparison.OrdinalIgnoreCase) == true
+            ? decision.ExpectedDelta
+            : null;
+    }
+
     static async Task<GuiSmokeDecisionStatusResult> TryHandleDecisionStatusAsync(
         int stepIndex,
         string screenshotPath,
@@ -625,11 +651,7 @@ internal static partial class Program
                 RewardMapRecoveryAttempt: false);
         }
 
-        var actionFingerprint = string.Join("|",
-            phase.ToString(),
-            request.SceneSignature,
-            decision.ActionKind ?? "null",
-            decision.TargetLabel ?? "null");
+        var actionFingerprint = BuildActionFingerprint(phase, request, decision);
         if (string.Equals(loopTracking.LastActionFingerprint, actionFingerprint, StringComparison.Ordinal))
         {
             loopTracking.SameActionStallCount += 1;
@@ -642,6 +664,7 @@ internal static partial class Program
 
         if (loopTracking.SameActionStallCount >= GetSameActionStallLimit(phase, decision))
         {
+            var eventActionLineage = TryGetEventActionLineage(phase, decision);
             if (TryClassifyRewardAftermathCardProgressionActionStall(
                     phase,
                     request,
@@ -708,7 +731,9 @@ internal static partial class Program
                     RewardMapRecoveryAttempt: false);
             }
 
-            var abortReason = $"same-action-stall phase={phase} target={decision.TargetLabel ?? "null"} screen={observer.CurrentScreen ?? "null"} inventory={observer.InventoryId ?? "null"}";
+            var abortReason = string.IsNullOrWhiteSpace(eventActionLineage)
+                ? $"same-action-stall phase={phase} target={decision.TargetLabel ?? "null"} screen={observer.CurrentScreen ?? "null"} inventory={observer.InventoryId ?? "null"}"
+                : $"same-action-stall phase={phase} target={decision.TargetLabel ?? "null"} eventLineage={eventActionLineage} screen={observer.CurrentScreen ?? "null"} inventory={observer.InventoryId ?? "null"}";
             LogHarness($"step={stepIndex} abort {abortReason}");
             AppendProgressIfLongRun(
                 isLongRun,

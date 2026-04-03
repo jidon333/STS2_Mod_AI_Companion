@@ -1006,6 +1006,59 @@ sealed partial class AutoDecisionProvider
                ?? CreateForegroundAwareNonCombatWaitDecision(request, waitReason);
     }
 
+    private static GuiSmokeStepDecision? TryCreateSlipperyBridgeProgressionDecision(GuiSmokeStepRequest request)
+    {
+        if (!GuiSmokeNonCombatContractSupport.AllowsAction(request, "click event choice"))
+        {
+            return null;
+        }
+
+        var slipperyBridgeChoices = request.Observer.Choices
+            .Where(choice =>
+                HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds)
+                && IsExplicitEventChoiceChoice(choice)
+                && IsSlipperyBridgeChoice(choice))
+            .ToArray();
+        if (slipperyBridgeChoices.Length == 0)
+        {
+            return null;
+        }
+
+        var overcomeChoice = slipperyBridgeChoices.FirstOrDefault(IsSlipperyBridgeOvercomeChoice);
+        if (overcomeChoice is not null)
+        {
+            return CreateEventChoiceDecisionFromChoice(
+                request,
+                overcomeChoice,
+                GetProgressChoiceTargetLabel(overcomeChoice, request.Observer),
+                "Slippery Bridge keeps OVERCOME available on every page. Prefer the bounded card-removal exit over HOLD_ON loops that only spend HP and reroll the sacrifice card.",
+                0.97,
+                ResolveObserverScreen(request.Observer, "event"),
+                1400) with
+            {
+                SceneInterpretation = "slippery-bridge:overcome",
+            };
+        }
+
+        var holdOnChoice = slipperyBridgeChoices.FirstOrDefault(IsSlipperyBridgeHoldOnChoice);
+        if (holdOnChoice is null)
+        {
+            return null;
+        }
+
+        return CreateEventChoiceDecisionFromChoice(
+            request,
+            holdOnChoice,
+            GetProgressChoiceTargetLabel(holdOnChoice, request.Observer),
+            "Slippery Bridge is active but OVERCOME is missing from the current exported choices. HOLD_ON still advances the event lineage, so use the bounded event button instead of misclassifying the repeated label as a stall.",
+            0.88,
+            ResolveObserverScreen(request.Observer, "event"),
+            1400) with
+        {
+            SceneInterpretation = "slippery-bridge:hold-on-fallback",
+        };
+    }
+
     private static GuiSmokeStepDecision? TryCreateSemanticEventDecision(GuiSmokeStepRequest request)
     {
         if (!string.Equals(request.ReasoningMode, "semantic", StringComparison.OrdinalIgnoreCase))
@@ -1028,29 +1081,38 @@ sealed partial class AutoDecisionProvider
                 continue;
             }
 
-            var centerX = bounds.X + bounds.Width / 2f;
-            var centerY = bounds.Y + bounds.Height / 2f;
             var leadingCandidate = request.EventKnowledgeCandidates.FirstOrDefault(candidate =>
                 candidate.Options.Any(option => string.Equals(option.Label, label, StringComparison.OrdinalIgnoreCase)));
-            return new GuiSmokeStepDecision(
-                "act",
-                "click",
-                null,
-                Math.Clamp(centerX / 1920f, 0d, 1d),
-                Math.Clamp(centerY / 1080f, 0d, 1d),
+            return CreateEventChoiceDecisionFromChoice(
+                request,
+                choice,
                 $"semantic event option: {label}",
                 $"Semantic event reasoning selected '{label}' from {leadingCandidate?.Title ?? "event knowledge"}.",
                 0.86,
-                "event",
-                1400,
-                true,
-                null,
-                leadingCandidate is null ? "semantic event match" : $"event candidate: {leadingCandidate.Title}",
-                "event option changes page, grants reward, or advances room flow",
-                request.DecisionRiskHint);
+                ResolveObserverScreen(request.Observer, "event"),
+                1400) with
+            {
+                SceneInterpretation = leadingCandidate is null ? "semantic event match" : $"event candidate: {leadingCandidate.Title}",
+                DecisionRisk = request.DecisionRiskHint,
+            };
         }
 
         return null;
+    }
+
+    private static bool IsSlipperyBridgeChoice(ObserverChoice choice)
+    {
+        return choice.BindingId?.StartsWith("SLIPPERY_BRIDGE.pages.", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static bool IsSlipperyBridgeOvercomeChoice(ObserverChoice choice)
+    {
+        return string.Equals(choice.BindingId, "SLIPPERY_BRIDGE.pages.INITIAL.options.OVERCOME", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSlipperyBridgeHoldOnChoice(ObserverChoice choice)
+    {
+        return choice.BindingId?.Contains(".options.HOLD_ON_", StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private static int ScoreSemanticEventOption(string? label, string? description)

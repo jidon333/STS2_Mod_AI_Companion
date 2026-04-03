@@ -218,6 +218,79 @@ internal static partial class Program
                     "rest-site-choice-not-click-ready",
                     GuiSmokeContractStates.TrustValid)),
             "Rest-site click-ready stalls should count as dead-end attempts for supervision.");
+        var slipperyBridgeFingerprintRequest = new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            1,
+            GuiSmokePhase.HandleEvent.ToString(),
+            "Different Slippery Bridge HOLD_ON bindings should not collapse into the same-action stall fingerprint.",
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            new WindowBounds(26, 75, 1280, 720),
+            "phase:handleevent|screen:event|visible:event|encounter:event|scene:slippery-bridge",
+            "0001",
+            1,
+            3,
+            false,
+            "semantic",
+            null,
+            new ObserverSummary(
+                "event",
+                "event",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-slippery-bridge-fingerprint",
+                true,
+                "foreground",
+                "stable",
+                "episode-slippery-bridge-fingerprint",
+                "Event",
+                "event",
+                30,
+                80,
+                null,
+                new[] { "버틴다" },
+                Array.Empty<string>(),
+                Array.Empty<ObserverActionNode>(),
+                Array.Empty<ObserverChoice>(),
+                Array.Empty<ObservedCombatHandCard>()),
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            new[] { "click event choice", "wait" },
+            Array.Empty<GuiSmokeHistoryEntry>(),
+            string.Empty,
+            null);
+        var slipperyBridgeHoldOn0Decision = new GuiSmokeStepDecision(
+            "act",
+            "click",
+            null,
+            0.5,
+            0.5,
+            "semantic event option: 버틴다",
+            "synthetic slippery bridge hold-on step",
+            0.9,
+            "event",
+            1400,
+            true,
+            null,
+            ExpectedDelta: "event-choice-lineage:SLIPPERY_BRIDGE.pages.INITIAL.options.HOLD_ON_0");
+        var slipperyBridgeHoldOn1Decision = slipperyBridgeHoldOn0Decision with
+        {
+            ExpectedDelta = "event-choice-lineage:SLIPPERY_BRIDGE.pages.HOLD_ON_0.options.HOLD_ON_1",
+        };
+        Assert(
+            !string.Equals(
+                BuildActionFingerprint(GuiSmokePhase.HandleEvent, slipperyBridgeFingerprintRequest, slipperyBridgeHoldOn0Decision),
+                BuildActionFingerprint(GuiSmokePhase.HandleEvent, slipperyBridgeFingerprintRequest, slipperyBridgeHoldOn1Decision),
+                StringComparison.Ordinal),
+            "Event same-action fingerprint should include exported binding lineage when repeated labels progress across Slippery Bridge pages.");
+        Assert(
+            string.Equals(
+                BuildActionFingerprint(GuiSmokePhase.HandleEvent, slipperyBridgeFingerprintRequest, slipperyBridgeHoldOn0Decision),
+                BuildActionFingerprint(GuiSmokePhase.HandleEvent, slipperyBridgeFingerprintRequest, slipperyBridgeHoldOn0Decision),
+                StringComparison.Ordinal),
+            "Identical Slippery Bridge bindings should continue to fingerprint as the same action.");
         Assert(
             string.Equals(
                 ClassifyFailureForAttempt(

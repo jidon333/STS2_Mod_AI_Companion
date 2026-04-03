@@ -594,6 +594,152 @@ internal static partial class Program
                        || !ancientContractFailureDecision.AbortReason.Contains("plateau", StringComparison.OrdinalIgnoreCase)),
                 "Ancient option mismatch without a bounded same-family button should abort with an explicit contract mismatch instead of plateau masking.");
 
+            var slipperyBridgeObserver = new ObserverState(
+                new ObserverSummary(
+                    "event",
+                    "event",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-slippery-bridge",
+                    true,
+                    "foreground",
+                    "stable",
+                    "episode-slippery-bridge",
+                    "Event",
+                    "event",
+                    30,
+                    80,
+                    null,
+                    new[] { "헤쳐 나간다", "버틴다" },
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    new[]
+                    {
+                        new ObserverChoice("event-option", "헤쳐 나간다", "520,320,360,96")
+                        {
+                            NodeId = "event-option:slippery-bridge-overcome",
+                            BindingKind = "event-option",
+                            BindingId = "SLIPPERY_BRIDGE.pages.INITIAL.options.OVERCOME",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                        },
+                        new ObserverChoice("event-option", "헤쳐 나간다", null)
+                        {
+                            NodeId = "event-option:slippery-bridge-overcome-generic",
+                            BindingKind = "event-option",
+                            BindingId = "SLIPPERY_BRIDGE.pages.INITIAL.options.OVERCOME",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                        },
+                        new ObserverChoice("event-option", "버틴다", "520,450,360,96")
+                        {
+                            NodeId = "event-option:slippery-bridge-hold-on",
+                            BindingKind = "event-option",
+                            BindingId = "SLIPPERY_BRIDGE.pages.INITIAL.options.HOLD_ON_0",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                        },
+                        new ObserverChoice("event-option", "버틴다", null)
+                        {
+                            NodeId = "event-option:slippery-bridge-hold-on-generic",
+                            BindingKind = "event-option",
+                            BindingId = "SLIPPERY_BRIDGE.pages.INITIAL.options.HOLD_ON_0",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>()),
+                null,
+                null,
+                null);
+            var slipperyBridgeDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                103,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Prefer the bounded Slippery Bridge exit over repeated HOLD_ON loops.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(26, 75, 1280, 720),
+                "phase:handleevent|screen:event|visible:event|encounter:none|ready:unknown|stability:unknown|layer:event-background|reward:claimable|layer:event-foreground",
+                "0001",
+                1,
+                3,
+                false,
+                "semantic",
+                null,
+                slipperyBridgeObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                new[] { "click event choice", "wait" },
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Slippery Bridge should prefer OVERCOME before semantic HOLD_ON loops.",
+                null));
+            Assert(string.Equals(slipperyBridgeDecision.Status, "act", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(slipperyBridgeDecision.TargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(slipperyBridgeDecision.ExpectedDelta, "event-choice-lineage:SLIPPERY_BRIDGE.pages.INITIAL.options.OVERCOME", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(slipperyBridgeDecision.SceneInterpretation, "slippery-bridge:overcome", StringComparison.OrdinalIgnoreCase),
+                $"Slippery Bridge should deterministically select OVERCOME with exported binding lineage before semantic fallback. actual={slipperyBridgeDecision.Status}/{slipperyBridgeDecision.TargetLabel ?? "null"}/{slipperyBridgeDecision.ExpectedDelta ?? "null"}/{slipperyBridgeDecision.SceneInterpretation ?? "null"}");
+
+            var slipperyBridgeLoopObserver = new ObserverState(
+                slipperyBridgeObserver.Summary with
+                {
+                    InventoryId = "inv-slippery-bridge-loop",
+                    SceneEpisodeId = "episode-slippery-bridge-loop",
+                    PlayerCurrentHp = 27,
+                    Choices = new[]
+                    {
+                        new ObserverChoice("event-option", "헤쳐 나간다", "520,320,360,96")
+                        {
+                            NodeId = "event-option:slippery-bridge-overcome-loop",
+                            BindingKind = "event-option",
+                            BindingId = "SLIPPERY_BRIDGE.pages.INITIAL.options.OVERCOME",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                        },
+                        new ObserverChoice("event-option", "버틴다", "520,450,360,96")
+                        {
+                            NodeId = "event-option:slippery-bridge-hold-on-loop",
+                            BindingKind = "event-option",
+                            BindingId = "SLIPPERY_BRIDGE.pages.HOLD_ON_0.options.HOLD_ON_1",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                        },
+                    },
+                },
+                null,
+                null,
+                null);
+            var slipperyBridgeLoopDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                104,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Keep preferring OVERCOME even after HOLD_ON page progression.",
+                DateTimeOffset.UtcNow,
+                string.Empty,
+                new WindowBounds(26, 75, 1280, 720),
+                "phase:handleevent|screen:event|visible:event|encounter:none|ready:unknown|stability:unknown|layer:event-background|reward:claimable|layer:event-foreground",
+                "0001",
+                1,
+                3,
+                false,
+                "semantic",
+                null,
+                slipperyBridgeLoopObserver.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                new[] { "click event choice", "wait" },
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                "Slippery Bridge should not reopen HOLD_ON as the preferred line on later pages.",
+                null));
+            Assert(string.Equals(slipperyBridgeLoopDecision.TargetLabel, "event progression choice", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(slipperyBridgeLoopDecision.ExpectedDelta, "event-choice-lineage:SLIPPERY_BRIDGE.pages.INITIAL.options.OVERCOME", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(slipperyBridgeLoopDecision.SceneInterpretation, "slippery-bridge:overcome", StringComparison.OrdinalIgnoreCase),
+                $"Slippery Bridge mid-chain pages should still resolve to OVERCOME before semantic HOLD_ON. actual={slipperyBridgeLoopDecision.TargetLabel ?? "null"}/{slipperyBridgeLoopDecision.ExpectedDelta ?? "null"}/{slipperyBridgeLoopDecision.SceneInterpretation ?? "null"}");
+
             var ancientFollowUpObserver = new ObserverState(
                 transformSubtypeObserver.Summary with
                 {

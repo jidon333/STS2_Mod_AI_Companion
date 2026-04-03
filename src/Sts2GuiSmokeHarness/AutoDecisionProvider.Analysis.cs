@@ -635,6 +635,16 @@ sealed partial class AutoDecisionProvider
             rawBounds: TryFindEventChoiceBounds(request),
             boundsSource: "observer-event");
 
+        var slipperyBridgeDecision = TryCreateSlipperyBridgeProgressionDecision(request);
+        builder.Consider(
+            "click event choice",
+            "event-slippery-bridge",
+            eventForegroundActive ? 0.99d : 0.79d,
+            () => slipperyBridgeDecision,
+            "slippery-bridge-override-inactive",
+            rawBounds: TryFindEventChoiceBounds(request),
+            boundsSource: "observer-event");
+
         var semanticDecision = TryCreateSemanticEventDecision(request);
         builder.Consider("click event choice", "semantic-event", eventForegroundActive ? 0.98d : 0.72d, () => semanticDecision, "no-semantic-event-choice", rawBounds: TryFindEventChoiceBounds(request), boundsSource: "observer-event");
 

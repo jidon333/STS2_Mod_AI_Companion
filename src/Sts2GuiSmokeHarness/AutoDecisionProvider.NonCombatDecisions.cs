@@ -519,6 +519,17 @@ sealed partial class AutoDecisionProvider
             return explicitProceedDecision;
         }
 
+        var slipperyBridgeDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "slippery bridge progression choice",
+            "event-slippery-bridge",
+            0.97,
+            TryCreateSlipperyBridgeProgressionDecision(request),
+            "slippery bridge override is not active");
+        if (slipperyBridgeDecision is not null)
+        {
+            return slipperyBridgeDecision;
+        }
+
         if (eventProgressionActionable)
         {
             var eventProgressionDecision = TryCreateEventProgressionDecision(request);
@@ -1327,7 +1338,7 @@ sealed partial class AutoDecisionProvider
             .FirstOrDefault();
         if (bestNode is not null)
         {
-            return CreateClickDecisionFromNode(request, bestNode, GetProgressChoiceTargetLabel(bestNode, request.Observer));
+            return CreateEventChoiceDecisionFromNode(request, bestNode, GetProgressChoiceTargetLabel(bestNode, request.Observer));
         }
 
         var bestChoice = request.Observer.Choices
@@ -1342,7 +1353,7 @@ sealed partial class AutoDecisionProvider
             .FirstOrDefault();
         if (bestChoice is not null)
         {
-            return CreateClickDecisionFromChoice(
+            return CreateEventChoiceDecisionFromChoice(
                 request,
                 bestChoice,
                 GetProgressChoiceTargetLabel(bestChoice, request.Observer),

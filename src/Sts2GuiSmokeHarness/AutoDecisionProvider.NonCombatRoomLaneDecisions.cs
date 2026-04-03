@@ -88,6 +88,17 @@ sealed partial class AutoDecisionProvider
 
     private static GuiSmokeStepDecision? TryCreateEventProgressionDecision(GuiSmokeStepRequest request)
     {
+        var slipperyBridgeDecision = GuiSmokeDecisionDebug.TraceCandidate(
+            "slippery bridge progression choice",
+            "event-slippery-bridge",
+            0.97,
+            TryCreateSlipperyBridgeProgressionDecision(request),
+            "slippery bridge override is not active");
+        if (slipperyBridgeDecision is not null)
+        {
+            return slipperyBridgeDecision;
+        }
+
         var semanticDecision = GuiSmokeDecisionDebug.TraceCandidate(
             "semantic event option",
             "event-semantic",

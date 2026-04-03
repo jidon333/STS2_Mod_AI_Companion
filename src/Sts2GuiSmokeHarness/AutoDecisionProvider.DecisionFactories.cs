@@ -230,6 +230,51 @@ sealed partial class AutoDecisionProvider
             null);
     }
 
+    private static GuiSmokeStepDecision CreateEventChoiceDecisionFromChoice(
+        GuiSmokeStepRequest request,
+        ObserverChoice choice,
+        string targetLabel,
+        string reason,
+        double confidence,
+        string expectedScreen,
+        int waitMs)
+    {
+        var decision = CreateClickDecisionFromChoice(request, choice, targetLabel, reason, confidence, expectedScreen, waitMs);
+        var eventChoiceLineage = BuildEventChoiceLineage(choice);
+        return string.IsNullOrWhiteSpace(eventChoiceLineage)
+            ? decision
+            : decision with { ExpectedDelta = eventChoiceLineage };
+    }
+
+    private static GuiSmokeStepDecision CreateEventChoiceDecisionFromNode(
+        GuiSmokeStepRequest request,
+        ObserverActionNode node,
+        string targetLabel)
+    {
+        var decision = CreateClickDecisionFromNode(request, node, targetLabel);
+        var eventChoiceLineage = BuildEventChoiceLineage(node);
+        return string.IsNullOrWhiteSpace(eventChoiceLineage)
+            ? decision
+            : decision with { ExpectedDelta = eventChoiceLineage };
+    }
+
+    private static string? BuildEventChoiceLineage(ObserverChoice choice)
+    {
+        var source = !string.IsNullOrWhiteSpace(choice.BindingId)
+            ? choice.BindingId
+            : choice.NodeId;
+        return string.IsNullOrWhiteSpace(source)
+            ? null
+            : $"event-choice-lineage:{source}";
+    }
+
+    private static string? BuildEventChoiceLineage(ObserverActionNode node)
+    {
+        return string.IsNullOrWhiteSpace(node.NodeId)
+            ? null
+            : $"event-choice-lineage:{node.NodeId}";
+    }
+
     private static bool HasUsableLogicalBounds(string? raw)
     {
         if (!TryParseNodeBounds(raw, out var bounds))
