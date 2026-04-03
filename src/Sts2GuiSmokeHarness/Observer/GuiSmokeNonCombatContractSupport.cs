@@ -129,6 +129,7 @@ static class GuiSmokeNonCombatContractSupport
     public static bool LooksLikeRestSiteProceedState(ObserverSummary observer)
     {
         if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
+            || HasAuthoritativeMapTakeoverOverRestSiteProceed(observer)
             || (MapAuthorityOutranksStaleRestSiteResidue(observer)
                 && !HasRestSiteReleasePendingAuthority(observer)
                 && !HasVisibleRestSiteProceedAffordance(observer)))
@@ -305,6 +306,14 @@ static class GuiSmokeNonCombatContractSupport
                || observer.ActionNodes.Any(static node =>
                    node.Actionable
                    && MapNodeSourceSupport.IsExplicitMapPointNode(node));
+    }
+
+    private static bool HasAuthoritativeMapTakeoverOverRestSiteProceed(ObserverSummary observer)
+    {
+        return HasMapCurrentActiveScreen(observer)
+               && HasExplicitMapNodeAuthority(observer)
+               && !RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
+               && !RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
     }
 
     private static bool MapAuthorityOutranksStaleRestSiteResidue(ObserverSummary observer)

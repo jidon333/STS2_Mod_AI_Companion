@@ -1814,6 +1814,61 @@ internal static partial class Program
             });
             Assert(string.Equals(restSiteProceedMetaOnlyDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
                 $"Meta-only rest-site proceed should click the canonical proceed bounds instead of waiting behind map overlay residue. actual={restSiteProceedMetaOnlyDecision.TargetLabel ?? restSiteProceedMetaOnlyDecision.Reason ?? restSiteProceedMetaOnlyDecision.Status}");
+
+            var restSiteProceedStaleAfterMapTakeoverSummary = restSiteProceedMetaOnlySummary with
+            {
+                CurrentScreen = "map",
+                VisibleScreen = "map",
+                CurrentChoices = new[] { "Unknown (11,3)" },
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("map:11:3", "map-node", "Unknown (11,3)", "914.813,528.204,56,56", true)
+                    {
+                        TypeName = "map-node",
+                        SemanticHints = new[] { "scene:map", "kind:map-node", "node-id:map:11:3", "coord:11,3" },
+                    },
+                },
+                Choices = new[]
+                {
+                    new ObserverChoice("map-node", "Unknown (11,3)", "914.813,528.204,56,56", "11,3", "type:Unknown;state:Travelable;coord:11,3")
+                    {
+                        NodeId = "map:11:3",
+                        Enabled = true,
+                    },
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["choiceExtractorPath"] = "map",
+                    ["mapCurrentActiveScreen"] = "true",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastOptionId"] = "HEAL",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                    ["restSiteSelectionCurrentStatus"] = "proceed-visible",
+                    ["restSiteSelectionOutcome"] = "success",
+                    ["restSiteProceedVisible"] = "true",
+                    ["restSiteProceedEnabled"] = "true",
+                    ["restSiteProceedBounds"] = "1576.3,761.3,282.45,113.4",
+                    ["restSiteViewKind"] = "proceed",
+                },
+            };
+            var restSiteProceedStaleAfterMapTakeoverObserver = new ObserverState(restSiteProceedStaleAfterMapTakeoverSummary, null, null, null);
+            Assert(!GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(restSiteProceedStaleAfterMapTakeoverSummary),
+                "Authoritative map takeover should retire stale rest-site proceed metadata once an explicit map node surface is exported.");
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(restSiteProceedStaleAfterMapTakeoverObserver) is null,
+                "Rest-site scene state should retire once the map current-active screen owns the foreground and exports the next node.");
+            var restSiteProceedStaleAfterMapTakeoverActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteProceedStaleAfterMapTakeoverObserver);
+            Assert(restSiteProceedStaleAfterMapTakeoverActions.Contains("click exported reachable node", StringComparer.OrdinalIgnoreCase)
+                   && !restSiteProceedStaleAfterMapTakeoverActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase),
+                $"Map takeover should reopen map routing instead of stale rest-site proceed. actual=[{string.Join(", ", restSiteProceedStaleAfterMapTakeoverActions)}]");
+            var restSiteProceedStaleAfterMapTakeoverDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteProceedStaleAfterMapTakeoverSummary,
+                AllowedActions = restSiteProceedStaleAfterMapTakeoverActions,
+                SceneSignature = "phase:choosefirstnode|screen:map|visible:map|encounter:restsite|ready:unknown|stability:unknown|layer:map-background|layer:map-overlay-foreground|reachable-node-candidate-present|exported-reachable-node-present",
+            });
+            Assert(string.Equals(restSiteProceedStaleAfterMapTakeoverDecision.TargetLabel, "exported reachable map node", StringComparison.OrdinalIgnoreCase),
+                $"Map takeover should route the exported reachable node instead of re-clicking stale proceed. actual={restSiteProceedStaleAfterMapTakeoverDecision.TargetLabel ?? restSiteProceedStaleAfterMapTakeoverDecision.Reason ?? restSiteProceedStaleAfterMapTakeoverDecision.Status}");
             var restSiteProceedRewardContext = GuiSmokeStepRequestFactory.CreateObserverOnlyAnalysisContext(
                 GuiSmokePhase.HandleRewards,
                 restSiteProceedObserver,
