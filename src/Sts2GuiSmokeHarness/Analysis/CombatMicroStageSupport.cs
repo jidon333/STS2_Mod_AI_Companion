@@ -65,6 +65,12 @@ static class CombatMicroStageSupport
         var carriedAttackLaneBlocked = carriedAttackLaneOpen
                                        && pendingSelection!.SlotIndex is >= 1 and <= 5
                                        && HandleCombatContextSupport.GetCombatNoOpCountForSlot(context.CombatContext, pendingSelection.SlotIndex) >= 2;
+        var retireResolvedAttackSelectionTail = pendingSelection is null
+                                                && CombatRuntimeStateSupport.ShouldRetireResolvedAttackSelectionTail(
+                                                    context.Observer.Summary,
+                                                    context.CombatCardKnowledge,
+                                                    context.CombatContext.PendingSelection,
+                                                    context.History);
         var barrierAttackLaneOpen = effectiveBarrierKind is CombatBarrierKind.AttackSelect or CombatBarrierKind.EnemyClick
                                     && (barrier.SourceSlotIndex is not int barrierSourceSlotIndex
                                         || barrierSourceSlotIndex is < 1 or > 5
@@ -78,7 +84,8 @@ static class CombatMicroStageSupport
                                                     context.CombatCardKnowledge,
                                                     pendingSelection);
         var hasExplicitAttackLaneEvidence = runtimeAttackLaneOpen
-                                            || CombatRuntimeStateSupport.HasSelectedAttackMetadata(runtime.SelectedCardType, runtime.SelectedCardTargetType)
+                                            || (!retireResolvedAttackSelectionTail
+                                                && CombatRuntimeStateSupport.HasSelectedAttackMetadata(runtime.SelectedCardType, runtime.SelectedCardTargetType))
                                             || (carriedAttackLaneOpen
                                                 && !carriedAttackLaneBlocked
                                                 && (runtime.HasExplicitEnemyTargetingEvidence

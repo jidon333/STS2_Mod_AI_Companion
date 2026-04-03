@@ -230,19 +230,21 @@ static class CombatBarrierSupport
         AutoCombatAnalysis analysis,
         bool canResolveCombatEnemyTarget)
     {
-        if (freshSnapshotSeen
+        var attackSelectionProgressSeen = freshSnapshotSeen
+                                         || HasAttackSelectionProgressSinceSource(source.Metadata, runtime);
+        if (attackSelectionProgressSeen
             && runtime.HasInFlightPlayerDrivenAction)
         {
             return Released(source, "selected combat card entered the play queue");
         }
 
-        if (freshSnapshotSeen
+        if (attackSelectionProgressSeen
             && canResolveCombatEnemyTarget)
         {
             return Released(source, "enemy-target authority surfaced after attack selection");
         }
 
-        if (freshSnapshotSeen
+        if (attackSelectionProgressSeen
             && runtime.ExplicitlyClearedSelection
             && runtime.PendingSelection is null
             && !runtime.HasCardSelectionEvidence)
@@ -252,11 +254,11 @@ static class CombatBarrierSupport
 
         return Active(
             source,
-            freshSnapshotSeen
+            attackSelectionProgressSeen
                 ? "attack selection is still awaiting targetable enemy authority or explicit clear"
-                : "waiting for a fresh post-attack-select snapshot",
+                : "waiting for fresh post-attack-select progress",
             false,
-            freshSnapshotSeen);
+            attackSelectionProgressSeen);
     }
 
     private static CombatBarrierEvaluation EvaluateEnemyClickBarrier(
@@ -579,6 +581,45 @@ static class CombatBarrierSupport
         }
 
         return observer.CapturedAt is not null && observer.CapturedAt > entry.RecordedAt;
+    }
+
+    private static bool HasAttackSelectionProgressSinceSource(
+        CombatBarrierHistoryMetadata? metadata,
+        CombatRuntimeState runtime)
+    {
+        if (metadata is null)
+        {
+            return false;
+        }
+
+        if (metadata.RoundNumber is not null
+            && runtime.RoundNumber is not null
+            && runtime.RoundNumber != metadata.RoundNumber)
+        {
+            return true;
+        }
+
+        if (metadata.HistoryStartedCount is not null
+            && runtime.HistoryStartedCount is not null
+            && runtime.HistoryStartedCount != metadata.HistoryStartedCount)
+        {
+            return true;
+        }
+
+        if (metadata.HistoryFinishedCount is not null
+            && runtime.HistoryFinishedCount is not null
+            && runtime.HistoryFinishedCount != metadata.HistoryFinishedCount)
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(metadata.InteractionRevision)
+            && !string.Equals(runtime.InteractionRevision, metadata.InteractionRevision, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.Equals(runtime.LastCardPlayFinishedCardId, metadata.LastFinishedCardId, StringComparison.OrdinalIgnoreCase);
     }
 
     internal static CombatBarrierHistoryMetadata? TryParseHistoryMetadata(string? metadata)

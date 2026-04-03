@@ -436,6 +436,21 @@ static class CombatRuntimeStateSupport
         return HasResidualAttackSelectionTail(observer, Read(observer, combatCardKnowledge), historyPendingSelection, history);
     }
 
+    public static bool ShouldRetireResolvedAttackSelectionTail(
+        ObserverSummary observer,
+        IReadOnlyList<CombatCardKnowledgeHint> combatCardKnowledge,
+        PendingCombatSelection? historyPendingSelection,
+        IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
+        return historyPendingSelection?.Kind == AutoCombatCardKind.AttackLike
+               && historyPendingSelection.SlotIndex is >= 1 and <= 5
+               && ShouldRetireResolvedAttackSelectionTail(
+                   observer,
+                   Read(observer, combatCardKnowledge),
+                   historyPendingSelection.SlotIndex,
+                   history);
+    }
+
     public static bool LooksLikeFreshCombatEncounterStart(CombatRuntimeState runtime)
     {
         return runtime.RoundNumber == 1
@@ -625,7 +640,8 @@ static class CombatRuntimeStateSupport
         }
 
         if (observer.Meta.TryGetValue("combatTargetSummary", out var rawTargetSummary)
-            && !string.IsNullOrWhiteSpace(rawTargetSummary))
+            && !string.IsNullOrWhiteSpace(rawTargetSummary)
+            && !HasStaleRuntimeTargetSummaryWithoutLiveTargetAuthority(observer, runtime))
         {
             return false;
         }
@@ -637,6 +653,28 @@ static class CombatRuntimeStateSupport
         }
 
         return HasSelectedAttackMetadata(runtime.SelectedCardType, runtime.SelectedCardTargetType);
+    }
+
+    private static bool HasStaleRuntimeTargetSummaryWithoutLiveTargetAuthority(
+        ObserverSummary observer,
+        CombatRuntimeState runtime)
+    {
+        if (!observer.Meta.TryGetValue("combatTargetSummary", out var rawTargetSummary)
+            || string.IsNullOrWhiteSpace(rawTargetSummary))
+        {
+            return false;
+        }
+
+        if (HasLiveEnemyTargetSurface(observer, runtime)
+            || runtime.TargetingInProgress == true
+            || runtime.HasExplicitEnemyTargetingEvidence
+            || runtime.HasExplicitTargetableEnemy
+            || runtime.HasExplicitHittableEnemy)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static bool HasDownstreamAttackResolutionAttempt(
@@ -695,22 +733,27 @@ static class CombatRuntimeStateSupport
 
     private static bool HasLiveEnemyTargetSurface(ObserverSummary observer, CombatRuntimeState runtime)
     {
-        if (runtime.HasExplicitEnemyTargetingEvidence
-            || string.Equals(observer.ChoiceExtractorPath, "combat-targets", StringComparison.OrdinalIgnoreCase))
+        if (runtime.HasExplicitEnemyTargetingEvidence)
         {
             return true;
         }
 
-        return observer.ActionNodes.Any(node =>
-            node.Actionable
-            && !node.SemanticHints.Any(static hint => string.Equals(hint, "source:runtime-target-summary", StringComparison.OrdinalIgnoreCase))
-            && (string.Equals(node.Kind, "enemy-target", StringComparison.OrdinalIgnoreCase)
-                || node.NodeId.StartsWith("enemy-target:", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(node.TypeName, "enemy-target", StringComparison.OrdinalIgnoreCase)
-                || node.SemanticHints.Any(static hint =>
-                    string.Equals(hint, "combat-targetable", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(hint, "combat-hittable", StringComparison.OrdinalIgnoreCase)
-                    || hint.StartsWith("target-id:", StringComparison.OrdinalIgnoreCase))));
+        var targetNodes = CombatTargetabilitySupport.GetCombatEnemyTargetNodes(observer);
+        if (targetNodes.Count == 0)
+        {
+            return false;
+        }
+
+        if (!runtime.ExplicitlyClearedSelection)
+        {
+            return true;
+        }
+
+        return runtime.PendingSelection?.Kind == AutoCombatCardKind.AttackLike
+               || runtime.CardPlayPending == true
+               || runtime.TargetingInProgress == true
+               || runtime.HasExplicitTargetableEnemy
+               || runtime.HasExplicitHittableEnemy;
     }
 
     private static bool HasExplicitActionSurfaceBounds(string? screenBounds, WindowBounds? windowBounds)

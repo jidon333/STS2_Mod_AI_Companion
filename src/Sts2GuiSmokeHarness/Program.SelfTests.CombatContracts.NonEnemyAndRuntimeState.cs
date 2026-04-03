@@ -1241,14 +1241,24 @@ internal static partial class Program
                 new CombatCardKnowledgeHint(2, "CARD.SPOILS_MAP", "Quest", "None", 0, "self-test"),
                 new CombatCardKnowledgeHint(3, "CARD.IRON_WAVE", "Attack", "AnyEnemy", 1, "self-test"),
             };
+            var reopenedAttackSelectionState = new ObserverState(reopenedAttackSelectionObserver, null, null, null);
+            var reopenedAttackSelectionContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                reopenedAttackSelectionState,
+                runtimeStateOnlyScreenshotPath,
+                reopenedAttackSelectionHistory,
+                reopenedAttackSelectionKnowledge);
             var reopenedAttackSelectionActions = BuildAllowedActions(
                 GuiSmokePhase.HandleCombat,
-                new ObserverState(reopenedAttackSelectionObserver, null, null, null),
+                reopenedAttackSelectionState,
                 reopenedAttackSelectionKnowledge,
                 runtimeStateOnlyScreenshotPath,
                 reopenedAttackSelectionHistory);
+            Assert(!reopenedAttackSelectionContext.CombatBarrierEvaluation.IsActive
+                   || reopenedAttackSelectionContext.CombatBarrierEvaluation.Kind != CombatBarrierKind.AttackSelect,
+                $"Post-selection player-play reopen should retire the old AttackSelect barrier. actualBarrier={reopenedAttackSelectionContext.CombatBarrierEvaluation.Kind} reason={reopenedAttackSelectionContext.CombatBarrierEvaluation.Reason}");
             Assert(reopenedAttackSelectionActions.Contains("select attack slot 3", StringComparer.OrdinalIgnoreCase),
-                $"Post-selection progress with player-play reopen should reopen the next explicit attack lane instead of staying wait-only. actual=[{string.Join(", ", reopenedAttackSelectionActions)}]");
+                $"Post-selection progress with player-play reopen should reopen the next explicit attack lane instead of staying wait-only. actual=[{string.Join(", ", reopenedAttackSelectionActions)}] lifecycle={reopenedAttackSelectionContext.CombatReleaseState.LifecycleStage} micro={reopenedAttackSelectionContext.CombatMicroStage.Kind} pending={reopenedAttackSelectionContext.PendingCombatSelection?.Kind.ToString() ?? "null"} barrier={reopenedAttackSelectionContext.CombatBarrierEvaluation.Kind} runtimePending={reopenedAttackSelectionContext.RuntimeCombatState.PendingSelection?.Kind.ToString() ?? "null"} targetSummary={reopenedAttackSelectionObserver.Meta.GetValueOrDefault("combatTargetSummary") ?? "null"} selectedType={reopenedAttackSelectionContext.RuntimeCombatState.SelectedCardType ?? "null"} selectedTargetType={reopenedAttackSelectionContext.RuntimeCombatState.SelectedCardTargetType ?? "null"} retireTail={CombatRuntimeStateSupport.ShouldRetireResolvedAttackSelectionTail(reopenedAttackSelectionObserver, reopenedAttackSelectionKnowledge, reopenedAttackSelectionContext.CombatContext.PendingSelection, reopenedAttackSelectionHistory)} staleTail={CombatRuntimeStateSupport.HasResidualAttackSelectionTail(reopenedAttackSelectionObserver, reopenedAttackSelectionKnowledge, reopenedAttackSelectionContext.CombatContext.PendingSelection, reopenedAttackSelectionHistory)}");
             Assert(!reopenedAttackSelectionActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
                 "Resolved attack selection metadata should not collapse a reopened player-play frame into wait-only.");
             var reopenedAttackSelectionDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
@@ -1278,6 +1288,53 @@ internal static partial class Program
             Assert(!string.Equals(reopenedAttackSelectionDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
                    && string.Equals(reopenedAttackSelectionDecision.TargetLabel, "combat select attack slot 3", StringComparison.OrdinalIgnoreCase),
                 $"Reopened player-play combat after cleared attack selection should reissue the remaining explicit playable attack slot. actual={reopenedAttackSelectionDecision.Status}/{reopenedAttackSelectionDecision.TargetLabel}/{reopenedAttackSelectionDecision.Reason}");
+
+            var reopenedAttackSelectionWithStaleTargetSummaryObserver = reopenedAttackSelectionObserver with
+            {
+                InventoryId = "inv-runtime-attack-reopen-after-cleared-selection-stale-summary",
+                SceneEpisodeId = "episode-runtime-attack-reopen-after-cleared-selection-stale-summary",
+                Meta = new Dictionary<string, string?>(reopenedAttackSelectionObserver.Meta, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatTargetSummary"] = "enemy-target:Jaw Worm:1@logical:720,180,180,260@normalized:0.3750,0.1667,0.0938,0.2407",
+                },
+            };
+            var reopenedAttackSelectionWithStaleTargetSummaryActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(reopenedAttackSelectionWithStaleTargetSummaryObserver, null, null, null),
+                reopenedAttackSelectionKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                reopenedAttackSelectionHistory);
+            Assert(reopenedAttackSelectionWithStaleTargetSummaryActions.Contains("select attack slot 3", StringComparer.OrdinalIgnoreCase),
+                $"Post-selection reopen should retire stale target-summary residue when no live target surface remains. actual=[{string.Join(", ", reopenedAttackSelectionWithStaleTargetSummaryActions)}]");
+            Assert(!reopenedAttackSelectionWithStaleTargetSummaryActions.Contains("click enemy", StringComparer.OrdinalIgnoreCase),
+                "Stale target-summary residue without live target authority should not keep click-enemy open after the player-play lane reopened.");
+            var reopenedAttackSelectionWithStaleTargetSummaryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                29,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Retire stale target-summary residue once post-selection progress confirms the player-play lane reopened.",
+                DateTimeOffset.UtcNow,
+                runtimeStateOnlyScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:boss|ready:true|stability:stable",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                reopenedAttackSelectionWithStaleTargetSummaryObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                reopenedAttackSelectionKnowledge,
+                reopenedAttackSelectionWithStaleTargetSummaryActions,
+                reopenedAttackSelectionHistory,
+                "Do not let stale target-summary metadata override a reopened player-play lane after explicit clear.",
+                null));
+            Assert(!string.Equals(reopenedAttackSelectionWithStaleTargetSummaryDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(reopenedAttackSelectionWithStaleTargetSummaryDecision.TargetLabel, "combat select attack slot 3", StringComparison.OrdinalIgnoreCase),
+                $"Reopened player-play combat should still select the remaining attack slot when only stale target-summary residue remains. actual={reopenedAttackSelectionWithStaleTargetSummaryDecision.Status}/{reopenedAttackSelectionWithStaleTargetSummaryDecision.TargetLabel}/{reopenedAttackSelectionWithStaleTargetSummaryDecision.Reason}");
 
             var runtimeTargetSummaryAfterDriftHistory = new[]
             {
