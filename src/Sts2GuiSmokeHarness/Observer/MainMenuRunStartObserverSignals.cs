@@ -26,6 +26,17 @@ static class MainMenuRunStartObserverSignals
                || observer.Choices.Any(IsBoundedAbandonRunChoice);
     }
 
+    public static bool HasExplicitAbandonRunSurface(ObserverSummary observer)
+    {
+        if (!IsMainMenuSurface(observer))
+        {
+            return false;
+        }
+
+        return observer.ActionNodes.Any(IsBoundedAbandonRunActionNode)
+               || observer.Choices.Any(IsBoundedAbandonRunChoice);
+    }
+
     public static bool HasAbandonRunConfirmSurface(ObserverState observer)
         => HasAbandonRunConfirmSurface(observer.Summary);
 

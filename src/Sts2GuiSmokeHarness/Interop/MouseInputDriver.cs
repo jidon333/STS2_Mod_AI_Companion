@@ -28,13 +28,27 @@ sealed class MouseInputDriver
             return;
         }
 
+        if (NativeMethods.IsIconic(target.Handle))
+        {
+            NativeMethods.ShowWindow(target.Handle, NativeMethods.SW_RESTORE);
+            Thread.Sleep(40);
+        }
+
         if (NativeMethods.GetForegroundWindow() == target.Handle)
         {
             return;
         }
 
+        NativeMethods.BringWindowToTop(target.Handle);
         NativeMethods.SetForegroundWindow(target.Handle);
         Thread.Sleep(Math.Min(delayMs, 80));
+
+        if (NativeMethods.GetForegroundWindow() != target.Handle)
+        {
+            NativeMethods.BringWindowToTop(target.Handle);
+            NativeMethods.SetForegroundWindow(target.Handle);
+            Thread.Sleep(Math.Min(delayMs, 120));
+        }
     }
 
     public void MoveCursor(WindowCaptureTarget target, double normalizedX, double normalizedY)
@@ -56,11 +70,7 @@ sealed class MouseInputDriver
             NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_LEFTDOWN),
             NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_LEFTUP),
         };
-        var sent = NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
-        if (sent != inputs.Length)
-        {
-            throw new InvalidOperationException("Failed to send mouse input.");
-        }
+        SendMouseInputsWithRetry(target, point, inputs, "Failed to send mouse input.");
     }
 
     public void HoverPrimedClick(WindowCaptureTarget target, double normalizedX, double normalizedY)
@@ -171,11 +181,30 @@ sealed class MouseInputDriver
             NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_RIGHTDOWN),
             NativeMethods.CreateMouseInput(0, 0, NativeMethods.MOUSEEVENTF_RIGHTUP),
         };
-        var sent = NativeMethods.SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<NativeMethods.INPUT>());
-        if (sent != inputs.Length)
+        SendMouseInputsWithRetry(target, point, inputs, "Failed to send right-click mouse input.");
+    }
+
+    private static void SendMouseInputsWithRetry(WindowCaptureTarget target, Point point, NativeMethods.INPUT[] inputs, string failureMessage)
+    {
+        var inputSize = Marshal.SizeOf<NativeMethods.INPUT>();
+        var sent = NativeMethods.SendInput((uint)inputs.Length, inputs, inputSize);
+        if (sent == inputs.Length)
         {
-            throw new InvalidOperationException("Failed to send right-click mouse input.");
+            return;
         }
+
+        var firstError = Marshal.GetLastWin32Error();
+        PrepareWindow(target, 200);
+        NativeMethods.SetCursorPos(point.X, point.Y);
+        Thread.Sleep(60);
+        sent = NativeMethods.SendInput((uint)inputs.Length, inputs, inputSize);
+        if (sent == inputs.Length)
+        {
+            return;
+        }
+
+        var retryError = Marshal.GetLastWin32Error();
+        throw new InvalidOperationException($"{failureMessage} firstError={firstError} retryError={retryError}");
     }
 
     public static Point TransformNormalizedPoint(WindowCaptureTarget target, double normalizedX, double normalizedY)

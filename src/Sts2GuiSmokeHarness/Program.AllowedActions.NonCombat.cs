@@ -72,7 +72,7 @@ internal static partial class Program
                                    || explicitEventRoomEntrySurface;
         var ancientMapOwner = AncientEventObserverSignals.IsMapForegroundOwner(observer.Summary);
         var ancientMapSurfacePending = AncientEventObserverSignals.IsMapSurfacePending(observer.Summary);
-        var restSiteScene = AutoDecisionProvider.BuildRestSiteSceneState(observer.Summary);
+        var restSiteScene = AutoDecisionProvider.BuildRestSiteSceneState(observer.Summary, history);
         var explicitRestSiteChoiceAuthority = GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(observer, screenshotPath);
         if (phase == GuiSmokePhase.WaitRunLoad && GuiSmokeObserverPhaseHeuristics.TryGetPostRunLoadPhase(observer, out var postRunLoadPhase))
         {
@@ -94,7 +94,7 @@ internal static partial class Program
 
         return phase switch
         {
-            GuiSmokePhase.EnterRun => BuildEnterRunAllowedActions(observer.Summary),
+            GuiSmokePhase.EnterRun => BuildEnterRunAllowedActions(observer.Summary, history),
             GuiSmokePhase.WaitRunLoad => new[] { "wait" },
             GuiSmokePhase.ChooseCharacter => new[] { "click ironclad", "click character confirm", "wait" },
             GuiSmokePhase.Embark => new[] { "click embark", "click character confirm", "wait" },
@@ -272,11 +272,16 @@ internal static partial class Program
         };
     }
 
-    static string[] BuildEnterRunAllowedActions(ObserverSummary observer)
+    static string[] BuildEnterRunAllowedActions(ObserverSummary observer, IReadOnlyList<GuiSmokeHistoryEntry> history)
     {
         if (MainMenuRunStartObserverSignals.HasAbandonRunConfirmSurface(observer))
         {
             return new[] { "click confirm abandon run", "click cancel abandon run", "wait" };
+        }
+
+        if (WaitRunLoadRecoverySignals.ShouldPreferRunSaveCleanupAfterFailedContinue(observer, history))
+        {
+            return new[] { "click abandon run", "wait" };
         }
 
         if (MainMenuRunStartObserverSignals.HasRunSaveCleanupSurface(observer))

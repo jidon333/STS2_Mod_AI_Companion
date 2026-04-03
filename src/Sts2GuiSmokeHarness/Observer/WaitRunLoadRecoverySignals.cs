@@ -24,6 +24,18 @@ static class WaitRunLoadRecoverySignals
     public static bool ShouldRetryEnterRunFromWaitRunLoad(ObserverSummary observer, IReadOnlyList<GuiSmokeHistoryEntry>? history)
         => GetState(observer, history).ShouldRetryEnterRun;
 
+    public static bool ShouldPreferRunSaveCleanupAfterFailedContinue(ObserverSummary observer, IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
+        if (!IsReturnedMainMenuSurface(observer)
+            || MainMenuRunStartObserverSignals.HasAbandonRunConfirmSurface(observer)
+            || !MainMenuRunStartObserverSignals.HasExplicitAbandonRunSurface(observer))
+        {
+            return false;
+        }
+
+        return HasFreshRetryAfterContinuePending(history);
+    }
+
     public static WaitRunLoadRecoveryState GetState(ObserverSummary observer, IReadOnlyList<GuiSmokeHistoryEntry>? history = null)
     {
         var transitionState = RootSceneTransitionObserverSignals.TryGetState(observer);
@@ -194,7 +206,8 @@ static class WaitRunLoadRecoverySignals
         foreach (var entry in history.Reverse())
         {
             if (string.Equals(entry.Phase, GuiSmokePhase.WaitRunLoad.ToString(), StringComparison.OrdinalIgnoreCase)
-                && string.Equals(entry.Action, "retry-enter-run", StringComparison.OrdinalIgnoreCase))
+                && (string.Equals(entry.Action, "retry-enter-run", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase)))
             {
                 continue;
             }
@@ -220,6 +233,12 @@ static class WaitRunLoadRecoverySignals
                 && string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase))
             {
                 waitCount++;
+                continue;
+            }
+
+            if (string.Equals(entry.Phase, GuiSmokePhase.WaitRunLoad.ToString(), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(entry.Action, "retry-enter-run", StringComparison.OrdinalIgnoreCase))
+            {
                 continue;
             }
 
@@ -250,6 +269,40 @@ static class WaitRunLoadRecoverySignals
                && !MainMenuRunStartObserverSignals.IsLogoAnimationOnlyMainMenu(observer)
                && !MainMenuRunStartObserverSignals.ShouldWaitForStableRunStartSurface(observer)
                && MainMenuRunStartObserverSignals.HasMainMenuRunStartSurface(observer);
+    }
+
+    private static bool HasFreshRetryAfterContinuePending(IReadOnlyList<GuiSmokeHistoryEntry>? history)
+    {
+        if (history is null || history.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var entry in history.Reverse())
+        {
+            if (string.Equals(entry.Phase, GuiSmokePhase.WaitRunLoad.ToString(), StringComparison.OrdinalIgnoreCase)
+                && string.Equals(entry.Action, "wait", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return string.Equals(entry.Phase, GuiSmokePhase.WaitRunLoad.ToString(), StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(entry.Action, "retry-enter-run", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(entry.Metadata, "FreshRetryAfterContinuePending", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    private static bool IsReturnedMainMenuSurface(ObserverSummary observer)
+    {
+        return (MatchesControlFlowScreen(observer, "main-menu")
+                || string.Equals(observer.ChoiceExtractorPath, "main-menu", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(observer.Meta.TryGetValue("choiceExtractorPath", out var choiceExtractorPath) ? choiceExtractorPath : null, "main-menu", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(observer.Meta.TryGetValue("rawChoiceExtractorPath", out var rawChoiceExtractorPath) ? rawChoiceExtractorPath : null, "main-menu", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(observer.Meta.TryGetValue("rootSceneIsMainMenu", out var rootSceneIsMainMenu) ? rootSceneIsMainMenu : null, "true", StringComparison.OrdinalIgnoreCase))
+               && (string.Equals(observer.Meta.TryGetValue("terminalRunBoundary", out var terminalRunBoundary) ? terminalRunBoundary : null, "true", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(observer.Meta.TryGetValue("mainMenuReturnDetected", out var mainMenuReturnDetected) ? mainMenuReturnDetected : null, "true", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsMainMenuScreenTypeName(string? typeName)

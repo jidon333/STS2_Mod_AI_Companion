@@ -322,6 +322,7 @@ internal static partial class Program
 
         if (TryAdvanceAlternateBranch(phase, observer, history, logger, stepIndex, isLongRun, out var alternatePhase))
         {
+            var alternateBranchSourcePhase = phase;
             logger.WriteObserverCopies(stepPrefix, observer);
             LogHarness($"step={stepIndex} alternate branch {phase} -> {alternatePhase} from screen={observer.CurrentScreen ?? "null"}");
             AppendProgressIfLongRun(
@@ -350,16 +351,29 @@ internal static partial class Program
                     observer);
             }
 
+            var retryEnterRunFromWaitRunLoad = alternateBranchSourcePhase == GuiSmokePhase.WaitRunLoad
+                                               && phase == GuiSmokePhase.EnterRun;
             var alternateBranchWait = await WaitWithObserverPollingAsync(
                     observerReader,
                     transitionSettleMs,
                     75,
                     observer,
-                    latestObserver => HasGenericObserverWakeDelta(observer, latestObserver)
-                        ? "observer-delta"
-                        : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
-                            ? "phase-satisfied"
-                            : null)
+                    latestObserver =>
+                    {
+                        if (retryEnterRunFromWaitRunLoad)
+                        {
+                            return evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                   && !MatchesControlFlowScreen(latestObserver, "main-menu")
+                                ? "phase-satisfied"
+                                : null;
+                        }
+
+                        return HasGenericObserverWakeDelta(observer, latestObserver)
+                            ? "observer-delta"
+                            : evaluator.IsPhaseSatisfied(phase, latestObserver, history)
+                                ? "phase-satisfied"
+                                : null;
+                    })
                 .ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(alternateBranchWait.WakeReason))
             {
@@ -426,6 +440,10 @@ internal static partial class Program
         }
 
         LogHarness($"step={stepIndex} waiting phase={phase} attempt={waitAttempt} screen={observer.CurrentScreen ?? "null"}");
+        if (phase == GuiSmokePhase.WaitRunLoad)
+        {
+            history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "wait", observer.CurrentScreen, DateTimeOffset.UtcNow));
+        }
         logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "waiting", observer.CurrentScreen, observer.InCombat, null));
         AppendProgressIfLongRun(
             isLongRun,

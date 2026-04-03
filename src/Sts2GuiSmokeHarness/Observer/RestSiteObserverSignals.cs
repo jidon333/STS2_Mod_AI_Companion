@@ -49,9 +49,9 @@ static class RestSiteObserverSignals
             return clickReadyOptionIds.Contains(normalizedOptionId, StringComparer.OrdinalIgnoreCase);
         }
 
-        if (observer.Meta.ContainsKey("restSiteButtonsClickReady") && TryGetMetaBool(observer, "restSiteButtonsClickReady"))
+        if (observer.Meta.ContainsKey("restSiteButtonsClickReady"))
         {
-            return true;
+            return TryGetMetaBool(observer, "restSiteButtonsClickReady");
         }
 
         if (observer.Meta.ContainsKey("restSiteOptionsInteractive"))
@@ -70,6 +70,11 @@ static class RestSiteObserverSignals
     public static bool HasProceedEnabled(ObserverSummary observer)
     {
         return TryGetMetaBool(observer, "restSiteProceedEnabled");
+    }
+
+    public static bool HasChoiceSurfaceAmbiguous(ObserverSummary observer)
+    {
+        return TryGetMetaBool(observer, "restSiteChoiceSurfaceAmbiguous");
     }
 
     public static bool HasSmithUpgradeVisible(ObserverSummary observer)
@@ -115,6 +120,8 @@ static class RestSiteObserverSignals
             return false;
         }
 
+        var selectionSignalFresh = HasFreshSelectionSignalForCurrentRoom(observer);
+
         var currentStatus = TryGetMetaValue(observer, "restSiteSelectionCurrentStatus");
         var outcome = TryGetMetaValue(observer, "restSiteSelectionOutcome");
         var lastSignal = TryGetMetaValue(observer, "restSiteSelectionLastSignal");
@@ -136,18 +143,39 @@ static class RestSiteObserverSignals
 
         return string.Equals(currentStatus, "selecting", StringComparison.OrdinalIgnoreCase)
                || string.Equals(currentStatus, "options-disabled", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(outcome, "in-progress", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(lastSignal, "before-select", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase);
+               || (selectionSignalFresh
+                   && (string.Equals(outcome, "in-progress", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(lastSignal, "before-select", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase)));
     }
 
     public static bool HasSelectionAcceptedRecently(ObserverSummary observer)
     {
+        if (!HasFreshSelectionSignalForCurrentRoom(observer))
+        {
+            return false;
+        }
+
         return string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase)
                || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSignal"), "after-select-success", StringComparison.OrdinalIgnoreCase)
                || IsRestSiteSelectionSettlingState(observer);
+    }
+
+    public static bool HasFreshSelectionSignalForCurrentRoom(ObserverSummary observer)
+    {
+        if (!TryGetMetaTimestamp(observer, "restSiteSelectionLastSignalAt", out var lastSignalAt))
+        {
+            return true;
+        }
+
+        if (!TryGetLatestRestSiteRoomEnteredAt(observer, out var roomEnteredAt))
+        {
+            return true;
+        }
+
+        return lastSignalAt >= roomEnteredAt;
     }
 
     public static bool HasExportedSmithUpgradeChoices(ObserverSummary observer)
@@ -188,6 +216,8 @@ static class RestSiteObserverSignals
     {
         var normalizedTarget = RestSiteChoiceSupport.NormalizeOptionId(RestSiteChoiceSupport.MapLabelToOptionId(targetLabel) ?? targetLabel);
         var explicitChoiceVisible = RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer);
+        var proceedVisible = HasProceedVisible(observer);
+        var proceedEnabled = HasProceedEnabled(observer);
         var smithGridVisible = HasSmithGridVisible(observer);
         var smithConfirmVisible = HasSmithConfirmVisible(observer);
         var upgradeScreenVisible = HasSmithUpgradeScreenVisible(observer);
@@ -197,6 +227,11 @@ static class RestSiteObserverSignals
         var currentOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionCurrentOptionId"));
         var lastSignal = TryGetMetaValue(observer, "restSiteSelectionLastSignal");
         var lastOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionLastOptionId"));
+        var lastChosenOptionId = RestSiteChoiceSupport.GetLastChosenOptionId(observer);
+        var targetStillVisible = RestSiteChoiceSupport.IsTargetStillVisible(observer, normalizedTarget);
+        var choiceSurfaceAmbiguous = RestSiteChoiceSupport.HasChoiceSurfaceAmbiguity(observer);
+        var visibleOptionIds = string.Join(",", RestSiteChoiceSupport.GetVisibleOptionIds(observer));
+        var choiceSurfaceSummary = RestSiteChoiceSupport.GetChoiceSurfaceAmbiguitySummary(observer);
         var upgradeActionSurfacePresent = HasUpgradeCardSelectionSurface(observer);
         var upgradeChoiceObserverMiss = string.Equals(TryGetMetaValue(observer, "restSiteUpgradeObserverMiss"), "true", StringComparison.OrdinalIgnoreCase)
                                         || (string.Equals(currentStatus, "grid-visible", StringComparison.OrdinalIgnoreCase)
@@ -213,6 +248,15 @@ static class RestSiteObserverSignals
                 || string.Equals(currentStatus, "selection-failed", StringComparison.OrdinalIgnoreCase))
             {
                 classification = "rest-site-selection-failed";
+            }
+            else if (choiceSurfaceAmbiguous
+                     && targetStillVisible
+                     && !proceedEnabled
+                     && !smithGridVisible
+                     && !smithConfirmVisible
+                     && !upgradeScreenVisible)
+            {
+                classification = "rest-site-choice-surface-ambiguous";
             }
             else if (upgradeChoiceObserverMiss
                      || (string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
@@ -242,11 +286,18 @@ static class RestSiteObserverSignals
             currentOptionId,
             lastSignal,
             lastOptionId,
+            lastChosenOptionId,
             upgradeScreenVisible,
             explicitChoiceVisible,
+            proceedVisible,
+            proceedEnabled,
             smithGridVisible,
             smithConfirmVisible,
-            upgradeChoiceObserverMiss);
+            upgradeChoiceObserverMiss,
+            targetStillVisible,
+            choiceSurfaceAmbiguous,
+            string.IsNullOrWhiteSpace(visibleOptionIds) ? null : visibleOptionIds,
+            choiceSurfaceSummary);
     }
 
     private static bool HasUpgradeCardSelectionSurface(ObserverSummary observer)
@@ -265,6 +316,64 @@ static class RestSiteObserverSignals
         return int.TryParse(TryGetMetaValue(observer, key), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
             ? value
             : 0;
+    }
+
+    private static bool TryGetMetaTimestamp(ObserverSummary observer, string key, out DateTimeOffset timestamp)
+    {
+        var rawValue = TryGetMetaValue(observer, key);
+        return DateTimeOffset.TryParse(rawValue, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out timestamp);
+    }
+
+    private static bool TryGetLatestRestSiteRoomEnteredAt(ObserverSummary observer, out DateTimeOffset roomEnteredAt)
+    {
+        roomEnteredAt = default;
+        var found = false;
+        foreach (var tail in observer.LastEventsTail)
+        {
+            if (string.IsNullOrWhiteSpace(tail)
+                || !tail.Contains("\"kind\":\"room-entered\"", StringComparison.OrdinalIgnoreCase)
+                || !tail.Contains("\"screen\":\"rest-site\"", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!TryParseEventTailTimestamp(tail, out var parsedTimestamp))
+            {
+                continue;
+            }
+
+            if (!found || parsedTimestamp > roomEnteredAt)
+            {
+                roomEnteredAt = parsedTimestamp;
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
+    private static bool TryParseEventTailTimestamp(string eventTail, out DateTimeOffset timestamp)
+    {
+        timestamp = default;
+        try
+        {
+            using var document = JsonDocument.Parse(eventTail);
+            if (!document.RootElement.TryGetProperty("ts", out var timestampElement))
+            {
+                return false;
+            }
+
+            return timestampElement.ValueKind == JsonValueKind.String
+                   && DateTimeOffset.TryParse(
+                       timestampElement.GetString(),
+                       CultureInfo.InvariantCulture,
+                       DateTimeStyles.RoundtripKind,
+                       out timestamp);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static double TryGetSortX(string? rawBounds)

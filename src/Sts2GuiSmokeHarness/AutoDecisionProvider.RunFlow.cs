@@ -16,6 +16,18 @@ sealed partial class AutoDecisionProvider
                    ?? CreateWaitDecision("waiting for abandon-run confirmation button", ControlFlowCurrentScreen(request.Observer));
         }
 
+        if (WaitRunLoadRecoverySignals.ShouldPreferRunSaveCleanupAfterFailedContinue(request.Observer, request.History))
+        {
+            return TryFindLabeledSurfaceDecision(
+                       request,
+                       MainMenuRunStartObserverSignals.IsAbandonRunLabel,
+                       "abandon run",
+                       "The previous Continue retry returned to the main menu with an explicit Abandon Run surface. Clear the stale run save before opening a fresh run path instead of resubmitting Continue.",
+                       0.96,
+                       1200)
+                   ?? CreateWaitDecision("waiting for abandon-run cleanup after failed Continue", ControlFlowCurrentScreen(request.Observer));
+        }
+
         if (MainMenuRunStartObserverSignals.HasRunSaveCleanupSurface(request.Observer))
         {
             return TryFindLabeledSurfaceDecision(

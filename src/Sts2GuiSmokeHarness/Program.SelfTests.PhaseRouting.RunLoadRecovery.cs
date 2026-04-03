@@ -283,6 +283,7 @@ internal static partial class Program
                     ["rootSceneIsRun"] = "false",
                     ["currentRunNodePresent"] = "false",
                     ["rootSceneCurrentType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.MainMenu.NMainMenu",
                     ["terminalRunBoundary"] = "true",
                     ["mainMenuReturnDetected"] = "true",
                     ["choiceExtractorPath"] = "main-menu",
@@ -450,9 +451,11 @@ internal static partial class Program
                 "wait",
                 null,
                 DateTimeOffset.UtcNow.AddMilliseconds(-2000 + (waitIndex * 100)))));
+        var continueFailedRetryState = WaitRunLoadRecoverySignals.GetState(waitRunLoadStuckContinueObserver.Summary, continueFailedRetryHistory);
         Assert(
-            WaitRunLoadRecoverySignals.ShouldRetryEnterRunFromWaitRunLoad(waitRunLoadStuckContinueObserver.Summary, continueFailedRetryHistory),
-            "WaitRunLoad should reopen EnterRun after a submitted Continue action keeps the explicit continue surface visible through a bounded series of wait steps.");
+            continueFailedRetryState.ShouldRetryEnterRun
+            && string.Equals(continueFailedRetryState.RetryReason, "FreshRetryAfterContinuePending", StringComparison.OrdinalIgnoreCase),
+            "WaitRunLoad should escalate a submitted Continue action that fails back to the main menu into the bounded retry-after-pending contract, not a generic fresh retry.");
         var waitRunLoadContinueRetryActions = BuildAllowedActions(
             GuiSmokePhase.WaitRunLoad,
             waitRunLoadStuckContinueObserver,

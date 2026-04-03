@@ -156,6 +156,105 @@ internal static partial class Program
         Assert(
             GetPostEnterRunPhase(continueReturnedMainMenuDecision) == GuiSmokePhase.WaitRunLoad,
             "Continue retries from the returned main menu should hand off to neutral run-load waiting.");
+        var continueFailedRetryHistory = new[]
+        {
+            new GuiSmokeHistoryEntry(GuiSmokePhase.WaitRunLoad.ToString(), "wait", "main-menu", DateTimeOffset.UtcNow.AddSeconds(-4)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.WaitRunLoad.ToString(), "wait", "main-menu", DateTimeOffset.UtcNow.AddSeconds(-3)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.WaitRunLoad.ToString(), "wait", "main-menu", DateTimeOffset.UtcNow.AddSeconds(-2)),
+            new GuiSmokeHistoryEntry(GuiSmokePhase.WaitRunLoad.ToString(), "retry-enter-run", "main-menu", DateTimeOffset.UtcNow.AddSeconds(-1))
+            {
+                Metadata = "FreshRetryAfterContinuePending",
+            },
+        };
+        var continueReturnedMainMenuAfterFailedRetryObserver = new ObserverState(
+            new ObserverSummary(
+                "main-menu",
+                "main-menu",
+                false,
+                DateTimeOffset.UtcNow,
+                "inv-main-menu-run-start-and-abandon-retry",
+                true,
+                "main-menu",
+                "stable",
+                null,
+                null,
+                "main-menu",
+                null,
+                null,
+                null,
+                new[] { "Continue", "Abandon Run" },
+                Array.Empty<string>(),
+                new[]
+                {
+                    new ObserverActionNode("main-menu:continue", "continue-run", "Continue", "620,560,420,96", true),
+                    new ObserverActionNode("main-menu:abandon-run", "menu-action", "Abandon Run", "620,680,420,96", true),
+                },
+                new[]
+                {
+                    new ObserverChoice("continue-run", "Continue", "620,560,420,96"),
+                    new ObserverChoice("menu-action", "Abandon Run", "620,680,420,96"),
+                },
+                Array.Empty<ObservedCombatHandCard>())
+            {
+                PublishedCurrentScreen = "main-menu",
+                PublishedVisibleScreen = "main-menu",
+                PublishedSceneReady = true,
+                PublishedSceneAuthority = "hook",
+                PublishedSceneStability = "stable",
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["terminalRunBoundary"] = "true",
+                    ["mainMenuReturnDetected"] = "true",
+                    ["choiceExtractorPath"] = "main-menu",
+                    ["rootSceneIsMainMenu"] = "true",
+                },
+            },
+            null,
+            null,
+            null);
+        Assert(
+            WaitRunLoadRecoverySignals.ShouldPreferRunSaveCleanupAfterFailedContinue(continueReturnedMainMenuAfterFailedRetryObserver.Summary, continueFailedRetryHistory),
+            "A returned main menu with explicit Abandon Run should retire Continue after a bounded failed-Continue retry.");
+        var continueReturnedMainMenuAfterFailedRetryActions = BuildAllowedActions(
+            GuiSmokePhase.EnterRun,
+            continueReturnedMainMenuAfterFailedRetryObserver,
+            Array.Empty<CombatCardKnowledgeHint>(),
+            null,
+            continueFailedRetryHistory);
+        Assert(
+            continueReturnedMainMenuAfterFailedRetryActions.Contains("click abandon run", StringComparer.OrdinalIgnoreCase)
+            && !continueReturnedMainMenuAfterFailedRetryActions.Contains("click continue", StringComparer.OrdinalIgnoreCase),
+            "EnterRun allowed actions should pivot to cleanup instead of reopening Continue once a bounded failed-Continue retry returns to the main menu.");
+        var continueReturnedMainMenuAfterFailedRetryDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+            "run",
+            "boot-to-long-run",
+            14,
+            GuiSmokePhase.EnterRun.ToString(),
+            "Retire Continue after a bounded failed-Continue retry and clear the stale run save first.",
+            DateTimeOffset.UtcNow,
+            "screen.png",
+            new WindowBounds(0, 0, 1280, 720),
+            "phase:enter-run|screen:main-menu|visible:main-menu|ready:true|terminal-run-boundary",
+            "0001",
+            1,
+            3,
+            false,
+            "tactical",
+            null,
+            continueReturnedMainMenuAfterFailedRetryObserver.Summary,
+            Array.Empty<KnownRecipeHint>(),
+            Array.Empty<EventKnowledgeCandidate>(),
+            Array.Empty<CombatCardKnowledgeHint>(),
+            continueReturnedMainMenuAfterFailedRetryActions,
+            continueFailedRetryHistory,
+            string.Empty,
+            null));
+        Assert(
+            string.Equals(continueReturnedMainMenuAfterFailedRetryDecision.TargetLabel, "abandon run", StringComparison.OrdinalIgnoreCase),
+            "EnterRun should choose Abandon Run instead of Continue when a bounded failed-Continue retry returns to the main menu with explicit cleanup authority.");
+        Assert(
+            GetPostEnterRunPhase(continueReturnedMainMenuAfterFailedRetryDecision) == GuiSmokePhase.WaitRunLoad,
+            "The failed-Continue cleanup lane should still hand off to neutral run-load waiting so the abandon confirmation popup can be observed.");
         var runSaveCleanupDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
             "run",
             "boot-to-long-run",
