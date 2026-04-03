@@ -48,11 +48,17 @@ static class RewardObserverSignals
                                              || observer.ActionNodes.Any(static node =>
                                                  node.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
                                                  || node.NodeId.Contains("reward", StringComparison.OrdinalIgnoreCase));
+        var explicitMapProgressionPresent = observer.Choices.Any(MapNodeSourceSupport.IsExplicitMapPointChoice)
+                                            || observer.ActionNodes.Any(static node =>
+                                                node.Actionable
+                                                && MapNodeSourceSupport.IsExplicitMapPointNode(node));
         var actionableRewardAffordance = proceedEnabled || enabledButtonCount > 0;
         var staleTopOverlayTeardown = rewardIsTopOverlay
                                       && !rewardIsCurrentActiveScreen
                                       && mapIsCurrentActiveScreen
-                                      && !actionableRewardAffordance;
+                                      && explicitMapProgressionPresent
+                                      && !proceedEnabled
+                                      && !explicitRewardProgressionPresent;
         var screenVisible = explicitVisible
                             ?? rewardIsCurrentActiveScreen
                             || rewardIsTopOverlay

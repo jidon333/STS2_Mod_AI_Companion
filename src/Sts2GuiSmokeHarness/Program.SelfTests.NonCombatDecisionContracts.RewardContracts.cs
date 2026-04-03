@@ -290,10 +290,19 @@ internal static partial class Program
                     new[]
                     {
                         new ObserverActionNode("proceed:0", "proceed", "진행", "1583,764,269,108", true),
+                        new ObserverActionNode("map:11:4", "map-node", "Monster (11,4)", "1018,514,56,56", true)
+                        {
+                            TypeName = "map-node",
+                        },
                     },
                     new[]
                     {
                         new ObserverChoice("choice", "진행", "1583,764,269,108"),
+                        new ObserverChoice("map-node", "Monster (11,4)", "1018,514,56,56", "11,4", "type:Monster;state:Travelable;coord:11,4")
+                        {
+                            NodeId = "map:11:4",
+                            Enabled = true,
+                        },
                     },
                     Array.Empty<ObservedCombatHandCard>())
                 {
@@ -334,6 +343,134 @@ internal static partial class Program
                     44,
                     out _),
                 "WaitMap mixed-state reopening should not resurrect HandleRewards when reward is only stale top-overlay residue under current map authority.");
+
+            var staleEnabledRewardAftermathObserver = new ObserverState(
+                new ObserverSummary(
+                    "map",
+                    "map",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-reward-aftermath-stale-enabled",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-reward-aftermath-stale-enabled",
+                    "None",
+                    "map",
+                    80,
+                    80,
+                    null,
+                    new[] { "Monster (14,5)" },
+                    Array.Empty<string>(),
+                    new[]
+                    {
+                        new ObserverActionNode("map:14:5", "map-node", "Monster (14,5)", "1205.072,544.27,56,56", true)
+                        {
+                            TypeName = "map-node",
+                        },
+                    },
+                    new[]
+                    {
+                        new ObserverChoice("map-node", "Monster (14,5)", "1205.072,544.27,56,56", "14,5", "type:Monster;state:Travelable;coord:14,5")
+                        {
+                            NodeId = "map:14:5",
+                            Enabled = true,
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "map",
+                    PublishedVisibleScreen = "map",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stable",
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "false",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "false",
+                        ["rewardVisibleButtonCount"] = "1",
+                        ["rewardEnabledButtonCount"] = "1",
+                        ["mapCurrentActiveScreen"] = "true",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            var staleEnabledRewardAftermathState = RewardObserverSignals.TryGetState(staleEnabledRewardAftermathObserver.Summary);
+            Assert(staleEnabledRewardAftermathState is not null, "Map-current stale reward button metadata should still parse into a reward state.");
+            Assert(!staleEnabledRewardAftermathState!.ForegroundOwned, "Map-current stale reward button metadata must not keep reward foreground ownership alive once only map-node surface remains.");
+            Assert(staleEnabledRewardAftermathState.TeardownInProgress, "Map-current stale reward button metadata should downgrade to reward teardown instead of active reward ownership.");
+            var staleEnabledRewardAftermathScene = AutoDecisionProvider.BuildRewardSceneState(
+                staleEnabledRewardAftermathObserver,
+                new WindowBounds(0, 0, 1280, 720),
+                Array.Empty<GuiSmokeHistoryEntry>(),
+                rewardRankingScreenshotPath);
+            Assert(staleEnabledRewardAftermathScene.CanonicalForegroundOwner == NonCombatForegroundOwner.Map,
+                "Canonical reward contract should release to map when only stale reward button metadata remains over an explicit reachable-node surface.");
+            Assert(
+                new ObserverAcceptanceEvaluator().IsPhaseSatisfied(
+                    GuiSmokePhase.WaitMap,
+                    staleEnabledRewardAftermathObserver,
+                    new[] { new GuiSmokeHistoryEntry(GuiSmokePhase.HandleRewards.ToString(), "click", "reward skip", DateTimeOffset.UtcNow) }),
+                "WaitMap should accept map ownership once reachable-node surface is current and reward only survives as stale enabled-button metadata.");
+
+            var metaOnlyRewardClaimObserver = new ObserverState(
+                new ObserverSummary(
+                    "rewards",
+                    "map",
+                    false,
+                    DateTimeOffset.UtcNow,
+                    "inv-reward-meta-only-claim",
+                    true,
+                    "mixed",
+                    "stable",
+                    "episode-reward-meta-only-claim",
+                    "Monster",
+                    "reward",
+                    80,
+                    80,
+                    null,
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    Array.Empty<ObserverChoice>(),
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "rewards",
+                    PublishedVisibleScreen = "map",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stable",
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["rewardScreenDetected"] = "true",
+                        ["rewardScreenVisible"] = "true",
+                        ["rewardForegroundOwned"] = "true",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "false",
+                        ["rewardIsTopOverlay"] = "true",
+                        ["rewardProceedVisible"] = "true",
+                        ["rewardProceedEnabled"] = "false",
+                        ["rewardVisibleButtonCount"] = "1",
+                        ["rewardEnabledButtonCount"] = "1",
+                        ["mapCurrentActiveScreen"] = "true",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+                    },
+                },
+                null,
+                null,
+                null);
+            var metaOnlyRewardClaimState = RewardObserverSignals.TryGetState(metaOnlyRewardClaimObserver.Summary);
+            Assert(metaOnlyRewardClaimState is not null, "Meta-only reward claim observers should still parse into a reward state.");
+            Assert(metaOnlyRewardClaimState!.ForegroundOwned, "Reward teardown narrowing must not release a top-overlay reward when map-current truth is present but no explicit map progression surface exists yet.");
+            Assert(!metaOnlyRewardClaimState.TeardownInProgress, "Meta-only reward claim observers should stay in active reward ownership until explicit map progression evidence appears.");
 
             var rewardAftermathObserver = new ObserverState(
                 new ObserverSummary(

@@ -926,7 +926,7 @@ internal static partial class Program
 
         if (phase == GuiSmokePhase.HandleRewards)
         {
-            if (TryGetCanonicalForegroundModalBranch(observer, history, out var branchKind, out var canonicalForegroundPhase))
+            if (TryGetCanonicalForegroundModalBranch(observer, history, out var branchKind, out var canonicalForegroundPhase, allowCombatLikeState: true))
             {
                 if (canonicalForegroundPhase == GuiSmokePhase.HandleRewards)
                 {
@@ -936,6 +936,14 @@ internal static partial class Program
                 history.Add(new GuiSmokeHistoryEntry(phase.ToString(), $"reward-resolved-{branchKind["branch-".Length..]}", null, DateTimeOffset.UtcNow));
                 logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), $"reward-resolved-{branchKind["branch-".Length..]}", observer.CurrentScreen, observer.InCombat, null));
                 nextPhase = canonicalForegroundPhase;
+                return true;
+            }
+
+            if (ShouldOpenCombatAlternateBranch(observer))
+            {
+                history.Add(new GuiSmokeHistoryEntry(phase.ToString(), "reward-resolved-combat", null, DateTimeOffset.UtcNow));
+                logger.AppendTrace(new GuiSmokeTraceEntry(DateTimeOffset.UtcNow, stepIndex, phase.ToString(), "reward-resolved-combat", observer.CurrentScreen, observer.InCombat, null));
+                nextPhase = GuiSmokePhase.HandleCombat;
                 return true;
             }
 
@@ -1017,16 +1025,18 @@ internal static partial class Program
         ObserverState observer,
         IReadOnlyList<GuiSmokeHistoryEntry>? history,
         out string branchKind,
-        out GuiSmokePhase nextPhase)
+        out GuiSmokePhase nextPhase,
+        bool allowCombatLikeState = false)
     {
         branchKind = string.Empty;
         nextPhase = GuiSmokePhase.WaitMap;
-        if (GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+        if (!allowCombatLikeState
+            && GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
         {
             return false;
         }
 
-        return AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, history) switch
+        return AutoDecisionProvider.TryBuildCanonicalNonCombatSceneState(observer, null, history, null, allowCombatLikeState) switch
         {
             RewardSceneState { RewardForegroundOwned: true, ReleaseStage: RewardReleaseStage.Active }
                 => SetCanonicalForegroundModalBranch("branch-rewards", GuiSmokePhase.HandleRewards, out branchKind, out nextPhase),

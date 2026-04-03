@@ -932,10 +932,12 @@ sealed partial class AutoDecisionProvider
         ObserverState observer,
         WindowBounds? windowBounds,
         IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
-        string? screenshotPath = null)
+        string? screenshotPath = null,
+        bool allowCombatLikeState = false)
     {
         if (RewardObserverSignals.IsTerminalRunBoundary(observer.Summary)
-            || GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary))
+            || (!allowCombatLikeState
+                && GuiSmokeObserverPhaseHeuristics.LooksLikeCombatState(observer.Summary)))
         {
             return null;
         }
@@ -979,9 +981,10 @@ sealed partial class AutoDecisionProvider
         ObserverSummary observer,
         WindowBounds? windowBounds,
         IReadOnlyList<GuiSmokeHistoryEntry>? history = null,
-        string? screenshotPath = null)
+        string? screenshotPath = null,
+        bool allowCombatLikeState = false)
     {
-        return TryBuildCanonicalNonCombatSceneState(new ObserverState(observer, null, null, null), windowBounds, history, screenshotPath);
+        return TryBuildCanonicalNonCombatSceneState(new ObserverState(observer, null, null, null), windowBounds, history, screenshotPath, allowCombatLikeState);
     }
 
     private static bool HasRecentRewardSkipReleaseIntent(IReadOnlyList<GuiSmokeHistoryEntry>? history)

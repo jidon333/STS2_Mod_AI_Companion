@@ -618,6 +618,153 @@ internal static partial class Program
                 && rewardReopenPhase == GuiSmokePhase.HandleRewards,
                 "WaitMap should reopen reward handling instead of idling when reward authority remains over a visible map.");
 
+            var rewardPhaseCombatTakeoverObserver = new ObserverState(
+                new ObserverSummary(
+                    "combat",
+                    "combat",
+                    true,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    true,
+                    "mixed",
+                    "transient",
+                    null,
+                    "Monster",
+                    "generic",
+                    23,
+                    80,
+                    3,
+                    Array.Empty<string>(),
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    Array.Empty<ObserverChoice>(),
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "combat",
+                    PublishedVisibleScreen = "combat",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "transient",
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NCombatRoom",
+                        ["combatPrimaryValue"] = "true",
+                        ["rewardScreenDetected"] = "false",
+                        ["rewardScreenVisible"] = "false",
+                        ["rewardForegroundOwned"] = "false",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "false",
+                        ["rewardIsTopOverlay"] = "false",
+                        ["rewardProceedVisible"] = "false",
+                        ["rewardProceedEnabled"] = "false",
+                        ["rewardVisibleButtonCount"] = "0",
+                        ["rewardEnabledButtonCount"] = "0",
+                        ["mapCurrentActiveScreen"] = "false",
+                    },
+                },
+                null,
+                null,
+                null);
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.HandleRewards,
+                    rewardPhaseCombatTakeoverObserver,
+                    new List<GuiSmokeHistoryEntry>
+                    {
+                        new(GuiSmokePhase.WaitMap.ToString(), "branch-rewards", null, DateTimeOffset.UtcNow.AddSeconds(-2)),
+                        new(GuiSmokePhase.ChooseFirstNode.ToString(), "click", "exported reachable map node", DateTimeOffset.UtcNow.AddSeconds(-1)),
+                    },
+                    waitMapMixedStateLogger,
+                    8,
+                    true,
+                    out var rewardCombatRecoveryPhase)
+                && rewardCombatRecoveryPhase == GuiSmokePhase.HandleCombat,
+                "HandleRewards should yield to authoritative combat takeover when room entry has already advanced past reward/map aftermath.");
+
+            var rewardPhaseShopForegroundObserver = new ObserverState(
+                new ObserverSummary(
+                    "combat",
+                    "shop",
+                    true,
+                    DateTimeOffset.UtcNow,
+                    null,
+                    true,
+                    "mixed",
+                    "stable",
+                    null,
+                    "Shop",
+                    "shop",
+                    23,
+                    80,
+                    3,
+                    new[] { "Back", "분노" },
+                    Array.Empty<string>(),
+                    Array.Empty<ObserverActionNode>(),
+                    new[]
+                    {
+                        new ObserverChoice("shop-back", "Back", "220,160,140,100")
+                        {
+                            BindingKind = "shop-room",
+                            BindingId = "back",
+                            Enabled = true,
+                        },
+                        new ObserverChoice("shop-option:card", "분노", "420,320,180,180")
+                        {
+                            BindingKind = "shop-option",
+                            BindingId = "CARD.ANGER",
+                            Enabled = true,
+                            SemanticHints = new[] { "scene:shop", "shop-type:card" },
+                        },
+                    },
+                    Array.Empty<ObservedCombatHandCard>())
+                {
+                    PublishedCurrentScreen = "combat",
+                    PublishedVisibleScreen = "shop",
+                    PublishedSceneReady = true,
+                    PublishedSceneAuthority = "hook",
+                    PublishedSceneStability = "stable",
+                    Meta = new Dictionary<string, string?>
+                    {
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom",
+                        ["combatPrimaryValue"] = "true",
+                        ["shopRoomDetected"] = "true",
+                        ["shopRoomVisible"] = "true",
+                        ["shopForegroundOwned"] = "true",
+                        ["shopTeardownInProgress"] = "false",
+                        ["shopIsCurrentActiveScreen"] = "true",
+                        ["mapCurrentActiveScreen"] = "false",
+                        ["shopInventoryOpen"] = "true",
+                        ["shopMerchantButtonVisible"] = "false",
+                        ["shopMerchantButtonEnabled"] = "false",
+                        ["shopProceedEnabled"] = "false",
+                        ["shopBackVisible"] = "true",
+                        ["shopBackEnabled"] = "true",
+                        ["shopOptionCount"] = "1",
+                        ["shopAffordableOptionCount"] = "1",
+                        ["shopRootType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NMerchantRoom",
+                        ["rewardScreenDetected"] = "false",
+                        ["rewardScreenVisible"] = "false",
+                        ["rewardForegroundOwned"] = "false",
+                        ["rewardTeardownInProgress"] = "false",
+                        ["rewardIsCurrentActiveScreen"] = "false",
+                        ["rewardIsTopOverlay"] = "false",
+                    },
+                },
+                null,
+                null,
+                null);
+            Assert(
+                TryAdvanceAlternateBranch(
+                    GuiSmokePhase.HandleRewards,
+                    rewardPhaseShopForegroundObserver,
+                    new List<GuiSmokeHistoryEntry>(),
+                    waitMapMixedStateLogger,
+                    9,
+                    true,
+                    out var rewardShopRecoveryPhase)
+                && rewardShopRecoveryPhase == GuiSmokePhase.HandleShop,
+                "HandleRewards must yield to explicit shop foreground even when stale combat truth still marks the mixed frame as combat-like.");
+
             var eventMixedStateObserver = new ObserverState(
                 new ObserverSummary(
                     "map",
