@@ -72,6 +72,12 @@ static class RestSiteObserverSignals
         return TryGetMetaBool(observer, "restSiteProceedEnabled");
     }
 
+    public static string? GetProceedBounds(ObserverSummary observer)
+    {
+        var rawBounds = TryGetMetaValue(observer, "restSiteProceedBounds");
+        return string.IsNullOrWhiteSpace(rawBounds) ? null : rawBounds;
+    }
+
     public static bool HasChoiceSurfaceAmbiguous(ObserverSummary observer)
     {
         return TryGetMetaBool(observer, "restSiteChoiceSurfaceAmbiguous");

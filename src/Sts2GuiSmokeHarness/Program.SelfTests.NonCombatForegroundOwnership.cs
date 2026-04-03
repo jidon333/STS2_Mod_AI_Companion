@@ -1766,6 +1766,54 @@ internal static partial class Program
             var restSiteProceedDecision = AutoDecisionProvider.Decide(restSiteProceedRequest);
             Assert(string.Equals(restSiteProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
                 "Observer-visible rest-site proceed choice should create a visible proceed decision without waiting for screenshot arrows.");
+
+            var restSiteProceedMetaOnlySummary = restSiteProceedSummary with
+            {
+                ChoiceExtractorPath = "map",
+                CurrentChoices = new[] { "Shop (8,3)", "Unknown (8,4)" },
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("map:8:3", "map-node", "Shop (8,3)", "770.838,528.498,56,56", true)
+                    {
+                        TypeName = "map-node",
+                    },
+                },
+                Choices = new[]
+                {
+                    new ObserverChoice("map-node", "Shop (8,3)", "770.838,528.498,56,56", "8,3", "type:Shop;state:Travelable;coord:8,3"),
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                    ["restSiteProceedVisible"] = "true",
+                    ["restSiteProceedEnabled"] = "true",
+                    ["restSiteProceedBounds"] = "1576.3,761.3,282.45,113.4",
+                    ["restSiteSelectionCurrentStatus"] = "proceed-visible",
+                    ["restSiteSelectionOutcome"] = "success",
+                    ["restSiteSelectionOutcomeEvidence"] = "runtime-poll:rest-site-proceed",
+                    ["restSiteViewKind"] = "proceed",
+                },
+            };
+            var restSiteProceedMetaOnlyObserver = new ObserverState(restSiteProceedMetaOnlySummary, null, null, null);
+            var restSiteProceedMetaOnlyActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteProceedMetaOnlyObserver);
+            Assert(restSiteProceedMetaOnlyActions.SequenceEqual(new[] { "click proceed", "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Meta-only rest-site proceed with canonical proceed bounds should reopen the proceed lane even when map nodes linger underneath. actual=[{string.Join(", ", restSiteProceedMetaOnlyActions)}]");
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(restSiteProceedMetaOnlyObserver) is
+                {
+                    CanonicalForegroundOwner: NonCombatCanonicalForegroundOwner.RestSite,
+                    ProceedVisible: true,
+                    SmithUpgradeActive: false,
+                },
+                "Rest-site scene state should keep canonical rest-site proceed ownership active when proceed metadata is explicit and enabled.");
+            var restSiteProceedMetaOnlyDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteProceedMetaOnlySummary,
+                AllowedActions = restSiteProceedMetaOnlyActions,
+                SceneSignature = "phase:choosefirstnode|screen:rest-site|visible:rest-site|encounter:restsite|ready:unknown|stability:unknown|room:rest-site|layer:map-overlay-foreground|reachable-node-candidate-present|exported-reachable-node-present",
+            });
+            Assert(string.Equals(restSiteProceedMetaOnlyDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
+                $"Meta-only rest-site proceed should click the canonical proceed bounds instead of waiting behind map overlay residue. actual={restSiteProceedMetaOnlyDecision.TargetLabel ?? restSiteProceedMetaOnlyDecision.Reason ?? restSiteProceedMetaOnlyDecision.Status}");
             var restSiteProceedRewardContext = GuiSmokeStepRequestFactory.CreateObserverOnlyAnalysisContext(
                 GuiSmokePhase.HandleRewards,
                 restSiteProceedObserver,
@@ -2042,16 +2090,19 @@ internal static partial class Program
                 Assert(!GuiSmokeNonCombatContractSupport.AllowsAnyMapRoutingAction(replayRequest),
                     $"Mixed rest-site aftermath replay {replayStep} should preserve the original stale non-map allowlist before rebuild.");
                 var replayArtifact = EvaluateAutoDecisionWithDiagnostics(replayRequestPath, replayRequest).CandidateDump;
-                Assert(string.Equals(replayArtifact.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
-                    $"Mixed rest-site aftermath replay {replayStep} should wait instead of emitting illegal screenshot map routing against a non-map allowlist.");
-                Assert(!string.Equals(replayArtifact.FinalDecision.TargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase),
-                    $"Mixed rest-site aftermath replay {replayStep} must not recreate the old request/decision mismatch.");
+                Assert(string.Equals(replayArtifact.FinalDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                       && !string.Equals(replayArtifact.FinalDecision.TargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase),
+                    $"Mixed rest-site aftermath saved replay {replayStep} should preserve the original stale non-map allowlist instead of emitting map routing. actual={replayArtifact.FinalDecision.Status}/{replayArtifact.FinalDecision.TargetLabel ?? "null"}/{replayArtifact.FinalDecision.Reason ?? "null"}.");
 
                 var rebuiltReplayRequest = LoadReplayRequest(replayRequestPath, fullRequestRebuild: true).Request;
-                Assert(rebuiltReplayRequest.AllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase)
+                Assert(rebuiltReplayRequest.AllowedActions.SequenceEqual(new[] { "click proceed", "wait" }, StringComparer.OrdinalIgnoreCase)
                        && !rebuiltReplayRequest.AllowedActions.Contains("click smith card", StringComparer.OrdinalIgnoreCase)
                        && !rebuiltReplayRequest.AllowedActions.Contains("click smith confirm", StringComparer.OrdinalIgnoreCase),
-                    $"Mixed rest-site aftermath replay rebuild {replayStep} should canonicalize to MapSurfacePending wait instead of stale smith/wait actions or premature map routing. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
+                    $"Mixed rest-site aftermath replay rebuild {replayStep} should canonicalize to the rest-site proceed lane instead of stale smith actions or premature map routing. Actual allowlist=[{string.Join(", ", rebuiltReplayRequest.AllowedActions)}].");
+                var rebuiltReplayArtifact = EvaluateAutoDecisionWithDiagnostics(replayRequestPath, rebuiltReplayRequest).CandidateDump;
+                Assert(string.Equals(rebuiltReplayArtifact.FinalDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase)
+                       && !string.Equals(rebuiltReplayArtifact.FinalDecision.TargetLabel, "visible reachable node", StringComparison.OrdinalIgnoreCase),
+                    $"Mixed rest-site aftermath rebuilt replay {replayStep} should recover the canonical rest-site proceed lane instead of waiting or emitting map routing. actual={rebuiltReplayArtifact.FinalDecision.Status}/{rebuiltReplayArtifact.FinalDecision.TargetLabel ?? "null"}/{rebuiltReplayArtifact.FinalDecision.Reason ?? "null"}.");
             }
 
             var restSiteReleaseReplayPath = Path.Combine(

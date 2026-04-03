@@ -130,7 +130,8 @@ static class GuiSmokeNonCombatContractSupport
     {
         if (RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
             || (MapAuthorityOutranksStaleRestSiteResidue(observer)
-                && !HasRestSiteReleasePendingAuthority(observer)))
+                && !HasRestSiteReleasePendingAuthority(observer)
+                && !HasVisibleRestSiteProceedAffordance(observer)))
         {
             return false;
         }
@@ -142,15 +143,8 @@ static class GuiSmokeNonCombatContractSupport
             return false;
         }
 
-        var hasProceedActionNode = observer.ActionNodes.Any(static node =>
-            node.Actionable
-            && IsProceedNode(node)
-            && TryParseBounds(node.ScreenBounds, out _));
-        var hasProceedChoice = observer.Choices.Any(static choice =>
-            IsProceedChoice(choice)
-            && HasLargeChoiceBounds(choice.ScreenBounds));
         var hasProceedLabel = observer.CurrentChoices.Any(IsProceedLikeLabel);
-        var hasVisibleProceedAffordance = hasProceedActionNode || hasProceedChoice || hasProceedLabel;
+        var hasVisibleProceedAffordance = HasVisibleRestSiteProceedAffordance(observer);
 
         if (RestSiteObserverSignals.HasProceedEnabled(observer))
         {
@@ -359,7 +353,10 @@ static class GuiSmokeNonCombatContractSupport
             IsProceedChoice(choice)
             && HasLargeChoiceBounds(choice.ScreenBounds));
         var hasProceedLabel = observer.CurrentChoices.Any(IsProceedLikeLabel);
-        return hasProceedActionNode || hasProceedChoice || hasProceedLabel;
+        var hasProceedMetaBounds = RestSiteObserverSignals.HasProceedVisible(observer)
+                                   && RestSiteObserverSignals.HasProceedEnabled(observer)
+                                   && !string.IsNullOrWhiteSpace(RestSiteObserverSignals.GetProceedBounds(observer));
+        return hasProceedActionNode || hasProceedChoice || hasProceedLabel || hasProceedMetaBounds;
     }
 
     private static bool IsProceedNode(ObserverActionNode node)

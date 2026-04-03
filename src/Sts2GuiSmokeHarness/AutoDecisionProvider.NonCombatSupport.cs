@@ -860,7 +860,8 @@ sealed partial class AutoDecisionProvider
                    && HasActiveNodeBounds(node.ScreenBounds, request.WindowBounds))?.ScreenBounds
                ?? request.Observer.Choices.FirstOrDefault(choice =>
                    IsProceedChoice(choice)
-                   && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds;
+                   && HasActiveNodeBounds(choice.ScreenBounds, request.WindowBounds))?.ScreenBounds
+               ?? RestSiteObserverSignals.GetProceedBounds(request.Observer);
     }
 
     private static string? TryFindRewardBounds(GuiSmokeStepRequest request)
@@ -1412,6 +1413,26 @@ sealed partial class AutoDecisionProvider
                 0.96,
                 ResolveObserverScreen(request.Observer, "rest-site"),
                 1400);
+        }
+
+        var proceedBounds = RestSiteObserverSignals.GetProceedBounds(request.Observer);
+        if (RestSiteObserverSignals.HasProceedEnabled(request.Observer)
+            && TryParseNodeBounds(proceedBounds, out var metaProceedBounds)
+            && TryResolveNormalizedBounds(request.WindowBounds, proceedBounds, metaProceedBounds, out var normalizedX, out var normalizedY, out _))
+        {
+            return new GuiSmokeStepDecision(
+                "act",
+                "click",
+                null,
+                normalizedX,
+                normalizedY,
+                "visible proceed",
+                "Rest-site runtime metadata reports an enabled proceed affordance even though no structured proceed hitbox was exported. Use the canonical proceed bounds before any map routing.",
+                0.88,
+                ResolveObserverScreen(request.Observer, "rest-site"),
+                1400,
+                true,
+                null);
         }
 
         return null;
