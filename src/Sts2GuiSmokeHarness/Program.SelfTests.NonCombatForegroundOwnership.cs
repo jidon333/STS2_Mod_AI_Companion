@@ -1608,6 +1608,41 @@ internal static partial class Program
             Assert(string.Equals(restSiteSelectionSettlingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
                 "ChooseFirstNode should wait while a completed rest-site selection is settling back to proceed.");
 
+            var restSiteStaleProceedMetaSummary = restSiteSelectionSettlingSummary with
+            {
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastOptionId"] = "SMITH",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                    ["restSiteSelectionCurrentStatus"] = "proceed-visible",
+                    ["restSiteSelectionCurrentOptionId"] = "SMITH",
+                    ["restSiteSelectionOutcome"] = "success",
+                    ["restSiteProceedVisible"] = "true",
+                    ["restSiteProceedEnabled"] = "true",
+                    ["restSiteViewKind"] = "proceed",
+                },
+            };
+            var restSiteStaleProceedMetaObserver = new ObserverState(restSiteStaleProceedMetaSummary, null, null, null);
+            Assert(!GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(restSiteStaleProceedMetaSummary),
+                "Meta-only rest-site proceed without an actual proceed affordance should not outrank post-smith selection settling.");
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(restSiteStaleProceedMetaObserver) is
+                   {
+                       SelectionSettling: true,
+                       ProceedVisible: false,
+                   },
+                "Post-smith rest-site residue should stay in selection-settling until an explicit proceed affordance is republished.");
+            var restSiteStaleProceedMetaActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteStaleProceedMetaObserver);
+            Assert(restSiteStaleProceedMetaActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Meta-only rest-site proceed should not reopen the proceed lane before an actionable affordance exists. actual=[{string.Join(", ", restSiteStaleProceedMetaActions)}]");
+            var restSiteStaleProceedMetaDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteStaleProceedMetaSummary,
+                AllowedActions = restSiteStaleProceedMetaActions,
+            });
+            Assert(string.Equals(restSiteStaleProceedMetaDecision.Reason, "waiting for rest-site selection to settle into smith upgrade or proceed", StringComparison.OrdinalIgnoreCase),
+                $"Meta-only rest-site proceed should wait on settling instead of proceeding immediately. actual={restSiteStaleProceedMetaDecision.Reason}");
+
             var restSiteSelectionInProgressSummary = restSiteMetadataSummary with
             {
                 CurrentScreen = "rest-site",

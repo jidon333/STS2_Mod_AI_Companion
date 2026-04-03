@@ -142,9 +142,19 @@ static class GuiSmokeNonCombatContractSupport
             return false;
         }
 
+        var hasProceedActionNode = observer.ActionNodes.Any(static node =>
+            node.Actionable
+            && IsProceedNode(node)
+            && TryParseBounds(node.ScreenBounds, out _));
+        var hasProceedChoice = observer.Choices.Any(static choice =>
+            IsProceedChoice(choice)
+            && HasLargeChoiceBounds(choice.ScreenBounds));
+        var hasProceedLabel = observer.CurrentChoices.Any(IsProceedLikeLabel);
+        var hasVisibleProceedAffordance = hasProceedActionNode || hasProceedChoice || hasProceedLabel;
+
         if (RestSiteObserverSignals.HasProceedEnabled(observer))
         {
-            return true;
+            return hasVisibleProceedAffordance;
         }
 
         var hasProceedMeta = observer.Meta.ContainsKey("restSiteProceedVisible")
@@ -155,15 +165,7 @@ static class GuiSmokeNonCombatContractSupport
             return false;
         }
 
-        var hasProceedActionNode = observer.ActionNodes.Any(static node =>
-            node.Actionable
-            && IsProceedNode(node)
-            && TryParseBounds(node.ScreenBounds, out _));
-        var hasProceedChoice = observer.Choices.Any(static choice =>
-            IsProceedChoice(choice)
-            && HasLargeChoiceBounds(choice.ScreenBounds));
-        var hasProceedLabel = observer.CurrentChoices.Any(IsProceedLikeLabel);
-        if (!hasProceedActionNode && !hasProceedChoice && !hasProceedLabel)
+        if (!hasVisibleProceedAffordance)
         {
             return false;
         }
