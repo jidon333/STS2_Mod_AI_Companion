@@ -184,7 +184,8 @@ static class CombatMicroStageSupport
         {
             var entry = history[index];
             if (string.Equals(entry.Action, "confirm-non-enemy", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(entry.Action, "confirm-attack-card", StringComparison.OrdinalIgnoreCase))
+                || string.Equals(entry.Action, "confirm-attack-card", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(entry.TargetLabel, "confirm selected hand card", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

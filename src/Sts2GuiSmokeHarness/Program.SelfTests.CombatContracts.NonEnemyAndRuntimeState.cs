@@ -669,6 +669,93 @@ internal static partial class Program
                 && string.Equals(handConfirmSemanticAction, "confirm selected hand card", StringComparison.OrdinalIgnoreCase),
                 "Combat hand-selection confirm should map to explicit confirm semantics.");
 
+            var handConfirmResolvingObserver = runtimeSimpleSelectObserver with
+            {
+                InventoryId = "inv-hand-confirm-resolving",
+                SceneEpisodeId = "episode-hand-confirm-resolving",
+                PlayerEnergy = 0,
+                CurrentChoices = new[] { "DrawPile", "DiscardPile", "ExhaustPile", "5턴 종료", "핑" },
+                ActionNodes = new[]
+                {
+                    new ObserverActionNode("end-turn", "choice", "5턴 종료", "1604,846,220,90", true),
+                },
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.INFECTION", "Status", 0),
+                    new ObservedCombatHandCard(2, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi;CombatState.RoundNumber=5;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                    ["combatCardPlayPending"] = "false",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatTargetableEnemyCount"] = "0",
+                    ["combatHittableEnemyCount"] = "0",
+                    ["combatHistoryStartedCount"] = "14",
+                    ["combatHistoryFinishedCount"] = "13",
+                    ["combatInteractionRevision"] = "14:13:false:false:none",
+                    ["combatLastCardPlayStartedCardId"] = "CARD.BURNING_PACT",
+                    ["combatLastCardPlayFinishedCardId"] = "CARD.STRIKE_IRONCLAD",
+                    ["combatPlayerActionsDisabled"] = "false",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                    ["combatRoundNumber"] = "5",
+                },
+            };
+            var handConfirmResolvingKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(2, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+            };
+            var handConfirmResolvingHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select hand slot 1", DateTimeOffset.UtcNow.AddSeconds(-2)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "click", "confirm selected hand card", DateTimeOffset.UtcNow.AddSeconds(-1)),
+            };
+            var handConfirmResolvingState = new ObserverState(handConfirmResolvingObserver, null, null, null);
+            var handConfirmResolvingContext = GuiSmokeStepRequestFactory.CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                handConfirmResolvingState,
+                combatNoOpScreenshotPath,
+                handConfirmResolvingHistory,
+                handConfirmResolvingKnowledge);
+            Assert(handConfirmResolvingContext.CombatMicroStage.Kind == CombatMicroStageKind.ResolvingCardPlay,
+                $"A confirmed combat hand-card play with started>finished counts should stay in ResolvingCardPlay until the queued action drains. actualStage={handConfirmResolvingContext.CombatMicroStage.Kind}");
+            var handConfirmResolvingActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                handConfirmResolvingState,
+                handConfirmResolvingKnowledge,
+                combatNoOpScreenshotPath,
+                handConfirmResolvingHistory);
+            Assert(handConfirmResolvingActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"A confirmed combat hand-card play should keep end turn closed while the player-driven action is still in flight. actual=[{string.Join(", ", handConfirmResolvingActions)}]");
+            var handConfirmResolvingDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                26,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Wait for the confirmed combat hand-card play to finish before ending the turn.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:elite|ready:true|stability:stable|combat-play-open",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                handConfirmResolvingObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                handConfirmResolvingKnowledge,
+                handConfirmResolvingActions,
+                handConfirmResolvingHistory,
+                "Do not end turn while the confirmed combat hand-card play is still resolving.",
+                null));
+            Assert(string.Equals(handConfirmResolvingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && !string.Equals(handConfirmResolvingDecision.TargetLabel, "auto-end turn", StringComparison.OrdinalIgnoreCase),
+                $"A confirmed combat hand-card play should wait instead of falling through to auto-end turn. actual={handConfirmResolvingDecision.Status}/{handConfirmResolvingDecision.TargetLabel ?? handConfirmResolvingDecision.Reason ?? "null"}");
+
             var runtimeUpgradeSelectObserver = runtimeSimpleSelectObserver with
             {
                 InventoryId = "inv-runtime-upgrade-select",
