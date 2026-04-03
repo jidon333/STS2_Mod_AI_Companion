@@ -409,7 +409,16 @@ static class CombatBarrierSupport
             && reopenedPlayerWindow
             && !HasEndTurnTransitionAcknowledgement(observer.Summary, runtime, combatPlayerActionWindowClosed))
         {
-            return Released(source, "player action window remained open after end-turn submission");
+            if (HasEndTurnProgressSinceSource(source.Metadata, observer.Summary, runtime))
+            {
+                return Released(source, "player action window reopened after post-end-turn progress");
+            }
+
+            return Active(
+                source,
+                "end turn submission is still awaiting post-submit progress under a reopened player window",
+                false,
+                true);
         }
 
         if (!freshSnapshotSeen)
@@ -451,6 +460,58 @@ static class CombatBarrierSupport
                && runtime.PlayerActionsDisabled == false
                && runtime.EndingPlayerTurnPhaseOne == false
                && runtime.EndingPlayerTurnPhaseTwo == false;
+    }
+
+    private static bool HasEndTurnProgressSinceSource(
+        CombatBarrierHistoryMetadata? metadata,
+        ObserverSummary observer,
+        CombatRuntimeState runtime)
+    {
+        if (runtime.RequiresHandCardSelection)
+        {
+            return true;
+        }
+
+        if (metadata is null)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(metadata.ScreenEpisodeId)
+            && !string.Equals(observer.SceneEpisodeId, metadata.ScreenEpisodeId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (metadata.RoundNumber is not null
+            && runtime.RoundNumber is not null
+            && runtime.RoundNumber != metadata.RoundNumber)
+        {
+            return true;
+        }
+
+        if (metadata.HistoryStartedCount is not null
+            && runtime.HistoryStartedCount is not null
+            && runtime.HistoryStartedCount != metadata.HistoryStartedCount)
+        {
+            return true;
+        }
+
+        if (metadata.HistoryFinishedCount is not null
+            && runtime.HistoryFinishedCount is not null
+            && runtime.HistoryFinishedCount != metadata.HistoryFinishedCount)
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(metadata.InteractionRevision)
+            && !string.Equals(runtime.InteractionRevision, metadata.InteractionRevision, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(metadata.LastFinishedCardId)
+               && !string.Equals(runtime.LastCardPlayFinishedCardId, metadata.LastFinishedCardId, StringComparison.OrdinalIgnoreCase);
     }
 
     public static string? TryBuildSafeTransitProgressFingerprint(CombatBarrierEvaluation barrier, ObserverSummary observer)

@@ -1110,6 +1110,60 @@ internal static partial class Program
             Assert(string.Equals(reopenedPlayerWindowAfterEndTurnDecision.TargetLabel, "auto-end turn", StringComparison.OrdinalIgnoreCase),
                 $"A reopened player window with zero energy should retry explicit end turn instead of waiting on stale transit residue. actual={reopenedPlayerWindowAfterEndTurnDecision.Status}/{reopenedPlayerWindowAfterEndTurnDecision.TargetLabel ?? reopenedPlayerWindowAfterEndTurnDecision.Reason ?? "null"}");
 
+            var unchangedReopenedPlayerWindowObserver = endTurnBarrierSeedObserver with
+            {
+                CapturedAt = endTurnBarrierCapturedAt.AddMilliseconds(500),
+                InventoryId = "inv-end-turn-reopen-unchanged",
+                SnapshotVersion = 85,
+                PlayerEnergy = 0,
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.INFECTION", "Status", 0),
+                    new ObservedCombatHandCard(2, "CARD.DEFEND_IRONCLAD", "Skill", 1),
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatRoundNumber"] = "2",
+                    ["combatPlayerActionsDisabled"] = "false",
+                    ["combatEndingPlayerTurnPhaseOne"] = "false",
+                    ["combatEndingPlayerTurnPhaseTwo"] = "false",
+                    ["combatHistoryStartedCount"] = "5",
+                    ["combatHistoryFinishedCount"] = "5",
+                    ["combatInteractionRevision"] = "5:5:false:false:none",
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;CombatState.RoundNumber=2;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                },
+            };
+            var unchangedReopenedPlayerWindowState = new ObserverState(unchangedReopenedPlayerWindowObserver, null, null, null);
+            var unchangedReopenedPlayerWindowContext = CreateStepAnalysisContext(
+                GuiSmokePhase.HandleCombat,
+                unchangedReopenedPlayerWindowState,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory,
+                endTurnBarrierKnowledge);
+            var unchangedReopenedPlayerWindowActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                unchangedReopenedPlayerWindowState,
+                endTurnBarrierKnowledge,
+                runtimeStateOnlyScreenshotPath,
+                endTurnBarrierHistory);
+            Assert(unchangedReopenedPlayerWindowContext.CombatBarrierEvaluation.IsActive,
+                "A reopened player window without any post-end-turn progress should keep the EndTurn barrier active.");
+            Assert(unchangedReopenedPlayerWindowContext.CombatBarrierEvaluation.Kind == CombatBarrierKind.EndTurn,
+                $"The unchanged reopened player window should still be owned by the EndTurn barrier. actual={unchangedReopenedPlayerWindowContext.CombatBarrierEvaluation.Kind}");
+            Assert(unchangedReopenedPlayerWindowActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"A reopened player window without post-end-turn progress should stay wait-only instead of reissuing end turn. actual=[{string.Join(", ", unchangedReopenedPlayerWindowActions)}]");
+            var unchangedReopenedPlayerWindowDecision = AutoDecisionProvider.Decide(BuildBarrierRequest(
+                "0007-reopen-unchanged",
+                40,
+                unchangedReopenedPlayerWindowObserver,
+                endTurnBarrierKnowledge,
+                unchangedReopenedPlayerWindowActions,
+                endTurnBarrierHistory,
+                "Do not replay end turn when the player window reopens on an unchanged post-submit snapshot."));
+            Assert(string.Equals(unchangedReopenedPlayerWindowDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && unchangedReopenedPlayerWindowDecision.Reason?.Contains("combat barrier wait", StringComparison.OrdinalIgnoreCase) == true,
+                $"An unchanged reopened player window should wait on the active EndTurn barrier instead of replaying auto-end turn. actual={unchangedReopenedPlayerWindowDecision.Status}/{unchangedReopenedPlayerWindowDecision.TargetLabel ?? unchangedReopenedPlayerWindowDecision.Reason ?? "null"}");
+
             var endTurnTransitProgressObservers = new[]
             {
                 endTurnBarrierSeedObserver with
