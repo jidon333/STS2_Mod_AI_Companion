@@ -136,7 +136,10 @@ sealed partial class AutoDecisionProvider
             return !string.IsNullOrWhiteSpace(targetLabel)
                    && (targetLabel.StartsWith("transform ", StringComparison.OrdinalIgnoreCase)
                        || targetLabel.StartsWith("deck remove ", StringComparison.OrdinalIgnoreCase)
-                       || targetLabel.StartsWith("upgrade ", StringComparison.OrdinalIgnoreCase));
+                       || targetLabel.StartsWith("upgrade ", StringComparison.OrdinalIgnoreCase)
+                       || targetLabel.StartsWith("simple select ", StringComparison.OrdinalIgnoreCase)
+                       || targetLabel.StartsWith("bundle select ", StringComparison.OrdinalIgnoreCase)
+                       || targetLabel.StartsWith("relic select ", StringComparison.OrdinalIgnoreCase));
         }
 
         for (var index = history.Count - 1; index >= 0 && index >= history.Count - 6; index -= 1)

@@ -496,23 +496,30 @@ sealed partial class AutoDecisionProvider
         var rawEventChoiceFamilyPresent = (!mapForegroundSuppressesEventSurface || foregroundGenericEventChoiceSurfaceWithoutBounds)
                                           && !rewardScene.RewardForegroundOwned
                                           && HasRawEventChoiceFamily(observer);
+        var explicitEventProceedSignalPresent = !rewardScene.RewardForegroundOwned
+                                               && EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
         var rawExplicitProceedVisible = !mapForegroundSuppressesEventSurface
-                                        && !rewardScene.RewardForegroundOwned
-                                        && EventProceedObserverSignals.HasExplicitEventProceedSignal(observer, windowBounds);
+                                        && explicitEventProceedSignalPresent;
         var rawActiveEventChoiceVisible = (!mapForegroundSuppressesEventSurface || foregroundGenericEventChoiceSurfaceWithoutBounds)
                                           && !rewardScene.RewardForegroundOwned
                                           && HasRawExplicitEventChoiceVisible(observer, windowBounds);
         var weakEventChoiceFamilyPresent = rawEventChoiceFamilyPresent && !rawActiveEventChoiceVisible;
+        var explicitProceedRoomEntrySurfacePresent = explicitEventProceedSignalPresent
+                                                     && !HasRecentEventReleaseIntent(history)
+                                                     && HasExporterMapForegroundClaim(observer)
+                                                     && !mapExplicitOwner;
         var rawExplicitRoomEntrySurfacePresent = HasExplicitEventRoomEntrySurface(observer, windowBounds)
                                                  && (ancientDialogueActive
                                                      || ancientCompletionActive
                                                      || ancientOptionActive
                                                      || ancientOptionContractMismatch
+                                                     || explicitProceedRoomEntrySurfacePresent
                                                      || rawActiveEventChoiceVisible);
         var eventReleaseToMapActive = HasRecentEventReleaseIntent(history)
                                       && (mapReleaseSignal || mapOverlayState.ForegroundVisible)
                                       && !rawExplicitRoomEntrySurfacePresent;
-        var explicitProceedVisible = rawExplicitProceedVisible && !eventReleaseToMapActive;
+        var explicitProceedVisible = (rawExplicitProceedVisible || explicitProceedRoomEntrySurfacePresent)
+                                     && !eventReleaseToMapActive;
         var activeEventChoiceVisible = rawActiveEventChoiceVisible && !eventReleaseToMapActive;
         var forceProgressionAfterCardSelection = HasRecentCardSelectionSubtypeAftermath(history ?? Array.Empty<GuiSmokeHistoryEntry>())
                                                 && (explicitProceedVisible || activeEventChoiceVisible);

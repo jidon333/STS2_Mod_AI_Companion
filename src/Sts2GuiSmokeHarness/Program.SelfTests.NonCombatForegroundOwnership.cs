@@ -358,6 +358,74 @@ internal static partial class Program
                 null));
             Assert(string.Equals(chooseFirstNodeEventRecoveryDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
                 $"ChooseFirstNode event recovery should click the explicit event proceed affordance instead of waiting for map routing. Actual status={chooseFirstNodeEventRecoveryDecision.Status}, action={chooseFirstNodeEventRecoveryDecision.ActionKind}, target={chooseFirstNodeEventRecoveryDecision.TargetLabel ?? "<null>"}.");
+            var explicitProceedMapResidueObserverState = new ObserverState(
+                explicitProceedObserverState.Summary with
+                {
+                    InventoryId = "inv-event-proceed-map-residue",
+                    SceneEpisodeId = "episode-event-proceed-map-residue",
+                    Meta = new Dictionary<string, string?>(explicitProceedObserverState.Summary.Meta, StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["foregroundOwner"] = "map",
+                        ["foregroundActionLane"] = "none",
+                        ["mapReleaseAuthority"] = "true",
+                        ["ancientEventDetected"] = "true",
+                        ["ancientPhase"] = "completion",
+                        ["eventTeardownInProgress"] = "true",
+                    },
+                },
+                eventProceedStateDocument,
+                null,
+                null);
+            var explicitProceedMapResidueHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "simple select choice 몸통 박치기", DateTimeOffset.UtcNow.AddMilliseconds(-500)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "simple select choice 박치기", DateTimeOffset.UtcNow.AddMilliseconds(-350)),
+            };
+            var explicitProceedMapResidueState = AutoDecisionProvider.BuildEventSceneState(
+                explicitProceedMapResidueObserverState,
+                new WindowBounds(0, 0, 1280, 720),
+                explicitProceedMapResidueHistory,
+                eventContaminationScreenshotPath);
+            Assert(explicitProceedMapResidueState.ExplicitProceedVisible
+                   && explicitProceedMapResidueState.ReleaseStage != EventReleaseStage.ReleasePending,
+                $"Explicit event proceed should remain actionable instead of collapsing to release-pending when stale map-owner residue lingers after card selection. actualOwner={explicitProceedMapResidueState.CanonicalForegroundOwner} release={explicitProceedMapResidueState.ReleaseStage} roomEntry={explicitProceedMapResidueState.ExplicitRoomEntrySurfacePresent} hasProgression={explicitProceedMapResidueState.HasExplicitProgression}");
+            var explicitProceedMapResidueAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                explicitProceedMapResidueObserverState,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                eventContaminationScreenshotPath,
+                explicitProceedMapResidueHistory);
+            Assert(explicitProceedMapResidueAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
+                   && !explicitProceedMapResidueAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                "Stale map-owner residue after a card-selection follow-up should not collapse explicit event proceed to wait-only.");
+            var explicitProceedMapResidueDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                46,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Do not let stale map-owner residue hide the explicit event proceed lane after a card-selection follow-up.",
+                DateTimeOffset.UtcNow,
+                eventContaminationScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                ComputeSceneSignature(eventContaminationScreenshotPath, explicitProceedMapResidueObserverState, GuiSmokePhase.HandleEvent),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                explicitProceedMapResidueObserverState.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                explicitProceedMapResidueAllowedActions,
+                explicitProceedMapResidueHistory,
+                "Explicit event proceed should stay actionable after simple-select resolves back into the event room.",
+                null));
+            Assert(
+                string.Equals(explicitProceedMapResidueDecision.Status, "act", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(explicitProceedMapResidueDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
+                $"HandleEvent should click explicit proceed instead of waiting when stale map-owner residue lingers. actual={explicitProceedMapResidueDecision.Status}/{explicitProceedMapResidueDecision.TargetLabel ?? "<null>"}/{explicitProceedMapResidueDecision.Reason}");
             var chooseFirstNodeEventRecoveryBranchRoot = Path.Combine(Path.GetTempPath(), $"gui-smoke-event-recovery-{Guid.NewGuid():N}");
             Directory.CreateDirectory(chooseFirstNodeEventRecoveryBranchRoot);
             try
@@ -900,6 +968,83 @@ internal static partial class Program
                 null));
             Assert(string.Equals(explicitProceedReissueDecision.Status, "wait", StringComparison.OrdinalIgnoreCase),
                 "HandleEvent should wait instead of reissuing the same explicit proceed on the same authority band.");
+
+            var ancientTeardownProceedObserverState = new ObserverState(
+                explicitProceedObserverState.Summary with
+                {
+                    InventoryId = "inv-ancient-teardown-explicit-proceed",
+                    SceneEpisodeId = "episode-ancient-teardown-explicit-proceed",
+                    Meta = new Dictionary<string, string?>(explicitProceedObserverState.Summary.Meta, StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["foregroundOwner"] = "map",
+                        ["foregroundActionLane"] = "none",
+                        ["mapReleaseAuthority"] = "true",
+                        ["mapSurfacePending"] = "true",
+                        ["eventTeardownInProgress"] = "true",
+                        ["ancientEventDetected"] = "true",
+                        ["ancientPhase"] = "teardown",
+                        ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom",
+                        ["rawCurrentActiveScreenType"] = "MegaCrit.Sts2.Core.Nodes.Rooms.NEventRoom",
+                        ["mapCurrentActiveScreen"] = "false",
+                    },
+                },
+                eventProceedStateDocument,
+                null,
+                null);
+            var ancientTeardownProceedHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleEvent.ToString(), "click", "simple select choice 몸통 박치기", DateTimeOffset.UtcNow.AddSeconds(-3)),
+            };
+            var ancientTeardownProceedState = AutoDecisionProvider.BuildEventSceneState(
+                ancientTeardownProceedObserverState,
+                new WindowBounds(0, 0, 1280, 720),
+                ancientTeardownProceedHistory,
+                eventContaminationScreenshotPath);
+            Assert(
+                ancientTeardownProceedState.EventForegroundOwned
+                && ancientTeardownProceedState.ReleaseStage == EventReleaseStage.Active
+                && ancientTeardownProceedState.ExplicitProceedVisible
+                && ancientTeardownProceedState.ExplicitRoomEntrySurfacePresent
+                && ancientTeardownProceedState.ForceProgressionAfterCardSelection,
+                "Ancient teardown should keep HandleEvent active when an explicit proceed lane republishes after subtype selection.");
+            var ancientTeardownProceedAllowedActions = BuildAllowedActions(
+                GuiSmokePhase.HandleEvent,
+                ancientTeardownProceedObserverState,
+                Array.Empty<CombatCardKnowledgeHint>(),
+                eventContaminationScreenshotPath,
+                ancientTeardownProceedHistory);
+            Assert(
+                ancientTeardownProceedAllowedActions.Contains("click proceed", StringComparer.OrdinalIgnoreCase)
+                && !ancientTeardownProceedAllowedActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                "Ancient teardown with an explicit proceed reopen should not collapse HandleEvent to wait-only.");
+            var ancientTeardownProceedDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                47,
+                GuiSmokePhase.HandleEvent.ToString(),
+                "Ancient teardown should reopen the explicit proceed lane once the same event screen republishes it after subtype selection.",
+                DateTimeOffset.UtcNow,
+                eventContaminationScreenshotPath,
+                new WindowBounds(0, 0, 1280, 720),
+                ComputeSceneSignature(eventContaminationScreenshotPath, ancientTeardownProceedObserverState, GuiSmokePhase.HandleEvent),
+                "0001",
+                1,
+                3,
+                true,
+                "tactical",
+                null,
+                ancientTeardownProceedObserverState.Summary,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                Array.Empty<CombatCardKnowledgeHint>(),
+                ancientTeardownProceedAllowedActions,
+                ancientTeardownProceedHistory,
+                "Ancient teardown should not suppress an explicit EventOption.IsProceed reopen on the same event screen.",
+                null));
+            Assert(
+                string.Equals(ancientTeardownProceedDecision.Status, "act", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(ancientTeardownProceedDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
+                "Ancient teardown should click the explicit proceed lane instead of waiting once EventOption.IsProceed republishes.");
         }
         finally
         {
