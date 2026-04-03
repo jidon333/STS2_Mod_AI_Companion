@@ -62,7 +62,11 @@ sealed record CombatRuntimeState(
     public IReadOnlyList<string> HandSelectionSelectedCardIds { get; init; } = Array.Empty<string>();
 
     public bool RequiresHandCardSelection =>
-        string.Equals(PlayMode, "SimpleSelect", StringComparison.OrdinalIgnoreCase);
+        string.Equals(PlayMode, "SimpleSelect", StringComparison.OrdinalIgnoreCase)
+        || (string.Equals(PlayMode, "UpgradeSelect", StringComparison.OrdinalIgnoreCase)
+            && (HasInFlightPlayerDrivenAction
+                || HandSelectionSelectedCount > 0
+                || HandSelectionConfirmEnabled == true));
 
     public bool HasSelectedHandCardForConfirmation =>
         RequiresHandCardSelection

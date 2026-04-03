@@ -669,6 +669,83 @@ internal static partial class Program
                 && string.Equals(handConfirmSemanticAction, "confirm selected hand card", StringComparison.OrdinalIgnoreCase),
                 "Combat hand-selection confirm should map to explicit confirm semantics.");
 
+            var runtimeUpgradeSelectObserver = runtimeSimpleSelectObserver with
+            {
+                InventoryId = "inv-runtime-upgrade-select",
+                SceneEpisodeId = "episode-runtime-upgrade-select",
+                PlayerEnergy = 0,
+                CombatHand = new[]
+                {
+                    new ObservedCombatHandCard(1, "CARD.DEFEND_IRONCLAD", "Skill", null),
+                    new ObservedCombatHandCard(2, "CARD.PERFECTED_STRIKE", "Attack", null),
+                },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["combatCrossCheck"] = "CombatManager.IsPlayPhase=true;CombatManager.IsEnemyTurnStarted=false;CombatManager.IsEnding=false;node:NCombatRoom;node:NCombatUi;CombatState.RoundNumber=2;CombatManager.PlayerActionsDisabled=false;CombatManager.EndingPlayerTurnPhaseOne=false;CombatManager.EndingPlayerTurnPhaseTwo=false",
+                    ["combatCardPlayPending"] = "false",
+                    ["combatPlayMode"] = "UpgradeSelect",
+                    ["combatTargetingInProgress"] = "false",
+                    ["combatTargetableEnemyCount"] = "0",
+                    ["combatHittableEnemyCount"] = "0",
+                    ["combatTargetSummary"] = "enemy-target:Bygone Effigy:2@logical:1426.976,280.592,114.048,221.76@normalized:0.7432,0.2598,0.0594,0.2053",
+                    ["combatHistoryStartedCount"] = "6",
+                    ["combatHistoryFinishedCount"] = "5",
+                    ["combatInteractionRevision"] = "6:5:false:false:none",
+                    ["combatLastCardPlayStartedCardId"] = "CARD.ARMAMENTS",
+                    ["combatLastCardPlayFinishedCardId"] = "CARD.SWORD_BOOMERANG",
+                },
+            };
+            var runtimeUpgradeSelectKnowledge = new[]
+            {
+                new CombatCardKnowledgeHint(1, "CARD.DEFEND_IRONCLAD", "Skill", "Self", 1, "self-test"),
+                new CombatCardKnowledgeHint(2, "CARD.PERFECTED_STRIKE", "Attack", "AnyEnemy", 2, "self-test"),
+            };
+            var runtimeUpgradeSelectHistory = new[]
+            {
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select attack slot 1", DateTimeOffset.UtcNow.AddSeconds(-8)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "confirm-attack-card", "confirm selected attack card", DateTimeOffset.UtcNow.AddSeconds(-7)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "combat select non-enemy slot 1", DateTimeOffset.UtcNow.AddSeconds(-6)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "confirm-non-enemy", "confirm selected non-enemy card", DateTimeOffset.UtcNow.AddSeconds(-5)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "press-key", "auto-end turn", DateTimeOffset.UtcNow.AddSeconds(-1)),
+                new GuiSmokeHistoryEntry(GuiSmokePhase.HandleCombat.ToString(), "wait", null, DateTimeOffset.UtcNow),
+            };
+            var runtimeUpgradeSelectActions = BuildAllowedActions(
+                GuiSmokePhase.HandleCombat,
+                new ObserverState(runtimeUpgradeSelectObserver, null, null, null),
+                runtimeUpgradeSelectKnowledge,
+                combatNoOpScreenshotPath,
+                runtimeUpgradeSelectHistory);
+            Assert(runtimeUpgradeSelectActions.Contains("select card from hand", StringComparer.OrdinalIgnoreCase),
+                "Combat UpgradeSelect runtime should expose a follow-up hand-card selection action.");
+            Assert(!runtimeUpgradeSelectActions.Contains("click end turn", StringComparer.OrdinalIgnoreCase),
+                "Combat UpgradeSelect runtime should keep end turn closed until the upgrade hand-card choice resolves.");
+            var runtimeUpgradeSelectDecision = AutoDecisionProvider.Decide(new GuiSmokeStepRequest(
+                "run",
+                "boot-to-long-run",
+                46,
+                GuiSmokePhase.HandleCombat.ToString(),
+                "Resolve combat UpgradeSelect by choosing a card from hand instead of replaying end turn.",
+                DateTimeOffset.UtcNow,
+                combatNoOpScreenshotPath,
+                new WindowBounds(1, 32, 1280, 720),
+                "phase:handlecombat|screen:combat|visible:combat|encounter:elite|ready:true|stability:stable|combat-selection:upgrade-select",
+                "0001",
+                1,
+                3,
+                false,
+                "tactical",
+                null,
+                runtimeUpgradeSelectObserver,
+                Array.Empty<KnownRecipeHint>(),
+                Array.Empty<EventKnowledgeCandidate>(),
+                runtimeUpgradeSelectKnowledge,
+                runtimeUpgradeSelectActions,
+                runtimeUpgradeSelectHistory,
+                "Choose a hand card for the combat upgrade-select overlay.",
+                null));
+            Assert(string.Equals(runtimeUpgradeSelectDecision.TargetLabel, "combat select hand slot 1", StringComparison.OrdinalIgnoreCase),
+                "Combat UpgradeSelect runtime should choose a hand-card slot instead of replaying auto-end turn.");
+
             var combatOverlaySimpleSelectObserver = runtimePendingNonEnemyObserver with
             {
                 InventoryId = "inv-combat-overlay-simple-select",
