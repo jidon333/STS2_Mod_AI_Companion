@@ -620,8 +620,11 @@ sealed partial class AutoDecisionProvider
         var authoritativeMapForegroundScreen = NonCombatForegroundOwnership.HasAuthoritativeMapForegroundScreen(observer);
         var explicitScreenAuthority = MatchesControlFlowScreen(observer, "rest-site")
                                       || string.Equals(observer.EncounterKind, "RestSite", StringComparison.OrdinalIgnoreCase)
-                                      || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase);
-        var smithUpgradeActive = RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary);
+                                      || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
+                                      || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary);
+        var smithUpgradeSurfacePending = RestSiteObserverSignals.IsRestSiteSmithUpgradeSurfacePending(observer.Summary);
+        var smithUpgradeActive = RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary)
+                                 && !smithUpgradeSurfacePending;
         var hasAuthoritativeChoiceMetadata = RestSiteChoiceSupport.HasAuthoritativeMetadata(observer.Summary);
         var explicitChoiceVisible = hasAuthoritativeChoiceMetadata
                                     || (explicitScreenAuthority
@@ -630,12 +633,14 @@ sealed partial class AutoDecisionProvider
                                   && RestSiteChoiceSupport.TryGetSelectedObservedChoice(observer.Summary) is { } selectedChoice
                                   && RestSiteObserverSignals.IsRestSiteChoiceClickReady(observer.Summary, selectedChoice.OptionId);
         var proceedVisible = explicitScreenAuthority
+                             && !smithUpgradeSurfacePending
                              && GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary);
         var selectionSettling = explicitScreenAuthority
-                                && explicitChoiceVisible
-                                && !smithUpgradeActive
-                                && !proceedVisible
-                                && RestSiteObserverSignals.IsRestSiteSelectionSettlingState(observer.Summary);
+                                && (smithUpgradeSurfacePending
+                                    || (explicitChoiceVisible
+                                        && !smithUpgradeActive
+                                        && !proceedVisible
+                                        && RestSiteObserverSignals.IsRestSiteSelectionSettlingState(observer.Summary)));
         var selectionAcceptedRecently = explicitScreenAuthority
                                         && RestSiteObserverSignals.HasSelectionAcceptedRecently(observer.Summary);
         var releasePending = explicitScreenAuthority

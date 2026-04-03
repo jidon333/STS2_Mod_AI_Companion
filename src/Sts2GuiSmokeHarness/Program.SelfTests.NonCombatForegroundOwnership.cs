@@ -1486,6 +1486,68 @@ internal static partial class Program
             Assert(restSiteSelectionInProgressActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
                 $"Rest-site in-progress selection should wait instead of clicking smith twice. actual=[{string.Join(", ", restSiteSelectionInProgressActions)}]");
 
+            var smithUpgradeSurfacePendingSummary = restSiteMetadataSummary with
+            {
+                CurrentScreen = "upgrade",
+                VisibleScreen = "upgrade",
+                CurrentChoices = new[] { "휴식", "재련" },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["activeScreenType"] = "MegaCrit.Sts2.Core.Nodes.Screens.CardSelection.NDeckUpgradeSelectScreen",
+                    ["restSiteSelectionLastSignal"] = "before-select",
+                    ["restSiteSelectionLastOptionId"] = "SMITH",
+                    ["restSiteSelectionCurrentStatus"] = "proceed-visible",
+                    ["restSiteSelectionCurrentOptionId"] = "SMITH",
+                    ["restSiteSelectionObservedOptionId"] = "SMITH",
+                    ["restSiteSelectionOutcome"] = "in-progress",
+                    ["restSiteSelectionOutcomeEvidence"] = "runtime-poll:executing-option",
+                    ["restSiteProceedVisible"] = "true",
+                    ["restSiteProceedEnabled"] = "false",
+                    ["restSiteButtonsVisible"] = "true",
+                    ["restSiteButtonsClickReady"] = "false",
+                    ["restSiteClickReadyOptionIds"] = "HEAL",
+                    ["restSiteUpgradeScreenVisible"] = "false",
+                    ["restSiteUpgradeCardCount"] = "0",
+                    ["restSiteUpgradeConfirmVisible"] = "false",
+                    ["restSiteViewKind"] = "proceed",
+                },
+            };
+            var smithUpgradeSurfacePendingObserver = new ObserverState(smithUpgradeSurfacePendingSummary, null, null, null);
+            Assert(RestSiteObserverSignals.IsRestSiteSmithUpgradeSurfacePending(smithUpgradeSurfacePendingSummary),
+                "Upgrade-screen mixed state after a smith click should classify as smith surface pending instead of an observer miss.");
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(smithUpgradeSurfacePendingObserver) is
+                   {
+                       SelectionSettling: true,
+                       SmithUpgradeActive: false,
+                       ProceedVisible: false,
+                   },
+                "Smith upgrade mixed-state should hold the room in selection-settling until exported smith grid or confirm controls appear.");
+            var smithUpgradeSurfacePendingActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, smithUpgradeSurfacePendingObserver);
+            Assert(smithUpgradeSurfacePendingActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Smith upgrade mixed-state should wait instead of reopening proceed or smith actions. actual=[{string.Join(", ", smithUpgradeSurfacePendingActions)}]");
+            var smithUpgradeSurfacePendingRequest = restSiteMetadataRequest with
+            {
+                Observer = smithUpgradeSurfacePendingSummary,
+                AllowedActions = smithUpgradeSurfacePendingActions,
+                History = new[]
+                {
+                    new GuiSmokeHistoryEntry(
+                        GuiSmokePhase.ChooseFirstNode.ToString(),
+                        "click",
+                        "rest site: smith",
+                        DateTimeOffset.UtcNow.AddSeconds(-1)),
+                },
+            };
+            var smithUpgradeSurfacePendingDecision = AutoDecisionProvider.Decide(smithUpgradeSurfacePendingRequest);
+            Assert(string.Equals(smithUpgradeSurfacePendingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && !string.Equals(smithUpgradeSurfacePendingDecision.DecisionRisk, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase),
+                "Upgrade-screen mixed-state should wait for smith surface publication instead of escalating immediately to rest-site-grid-observer-miss.");
+            var smithUpgradeSurfacePendingEvidence = RestSiteObserverSignals.BuildPostClickEvidence(
+                smithUpgradeSurfacePendingSummary,
+                "rest site: smith");
+            Assert(!string.Equals(smithUpgradeSurfacePendingEvidence.Classification, "rest-site-grid-observer-miss", StringComparison.OrdinalIgnoreCase),
+                "Smith upgrade mixed-state evidence should not classify the first upgrade-screen transition frame as an observer miss.");
+
             var restSiteProceedSummary = restSiteMetadataSummary with
             {
                 CurrentScreen = "rest-site",

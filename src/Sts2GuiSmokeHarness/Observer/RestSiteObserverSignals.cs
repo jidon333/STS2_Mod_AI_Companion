@@ -115,6 +115,11 @@ static class RestSiteObserverSignals
 
     public static bool IsRestSiteSelectionSettlingState(ObserverSummary observer)
     {
+        if (IsRestSiteSmithUpgradeSurfacePending(observer))
+        {
+            return true;
+        }
+
         if (IsRestSiteSmithUpgradeState(observer))
         {
             return false;
@@ -233,11 +238,13 @@ static class RestSiteObserverSignals
         var visibleOptionIds = string.Join(",", RestSiteChoiceSupport.GetVisibleOptionIds(observer));
         var choiceSurfaceSummary = RestSiteChoiceSupport.GetChoiceSurfaceAmbiguitySummary(observer);
         var upgradeActionSurfacePresent = HasUpgradeCardSelectionSurface(observer);
+        var smithUpgradeSurfacePending = IsRestSiteSmithUpgradeSurfacePending(observer);
         var upgradeChoiceObserverMiss = string.Equals(TryGetMetaValue(observer, "restSiteUpgradeObserverMiss"), "true", StringComparison.OrdinalIgnoreCase)
                                         || (string.Equals(currentStatus, "grid-visible", StringComparison.OrdinalIgnoreCase)
                                             || string.Equals(currentStatus, "confirm-visible", StringComparison.OrdinalIgnoreCase)
                                             || upgradeScreenVisible)
-                                        && !upgradeActionSurfacePresent;
+                                        && !upgradeActionSurfacePresent
+                                        && !smithUpgradeSurfacePending;
 
         var classification = "rest-site-post-click-noop";
         if (string.Equals(normalizedTarget, "SMITH", StringComparison.OrdinalIgnoreCase))
@@ -262,11 +269,13 @@ static class RestSiteObserverSignals
                      || (string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
                          && upgradeScreenVisible
                          && !smithGridVisible
-                         && !smithConfirmVisible))
+                         && !smithConfirmVisible
+                         && !smithUpgradeSurfacePending))
             {
                 classification = "rest-site-grid-observer-miss";
             }
-            else if (string.Equals(outcome, "in-progress", StringComparison.OrdinalIgnoreCase)
+            else if (smithUpgradeSurfacePending
+                     || string.Equals(outcome, "in-progress", StringComparison.OrdinalIgnoreCase)
                      || (string.Equals(lastOptionId, "SMITH", StringComparison.OrdinalIgnoreCase)
                       && (string.Equals(lastSignal, "before-select", StringComparison.OrdinalIgnoreCase)
                           || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase)))
@@ -298,6 +307,50 @@ static class RestSiteObserverSignals
             choiceSurfaceAmbiguous,
             string.IsNullOrWhiteSpace(visibleOptionIds) ? null : visibleOptionIds,
             choiceSurfaceSummary);
+    }
+
+    public static bool IsRestSiteSmithUpgradeSurfacePending(ObserverSummary observer)
+    {
+        if (!HasFreshSelectionSignalForCurrentRoom(observer)
+            || !IsRestSiteSmithUpgradeState(observer)
+            || HasSmithGridVisible(observer)
+            || HasSmithConfirmVisible(observer)
+            || HasUpgradeCardSelectionSurface(observer))
+        {
+            return false;
+        }
+
+        if (HasProceedEnabled(observer))
+        {
+            return false;
+        }
+
+        var currentStatus = TryGetMetaValue(observer, "restSiteSelectionCurrentStatus");
+        var outcome = TryGetMetaValue(observer, "restSiteSelectionOutcome");
+        var lastSignal = TryGetMetaValue(observer, "restSiteSelectionLastSignal");
+        var currentOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionCurrentOptionId"));
+        var observedOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionObservedOptionId"));
+        var lastOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionLastOptionId"));
+        var activeOptionId = currentOptionId ?? observedOptionId ?? lastOptionId;
+        if (!string.Equals(activeOptionId, "SMITH", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (string.Equals(currentStatus, "selection-failed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(outcome, "failure", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(lastSignal, "after-select-failure", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return string.Equals(currentStatus, "proceed-visible", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(currentStatus, "selecting", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(currentStatus, "options-disabled", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(outcome, "in-progress", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(lastSignal, "before-select", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasUpgradeCardSelectionSurface(ObserverSummary observer)

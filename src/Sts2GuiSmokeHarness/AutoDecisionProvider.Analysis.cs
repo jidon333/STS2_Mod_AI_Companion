@@ -258,6 +258,15 @@ sealed partial class AutoDecisionProvider
                     actualDecision);
             }
 
+            if (RestSiteObserverSignals.IsRestSiteSmithUpgradeSurfacePending(request.Observer))
+            {
+                return builder.Build(
+                    CreateWaitDecision(
+                        "waiting for smith upgrade surface to publish after accepted smith selection",
+                        DisplayControlFlowScreen(request.Observer)),
+                    actualDecision);
+            }
+
             var observerMissDecision = CreateRestSitePostClickNoOpWaitDecision(request, "rest site: smith", DisplayControlFlowScreen(request.Observer));
             builder.Consider(
                 "click smith card",
