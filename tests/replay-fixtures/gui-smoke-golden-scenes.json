@@ -14,15 +14,13 @@
     ]
   },
   {
-    "name": "mixed-overlay-suppresses-stale-event",
+    "name": "mixed-event-foreground-suppresses-map-routing",
     "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-9/attempts/0001/steps/0015.request.json",
-    "expectedForegroundKind": "map-overlay",
-    "expectedBackgroundKind": "event",
+    "expectedForegroundKind": "event",
+    "expectedBackgroundKind": null,
     "requiredCandidateLabels": [],
     "requiredSuppressedLabels": [
-      "click exported reachable node",
-      "click first reachable node",
-      "click map back"
+      "click exported reachable node"
     ],
     "forbiddenTargetLabels": [
       "visible map advance",
@@ -31,15 +29,13 @@
     ]
   },
   {
-    "name": "mixed-overlay-loop-regression",
+    "name": "mixed-event-loop-stays-on-event-owner",
     "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-9/attempts/0001/steps/0064.request.json",
-    "expectedForegroundKind": "map-overlay",
-    "expectedBackgroundKind": "event",
+    "expectedForegroundKind": "event",
+    "expectedBackgroundKind": null,
     "requiredCandidateLabels": [],
     "requiredSuppressedLabels": [
-      "click exported reachable node",
-      "click first reachable node",
-      "click map back"
+      "click exported reachable node"
     ],
     "forbiddenTargetLabels": [
       "visible map advance",
@@ -48,16 +44,13 @@
     ]
   },
   {
-    "name": "overlay-candidates-prefer-reachable-node",
+    "name": "overlay-event-owner-retires-reachable-node-fallback",
     "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-10/attempts/0001/steps/0008.request.json",
-    "expectedForegroundKind": "map-overlay",
-    "expectedBackgroundKind": "event",
+    "expectedForegroundKind": "event",
+    "expectedBackgroundKind": null,
     "requiredCandidateLabels": [],
     "requiredSuppressedLabels": [
-      "click exported reachable node",
-      "click first reachable node",
-      "click visible map advance",
-      "click map back"
+      "click exported reachable node"
     ],
     "forbiddenTargetLabels": [
       "visible map advance",
@@ -66,13 +59,11 @@
     ]
   },
   {
-    "name": "rest-site-explicit-over-current-arrow",
+    "name": "rest-site-settling-over-current-arrow",
     "requestPath": "artifacts/gui-smoke/verify-longrun-20260316-10/attempts/0001/steps/0010.request.json",
     "expectedForegroundKind": "rest-site",
     "expectedBackgroundKind": "map",
-    "requiredCandidateLabels": [
-      "click rest site choice"
-    ],
+    "requiredCandidateLabels": [],
     "requiredSuppressedLabels": [
       "click exported reachable node",
       "click first reachable node",
