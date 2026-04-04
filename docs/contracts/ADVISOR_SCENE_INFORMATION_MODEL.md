@@ -65,7 +65,8 @@
 ## Truth Source Rule
 
 - scene truth source는 `observer.state + canonical scene state`다.
-- live side truth source는 `live snapshot + normalized scene state + current choices + recent events`다.
+- live side truth source는 `live snapshot + normalized scene state + current choices`다.
+- `recent events`는 현재 live builder의 truth source가 아니라 run-state context/diagnostics 용도로만 유지한다.
 - `GuiSmokeStepRequest`는 truth source가 아니다.
 - `request`에서 허용되는 사용:
   - `runId`

@@ -420,15 +420,24 @@ internal static class CompanionLiveSceneModelBuilder
             .GroupBy(static option => $"{option.Kind}|{option.Label}|{option.Value}", StringComparer.OrdinalIgnoreCase)
             .Select(static group => group.First())
             .ToList();
+        var foregroundOwner = NormalizeSceneToken(TryGetMeta(snapshot.Meta, "foregroundOwner"));
         var mapReleaseAuthority = TryReadBoolMeta(snapshot.Meta, "mapReleaseAuthority") == true;
         var mapSurfacePending = TryReadBoolMeta(snapshot.Meta, "mapSurfacePending") == true;
-        var stage = mapReleaseAuthority && options.Count == 0 && mapSurfacePending ? "map-surface-pending" : "map-overlay";
+        var currentNodeArrowVisible = TryReadBoolMeta(snapshot.Meta, "mapCurrentNodeArrowVisible") == true;
+        var reachableNodeCount = options.Count > 0 ? options.Count : (TryReadIntMeta(snapshot.Meta, "mapPointCount") ?? 0);
+        var reachableNodePresent = reachableNodeCount > 0;
+        var overlayVisible = reachableNodePresent
+                             || currentNodeArrowVisible
+                             || (string.Equals(foregroundOwner, "map", StringComparison.OrdinalIgnoreCase) && !mapSurfacePending);
+        var stage = overlayVisible
+            ? "map-overlay"
+            : (mapReleaseAuthority && mapSurfacePending ? "map-surface-pending" : "map-overlay");
         var currentNode = runState.NormalizedState.Map.CurrentNode ?? TryGetMeta(snapshot.Meta, "map-node");
         var details = new AdvisorSceneMapDetails(
-            string.Equals(ResolveCanonicalOwner(runState, "map"), "map", StringComparison.OrdinalIgnoreCase),
-            TryReadBoolMeta(snapshot.Meta, "mapCurrentNodeArrowVisible") == true,
-            options.Count > 0 || TryReadIntMeta(snapshot.Meta, "mapPointCount") > 0,
-            options.Count > 0 ? options.Count : (TryReadIntMeta(snapshot.Meta, "mapPointCount") ?? 0),
+            overlayVisible,
+            currentNodeArrowVisible,
+            reachableNodePresent,
+            reachableNodeCount,
             currentNode,
             options.Select(static option => option.Label).ToArray());
         var missingFacts = new List<string> { "map-route-context-missing" };
@@ -442,6 +451,8 @@ internal static class CompanionLiveSceneModelBuilder
         sourceRefs.Add("live-export.snapshot.meta.foregroundOwner");
         sourceRefs.Add("live-export.snapshot.meta.mapReleaseAuthority");
         sourceRefs.Add("live-export.snapshot.meta.mapSurfacePending");
+        sourceRefs.Add("live-export.snapshot.meta.mapCurrentNodeArrowVisible");
+        sourceRefs.Add("live-export.snapshot.meta.mapPointCount");
         sourceRefs.Add("live-export.snapshot.currentChoices");
         return CreateArtifactBase(
                 runState,
@@ -451,7 +462,7 @@ internal static class CompanionLiveSceneModelBuilder
                 playerContext,
                 new[]
                 {
-                    new AdvisorSceneUiSurface("map-overlay", true, null, "map overlay"),
+                    new AdvisorSceneUiSurface("map-overlay", details.ForegroundVisible, null, "map overlay"),
                     new AdvisorSceneUiSurface("map-current-arrow", details.CurrentNodeArrowVisible, null, "current node arrow"),
                     new AdvisorSceneUiSurface("map-reachable-node", details.ReachableNodePresent, null, "reachable node candidate"),
                 },

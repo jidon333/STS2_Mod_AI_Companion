@@ -16,6 +16,7 @@
   - fake live export `scene-model-reward-run`
   - fake live export `scene-model-event-run`
   - fake live export `scene-model-shop-run`
+  - fake live export `scene-model-map-pending-run`
 
 ## Coverage Matrix
 
@@ -69,6 +70,7 @@
   - `snapshot.meta.foregroundOwner`
   - `snapshot.meta.mapReleaseAuthority`
   - `snapshot.meta.mapSurfacePending`
+  - `snapshot.meta.mapCurrentNodeArrowVisible`
   - `snapshot.meta.mapPointCount`
   - `snapshot.currentChoices`
 

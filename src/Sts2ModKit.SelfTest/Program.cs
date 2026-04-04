@@ -4616,6 +4616,14 @@ static void ExecuteHostSceneModelScenario(HostSceneModelScenario scenario)
                 Assert(sceneModel.MissingFacts.Contains(missingFact, StringComparer.Ordinal), $"Expected missing fact '{missingFact}' for scenario {scenario.Name}.");
             }
 
+            if (string.Equals(scenario.ExpectedSceneType, "map", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(scenario.ExpectedSceneStage, "map-surface-pending", StringComparison.OrdinalIgnoreCase))
+            {
+                var mapOverlaySurface = sceneModel.UiSurfaceInventory.FirstOrDefault(surface => string.Equals(surface.SurfaceId, "map-overlay", StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InvalidOperationException($"Expected map-overlay UI surface for scenario {scenario.Name}.");
+                Assert(!mapOverlaySurface.Present, $"Expected map-overlay UI surface to be absent for scenario {scenario.Name}.");
+            }
+
             Assert(sceneModel.AttemptId is null && sceneModel.StepIndex is null && sceneModel.Phase is null, $"Expected live scene model replay envelope fields to stay null for scenario {scenario.Name}.");
             Assert(!string.IsNullOrWhiteSpace(host.CurrentSnapshot.Paths.AdvisorSceneRoot) && Directory.Exists(host.CurrentSnapshot.Paths.AdvisorSceneRoot!), $"Expected advisor-scene root for scenario {scenario.Name}.");
             Assert(File.Exists(host.CurrentSnapshot.Paths.AdvisorSceneLatestJsonPath!), $"Expected advisor-scene.latest.json for scenario {scenario.Name}.");
@@ -4741,6 +4749,16 @@ static IReadOnlyList<HostSceneModelScenario> CreateHostSceneModelScenarios()
             "shop",
             4,
             new[] { "shop-item-price-missing" }),
+        new HostSceneModelScenario(
+            "map-surface-pending",
+            "scene-model-map-pending-run",
+            "map-surface-pending",
+            CreateMapSurfacePendingSceneModelSnapshot("scene-model-map-pending-run"),
+            "map",
+            "map-surface-pending",
+            "map",
+            0,
+            new[] { "map-route-context-missing", "map-current-node-identity-missing" }),
     };
 }
 
@@ -4872,6 +4890,29 @@ static LiveExportSnapshot CreateShopSceneModelSnapshot(string runId)
             ["shopCardRemovalUsed"] = "false",
             ["shopBackEnabled"] = "true",
             ["shopProceedEnabled"] = "false",
+        },
+    };
+}
+
+static LiveExportSnapshot CreateMapSurfacePendingSceneModelSnapshot(string runId)
+{
+    return CreateHostSnapshot(runId, "map") with
+    {
+        CurrentScreen = "map",
+        Encounter = new LiveExportEncounterSummary("MapRoom", "Map", false, null),
+        CurrentChoices = Array.Empty<LiveExportChoiceSummary>(),
+        RecentChanges = new[] { "trigger: map-surface-pending" },
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choiceExtractorPath"] = "map",
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.Screens.Map.NMapScreen",
+            ["flowScreen"] = "map",
+            ["visibleScreen"] = "map",
+            ["foregroundOwner"] = "map",
+            ["mapReleaseAuthority"] = "true",
+            ["mapSurfacePending"] = "true",
         },
     };
 }

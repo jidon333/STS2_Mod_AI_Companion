@@ -60,7 +60,7 @@ M9 v1에서 이미 얻은 것은 아래다.
 - live export snapshot
 - normalized scene
 - current choices
-- recent events
+- recent events는 현재 builder truth source가 아니라 run-state context/diagnostics로만 유지
 - `LatestAdvice` / collector degraded reason은 truth source로 쓰지 않음
 
 이번 wave 구현 결정:
