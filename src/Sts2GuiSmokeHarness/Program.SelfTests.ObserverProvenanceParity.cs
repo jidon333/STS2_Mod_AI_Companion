@@ -45,16 +45,16 @@ internal static partial class Program
             var reader = new ObserverSnapshotReader(liveLayout, harnessLayout);
 
             AssertObserverReaderMatchesSharedProvenance(
-                "published-character-select",
+                "published-event-screen",
                 reader,
                 liveLayout,
                 harnessLayout,
                 """
                 {
                   "version": 7,
-                  "currentScreen": "main-menu",
-                  "publishedCurrentScreen": "character-select",
-                  "publishedVisibleScreen": "character-select",
+                  "currentScreen": "feedback-overlay",
+                  "publishedCurrentScreen": "event",
+                  "publishedVisibleScreen": "event",
                   "publishedSceneReady": true,
                   "publishedSceneAuthority": "hook",
                   "publishedSceneStability": "stable",
@@ -63,16 +63,15 @@ internal static partial class Program
                     "inCombat": false
                   },
                   "meta": {
-                    "rawCurrentScreen": "main-menu",
-                    "rawObservedScreen": "main-menu"
+                    "rawObservedScreen": "map"
                   },
                   "player": {},
                   "choices": []
                 }
                 """.Replace("REPLACE_CAPTURED_AT", capturedAt.ToString("O"), StringComparison.Ordinal),
                 inventoryJson: null,
-                expectedCurrentScreen: "character-select",
-                expectedVisibleScreen: "character-select",
+                expectedCurrentScreen: "event",
+                expectedVisibleScreen: "event",
                 expectedSceneReady: true,
                 expectedSceneAuthority: "hook",
                 expectedSceneStability: "stable");
@@ -105,6 +104,80 @@ internal static partial class Program
                 expectedSceneReady: null,
                 expectedSceneAuthority: null,
                 expectedSceneStability: null);
+
+            AssertObserverReaderMatchesSharedProvenance(
+                "map-overlay-with-reachable-node",
+                reader,
+                liveLayout,
+                harnessLayout,
+                """
+                {
+                  "version": 7,
+                  "currentScreen": "map",
+                  "publishedCurrentScreen": "map",
+                  "publishedVisibleScreen": "map",
+                  "publishedSceneReady": true,
+                  "publishedSceneAuthority": "polling",
+                  "publishedSceneStability": "stable",
+                  "capturedAt": "REPLACE_CAPTURED_AT",
+                  "encounter": {
+                    "inCombat": false
+                  },
+                  "meta": {
+                    "rawObservedScreen": "map",
+                    "mapPointCount": "1",
+                    "mapCurrentNodeArrowVisible": "true"
+                  },
+                  "player": {},
+                  "choices": [
+                    {
+                      "kind": "map-node",
+                      "label": "휴식 (1,2)",
+                      "value": "1,2",
+                      "description": "type:Rest;coord:1,2"
+                    }
+                  ]
+                }
+                """.Replace("REPLACE_CAPTURED_AT", capturedAt.AddSeconds(2).ToString("O"), StringComparison.Ordinal),
+                inventoryJson: null,
+                expectedCurrentScreen: "map",
+                expectedVisibleScreen: "map",
+                expectedSceneReady: true,
+                expectedSceneAuthority: "polling",
+                expectedSceneStability: "stable");
+
+            AssertObserverReaderMatchesSharedProvenance(
+                "published-reward-aftermath",
+                reader,
+                liveLayout,
+                harnessLayout,
+                """
+                {
+                  "version": 7,
+                  "currentScreen": "legacy-collapsed",
+                  "publishedCurrentScreen": "rewards",
+                  "publishedVisibleScreen": "rewards",
+                  "publishedSceneReady": true,
+                  "publishedSceneAuthority": "hook",
+                  "publishedSceneStability": "stable",
+                  "capturedAt": "REPLACE_CAPTURED_AT",
+                  "encounter": {
+                    "inCombat": false
+                  },
+                  "meta": {
+                    "rawCurrentScreen": "rewards",
+                    "rawObservedScreen": "legacy-raw"
+                  },
+                  "player": {},
+                  "choices": []
+                }
+                """.Replace("REPLACE_CAPTURED_AT", capturedAt.AddSeconds(3).ToString("O"), StringComparison.Ordinal),
+                inventoryJson: null,
+                expectedCurrentScreen: "rewards",
+                expectedVisibleScreen: "rewards",
+                expectedSceneReady: true,
+                expectedSceneAuthority: "hook",
+                expectedSceneStability: "stable");
 
             AssertObserverReaderMatchesSharedProvenance(
                 "state-document-blocks-legacy-inventory-scene-fallback",
@@ -141,7 +214,7 @@ internal static partial class Program
                   "publishedSceneAuthority": "inventory",
                   "publishedSceneStability": "stable"
                 }
-                """.Replace("REPLACE_CAPTURED_AT", capturedAt.AddSeconds(2).ToString("O"), StringComparison.Ordinal),
+                """.Replace("REPLACE_CAPTURED_AT", capturedAt.AddSeconds(4).ToString("O"), StringComparison.Ordinal),
                 expectedCurrentScreen: null,
                 expectedVisibleScreen: null,
                 expectedSceneReady: true,
