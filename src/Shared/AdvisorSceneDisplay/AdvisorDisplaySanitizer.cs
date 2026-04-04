@@ -28,7 +28,10 @@ public static partial class AdvisorDisplaySanitizer
         var sanitized = ColorBbCodeRegex().Replace(text, string.Empty);
         sanitized = NamedColorBbCodeRegex().Replace(sanitized, string.Empty);
         sanitized = ColorXmlRegex().Replace(sanitized, string.Empty);
+        sanitized = ImageBbCodeRegex().Replace(sanitized, string.Empty);
+        sanitized = FormattingBbCodeRegex().Replace(sanitized, string.Empty);
         sanitized = TokenRegex().Replace(sanitized, string.Empty);
+        sanitized = DynamicPlaceholderRegex().Replace(sanitized, string.Empty);
         sanitized = SeparatorRegex().Replace(sanitized, " ");
         sanitized = WhitespaceRegex().Replace(sanitized, " ");
         sanitized = sanitized
@@ -46,6 +49,12 @@ public static partial class AdvisorDisplaySanitizer
 
     public static bool IsPlaceholderDescription(string? text, string? title = null)
     {
+        if (!string.IsNullOrWhiteSpace(text)
+            && DynamicPlaceholderRegex().IsMatch(text))
+        {
+            return true;
+        }
+
         var sanitized = SanitizeText(text);
         if (string.IsNullOrWhiteSpace(sanitized))
         {
@@ -103,8 +112,17 @@ public static partial class AdvisorDisplaySanitizer
     [GeneratedRegex(@"</?color(?:=[^>]+)?>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ColorXmlRegex();
 
+    [GeneratedRegex(@"\[img\][^\[]*?\[/img\]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ImageBbCodeRegex();
+
+    [GeneratedRegex(@"\[(?:/?(?:b|i|u|s|center|font_size(?:=[^\]]+)?))\]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex FormattingBbCodeRegex();
+
     [GeneratedRegex(@"\{[A-Za-z0-9_]+\}", RegexOptions.CultureInvariant)]
     private static partial Regex TokenRegex();
+
+    [GeneratedRegex(@"\{[A-Za-z0-9_]+(?::[^{}]+)?\}", RegexOptions.CultureInvariant)]
+    private static partial Regex DynamicPlaceholderRegex();
 
     [GeneratedRegex(@"(?:\|\||::|;;)+", RegexOptions.CultureInvariant)]
     private static partial Regex SeparatorRegex();

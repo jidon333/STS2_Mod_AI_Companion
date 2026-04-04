@@ -82,6 +82,8 @@ Run("runtime reflection extracts combat cards from player combat state", TestRun
 Run("runtime reflection prefers deck source over combat zones", TestRuntimeReflectionPrefersDeckSourceOverCombatZones, failures);
 Run("runtime reflection ignores standalone deck aliases when player deck is present", TestRuntimeReflectionIgnoresStandaloneDeckAliasesWhenPlayerDeckPresent, failures);
 Run("runtime reflection exports structured combat counts from combat state", TestRuntimeReflectionExportsStructuredCombatCounts, failures);
+Run("runtime reflection prefers evaluated display text for card-like options", TestRuntimeReflectionPrefersEvaluatedDisplayTextForCardLikeOptions, failures);
+Run("runtime reflection keeps sanitized fallback when evaluated card-like text is unavailable", TestRuntimeReflectionKeepsSanitizedFallbackWhenNoEvaluatedTextExists, failures);
 Run("runtime reflection prefers player hand ui holders over combat-state hand fallback", TestRuntimeReflectionPrefersPlayerHandUiHolders, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
 Run("runtime reflection encounter does not override CombatManager IsInProgress false", TestRuntimeReflectionEncounterDoesNotOverrideCombatManagerFalse, failures);
@@ -1336,8 +1338,8 @@ static void TestRuntimeReflectionRewardPickCardSelectionExport()
         _banner = new FakeBanner { label = new FakeLabel { Text = "카드를 고르세요." } },
         _cardRow = new object[]
         {
-            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.SHRUG_IT_OFF", Name = "몸통 박치기" }, 520, 280),
-            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.BATTLE_TRANCE", Name = "전투 최면" }, 860, 280),
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.SHRUG_IT_OFF", Name = "몸통 박치기", Description = "방어도를 {CalculatedBlock:base()} 얻습니다.", EvaluatedDescription = "방어도를 8 얻고 카드를 1장 뽑습니다." }, 520, 280),
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.BATTLE_TRANCE", Name = "전투 최면", Description = "카드를 {DrawCount:base()}장 뽑습니다.", EvaluatedDescription = "카드를 3장 뽑습니다." }, 860, 280),
         },
     };
 
@@ -1383,9 +1385,9 @@ static void TestRuntimeReflectionPrioritizesRewardPickChildScreenChoices()
         _banner = new FakeBanner { label = new FakeLabel { Text = "카드를 선택하세요" } },
         _cardRow = new object[]
         {
-            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.SHRUG_IT_OFF", Name = "흘려보내기" }, 520, 280),
-            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.RAGE", Name = "격노" }, 860, 280),
-            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.ANGER", Name = "분노" }, 1200, 280),
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.SHRUG_IT_OFF", Name = "흘려보내기", Description = "방어도를 {CalculatedBlock:base()} 얻습니다.", EvaluatedDescription = "방어도를 8 얻고 카드를 1장 뽑습니다." }, 520, 280),
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.RAGE", Name = "격노", Description = "이번 턴 공격을 사용할 때마다 방어도를 {CalculatedBlock:base()} 얻습니다.", EvaluatedDescription = "이번 턴 공격을 사용할 때마다 방어도를 3 얻습니다." }, 860, 280),
+            new FakeGridCardHolder(new FakeCardModel { Id = "CARD.ANGER", Name = "분노", Description = "적에게 {CalculatedDamage:diff()} 피해를 줍니다.", EvaluatedDescription = "적에게 6 피해를 줍니다." }, 1200, 280),
         },
     };
     var observation = BuildRuntimeObservationForSelfTest(
@@ -1415,6 +1417,11 @@ static void TestRuntimeReflectionPrioritizesRewardPickChildScreenChoices()
         $"Reward-pick child-screen should keep all explicit card-selection choices ahead of the generic reward budget. Actual reward-pick-card count={rewardPickChoices.Length}.");
     Assert(rewardPickChoices.All(choice => !string.IsNullOrWhiteSpace(choice.ScreenBounds)),
         "Reward-pick child-screen should preserve bounds on the exported card-selection choices.");
+    Assert(rewardPickChoices.Any(choice => string.Equals(choice.Label, "흘려보내기", StringComparison.OrdinalIgnoreCase)
+                                          && string.Equals(choice.Description, "방어도를 8 얻고 카드를 1장 뽑습니다.", StringComparison.OrdinalIgnoreCase)),
+        "Reward-pick child-screen should prefer evaluated card display text over the generic prompt.");
+    Assert(rewardPickChoices.All(choice => choice.Description?.Contains("{CalculatedBlock}", StringComparison.Ordinal) != true),
+        "Reward-pick child-screen should not leak raw dynamic placeholder text.");
     Assert(observation.Choices.Any(choice => string.Equals(choice.BindingKind, "reward-type", StringComparison.OrdinalIgnoreCase)),
         "Reward-pick child-screen export should stay additive and keep parent reward rows for diagnostics.");
 }
@@ -1590,6 +1597,13 @@ static void TestRuntimeReflectionShopExport()
                                      && string.Equals((string?)ReadProperty(choice, "Label"), "힘 포션", StringComparison.OrdinalIgnoreCase)), "Expected potion shop choice to use actual potion identity.");
     Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-card-removal", StringComparison.OrdinalIgnoreCase)
                                      && string.Equals((string?)ReadProperty(choice, "Value"), "service:card-removal", StringComparison.OrdinalIgnoreCase)), "Expected card-removal service to use explicit service identity.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-option:card", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Description"), "적에게 12 피해를 주고 카드를 1장 뽑습니다.", StringComparison.OrdinalIgnoreCase)), "Expected shop card choice to prefer the evaluated card display text.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-option:relic", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Description"), "턴 종료 시 방어도를 8 얻습니다.", StringComparison.OrdinalIgnoreCase)), "Expected shop relic choice to prefer the evaluated hover-tip text.");
+    Assert(shopChoices.Any(choice => string.Equals((string?)ReadProperty(choice, "Kind"), "shop-option:potion", StringComparison.OrdinalIgnoreCase)
+                                     && string.Equals((string?)ReadProperty(choice, "Description"), "이번 전투에서 힘을 2 얻습니다.", StringComparison.OrdinalIgnoreCase)), "Expected shop potion choice to prefer the evaluated hover-tip text.");
+    Assert(shopChoices.All(choice => !(((string?)ReadProperty(choice, "Description"))?.Contains("{CalculatedDamage:diff()}", StringComparison.Ordinal) ?? false)), "Expected shop choice descriptions to drop raw dynamic placeholders.");
 
     var removeContaminationMethod = extractorType.GetMethod("RemoveShopChoiceContamination", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
     var addChoiceSummaryMethod = extractorType.GetMethod("AddChoiceSummary", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
@@ -3253,6 +3267,109 @@ static void TestRuntimeReflectionExportsStructuredCombatCounts()
     Assert(observation.Payload.TryGetValue("playPileCount", out var payloadPlayPileCount) && payloadPlayPileCount is 2, "Expected playPileCount payload mirror.");
 }
 
+static void TestRuntimeReflectionPrefersEvaluatedDisplayTextForCardLikeOptions()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var shopCandidateMethod = extractorType!.GetMethod("TryCreateShopOptionCandidate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    var cardSelectionCandidateMethod = extractorType.GetMethod("TryCreateCardSelectionCandidate", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(shopCandidateMethod is not null, "Expected private TryCreateShopOptionCandidate helper.");
+    Assert(cardSelectionCandidateMethod is not null, "Expected private TryCreateCardSelectionCandidate helper.");
+
+    var shopCardSlot = new FakeNMerchantCard("몸풀기", "CARD.WARM_UP", x: 700, y: 260, enabled: true, stocked: true, enoughGold: true)
+    {
+        _cardNode = new FakeCardNode
+        {
+            _descriptionLabel = new FakeLabel { Text = "[b]적에게 11 피해를 주고[/b] 카드를 1장 뽑습니다." },
+        },
+    };
+    var shopCardCandidate = shopCandidateMethod.Invoke(null, new object?[] { shopCardSlot });
+    Assert(shopCardCandidate is not null, "Expected shop card candidate.");
+    Assert(
+        string.Equals((string?)ReadProperty(shopCardCandidate!, "Description"), "적에게 11 피해를 주고 카드를 1장 뽑습니다.", StringComparison.Ordinal),
+        $"Expected shop card candidate to prefer evaluated card-node description. actual='{(string?)ReadProperty(shopCardCandidate!, "Description") ?? "<null>"}'.");
+
+    var shopPotionSlot = new FakeNMerchantPotion("힘 포션", "POTION.STRENGTH_POTION", x: 980, y: 260, enabled: true, stocked: true, enoughGold: true)
+    {
+        Entry = new FakeMerchantPotionEntry
+        {
+            Id = "POTION.STRENGTH_POTION",
+            Name = "힘 포션",
+            IsStocked = true,
+            EnoughGold = true,
+            Model = new FakePotionModel
+            {
+                Id = "POTION.STRENGTH_POTION",
+                Name = "힘 포션",
+                HoverTips = new object[]
+                {
+                    new FakeHoverTip
+                    {
+                        Id = "POTION.STRENGTH_POTION",
+                        Title = "힘 포션",
+                        Description = "전투 중 힘을 2 얻습니다.",
+                    },
+                },
+            },
+        },
+    };
+    var shopPotionCandidate = shopCandidateMethod.Invoke(null, new object?[] { shopPotionSlot });
+    Assert(shopPotionCandidate is not null, "Expected shop potion candidate.");
+    Assert(
+        string.Equals((string?)ReadProperty(shopPotionCandidate!, "Description"), "전투 중 힘을 2 얻습니다.", StringComparison.Ordinal),
+        $"Expected shop potion candidate to prefer evaluated hover-tip description. actual='{(string?)ReadProperty(shopPotionCandidate!, "Description") ?? "<null>"}'.");
+
+    var rewardCardHolder = new FakeCardSelectionHolder
+    {
+        Visible = true,
+        Enabled = true,
+        Position = new FakeVector2(320, 420),
+        Size = new FakeVector2(180, 254),
+        CardModel = new FakeCardModel
+        {
+            Id = "pommel-strike",
+            Name = "Pommel Strike",
+            Description = "{CalculatedDamage:diff()} 피해를 주고 카드를 1장 뽑습니다.",
+        },
+        CardNode = new FakeCardNode
+        {
+            _descriptionLabel = new FakeLabel { Text = "적에게 10 피해를 주고 카드를 1장 뽑습니다." },
+        },
+    };
+    var rewardCardCandidate = cardSelectionCandidateMethod.Invoke(null, new object?[] { rewardCardHolder, Array.Empty<string>() });
+    Assert(rewardCardCandidate is not null, "Expected reward card candidate.");
+    Assert(
+        string.Equals((string?)ReadProperty(rewardCardCandidate!, "Description"), "적에게 10 피해를 주고 카드를 1장 뽑습니다.", StringComparison.Ordinal),
+        $"Expected reward card candidate to prefer evaluated card-node description. actual='{(string?)ReadProperty(rewardCardCandidate!, "Description") ?? "<null>"}'.");
+}
+
+static void TestRuntimeReflectionKeepsSanitizedFallbackWhenNoEvaluatedTextExists()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod(
+        "TryResolveChoiceDescription",
+        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
+        binder: null,
+        new[] { typeof(object) },
+        modifiers: null);
+    Assert(method is not null, "Expected private TryResolveChoiceDescription helper.");
+
+    var rawOnlyCardLikeChoice = new FakeCardLikeChoice
+    {
+        Description = "[b]{CalculatedDamage:diff()}[/b] 피해를 주고 {IfUpgraded:강화 시 }카드를 1장 뽑습니다.",
+    };
+
+    var description = method.Invoke(null, new object?[] { rawOnlyCardLikeChoice }) as string;
+    Assert(!string.IsNullOrWhiteSpace(description), "Expected placeholder fallback to leave readable text.");
+    Assert(!description!.Contains("{CalculatedDamage:diff()}", StringComparison.Ordinal), $"Expected dynamic placeholder to be removed from fallback description. actual='{description}'.");
+    Assert(!description.Contains("{IfUpgraded:강화 시 }", StringComparison.Ordinal), $"Expected conditional placeholder to be removed from fallback description. actual='{description}'.");
+    Assert(!description.Contains("[b]", StringComparison.Ordinal), $"Expected BBCode markup to be removed from fallback description. actual='{description}'.");
+    Assert(description.Contains("피해를 주고", StringComparison.Ordinal), $"Expected fallback description to keep surrounding readable text. actual='{description}'.");
+}
+
 static void TestRuntimeReflectionPrefersPlayerHandUiHolders()
 {
     var observation = BuildRuntimeObservationForSelfTest(
@@ -4525,6 +4642,9 @@ static void TestAdvisorDisplaySanitizer()
 
     var namedColorSanitized = AdvisorDisplaySanitizer.SanitizeText("[gold]희귀 카드[/gold] [blue]1[/blue]장 [red]감소[/red]");
     Assert(string.Equals(namedColorSanitized, "희귀 카드 1장 감소", StringComparison.Ordinal), $"Expected sanitizer to strip named color tags, got '{namedColorSanitized ?? "<null>"}'.");
+
+    var dynamicSanitized = AdvisorDisplaySanitizer.SanitizeText("[b]{CalculatedDamage:diff()}[/b] 피해를 주고 [img]res://x.png[/img] {IfUpgraded:강화 시 }카드를 1장 뽑습니다.");
+    Assert(string.Equals(dynamicSanitized, "피해를 주고 카드를 1장 뽑습니다.", StringComparison.Ordinal), $"Expected sanitizer to strip dynamic placeholders and formatting noise, got '{dynamicSanitized ?? "<null>"}'.");
 
     var prettified = AdvisorDisplaySanitizer.PrettifyIdentifier("CARD.STRIKE_IRONCLAD");
     Assert(string.Equals(prettified, "Strike Ironclad", StringComparison.Ordinal), $"Expected prettified identifier, got '{prettified ?? "<null>"}'.");
@@ -7185,17 +7305,28 @@ file sealed class FakeNMerchantRelic : FakeMerchantSlotBase
     public FakeNMerchantRelic(string label, string id, double x, double y, bool enabled, bool stocked, bool enoughGold)
         : base(label, id, x, y, enabled)
     {
+        var model = new FakeRelicModel
+        {
+            Id = id,
+            Name = label,
+            Description = "턴 종료 시 {InCombat:Block} 얻습니다.",
+            HoverTips = new object[]
+            {
+                new FakeHoverTip
+                {
+                    Id = id,
+                    Title = label,
+                    Description = "턴 종료 시 방어도를 8 얻습니다.",
+                },
+            },
+        };
         Entry = new FakeMerchantRelicEntry
         {
             Id = id,
             Name = label,
             IsStocked = stocked,
             EnoughGold = enoughGold,
-            Model = new FakeRelicModel
-            {
-                Id = id,
-                Name = label,
-            },
+            Model = model,
         };
     }
 
@@ -7207,6 +7338,13 @@ file sealed class FakeNMerchantCard : FakeMerchantSlotBase
     public FakeNMerchantCard(string label, string id, double x, double y, bool enabled, bool stocked, bool enoughGold)
         : base(label, id, x, y, enabled)
     {
+        var card = new FakeCardModel
+        {
+            Id = id,
+            Name = label,
+            Description = "적에게 {CalculatedDamage:diff()} 피해를 주고 {IfUpgraded:NL}카드를 1장 뽑습니다.",
+            EvaluatedDescription = "[center]적에게 12 피해를 주고 카드를 1장 뽑습니다.[/center]",
+        };
         Entry = new FakeMerchantCardEntry
         {
             Id = id,
@@ -7215,16 +7353,19 @@ file sealed class FakeNMerchantCard : FakeMerchantSlotBase
             EnoughGold = enoughGold,
             CreationResult = new FakeCardCreationResult
             {
-                Card = new FakeCardModel
-                {
-                    Id = id,
-                    Name = label,
-                },
+                Card = card,
             },
+        };
+        _cardNode = new FakeCardNode
+        {
+            Model = card,
+            _descriptionLabel = new FakeLabel { Text = card.EvaluatedDescription },
         };
     }
 
     public FakeMerchantCardEntry Entry { get; }
+
+    public object? _cardNode { get; init; }
 }
 
 file sealed class FakeNMerchantPotion : FakeMerchantSlotBase
@@ -7232,21 +7373,32 @@ file sealed class FakeNMerchantPotion : FakeMerchantSlotBase
     public FakeNMerchantPotion(string label, string id, double x, double y, bool enabled, bool stocked, bool enoughGold)
         : base(label, id, x, y, enabled)
     {
+        var model = new FakePotionModel
+        {
+            Id = id,
+            Name = label,
+            Description = "이번 전투에서 {CalculatedPower:strength()} 얻습니다.",
+            HoverTips = new object[]
+            {
+                new FakeHoverTip
+                {
+                    Id = id,
+                    Title = label,
+                    Description = "이번 전투에서 힘을 2 얻습니다.",
+                },
+            },
+        };
         Entry = new FakeMerchantPotionEntry
         {
             Id = id,
             Name = label,
             IsStocked = stocked,
             EnoughGold = enoughGold,
-            Model = new FakePotionModel
-            {
-                Id = id,
-                Name = label,
-            },
+            Model = model,
         };
     }
 
-    public FakeMerchantPotionEntry Entry { get; }
+    public FakeMerchantPotionEntry Entry { get; init; }
 }
 
 file sealed class FakeNMerchantCardRemoval : FakeMerchantSlotBase
@@ -7639,6 +7791,13 @@ file sealed class FakeGridCardHolder
     {
         Visible = true;
         CardModel = cardModel;
+        CardNode = new FakeCardNode
+        {
+            Model = cardModel,
+            _descriptionLabel = string.IsNullOrWhiteSpace(cardModel.EvaluatedDescription)
+                ? null
+                : new FakeLabel { Text = cardModel.EvaluatedDescription },
+        };
         Position = new FakeVector2(x, y);
         Size = new FakeVector2(180, 254);
     }
@@ -7647,9 +7806,33 @@ file sealed class FakeGridCardHolder
 
     public object CardModel { get; }
 
+    public object CardNode { get; }
+
     public object Position { get; }
 
     public object Size { get; }
+}
+
+file sealed class FakeCardSelectionHolder
+{
+    public bool Visible { get; init; }
+
+    public bool Enabled { get; init; }
+
+    public object? Position { get; init; }
+
+    public object? Size { get; init; }
+
+    public object? CardModel { get; init; }
+
+    public object? CardNode { get; init; }
+}
+
+file sealed class FakeCardNode
+{
+    public object? Model { get; init; }
+
+    public object? _descriptionLabel { get; init; }
 }
 
 file sealed class FakeCardModel
@@ -7657,6 +7840,12 @@ file sealed class FakeCardModel
     public string? Id { get; init; }
 
     public string? Name { get; init; }
+
+    public string? Description { get; init; }
+
+    public string? EvaluatedDescription { get; init; }
+
+    public object[] HoverTips { get; init; } = Array.Empty<object>();
 }
 
 file sealed class FakeFeedbackScreen
@@ -7673,6 +7862,10 @@ file sealed class FakeRelicModel
     public string? Id { get; init; }
 
     public string? Name { get; init; }
+
+    public string? Description { get; init; }
+
+    public object[] HoverTips { get; init; } = Array.Empty<object>();
 }
 
 file sealed class FakePotionModel
@@ -7680,6 +7873,31 @@ file sealed class FakePotionModel
     public string? Id { get; init; }
 
     public string? Name { get; init; }
+
+    public string? Description { get; init; }
+
+    public object[] HoverTips { get; init; } = Array.Empty<object>();
+}
+
+file sealed class FakeHoverTip
+{
+    public string? Title { get; init; }
+
+    public string? Description { get; init; }
+
+    public string? Id { get; init; }
+}
+
+file sealed class FakeCardLikeChoice
+{
+    public string? Description { get; init; }
+}
+
+file sealed class FakeChoiceDescriptionCarrier
+{
+    public string? Description { get; init; }
+
+    public object? _label { get; init; }
 }
 
 file sealed class FakeClickableControl

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using Sts2ModKit.Core.LiveExport;
 
 namespace Sts2ModAiCompanion.Mod.Runtime;
@@ -95,6 +96,38 @@ internal static class RuntimeSnapshotReflectionExtractor
         "SlimeSad",
     };
 
+    private static readonly string[] EvaluatedDisplaySourceMemberNames =
+    {
+        "Option",
+        "Reward",
+        "Entry",
+        "CreationResult",
+        "Card",
+        "CardModel",
+        "CardNode",
+        "_cardNode",
+        "Model",
+        "Relic",
+        "RelicNode",
+        "_relicNode",
+        "Potion",
+        "PotionNode",
+        "_potionNode",
+        "HoverTip",
+        "HoverTips",
+        "Tooltip",
+        "Tooltips",
+    };
+
+    private static readonly Regex ChoiceColorBbCodeRegex = new(@"\[(?:/?color(?:=[^\]]+)?)\]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ChoiceNamedColorBbCodeRegex = new(@"\[(?:/?(?:gold|blue|red|green|white|black|purple|orange|yellow|gray|grey))\]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ChoiceColorXmlRegex = new(@"</?color(?:=[^>]+)?>", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ChoiceImageBbCodeRegex = new(@"\[img\][^\[]*?\[/img\]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ChoiceFormattingBbCodeRegex = new(@"\[(?:/?(?:b|i|u|s|center|font_size(?:=[^\]]+)?))\]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex ChoiceDynamicPlaceholderRegex = new(@"\{[A-Za-z0-9_]+(?::[^{}]+)?\}", RegexOptions.CultureInvariant);
+    private static readonly Regex ChoiceWhitespaceRegex = new(@"\s+", RegexOptions.CultureInvariant);
+    private static readonly Regex ChoiceIdentifierRegex = new(@"[._:/\\-]+", RegexOptions.CultureInvariant);
+
     private sealed record RuntimeSceneProbe(
         string? SceneName,
         string? CurrentSceneType,
@@ -164,6 +197,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         object Holder,
         string Label,
         string? CardId,
+        string? Description,
         string ScreenBounds,
         bool Enabled,
         bool Selected,
@@ -220,6 +254,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         string OptionType,
         string Label,
         string? EntryId,
+        string? Description,
         string ScreenBounds,
         bool Enabled,
         bool IsStocked,
@@ -3641,12 +3676,16 @@ internal static class RuntimeSnapshotReflectionExtractor
         var cardId = FirstNonEmpty(
             TryReadString(cardModel, "Id", "CardId", "Name", "Title"),
             TryReadString(holder, "Id", "CardId", "Name", "Title"));
+        var description = FirstNonEmpty(
+            TryResolveChoiceDescription(holder, label, cardId),
+            TryResolveChoiceDescription(cardModel, label, cardId));
         var selected = !string.IsNullOrWhiteSpace(cardId) && selectedCardIds.Contains(cardId, StringComparer.OrdinalIgnoreCase)
                        || selectedCardIds.Contains(label, StringComparer.OrdinalIgnoreCase);
         return new CardSelectionCardCandidate(
             holder,
             label,
             cardId,
+            description,
             screenBounds,
             TryResolveInteractiveEnabled(holder) ?? true,
             selected,
@@ -4615,6 +4654,10 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
 
         var entryId = typedSource.EntryId ?? ResolveShopOptionId(slot, entry, optionType, label);
+        var description = FirstNonEmpty(
+            typedSource.Description,
+            TryResolveChoiceDescription(slot, label, entryId),
+            TryResolveChoiceDescription(entry, label, entryId));
         var enabled = TryResolveInteractiveEnabled(slot) ?? TryResolveControlEnabled(slot) ?? true;
         var isStocked = TryReadBool(entry, "IsStocked") ?? true;
         var enoughGold = TryReadBool(entry, "EnoughGold") ?? false;
@@ -4624,6 +4667,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             optionType,
             label,
             entryId,
+            description,
             screenBounds,
             enabled,
             isStocked,
@@ -4661,7 +4705,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         return null;
     }
 
-    private static (string? Label, string? EntryId) TryResolveTypedShopOptionSource(object slot, object? entry, string optionType)
+    private static (string? Label, string? EntryId, string? Description) TryResolveTypedShopOptionSource(object slot, object? entry, string optionType)
     {
         switch (optionType)
         {
@@ -4681,7 +4725,12 @@ internal static class RuntimeSnapshotReflectionExtractor
                         TryReadString(creationResult, "Title", "DisplayName", "Name", "Id"))),
                     SanitizeShopOptionIdentity(FirstNonEmpty(
                         TryReadString(card, "Id", "CardId", "Name", "Title"),
-                        TryReadString(creationResult, "Id", "CardId", "Name", "Title"))));
+                        TryReadString(creationResult, "Id", "CardId", "Name", "Title"))),
+                    FirstNonEmpty(
+                        TryResolveChoiceDescription(slot),
+                        TryResolveChoiceDescription(creationResult),
+                        TryResolveChoiceDescription(entry),
+                        TryResolveChoiceDescription(card)));
             }
             case "relic":
             {
@@ -4696,7 +4745,11 @@ internal static class RuntimeSnapshotReflectionExtractor
                         TryReadString(entry, "Title", "DisplayName", "Name", "Id"))),
                     SanitizeShopOptionIdentity(FirstNonEmpty(
                         TryReadString(relic, "Id", "Name", "Title"),
-                        TryReadString(entry, "Id", "Name", "Title"))));
+                        TryReadString(entry, "Id", "Name", "Title"))),
+                    FirstNonEmpty(
+                        TryResolveChoiceDescription(relic),
+                        TryResolveChoiceDescription(entry),
+                        TryResolveChoiceDescription(slot)));
             }
             case "potion":
             {
@@ -4711,7 +4764,11 @@ internal static class RuntimeSnapshotReflectionExtractor
                         TryReadString(entry, "Title", "DisplayName", "Name", "Id"))),
                     SanitizeShopOptionIdentity(FirstNonEmpty(
                         TryReadString(potion, "Id", "Name", "Title"),
-                        TryReadString(entry, "Id", "Name", "Title"))));
+                        TryReadString(entry, "Id", "Name", "Title"))),
+                    FirstNonEmpty(
+                        TryResolveChoiceDescription(potion),
+                        TryResolveChoiceDescription(entry),
+                        TryResolveChoiceDescription(slot)));
             }
             case "card-removal":
             {
@@ -4719,10 +4776,10 @@ internal static class RuntimeSnapshotReflectionExtractor
                     TryReadString(entry, "Title", "DisplayName", "Name", "Id"),
                     TryReadString(slot, "Title", "DisplayName", "Name", "Id")))
                     ?? "카드 제거 서비스";
-                return (label, "service:card-removal");
+                return (label, "service:card-removal", null);
             }
             default:
-                return (null, null);
+                return (null, null, null);
         }
     }
 
@@ -6733,7 +6790,7 @@ internal static class RuntimeSnapshotReflectionExtractor
                 cardKind,
                 card.Label,
                 card.CardId ?? SanitizeNodeKey(card.Label),
-                observation.Prompt)
+                card.Description ?? observation.Prompt)
             {
                 ScreenBounds = card.ScreenBounds,
                 NodeId = $"card-selection:{observation.ScreenType}:card:{cardIndex}",
@@ -6903,7 +6960,9 @@ internal static class RuntimeSnapshotReflectionExtractor
                 optionKind,
                 option.Label,
                 option.EntryId,
-                option.OptionType == "card-removal" ? "Merchant card removal service" : "Merchant inventory slot")
+                option.OptionType == "card-removal"
+                    ? option.Description ?? "Merchant card removal service"
+                    : option.Description ?? "Merchant inventory slot")
             {
                 NodeId = option.OptionType == "card-removal"
                     ? "shop:card-removal"
@@ -8817,16 +8876,254 @@ internal static class RuntimeSnapshotReflectionExtractor
 
     private static string? TryResolveChoiceDescription(object item)
     {
+        var rewardTypeName = TryResolveRewardTypeName(item);
+        var label = TryResolveChoiceLabel(item);
+        var value = TryResolveChoiceValue(item, rewardTypeName);
+        return TryResolveChoiceDescription(item, label, value);
+    }
+
+    private static string? TryResolveChoiceDescription(object? item, string? preferredLabel, string? preferredValue)
+    {
+        if (item is null)
+        {
+            return null;
+        }
+
         return FirstNonEmpty(
-            TryReadString(TryGetMemberValue(item, "_label"), "Text", "Value"),
-            TryReadString(TryGetMemberValue(item, "_descriptionLabel"), "Text", "Value"),
-            TryReadString(item, "Description", "Tooltip", "Body"),
-            TryReadString(TryGetMemberValue(item, "Option"), "Description", "Body"),
-            TryReadString(TryGetMemberValue(item, "Reward"), "Description", "Body"),
-            TryReadString(TryGetMemberValue(item, "Entry"), "DisplayName", "Description", "Body"),
-            TryReadString(TryGetMemberValue(item, "Card"), "Description", "Body"),
-            TryReadString(TryGetMemberValue(item, "Model"), "Description", "Body"),
-            TryResolveNestedChoiceText(item, maxDepth: 3));
+            TryResolveEvaluatedChoiceDescription(item, preferredLabel, preferredValue),
+            SanitizeChoiceDisplayFallback(FirstNonEmpty(
+                TryReadString(TryGetMemberValue(item, "_descriptionLabel"), "Text", "Value"),
+                TryReadString(item, "Description", "Tooltip", "Body"),
+                TryReadString(TryGetMemberValue(item, "Option"), "Description", "Body"),
+                TryReadString(TryGetMemberValue(item, "Reward"), "Description", "Body"),
+                TryReadString(TryGetMemberValue(item, "Entry"), "DisplayName", "Description", "Body"),
+                TryReadString(TryGetMemberValue(item, "Card"), "Description", "Body"),
+                TryReadString(TryGetMemberValue(item, "Model"), "Description", "Body"),
+                TryResolveNestedChoiceText(item, maxDepth: 3),
+                TryReadString(TryGetMemberValue(item, "_label"), "Text", "Value"))));
+    }
+
+    private static string? TryResolveEvaluatedChoiceDescription(object item, string? preferredLabel, string? preferredValue)
+    {
+        foreach (var source in EnumerateEvaluatedDisplaySources(item))
+        {
+            var materialized = TryResolveMaterializedDescription(source);
+            if (!IsPlaceholderChoiceDescription(materialized, preferredLabel))
+            {
+                return materialized;
+            }
+        }
+
+        foreach (var source in EnumerateEvaluatedDisplaySources(item))
+        {
+            var hoverTipDescription = TryResolveHoverTipDescription(source, preferredLabel, preferredValue);
+            if (!IsPlaceholderChoiceDescription(hoverTipDescription, preferredLabel))
+            {
+                return hoverTipDescription;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<object> EnumerateEvaluatedDisplaySources(object item)
+    {
+        var queue = new Queue<(object Item, int Depth)>();
+        var seen = new HashSet<int>();
+        queue.Enqueue((item, 0));
+
+        while (queue.Count > 0)
+        {
+            var (current, depth) = queue.Dequeue();
+            if (!seen.Add(RuntimeHelpers.GetHashCode(current)))
+            {
+                continue;
+            }
+
+            yield return current;
+
+            if (depth >= 2)
+            {
+                continue;
+            }
+
+            foreach (var memberName in EvaluatedDisplaySourceMemberNames)
+            {
+                var nested = TryGetMemberValue(current, memberName);
+                if (nested is null || nested is string)
+                {
+                    continue;
+                }
+
+                foreach (var expanded in ExpandEnumerable(nested).Prepend(nested))
+                {
+                    if (expanded is not null and not string)
+                    {
+                        queue.Enqueue((expanded, depth + 1));
+                    }
+                }
+            }
+        }
+    }
+
+    private static string? TryResolveMaterializedDescription(object source)
+    {
+        return SanitizeChoiceDisplayFallback(FirstNonEmpty(
+            TryReadString(TryGetMemberValue(source, "_descriptionLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
+            TryReadString(TryGetMemberValue(source, "DescriptionLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
+            TryReadString(TryGetMemberValue(source, "_bodyLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
+            TryReadString(TryGetMemberValue(source, "BodyLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
+            TryReadString(TryGetMemberValue(source, "_infoLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
+            TryReadString(TryGetMemberValue(source, "InfoLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
+            TryReadString(source, "TooltipText", "DisplayedText")));
+    }
+
+    private static string? TryResolveHoverTipDescription(object source, string? preferredLabel, string? preferredValue)
+    {
+        var preferredSeeds = BuildDisplayMatchSeeds(preferredLabel, preferredValue);
+        var hoverTips = EnumerateHoverTipCandidates(source).ToArray();
+        if (hoverTips.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (var hoverTip in hoverTips)
+        {
+            if (preferredSeeds.Length > 0
+                && !preferredSeeds.Any(seed => DisplayTextMatchesSeed(hoverTip.Title, seed)
+                                               || DisplayTextMatchesSeed(hoverTip.Id, seed)))
+            {
+                continue;
+            }
+
+            if (!IsPlaceholderChoiceDescription(hoverTip.Description, preferredLabel))
+            {
+                return hoverTip.Description;
+            }
+        }
+
+        return hoverTips.Length == 1
+               && preferredSeeds.Length == 0
+               && !IsPlaceholderChoiceDescription(hoverTips[0].Description, preferredLabel)
+            ? hoverTips[0].Description
+            : null;
+    }
+
+    private static IEnumerable<(string? Title, string? Description, string? Id)> EnumerateHoverTipCandidates(object source)
+    {
+        var directHoverTip = TryGetMemberValue(source, "HoverTip")
+                            ?? TryGetMemberValue(source, "Tooltip");
+        foreach (var hoverTip in ExpandEnumerable(directHoverTip).Prepend(directHoverTip))
+        {
+            if (hoverTip is null or string)
+            {
+                continue;
+            }
+
+            var description = SanitizeChoiceDisplayFallback(TryReadString(hoverTip, "Description"));
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                continue;
+            }
+
+            yield return (
+                SanitizeChoiceDisplayFallback(TryReadString(hoverTip, "Title", "Label")),
+                description,
+                SanitizeChoiceDisplayFallback(TryReadString(hoverTip, "Id")));
+        }
+
+        var hoverTips = TryGetMemberValue(source, "HoverTips")
+                        ?? TryGetMemberValue(source, "Tooltips");
+        foreach (var hoverTip in ExpandEnumerable(hoverTips))
+        {
+            if (hoverTip is null or string)
+            {
+                continue;
+            }
+
+            var description = SanitizeChoiceDisplayFallback(TryReadString(hoverTip, "Description"));
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                continue;
+            }
+
+            yield return (
+                SanitizeChoiceDisplayFallback(TryReadString(hoverTip, "Title", "Label")),
+                description,
+                SanitizeChoiceDisplayFallback(TryReadString(hoverTip, "Id")));
+        }
+    }
+
+    private static string?[] BuildDisplayMatchSeeds(params string?[] values)
+    {
+        return values
+            .SelectMany(value => new[]
+            {
+                SanitizeChoiceDisplayFallback(value),
+                SanitizeChoiceDisplayFallback(ChoiceIdentifierRegex.Replace(value ?? string.Empty, " ")),
+            })
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray()!;
+    }
+
+    private static bool DisplayTextMatchesSeed(string? candidate, string seed)
+    {
+        var sanitizedCandidate = SanitizeChoiceDisplayFallback(candidate);
+        return !string.IsNullOrWhiteSpace(sanitizedCandidate)
+               && (string.Equals(sanitizedCandidate, seed, StringComparison.OrdinalIgnoreCase)
+                   || sanitizedCandidate.Contains(seed, StringComparison.OrdinalIgnoreCase)
+                   || seed.Contains(sanitizedCandidate, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsPlaceholderChoiceDescription(string? text, string? title = null)
+    {
+        if (!string.IsNullOrWhiteSpace(text)
+            && ChoiceDynamicPlaceholderRegex.IsMatch(text))
+        {
+            return true;
+        }
+
+        var sanitized = SanitizeChoiceDisplayFallback(text);
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            return true;
+        }
+
+        var sanitizedTitle = SanitizeChoiceDisplayFallback(title);
+        if (!string.IsNullOrWhiteSpace(sanitizedTitle)
+            && string.Equals(sanitized, sanitizedTitle, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return sanitized.Equals("Merchant inventory slot", StringComparison.OrdinalIgnoreCase)
+               || sanitized.Equals("Card for sale", StringComparison.OrdinalIgnoreCase)
+               || sanitized.Equals("Card for sale.", StringComparison.OrdinalIgnoreCase)
+               || sanitized.Equals("Reward Button", StringComparison.OrdinalIgnoreCase)
+               || sanitized.Equals("Reward", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? SanitizeChoiceDisplayFallback(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var sanitized = ChoiceColorBbCodeRegex.Replace(text, string.Empty);
+        sanitized = ChoiceNamedColorBbCodeRegex.Replace(sanitized, string.Empty);
+        sanitized = ChoiceColorXmlRegex.Replace(sanitized, string.Empty);
+        sanitized = ChoiceImageBbCodeRegex.Replace(sanitized, string.Empty);
+        sanitized = ChoiceFormattingBbCodeRegex.Replace(sanitized, string.Empty);
+        sanitized = ChoiceDynamicPlaceholderRegex.Replace(sanitized, string.Empty);
+        sanitized = ChoiceWhitespaceRegex.Replace(sanitized, " ");
+        sanitized = sanitized
+            .Replace(" ,", ",", StringComparison.Ordinal)
+            .Replace(" .", ".", StringComparison.Ordinal)
+            .Replace(" :", ":", StringComparison.Ordinal)
+            .Trim();
+        return string.IsNullOrWhiteSpace(sanitized) ? null : sanitized;
     }
 
     private static string? TryResolveNestedChoiceText(object? root, int maxDepth)
