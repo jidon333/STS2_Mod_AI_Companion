@@ -351,7 +351,8 @@ internal static class AdvisorSceneDisplayFormatter
             return scene.SceneStage;
         }
 
-        return $"골드 {FormatInt(scene.PlayerContext.Gold)} · 상품 {shop.ItemCount}개 · 서비스 {shop.ServiceCount}개 · 제거 {(shop.CardRemovalVisible ? "가능" : "없음")}";
+        var breakdown = BuildShopOptionBreakdown(scene.Options);
+        return $"골드 {FormatInt(scene.PlayerContext.Gold)} · 현재 인식된 상품 {shop.ItemCount}개({breakdown.ItemsSummary}) · 서비스 {shop.ServiceCount}개 · 제거 {(shop.CardRemovalVisible ? "가능" : "없음")}";
     }
 
     private static string BuildMapDisplaySummary(AdvisorSceneArtifact scene)
@@ -480,12 +481,60 @@ internal static class AdvisorSceneDisplayFormatter
             return Array.Empty<string>();
         }
 
+        var breakdown = BuildShopOptionBreakdown(scene.Options);
+
         return new[]
         {
-            $"상품 {shop.ItemCount}개 · 서비스 {shop.ServiceCount}개",
-            $"affordable {shop.AffordableOptionCount}개",
+            $"현재 인식된 상품: 카드 {breakdown.CardCount}개 · 유물 {breakdown.RelicCount}개 · 포션 {breakdown.PotionCount}개",
+            $"서비스: {shop.ServiceCount}개",
+            $"구매 가능: {shop.AffordableOptionCount}개",
             $"제거 가능: {(shop.CardRemovalVisible ? "예" : "아니오")}",
         };
+    }
+
+    private static (int CardCount, int RelicCount, int PotionCount, string ItemsSummary) BuildShopOptionBreakdown(IReadOnlyList<AdvisorSceneOption> options)
+    {
+        var cardCount = 0;
+        var relicCount = 0;
+        var potionCount = 0;
+
+        foreach (var option in options)
+        {
+            if (option.Tags.Contains("shop-type:card", StringComparer.OrdinalIgnoreCase))
+            {
+                cardCount += 1;
+                continue;
+            }
+
+            if (option.Tags.Contains("shop-type:relic", StringComparer.OrdinalIgnoreCase))
+            {
+                relicCount += 1;
+                continue;
+            }
+
+            if (option.Tags.Contains("shop-type:potion", StringComparer.OrdinalIgnoreCase))
+            {
+                potionCount += 1;
+            }
+        }
+
+        var parts = new List<string>();
+        if (cardCount > 0)
+        {
+            parts.Add($"카드 {cardCount}");
+        }
+
+        if (relicCount > 0)
+        {
+            parts.Add($"유물 {relicCount}");
+        }
+
+        if (potionCount > 0)
+        {
+            parts.Add($"포션 {potionCount}");
+        }
+
+        return (cardCount, relicCount, potionCount, parts.Count == 0 ? "세부 분류 없음" : string.Join(" / ", parts));
     }
 
     private static string BuildMapHeadline(AdvisorSceneArtifact scene)

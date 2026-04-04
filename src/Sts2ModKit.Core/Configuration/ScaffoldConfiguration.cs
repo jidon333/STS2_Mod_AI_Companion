@@ -190,7 +190,7 @@ public sealed record LiveExportOptions
 
     public int MaxDeckEntries { get; init; } = 40;
 
-    public int MaxChoiceEntries { get; init; } = 10;
+    public int MaxChoiceEntries { get; init; } = 24;
 
     public string RelativeLiveRoot { get; init; } = "ai_companion/live";
 

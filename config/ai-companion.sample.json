@@ -27,7 +27,7 @@
     "snapshotWriteThrottleMs": 150,
     "maxRecentChanges": 16,
     "maxDeckEntries": 40,
-    "maxChoiceEntries": 10,
+    "maxChoiceEntries": 24,
     "relativeLiveRoot": "ai_companion/live",
     "eventsFileName": "events.ndjson",
     "snapshotFileName": "state.latest.json",
