@@ -9,6 +9,8 @@
 
 이번 workstream의 목표는 게임 위 overlay가 아니라, 기존 `WPF advisor window`를 확장해서 `현재 scene / human-readable summary / options / missing facts`를 실시간으로 보여주는 것이다.
 
+경계와 병목 위치가 헷갈리면 [HARNESS_TO_M9_STRUCTURE_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/HARNESS_TO_M9_STRUCTURE_READER_KO.md) 를 먼저 읽는다.
+
 ## 왜 이 작업을 하나
 
 M9 v1에서 이미 얻은 것은 아래다.
@@ -209,12 +211,51 @@ artifact root는 아래로 고정한다.
 - mismatch가 나왔을 때 source refs / missing facts / observer gaps로 원인을 좁힐 수 있다
 - unchanged poll에서는 `advisor-scene.ndjson`가 증가하지 않는다
 
+## 절대 하지 말아야 할 것
+
+이번 workstream에서는 아래를 금지한다.
+
+1. `foregroundOwner` sanity patch로 장면 truth를 덮어쓰기
+- 예:
+  - `combat 신호가 있으면 map owner 무시`
+  - `reward choice가 보이면 event owner 무시`
+- 이런 패치는 빠르지만, 하네스가 이미 겪은 mixed-state/aftermath drift를 live path에서 다시 재현한다.
+
+2. WPF/Host/live builder마다 다른 authority rule을 갖기
+- `ObserverSnapshotReader`가 이미 쓰는 published/raw/compatibility screen 처리와 어긋나는 live-only precedence를 추가하지 않는다.
+- sidecar 경로는 `하네스와 같은 truth family`를 봐야지, 다른 규칙 세트가 되면 안 된다.
+
+3. AI advice 완료를 기다린 뒤 scene panel을 갱신하기
+- scene panel은 `관측면`이다.
+- auto advice, codex request, diagnostics heavy refresh가 scene panel publish를 지연시키면 안 된다.
+- sidecar UI는 AI가 켜져 있어도 먼저 갱신돼야 한다.
+
+4. `LatestAdvice`, `CollectorStatus.LastDegradedReason`, prompt artifact를 scene truth source로 사용
+- 이것들은 설명/진단 부가 정보일 뿐이다.
+- 현재 장면과 owner/stage 판정의 근거로 쓰지 않는다.
+
+5. 하네스 decision/routing 로직을 Host에 이식
+- Host sidecar는 read-only scene model owner다.
+- allowed-actions, route suppression, same-action-stall, actuator fallback 같은 행위 로직을 가져오지 않는다.
+
+6. shared schema를 두고도 live/replay를 다르게 해석
+- 입력 adapter는 달라도 contract 의미는 같아야 한다.
+- replay에서는 reward release-pending인데 live에서는 같은 상태를 map-overlay로 뭉개는 식의 drift를 허용하지 않는다.
+
+7. provisional gap을 편의상 추정으로 채우기
+- shop price/effect, map route context, event identity/page, combat intent는 부족하면 부족하다고 보여줘야 한다.
+- sidecar 화면을 깔끔하게 보이게 하려고 추정값을 넣지 않는다.
+
+8. direct-play 검증 전에 overlay/UX polish로 새기
+- 지금 단계의 목표는 `예쁘게 보이기`가 아니라 `맞게 읽기`다.
+- layout polish나 overlay 주입은 authority/provenance contract가 안정된 뒤로 미룬다.
+
 ## 필수로 먼저 읽을 문서
 
 1. [AGENTS.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/AGENTS.md)
 2. [PROJECT_STATUS.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/PROJECT_STATUS.md)
 3. [M9_EXECUTION_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_EXECUTION_PLAN_KO.md)
-4. [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/ADVISOR_SCENE_MODEL_READER_KO.md)
+4. [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md)
 5. [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
 6. [ADVISOR_INPUT_OUTPUT_CONTRACT.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_INPUT_OUTPUT_CONTRACT.md)
 7. [ARCHITECTURE.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/ARCHITECTURE.md)
@@ -225,7 +266,7 @@ artifact root는 아래로 고정한다.
    - current progress / next work unit / acceptance gate
 2. [ADVISOR_UI_COVERAGE_MATRIX_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/ADVISOR_UI_COVERAGE_MATRIX_KO.md)
    - live sidecar에서 확인된 missing / degraded / new evidence root
-3. [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/ADVISOR_SCENE_MODEL_READER_KO.md)
+3. [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md)
    - 사람이 실제로 어떻게 읽는지 바뀌면 예시와 설명 갱신
 4. [PROJECT_STATUS.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/PROJECT_STATUS.md)
    - active M9 workstream 포인터가 바뀌면 갱신
@@ -246,6 +287,7 @@ artifact root는 아래로 고정한다.
 직접 플레이 전후로 아래 순서를 따른다.
 
 1. AGENTS 가드레일대로 clean boot
+   - 원큐 실행은 `scripts/Start-CompanionSidecar-DirectPlay.cmd`
 2. WPF sidecar 실행
 3. reward / event / rest-site / shop / map / combat 진입
 4. panel의 `sceneType / sceneStage / canonicalOwner / summary / options`를 실제 화면과 대조
@@ -269,7 +311,7 @@ artifact root는 아래로 고정한다.
 2. docs/current/PROJECT_STATUS.md
 3. docs/current/M9_EXECUTION_PLAN_KO.md
 4. docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md
-5. docs/current/ADVISOR_SCENE_MODEL_READER_KO.md
+5. docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md
 6. docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md
 7. docs/contracts/ADVISOR_INPUT_OUTPUT_CONTRACT.md
 8. docs/ARCHITECTURE.md
@@ -309,7 +351,7 @@ artifact root는 아래로 고정한다.
 1. docs/current/M9_EXECUTION_PLAN_KO.md
 2. docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md
 3. docs/current/ADVISOR_UI_COVERAGE_MATRIX_KO.md
-4. docs/current/ADVISOR_SCENE_MODEL_READER_KO.md
+4. docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md
 5. 필요 시 docs/current/PROJECT_STATUS.md
 
 검증:

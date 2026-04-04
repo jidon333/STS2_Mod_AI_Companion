@@ -2,7 +2,7 @@
 
 > 상태: 현재 사용 중
 > 대상 독자: 한국어 사용자, 개발자, 새로 합류한 작업자
-> 기준 문서: [PROJECT_STATUS.md](./PROJECT_STATUS.md)
+> 기준 문서: [PROJECT_STATUS.md](../PROJECT_STATUS.md)
 
 ## 지금 어디까지 왔나
 
@@ -20,7 +20,7 @@
 
 - `Program.cs`는 이제 거의 shell만 남았습니다.
 - startup/deploy, step loop, observer, decision, artifact, self-test가 분리됐습니다.
-- 관련 문서는 [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)로 현재 구조를 읽고, [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)로 cleanup completion contract를 읽으면 됩니다.
+- 관련 문서는 [GUI_SMOKE_HARNESS_ARCHITECTURE.md](../../reference/harness/GUI_SMOKE_HARNESS_ARCHITECTURE.md)로 현재 구조를 읽고, [GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md](../../contracts/GUI_SMOKE_HARNESS_MODULE_BOUNDARIES.md)로 cleanup completion contract를 읽으면 됩니다.
 
 ### 2. 기본 검증 세트
 

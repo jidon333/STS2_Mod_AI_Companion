@@ -9,7 +9,8 @@
 
 `M9`의 첫 목표는 AI를 곧바로 더 똑똑하게 만드는 것이 아니라, 현재 하네스가 읽는 게임 상태를 `장면별 human-readable scene model`로 승격시키는 것이다.
 
-읽기 쉬운 안내 문서는 [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/ADVISOR_SCENE_MODEL_READER_KO.md) 를 우선한다.
+읽기 쉬운 안내 문서는 [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md) 를 우선한다.
+구조 자체가 헷갈리면 [HARNESS_TO_M9_STRUCTURE_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/HARNESS_TO_M9_STRUCTURE_READER_KO.md) 를 먼저 읽는다.
 
 ## 현재 위치
 
@@ -255,6 +256,51 @@ v1 우선순위는 다음으로 고정한다.
 
 - reward/event 2개 scene 이상에서 scene model 기반 read-only advisor dry run 가능
 - 조언 결과를 scene model과 provenance로 설명할 수 있음
+
+## 절대 하지 말아야 할 것
+
+M9에서는 아래 anti-pattern을 절대 허용하지 않는다.
+
+1. live path 전용 임시 precedence patch 추가
+- 예:
+  - `currentScreen=combat이면 foregroundOwner=map 무시`
+  - `combat marker가 2개 이상이면 map 대신 combat`
+- 이유:
+  - 하네스에서 이미 겪은 authority/handoff 꼬임을 sidecar 경로에서 다시 반복하게 된다.
+  - 장면 truth를 예외 규칙 목록으로 관리하기 시작하면 M9 scene model이 금방 drift한다.
+
+2. 하네스와 다른 장면 authority 규칙을 sidecar에서 따로 만들기
+- replay/harness에서 검증된 `published screen / compatibility screen / canonical owner / release-pending` 규칙을 재사용하거나 shared seam으로 승격해야 한다.
+- `foregroundOwner` 하나만 더 믿거나, `currentChoices`만 더 믿는 식의 live-only 해석기는 만들지 않는다.
+
+3. raw meta를 scene truth로 바로 승격
+- `foregroundOwner`, `foregroundActionLane`, `currentScene`, `mapCurrentActiveScreen` 같은 단일 meta 값을 곧바로 최종 truth로 쓰지 않는다.
+- raw meta는 provenance input이다. 최종 scene truth는 shared provenance/authority resolver를 거쳐야 한다.
+
+4. AI advice / diagnostics가 scene panel publish를 막게 두기
+- M9 초반의 주 목적은 `scene model 관측`이다.
+- auto advice, knowledge build, diagnostics heavy refresh가 sidecar scene update보다 앞서면 안 된다.
+- `scene model publish`는 AI와 분리된 fast path를 유지해야 한다.
+
+5. 하네스 전체 decision/routing 로직을 Host로 가져오기
+- 필요한 것은 `행동 결정`이 아니라 `read-only authority/provenance contract`다.
+- `same-action-stall`, routing, allowed-actions, actuator suppression 같은 하네스 전용 행위 로직을 Host 쪽에 옮기지 않는다.
+
+6. scene model과 advisor input을 다시 섞기
+- SceneModel은 fact model이다.
+- `recommendedChoice`, `decisionBlockers`, `fallback reason`, `allowedActions`, `reasoningMode`를 scene model 필드로 올리지 않는다.
+
+7. observer gap을 추정값으로 메우기
+- 비는 정보는 `missingFacts` / `observerGaps`로 남겨야 한다.
+- route context, event identity, shop price/effect, combat intent 같은 값을 sidecar convenience를 위해 추정하지 않는다.
+
+8. foundation merge를 조급하게 진행
+- live/replay schema stability와 manual direct-play 검증이 충분하지 않으면 foundation contract로 올리지 않는다.
+- M9 v1은 proving schema다. shared source는 허용되지만 foundation canonical merge는 별도 gate를 통과해야 한다.
+
+9. blocker-fix식 임시 heuristic을 scene model에 누적
+- timer suppression, recapture count, stale label special-case, 특정 scene 전용 broad suppress를 M9 scene model에 넣지 않는다.
+- 장면 authority 문제는 provenance/authority resolver에서 좁게 해결한다.
 
 ## 다음 Work Units
 

@@ -6,21 +6,36 @@
 
 ## Start Here
 
-사람과 AI가 기본적으로 먼저 읽어야 하는 최소 문서는 아래 7개입니다.
+기본 reading set은 사람과 AI를 분리한다.
 
-1. [PROJECT_STATUS_READER_KO.md](./current/PROJECT_STATUS_READER_KO.md)
+중요:
+
+- `docs/current/` 루트는 `AI/운영 current docs` 전용이다.
+- 사람이 읽기 쉽게 풀어쓴 reader 문서는 `docs/current/readers/`에만 둔다.
+- 같은 주제의 AI용 current doc과 reader doc을 같은 폴더에 섞어 두지 않는다.
+
+### 사람
+
+1. [PROJECT_STATUS_READER_KO.md](./current/readers/PROJECT_STATUS_READER_KO.md)
    - 사람이 빨리 읽는 현재 상태 설명
-2. [PROJECT_STATUS.md](./current/PROJECT_STATUS.md)
-   - 현재 마일스톤, blocker, authoritative root
-3. [AI_SESSION_HANDOFF_KO.md](./current/AI_SESSION_HANDOFF_KO.md)
-   - active session handoff와 bounded next-step context
-4. [AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md)
-   - 새 세션을 current handoff로 시작시키는 wrapper prompt
-5. [ROADMAP.md](./ROADMAP.md)
-   - 장기 `M1~M10` milestone canonical source
-6. [ARCHITECTURE.md](./ARCHITECTURE.md)
+2. [ROADMAP.md](./ROADMAP.md)
+   - 장기 `M1~M10` milestone 큰 그림
+3. [ARCHITECTURE.md](./ARCHITECTURE.md)
    - shared foundation / advisor mode / harness mode 큰 그림
-7. [BOUNDARIES.md](./BOUNDARIES.md)
+
+### AI / 운영 세션
+
+1. [PROJECT_STATUS.md](./current/PROJECT_STATUS.md)
+   - 현재 마일스톤, blocker, authoritative root
+2. [AI_SESSION_HANDOFF_KO.md](./current/AI_SESSION_HANDOFF_KO.md)
+   - active session handoff와 bounded next-step context
+3. [AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md)
+   - 새 세션을 current handoff로 시작시키는 wrapper prompt
+4. [ROADMAP.md](./ROADMAP.md)
+   - 장기 `M1~M10` milestone canonical source
+5. [ARCHITECTURE.md](./ARCHITECTURE.md)
+   - shared foundation / advisor mode / harness mode 큰 그림
+6. [BOUNDARIES.md](./BOUNDARIES.md)
    - 현재 범위와 제외 범위
 
 하네스 내부 구조를 바로 봐야 하는 경우에는 아래 두 문서를 바로 추가로 읽는다.
@@ -59,7 +74,7 @@
 
 | Role | Document | Purpose | Update when |
 |---|---|---|---|
-| live-current-reader | [current/PROJECT_STATUS_READER_KO.md](./current/PROJECT_STATUS_READER_KO.md) | 사람이 읽는 쉬운 현재 상태 설명 | 현재 상태 설명을 더 쉽게 풀어써야 할 때 |
+| live-current-reader | [current/readers/PROJECT_STATUS_READER_KO.md](./current/readers/PROJECT_STATUS_READER_KO.md) | 사람이 읽는 쉬운 현재 상태 설명 | 현재 상태 설명을 더 쉽게 풀어써야 할 때 |
 | live-current | [current/PROJECT_STATUS.md](./current/PROJECT_STATUS.md) | 현재 milestone, blocker, authoritative roots | 현재 상태나 blocker가 바뀔 때 |
 | live-current | [current/AI_SESSION_HANDOFF_KO.md](./current/AI_SESSION_HANDOFF_KO.md) | active session handoff와 bounded next-step context | current pointer나 next-step context가 바뀔 때 |
 | live-current | [current/AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md) | 새 세션을 current handoff로 시작시키는 wrapper prompt | prompt framing이나 required reading set이 바뀔 때 |
@@ -81,7 +96,12 @@
 
 ### `docs/current/`
 
-지금 상태를 읽는 곳입니다. 매 세션마다 이 경로만 읽으면 current pointer를 따라갈 수 있어야 합니다.
+AI/운영 current docs를 읽는 곳입니다. 매 세션마다 이 경로만 읽으면 current pointer를 따라갈 수 있어야 합니다.
+
+### `docs/current/readers/`
+
+사람이 읽기 쉽게 풀어쓴 현재 상태/구조 reader 문서를 둡니다.
+설명용 문서는 이 경로로만 넣고, AI 세션 handoff/current pointer 문서는 넣지 않습니다.
 
 ### `docs/contracts/`
 
@@ -115,12 +135,17 @@
 
 ## Default Reading Sets
 
-### 상태 파악만 빠르게 할 때
+### 사람이 상태 파악만 빠르게 할 때
 
-1. [current/PROJECT_STATUS_READER_KO.md](./current/PROJECT_STATUS_READER_KO.md)
-2. [current/PROJECT_STATUS.md](./current/PROJECT_STATUS.md)
-3. [current/AI_SESSION_HANDOFF_KO.md](./current/AI_SESSION_HANDOFF_KO.md)
-4. [current/AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md)
+1. [current/readers/PROJECT_STATUS_READER_KO.md](./current/readers/PROJECT_STATUS_READER_KO.md)
+2. [current/readers/HARNESS_TO_M9_STRUCTURE_READER_KO.md](./current/readers/HARNESS_TO_M9_STRUCTURE_READER_KO.md)
+3. [current/readers/ADVISOR_SCENE_MODEL_READER_KO.md](./current/readers/ADVISOR_SCENE_MODEL_READER_KO.md)
+
+### AI / 운영 세션이 current pointer를 잡을 때
+
+1. [current/PROJECT_STATUS.md](./current/PROJECT_STATUS.md)
+2. [current/AI_SESSION_HANDOFF_KO.md](./current/AI_SESSION_HANDOFF_KO.md)
+3. [current/AI_HANDOFF_PROMPT_KO.md](./current/AI_HANDOFF_PROMPT_KO.md)
 
 ### 새로 합류했을 때
 

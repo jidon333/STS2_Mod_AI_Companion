@@ -1,7 +1,7 @@
 # Advisor Scene Model 쉬운 설명
 
 > 상태: 현재 사용 중
-> 대상 독자: 한국어 사용자, 구현 세션, 리뷰 세션
+> 대상 독자: 한국어 사용자, 사람 리뷰어
 > 기준 문서:
 > - [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
 > - [ADVISOR_UI_COVERAGE_MATRIX_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/ADVISOR_UI_COVERAGE_MATRIX_KO.md)
@@ -114,6 +114,8 @@ advisor는 장면 종류만이 아니라, 그 장면이 지금 어떤 하위 단
 - 즉 `allowedActions`, `fallback reason`, `targetLabel` 같은 하네스 내부 용어는 의도적으로 제외한다
 
 WPF에서는 이 값이 `요약` 패널로 그대로 보인다.
+
+직접 플레이 검증을 바로 시작하려면 `scripts/Start-CompanionSidecar-DirectPlay.cmd`를 실행하면 된다. 이 스크립트는 stale 게임 프로세스를 정리한 뒤 WPF sidecar를 띄우고 Steam clean boot를 시작한다.
 
 ### 5. options
 
