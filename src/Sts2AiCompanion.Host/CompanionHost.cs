@@ -494,7 +494,13 @@ public sealed partial class CompanionHost : IAsyncDisposable
         var provenance = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(snapshot));
         return new CompanionRunState(snapshot, session, summaryText, recentEvents, isStale)
         {
-            NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, recentEvents),
+            NormalizedState = CompanionStateMapper.FromLiveExport(
+                snapshot,
+                session,
+                recentEvents,
+                provenance.ResolvedCurrentScreen,
+                provenance.ResolvedVisibleScreen,
+                provenance.ProvenanceSource),
             ScreenProvenance = provenance,
         };
     }

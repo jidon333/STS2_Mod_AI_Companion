@@ -14,9 +14,21 @@ public static class CompanionSceneNormalizer
     public static CompanionNormalizedScene Normalize(
         LiveExportSnapshot snapshot)
     {
-        var resolvedProvenance = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(snapshot));
-        var rawScene = !string.IsNullOrWhiteSpace(resolvedProvenance.ResolvedCurrentScreen)
-            ? resolvedProvenance.ResolvedCurrentScreen.Trim()
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        return Normalize(
+            snapshot,
+            ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(snapshot)).ResolvedCurrentScreen);
+    }
+
+    public static CompanionNormalizedScene Normalize(
+        LiveExportSnapshot snapshot,
+        string? resolvedCurrentScreen)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        var rawScene = !string.IsNullOrWhiteSpace(resolvedCurrentScreen)
+            ? resolvedCurrentScreen.Trim()
             : !string.IsNullOrWhiteSpace(snapshot.CurrentScreen)
                 ? snapshot.CurrentScreen.Trim()
                 : "unknown";

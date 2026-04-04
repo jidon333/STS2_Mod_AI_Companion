@@ -11,13 +11,34 @@ public static class CompanionStateMapper
         LiveExportSession? session,
         IReadOnlyList<LiveExportEventEnvelope> recentEvents)
     {
-        var sanitizedChoices = CompanionSceneNormalizer.SanitizeChoices(snapshot.CurrentChoices);
+        ArgumentNullException.ThrowIfNull(snapshot);
+
         var resolvedProvenance = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(snapshot));
-        var normalizedScene = CompanionSceneNormalizer.Normalize(snapshot);
-        var sceneType = NormalizeSceneToken(resolvedProvenance.ResolvedCurrentScreen)
+        return FromLiveExport(
+            snapshot,
+            session,
+            recentEvents,
+            resolvedProvenance.ResolvedCurrentScreen,
+            resolvedProvenance.ResolvedVisibleScreen,
+            resolvedProvenance.ProvenanceSource);
+    }
+
+    public static CompanionState FromLiveExport(
+        LiveExportSnapshot snapshot,
+        LiveExportSession? session,
+        IReadOnlyList<LiveExportEventEnvelope> recentEvents,
+        string? resolvedCurrentScreen,
+        string? resolvedVisibleScreen,
+        string? provenanceSource)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        var sanitizedChoices = CompanionSceneNormalizer.SanitizeChoices(snapshot.CurrentChoices);
+        var normalizedScene = CompanionSceneNormalizer.Normalize(snapshot, resolvedCurrentScreen);
+        var sceneType = NormalizeSceneToken(resolvedCurrentScreen)
                         ?? normalizedScene.SceneType;
         var flowScene = sceneType;
-        var visibleScene = NormalizeSceneToken(resolvedProvenance.ResolvedVisibleScreen)
+        var visibleScene = NormalizeSceneToken(resolvedVisibleScreen)
                            ?? flowScene;
         var confidence = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
         {
@@ -61,7 +82,7 @@ public static class CompanionStateMapper
                 visibleScene,
                 flowScene,
                 confidence["scene"],
-                $"provenance:{resolvedProvenance.ProvenanceSource}; semantic:{normalizedScene.Source}",
+                $"provenance:{provenanceSource ?? "none"}; semantic:{normalizedScene.Source}",
                 TryGetMeta(snapshot.Meta, "screen-episode")),
             new CompanionPlayerState(
                 snapshot.Player.CurrentHp,

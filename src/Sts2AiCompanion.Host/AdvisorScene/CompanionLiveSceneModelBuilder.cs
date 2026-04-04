@@ -426,21 +426,14 @@ internal static class CompanionLiveSceneModelBuilder
             .GroupBy(static option => $"{option.Kind}|{option.Label}|{option.Value}", StringComparer.OrdinalIgnoreCase)
             .Select(static group => group.First())
             .ToList();
-        var mapReleaseAuthority = TryReadBoolMeta(snapshot.Meta, "mapReleaseAuthority") == true;
         var mapSurfacePending = TryReadBoolMeta(snapshot.Meta, "mapSurfacePending") == true;
         var currentNodeArrowVisible = TryReadBoolMeta(snapshot.Meta, "mapCurrentNodeArrowVisible") == true;
         var reachableNodeCount = options.Count > 0 ? options.Count : (TryReadIntMeta(snapshot.Meta, "mapPointCount") ?? 0);
         var reachableNodePresent = reachableNodeCount > 0;
-        var resolvedCurrentScreen = NormalizeSceneToken(runState.ScreenProvenance.ResolvedCurrentScreen);
-        var resolvedVisibleScreen = NormalizeSceneToken(runState.ScreenProvenance.ResolvedVisibleScreen);
-        var overlayVisible = reachableNodePresent
-                             || currentNodeArrowVisible
-                             || ((string.Equals(resolvedCurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
-                                  || string.Equals(resolvedVisibleScreen, "map", StringComparison.OrdinalIgnoreCase))
-                                 && !mapSurfacePending);
+        var overlayVisible = reachableNodePresent || currentNodeArrowVisible;
         var stage = overlayVisible
             ? "map-overlay"
-            : (mapReleaseAuthority && mapSurfacePending ? "map-surface-pending" : "map-overlay");
+            : "map-surface-pending";
         var currentNode = runState.NormalizedState.Map.CurrentNode ?? TryGetMeta(snapshot.Meta, "map-node");
         var details = new AdvisorSceneMapDetails(
             overlayVisible,
@@ -455,6 +448,14 @@ internal static class CompanionLiveSceneModelBuilder
         {
             missingFacts.Add("map-current-node-identity-missing");
             observerGaps.Add("live-export.snapshot.meta.map-node missing");
+        }
+
+        if (!overlayVisible)
+        {
+            observerGaps.Add(
+                mapSurfacePending
+                    ? "map surface remains pending because visible reachable-node/current-arrow evidence is absent"
+                    : "map overlay stage kept pending because reachable-node/current-arrow evidence is absent");
         }
 
         sourceRefs.Add("shared.scene-provenance.provenanceSource");

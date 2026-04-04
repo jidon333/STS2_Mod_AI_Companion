@@ -29,6 +29,7 @@ internal static partial class Program
         RunCombatContractBands();
         RunEventRewardSubstateSelfTests();
         RunManualCleanBootSelfTests();
+        RunObserverProvenanceParitySelfTests();
         RunStartupRuntimeEvidenceSelfTests();
         RunStallSentinelSelfTests();
         RunLongRunSupervisorSelfTests();

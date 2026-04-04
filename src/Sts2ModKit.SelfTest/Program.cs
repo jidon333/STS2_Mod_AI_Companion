@@ -5026,6 +5026,16 @@ static IReadOnlyList<HostSceneModelScenario> CreateHostSceneModelScenarios()
             "map",
             0,
             new[] { "map-route-context-missing", "map-current-node-identity-missing" }),
+        new HostSceneModelScenario(
+            "map-provenance-only-stays-pending",
+            "scene-model-map-provenance-only-run",
+            "map-opened",
+            CreateMapProvenanceOnlySceneModelSnapshot("scene-model-map-provenance-only-run"),
+            "map",
+            "map-surface-pending",
+            "map",
+            0,
+            new[] { "map-route-context-missing", "map-current-node-identity-missing" }),
     };
 }
 
@@ -5181,6 +5191,26 @@ static LiveExportSnapshot CreateMapSurfacePendingSceneModelSnapshot(string runId
             ["mapReleaseAuthority"] = "true",
             ["mapSurfacePending"] = "true",
         },
+    };
+}
+
+static LiveExportSnapshot CreateMapProvenanceOnlySceneModelSnapshot(string runId)
+{
+    return CreateHostSnapshot(runId, "map") with
+    {
+        CurrentScreen = "map",
+        PublishedCurrentScreen = "map",
+        PublishedVisibleScreen = "map",
+        PublishedSceneAuthority = "polling",
+        PublishedSceneStability = "stable",
+        Encounter = new LiveExportEncounterSummary("Map", "Transition", false, null),
+        CurrentChoices = Array.Empty<LiveExportChoiceSummary>(),
+        Meta = MergeMeta(
+            CreateHostSnapshot(runId, "map").Meta,
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["foregroundOwner"] = "map",
+            }),
     };
 }
 
