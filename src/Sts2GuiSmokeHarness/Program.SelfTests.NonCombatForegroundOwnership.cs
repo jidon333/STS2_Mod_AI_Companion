@@ -1335,6 +1335,57 @@ internal static partial class Program
             Assert(string.Equals(restSiteProceedWithLingeringChoicesDecision.TargetLabel, "visible proceed", StringComparison.OrdinalIgnoreCase),
                 $"Proceed-enabled rest-site truth should click proceed instead of reopening rest choices. actual={restSiteProceedWithLingeringChoicesDecision.TargetLabel ?? restSiteProceedWithLingeringChoicesDecision.Reason ?? restSiteProceedWithLingeringChoicesDecision.Status}");
 
+            var restSiteHealReleasePendingSummary = restSiteChoiceReadySummary with
+            {
+                PlayerCurrentHp = 50,
+                PlayerMaxHp = 80,
+                CurrentChoices = new[] { "휴식", "재련" },
+                Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["restSiteSelectionLastSignal"] = "after-select-success",
+                    ["restSiteSelectionLastOptionId"] = "HEAL",
+                    ["restSiteSelectionLastSuccess"] = "true",
+                    ["restSiteSelectionCurrentStatus"] = "proceed-visible",
+                    ["restSiteSelectionOutcome"] = "success",
+                    ["restSiteSelectionOutcomeEvidence"] = "runtime-poll:heal-applied",
+                    ["restSiteProceedVisible"] = "true",
+                    ["restSiteProceedEnabled"] = "false",
+                    ["restSiteProceedBounds"] = "1576.3,761.3,282.45,113.4",
+                    ["restSiteButtonsVisible"] = "true",
+                    ["restSiteButtonsClickReady"] = "true",
+                    ["restSiteClickReadyOptionIds"] = "HEAL,SMITH",
+                    ["restSiteViewKind"] = "proceed",
+                },
+            };
+            var restSiteHealReleasePendingObserver = new ObserverState(restSiteHealReleasePendingSummary, null, null, null);
+            var restSiteHealReleasePendingEvidence = RestSiteObserverSignals.BuildPostClickEvidence(restSiteHealReleasePendingSummary, "rest site: rest");
+            Assert(string.Equals(restSiteHealReleasePendingEvidence.Classification, "rest-site-release-pending", StringComparison.OrdinalIgnoreCase),
+                $"Accepted heal with proceed visible but disabled should classify as release-pending instead of noop. actual={restSiteHealReleasePendingEvidence.Classification}");
+            Assert(!GuiSmokeNonCombatContractSupport.HasExplicitRestSiteChoiceAuthority(restSiteHealReleasePendingObserver, restSiteMetadataScreenshotPath)
+                   && !GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(restSiteHealReleasePendingSummary),
+                "Accepted heal release-pending should suppress explicit rest choices without promoting disabled proceed as actionable.");
+            Assert(AutoDecisionProvider.BuildRestSiteSceneState(restSiteHealReleasePendingObserver) is
+                   {
+                       ExplicitChoiceVisible: false,
+                       ProceedVisible: false,
+                       SelectionSettling: false,
+                       SelectionAcceptedRecently: true,
+                       ReleaseStage: NonCombatReleaseStage.ReleasePending,
+                   },
+                "Accepted heal release-pending should canonicalize to rest-site release-pending instead of explicit-choice or proceed-active.");
+            var restSiteHealReleasePendingActions = GetAllowedActions(GuiSmokePhase.ChooseFirstNode, restSiteHealReleasePendingObserver);
+            Assert(restSiteHealReleasePendingActions.SequenceEqual(new[] { "wait" }, StringComparer.OrdinalIgnoreCase),
+                $"Accepted heal release-pending should wait for proceed enablement instead of reopening rest choices. actual=[{string.Join(", ", restSiteHealReleasePendingActions)}]");
+            var restSiteHealReleasePendingDecision = AutoDecisionProvider.Decide(restSiteMetadataRequest with
+            {
+                Observer = restSiteHealReleasePendingSummary,
+                AllowedActions = restSiteHealReleasePendingActions,
+            });
+            Assert(string.Equals(restSiteHealReleasePendingDecision.Status, "wait", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(restSiteHealReleasePendingDecision.Reason, "waiting for rest-site release to publish proceed or true map foreground", StringComparison.OrdinalIgnoreCase)
+                   && !string.Equals(restSiteHealReleasePendingDecision.DecisionRisk, "rest-site-post-click-noop", StringComparison.OrdinalIgnoreCase),
+                $"Accepted heal release-pending should wait for proceed enablement instead of escalating to noop. actual={restSiteHealReleasePendingDecision.Status}/{restSiteHealReleasePendingDecision.DecisionRisk}/{restSiteHealReleasePendingDecision.Reason}");
+
             var legacyRestSiteProceedWithLingeringChoicesSummary = restSiteProceedWithLingeringChoicesSummary with
             {
                 Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)

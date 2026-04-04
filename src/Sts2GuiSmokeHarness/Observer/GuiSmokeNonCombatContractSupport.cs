@@ -34,6 +34,7 @@ static class GuiSmokeNonCombatContractSupport
         if (MapAuthorityOutranksStaleRestSiteResidue(observer)
             || !HasRestSiteAuthority(observer)
             || !RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
+            || RestSiteObserverSignals.IsRestSiteProceedReleasePending(observer)
             || LooksLikeRestSiteProceedState(observer)
             || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
             || RestSiteObserverSignals.IsRestSiteSelectionSettlingState(observer))
@@ -150,6 +151,11 @@ static class GuiSmokeNonCombatContractSupport
         if (RestSiteObserverSignals.HasProceedEnabled(observer))
         {
             return hasVisibleProceedAffordance;
+        }
+
+        if (RestSiteObserverSignals.IsRestSiteProceedReleasePending(observer))
+        {
+            return false;
         }
 
         var hasProceedMeta = observer.Meta.ContainsKey("restSiteProceedVisible")
@@ -342,8 +348,17 @@ static class GuiSmokeNonCombatContractSupport
         if (!onRestSiteScreen
             || HasMapCurrentActiveScreen(observer)
             || MatchesControlFlowScreen(observer, "map")
-            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer)
-            || RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
+            || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer))
+        {
+            return false;
+        }
+
+        if (RestSiteObserverSignals.IsRestSiteProceedReleasePending(observer))
+        {
+            return true;
+        }
+
+        if (RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer)
             || HasVisibleRestSiteProceedAffordance(observer))
         {
             return false;

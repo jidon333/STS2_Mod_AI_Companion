@@ -679,6 +679,7 @@ sealed partial class AutoDecisionProvider
             "rest-site-selection-failed" => $"Rest-site explicit choice '{targetLabel}' reported an after-select failure in observer metadata. Stop repeating the click and surface the failed selection directly.",
             "rest-site-grid-not-visible-after-selection" => $"Rest-site explicit choice '{targetLabel}' was accepted for selection, but no smith grid or confirm state became observer-visible after grace recapture.",
             "rest-site-grid-observer-miss" => $"Rest-site smith upgrade screen became runtime-visible, but the observer did not export card or confirm hitboxes. Stop repeating the smith click and surface the observer miss.",
+            "rest-site-release-pending" => $"Rest-site explicit choice '{targetLabel}' was accepted and the room is publishing a proceed-visible release pending state. Wait for proceed enablement instead of re-clicking the old choice.",
             _ => $"Rest-site explicit choice '{targetLabel}' remained on the same fingerprint after grace recapture. Stop repeating the click and escalate to rest-site-post-click-noop.",
         };
         return new GuiSmokeStepDecision(

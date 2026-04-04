@@ -630,16 +630,19 @@ sealed partial class AutoDecisionProvider
                                       || string.Equals(observer.ChoiceExtractorPath, "rest", StringComparison.OrdinalIgnoreCase)
                                       || RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary);
         var smithUpgradeSurfacePending = RestSiteObserverSignals.IsRestSiteSmithUpgradeSurfacePending(observer.Summary);
+        var proceedReleasePending = RestSiteObserverSignals.IsRestSiteProceedReleasePending(observer.Summary);
         var smithUpgradeActive = RestSiteObserverSignals.IsRestSiteSmithUpgradeState(observer.Summary)
                                  && !smithUpgradeSurfacePending;
         var hasAuthoritativeChoiceMetadata = RestSiteChoiceSupport.HasAuthoritativeMetadata(observer.Summary);
-        var explicitChoiceVisible = hasAuthoritativeChoiceMetadata
-                                    || (explicitScreenAuthority
-                                        && RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer.Summary));
+        var explicitChoiceVisible = !proceedReleasePending
+                                    && (hasAuthoritativeChoiceMetadata
+                                        || (explicitScreenAuthority
+                                            && RestSiteChoiceSupport.HasExplicitRestSiteChoiceAffordance(observer.Summary)));
         var explicitChoiceReady = explicitChoiceVisible
                                   && RestSiteChoiceSupport.TryGetSelectedObservedChoice(observer.Summary) is { } selectedChoice
                                   && RestSiteObserverSignals.IsRestSiteChoiceClickReady(observer.Summary, selectedChoice.OptionId);
         var proceedVisible = explicitScreenAuthority
+                             && !proceedReleasePending
                              && !smithUpgradeSurfacePending
                              && GuiSmokeNonCombatContractSupport.LooksLikeRestSiteProceedState(observer.Summary);
         var selectionSettling = explicitScreenAuthority
@@ -652,7 +655,8 @@ sealed partial class AutoDecisionProvider
                                         && RestSiteObserverSignals.HasSelectionAcceptedRecently(observer.Summary);
         var releasePending = explicitScreenAuthority
                              && selectionAcceptedRecently
-                             && !explicitChoiceVisible
+                             && (proceedReleasePending
+                                 || !explicitChoiceVisible)
                              && !smithUpgradeActive
                              && !proceedVisible
                              && !selectionSettling;

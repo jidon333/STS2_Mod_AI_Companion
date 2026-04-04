@@ -179,6 +179,39 @@ static class RestSiteObserverSignals
                || IsRestSiteSelectionSettlingState(observer);
     }
 
+    public static bool IsRestSiteProceedReleasePending(ObserverSummary observer)
+    {
+        if (!HasFreshSelectionSignalForCurrentRoom(observer)
+            || IsRestSiteSmithUpgradeState(observer)
+            || HasProceedEnabled(observer)
+            || !HasProceedVisible(observer))
+        {
+            return false;
+        }
+
+        var currentStatus = TryGetMetaValue(observer, "restSiteSelectionCurrentStatus");
+        if (!string.Equals(currentStatus, "proceed-visible", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var currentOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionCurrentOptionId"));
+        var observedOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionObservedOptionId"));
+        var lastOptionId = RestSiteChoiceSupport.NormalizeOptionId(TryGetMetaValue(observer, "restSiteSelectionLastOptionId"));
+        var activeOptionId = currentOptionId ?? observedOptionId ?? lastOptionId;
+        if (string.Equals(activeOptionId, "SMITH", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(activeOptionId))
+        {
+            return false;
+        }
+
+        var lastSignal = TryGetMetaValue(observer, "restSiteSelectionLastSignal");
+        var outcome = TryGetMetaValue(observer, "restSiteSelectionOutcome");
+        return string.Equals(outcome, "success", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(lastSignal, "after-select-success", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(TryGetMetaValue(observer, "restSiteSelectionLastSuccess"), "true", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool HasFreshSelectionSignalForCurrentRoom(ObserverSummary observer)
     {
         if (!TryGetMetaTimestamp(observer, "restSiteSelectionLastSignalAt", out var lastSignalAt))
@@ -257,7 +290,9 @@ static class RestSiteObserverSignals
                                         && !upgradeActionSurfacePresent
                                         && !smithUpgradeSurfacePending;
 
-        var classification = "rest-site-post-click-noop";
+        var classification = IsRestSiteProceedReleasePending(observer)
+            ? "rest-site-release-pending"
+            : "rest-site-post-click-noop";
         if (string.Equals(normalizedTarget, "SMITH", StringComparison.OrdinalIgnoreCase))
         {
             if (string.Equals(outcome, "failure", StringComparison.OrdinalIgnoreCase)
@@ -536,6 +571,27 @@ static class RestSiteObserverSignals
                              && payload.TryGetProperty("choices", out var choicesElement)
                              && choicesElement.ValueKind == JsonValueKind.Array
                              && choicesElement.GetArrayLength() > 0;
+            var currentStatus = payload.ValueKind == JsonValueKind.Object
+                                && payload.TryGetProperty("restSiteSelectionCurrentStatus", out var currentStatusElement)
+                                && currentStatusElement.ValueKind == JsonValueKind.String
+                ? currentStatusElement.GetString()
+                : null;
+            var viewKind = payload.ValueKind == JsonValueKind.Object
+                           && payload.TryGetProperty("restSiteViewKind", out var viewKindElement)
+                           && viewKindElement.ValueKind == JsonValueKind.String
+                ? viewKindElement.GetString()
+                : null;
+            var proceedVisible = payload.ValueKind == JsonValueKind.Object
+                                 && payload.TryGetProperty("restSiteProceedVisible", out var proceedVisibleElement)
+                                 && proceedVisibleElement.ValueKind == JsonValueKind.True;
+            var proceedEnabled = payload.ValueKind == JsonValueKind.Object
+                                 && payload.TryGetProperty("restSiteProceedEnabled", out var proceedEnabledElement)
+                                 && proceedEnabledElement.ValueKind == JsonValueKind.True;
+            var postSelectionProceedRepublish =
+                string.Equals(currentStatus, "proceed-visible", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(viewKind, "proceed", StringComparison.OrdinalIgnoreCase)
+                || proceedVisible
+                || proceedEnabled;
 
             var looksLikeRestSiteRoomEntry = string.Equals(method, "Create", StringComparison.OrdinalIgnoreCase)
                                              || string.Equals(method, "_Ready", StringComparison.OrdinalIgnoreCase)
@@ -544,6 +600,7 @@ static class RestSiteObserverSignals
                                                  && declaringType.Contains("NRestSiteRoom", StringComparison.OrdinalIgnoreCase))
                                              || hasChoices;
             return looksLikeRestSiteRoomEntry
+                   && !postSelectionProceedRepublish
                    && TryParseEventTailTimestamp(eventTail, out timestamp);
         }
         catch (JsonException)
