@@ -44,7 +44,7 @@
     "codexModel": "gpt-5.4",
     "codexReasoningEffort": "medium",
     "optionalGodotExe": "C:\\\\Tools\\\\Godot_v4.5.1-stable_win64\\\\Godot_v4.5.1-stable_win64_console.exe",
-    "autoAdviceEnabled": true,
+    "autoAdviceEnabled": false,
     "livePollIntervalMs": 750,
     "stateDebounceMs": 300,
     "minAdviceIntervalMs": 2000,

@@ -309,7 +309,7 @@ public sealed record AssistantOptions
 
     public string? OptionalGodotExe { get; init; }
 
-    public bool AutoAdviceEnabled { get; init; } = true;
+    public bool AutoAdviceEnabled { get; init; } = false;
 
     public int LivePollIntervalMs { get; init; } = 750;
 
