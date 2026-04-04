@@ -170,7 +170,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
             if (_autoAdviceEnabled)
             {
                 var autoTrigger = DetermineAutomaticTrigger(events);
-                if (autoTrigger is not null) await EnqueueAutomaticAdviceAsync(runState, autoTrigger, cancellationToken).ConfigureAwait(false);
+                if (autoTrigger is not null) StartAutomaticAdvice(runState, autoTrigger, cancellationToken);
             }
             _latestCollectorStatus = _diagnosticsService.UpdateArtifacts(runState, _latestKnowledgeSlice, _latestAdvice, _sessionState);
             PublishSnapshot(CreateSnapshot("running", "Monitoring live export updates."));
@@ -196,6 +196,37 @@ public sealed partial class CompanionHost : IAsyncDisposable
         if (!acquired) { QueuePendingAutomaticAdvice(runState, trigger); return; }
         try { await ProcessAdviceChainWhileLockedAsync(runState, trigger, null, null, cancellationToken).ConfigureAwait(false); }
         finally { _adviceLock.Release(); }
+    }
+
+    private void StartAutomaticAdvice(CompanionRunState runState, AdviceTrigger trigger, CancellationToken cancellationToken)
+    {
+        if (!_adviceLock.Wait(0))
+        {
+            QueuePendingAutomaticAdvice(runState, trigger);
+            return;
+        }
+
+        _ = RunAutomaticAdviceAsync(runState, trigger, cancellationToken);
+    }
+
+    private async Task RunAutomaticAdviceAsync(CompanionRunState runState, AdviceTrigger trigger, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await ProcessAdviceChainWhileLockedAsync(runState, trigger, null, null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Best effort only on shutdown/cancellation.
+        }
+        catch (Exception)
+        {
+            // GenerateAdviceCoreAsync already published failure state and trace.
+        }
+        finally
+        {
+            _adviceLock.Release();
+        }
     }
 
     private async Task ExecuteRequestedAdviceAsync(CompanionRunState runState, AdviceTrigger trigger, AdviceInputPack? inputPackOverride, string? retrySourcePromptPack, CancellationToken cancellationToken)

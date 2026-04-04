@@ -4,10 +4,14 @@ using Sts2AiCompanion.Foundation.Reasoning;
 internal sealed class FakeCodexSessionClient : ICodexSessionClient
 {
     private readonly FakeCodexRewardResponseMode rewardResponseMode;
+    private readonly TimeSpan responseDelay;
 
-    public FakeCodexSessionClient(FakeCodexRewardResponseMode rewardResponseMode = FakeCodexRewardResponseMode.ModelRationaleOutput)
+    public FakeCodexSessionClient(
+        FakeCodexRewardResponseMode rewardResponseMode = FakeCodexRewardResponseMode.ModelRationaleOutput,
+        TimeSpan? responseDelay = null)
     {
         this.rewardResponseMode = rewardResponseMode;
+        this.responseDelay = responseDelay ?? TimeSpan.Zero;
     }
 
     public int RequestCount { get; private set; }
@@ -25,12 +29,25 @@ internal sealed class FakeCodexSessionClient : ICodexSessionClient
         string? reasoningEffortOverride,
         CancellationToken cancellationToken)
     {
+        return ExecuteAsyncCore(inputPack, sessionId, cancellationToken);
+    }
+
+    private async Task<(AdviceResponse Response, string? SessionId)> ExecuteAsyncCore(
+        AdviceInputPack inputPack,
+        string? sessionId,
+        CancellationToken cancellationToken)
+    {
         RequestCount += 1;
+        if (responseDelay > TimeSpan.Zero)
+        {
+            await Task.Delay(responseDelay, cancellationToken).ConfigureAwait(false);
+        }
+
         var resolvedSessionId = sessionId ?? "fake-session-001";
         var rawResponse = BuildRawResponseForTesting(inputPack, resolvedSessionId);
-        return Task.FromResult<(AdviceResponse Response, string? SessionId)>((
+        return (
             ToHostResponse(RewardAdviceResponseFinalizer.Apply(ToFoundationInputPack(inputPack), ToFoundationResponse(rawResponse))),
-            resolvedSessionId));
+            resolvedSessionId);
     }
 
     private AdviceResponse BuildResponse(AdviceInputPack inputPack, string resolvedSessionId)

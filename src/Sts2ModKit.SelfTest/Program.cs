@@ -115,6 +115,7 @@ Run("reward model rationale survives without heavy backfill", TestRewardModelRat
 Run("reward fixtures include a non-first winning choice", TestRewardNonFirstChoiceScenario, failures);
 Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
 Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
+Run("companion host keeps scene model polling responsive while auto advice runs", TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice, failures);
 Run("companion host publishes live advisor scene model artifacts", TestCompanionHostLiveSceneModelArtifacts, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
 
@@ -4726,6 +4727,80 @@ static void TestCompanionHostAdviceFlow()
     ExecuteCompanionHostAdviceFlowTest(collectorModeEnabled: true);
 }
 
+static void TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var baseConfiguration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        var configuration = baseConfiguration with
+        {
+            Assistant = baseConfiguration.Assistant with
+            {
+                AutoAdviceEnabled = true,
+                LivePollIntervalMs = 250,
+                MinAdviceIntervalMs = 0,
+            },
+        };
+        SeedKnowledgeCatalog(root);
+
+        var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+        Directory.CreateDirectory(layout.LiveRoot);
+        const string runId = "scene-poll-during-advice-run";
+
+        var rewardSnapshot = CreateRewardSceneModelSnapshot(runId);
+        var eventSnapshot = CreateEventSceneModelSnapshot(runId);
+        var session = new LiveExportSession("session-scene-poll", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, layout.LiveRoot, "choice-list-presented", rewardSnapshot.CurrentScreen);
+        var events = new[]
+        {
+            new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, runId, "choice-list-presented", rewardSnapshot.CurrentScreen, rewardSnapshot.Act, rewardSnapshot.Floor, new Dictionary<string, object?>()),
+        };
+
+        WriteJson(layout.SnapshotPath, rewardSnapshot);
+        WriteJson(layout.SessionPath, session);
+        File.WriteAllText(layout.SummaryPath, "reward summary", Encoding.UTF8);
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+        File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+        File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+        Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+        var fakeClient = new FakeCodexSessionClient(responseDelay: TimeSpan.FromSeconds(4));
+        var host = new CompanionHost(configuration, root, fakeClient);
+        try
+        {
+            host.StartAsync().GetAwaiter().GetResult();
+
+            WaitForCondition(
+                () => fakeClient.RequestCount == 1 && host.CurrentSnapshot.Status.AnalysisInProgress,
+                TimeSpan.FromSeconds(2),
+                "Expected auto advice to start from the initial reward snapshot.");
+
+            Assert(host.CurrentSnapshot.LatestSceneModel is { SceneType: "reward" }, "Expected initial scene model to publish reward before the delayed advice completes.");
+
+            WriteJson(layout.SnapshotPath, eventSnapshot);
+            File.WriteAllText(layout.SummaryPath, "event summary", Encoding.UTF8);
+
+            WaitForCondition(
+                () => host.CurrentSnapshot.LatestSceneModel is { SceneType: "event", SceneStage: "ancient-option" },
+                TimeSpan.FromSeconds(2),
+                "Expected polling to publish the newer event scene model while auto advice was still running.");
+
+            Assert(host.CurrentSnapshot.Status.AnalysisInProgress, "Expected delayed auto advice to still be running when the newer scene model published.");
+        }
+        finally
+        {
+            host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestCodexCliTraceParser()
 {
     const string trace = """
@@ -5939,6 +6014,22 @@ static void Assert(bool condition, string message)
     {
         throw new InvalidOperationException(message);
     }
+}
+
+static void WaitForCondition(Func<bool> predicate, TimeSpan timeout, string message)
+{
+    var deadline = DateTime.UtcNow + timeout;
+    while (DateTime.UtcNow < deadline)
+    {
+        if (predicate())
+        {
+            return;
+        }
+
+        Thread.Sleep(25);
+    }
+
+    throw new InvalidOperationException(message);
 }
 
 static string? ReadAttribute(StaticKnowledgeEntry entry, string key)
