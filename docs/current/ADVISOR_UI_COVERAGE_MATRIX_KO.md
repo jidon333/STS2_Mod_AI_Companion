@@ -22,7 +22,7 @@
 
 | scene | decision question | observable now | missing | source seam | evidence root | needs observer/exporter? |
 | --- | --- | --- | --- | --- | --- | --- |
-| combat | 지금 턴에서 어떤 플레이 맥락인가 | HP, energy, hand summary, targetability, lifecycle stage | enemy intent summary, incoming damage summary | `observer.state.player/meta` + `CombatReleaseState` + `CombatRuntimeState` | `live28` step `0017` | not for v1 summary, yes for higher-quality advice |
+| combat | 지금 턴에서 어떤 플레이 맥락인가 | HP, energy, hand summary, targetability, lifecycle stage, display 가능한 pile/hand detail | enemy intent summary, incoming damage summary | `observer.state.player/meta` + `CombatReleaseState` + `CombatRuntimeState` | `live28` step `0017` | not for v1 summary, yes for higher-quality advice |
 | reward | 지금 어떤 보상이 남아 있는가 | normalized reward entries, reward child state, proceed visibility | durable remaining-vs-claimed normalization | `observer.state.currentChoices` + `RewardSceneState` | `live28` step `0052` | not immediately |
 | event | 지금 이벤트가 어느 단계이며 선택지는 무엇인가 | option labels/descriptions, ancient phase, proceed visibility, reward substate | canonical event identity/title/page id | `observer.state.currentChoices/meta` + `EventSceneState` | `live29` step `0027` | maybe, if identity becomes decision blocker |
 | rest-site | 지금 휴식 vs 재련 판단에 필요한 상태는 무엇인가 | HP, explicit choice visibility, smith/proceed stage | smith candidate delta summary | `observer.state.player/currentChoices` + `RestSiteSceneState` | `live28` step `0101` | maybe, only if smith detail is needed |
@@ -83,6 +83,13 @@
   - shop: `shop-item-price-missing`, `shop-item-effect-summary-missing`
   - map: `map-route-context-missing`, `map-current-node-identity-missing`
   - event: non-ancient canonical identity는 여전히 partial이다
+
+## WPF Display Notes
+
+- live sidecar는 scene-aware display formatter를 써서 `sceneType / sceneStage / canonicalOwner`와 `현재 장면 맥락`을 분리해 보여 준다.
+- `SceneSummaryText`는 raw summary를 그대로 복사하지 않고, display-only knowledge/localization을 거친 결과를 보여 준다.
+- `보이는 선택지`는 기본 플레이에 직접 필요하지 않은 utility/diagnostic choice를 숨긴다.
+- advanced 영역은 기본 접힘으로 두고, `confidence / source refs`, `최근 이벤트`, `관련 지식`, `수집 런 진단`을 그 안에 둔다.
 
 ## Follow-up Work Item
 

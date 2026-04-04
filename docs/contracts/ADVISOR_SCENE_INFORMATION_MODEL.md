@@ -79,6 +79,7 @@
   - `screenshotPath`
   - `combatCardKnowledge`
 - `request.Observer.goal/allowedActions/failureModeHint/reasoningMode` 같은 prompt/actuator 필드는 scene truth 계산에 쓰지 않는다.
+- WPF sidecar는 같은 scene model을 scene-aware display formatter로 다시 읽을 수 있지만, display-only knowledge/localization은 label/description 렌더링에만 쓰고 truth source로 쓰지 않는다.
 
 ## Common SceneModel Envelope
 
@@ -105,8 +106,10 @@
 구현 위치:
 
 - 공통 contract + summary: `src/Shared/AdvisorSceneModel/`
+- display-only sanitizer / knowledge resolver: `src/Shared/AdvisorSceneDisplay/`
 - replay builder: `src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneModelBuilder.cs`
 - live builder: `src/Sts2AiCompanion.Host/AdvisorScene/`
+- WPF scene-aware formatter: `src/Sts2AiCompanion.Wpf/Display/`
 
 nullable rule:
 
@@ -192,3 +195,4 @@ nullable rule:
 - summary는 `click`, `wait`, `fallback`, `candidate`, `targetLabel` 같은 actuator vocabulary를 포함하지 않는다.
 - hard gap은 추정하지 않고 `missingFacts`로 남긴다.
 - reward option list는 raw observer dump를 그대로 넘기지 않고 scene-level normalization을 거친다.
+- live sidecar의 core/advanced 패널은 이 scene model을 사람이 읽기 쉽게 재배치하는 display layer다. raw summary를 그대로 복사하지 않고, scene-aware formatter와 display-only knowledge를 거쳐 보여 줄 수 있다.

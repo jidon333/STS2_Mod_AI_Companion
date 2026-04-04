@@ -8,6 +8,7 @@
 ## 한 줄 요약
 
 이번 workstream의 목표는 게임 위 overlay가 아니라, 기존 `WPF advisor window`를 확장해서 `현재 scene / human-readable summary / options / missing facts`를 실시간으로 보여주는 것이다.
+이번 품질 개선 wave에서는 여기에 `core vs advanced` 표시 계층과 scene-aware display formatter를 더한다.
 
 경계와 병목 위치가 헷갈리면 [HARNESS_TO_M9_STRUCTURE_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/HARNESS_TO_M9_STRUCTURE_READER_KO.md) 를 먼저 읽는다.
 
@@ -71,9 +72,11 @@ M9 v1에서 이미 얻은 것은 아래다.
 
 1. live scene model owner는 `src/Sts2AiCompanion.Host`다
 2. replay/live 공용 contract + summary는 `src/Shared/AdvisorSceneModel/` source-shared로 둔다
-3. live builder root는 `src/Sts2AiCompanion.Host/AdvisorScene/`로 고정한다
-4. WPF는 이번 wave에서도 `CompanionHost` direct path를 유지한다
-5. `AdvisorCoordinator`, foundation contracts, `AdviceInputPack`, `AdviceResponse`는 이번 wave에서 확장하지 않는다
+3. display-only sanitizer / knowledge resolver는 `src/Shared/AdvisorSceneDisplay/` source-shared로 둔다
+4. live builder root는 `src/Sts2AiCompanion.Host/AdvisorScene/`로 고정한다
+5. WPF scene-aware formatter는 `src/Sts2AiCompanion.Wpf/Display/`에 둔다
+6. WPF는 이번 wave에서도 `CompanionHost` direct path를 유지한다
+7. `AdvisorCoordinator`, foundation contracts, `AdviceInputPack`, `AdviceResponse`는 이번 wave에서 확장하지 않는다
 
 중요:
 
@@ -123,8 +126,10 @@ artifact root는 아래로 고정한다.
 레이아웃 결정:
 
 - 오른쪽 컬럼을 `현재 scene model` 패널로 재구성한다
-- 상단부터 `sceneType / stage / owner`, `요약`, `보이는 선택지`, `누락 정보 / observer gaps`, `confidence / source refs`를 둔다
-- `최근 이벤트`, `관련 지식`, `수집 런 진단`은 같은 컬럼 하단에 유지한다
+- 상단은 `핵심` 영역으로 두고 `sceneType / stage / owner`, `요약`, `현재 장면 맥락`, `보이는 선택지`, `누락 정보 / observer gaps`를 둔다
+- 하단은 기본 접힘 `고급` 영역으로 두고 `confidence / source refs`, `최근 이벤트`, `관련 지식`, `수집 런 진단`을 넣는다
+- `SceneSummaryText`는 raw summary를 그대로 내보내지 않고 scene-aware display formatter를 거친 결과를 보여 준다
+- `DeckText`, `유물 / 포션`, option label / description은 display-only knowledge resolver를 거쳐 사람이 읽기 쉬운 텍스트로 보여 준다
 - 기존 raw `CurrentChoicesText`는 메인 패널에서 human-readable `SceneOptionsText`로 대체한다
 
 ### 3. Live Feedback Loop
@@ -145,6 +150,8 @@ artifact root는 아래로 고정한다.
 
 - WPF에 scene model 패널을 추가한다
 - advice 패널과 분리해서 “현재 읽는 정보”를 먼저 보여 준다
+- scene-aware display formatter로 `현재 장면 맥락`과 `요약`을 분리한다
+- advanced 영역은 기본 접힘으로 둔다
 
 완료 기준:
 
@@ -167,6 +174,7 @@ artifact root는 아래로 고정한다.
 완료 기준:
 
 - mismatch가 나왔을 때 “scene model 부족인지 observer 부족인지” 구분 가능
+- WPF sidecar는 display-only knowledge/localization으로 label과 description을 다듬지만, truth source는 바꾸지 않는다
 
 ### Stage 3. Read-only advisor integration
 
@@ -332,6 +340,10 @@ artifact root는 아래로 고정한다.
 6. src/Shared/AdvisorSceneModel/AdvisorSceneContracts.cs
 7. src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneModelBuilder.cs
 8. src/Shared/AdvisorSceneModel/AdvisorSceneSummaryFormatter.cs
+9. src/Shared/AdvisorSceneDisplay/AdvisorDisplaySanitizer.cs
+10. src/Shared/AdvisorSceneDisplay/AdvisorKnowledgeDisplayResolver.cs
+11. src/Sts2AiCompanion.Wpf/Display/AdvisorSceneDisplayFormatter.cs
+12. src/Sts2AiCompanion.Wpf/Display/DeckDisplayFormatter.cs
 
 핵심 원칙:
 - replay scene model과 live scene model은 같은 schema를 써야 한다

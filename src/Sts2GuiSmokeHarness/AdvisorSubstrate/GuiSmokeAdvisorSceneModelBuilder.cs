@@ -42,6 +42,11 @@ static class GuiSmokeAdvisorSceneModelBuilder
     {
         var release = analysisContext.CombatReleaseState;
         var handSummary = TryReadMetaString(observer.StateDocument, "combatHandSummary");
+        var handCount = TryReadIntMeta(observer, "combatHandCount") ?? observer.CombatHand.Count;
+        var drawPileCount = TryReadIntMeta(observer, "drawPileCount");
+        var discardPileCount = TryReadIntMeta(observer, "discardPileCount");
+        var exhaustPileCount = TryReadIntMeta(observer, "exhaustPileCount");
+        var playPileCount = TryReadIntMeta(observer, "playPileCount");
         var enemyIntentSummary = TryReadMetaString(observer.StateDocument, "enemyIntentSummary")
                                  ?? TryReadMetaString(observer.StateDocument, "enemy-intent-summary");
         var details = new AdvisorSceneCombatDetails(
@@ -49,8 +54,12 @@ static class GuiSmokeAdvisorSceneModelBuilder
             observer.EncounterKind ?? "unknown",
             ToKebabCase(release.LifecycleStage.ToString()),
             TryReadInt(observer.StateDocument, "encounter", "turn"),
-            observer.CombatHand.Count,
+            handCount,
             handSummary,
+            drawPileCount,
+            discardPileCount,
+            exhaustPileCount,
+            playPileCount,
             TryReadIntMeta(observer, "combatHittableEnemyCount"),
             TryReadIntMeta(observer, "combatTargetableEnemyCount"),
             TryReadBoolMeta(observer, "combatTargetingInProgress") == true,
@@ -64,15 +73,12 @@ static class GuiSmokeAdvisorSceneModelBuilder
                 card.Cost?.ToString(CultureInfo.InvariantCulture),
                 card.Type,
                 true,
-                new[] { $"slot:{card.SlotIndex}" }));
+                new[] { $"slot:{card.SlotIndex}", "category:hand-card" }));
         }
 
-        foreach (var choice in observer.Choices.Where(static choice =>
-                     !string.IsNullOrWhiteSpace(choice.Label)
-                     && (choice.Label.Contains("턴 종료", StringComparison.OrdinalIgnoreCase)
-                         || choice.Label.Contains("End Turn", StringComparison.OrdinalIgnoreCase))))
+        foreach (var choice in observer.Choices.Where(static choice => ResolveCombatOptionCategory(choice) is not null))
         {
-            options.Add(ToOption(choice));
+            options.Add(ToCombatOption(choice));
         }
 
         var missingFacts = new List<string>();
@@ -89,9 +95,20 @@ static class GuiSmokeAdvisorSceneModelBuilder
             observerGaps.Add("observer.state.player.energy missing");
         }
 
+        if (drawPileCount is null || discardPileCount is null || exhaustPileCount is null || playPileCount is null)
+        {
+            missingFacts.Add("combat-pile-counts-partial");
+            observerGaps.Add("observer.state.meta draw/discard/exhaust/play pile counts missing");
+        }
+
         sourceRefs.Add("analysis.combat-release-state");
         sourceRefs.Add("analysis.runtime-combat-state");
         sourceRefs.Add("observer.state.meta.combatHandSummary");
+        sourceRefs.Add("observer.state.meta.combatHandCount");
+        sourceRefs.Add("observer.state.meta.drawPileCount");
+        sourceRefs.Add("observer.state.meta.discardPileCount");
+        sourceRefs.Add("observer.state.meta.exhaustPileCount");
+        sourceRefs.Add("observer.state.meta.playPileCount");
         return CreateArtifactBase(
                 request,
                 requestPath,
@@ -539,8 +556,9 @@ static class GuiSmokeAdvisorSceneModelBuilder
         return new[]
         {
             new AdvisorSceneUiSurface("combat-hand", details.HandCount > 0, null, "combat hand summary"),
+            new AdvisorSceneUiSurface("combat-pile-buttons", observer.Choices.Any(IsCombatPileButtonChoice), null, "draw/discard/exhaust/play pile buttons"),
             new AdvisorSceneUiSurface("combat-targeting", details.TargetingInProgress, details.TargetingInProgress, "targeting arrow state"),
-            new AdvisorSceneUiSurface("combat-end-turn", observer.CurrentChoices.Any(static choice => choice.Contains("턴 종료", StringComparison.OrdinalIgnoreCase) || choice.Contains("End Turn", StringComparison.OrdinalIgnoreCase)), null, "end turn button"),
+            new AdvisorSceneUiSurface("combat-end-turn", observer.Choices.Any(IsEndTurnChoice), null, "end turn button"),
         };
     }
 
@@ -564,6 +582,108 @@ static class GuiSmokeAdvisorSceneModelBuilder
             choice.Description,
             choice.Enabled != false,
             choice.SemanticHints.Count == 0 ? Array.Empty<string>() : choice.SemanticHints.ToArray());
+    }
+
+    private static AdvisorSceneOption ToCombatOption(ObserverChoice choice)
+    {
+        var option = ToOption(choice);
+        var category = ResolveCombatOptionCategory(choice);
+        return string.IsNullOrWhiteSpace(category)
+            ? option
+            : AddTag(option, $"category:{category}");
+    }
+
+    private static AdvisorSceneOption AddTag(AdvisorSceneOption option, string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag) || option.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+        {
+            return option;
+        }
+
+        return option with
+        {
+            Tags = option.Tags.Concat(new[] { tag }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+        };
+    }
+
+    private static string? ResolveCombatOptionCategory(ObserverChoice choice)
+    {
+        if (IsEndTurnChoice(choice))
+        {
+            return "combat-action";
+        }
+
+        if (IsCombatPileButtonChoice(choice))
+        {
+            return "pile-button";
+        }
+
+        if (IsCombatUtilityChoice(choice))
+        {
+            return "utility";
+        }
+
+        return null;
+    }
+
+    private static bool IsEndTurnChoice(ObserverChoice choice)
+    {
+        return choice.Label.Contains("턴 종료", StringComparison.OrdinalIgnoreCase)
+               || choice.Label.Contains("End Turn", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Contains("combat-end-turn", StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCombatPileButtonChoice(ObserverChoice choice)
+    {
+        return TryGetCombatPileId(choice) is not null;
+    }
+
+    private static bool IsCombatUtilityChoice(ObserverChoice choice)
+    {
+        return choice.Label.Contains("Ping", StringComparison.OrdinalIgnoreCase)
+               || choice.Kind.Contains("ping", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Any(static hint => hint.Contains("ping", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? TryGetCombatPileId(ObserverChoice choice)
+    {
+        var seeds = new[]
+        {
+            choice.Label,
+            choice.Value,
+            choice.BindingId,
+            choice.NodeId,
+            string.Join(' ', choice.SemanticHints),
+        };
+        foreach (var seed in seeds)
+        {
+            if (string.IsNullOrWhiteSpace(seed))
+            {
+                continue;
+            }
+
+            if (seed.Contains("DrawPile", StringComparison.OrdinalIgnoreCase))
+            {
+                return "draw";
+            }
+
+            if (seed.Contains("DiscardPile", StringComparison.OrdinalIgnoreCase))
+            {
+                return "discard";
+            }
+
+            if (seed.Contains("ExhaustPile", StringComparison.OrdinalIgnoreCase))
+            {
+                return "exhaust";
+            }
+
+            if (seed.Contains("PlayPile", StringComparison.OrdinalIgnoreCase))
+            {
+                return "play";
+            }
+        }
+
+        return null;
     }
 
     private static List<AdvisorSceneOption> NormalizeRewardEntryOptions(IEnumerable<AdvisorSceneOption> options)

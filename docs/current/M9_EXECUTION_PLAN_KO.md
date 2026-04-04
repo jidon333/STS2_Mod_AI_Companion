@@ -191,13 +191,16 @@ v1 우선순위는 다음으로 고정한다.
 
 - 직접 플레이 중 현재 scene model을 별도 WPF UI에서 실시간으로 읽을 수 있게 한다.
 - overlay가 아니라 sidecar window를 우선한다.
+- 이번 정보 품질 wave에서는 scene-aware display formatter, core vs advanced layout, display-only knowledge/localization이 핵심이다.
 
 주요 산출물:
 
 - [M9_LIVE_SIDECAR_UI_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md)
 - `src/Shared/AdvisorSceneModel/*`
+- `src/Shared/AdvisorSceneDisplay/*`
 - `src/Sts2AiCompanion.Host/AdvisorScene/*`
 - `src/Sts2AiCompanion.Wpf`
+- `src/Sts2AiCompanion.Wpf/Display/*`
 
 현재 상태:
 
@@ -210,6 +213,8 @@ v1 우선순위는 다음으로 고정한다.
 - replay schema와 live schema가 일치함
 - `artifacts/companion/<runId>/advisor-scene/advisor-scene.latest.json` + `advisor-scene.ndjson`가 생성됨
 - unchanged poll에서는 `advisor-scene.ndjson`가 append되지 않음
+- `SceneSummaryText`는 raw summary를 그대로 복사하지 않고 scene-aware display formatter를 거친다
+- advanced 영역은 기본 접힘으로 유지된다
 
 ## 현재 진척도 보드
 
@@ -339,9 +344,10 @@ M9에서는 아래 anti-pattern을 절대 허용하지 않는다.
 
 1. harness는 주력 제품이 아니라 proving ground + acceptance lane으로 본다
 2. scene model contract/summary는 `src/Shared/AdvisorSceneModel`에 두고, replay/live builder는 harness/host adapter로 분리한다
-3. 문서와 fixture를 함께 갱신한다
-4. blocker-fix loop와 M9 workstream을 섞지 않는다
-5. 새 live blocker가 나오면 M5~M8 reopen으로 분리하고, M9 계획 자체와 혼합하지 않는다
+3. display-only sanitizer / knowledge resolver는 `src/Shared/AdvisorSceneDisplay`에 두고, WPF scene-aware formatter는 `src/Sts2AiCompanion.Wpf/Display`에 둔다
+4. 문서와 fixture를 함께 갱신한다
+5. blocker-fix loop와 M9 workstream을 섞지 않는다
+6. 새 live blocker가 나오면 M5~M8 reopen으로 분리하고, M9 계획 자체와 혼합하지 않는다
 
 ## 완료 선언 조건
 

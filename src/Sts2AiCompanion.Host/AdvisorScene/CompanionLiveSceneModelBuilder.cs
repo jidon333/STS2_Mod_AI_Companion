@@ -44,27 +44,33 @@ internal static class CompanionLiveSceneModelBuilder
     {
         var snapshot = runState.Snapshot;
         var choices = CompanionSceneNormalizer.SanitizeChoices(snapshot.CurrentChoices);
+        var combatOptions = BuildCombatOptions(choices);
         var handChoices = choices.Where(IsCombatHandChoice).ToArray();
         var stage = ResolveCombatStage(snapshot, handChoices);
         var targetCount = TryReadIntMeta(snapshot.Meta, "combatTargetCount");
+        var hittableEnemyCount = TryReadIntMeta(snapshot.Meta, "combatHittableEnemyCount");
         var targetableEnemyCount = TryReadIntMeta(snapshot.Meta, "combatTargetableEnemyCount");
         var targetingInProgress = TryReadBoolMeta(snapshot.Meta, "combatTargetingInProgress") == true;
         var handSummary = TryGetMeta(snapshot.Meta, "combatHandSummary") ?? runState.NormalizedState.Combat.HandSummary;
+        var handCount = snapshot.CombatHandCount
+                        ?? TryReadIntMeta(snapshot.Meta, "combatHandCount")
+                        ?? combatOptions.Count(IsCombatHandOption);
         var enemyIntentSummary = TryGetMeta(snapshot.Meta, "enemyIntentSummary")
                                  ?? TryGetMeta(snapshot.Meta, "enemy-intent-summary")
+                                 ?? snapshot.EnemyIntentSummary
                                  ?? runState.NormalizedState.Combat.EnemyIntentSummary;
-        var options = handChoices
-            .Select(ToOption)
-            .Concat(choices.Where(IsEndTurnChoice).Select(ToOption))
-            .ToList();
         var details = new AdvisorSceneCombatDetails(
             snapshot.Encounter?.InCombat ?? true,
             snapshot.Encounter?.Kind ?? "unknown",
             stage,
             snapshot.Encounter?.Turn,
-            handChoices.Length,
+            handCount,
             handSummary,
-            targetCount,
+            snapshot.DrawPileCount,
+            snapshot.DiscardPileCount,
+            snapshot.ExhaustPileCount,
+            snapshot.PlayPileCount,
+            hittableEnemyCount ?? targetCount,
             targetableEnemyCount,
             targetingInProgress,
             enemyIntentSummary);
@@ -82,9 +88,23 @@ internal static class CompanionLiveSceneModelBuilder
             observerGaps.Add("live-export.snapshot.player.energy missing");
         }
 
+        if (snapshot.DrawPileCount is null
+            || snapshot.DiscardPileCount is null
+            || snapshot.ExhaustPileCount is null
+            || snapshot.PlayPileCount is null)
+        {
+            missingFacts.Add("combat-pile-counts-partial");
+            observerGaps.Add("live-export.snapshot draw/discard/exhaust/play pile counts missing");
+        }
+
         sourceRefs.Add("live-export.snapshot.meta.foregroundOwner");
         sourceRefs.Add("live-export.snapshot.meta.foregroundActionLane");
         sourceRefs.Add("live-export.snapshot.meta.combatHandSummary");
+        sourceRefs.Add("live-export.snapshot.combatHandCount");
+        sourceRefs.Add("live-export.snapshot.drawPileCount");
+        sourceRefs.Add("live-export.snapshot.discardPileCount");
+        sourceRefs.Add("live-export.snapshot.exhaustPileCount");
+        sourceRefs.Add("live-export.snapshot.playPileCount");
         sourceRefs.Add("live-export.snapshot.meta.combatTargetCount");
         sourceRefs.Add("live-export.snapshot.currentChoices");
         return CreateArtifactBase(
@@ -95,18 +115,19 @@ internal static class CompanionLiveSceneModelBuilder
                 playerContext,
                 new[]
                 {
-                    new AdvisorSceneUiSurface("combat-hand", handChoices.Length > 0 || !string.IsNullOrWhiteSpace(handSummary), null, "combat hand summary"),
+                    new AdvisorSceneUiSurface("combat-hand", handCount > 0 || !string.IsNullOrWhiteSpace(handSummary), null, "combat hand summary"),
+                    new AdvisorSceneUiSurface("combat-pile-buttons", combatOptions.Any(IsCombatPileButtonOption), null, "draw/discard/exhaust/play pile buttons"),
                     new AdvisorSceneUiSurface("combat-targeting", targetingInProgress || (targetCount ?? 0) > 0, targetingInProgress, "targeting arrow state"),
-                    new AdvisorSceneUiSurface("combat-end-turn", choices.Any(IsEndTurnChoice), null, "end turn button"),
+                    new AdvisorSceneUiSurface("combat-end-turn", combatOptions.Any(IsCombatActionOption), null, "end turn button"),
                 },
-                options,
+                combatOptions,
                 missingFacts,
                 observerGaps,
                 new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["scene"] = 0.94,
                     ["player"] = playerContext.CurrentHp is null ? 0.40 : 0.95,
-                    ["options"] = options.Count == 0 ? 0.35 : 0.86,
+                    ["options"] = combatOptions.Count == 0 ? 0.35 : 0.86,
                 },
                 sourceRefs)
             with
@@ -684,6 +705,63 @@ internal static class CompanionLiveSceneModelBuilder
         return score;
     }
 
+    private static List<AdvisorSceneOption> BuildCombatOptions(IReadOnlyList<LiveExportChoiceSummary> choices)
+    {
+        return choices
+            .Where(static choice => ResolveCombatOptionCategory(choice) is not null)
+            .Select(ToCombatOption)
+            .GroupBy(static option => $"{option.Kind}|{option.Label}|{option.Value}", StringComparer.OrdinalIgnoreCase)
+            .Select(static group => group.First())
+            .ToList();
+    }
+
+    private static AdvisorSceneOption ToCombatOption(LiveExportChoiceSummary choice)
+    {
+        var option = ToOption(choice);
+        var category = ResolveCombatOptionCategory(choice);
+        return string.IsNullOrWhiteSpace(category)
+            ? option
+            : AddTag(option, $"category:{category}");
+    }
+
+    private static AdvisorSceneOption AddTag(AdvisorSceneOption option, string tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag) || option.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+        {
+            return option;
+        }
+
+        return option with
+        {
+            Tags = option.Tags.Concat(new[] { tag }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+        };
+    }
+
+    private static string? ResolveCombatOptionCategory(LiveExportChoiceSummary choice)
+    {
+        if (IsCombatHandChoice(choice))
+        {
+            return "hand-card";
+        }
+
+        if (IsCombatPileButtonChoice(choice))
+        {
+            return "pile-button";
+        }
+
+        if (IsEndTurnChoice(choice))
+        {
+            return "combat-action";
+        }
+
+        if (IsCombatUtilityChoice(choice))
+        {
+            return "utility";
+        }
+
+        return null;
+    }
+
     private static string ResolveSceneType(CompanionRunState runState)
     {
         var snapshot = runState.Snapshot;
@@ -778,7 +856,9 @@ internal static class CompanionLiveSceneModelBuilder
             return "targeting";
         }
 
-        if (!string.IsNullOrWhiteSpace(TryGetMeta(snapshot.Meta, "combatHandSummary")) || handChoices.Count > 0)
+        if (!string.IsNullOrWhiteSpace(TryGetMeta(snapshot.Meta, "combatHandSummary"))
+            || snapshot.CombatHandCount.GetValueOrDefault() > 0
+            || handChoices.Count > 0)
         {
             return "player-play-open";
         }
@@ -1014,8 +1094,11 @@ internal static class CompanionLiveSceneModelBuilder
 
     private static bool IsCombatHandChoice(LiveExportChoiceSummary choice)
     {
-        return string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(choice.Kind, "combat-hand-card", StringComparison.OrdinalIgnoreCase);
+        return (string.Equals(choice.Kind, "card", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(choice.Kind, "combat-hand-card", StringComparison.OrdinalIgnoreCase))
+               && !IsCombatPileButtonChoice(choice)
+               && !IsEndTurnChoice(choice)
+               && !IsCombatUtilityChoice(choice);
     }
 
     private static bool IsEndTurnChoice(LiveExportChoiceSummary choice)
@@ -1023,6 +1106,74 @@ internal static class CompanionLiveSceneModelBuilder
         return choice.Label.Contains("턴 종료", StringComparison.OrdinalIgnoreCase)
                || choice.Label.Contains("End Turn", StringComparison.OrdinalIgnoreCase)
                || choice.SemanticHints.Contains("combat-end-turn", StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCombatPileButtonChoice(LiveExportChoiceSummary choice)
+    {
+        return TryGetCombatPileId(choice) is not null;
+    }
+
+    private static bool IsCombatUtilityChoice(LiveExportChoiceSummary choice)
+    {
+        return choice.Label.Contains("Ping", StringComparison.OrdinalIgnoreCase)
+               || choice.Kind.Contains("ping", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Any(static hint => hint.Contains("ping", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsCombatHandOption(AdvisorSceneOption option)
+    {
+        return option.Tags.Contains("category:hand-card", StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCombatPileButtonOption(AdvisorSceneOption option)
+    {
+        return option.Tags.Contains("category:pile-button", StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCombatActionOption(AdvisorSceneOption option)
+    {
+        return option.Tags.Contains("category:combat-action", StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? TryGetCombatPileId(LiveExportChoiceSummary choice)
+    {
+        var seeds = new[]
+        {
+            choice.Label,
+            choice.Value,
+            choice.BindingId,
+            choice.NodeId,
+            string.Join(' ', choice.SemanticHints),
+        };
+        foreach (var seed in seeds)
+        {
+            if (string.IsNullOrWhiteSpace(seed))
+            {
+                continue;
+            }
+
+            if (seed.Contains("DrawPile", StringComparison.OrdinalIgnoreCase))
+            {
+                return "draw";
+            }
+
+            if (seed.Contains("DiscardPile", StringComparison.OrdinalIgnoreCase))
+            {
+                return "discard";
+            }
+
+            if (seed.Contains("ExhaustPile", StringComparison.OrdinalIgnoreCase))
+            {
+                return "exhaust";
+            }
+
+            if (seed.Contains("PlayPile", StringComparison.OrdinalIgnoreCase))
+            {
+                return "play";
+            }
+        }
+
+        return null;
     }
 
     private static bool IsRewardEntryChoice(LiveExportChoiceSummary choice)

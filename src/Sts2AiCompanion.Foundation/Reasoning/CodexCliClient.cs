@@ -56,6 +56,8 @@ public sealed class CodexCliClient : ICodexSessionClient
             var standardOutput = await stdoutTask.ConfigureAwait(false);
             var standardError = await stderrTask.ConfigureAwait(false);
             var execTrace = ParseExecTrace(standardOutput);
+            var execError = TryExtractExecErrorMessage(standardOutput)
+                ?? TryExtractExecErrorMessage(standardError);
             var resolvedSessionId = sessionId
                 ?? execTrace.ThreadId
                 ?? ResolveCreatedSessionId(before);
@@ -66,14 +68,18 @@ public sealed class CodexCliClient : ICodexSessionClient
             if (string.IsNullOrWhiteSpace(rawOutput))
             {
                 rawOutput = execTrace.LastAgentMessageJson
-                    ?? ExtractJsonObject(standardOutput)
+                    ?? (string.IsNullOrWhiteSpace(execError)
+                        ? ExtractJsonObject(standardOutput)
+                        : standardOutput)
                     ?? string.Empty;
             }
 
             if (process.ExitCode != 0)
             {
-                var failureMessage = $"Codex CLI exited with code {process.ExitCode}.";
-                if (!string.IsNullOrWhiteSpace(standardError))
+                var failureMessage = !string.IsNullOrWhiteSpace(execError)
+                    ? execError
+                    : $"Codex CLI exited with code {process.ExitCode}.";
+                if (string.IsNullOrWhiteSpace(execError) && !string.IsNullOrWhiteSpace(standardError))
                 {
                     failureMessage += $" stderr: {TrimDiagnosticText(standardError)}";
                 }
@@ -83,13 +89,22 @@ public sealed class CodexCliClient : ICodexSessionClient
 
             if (string.IsNullOrWhiteSpace(rawOutput))
             {
-                var emptyMessage = "Codex가 빈 응답을 반환했습니다.";
-                if (!string.IsNullOrWhiteSpace(standardError))
+                var emptyMessage = !string.IsNullOrWhiteSpace(execError)
+                    ? execError
+                    : "Codex가 빈 응답을 반환했습니다.";
+                if (string.IsNullOrWhiteSpace(execError) && !string.IsNullOrWhiteSpace(standardError))
                 {
                     emptyMessage += $" stderr: {TrimDiagnosticText(standardError)}";
                 }
 
                 return (CreateDegradedResponse(inputPack, resolvedSessionId, emptyMessage, rawOutput), resolvedSessionId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(execError)
+                && string.IsNullOrWhiteSpace(execTrace.LastAgentMessageJson)
+                && LooksLikeExecTrace(rawOutput))
+            {
+                return (CreateDegradedResponse(inputPack, resolvedSessionId, execError, rawOutput), resolvedSessionId);
             }
 
             try
@@ -125,7 +140,10 @@ public sealed class CodexCliClient : ICodexSessionClient
             }
             catch (JsonException exception)
             {
-                return (CreateDegradedResponse(inputPack, resolvedSessionId, $"Codex response schema parse failed: {exception.Message}", rawOutput), resolvedSessionId);
+                var message = !string.IsNullOrWhiteSpace(execError)
+                    ? execError
+                    : $"Codex response schema parse failed: {exception.Message}";
+                return (CreateDegradedResponse(inputPack, resolvedSessionId, message, rawOutput), resolvedSessionId);
             }
         }
         catch (Exception exception)
@@ -334,6 +352,51 @@ public sealed class CodexCliClient : ICodexSessionClient
         return RewardAdviceResponseFinalizer.Apply(inputPack, response);
     }
 
+    public static string? TryExtractExecErrorMessage(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        foreach (var rawLine in text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (string.IsNullOrWhiteSpace(rawLine) || !rawLine.TrimStart().StartsWith('{'))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(rawLine);
+                var root = document.RootElement;
+                if (!root.TryGetProperty("type", out var typeElement))
+                {
+                    continue;
+                }
+
+                var eventType = typeElement.GetString();
+                if (string.Equals(eventType, "error", StringComparison.Ordinal)
+                    && root.TryGetProperty("message", out var messageElement))
+                {
+                    return NormalizeExecErrorMessage(messageElement.GetString());
+                }
+
+                if (string.Equals(eventType, "turn.failed", StringComparison.Ordinal)
+                    && root.TryGetProperty("error", out var errorElement)
+                    && errorElement.TryGetProperty("message", out var errorMessageElement))
+                {
+                    return NormalizeExecErrorMessage(errorMessageElement.GetString());
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return null;
+    }
+
     private static string? ExtractJsonObject(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -360,6 +423,35 @@ public sealed class CodexCliClient : ICodexSessionClient
         return compact.Length <= 400
             ? compact
             : compact[..400] + "...";
+    }
+
+    private static string NormalizeExecErrorMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return "Codex CLI request failed.";
+        }
+
+        if (message.Contains("Your input exceeds the context window of this model", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("context_length_exceeded", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Codex 요청이 모델 컨텍스트 한도를 초과했습니다. 자동 조언 세션을 새로 시작하거나 입력 크기를 줄여야 합니다.";
+        }
+
+        return TrimDiagnosticText(message);
+    }
+
+    private static bool LooksLikeExecTrace(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return text.Contains("\"type\":\"thread.started\"", StringComparison.Ordinal)
+            || text.Contains("\"type\":\"turn.started\"", StringComparison.Ordinal)
+            || text.Contains("\"type\":\"error\"", StringComparison.Ordinal)
+            || text.Contains("\"type\":\"turn.failed\"", StringComparison.Ordinal);
     }
 
     public static (string? ThreadId, string? LastAgentMessageJson) ParseExecTrace(string? standardOutput)

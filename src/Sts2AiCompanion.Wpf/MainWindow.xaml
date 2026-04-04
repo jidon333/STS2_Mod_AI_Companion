@@ -111,6 +111,10 @@
                                 <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding SceneSummaryText, Mode=OneWay}" />
                             </GroupBox>
 
+                            <GroupBox Margin="0,12,0,0" Header="현재 장면 맥락">
+                                <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding SceneContextText, Mode=OneWay}" />
+                            </GroupBox>
+
                             <GroupBox Margin="0,12,0,0" Header="보이는 선택지">
                                 <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding SceneOptionsText, Mode=OneWay}" />
                             </GroupBox>
@@ -119,21 +123,25 @@
                                 <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding SceneGapsText, Mode=OneWay}" />
                             </GroupBox>
 
-                            <GroupBox Margin="0,12,0,0" Header="confidence / source refs">
-                                <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding SceneProvenanceText, Mode=OneWay}" />
-                            </GroupBox>
+                            <Expander Margin="0,12,0,0" Header="고급 정보" IsExpanded="False">
+                                <StackPanel Margin="0,12,0,0">
+                                    <GroupBox Header="confidence / source refs">
+                                        <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding SceneProvenanceText, Mode=OneWay}" />
+                                    </GroupBox>
 
-                            <GroupBox Margin="0,12,0,0" Header="최근 이벤트">
-                                <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding RecentEventsText, Mode=OneWay}" />
-                            </GroupBox>
+                                    <GroupBox Margin="0,12,0,0" Header="최근 이벤트">
+                                        <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding RecentEventsText, Mode=OneWay}" />
+                                    </GroupBox>
 
-                            <GroupBox Margin="0,12,0,0" Header="관련 지식">
-                                <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding KnowledgeEntriesText, Mode=OneWay}" />
-                            </GroupBox>
+                                    <GroupBox Margin="0,12,0,0" Header="관련 지식">
+                                        <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding KnowledgeEntriesText, Mode=OneWay}" />
+                                    </GroupBox>
 
-                            <GroupBox Margin="0,12,0,0" Header="수집 런 진단">
-                                <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding CollectorNotesText, Mode=OneWay}" />
-                            </GroupBox>
+                                    <GroupBox Margin="0,12,0,0" Header="수집 런 진단">
+                                        <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding CollectorNotesText, Mode=OneWay}" />
+                                    </GroupBox>
+                                </StackPanel>
+                            </Expander>
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>

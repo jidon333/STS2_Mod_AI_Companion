@@ -1,10 +1,12 @@
 using System.Text.Json;
 using System.Text;
+using Sts2AiCompanion.AdvisorSceneDisplay;
 using Sts2AiCompanion.AdvisorSceneModel;
 using Sts2AiCompanion.SceneProvenance;
 using Sts2AiCompanion.Foundation.State;
 using Sts2AiCompanion.Harness.Actions;
 using Sts2AiCompanion.Host;
+using Sts2AiCompanion.Wpf.Display;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Diagnostics;
 using Sts2ModKit.Core.Harness;
@@ -77,6 +79,9 @@ Run("inventory publisher fingerprint tracks provenance fields", TestInventoryPub
 Run("bridge guard surface requires explicit published scene provenance", TestHarnessBridgeGuardSurfaceRequiresPublishedProvenance, failures);
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
+Run("runtime reflection prefers deck source over combat zones", TestRuntimeReflectionPrefersDeckSourceOverCombatZones, failures);
+Run("runtime reflection exports structured combat counts from combat state", TestRuntimeReflectionExportsStructuredCombatCounts, failures);
+Run("runtime reflection prefers player hand ui holders over combat-state hand fallback", TestRuntimeReflectionPrefersPlayerHandUiHolders, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
 Run("runtime reflection encounter does not override CombatManager IsInProgress false", TestRuntimeReflectionEncounterDoesNotOverrideCombatManagerFalse, failures);
 Run("runtime reflection screen resolution prefers overlay screens", TestRuntimeReflectionScreenResolution, failures);
@@ -95,6 +100,7 @@ Run("screen provenance resolver preserves compatibility as diagnostic-only prove
 Run("screen provenance resolver uses inventory fallback only for harness adapter", TestScreenProvenanceResolverInventoryFallbackIsolation, failures);
 Run("screen provenance harness and host adapters stay aligned on A2 fixtures", TestScreenProvenanceHarnessHostParity, failures);
 Run("live export tracker preserves high-value state across partial observations", TestLiveExportTrackerPartialMerge, failures);
+Run("live export tracker clears combat structured fields outside combat", TestLiveExportTrackerClearsCombatStructuredFieldsOutsideCombat, failures);
 Run("live export tracker accepts explicit published scene over sticky fallback preservation", TestLiveExportTrackerPrefersExplicitPublishedSceneOverStickyFallback, failures);
 Run("live export tracker accepts foreground owner over fallback published screen", TestLiveExportTrackerPrefersForegroundOwnerOverFallbackPublishedScreen, failures);
 Run("live export tracker accepts authoritative combat encounter on high-value screen", TestLiveExportTrackerAcceptsAuthoritativeCombatEncounter, failures);
@@ -105,6 +111,10 @@ Run("harness path resolver exposes trace queue path", TestHarnessPathResolver, f
 Run("bridge action executor round-trips action results through the queue", TestBridgeActionExecutorRoundTrip, failures);
 Run("companion path resolver keeps per-run artifacts under companion root", TestCompanionPathResolver, failures);
 Run("knowledge catalog service builds a bounded relevant slice", TestKnowledgeCatalogService, failures);
+Run("advisor display sanitizer strips raw markers", TestAdvisorDisplaySanitizer, failures);
+Run("advisor display resolver uses knowledge fallback for missing descriptions", TestAdvisorKnowledgeDisplayResolver, failures);
+Run("wpf scene display formatter hides utility combat options and sanitizes reward markers", TestAdvisorSceneDisplayFormatter, failures);
+Run("deck display formatter aggregates localized card names", TestDeckDisplayFormatter, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
 Run("reward deterministic builders are reproducible", TestRewardDeterministicBuilders, failures);
 Run("reward deterministic layer stays off for non-card rewards", TestRewardNonCardFallback, failures);
@@ -117,7 +127,10 @@ Run("host wrappers converge on foundation prompt and knowledge services", TestHo
 Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
 Run("companion host keeps scene model polling responsive while auto advice runs", TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice, failures);
 Run("companion host publishes live advisor scene model artifacts", TestCompanionHostLiveSceneModelArtifacts, failures);
+Run("companion host classifies combat options and structured pile counts", TestCompanionHostCombatSceneModelClassification, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
+Run("codex cli surfaces context overflow diagnostics from exec trace", TestCodexCliContextOverflowDiagnostic, failures);
+Run("host codex client retries without resume after context overflow", TestHostCodexCliClientRetriesWithoutResumeAfterContextOverflow, failures);
 
 if (failures.Count == 0)
 {
@@ -3046,16 +3059,17 @@ static void TestRuntimeReflectionExtractDeckFromCombatState()
     {
         new FakeCombatPlayerRoot
         {
-            PlayerCombatState = new FakePlayerCombatState
-            {
-                Hand = new object[]
+                PlayerCombatState = new FakePlayerCombatState
                 {
-                    new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
-                    new FakeCombatCard { Name = "Defend", CardId = "DEFEND", Cost = 1, Type = "skill" },
-                },
-                DrawPile = new object[]
-                {
-                    new FakeCombatCard { Name = "Bash", CardId = "BASH", Cost = 2, Type = "attack" },
+                    Hand = new object[]
+                    {
+                        new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+                        new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+                        new FakeCombatCard { Name = "Defend", CardId = "DEFEND", Cost = 1, Type = "skill" },
+                    },
+                    DrawPile = new object[]
+                    {
+                        new FakeCombatCard { Name = "Bash", CardId = "BASH", Cost = 2, Type = "attack" },
                 },
             },
         },
@@ -3063,9 +3077,187 @@ static void TestRuntimeReflectionExtractDeckFromCombatState()
 
     var cards = method!.Invoke(null, new object?[] { roots, 16 }) as IReadOnlyList<LiveExportCardSummary>;
     Assert(cards is not null, "Expected ExtractDeck to return a card list.");
-    Assert(cards!.Count == 3, $"Expected three combat cards, got {cards.Count}.");
-    Assert(cards.Any(card => card.Name == "Strike"), "Expected Strike to be present.");
+    Assert(cards!.Count == 4, $"Expected duplicate combat cards to be preserved, got {cards.Count}.");
+    Assert(cards.Count(card => card.Name == "Strike") == 2, "Expected both Strike copies to remain present.");
     Assert(cards.Any(card => card.Name == "Bash"), "Expected Bash to be present.");
+}
+
+static void TestRuntimeReflectionPrefersDeckSourceOverCombatZones()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("ExtractDeck", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private ExtractDeck helper.");
+
+    var roots = new object[]
+    {
+        new FakeCombatPlayerRoot
+        {
+            PlayerCombatState = new FakePlayerCombatState
+            {
+                Deck = new object[]
+                {
+                    new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+                    new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+                    new FakeCombatCard { Name = "Defend", CardId = "DEFEND", Cost = 1, Type = "skill" },
+                },
+                Hand = new object[]
+                {
+                    new FakeCombatCard { Name = "Noise Hand", CardId = "NOISE_HAND", Cost = 1, Type = "attack" },
+                },
+                DrawPile = new object[]
+                {
+                    new FakeCombatCard { Name = "Noise Draw", CardId = "NOISE_DRAW", Cost = 1, Type = "attack" },
+                },
+                DiscardPile = new object[]
+                {
+                    new FakeCombatCard { Name = "Noise Discard", CardId = "NOISE_DISCARD", Cost = 1, Type = "attack" },
+                },
+            },
+        },
+    };
+
+    var cards = method!.Invoke(null, new object?[] { roots, 16 }) as IReadOnlyList<LiveExportCardSummary>;
+    Assert(cards is not null, "Expected ExtractDeck to return a card list.");
+    Assert(cards!.Count == 3, $"Expected deck extraction to prefer deck source only, got {cards.Count}.");
+    Assert(cards.Count(card => card.Name == "Strike") == 2, "Expected both Strike copies from deck source to remain present.");
+    Assert(cards.All(card => !card.Name!.StartsWith("Noise", StringComparison.Ordinal)), "Expected combat-zone noise cards to stay out of deck extraction.");
+}
+
+static void TestRuntimeReflectionExportsStructuredCombatCounts()
+{
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeCombatPlayerRoot
+            {
+                PlayerCombatState = new FakePlayerCombatState
+                {
+                    Hand = new object[]
+                    {
+                        new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+                        new FakeCombatCard { Name = "Defend", CardId = "DEFEND", Cost = 1, Type = "skill" },
+                        new FakeCombatCard { Name = "Bash", CardId = "BASH", Cost = 2, Type = "attack" },
+                    },
+                    DrawPile = new object[]
+                    {
+                        new FakeCombatCard { Name = "Pommel Strike", CardId = "POMMEL_STRIKE", Cost = 1, Type = "attack" },
+                        new FakeCombatCard { Name = "Twin Strike", CardId = "TWIN_STRIKE", Cost = 1, Type = "attack" },
+                    },
+                    DiscardPile = new object[]
+                    {
+                        new FakeCombatCard { Name = "Shrug It Off", CardId = "SHRUG", Cost = 1, Type = "skill" },
+                    },
+                    ExhaustPile = new object[]
+                    {
+                        new FakeCombatCard { Name = "Offering", CardId = "OFFERING", Cost = 0, Type = "skill" },
+                    },
+                    PlayPile = new object[]
+                    {
+                        new FakeCombatCard { Name = "Strike+", CardId = "STRIKE_PLUS", Cost = 1, Type = "attack" },
+                        new FakeCombatCard { Name = "Defend+", CardId = "DEFEND_PLUS", Cost = 1, Type = "skill" },
+                    },
+                },
+            },
+            new FakeCombatManagerState
+            {
+                IsInProgress = true,
+                IsPlayPhase = true,
+                PlayerActionsDisabled = false,
+            },
+            new FakeCombatState
+            {
+                RoundNumber = 2,
+                Cards = Enumerable.Range(0, 12)
+                    .Select(index => (object)new FakeCombatCard { Name = $"Noise {index}", CardId = $"NOISE_{index}", Cost = 1, Type = "attack" })
+                    .ToArray(),
+            },
+        },
+        "combat");
+
+    Assert(observation.CombatHandCount == 3, $"Expected structured combat hand count 3, got {observation.CombatHandCount?.ToString() ?? "<null>"}.");
+    Assert(observation.DrawPileCount == 2, $"Expected structured draw pile count 2, got {observation.DrawPileCount?.ToString() ?? "<null>"}.");
+    Assert(observation.DiscardPileCount == 1, $"Expected structured discard pile count 1, got {observation.DiscardPileCount?.ToString() ?? "<null>"}.");
+    Assert(observation.ExhaustPileCount == 1, $"Expected structured exhaust pile count 1, got {observation.ExhaustPileCount?.ToString() ?? "<null>"}.");
+    Assert(observation.PlayPileCount == 2, $"Expected structured play pile count 2, got {observation.PlayPileCount?.ToString() ?? "<null>"}.");
+    Assert(observation.Meta.TryGetValue("combatHandCount", out var combatHandCount) && combatHandCount == "3", "Expected combatHandCount meta mirror.");
+    Assert(observation.Meta.TryGetValue("combatHandSummary", out var combatHandSummary)
+           && combatHandSummary is not null
+           && combatHandSummary.Contains("Strike", StringComparison.Ordinal)
+           && !combatHandSummary.Contains("CARD.STRIKE", StringComparison.OrdinalIgnoreCase),
+        $"Expected combatHandSummary to prefer observed card names over raw ids, got '{combatHandSummary ?? "<null>"}'.");
+    Assert(observation.Meta.TryGetValue("drawPileCount", out var drawPileCount) && drawPileCount == "2", "Expected drawPileCount meta mirror.");
+    Assert(observation.Meta.TryGetValue("discardPileCount", out var discardPileCount) && discardPileCount == "1", "Expected discardPileCount meta mirror.");
+    Assert(observation.Meta.TryGetValue("exhaustPileCount", out var exhaustPileCount) && exhaustPileCount == "1", "Expected exhaustPileCount meta mirror.");
+    Assert(observation.Meta.TryGetValue("playPileCount", out var playPileCount) && playPileCount == "2", "Expected playPileCount meta mirror.");
+    Assert(observation.Payload.TryGetValue("combatHandCount", out var payloadCombatHandCount) && payloadCombatHandCount is 3, "Expected combatHandCount payload mirror.");
+    Assert(observation.Payload.TryGetValue("drawPileCount", out var payloadDrawPileCount) && payloadDrawPileCount is 2, "Expected drawPileCount payload mirror.");
+    Assert(observation.Payload.TryGetValue("discardPileCount", out var payloadDiscardPileCount) && payloadDiscardPileCount is 1, "Expected discardPileCount payload mirror.");
+    Assert(observation.Payload.TryGetValue("exhaustPileCount", out var payloadExhaustPileCount) && payloadExhaustPileCount is 1, "Expected exhaustPileCount payload mirror.");
+    Assert(observation.Payload.TryGetValue("playPileCount", out var payloadPlayPileCount) && payloadPlayPileCount is 2, "Expected playPileCount payload mirror.");
+}
+
+static void TestRuntimeReflectionPrefersPlayerHandUiHolders()
+{
+    var observation = BuildRuntimeObservationForSelfTest(
+        new object[]
+        {
+            new FakeRuntimePlayerHand
+            {
+                ActiveHolders = new object[]
+                {
+                    new FakeRuntimeHandHolder
+                    {
+                        CardModel = new FakeRuntimeCombatCard
+                        {
+                            Id = "CARD.STRIKE_IRONCLAD",
+                            Title = "Strike",
+                            Type = "Attack",
+                        },
+                    },
+                    new FakeRuntimeHandHolder
+                    {
+                        CardModel = new FakeRuntimeCombatCard
+                        {
+                            Id = "CARD.DEFEND_IRONCLAD",
+                            Title = "Defend",
+                            Type = "Skill",
+                        },
+                    },
+                },
+            },
+            new FakeCombatPlayerRoot
+            {
+                PlayerCombatState = new FakePlayerCombatState
+                {
+                    Hand = Enumerable.Range(0, 10)
+                        .Select(index => (object)new FakeCombatCard
+                        {
+                            Name = $"Noise {index}",
+                            CardId = $"NOISE_{index}",
+                            Cost = 1,
+                            Type = "attack",
+                        })
+                        .ToArray(),
+                },
+            },
+            new FakeCombatManagerState
+            {
+                IsInProgress = true,
+                IsPlayPhase = true,
+                PlayerActionsDisabled = false,
+            },
+        },
+        "combat");
+
+    Assert(observation.CombatHandCount == 2, $"Expected UI hand holders to win over combat-state fallback, got {observation.CombatHandCount?.ToString() ?? "<null>"}.");
+    Assert(observation.Meta.TryGetValue("combatHandSummary", out var combatHandSummary)
+           && combatHandSummary is not null
+           && combatHandSummary.Contains("Strike", StringComparison.Ordinal)
+           && combatHandSummary.Contains("Defend", StringComparison.Ordinal)
+           && !combatHandSummary.Contains("Noise", StringComparison.Ordinal),
+        $"Expected combatHandSummary to come from visible UI holders, got '{combatHandSummary ?? "<null>"}'.");
 }
 
 static void TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress()
@@ -3514,7 +3706,14 @@ static void TestLiveExportTrackerPartialMerge()
         Array.Empty<string>(),
         new LiveExportEncounterSummary("Rest Site", "RestSite", false, null),
         new Dictionary<string, object?>(),
-        new Dictionary<string, string?>());
+        new Dictionary<string, string?>())
+    {
+        CombatHandCount = 5,
+        DrawPileCount = 10,
+        DiscardPileCount = 4,
+        ExhaustPileCount = 1,
+        PlayPileCount = 2,
+    };
     var first = tracker.Apply(seed).Snapshot;
 
     var partialPoll = new LiveExportObservation(
@@ -3545,6 +3744,80 @@ static void TestLiveExportTrackerPartialMerge()
     Assert(second.Relics.SequenceEqual(first.Relics, StringComparer.Ordinal), "Expected partial runtime poll not to clear relics.");
     Assert(second.Potions.SequenceEqual(first.Potions, StringComparer.Ordinal), "Expected partial runtime poll not to clear potions.");
     Assert(second.CurrentChoices.Select(choice => choice.Label).SequenceEqual(first.CurrentChoices.Select(choice => choice.Label), StringComparer.Ordinal), "Expected unresolved choice poll not to clear visible choices.");
+    Assert(second.CombatHandCount == first.CombatHandCount, "Expected partial runtime poll not to clear structured combat hand count.");
+    Assert(second.DrawPileCount == first.DrawPileCount, "Expected partial runtime poll not to clear draw pile count.");
+    Assert(second.DiscardPileCount == first.DiscardPileCount, "Expected partial runtime poll not to clear discard pile count.");
+    Assert(second.ExhaustPileCount == first.ExhaustPileCount, "Expected partial runtime poll not to clear exhaust pile count.");
+    Assert(second.PlayPileCount == first.PlayPileCount, "Expected partial runtime poll not to clear play pile count.");
+}
+
+static void TestLiveExportTrackerClearsCombatStructuredFieldsOutsideCombat()
+{
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
+    var combatSeed = new LiveExportObservation(
+        "runtime-poll",
+        DateTimeOffset.UtcNow.AddSeconds(-1),
+        "run-001",
+        "active",
+        "combat",
+        1,
+        9,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        Array.Empty<LiveExportChoiceSummary>(),
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("Jaw Worm", "Combat", true, 2),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["combatHandSummary"] = "1:Strike|Attack|1;2:Defend|Skill|1;3:Bash|Attack|2",
+            ["combatTargetCount"] = "1",
+            ["enemyIntentSummary"] = "Jaw Worm attacks for 11",
+        })
+    {
+        CombatHandCount = 3,
+        DrawPileCount = 10,
+        DiscardPileCount = 4,
+        ExhaustPileCount = 1,
+        PlayPileCount = 2,
+        EnemyIntentSummary = "Jaw Worm attacks for 11",
+    };
+    var first = tracker.Apply(combatSeed).Snapshot;
+
+    var rewardAftermath = new LiveExportObservation(
+        "reward-screen-opened",
+        DateTimeOffset.UtcNow,
+        "run-001",
+        "active",
+        "rewards",
+        1,
+        9,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("choice", "넘기기", null, "넘기기"),
+        },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("RewardsScreen", "Reward", false, null),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>());
+    var second = tracker.Apply(rewardAftermath).Snapshot;
+
+    Assert(first.CombatHandCount == 3 && first.DrawPileCount == 10, "Expected seed combat snapshot to hold structured combat values.");
+    Assert(second.CombatHandCount is null, "Expected combat hand count to clear outside combat.");
+    Assert(second.DrawPileCount is null, "Expected draw pile count to clear outside combat.");
+    Assert(second.DiscardPileCount is null, "Expected discard pile count to clear outside combat.");
+    Assert(second.ExhaustPileCount is null, "Expected exhaust pile count to clear outside combat.");
+    Assert(second.PlayPileCount is null, "Expected play pile count to clear outside combat.");
+    Assert(second.EnemyIntentSummary is null, "Expected enemy intent summary to clear outside combat.");
+    Assert(second.Meta.TryGetValue("combatHandSummary", out var combatHandSummary) && combatHandSummary is null, "Expected combatHandSummary meta to clear outside combat.");
+    Assert(second.Meta.TryGetValue("combatTargetCount", out var combatTargetCount) && combatTargetCount is null, "Expected combatTargetCount meta to clear outside combat.");
+    Assert(second.Meta.TryGetValue("enemyIntentSummary", out var enemyIntentMeta) && enemyIntentMeta is null, "Expected enemyIntentSummary meta to clear outside combat.");
 }
 
 static void TestLiveExportTrackerPrefersExplicitPublishedSceneOverStickyFallback()
@@ -4190,6 +4463,152 @@ static void TestKnowledgeCatalogService()
     }
 }
 
+static void TestAdvisorDisplaySanitizer()
+{
+    var sanitized = AdvisorDisplaySanitizer.SanitizeText("[color=gold]Gain[/color] {gold} 99 <color=#ff0>now</color> :: reward");
+    Assert(string.Equals(sanitized, "Gain 99 now reward", StringComparison.Ordinal), $"Expected sanitizer to strip raw markers, got '{sanitized ?? "<null>"}'.");
+
+    var namedColorSanitized = AdvisorDisplaySanitizer.SanitizeText("[gold]희귀 카드[/gold] [blue]1[/blue]장 [red]감소[/red]");
+    Assert(string.Equals(namedColorSanitized, "희귀 카드 1장 감소", StringComparison.Ordinal), $"Expected sanitizer to strip named color tags, got '{namedColorSanitized ?? "<null>"}'.");
+
+    var prettified = AdvisorDisplaySanitizer.PrettifyIdentifier("CARD.STRIKE_IRONCLAD");
+    Assert(string.Equals(prettified, "Strike Ironclad", StringComparison.Ordinal), $"Expected prettified identifier, got '{prettified ?? "<null>"}'.");
+}
+
+static void TestAdvisorKnowledgeDisplayResolver()
+{
+    var resolver = CreateDisplayKnowledgeResolver();
+    var option = new AdvisorSceneOption(
+        "Pommel Strike",
+        "reward-pick-card",
+        "pommel-strike",
+        null,
+        true,
+        new[] { "reward-card", "scene:reward" });
+
+    var resolved = resolver.ResolveSceneOption(option);
+    Assert(string.Equals(resolved.Title, "몸통 박치기", StringComparison.Ordinal), $"Expected localized card title, got '{resolved.Title}'.");
+    Assert(string.Equals(resolved.Description, "적에게 피해를 주고 카드를 1장 뽑습니다.", StringComparison.Ordinal), $"Expected localized card description, got '{resolved.Description ?? "<null>"}'.");
+    Assert(resolved.UsedKnowledge, "Expected scene option resolution to report knowledge usage.");
+
+    var fallbackDescription = resolver.ResolveDescription(null, "Pommel Strike", "pommel-strike");
+    Assert(string.Equals(fallbackDescription, "적에게 피해를 주고 카드를 1장 뽑습니다.", StringComparison.Ordinal), $"Expected description fallback from knowledge, got '{fallbackDescription ?? "<null>"}'.");
+}
+
+static void TestAdvisorSceneDisplayFormatter()
+{
+    var resolver = CreateDisplayKnowledgeResolver();
+    var player = new AdvisorScenePlayerContext(70, 80, 3, 120, 12, Array.Empty<string>(), Array.Empty<string>());
+    var combatScene = new AdvisorSceneArtifact(
+        AdvisorSceneSchema.Version,
+        "live",
+        "display-combat-run",
+        DateTimeOffset.UtcNow,
+        DateTimeOffset.UtcNow,
+        null,
+        null,
+        null,
+        "combat",
+        "player-play-open",
+        "combat",
+        "raw combat summary",
+        player,
+        Array.Empty<AdvisorSceneUiSurface>(),
+        new[]
+        {
+            new AdvisorSceneOption("Strike", "combat-hand-card", "CARD.STRIKE_IRONCLAD", "Deal 6 damage.", true, new[] { "category:hand-card" }),
+            new AdvisorSceneOption("DrawPile", "choice", "draw-pile", null, true, new[] { "category:pile-button" }),
+            new AdvisorSceneOption("End Turn", "choice", "end-turn", null, true, new[] { "category:combat-action" }),
+            new AdvisorSceneOption("Ping", "utility", "ping", "Diagnostic ping.", true, new[] { "category:utility" }),
+        },
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new Dictionary<string, double>(),
+        Array.Empty<string>())
+    {
+        Combat = new AdvisorSceneCombatDetails(
+            true,
+            "jaw-worm",
+            "player-play-open",
+            2,
+            3,
+            "1:CARD.STRIKE_IRONCLAD|Attack|1;2:CARD.DEFEND_IRONCLAD|Skill|1;3:pommel-strike|Attack|1",
+            10,
+            4,
+            1,
+            2,
+            1,
+            1,
+            false,
+            "Jaw Worm attacks for 11"),
+    };
+    var combatContext = AdvisorSceneDisplayFormatter.FormatContext(combatScene, resolver);
+    Assert(!combatContext.Contains("1:CARD.STRIKE_IRONCLAD", StringComparison.Ordinal), $"Expected combat context to humanize the raw hand summary, got '{combatContext}'.");
+    Assert(!combatContext.Contains("|Attack|1", StringComparison.Ordinal), $"Expected combat context to strip machine summary separators, got '{combatContext}'.");
+    Assert(combatContext.Contains("비용 1", StringComparison.Ordinal), $"Expected combat context to keep human-readable card metadata, got '{combatContext}'.");
+    Assert(combatContext.Contains("명시적 피격 적: 1", StringComparison.Ordinal), $"Expected combat context to label HittableEnemyCount correctly, got '{combatContext}'.");
+
+    var combatSummary = AdvisorSceneDisplayFormatter.FormatSummary(combatScene, resolver);
+    Assert(!combatSummary.Contains("1:CARD.STRIKE_IRONCLAD", StringComparison.Ordinal), $"Expected combat summary to avoid raw hand summary payloads, got '{combatSummary}'.");
+    Assert(combatSummary.Contains("핵심 손패", StringComparison.Ordinal), $"Expected combat summary to keep the humanized hand summary section, got '{combatSummary}'.");
+
+    var combatOptions = AdvisorSceneDisplayFormatter.FormatOptions(combatScene, resolver);
+    Assert(combatOptions.Contains("손패 카드", StringComparison.Ordinal), "Expected combat formatter to render the hand-card section.");
+    Assert(combatOptions.Contains("더미 버튼", StringComparison.Ordinal), "Expected combat formatter to render the pile-button section.");
+    Assert(combatOptions.Contains("전투 행동", StringComparison.Ordinal), "Expected combat formatter to render the combat-action section.");
+    Assert(!combatOptions.Contains("Ping", StringComparison.OrdinalIgnoreCase), "Expected combat formatter to hide utility Ping from the default option panel.");
+
+    var rewardScene = new AdvisorSceneArtifact(
+        AdvisorSceneSchema.Version,
+        "live",
+        "display-reward-run",
+        DateTimeOffset.UtcNow,
+        DateTimeOffset.UtcNow,
+        null,
+        null,
+        null,
+        "reward",
+        "claim",
+        "reward",
+        "reward summary",
+        player,
+        Array.Empty<AdvisorSceneUiSurface>(),
+        new[]
+        {
+            new AdvisorSceneOption("보상 {gold}", "gold", "reward-gold", "[color=#ff0]{gold} 100[/color]", true, new[] { "reward-gold" }),
+            new AdvisorSceneOption("Pommel Strike", "reward-pick-card", "pommel-strike", null, true, new[] { "reward-card" }),
+        },
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new Dictionary<string, double>(),
+        Array.Empty<string>())
+    {
+        Reward = new AdvisorSceneRewardDetails("claim", "claim", true, false, true, false, 2, true),
+    };
+    var rewardOptions = AdvisorSceneDisplayFormatter.FormatOptions(rewardScene, resolver);
+    Assert(!rewardOptions.Contains("{gold}", StringComparison.Ordinal), $"Expected reward formatter to sanitize raw gold markers, got '{rewardOptions}'.");
+    Assert(rewardOptions.Contains("몸통 박치기", StringComparison.Ordinal), "Expected reward formatter to localize the card label.");
+    Assert(rewardOptions.Contains("적에게 피해를 주고 카드를 1장 뽑습니다.", StringComparison.Ordinal), "Expected reward formatter to fill the missing card description from knowledge.");
+}
+
+static void TestDeckDisplayFormatter()
+{
+    var resolver = CreateDisplayKnowledgeResolver();
+    var deckText = DeckDisplayFormatter.FormatDeck(
+        new[]
+        {
+            new LiveExportCardSummary("Pommel Strike", "pommel-strike", 1, "Attack", false),
+            new LiveExportCardSummary("Pommel Strike", "pommel-strike", 1, "Attack", true),
+            new LiveExportCardSummary("Defend", "CARD.DEFEND_IRONCLAD", 1, "Skill", false),
+        },
+        resolver);
+
+    Assert(deckText.Contains("총 카드 수: 3", StringComparison.Ordinal), "Expected deck formatter to include the total card count.");
+    Assert(deckText.Contains("- 몸통 박치기 x 2", StringComparison.Ordinal), $"Expected deck formatter to aggregate duplicate localized card names, got '{deckText}'.");
+    Assert(deckText.Contains("- 수비 x 1", StringComparison.Ordinal), $"Expected raw card ids to resolve to localized titles, got '{deckText}'.");
+    Assert(!deckText.Contains("CARD.DEFEND_IRONCLAD", StringComparison.Ordinal), $"Expected deck formatter to avoid raw ids, got '{deckText}'.");
+}
+
 static void TestAdvicePromptBuilder()
 {
     var configuration = ScaffoldConfiguration.CreateLocalDefault();
@@ -4816,6 +5235,107 @@ static void TestCodexCliTraceParser()
     Assert(!string.IsNullOrWhiteSpace(lastAgentMessageJson) && lastAgentMessageJson.Contains("\"headline\":\"h\"", StringComparison.Ordinal), "Expected final agent message JSON to be captured from item.completed events.");
 }
 
+static void TestCodexCliContextOverflowDiagnostic()
+{
+    const string trace = """
+    {"type":"thread.started","thread_id":"019cdcfc-aefb-76c1-92e7-d36d9d89d3cb"}
+    {"type":"turn.started"}
+    {"type":"error","message":"Error running remote compact task: {\n  \"error\": {\n    \"message\": \"Your input exceeds the context window of this model. Please adjust your input and try again.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"input\",\n    \"code\": \"context_length_exceeded\"\n  }\n}"}
+    {"type":"turn.failed","error":{"message":"Error running remote compact task: {\n  \"error\": {\n    \"message\": \"Your input exceeds the context window of this model. Please adjust your input and try again.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"input\",\n    \"code\": \"context_length_exceeded\"\n  }\n}"}}
+    """;
+
+    var diagnostic = FoundationCodexCliClient.TryExtractExecErrorMessage(trace);
+
+    Assert(
+        string.Equals(diagnostic, "Codex 요청이 모델 컨텍스트 한도를 초과했습니다. 자동 조언 세션을 새로 시작하거나 입력 크기를 줄여야 합니다.", StringComparison.Ordinal),
+        $"Expected context overflow to surface a direct diagnostic. actual={diagnostic ?? "null"}");
+}
+
+static void TestHostCodexCliClientRetriesWithoutResumeAfterContextOverflow()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        var fakeInner = new FakeFoundationCodexSessionClient();
+        fakeInner.Enqueue(sessionId => (
+            new Sts2AiCompanion.Foundation.Contracts.AdviceResponse(
+                "degraded",
+                "Codex 조언 사용 불가",
+                "Codex 요청이 모델 컨텍스트 한도를 초과했습니다. 자동 조언 세션을 새로 시작하거나 입력 크기를 줄여야 합니다.",
+                "현재 상태를 다시 확인하세요.",
+                null,
+                new[] { "Codex CLI 실행이 실패했거나 응답을 읽을 수 없었습니다." },
+                new[] { "Codex 요청이 모델 컨텍스트 한도를 초과했습니다. 자동 조언 세션을 새로 시작하거나 입력 크기를 줄여야 합니다." },
+                Array.Empty<string>(),
+                new[] { "Codex 요청이 모델 컨텍스트 한도를 초과했습니다. 자동 조언 세션을 새로 시작하거나 입력 크기를 줄여야 합니다." },
+                null,
+                Array.Empty<string>(),
+                DateTimeOffset.UtcNow,
+                "retry-run",
+                "choice-list-presented",
+                sessionId,
+                "{\"type\":\"thread.started\"}\n{\"type\":\"error\",\"message\":\"Error running remote compact task: {\\n  \\\"error\\\": {\\n    \\\"message\\\": \\\"Your input exceeds the context window of this model. Please adjust your input and try again.\\\",\\n    \\\"type\\\": \\\"invalid_request_error\\\",\\n    \\\"param\\\": \\\"input\\\",\\n    \\\"code\\\": \\\"context_length_exceeded\\\"\\n  }\\n}\"}"),
+            sessionId));
+        fakeInner.Enqueue(sessionId => (
+            new Sts2AiCompanion.Foundation.Contracts.AdviceResponse(
+                "ok",
+                "headline-choice-list-presented",
+                "summary-choice-list-presented",
+                "action-choice-list-presented",
+                "Pommel Strike",
+                new[] { "reason-1" },
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                Array.Empty<string>(),
+                0.8,
+                Array.Empty<string>(),
+                DateTimeOffset.UtcNow,
+                "retry-run",
+                "choice-list-presented",
+                "new-session-001",
+                "{\"status\":\"ok\"}"),
+            "new-session-001"));
+
+        var client = Activator.CreateInstance(
+            typeof(Sts2AiCompanion.Host.CodexCliClient),
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+            binder: null,
+            args: new object?[] { fakeInner },
+            culture: null) as Sts2AiCompanion.Host.CodexCliClient;
+        Assert(client is not null, "Expected CodexCliClient test hook constructor to be available.");
+        var inputPack = new AdviceInputPack(
+            "retry-run",
+            "choice-list-presented",
+            DateTimeOffset.UtcNow,
+            false,
+            "event",
+            "summary",
+            CreateHostSnapshot("retry-run", "event"),
+            Array.Empty<LiveExportEventEnvelope>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<string>(),
+            "constraints");
+
+        var (response, sessionId) = client!.ExecuteAsync(
+            inputPack,
+            "prompt",
+            "old-session-001",
+            configuration.Assistant.CodexModel,
+            configuration.Assistant.CodexReasoningEffort,
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        Assert(fakeInner.RequestCount == 2, $"Expected a single retry without resume after context overflow. actual={fakeInner.RequestCount}");
+        Assert(fakeInner.SeenSessionIds.Count == 2 && fakeInner.SeenSessionIds[0] == "old-session-001" && fakeInner.SeenSessionIds[1] is null, "Expected retry path to clear the Codex session id on the second attempt.");
+        Assert(string.Equals(response.Status, "ok", StringComparison.Ordinal), $"Expected retry response to succeed. actual={response.Status}");
+        Assert(string.Equals(sessionId, "new-session-001", StringComparison.Ordinal), $"Expected retry path to return the new session id. actual={sessionId ?? "null"}");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void ExecuteCompanionHostAdviceFlowTest(bool collectorModeEnabled)
 {
     var root = CreateTempDirectory();
@@ -4903,6 +5423,37 @@ static void TestCompanionHostLiveSceneModelArtifacts()
     }
 }
 
+static void TestCompanionHostCombatSceneModelClassification()
+{
+    var sceneModel = ResolveHostSceneModelForSnapshot(
+        "combat-classification",
+        "combat-started",
+        CreateCombatSceneModelSnapshot("scene-model-combat-run"));
+
+    Assert(string.Equals(sceneModel.SceneType, "combat", StringComparison.Ordinal), $"Expected combat scene type, got {sceneModel.SceneType}.");
+    Assert(string.Equals(sceneModel.CanonicalOwner, "combat", StringComparison.Ordinal), $"Expected combat canonical owner, got {sceneModel.CanonicalOwner}.");
+    Assert(sceneModel.Combat is not null, "Expected combat details.");
+    Assert(sceneModel.Combat.HandCount == 3, $"Expected structured combat hand count 3, got {sceneModel.Combat.HandCount}.");
+    Assert(sceneModel.Combat.DrawPileCount == 10, $"Expected draw pile count 10, got {sceneModel.Combat.DrawPileCount?.ToString() ?? "<null>"}.");
+    Assert(sceneModel.Combat.DiscardPileCount == 4, $"Expected discard pile count 4, got {sceneModel.Combat.DiscardPileCount?.ToString() ?? "<null>"}.");
+    Assert(sceneModel.Combat.ExhaustPileCount == 1, $"Expected exhaust pile count 1, got {sceneModel.Combat.ExhaustPileCount?.ToString() ?? "<null>"}.");
+    Assert(sceneModel.Combat.PlayPileCount == 2, $"Expected play pile count 2, got {sceneModel.Combat.PlayPileCount?.ToString() ?? "<null>"}.");
+    Assert(string.Equals(sceneModel.Combat.EnemyIntentSummary, "Jaw Worm attacks for 11", StringComparison.Ordinal), $"Expected enemy intent summary, got '{sceneModel.Combat.EnemyIntentSummary ?? "<null>"}'.");
+    Assert(!sceneModel.MissingFacts.Contains("combat-pile-counts-partial", StringComparer.Ordinal), "Structured pile counts should not surface as missing facts when populated.");
+    Assert(!sceneModel.MissingFacts.Contains("combat-enemy-intent-summary-missing", StringComparer.Ordinal), "Enemy intent should not be missing when the structured field is populated.");
+
+    var handCards = sceneModel.Options.Count(option => option.Tags.Contains("category:hand-card", StringComparer.OrdinalIgnoreCase));
+    var pileButtons = sceneModel.Options.Count(option => option.Tags.Contains("category:pile-button", StringComparer.OrdinalIgnoreCase));
+    var combatActions = sceneModel.Options.Count(option => option.Tags.Contains("category:combat-action", StringComparer.OrdinalIgnoreCase));
+    var utilityOptions = sceneModel.Options.Count(option => option.Tags.Contains("category:utility", StringComparer.OrdinalIgnoreCase));
+    Assert(handCards == 3, $"Expected three hand-card options, got {handCards}.");
+    Assert(pileButtons == 4, $"Expected four pile-button options, got {pileButtons}.");
+    Assert(combatActions == 1, $"Expected one combat-action option, got {combatActions}.");
+    Assert(utilityOptions == 1, $"Expected one utility option, got {utilityOptions}.");
+    Assert(sceneModel.Options.Any(option => string.Equals(option.Label, "Ping", StringComparison.OrdinalIgnoreCase)
+                                            && option.Tags.Contains("category:utility", StringComparer.OrdinalIgnoreCase)), "Expected Ping to stay present in scene truth as a utility option.");
+}
+
 static void ExecuteHostSceneModelScenario(HostSceneModelScenario scenario)
 {
     var root = CreateTempDirectory();
@@ -4981,6 +5532,70 @@ static void ExecuteHostSceneModelScenario(HostSceneModelScenario scenario)
             host.RefreshAsync().GetAwaiter().GetResult();
             var secondLineCount = File.ReadAllLines(host.CurrentSnapshot.Paths.AdvisorSceneLogPath!, Encoding.UTF8).Length;
             Assert(secondLineCount == initialLineCount, $"Expected unchanged refresh not to append advisor-scene.ndjson for scenario {scenario.Name}.");
+        }
+        finally
+        {
+            host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static AdvisorSceneArtifact ResolveHostSceneModelForSnapshot(
+    string scenarioName,
+    string eventKind,
+    LiveExportSnapshot snapshot)
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        configuration = configuration with
+        {
+            Assistant = configuration.Assistant with
+            {
+                AutoAdviceEnabled = false,
+            },
+        };
+        SeedKnowledgeCatalog(root);
+
+        var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+        Directory.CreateDirectory(layout.LiveRoot);
+        var session = new LiveExportSession(
+            $"session-{snapshot.RunId}",
+            snapshot.RunId,
+            "active",
+            DateTimeOffset.UtcNow.AddMinutes(-1),
+            DateTimeOffset.UtcNow,
+            1,
+            layout.LiveRoot,
+            eventKind,
+            snapshot.CurrentScreen);
+        var events = new[]
+        {
+            new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, snapshot.RunId, eventKind, snapshot.CurrentScreen, snapshot.Act, snapshot.Floor, new Dictionary<string, object?>()),
+        };
+
+        WriteJson(layout.SnapshotPath, snapshot);
+        WriteJson(layout.SessionPath, session);
+        File.WriteAllText(layout.SummaryPath, $"{scenarioName} summary", Encoding.UTF8);
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+        File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+        File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+        Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+        var host = new CompanionHost(configuration, root, new FakeCodexSessionClient());
+        try
+        {
+            host.RefreshAsync().GetAwaiter().GetResult();
+            return host.CurrentSnapshot.LatestSceneModel
+                ?? throw new InvalidOperationException($"Expected latest scene model for scenario {scenarioName}.");
         }
         finally
         {
@@ -5111,6 +5726,84 @@ static IReadOnlyList<HostSceneModelScenario> CreateHostSceneModelScenarios()
             "map",
             0,
             new[] { "map-route-context-missing", "map-current-node-identity-missing" }),
+    };
+}
+
+static LiveExportSnapshot CreateCombatSceneModelSnapshot(string runId)
+{
+    return CreateHostSnapshot(runId, "combat") with
+    {
+        CurrentScreen = "combat",
+        Encounter = new LiveExportEncounterSummary("Jaw Worm", "Combat", true, 2),
+        CombatHandCount = 3,
+        DrawPileCount = 10,
+        DiscardPileCount = 4,
+        ExhaustPileCount = 1,
+        PlayPileCount = 2,
+        EnemyIntentSummary = "Jaw Worm attacks for 11",
+        CurrentChoices = new[]
+        {
+            new LiveExportChoiceSummary("combat-hand-card", "Strike", "CARD.STRIKE_IRONCLAD", "Deal 6 damage.")
+            {
+                SemanticHints = new[] { "combat-hand-card" },
+            },
+            new LiveExportChoiceSummary("combat-hand-card", "Defend", "CARD.DEFEND_IRONCLAD", "Gain 5 Block.")
+            {
+                SemanticHints = new[] { "combat-hand-card" },
+            },
+            new LiveExportChoiceSummary("card", "Pommel Strike", "pommel-strike", "Deal damage and draw a card.")
+            {
+                SemanticHints = new[] { "combat-hand-card" },
+            },
+            new LiveExportChoiceSummary("choice", "DrawPile", "draw-pile", null)
+            {
+                BindingId = "DrawPile",
+                SemanticHints = new[] { "combat-pile-button" },
+            },
+            new LiveExportChoiceSummary("choice", "DiscardPile", "discard-pile", null)
+            {
+                BindingId = "DiscardPile",
+                SemanticHints = new[] { "combat-pile-button" },
+            },
+            new LiveExportChoiceSummary("choice", "ExhaustPile", "exhaust-pile", null)
+            {
+                BindingId = "ExhaustPile",
+                SemanticHints = new[] { "combat-pile-button" },
+            },
+            new LiveExportChoiceSummary("choice", "PlayPile", "play-pile", null)
+            {
+                BindingId = "PlayPile",
+                SemanticHints = new[] { "combat-pile-button" },
+            },
+            new LiveExportChoiceSummary("choice", "End Turn", "end-turn", null)
+            {
+                SemanticHints = new[] { "combat-end-turn" },
+            },
+            new LiveExportChoiceSummary("utility", "Ping", "ping", "Diagnostic ping.")
+            {
+                SemanticHints = new[] { "utility", "ping" },
+            },
+        },
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choiceExtractorPath"] = "combat.hand",
+            ["currentSceneType"] = "CombatScreen",
+            ["rootTypeSummary"] = "CombatScreen",
+            ["flowScreen"] = "combat",
+            ["visibleScreen"] = "combat",
+            ["foregroundOwner"] = "combat",
+            ["foregroundActionLane"] = "player-play-open",
+            ["combatHandSummary"] = "Strike, Defend, Pommel Strike",
+            ["combatTargetCount"] = "1",
+            ["combatTargetableEnemyCount"] = "1",
+            ["combatHittableEnemyCount"] = "1",
+            ["combatTargetingInProgress"] = "false",
+        },
+        PublishedCurrentScreen = "combat",
+        PublishedVisibleScreen = "combat",
+        PublishedSceneAuthority = "hook",
+        PublishedSceneStability = "stable",
     };
 }
 
@@ -5794,6 +6487,66 @@ static void SeedKnowledgeCatalog(string root)
         Array.Empty<StaticKnowledgeEntry>(),
         Array.Empty<StaticKnowledgeEntry>());
     File.WriteAllText(Path.Combine(knowledgeRoot, "catalog.latest.json"), JsonSerializer.Serialize(catalog, ConfigurationLoader.JsonOptions), Encoding.UTF8);
+}
+
+static AdvisorKnowledgeDisplayResolver CreateDisplayKnowledgeResolver()
+{
+    var catalog = new StaticKnowledgeCatalog(
+        DateTimeOffset.UtcNow,
+        new StaticKnowledgeMetadata("display-v1", "display-test", DateTimeOffset.UtcNow, new Dictionary<string, string?>()),
+        new[]
+        {
+            new StaticKnowledgeEntry(
+                "pommel-strike",
+                "몸통 박치기",
+                "localization-scan",
+                true,
+                "적에게 피해를 주고 카드를 1장 뽑습니다.",
+                new[] { "card", "attack" },
+                new Dictionary<string, string?>
+                {
+                    ["englishTitle"] = "Pommel Strike",
+                    ["classId"] = "POMMEL_STRIKE",
+                    ["title"] = "몸통 박치기",
+                    ["description"] = "적에게 피해를 주고 카드를 1장 뽑습니다.",
+                },
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "strike-ironclad",
+                "타격",
+                "localization-scan",
+                true,
+                "적에게 피해를 줍니다.",
+                new[] { "card", "attack" },
+                new Dictionary<string, string?>
+                {
+                    ["classId"] = "STRIKE_IRONCLAD",
+                    ["title"] = "타격",
+                    ["description"] = "적에게 피해를 줍니다.",
+                },
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "defend-ironclad",
+                "수비",
+                "localization-scan",
+                true,
+                "방어도를 얻습니다.",
+                new[] { "card", "skill" },
+                new Dictionary<string, string?>
+                {
+                    ["classId"] = "DEFEND_IRONCLAD",
+                    ["title"] = "수비",
+                    ["description"] = "방어도를 얻습니다.",
+                },
+                Array.Empty<StaticKnowledgeOption>()),
+        },
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>());
+    return new AdvisorKnowledgeDisplayResolver(catalog);
 }
 
 static void SeedRewardKnowledgeCatalog(string root)
@@ -6961,9 +7714,17 @@ file sealed class FakeCombatPlayerRoot
 
 file sealed class FakePlayerCombatState
 {
+    public object[] Deck { get; init; } = Array.Empty<object>();
+
     public object[] Hand { get; init; } = Array.Empty<object>();
 
     public object[] DrawPile { get; init; } = Array.Empty<object>();
+
+    public object[] DiscardPile { get; init; } = Array.Empty<object>();
+
+    public object[] ExhaustPile { get; init; } = Array.Empty<object>();
+
+    public object[] PlayPile { get; init; } = Array.Empty<object>();
 }
 
 file sealed class FakeCombatCard
@@ -7001,6 +7762,8 @@ file sealed class FakeNGameRoot
 file sealed class FakeCombatState
 {
     public int? RoundNumber { get; init; }
+
+    public object[] Cards { get; init; } = Array.Empty<object>();
 }
 
 file sealed class FakeEncounterState
@@ -7032,6 +7795,8 @@ file sealed class FakeRuntimePlayerHand
     public bool InCardPlay { get; init; }
 
     public string? CurrentMode { get; init; }
+
+    public object[] ActiveHolders { get; init; } = Array.Empty<object>();
 
     public int _draggedHolderIndex { get; init; }
 

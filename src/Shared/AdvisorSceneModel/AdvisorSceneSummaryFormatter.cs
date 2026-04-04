@@ -61,6 +61,14 @@ public static class AdvisorSceneSummaryFormatter
             builder.Append(", 적 의도 요약은 아직 정규화되지 않았다");
         }
 
+        if (combat.DrawPileCount is not null
+            || combat.DiscardPileCount is not null
+            || combat.ExhaustPileCount is not null
+            || combat.PlayPileCount is not null)
+        {
+            builder.Append($", 더미 draw/discard/exhaust/play = {FormatScalar(combat.DrawPileCount)}/{FormatScalar(combat.DiscardPileCount)}/{FormatScalar(combat.ExhaustPileCount)}/{FormatScalar(combat.PlayPileCount)}");
+        }
+
         builder.Append('.');
     }
 

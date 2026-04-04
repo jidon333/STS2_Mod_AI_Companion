@@ -42,6 +42,11 @@ Live sidecar:
 - `artifacts/companion/<runId>/advisor-scene/advisor-scene.latest.json`
 - `artifacts/companion/<runId>/advisor-scene/advisor-scene.ndjson`
 
+이 패널은 `핵심`과 `고급`으로 나뉜다.
+
+- 핵심: `sceneType / sceneStage / canonicalOwner`, `요약`, `현재 장면 맥락`, `보이는 선택지`, `누락 정보 / observer gaps`
+- 고급: `confidence / source refs`, `최근 이벤트`, `관련 지식`, `수집 런 진단`
+
 중요:
 
 - replay와 live는 같은 schema를 쓴다
@@ -160,6 +165,17 @@ observerGaps = 왜 부족한가
 ```
 
 WPF에서는 이 값이 `누락 정보 / observer gaps` 패널로 분리되어 보인다.
+
+## WPF에서 추가로 보는 것
+
+WPF sidecar는 `scene model`만 복사해서 보여 주지 않는다.
+
+- `DeckText`는 카드명을 집계형으로 보여 준다
+- 카드명과 option label은 display-only knowledge/localization을 거쳐 더 읽기 쉽게 바뀔 수 있다
+- `SceneSummaryText`는 raw summary를 그대로 복사하지 않고 scene-aware formatter를 거친다
+- 기본 옵션에서 `Ping` 같은 utility/diagnostic choice는 숨긴다
+
+즉, WPF는 truth source가 아니라 `읽기 좋은 표시 계층`이다.
 
 ### 7. confidence / sourceRefs
 

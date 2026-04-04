@@ -122,6 +122,9 @@ WPF는 사람이 직접 보는 창이다.
 - options를 보여준다
 - missing facts / observer gaps를 보여준다
 - confidence / source refs를 보여준다
+- scene-aware display formatter로 요약과 현재 장면 맥락을 분리해 보여 준다
+- display-only sanitizer / knowledge resolver는 `src/Shared/AdvisorSceneDisplay/`, WPF formatter는 `src/Sts2AiCompanion.Wpf/Display/`에 둔다
+- display-only knowledge/localization은 label과 description을 다듬는 데만 쓰고 truth source로 쓰지 않는다
 
 WPF는 truth source가 아니다.
 

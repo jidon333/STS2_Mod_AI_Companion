@@ -190,7 +190,8 @@ public sealed class LiveExportStateTracker
         {
             warnings = MergeWarnings(warnings, new[] { $"state-regression: combat-conflict-with-screen:{screen}" });
         }
-        var meta = ApplyScreenMeta(MergeMeta(previous.Meta, observation.Meta), previous.Meta, observation, screen);
+        var mergedMeta = MergeMeta(previous.Meta, observation.Meta);
+        var meta = ApplyScreenMeta(mergedMeta, previous.Meta, observation, screen);
         var rawCurrentScreen = ReadMetaValue(meta, "rawCurrentScreen")
                                ?? ReadMetaValue(meta, "rawCurrentScreenValue")
                                ?? ReadMetaValue(observation.Meta, "rawCurrentScreen")
@@ -224,6 +225,24 @@ public sealed class LiveExportStateTracker
                                           ?? ReadMetaValue(meta, "sceneAuthority");
         var compatibilitySceneStability = ReadMetaValue(meta, "compatSceneStability")
                                           ?? ReadMetaValue(meta, "sceneStability");
+        var combatHandCount = observation.CombatHandCount
+                              ?? ReadMetaInt(observation.Meta, "combatHandCount");
+        var drawPileCount = observation.DrawPileCount
+                            ?? ReadMetaInt(observation.Meta, "drawPileCount");
+        var discardPileCount = observation.DiscardPileCount
+                               ?? ReadMetaInt(observation.Meta, "discardPileCount");
+        var exhaustPileCount = observation.ExhaustPileCount
+                               ?? ReadMetaInt(observation.Meta, "exhaustPileCount");
+        var playPileCount = observation.PlayPileCount
+                            ?? ReadMetaInt(observation.Meta, "playPileCount");
+        var enemyIntentSummary = observation.EnemyIntentSummary
+                                 ?? ReadMetaValue(observation.Meta, "enemyIntentSummary")
+                                 ?? ReadMetaValue(observation.Meta, "enemy-intent-summary");
+        var preserveCombatStructuredFields = IsCombatContextActive(screen, observation, encounter);
+        if (!preserveCombatStructuredFields)
+        {
+            meta = ClearCombatDisplayMeta(meta);
+        }
 
         var recentChanges = previous.RecentChanges
             .Concat(DescribeDiff(previous, screen, player, deck, relics, potions, choices, observation.TriggerKind))
@@ -261,6 +280,12 @@ public sealed class LiveExportStateTracker
             CompatibilitySceneReady = compatibilitySceneReady,
             CompatibilitySceneAuthority = compatibilitySceneAuthority,
             CompatibilitySceneStability = compatibilitySceneStability,
+            CombatHandCount = preserveCombatStructuredFields ? combatHandCount ?? previous.CombatHandCount : null,
+            DrawPileCount = preserveCombatStructuredFields ? drawPileCount ?? previous.DrawPileCount : null,
+            DiscardPileCount = preserveCombatStructuredFields ? discardPileCount ?? previous.DiscardPileCount : null,
+            ExhaustPileCount = preserveCombatStructuredFields ? exhaustPileCount ?? previous.ExhaustPileCount : null,
+            PlayPileCount = preserveCombatStructuredFields ? playPileCount ?? previous.PlayPileCount : null,
+            EnemyIntentSummary = preserveCombatStructuredFields ? enemyIntentSummary ?? previous.EnemyIntentSummary : null,
         };
     }
 
@@ -519,6 +544,74 @@ public sealed class LiveExportStateTracker
 
         return merged;
     }
+
+    private static bool IsCombatContextActive(
+        string? logicalScreen,
+        LiveExportObservation observation,
+        LiveExportEncounterSummary? encounter)
+    {
+        if (encounter?.InCombat == true)
+        {
+            return true;
+        }
+
+        if (IsCombatScreen(logicalScreen)
+            || IsCombatScreen(observation.SemanticScreen)
+            || IsCombatScreen(observation.Screen))
+        {
+            return true;
+        }
+
+        return observation.CombatHandCount is not null
+               || observation.DrawPileCount is not null
+               || observation.DiscardPileCount is not null
+               || observation.ExhaustPileCount is not null
+               || observation.PlayPileCount is not null
+               || !string.IsNullOrWhiteSpace(observation.EnemyIntentSummary)
+               || ReadMetaInt(observation.Meta, "combatHandCount") is not null
+               || ReadMetaInt(observation.Meta, "drawPileCount") is not null
+               || ReadMetaInt(observation.Meta, "discardPileCount") is not null
+               || ReadMetaInt(observation.Meta, "exhaustPileCount") is not null
+               || ReadMetaInt(observation.Meta, "playPileCount") is not null
+               || !string.IsNullOrWhiteSpace(ReadMetaValue(observation.Meta, "enemyIntentSummary"))
+               || !string.IsNullOrWhiteSpace(ReadMetaValue(observation.Meta, "enemy-intent-summary"))
+               || !string.IsNullOrWhiteSpace(ReadMetaValue(observation.Meta, "combatHandSummary"));
+    }
+
+    private static bool IsCombatScreen(string? value)
+    {
+        return string.Equals(value?.Trim(), "combat", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyDictionary<string, string?> ClearCombatDisplayMeta(IReadOnlyDictionary<string, string?> meta)
+    {
+        var cleared = new Dictionary<string, string?>(meta, StringComparer.OrdinalIgnoreCase);
+        foreach (var key in CombatDisplayMetaKeys)
+        {
+            if (cleared.ContainsKey(key))
+            {
+                cleared[key] = null;
+            }
+        }
+
+        return cleared;
+    }
+
+    private static readonly string[] CombatDisplayMetaKeys =
+    {
+        "combatHandSummary",
+        "combatHandCount",
+        "drawPileCount",
+        "discardPileCount",
+        "exhaustPileCount",
+        "playPileCount",
+        "enemyIntentSummary",
+        "enemy-intent-summary",
+        "combatTargetCount",
+        "combatHittableEnemyCount",
+        "combatTargetableEnemyCount",
+        "combatTargetingInProgress",
+    };
 
     private IReadOnlyDictionary<string, string?> ApplyScreenMeta(
         IReadOnlyDictionary<string, string?> mergedMeta,
@@ -799,6 +892,13 @@ public sealed class LiveExportStateTracker
     private static bool? ReadMetaBool(IReadOnlyDictionary<string, string?> meta, string key)
     {
         return meta.TryGetValue(key, out var value) && bool.TryParse(value, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static int? ReadMetaInt(IReadOnlyDictionary<string, string?> meta, string key)
+    {
+        return meta.TryGetValue(key, out var value) && int.TryParse(value, out var parsed)
             ? parsed
             : null;
     }

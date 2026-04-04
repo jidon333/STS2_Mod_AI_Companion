@@ -135,6 +135,18 @@ public sealed record LiveExportSnapshot(
 
     public string? CompatibilitySceneStability { get; init; }
 
+    public int? CombatHandCount { get; init; }
+
+    public int? DrawPileCount { get; init; }
+
+    public int? DiscardPileCount { get; init; }
+
+    public int? ExhaustPileCount { get; init; }
+
+    public int? PlayPileCount { get; init; }
+
+    public string? EnemyIntentSummary { get; init; }
+
     public static LiveExportSnapshot CreateEmpty(string runId)
     {
         return new LiveExportSnapshot(
@@ -190,6 +202,18 @@ public sealed record LiveExportObservation(
     public LiveExportChoiceDecision? ChoiceDecision { get; init; }
 
     public string? SemanticScreen { get; init; }
+
+    public int? CombatHandCount { get; init; }
+
+    public int? DrawPileCount { get; init; }
+
+    public int? DiscardPileCount { get; init; }
+
+    public int? ExhaustPileCount { get; init; }
+
+    public int? PlayPileCount { get; init; }
+
+    public string? EnemyIntentSummary { get; init; }
 
     public static LiveExportObservation Create(
         string triggerKind,

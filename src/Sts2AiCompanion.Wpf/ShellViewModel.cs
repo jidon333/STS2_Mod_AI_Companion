@@ -7,8 +7,11 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Threading;
+using Sts2AiCompanion.AdvisorSceneDisplay;
 using Sts2AiCompanion.AdvisorSceneModel;
 using Sts2AiCompanion.Host;
+using Sts2AiCompanion.Wpf.Display;
+using WpfKnowledgeCatalogService = Sts2AiCompanion.Foundation.Knowledge.KnowledgeCatalogService;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
@@ -39,6 +42,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private Dispatcher? _dispatcher;
     private CompanionHost? _host;
+    private WpfKnowledgeCatalogService? _knowledgeCatalogService;
     private DispatcherTimer? _analysisTimer;
     private string _workspaceRoot = Directory.GetCurrentDirectory();
     private bool _analysisInProgress;
@@ -59,6 +63,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     public string AdviceDetailsText { get; private set; } = "근거와 리스크 정보가 아직 없습니다.";
     public string CurrentChoicesText { get; private set; } = "없음";
     public string SceneIdentityText { get; private set; } = "없음";
+    public string SceneContextText { get; private set; } = "scene context가 아직 없습니다.";
     public string SceneSummaryText { get; private set; } = "scene model이 아직 없습니다.";
     public string SceneOptionsText { get; private set; } = "없음";
     public string SceneGapsText { get; private set; } = "없음";
@@ -80,6 +85,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         _workspaceRoot = FindWorkspaceRoot(AppContext.BaseDirectory);
         var configPath = Path.Combine(_workspaceRoot, "config", "ai-companion.sample.json");
         var configuration = ConfigurationLoader.LoadFromFile(configPath).Configuration;
+        _knowledgeCatalogService = new WpfKnowledgeCatalogService(configuration, _workspaceRoot);
         _host = new CompanionHost(configuration, _workspaceRoot);
         _host.SnapshotChanged += HostOnSnapshotChanged;
 
@@ -124,6 +130,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     public void RefreshKnowledge()
     {
+        _knowledgeCatalogService?.ReloadIfChanged();
         if (_host is not null)
         {
             Apply(_host.CurrentSnapshot);
@@ -186,6 +193,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void Apply(CompanionHostSnapshot snapshot)
     {
+        var resolver = BuildKnowledgeResolver();
         StatusLine = LocalizeStatusMessage(snapshot.Status.Message);
         RunLine = $"런: {snapshot.Status.RunId ?? "없음"}";
         var normalizedScreen = snapshot.RunState?.NormalizedState.Scene.SemanticSceneType;
@@ -212,42 +220,14 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
                     $"체력: {player.CurrentHp?.ToString() ?? "?"}/{player.MaxHp?.ToString() ?? "?"}",
                     $"골드: {player.Gold?.ToString() ?? "?"}",
                     $"에너지: {player.Energy?.ToString() ?? "?"}",
-                }.Concat(player.Resources.Select(pair => $"{pair.Key}: {pair.Value ?? "?"}")));
+                    }.Concat(player.Resources.Select(pair => $"{pair.Key}: {pair.Value ?? "?"}")));
 
-            DeckText = snapshot.RunState.Snapshot.Deck.Count == 0
-                ? "덱 정보를 아직 읽지 못했습니다."
-                : JoinLines(snapshot.RunState.Snapshot.Deck.Take(24).Select(card =>
-                {
-                    var parts = new List<string> { card.Name };
-                    if (card.Cost is not null)
-                    {
-                        parts.Add($"cost {card.Cost}");
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(card.Type))
-                    {
-                        parts.Add(card.Type!);
-                    }
-
-                    if (card.Upgraded == true)
-                    {
-                        parts.Add("강화");
-                    }
-
-                    return "- " + string.Join(" / ", parts);
-                }));
-
+            DeckText = DeckDisplayFormatter.FormatDeck(snapshot.RunState.Snapshot.Deck, resolver);
             RelicsPotionsText = JoinLines(new[]
             {
-                "유물",
-                snapshot.RunState.Snapshot.Relics.Count == 0
-                    ? "- 없음"
-                    : JoinLines(snapshot.RunState.Snapshot.Relics.Take(12).Select(relic => $"- {relic}")),
+                DeckDisplayFormatter.FormatNamedListSection("유물", snapshot.RunState.Snapshot.Relics.Take(12).ToArray(), resolver),
                 string.Empty,
-                "포션",
-                snapshot.RunState.Snapshot.Potions.Count == 0
-                    ? "- 없음"
-                    : JoinLines(snapshot.RunState.Snapshot.Potions.Take(8).Select(potion => $"- {potion}")),
+                DeckDisplayFormatter.FormatNamedListSection("포션", snapshot.RunState.Snapshot.Potions.Take(8).ToArray(), resolver),
             });
         }
         else
@@ -303,52 +283,23 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         if (snapshot.LatestSceneModel is { } sceneModel)
         {
             SceneIdentityText = $"{sceneModel.SceneType} / {sceneModel.SceneStage} / {sceneModel.CanonicalOwner}";
-            SceneSummaryText = string.IsNullOrWhiteSpace(sceneModel.SummaryText) ? "scene summary가 아직 없습니다." : sceneModel.SummaryText;
-            SceneOptionsText = FormatSceneOptions(sceneModel.Options);
-            SceneGapsText = JoinLines(new[]
-            {
-                "missing facts",
-                FormatBulletSection(sceneModel.MissingFacts),
-                string.Empty,
-                "observer gaps",
-                FormatBulletSection(sceneModel.ObserverGaps),
-            });
-            SceneProvenanceText = JoinLines(new[]
-            {
-                "confidence",
-                FormatConfidence(sceneModel.Confidence),
-                string.Empty,
-                "source refs",
-                FormatBulletSection(sceneModel.SourceRefs),
-            });
+            SceneContextText = AdvisorSceneDisplayFormatter.FormatContext(sceneModel, resolver);
+            SceneSummaryText = AdvisorSceneDisplayFormatter.FormatSummary(sceneModel, resolver);
+            SceneOptionsText = AdvisorSceneDisplayFormatter.FormatOptions(sceneModel, resolver);
+            SceneGapsText = AdvisorSceneDisplayFormatter.FormatGaps(sceneModel);
+            SceneProvenanceText = AdvisorSceneDisplayFormatter.FormatProvenance(sceneModel);
         }
         else
         {
             SceneIdentityText = "없음";
+            SceneContextText = "scene context가 아직 없습니다.";
             SceneSummaryText = "scene model이 아직 없습니다.";
             SceneOptionsText = "없음";
-            SceneGapsText = JoinLines(new[]
-            {
-                "missing facts",
-                "- 없음",
-                string.Empty,
-                "observer gaps",
-                "- 없음",
-            });
-            SceneProvenanceText = JoinLines(new[]
-            {
-                "confidence",
-                "- 없음",
-                string.Empty,
-                "source refs",
-                "- 없음",
-            });
+            SceneGapsText = AdvisorSceneDisplayFormatter.FormatGaps(null);
+            SceneProvenanceText = AdvisorSceneDisplayFormatter.FormatProvenance(null);
         }
 
-        CurrentChoicesText = JoinLines(
-            (snapshot.RunState?.Snapshot.CurrentChoices ?? Array.Empty<LiveExportChoiceSummary>())
-            .Select(choice => $"[{TranslateChoiceKind(choice.Kind)}] {choice.Label} :: {choice.Description ?? choice.Value ?? "추가 정보 없음"}")
-            .DefaultIfEmpty("없음"));
+        CurrentChoicesText = SceneOptionsText;
 
         RecentEventsText = JoinLines(
             (snapshot.RunState?.RecentEvents ?? Array.Empty<LiveExportEventEnvelope>())
@@ -357,7 +308,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         KnowledgeEntriesText = JoinLines(
             (snapshot.LatestKnowledgeSlice?.Entries ?? Array.Empty<StaticKnowledgeEntry>())
-            .Select(entry => $"{entry.Name} [출처: {TranslateSource(entry.Source)}]")
+            .Select(entry => $"{resolver.ResolveDisplayText(entry.Name, entry.Id)} [출처: {TranslateSource(entry.Source)}]")
             .DefaultIfEmpty("없음"));
 
         CollectorNotesText = snapshot.CollectorStatus switch
@@ -422,28 +373,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     private static string FormatBulletSection(IEnumerable<string> items)
     {
         return JoinLines(items.DefaultIfEmpty("없음").Select(item => $"- {item}"));
-    }
-
-    private static string FormatSceneOptions(IReadOnlyList<AdvisorSceneOption> options)
-    {
-        if (options.Count == 0)
-        {
-            return "없음";
-        }
-
-        return JoinLines(options.Select(option =>
-        {
-            var status = option.Enabled ? "활성" : "비활성";
-            var detail = option.Description;
-            if (string.IsNullOrWhiteSpace(detail) && !string.IsNullOrWhiteSpace(option.Value) && !string.Equals(option.Value, option.Label, StringComparison.OrdinalIgnoreCase))
-            {
-                detail = option.Value;
-            }
-
-            return string.IsNullOrWhiteSpace(detail) || string.Equals(detail, option.Label, StringComparison.OrdinalIgnoreCase)
-                ? $"- {option.Label} [{status}]"
-                : $"- {option.Label} [{status}] :: {detail}";
-        }));
     }
 
     private static string FormatConfidence(IReadOnlyDictionary<string, double> confidence)
@@ -587,6 +516,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         };
     }
 
+    private AdvisorKnowledgeDisplayResolver BuildKnowledgeResolver()
+    {
+        var catalog = _knowledgeCatalogService?.ReloadIfChanged() ?? _knowledgeCatalogService?.CurrentCatalog;
+        return new AdvisorKnowledgeDisplayResolver(catalog ?? Sts2ModKit.Core.Knowledge.StaticKnowledgeCatalog.CreateEmpty());
+    }
+
     private static string FindWorkspaceRoot(string start)
     {
         var current = new DirectoryInfo(start);
@@ -617,6 +552,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         Notify(nameof(AdviceDetailsText));
         Notify(nameof(CurrentChoicesText));
         Notify(nameof(SceneIdentityText));
+        Notify(nameof(SceneContextText));
         Notify(nameof(SceneSummaryText));
         Notify(nameof(SceneOptionsText));
         Notify(nameof(SceneGapsText));

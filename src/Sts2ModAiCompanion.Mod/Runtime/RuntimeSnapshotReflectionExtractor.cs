@@ -431,6 +431,51 @@ internal static class RuntimeSnapshotReflectionExtractor
         var combatHand = encounter?.InCombat == true
             ? ExtractCombatHand(roots, config.LiveExport.MaxChoiceEntries)
             : Array.Empty<LiveExportCardSummary>();
+        var combatStateRoots = roots
+            .Where(root =>
+            {
+                var typeName = root.GetType().FullName ?? root.GetType().Name;
+                return typeName.Contains("CombatState", StringComparison.OrdinalIgnoreCase);
+            })
+            .Concat(FindRoots(roots, "PlayerCombatState", "CombatState"))
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+        var combatHandCount = combatHand.Count > 0
+            ? combatHand.Count
+            : TryReadCombatCollectionCount(combatStateRoots, "Hand", "HandCards");
+        var drawPileCount = TryReadCombatCollectionCount(combatStateRoots, "DrawPile", "DrawPileCards");
+        var discardPileCount = TryReadCombatCollectionCount(combatStateRoots, "DiscardPile", "DiscardPileCards");
+        var exhaustPileCount = TryReadCombatCollectionCount(combatStateRoots, "ExhaustPile", "ExhaustPileCards");
+        var playPileCount = TryReadCombatCollectionCount(combatStateRoots, "PlayPile", "PlayPileCards");
+        if (combatHandCount is not null)
+        {
+            meta["combatHandCount"] = combatHandCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["combatHandCount"] = combatHandCount.Value;
+        }
+
+        if (drawPileCount is not null)
+        {
+            meta["drawPileCount"] = drawPileCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["drawPileCount"] = drawPileCount.Value;
+        }
+
+        if (discardPileCount is not null)
+        {
+            meta["discardPileCount"] = discardPileCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["discardPileCount"] = discardPileCount.Value;
+        }
+
+        if (exhaustPileCount is not null)
+        {
+            meta["exhaustPileCount"] = exhaustPileCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["exhaustPileCount"] = exhaustPileCount.Value;
+        }
+
+        if (playPileCount is not null)
+        {
+            meta["playPileCount"] = playPileCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["playPileCount"] = playPileCount.Value;
+        }
         var rawCurrentScreenValue = TryReadString(roots, "CurrentScreen", "Screen", "ScreenName");
         var rawRoomTypeValue = TryReadString(roots, "RoomType");
         var rootTypeSummary = string.Join(
@@ -651,6 +696,11 @@ internal static class RuntimeSnapshotReflectionExtractor
             payload,
             meta)
         {
+            CombatHandCount = combatHandCount,
+            DrawPileCount = drawPileCount,
+            DiscardPileCount = discardPileCount,
+            ExhaustPileCount = exhaustPileCount,
+            PlayPileCount = playPileCount,
             ChoiceCandidates = choiceResult.Candidates,
             ChoiceDecision = choiceResult.Decision,
             SemanticScreen = IsSemanticHighValueScreen(triggerKind, screen) ? screen : null,
@@ -937,44 +987,53 @@ internal static class RuntimeSnapshotReflectionExtractor
     private static IReadOnlyList<LiveExportCardSummary> ExtractDeck(IEnumerable<object> roots, int maxEntries)
     {
         var cards = new List<LiveExportCardSummary>();
-        var deckRoots = roots
-            .Concat(FindRoots(roots, "PlayerCombatState", "CombatState", "Deck", "Hand", "DrawPile", "DiscardPile", "ExhaustPile", "PlayPile"))
+        var seen = new HashSet<int>();
+        var primaryDeckRoots = roots
+            .Concat(FindRoots(roots, "PlayerCombatState", "CombatState", "Deck", "MasterDeck"))
             .DistinctBy(RuntimeHelpers.GetHashCode)
             .ToArray();
 
-        foreach (var item in FindEnumerableItems(
-                     deckRoots,
-                     "MasterDeck",
-                     "Deck",
-                     "Cards",
-                     "AllCards",
-                     "Hand",
-                     "DrawPile",
-                     "DiscardPile",
-                     "ExhaustPile",
-                     "PlayPile"))
+        void CollectFrom(IEnumerable<object> candidateRoots, params string[] memberNames)
         {
-            if (!LooksLikeCardLikeItem(item))
+            foreach (var item in FindEnumerableItems(candidateRoots, memberNames))
             {
-                continue;
-            }
+                if (!LooksLikeCardLikeItem(item))
+                {
+                    continue;
+                }
 
-            var name = TryReadString(item, "Name", "CardName", "DisplayName", "Id", "CardId");
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                continue;
-            }
+                if (!seen.Add(RuntimeHelpers.GetHashCode(item)))
+                {
+                    continue;
+                }
 
-            cards.Add(new LiveExportCardSummary(
-                name,
-                TryReadString(item, "Id", "CardId", "Name"),
-                TryReadInt(item, "Cost", "EnergyCost", "ManaCost"),
-                TryReadString(item, "Type", "CardType"),
-                TryReadBool(item, "Upgraded", "IsUpgraded")));
+                var name = TryReadString(item, "Name", "CardName", "DisplayName", "Title", "LocalizedTitle", "Id", "CardId");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                cards.Add(new LiveExportCardSummary(
+                    name,
+                    TryReadString(item, "Id", "CardId", "Name", "Title"),
+                    TryReadInt(item, "Cost", "EnergyCost", "ManaCost"),
+                    TryReadString(item, "Type", "CardType"),
+                    TryReadBool(item, "Upgraded", "IsUpgraded")));
+            }
+        }
+
+        CollectFrom(primaryDeckRoots, "MasterDeck", "Deck", "Cards", "AllCards");
+
+        if (cards.Count == 0)
+        {
+            var fallbackDeckRoots = roots
+                .Concat(FindRoots(roots, "PlayerCombatState", "CombatState", "Hand", "DrawPile", "DiscardPile", "ExhaustPile", "PlayPile"))
+                .DistinctBy(RuntimeHelpers.GetHashCode)
+                .ToArray();
+            CollectFrom(fallbackDeckRoots, "Hand", "DrawPile", "DiscardPile", "ExhaustPile", "PlayPile");
         }
 
         return cards
-            .DistinctBy(card => $"{card.Name}|{card.Id}|{card.Cost}|{card.Type}|{card.Upgraded}")
             .Take(maxEntries)
             .ToArray();
     }
@@ -983,17 +1042,22 @@ internal static class RuntimeSnapshotReflectionExtractor
     {
         var cards = new List<LiveExportCardSummary>();
         var seen = new HashSet<int>();
-        var uiHandRoots = roots
-            .SelectMany(root => new[]
+        var uiCandidates = roots
+            .SelectMany(root => new object?[]
             {
-                TryGetMemberValue(root, "Ui"),
+                root,
                 TryGetMemberValue(root, "Hand"),
-            })
-            .Concat(FindRoots(roots, "Ui", "Hand"))
+                TryGetMemberValue(root, "Ui"),
+                TryGetMemberValue(TryGetMemberValue(root, "Ui"), "Hand"),
+            });
+        var uiHandRoots = roots
+            .Concat(uiCandidates)
             .Where(root => root is not null)
             .Cast<object>()
+            .Where(LooksLikePlayerHandRoot)
             .DistinctBy(RuntimeHelpers.GetHashCode)
             .ToArray();
+        var hasExplicitUiHandRoot = uiHandRoots.Length > 0;
 
         foreach (var holder in FindEnumerableItems(uiHandRoots, "ActiveHolders", "Holders", "CardHolderContainer"))
         {
@@ -1024,12 +1088,18 @@ internal static class RuntimeSnapshotReflectionExtractor
             }
         }
 
+        if (hasExplicitUiHandRoot)
+        {
+            return cards;
+        }
+
         var handRoots = roots
-            .Concat(FindRoots(roots, "PlayerCombatState", "CombatState", "Hand", "HandCards"))
+            .Concat(FindRoots(roots, "PlayerCombatState", "CombatState"))
+            .Concat(FindRoots(roots, "Hand", "HandCards"))
             .DistinctBy(RuntimeHelpers.GetHashCode)
             .ToArray();
 
-        foreach (var item in FindEnumerableItems(handRoots, "Hand", "HandCards", "Cards"))
+        foreach (var item in FindCombatCollectionItems(handRoots, "Hand", "HandCards"))
         {
             if (!LooksLikeCardLikeItem(item) || !seen.Add(RuntimeHelpers.GetHashCode(item)))
             {
@@ -1053,6 +1123,92 @@ internal static class RuntimeSnapshotReflectionExtractor
         return cards;
     }
 
+    private static bool LooksLikePlayerHandRoot(object root)
+    {
+        var typeName = root.GetType().FullName ?? root.GetType().Name;
+        return typeName.Contains("PlayerHand", StringComparison.OrdinalIgnoreCase)
+               || typeName.Contains("NPlayerHand", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int? TryReadCombatCollectionCount(IEnumerable<object> roots, params string[] memberNames)
+    {
+        foreach (var root in roots)
+        {
+            foreach (var memberName in memberNames)
+            {
+                var member = TryGetMemberValue(root, memberName);
+                if (member is null)
+                {
+                    continue;
+                }
+
+                var count = TryCountEnumerable(member)
+                            ?? TryReadInt(member, "Count", "CardCount", "NumCards", "Length")
+                            ?? CountCombatCollectionItems(member);
+                if (count is not null)
+                {
+                    return count;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<object> FindCombatCollectionItems(IEnumerable<object> roots, params string[] memberNames)
+    {
+        foreach (var root in roots)
+        {
+            foreach (var memberName in memberNames)
+            {
+                foreach (var item in EnumerateCombatCollectionItems(TryGetMemberValue(root, memberName)))
+                {
+                    yield return item;
+                }
+            }
+        }
+    }
+
+    private static int? CountCombatCollectionItems(object? candidate)
+    {
+        var count = 0;
+        foreach (var _ in EnumerateCombatCollectionItems(candidate))
+        {
+            count += 1;
+        }
+
+        return count > 0 ? count : null;
+    }
+
+    private static IEnumerable<object> EnumerateCombatCollectionItems(object? candidate)
+    {
+        if (candidate is null or string)
+        {
+            yield break;
+        }
+
+        if (candidate is System.Collections.IEnumerable enumerable)
+        {
+            foreach (var item in enumerable)
+            {
+                if (item is not null)
+                {
+                    yield return item;
+                }
+            }
+
+            yield break;
+        }
+
+        foreach (var nestedMemberName in new[] { "Cards", "Items", "Entries" })
+        {
+            foreach (var item in EnumerateCombatCollectionItems(TryGetMemberValue(candidate, nestedMemberName)))
+            {
+                yield return item;
+            }
+        }
+    }
+
     private static LiveExportCardSummary? TryCreateCardSummary(object? item)
     {
         if (!LooksLikeCardLikeItem(item))
@@ -1060,7 +1216,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             return null;
         }
 
-        var name = TryReadString(item, "Name", "CardName", "DisplayName", "Id", "CardId");
+        var name = TryReadString(item, "Name", "CardName", "DisplayName", "Title", "LocalizedTitle", "Id", "CardId");
         if (string.IsNullOrWhiteSpace(name))
         {
             return null;
@@ -1068,7 +1224,7 @@ internal static class RuntimeSnapshotReflectionExtractor
 
         return new LiveExportCardSummary(
             name,
-            TryReadString(item, "Id", "CardId", "Name"),
+            TryReadString(item, "Id", "CardId", "Name", "Title"),
             TryReadInt(item, "Cost", "CurrentCost", "DisplayedCost", "EnergyCost", "ManaCost"),
             TryReadString(item, "Type", "CardType"),
             TryReadBool(item, "Upgraded", "IsUpgraded"));
@@ -1081,7 +1237,31 @@ internal static class RuntimeSnapshotReflectionExtractor
             cards.Select((card, index) =>
                 string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{index + 1}:{(card.Id ?? card.Name)}|{card.Type ?? "unknown"}|{(card.Cost?.ToString(CultureInfo.InvariantCulture) ?? "?")}")));
+                    $"{index + 1}:{(card.Name ?? card.Id ?? "unknown")}|{card.Type ?? "unknown"}|{(card.Cost?.ToString(CultureInfo.InvariantCulture) ?? "?")}")));
+    }
+
+    private static int? TryCountEnumerable(object? candidate)
+    {
+        if (candidate is null or string)
+        {
+            return null;
+        }
+
+        if (candidate is not System.Collections.IEnumerable enumerable)
+        {
+            return null;
+        }
+
+        var count = 0;
+        foreach (var item in enumerable)
+        {
+            if (item is not null)
+            {
+                count += 1;
+            }
+        }
+
+        return count;
     }
 
     private static IReadOnlyList<string> ExtractStringList(IEnumerable<object> roots, int maxEntries, params string[] collectionNames)
@@ -1885,6 +2065,11 @@ internal static class RuntimeSnapshotReflectionExtractor
                 || TryReadString(root, "CurrentMode") is not null
                 || TryGetMemberValue(root, "_currentCardPlay") is not null
                 || TryGetMemberValue(root, "_holdersAwaitingQueue") is not null);
+        var combatHandCount = TryReadCombatCollectionCount(combatStateRoots, "Hand", "HandCards");
+        var drawPileCount = TryReadCombatCollectionCount(combatStateRoots, "DrawPile", "DrawPileCards");
+        var discardPileCount = TryReadCombatCollectionCount(combatStateRoots, "DiscardPile", "DiscardPileCards");
+        var exhaustPileCount = TryReadCombatCollectionCount(combatStateRoots, "ExhaustPile", "ExhaustPileCards");
+        var playPileCount = TryReadCombatCollectionCount(combatStateRoots, "PlayPile", "PlayPileCards");
         var targetManagerRoot = roots
             .Where(root =>
             {
@@ -2177,6 +2362,36 @@ internal static class RuntimeSnapshotReflectionExtractor
         if (!string.IsNullOrWhiteSpace(lastFinishedCardId))
         {
             payload["combatLastCardPlayFinishedCardId"] = lastFinishedCardId;
+        }
+
+        if (combatHandCount is not null)
+        {
+            meta["combatHandCount"] = combatHandCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["combatHandCount"] = combatHandCount.Value;
+        }
+
+        if (drawPileCount is not null)
+        {
+            meta["drawPileCount"] = drawPileCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["drawPileCount"] = drawPileCount.Value;
+        }
+
+        if (discardPileCount is not null)
+        {
+            meta["discardPileCount"] = discardPileCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["discardPileCount"] = discardPileCount.Value;
+        }
+
+        if (exhaustPileCount is not null)
+        {
+            meta["exhaustPileCount"] = exhaustPileCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["exhaustPileCount"] = exhaustPileCount.Value;
+        }
+
+        if (playPileCount is not null)
+        {
+            meta["playPileCount"] = playPileCount.Value.ToString(CultureInfo.InvariantCulture);
+            payload["playPileCount"] = playPileCount.Value;
         }
     }
 
@@ -9205,13 +9420,12 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             return FirstNonEmpty(
                 TryConvertToDisplayString(TryInvokeMethod(value, "GetRawText"), depth + 1),
-                TryConvertToDisplayString(TryInvokeMethod(value, "GetFormattedText"), depth + 1),
                 TryConvertToDisplayString(TryGetMemberValue(value, "Text"), depth + 1),
                 TryConvertToDisplayString(TryGetMemberValue(value, "Value"), depth + 1),
                 TryConvertToDisplayString(TryGetMemberValue(value, "Key"), depth + 1));
         }
 
-        foreach (var methodName in new[] { "GetRawText", "GetParsedText", "GetText", "GetFormattedText" })
+        foreach (var methodName in new[] { "GetRawText", "GetParsedText", "GetText" })
         {
             var invoked = TryInvokeMethod(value, methodName);
             var rendered = TryConvertToDisplayString(invoked, depth + 1);
