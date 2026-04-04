@@ -1,0 +1,179 @@
+# Advisor Scene Information Model
+
+## 목적
+
+`M9` v1의 목적은 prompt를 만드는 것이 아니라, scene별 의사결정 핵심 정보를 사람이 읽기 좋은 형태로 고정하는 것이다.
+
+이 문서의 범위는:
+
+- raw fact와 human-readable scene model의 경계
+- 장면별 decision-relevant field
+- `request is not truth source` 원칙
+
+이 문서의 비범위는:
+
+- 추천 생성 로직
+- prompt packing
+- actuator contract 변경
+
+## 3-Layer Boundary
+
+### 1. Raw facts
+
+원천:
+
+- `observer.state.json`
+- screenshot-derived analyzer outputs
+- runtime observer `meta`
+
+특징:
+
+- noisy하고 transport-oriented
+- 장면별 의미가 아직 정리되지 않았을 수 있다
+
+### 2. Canonical harness scene state
+
+원천:
+
+- `GuiSmokeStepAnalysisContext`
+- `RewardSceneState`
+- `EventSceneState`
+- `ShopSceneState`
+- `RestSiteSceneState`
+- `CombatReleaseState`
+- `CombatRuntimeState`
+- `MapOverlayState`
+
+특징:
+
+- harness의 foreground owner / stage / release truth를 이미 정리한다
+- actuator logic와 같은 seam을 공유하지만 advisor 출력 자체는 아니다
+
+### 3. Human-readable advisor scene model
+
+원천:
+
+- layer 1 + layer 2를 scene-local decision facts로 재구성
+
+특징:
+
+- 사람이 읽는 상태 표현
+- 추천을 포함하지 않음
+- actuator vocabulary를 포함하지 않음
+- 누락 정보는 `missingFacts`, `observerGaps`로 명시
+
+## Truth Source Rule
+
+- scene truth source는 `observer.state + canonical scene state`다.
+- `GuiSmokeStepRequest`는 truth source가 아니다.
+- `request`에서 허용되는 사용:
+  - `runId`
+  - `attemptId`
+  - `stepIndex`
+  - `phase`
+  - `history`
+  - `windowBounds`
+  - `screenshotPath`
+  - `combatCardKnowledge`
+- `request.Observer.goal/allowedActions/failureModeHint/reasoningMode` 같은 prompt/actuator 필드는 scene truth 계산에 쓰지 않는다.
+
+## Common SceneModel Envelope
+
+모든 scene model은 아래 공통 필드를 가진다.
+
+- `schemaVersion`
+- `runId`
+- `attemptId`
+- `stepIndex`
+- `phase`
+- `sceneType`
+- `sceneStage`
+- `canonicalOwner`
+- `summaryText`
+- `playerContext`
+- `uiSurfaceInventory`
+- `options`
+- `missingFacts`
+- `observerGaps`
+- `confidence`
+- `sourceRefs`
+
+## Scene-Specific Fields
+
+### combat
+
+- `lifecycleStage`
+- `encounterKind`
+- `turn`
+- `handCount`
+- `handSummary`
+- `targetableEnemyCount`
+- `hittableEnemyCount`
+- `targetingInProgress`
+- `enemyIntentSummary?`
+
+### reward
+
+- `explicitAction`
+- `releaseStage`
+- `claimableRewardPresent`
+- `explicitProceedVisible`
+- `rewardChoiceVisible`
+- `colorlessChoiceVisible`
+- `rewardEntryCount`
+- `cardProgressionSurfacePresent`
+- `options`는 duplicate raw exports를 그대로 담지 않고, unique reward entries + visible control choices로 정규화한다.
+
+### event
+
+- `explicitAction`
+- `releaseStage`
+- `rewardSubstateActive`
+- `explicitProceedVisible`
+- `hasExplicitProgression`
+- `ancientContractLane`
+- `eventIdentity?`
+- `optionCount`
+
+### rest-site
+
+- `releaseStage`
+- `explicitChoiceVisible`
+- `explicitChoiceReady`
+- `smithUpgradeActive`
+- `smithConfirmVisible`
+- `proceedVisible`
+- `selectionSettling`
+- `actionCount`
+- `upgradeCandidateSurfaceVisible`
+
+### shop
+
+- `inventoryOpen`
+- `proceedEnabled`
+- `backEnabled`
+- `cardRemovalVisible`
+- `cardRemovalEnabled`
+- `cardRemovalUsed`
+- `optionCount`
+- `affordableOptionCount`
+- `serviceCount`
+- `itemCount`
+
+### map
+
+- `foregroundVisible`
+- `currentNodeArrowVisible`
+- `reachableNodePresent`
+- `reachableNodeCount`
+- `currentNode?`
+- `reachableNodeLabels`
+
+## V1 Rules
+
+- v1 목표는 `SceneModel + summary`까지다.
+- `AdvisorInputV1`는 다음 wave 전까지 구현하지 않는다.
+- summary는 사실 서술만 한다.
+- summary는 `click`, `wait`, `fallback`, `candidate`, `targetLabel` 같은 actuator vocabulary를 포함하지 않는다.
+- hard gap은 추정하지 않고 `missingFacts`로 남긴다.
+- reward option list는 raw observer dump를 그대로 넘기지 않고 scene-level normalization을 거친다.

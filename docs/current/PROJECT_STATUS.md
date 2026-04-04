@@ -15,6 +15,8 @@
   1. fresh live long run 2회 연속 success를 current docs/handoff baseline으로 승격하고, M5 exit를 문서상으로도 확정하기
   2. replay/parity gate, 비전투 흐름, 전투 안전성은 current `main`에서 M5 acceptance에 사실상 포함된 것으로 정리하고 M6~M8을 reopened blocker가 없는 한 closed substrate baseline으로 다루기
   3. 다음 active workstream을 harness substrate stabilization이 아니라 `M9 advice-quality`로 전환하되, 새 blocker가 나오면 M5~M8 reopen으로 따로 분류하기
+- M9 세부 계획과 진척도 추적은 [M9_EXECUTION_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_EXECUTION_PLAN_KO.md) 를 우선한다
+- 직접 플레이용 실시간 정보 표시는 [M9_LIVE_SIDECAR_UI_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md) 를 우선한다
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
 중요한 현재 해석:

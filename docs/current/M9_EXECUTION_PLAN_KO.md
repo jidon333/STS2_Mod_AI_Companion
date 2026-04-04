@@ -1,0 +1,301 @@
+# M9 실행 계획 (KO)
+
+> 상태: 현재 사용 중
+> 기준 브랜치: `main`
+> 최종 갱신: 2026-04-04
+> 목적: `M9 advice-quality`의 세부 계획, 현재 진척도, 다음 work unit, acceptance gate를 한 문서에서 추적
+
+## 한 줄 요약
+
+`M9`의 첫 목표는 AI를 곧바로 더 똑똑하게 만드는 것이 아니라, 현재 하네스가 읽는 게임 상태를 `장면별 human-readable scene model`로 승격시키는 것이다.
+
+읽기 쉬운 안내 문서는 [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/ADVISOR_SCENE_MODEL_READER_KO.md) 를 우선한다.
+
+## 현재 위치
+
+- substrate baseline:
+  - fresh live long run 2회 연속 natural terminal 확보
+  - practical pointer는 `M5~M8 substrate acceptance complete`, `M9 entry`
+- M9 기본 원칙:
+  - observer-first
+  - read-only
+  - artifact-first
+  - harness-local proving schema
+  - raw fact를 직접 AI 입력으로 쓰지 않음
+
+## M9 범위
+
+이번 milestone에서 먼저 만드는 것은 아래 다섯 가지다.
+
+1. scene UI inventory
+2. canonical advisor scene model
+3. human-readable scene summary
+4. coverage gap inventory
+5. read-only advisor input 준비
+
+이번 milestone에서 아직 하지 않는 것은 아래다.
+
+1. actuator contract 확장
+2. gameplay auto-decision 교체
+3. foundation canonical merge
+4. polished real-time overlay UI
+5. raw observer dump direct-to-LLM
+
+별도 sidecar 실시간 표시 workstream은 [M9_LIVE_SIDECAR_UI_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md) 로 분리한다.
+
+## 장면 우선순위
+
+v1 우선순위는 다음으로 고정한다.
+
+1. reward
+2. event
+3. rest-site
+4. shop
+5. map
+6. combat
+
+설명:
+
+- reward/event/rest-site/shop/map은 advisor 가치 대비 schema 안정화 비용이 낮다.
+- combat는 scene summary부터 시작하되, 고급 조언 depth는 v1 후반 또는 다음 wave로 미룬다.
+
+## Workstream
+
+### WS1. Scene Inventory
+
+목표:
+
+- 장면별로 사람이 실제 판단에 쓰는 UI 정보를 문서화한다.
+- `observable now / missing / source seam / evidence root`를 고정한다.
+
+주요 산출물:
+
+- [ADVISOR_UI_COVERAGE_MATRIX_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/ADVISOR_UI_COVERAGE_MATRIX_KO.md)
+
+현재 상태:
+
+- `started`
+
+완료 기준:
+
+- reward/event/rest-site/shop/map/combat 6개 scene row가 존재
+- 각 row에 `decision question`, `observable now`, `missing`, `source seam`, `evidence root`, `needs observer/exporter?`가 채워짐
+- provisional root와 acceptance-grade root가 구분됨
+
+### WS2. Scene Model Contract
+
+목표:
+
+- `raw facts -> canonical harness scene state -> human-readable advisor scene model` 3층 경계를 고정한다.
+- scene truth는 `observer.state + canonical scene state`에서만 만든다.
+
+주요 산출물:
+
+- [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
+- [GuiSmokeAdvisorSceneContracts.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneContracts.cs)
+
+현재 상태:
+
+- `started`
+
+완료 기준:
+
+- common envelope가 고정됨
+- reward/event/rest-site/shop/map/combat typed details가 존재
+- `request is not truth source` 규칙이 문서/코드에 같이 반영됨
+- actuator vocabulary가 scene model에 섞이지 않음
+
+### WS3. Harness-Local Builder And Summary
+
+목표:
+
+- replay artifact에서 advisor scene model을 생성한다.
+- 사람이 읽는 summary를 typed model에서 렌더링한다.
+
+주요 산출물:
+
+- [GuiSmokeAdvisorSceneModelBuilder.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneModelBuilder.cs)
+- [GuiSmokeAdvisorSceneSummaryFormatter.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneSummaryFormatter.cs)
+- [Program.InspectAndReplay.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.InspectAndReplay.cs)
+
+현재 상태:
+
+- `started`
+
+완료 기준:
+
+- `replay-advisor-scene`로 `.request.json + .observer.state.json`에서 advisor scene artifact 생성 가능
+- summary text가 typed model 기반으로 만들어짐
+- fixture replay를 반복해도 field churn이 크지 않음
+
+### WS4. Advisor Input Contract
+
+목표:
+
+- scene model과 advisor input pack을 분리한다.
+- v1에서는 mapping direction만 정하고 foundation merge는 보류한다.
+
+주요 산출물:
+
+- [ADVISOR_INPUT_OUTPUT_CONTRACT.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_INPUT_OUTPUT_CONTRACT.md)
+
+현재 상태:
+
+- `draft`
+
+완료 기준:
+
+- `SceneModel`과 `AdvisorInputV1`의 경계가 문서로 고정됨
+- `recommendedChoiceLabel` compatibility rule이 명시됨
+- foundation merge gate가 명확히 적힘
+
+### WS5. Coverage Gaps And Export Follow-Up
+
+목표:
+
+- scene model에서 비는 정보를 `missingFacts`와 `observerGaps`로 관리한다.
+- exporter 추가는 hard blocker일 때만 제안한다.
+
+현재 상태:
+
+- `not-started`
+
+완료 기준:
+
+- scene별 hard gap list가 정리됨
+- `observer fix`와 `exporter fix`가 구분됨
+- shop provisional root refresh 같은 follow-up이 별도 work unit으로 관리됨
+
+### WS6. Read-Only Advisor MVP
+
+목표:
+
+- reward/event 중심의 read-only advisor 입력을 시험한다.
+- actuator 없이 recommendation label / reasons / missing info 정합성을 본다.
+
+현재 상태:
+
+- `not-started`
+
+완료 기준:
+
+- 최소 reward + event 2개 scene에서 advisor input/output dry run 가능
+- `recommendedChoiceLabel`이 scene model option label과 정확히 대응
+- 조언 실패가 scene model 부족인지 knowledge 부족인지 분리 가능
+
+### WS7. Live Sidecar UI
+
+목표:
+
+- 직접 플레이 중 현재 scene model을 별도 WPF UI에서 실시간으로 읽을 수 있게 한다.
+- overlay가 아니라 sidecar window를 우선한다.
+
+주요 산출물:
+
+- [M9_LIVE_SIDECAR_UI_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md)
+- `src/Sts2AiCompanion.Wpf`
+- `src/Sts2AiCompanion.Advisor`
+
+현재 상태:
+
+- `pending`
+
+완료 기준:
+
+- live scene type / stage / owner / summary / options / missing facts가 sidecar에 표시됨
+- replay schema와 live schema가 일치함
+
+## 현재 진척도 보드
+
+| Item | Status | Notes |
+|---|---|---|
+| M9 pointer 승격 | completed | current docs 기준 `M9 advice-quality entry` |
+| Scene inventory 초안 | in_progress | coverage matrix 존재, provisional shop root 남음 |
+| Scene model contract 초안 | in_progress | 3-layer boundary와 typed fields 정의됨 |
+| Harness-local scene builder | in_progress | advisor substrate code와 replay path 존재 |
+| Human-readable summary | in_progress | formatter 존재, fixture stabilization 필요 |
+| Advisor input contract | in_progress | draft 상태, 아직 mapping only |
+| Coverage gap 운영 | pending | hard gap triage와 root refresh 필요 |
+| Read-only advisor MVP | pending | 아직 production/host merge 안 함 |
+| Live sidecar UI | pending | WPF에 scene model 실시간 패널 추가 예정 |
+| Foundation canonical merge | blocked_by_design | schema 안정화 전 금지 |
+| Real-time overlay UI | deferred | 텍스트/artifact proving 이후 단계 |
+
+## Current Evidence Roots
+
+- authoritative fresh live:
+  - `artifacts/gui-smoke/endurance-longrun-20260404-live28`
+  - `artifacts/gui-smoke/endurance-longrun-20260404-live29`
+- provisional shop root:
+  - `artifacts/gui-smoke/verify-shop-slot-source-20260322-0131`
+
+## Acceptance Gates
+
+### Gate A. Schema Safety
+
+- scene truth가 `request goal`이나 actuator field에 의존하지 않음
+- `missingFacts`는 추정값이 아니라 실제 gap만 올림
+- summary에 `allowedActions`, `fallback reason`, `targetLabel` 같은 actuator vocabulary가 없음
+
+### Gate B. Fixture Stability
+
+- 대표 fixture root를 반복 replay해도 field churn이 크지 않음
+- scene type / stage / canonical owner가 일관되게 생성됨
+- option labels가 visible UI와 맞음
+
+### Gate C. Scope Discipline
+
+- current harness routing / allowed-actions / actuator logic을 건드리지 않음
+- observer/exporter 추가는 coverage matrix에서 hard blocker가 드러난 경우에만 진행
+
+### Gate D. Advisor Readiness
+
+- reward/event 2개 scene 이상에서 scene model 기반 read-only advisor dry run 가능
+- 조언 결과를 scene model과 provenance로 설명할 수 있음
+
+## 다음 Work Units
+
+### WU1. Coverage Matrix 보강
+
+- shop provisional root refresh task를 추가한다.
+- map/combat row의 missing fact severity를 더 명확히 적는다.
+
+### WU2. Scene Model Fixture 안정화
+
+- representative fixture root 6개를 기준으로 `replay-advisor-scene` 산출물을 고정한다.
+- schema churn이 큰 field를 줄인다.
+
+### WU3. Advisor Input Mapping 설계
+
+- scene model에서 advisor input으로 넘길 최소 필드를 정리한다.
+- 이 단계에서도 foundation merge는 하지 않는다.
+
+### WU4. Reward/Event Read-Only Advisor Dry Run
+
+- reward/event 두 scene에 한정해 advice input/output dry run을 만든다.
+- recommendation label 정합성과 missingInformation 품질을 본다.
+
+## 리스크
+
+1. raw observer/meta가 advisor vocabulary를 오염시키는 것
+2. scene model과 advisor input을 너무 빨리 합쳐서 drift가 나는 것
+3. provisional root를 acceptance-grade root처럼 취급하는 것
+4. combat를 너무 빨리 넓혀 v1 범위가 터지는 것
+5. foundation merge를 너무 빨리 해서 unstable schema를 굳히는 것
+
+## 운영 원칙
+
+1. harness는 주력 제품이 아니라 proving ground + acceptance lane으로 본다
+2. scene model은 harness-local에서 먼저 증명한다
+3. 문서와 fixture를 함께 갱신한다
+4. blocker-fix loop와 M9 workstream을 섞지 않는다
+5. 새 live blocker가 나오면 M5~M8 reopen으로 분리하고, M9 계획 자체와 혼합하지 않는다
+
+## 완료 선언 조건
+
+아래를 만족하면 M9 wave 1 완료로 본다.
+
+1. scene inventory / scene model / summary / advisor input draft 문서가 모두 current 상태다
+2. representative scene fixture에서 advisor scene artifact가 안정적으로 생성된다
+3. reward + event read-only advisor dry run이 가능하다
+4. foundation merge는 하지 않았지만, merge gate를 통과할 조건이 문서/fixture로 명확하다
