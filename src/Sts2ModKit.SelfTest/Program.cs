@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text;
+using Sts2AiCompanion.AdvisorSceneModel;
 using Sts2AiCompanion.Foundation.State;
 using Sts2AiCompanion.Harness.Actions;
 using Sts2AiCompanion.Host;
@@ -106,6 +107,7 @@ Run("reward model rationale survives without heavy backfill", TestRewardModelRat
 Run("reward fixtures include a non-first winning choice", TestRewardNonFirstChoiceScenario, failures);
 Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
 Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
+Run("companion host publishes live advisor scene model artifacts", TestCompanionHostLiveSceneModelArtifacts, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
 
 if (failures.Count == 0)
@@ -4556,6 +4558,91 @@ static void ExecuteCompanionHostAdviceFlowTest(bool collectorModeEnabled)
     }
 }
 
+static void TestCompanionHostLiveSceneModelArtifacts()
+{
+    foreach (var scenario in CreateHostSceneModelScenarios())
+    {
+        ExecuteHostSceneModelScenario(scenario);
+    }
+}
+
+static void ExecuteHostSceneModelScenario(HostSceneModelScenario scenario)
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        configuration = configuration with
+        {
+            Assistant = configuration.Assistant with
+            {
+                AutoAdviceEnabled = false,
+            },
+        };
+        SeedKnowledgeCatalog(root);
+
+        var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+        Directory.CreateDirectory(layout.LiveRoot);
+        var session = new LiveExportSession($"session-{scenario.RunId}", scenario.RunId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, layout.LiveRoot, scenario.EventKind, scenario.Snapshot.CurrentScreen);
+        var events = new[]
+        {
+            new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, scenario.RunId, scenario.EventKind, scenario.Snapshot.CurrentScreen, scenario.Snapshot.Act, scenario.Snapshot.Floor, new Dictionary<string, object?>()),
+        };
+
+        WriteJson(layout.SnapshotPath, scenario.Snapshot);
+        WriteJson(layout.SessionPath, session);
+        File.WriteAllText(layout.SummaryPath, $"{scenario.Name} summary", Encoding.UTF8);
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+        File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+        File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+        Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+        var host = new CompanionHost(configuration, root, new FakeCodexSessionClient());
+        try
+        {
+            host.RefreshAsync().GetAwaiter().GetResult();
+            var sceneModel = host.CurrentSnapshot.LatestSceneModel
+                ?? throw new InvalidOperationException($"Expected latest scene model for scenario {scenario.Name}.");
+            Assert(string.Equals(sceneModel.SourceKind, "live", StringComparison.Ordinal), $"Expected sourceKind=live for scenario {scenario.Name}.");
+            Assert(string.Equals(sceneModel.SceneType, scenario.ExpectedSceneType, StringComparison.Ordinal), $"Expected sceneType {scenario.ExpectedSceneType} for scenario {scenario.Name} but got {sceneModel.SceneType}.");
+            Assert(string.Equals(sceneModel.SceneStage, scenario.ExpectedSceneStage, StringComparison.Ordinal), $"Expected sceneStage {scenario.ExpectedSceneStage} for scenario {scenario.Name} but got {sceneModel.SceneStage}.");
+            Assert(string.Equals(sceneModel.CanonicalOwner, scenario.ExpectedCanonicalOwner, StringComparison.Ordinal), $"Expected canonicalOwner {scenario.ExpectedCanonicalOwner} for scenario {scenario.Name} but got {sceneModel.CanonicalOwner}.");
+            Assert(sceneModel.Options.Count == scenario.ExpectedOptionCount, $"Expected option count {scenario.ExpectedOptionCount} for scenario {scenario.Name} but got {sceneModel.Options.Count}.");
+            foreach (var missingFact in scenario.ExpectedMissingFacts)
+            {
+                Assert(sceneModel.MissingFacts.Contains(missingFact, StringComparer.Ordinal), $"Expected missing fact '{missingFact}' for scenario {scenario.Name}.");
+            }
+
+            Assert(sceneModel.AttemptId is null && sceneModel.StepIndex is null && sceneModel.Phase is null, $"Expected live scene model replay envelope fields to stay null for scenario {scenario.Name}.");
+            Assert(!string.IsNullOrWhiteSpace(host.CurrentSnapshot.Paths.AdvisorSceneRoot) && Directory.Exists(host.CurrentSnapshot.Paths.AdvisorSceneRoot!), $"Expected advisor-scene root for scenario {scenario.Name}.");
+            Assert(File.Exists(host.CurrentSnapshot.Paths.AdvisorSceneLatestJsonPath!), $"Expected advisor-scene.latest.json for scenario {scenario.Name}.");
+            Assert(File.Exists(host.CurrentSnapshot.Paths.AdvisorSceneLogPath!), $"Expected advisor-scene.ndjson for scenario {scenario.Name}.");
+
+            var latestSceneArtifact = JsonSerializer.Deserialize<AdvisorSceneArtifact>(File.ReadAllText(host.CurrentSnapshot.Paths.AdvisorSceneLatestJsonPath!, Encoding.UTF8), ConfigurationLoader.JsonOptions)
+                ?? throw new InvalidOperationException($"Expected advisor scene artifact json for scenario {scenario.Name}.");
+            Assert(string.Equals(latestSceneArtifact.SceneType, scenario.ExpectedSceneType, StringComparison.Ordinal), $"Expected persisted sceneType {scenario.ExpectedSceneType} for scenario {scenario.Name}.");
+
+            var initialLineCount = File.ReadAllLines(host.CurrentSnapshot.Paths.AdvisorSceneLogPath!, Encoding.UTF8).Length;
+            Assert(initialLineCount == 1, $"Expected one advisor-scene.ndjson line after first publish for scenario {scenario.Name}.");
+
+            host.RefreshAsync().GetAwaiter().GetResult();
+            var secondLineCount = File.ReadAllLines(host.CurrentSnapshot.Paths.AdvisorSceneLogPath!, Encoding.UTF8).Length;
+            Assert(secondLineCount == initialLineCount, $"Expected unchanged refresh not to append advisor-scene.ndjson for scenario {scenario.Name}.");
+        }
+        finally
+        {
+            host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static ScaffoldConfiguration CreateCompanionHostTestConfiguration(string root, bool collectorModeEnabled)
 {
     var baseConfiguration = ScaffoldConfiguration.CreateLocalDefault();
@@ -4618,6 +4705,175 @@ static LiveExportSnapshot CreateHostSnapshot(string runId, string screen)
             ["flowScreen"] = screen,
             ["visibleScreen"] = screen,
         });
+}
+
+static IReadOnlyList<HostSceneModelScenario> CreateHostSceneModelScenarios()
+{
+    return new[]
+    {
+        new HostSceneModelScenario(
+            "reward-claim",
+            "scene-model-reward-run",
+            "reward-screen-opened",
+            CreateRewardSceneModelSnapshot("scene-model-reward-run"),
+            "reward",
+            "claim",
+            "reward",
+            3,
+            Array.Empty<string>()),
+        new HostSceneModelScenario(
+            "event-ancient-option",
+            "scene-model-event-run",
+            "event-opened",
+            CreateEventSceneModelSnapshot("scene-model-event-run"),
+            "event",
+            "ancient-option",
+            "event",
+            2,
+            Array.Empty<string>()),
+        new HostSceneModelScenario(
+            "shop-inventory-open",
+            "scene-model-shop-run",
+            "shop-opened",
+            CreateShopSceneModelSnapshot("scene-model-shop-run"),
+            "shop",
+            "inventory-open",
+            "shop",
+            4,
+            new[] { "shop-item-price-missing" }),
+    };
+}
+
+static LiveExportSnapshot CreateRewardSceneModelSnapshot(string runId)
+{
+    return CreateHostSnapshot(runId, "rewards") with
+    {
+        CurrentScreen = "rewards",
+        Encounter = new LiveExportEncounterSummary("RewardsScreen", "Reward", false, null),
+        CurrentChoices = new[]
+        {
+            new LiveExportChoiceSummary("card", "몸통 박치기", "CARD.BASH", "적에게 피해를 주고 취약을 겁니다.")
+            {
+                BindingKind = "reward-type",
+                BindingId = "CardReward",
+                SemanticHints = new[] { "reward-card" },
+            },
+            new LiveExportChoiceSummary("card", "수비 강화", "CARD.SHRUG_IT_OFF", "방어도를 얻고 카드를 뽑습니다.")
+            {
+                BindingKind = "reward-type",
+                BindingId = "CardReward",
+                SemanticHints = new[] { "reward-card" },
+            },
+            new LiveExportChoiceSummary("choice", "넘기기", null, "넘기기"),
+        },
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choiceExtractorPath"] = "reward",
+            ["currentSceneType"] = "NRewardsScreen",
+            ["rootTypeSummary"] = "NRewardsScreen",
+            ["flowScreen"] = "rewards",
+            ["visibleScreen"] = "rewards",
+            ["foregroundOwner"] = "reward",
+            ["foregroundActionLane"] = "reward-claim",
+            ["rewardProceedVisible"] = "false",
+        },
+    };
+}
+
+static LiveExportSnapshot CreateEventSceneModelSnapshot(string runId)
+{
+    return CreateHostSnapshot(runId, "event") with
+    {
+        CurrentScreen = "event",
+        Encounter = new LiveExportEncounterSummary("EventRoom", "Event", false, null),
+        CurrentChoices = new[]
+        {
+            new LiveExportChoiceSummary("event-option", "해독한다", "option-0", "최대 체력을 3 잃고 무작위 카드를 1장 강화합니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "option-0",
+                SemanticHints = new[] { "source:event-option-button" },
+            },
+            new LiveExportChoiceSummary("event-option", "부순다", "option-1", "체력을 20 회복합니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "option-1",
+                SemanticHints = new[] { "source:event-option-button" },
+            },
+        },
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choiceExtractorPath"] = "event",
+            ["currentSceneType"] = "NEventRoom",
+            ["rootTypeSummary"] = "NEventRoom",
+            ["flowScreen"] = "event",
+            ["visibleScreen"] = "event",
+            ["foregroundOwner"] = "event",
+            ["foregroundActionLane"] = "ancient-option",
+            ["ancientPhase"] = "options",
+            ["ancientEventDetected"] = "true",
+        },
+    };
+}
+
+static LiveExportSnapshot CreateShopSceneModelSnapshot(string runId)
+{
+    return CreateHostSnapshot(runId, "shop") with
+    {
+        CurrentScreen = "shop",
+        Encounter = new LiveExportEncounterSummary("MerchantRoom", "Shop", false, null),
+        CurrentChoices = new[]
+        {
+            new LiveExportChoiceSummary("shop-option:relic", "게임용 말", "RELIC.GAME_PIECE", "Merchant inventory slot")
+            {
+                BindingKind = "shop-option",
+                BindingId = "shop-relic-0",
+                Enabled = true,
+                SemanticHints = new[] { "shop", "shop-option:relic" },
+            },
+            new LiveExportChoiceSummary("shop-option:card", "몸풀기", "CARD.WARM_UP", "Merchant inventory slot")
+            {
+                BindingKind = "shop-option",
+                BindingId = "shop-card-0",
+                Enabled = false,
+                SemanticHints = new[] { "shop", "shop-option:card" },
+            },
+            new LiveExportChoiceSummary("shop-card-removal", "카드 제거", "service:card-removal", "Merchant service")
+            {
+                BindingKind = "shop-option",
+                BindingId = "shop-removal",
+                Enabled = true,
+                SemanticHints = new[] { "shop", "service" },
+            },
+            new LiveExportChoiceSummary("shop-back", "뒤로", null, "상점을 닫습니다.")
+            {
+                BindingKind = "shop-option",
+                BindingId = "shop-back",
+                Enabled = true,
+                SemanticHints = new[] { "shop" },
+            },
+        },
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choiceExtractorPath"] = "shop",
+            ["currentSceneType"] = "NMerchantRoom",
+            ["rootTypeSummary"] = "NMerchantRoom",
+            ["flowScreen"] = "shop",
+            ["visibleScreen"] = "shop",
+            ["foregroundOwner"] = "shop",
+            ["foregroundActionLane"] = "shop-inventory",
+            ["shopInventoryOpen"] = "true",
+            ["shopAffordableOptionCount"] = "2",
+            ["shopCardRemovalVisible"] = "true",
+            ["shopCardRemovalEnabled"] = "true",
+            ["shopCardRemovalUsed"] = "false",
+            ["shopBackEnabled"] = "true",
+            ["shopProceedEnabled"] = "false",
+        },
+    };
 }
 
 static RewardScenarioDefinition CreateDefaultRewardScenario()
@@ -6208,6 +6464,17 @@ file sealed record RewardScenarioExecutionResult(
     AdviceInputPack ReplayPromptPack,
     AdviceResponse ReplayAdvice,
     string ReplayMarkdown);
+
+file sealed record HostSceneModelScenario(
+    string Name,
+    string RunId,
+    string EventKind,
+    LiveExportSnapshot Snapshot,
+    string ExpectedSceneType,
+    string ExpectedSceneStage,
+    string ExpectedCanonicalOwner,
+    int ExpectedOptionCount,
+    IReadOnlyList<string> ExpectedMissingFacts);
 
 sealed class FakeProbe : IFileStateProbe
 {

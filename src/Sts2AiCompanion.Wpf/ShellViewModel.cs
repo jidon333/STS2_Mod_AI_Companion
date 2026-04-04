@@ -7,6 +7,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows.Threading;
+using Sts2AiCompanion.AdvisorSceneModel;
 using Sts2AiCompanion.Host;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Knowledge;
@@ -57,6 +58,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     public string AdviceOverviewText { get; private set; } = "아직 조언이 없습니다.";
     public string AdviceDetailsText { get; private set; } = "근거와 리스크 정보가 아직 없습니다.";
     public string CurrentChoicesText { get; private set; } = "없음";
+    public string SceneIdentityText { get; private set; } = "없음";
+    public string SceneSummaryText { get; private set; } = "scene model이 아직 없습니다.";
+    public string SceneOptionsText { get; private set; } = "없음";
+    public string SceneGapsText { get; private set; } = "없음";
+    public string SceneProvenanceText { get; private set; } = "없음";
     public string RecentEventsText { get; private set; } = "없음";
     public string KnowledgeEntriesText { get; private set; } = "없음";
     public string CollectorNotesText { get; private set; } = "수집 런 진단 정보가 없습니다.";
@@ -183,7 +189,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         StatusLine = LocalizeStatusMessage(snapshot.Status.Message);
         RunLine = $"런: {snapshot.Status.RunId ?? "없음"}";
         var normalizedScreen = snapshot.RunState?.NormalizedState.Scene.SemanticSceneType;
-        ScreenLine = $"화면: {TranslateScreen(string.IsNullOrWhiteSpace(normalizedScreen) ? snapshot.RunState?.Snapshot.CurrentScreen : normalizedScreen)}";
+        var sceneScreen = snapshot.LatestSceneModel?.SceneType;
+        ScreenLine = $"화면: {TranslateScreen(string.IsNullOrWhiteSpace(sceneScreen) ? (string.IsNullOrWhiteSpace(normalizedScreen) ? snapshot.RunState?.Snapshot.CurrentScreen : normalizedScreen) : sceneScreen)}";
         UpdatedLine = $"업데이트: {snapshot.Status.UpdatedAt:yyyy-MM-dd HH:mm:ss}";
         AutoAdviceEnabled = snapshot.Status.AutoAdviceEnabled;
         AutoAdviceButtonText = AutoAdviceEnabled ? "자동 조언 일시중지" : "자동 조언 다시 켜기";
@@ -293,6 +300,51 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             ConfidenceLine = "신뢰도: -";
         }
 
+        if (snapshot.LatestSceneModel is { } sceneModel)
+        {
+            SceneIdentityText = $"{sceneModel.SceneType} / {sceneModel.SceneStage} / {sceneModel.CanonicalOwner}";
+            SceneSummaryText = string.IsNullOrWhiteSpace(sceneModel.SummaryText) ? "scene summary가 아직 없습니다." : sceneModel.SummaryText;
+            SceneOptionsText = FormatSceneOptions(sceneModel.Options);
+            SceneGapsText = JoinLines(new[]
+            {
+                "missing facts",
+                FormatBulletSection(sceneModel.MissingFacts),
+                string.Empty,
+                "observer gaps",
+                FormatBulletSection(sceneModel.ObserverGaps),
+            });
+            SceneProvenanceText = JoinLines(new[]
+            {
+                "confidence",
+                FormatConfidence(sceneModel.Confidence),
+                string.Empty,
+                "source refs",
+                FormatBulletSection(sceneModel.SourceRefs),
+            });
+        }
+        else
+        {
+            SceneIdentityText = "없음";
+            SceneSummaryText = "scene model이 아직 없습니다.";
+            SceneOptionsText = "없음";
+            SceneGapsText = JoinLines(new[]
+            {
+                "missing facts",
+                "- 없음",
+                string.Empty,
+                "observer gaps",
+                "- 없음",
+            });
+            SceneProvenanceText = JoinLines(new[]
+            {
+                "confidence",
+                "- 없음",
+                string.Empty,
+                "source refs",
+                "- 없음",
+            });
+        }
+
         CurrentChoicesText = JoinLines(
             (snapshot.RunState?.Snapshot.CurrentChoices ?? Array.Empty<LiveExportChoiceSummary>())
             .Select(choice => $"[{TranslateChoiceKind(choice.Kind)}] {choice.Label} :: {choice.Description ?? choice.Value ?? "추가 정보 없음"}")
@@ -370,6 +422,40 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     private static string FormatBulletSection(IEnumerable<string> items)
     {
         return JoinLines(items.DefaultIfEmpty("없음").Select(item => $"- {item}"));
+    }
+
+    private static string FormatSceneOptions(IReadOnlyList<AdvisorSceneOption> options)
+    {
+        if (options.Count == 0)
+        {
+            return "없음";
+        }
+
+        return JoinLines(options.Select(option =>
+        {
+            var status = option.Enabled ? "활성" : "비활성";
+            var detail = option.Description;
+            if (string.IsNullOrWhiteSpace(detail) && !string.IsNullOrWhiteSpace(option.Value) && !string.Equals(option.Value, option.Label, StringComparison.OrdinalIgnoreCase))
+            {
+                detail = option.Value;
+            }
+
+            return string.IsNullOrWhiteSpace(detail) || string.Equals(detail, option.Label, StringComparison.OrdinalIgnoreCase)
+                ? $"- {option.Label} [{status}]"
+                : $"- {option.Label} [{status}] :: {detail}";
+        }));
+    }
+
+    private static string FormatConfidence(IReadOnlyDictionary<string, double> confidence)
+    {
+        if (confidence.Count == 0)
+        {
+            return "- 없음";
+        }
+
+        return JoinLines(confidence
+            .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(pair => $"- {pair.Key}: {pair.Value:0.00}"));
     }
 
     private static string ToModelDisplay(string? model)
@@ -530,6 +616,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         Notify(nameof(AdviceOverviewText));
         Notify(nameof(AdviceDetailsText));
         Notify(nameof(CurrentChoicesText));
+        Notify(nameof(SceneIdentityText));
+        Notify(nameof(SceneSummaryText));
+        Notify(nameof(SceneOptionsText));
+        Notify(nameof(SceneGapsText));
+        Notify(nameof(SceneProvenanceText));
         Notify(nameof(RecentEventsText));
         Notify(nameof(KnowledgeEntriesText));
         Notify(nameof(CollectorNotesText));

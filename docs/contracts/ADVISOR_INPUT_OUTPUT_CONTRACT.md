@@ -9,7 +9,9 @@
 
 - `SceneModel`과 `AdvisorInputV1`는 분리한다.
 - wave 1에서는 `AdviceInputPack` 또는 foundation advisor contract를 변경하지 않는다.
-- scene model builder는 harness-local에 유지한다.
+- scene model contract + summary는 `src/Shared/AdvisorSceneModel/`에 유지한다.
+- replay/live builder는 harness/host local adapter로 분리한다.
+- live sidecar는 `SceneModel`을 WPF에 직접 표시하지만, advisor input packing에는 아직 연결하지 않는다.
 
 ## Planned Mapping Direction
 

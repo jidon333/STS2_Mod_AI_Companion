@@ -25,6 +25,55 @@ using static GuiSmokeStepRequestFactory;
 
 internal static partial class Program
 {
+    static int ReplayAdvisorScene(IReadOnlyDictionary<string, string> options, string workspaceRoot)
+    {
+        if (!options.TryGetValue("--request", out var requestPath))
+        {
+            throw new InvalidOperationException("--request is required.");
+        }
+
+        var resolvedRequestPath = ResolveCliPath(requestPath, workspaceRoot);
+        if (!File.Exists(resolvedRequestPath))
+        {
+            throw new FileNotFoundException("Replay request not found.", resolvedRequestPath);
+        }
+
+        var request = TryReadJson<GuiSmokeStepRequest>(resolvedRequestPath)
+                      ?? throw new InvalidOperationException($"Failed to parse replay request '{resolvedRequestPath}'.");
+        if (!Enum.TryParse<GuiSmokePhase>(request.Phase, ignoreCase: true, out var phase))
+        {
+            throw new InvalidOperationException($"Unsupported replay phase '{request.Phase}'.");
+        }
+
+        var stepPrefix = resolvedRequestPath.EndsWith(".request.json", StringComparison.OrdinalIgnoreCase)
+            ? resolvedRequestPath[..^".request.json".Length]
+            : Path.Combine(Path.GetDirectoryName(resolvedRequestPath) ?? string.Empty, Path.GetFileNameWithoutExtension(resolvedRequestPath));
+        var statePath = stepPrefix + ".observer.state.json";
+        var stateDocument = TryLoadJsonDocument(statePath)
+                            ?? throw new FileNotFoundException("Observer state sidecar not found.", statePath);
+        var eventTailPath = stepPrefix + ".observer.events.tail.json";
+        var eventLines = TryReadJson<string[]>(eventTailPath);
+        var observer = ObserverSnapshotReader.CreateReplayObserverState(stateDocument, eventLines);
+        var analysisContext = CreateStepAnalysisContext(
+            phase,
+            observer,
+            request.ScreenshotPath,
+            request.History ?? Array.Empty<GuiSmokeHistoryEntry>(),
+            request.CombatCardKnowledge ?? Array.Empty<CombatCardKnowledgeHint>(),
+            request.WindowBounds);
+        var artifact = GuiSmokeAdvisorSceneModelBuilder.Build(request, observer, analysisContext, resolvedRequestPath);
+        var serialized = JsonSerializer.Serialize(artifact, GuiSmokeShared.JsonOptions);
+        if (options.TryGetValue("--out", out var outputPath))
+        {
+            var resolvedOutputPath = ResolveCliPath(outputPath, workspaceRoot);
+            Directory.CreateDirectory(Path.GetDirectoryName(resolvedOutputPath) ?? workspaceRoot);
+            File.WriteAllText(resolvedOutputPath, serialized);
+        }
+
+        Console.WriteLine(serialized);
+        return 0;
+    }
+
     static int InspectRun(IReadOnlyDictionary<string, string> options, string workspaceRoot)
     {
         if (!options.TryGetValue("--run-root", out var runRoot))

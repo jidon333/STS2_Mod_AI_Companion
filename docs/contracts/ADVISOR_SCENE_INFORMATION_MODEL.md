@@ -65,6 +65,7 @@
 ## Truth Source Rule
 
 - scene truth source는 `observer.state + canonical scene state`다.
+- live side truth source는 `live snapshot + normalized scene state + current choices + recent events`다.
 - `GuiSmokeStepRequest`는 truth source가 아니다.
 - `request`에서 허용되는 사용:
   - `runId`
@@ -82,6 +83,7 @@
 모든 scene model은 아래 공통 필드를 가진다.
 
 - `schemaVersion`
+- `sourceKind`
 - `runId`
 - `attemptId`
 - `stepIndex`
@@ -97,6 +99,17 @@
 - `observerGaps`
 - `confidence`
 - `sourceRefs`
+
+구현 위치:
+
+- 공통 contract + summary: `src/Shared/AdvisorSceneModel/`
+- replay builder: `src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneModelBuilder.cs`
+- live builder: `src/Sts2AiCompanion.Host/AdvisorScene/`
+
+nullable rule:
+
+- replay: `attemptId`, `stepIndex`, `phase`, `requestPath`, `screenshotPath`가 채워진다
+- live: 위 필드들은 null일 수 있고, fake replay envelope를 만들지 않는다
 
 ## Scene-Specific Fields
 

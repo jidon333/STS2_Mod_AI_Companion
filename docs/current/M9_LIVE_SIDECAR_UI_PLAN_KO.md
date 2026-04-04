@@ -55,23 +55,42 @@ M9 v1에서 이미 얻은 것은 아래다.
 - replay builder와 같은 의미 계약을 유지하되,
 - live side는 `request`가 없으므로 live snapshot/normalized state 기준으로 scene model을 만든다.
 
-권장 seam:
+선택한 seam:
 
 - live export snapshot
 - normalized scene
 - current choices
 - recent events
-- collector/degradation info
+- `LatestAdvice` / collector degraded reason은 truth source로 쓰지 않음
 
-가능한 구현 경로:
+이번 wave 구현 결정:
 
-1. harness-local builder 재사용 범위를 넓힌다
-2. 또는 live 전용 adapter를 추가해 같은 scene contract로 매핑한다
+1. live scene model owner는 `src/Sts2AiCompanion.Host`다
+2. replay/live 공용 contract + summary는 `src/Shared/AdvisorSceneModel/` source-shared로 둔다
+3. live builder root는 `src/Sts2AiCompanion.Host/AdvisorScene/`로 고정한다
+4. WPF는 이번 wave에서도 `CompanionHost` direct path를 유지한다
+5. `AdvisorCoordinator`, foundation contracts, `AdviceInputPack`, `AdviceResponse`는 이번 wave에서 확장하지 않는다
 
 중요:
 
 - replay artifact용 builder와 live UI용 builder가 별도 schema를 가지면 안 된다
 - schema는 같고, input adapter만 달라야 한다
+- 공통 envelope는 `sourceKind = replay | live`를 가진다
+- live에서는 `attemptId`, `stepIndex`, `phase`, `requestPath`, `screenshotPath`가 nullable이다
+
+### 1.1 Live Artifact Root
+
+artifact root는 아래로 고정한다.
+
+- `artifacts/companion/<runId>/advisor-scene/`
+- latest file: `advisor-scene.latest.json`
+- change log: `advisor-scene.ndjson`
+
+정책:
+
+- latest json은 매 poll overwrite
+- ndjson는 serialized scene model이 직전 publish와 달라졌을 때만 append
+- unchanged poll이면 append하지 않는다
 
 ### 2. Sidecar UI Surface
 
@@ -79,7 +98,6 @@ M9 v1에서 이미 얻은 것은 아래다.
 
 - [ShellViewModel.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Wpf/ShellViewModel.cs)
 - [MainWindow.xaml](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Wpf/MainWindow.xaml)
-- [AdvisorCoordinator.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Advisor/AdvisorCoordinator.cs)
 
 추가할 표시 항목:
 
@@ -97,6 +115,13 @@ M9 v1에서 이미 얻은 것은 아래다.
 
 - 보기 좋은 UI보다 읽기 정확한 UI
 - “지금 화면을 어떻게 읽고 있는가”가 먼저
+
+레이아웃 결정:
+
+- 오른쪽 컬럼을 `현재 scene model` 패널로 재구성한다
+- 상단부터 `sceneType / stage / owner`, `요약`, `보이는 선택지`, `누락 정보 / observer gaps`, `confidence / source refs`를 둔다
+- `최근 이벤트`, `관련 지식`, `수집 런 진단`은 같은 컬럼 하단에 유지한다
+- 기존 raw `CurrentChoicesText`는 메인 패널에서 human-readable `SceneOptionsText`로 대체한다
 
 ### 3. Live Feedback Loop
 
@@ -155,10 +180,10 @@ M9 v1에서 이미 얻은 것은 아래다.
 | Item | Status | Notes |
 |---|---|---|
 | replay scene model | completed | harness-local substrate 존재 |
-| human-readable summary | completed | formatter 존재 |
-| live sidecar panel | pending | 이번 workstream owner |
-| live scene model adapter | pending | replay/live seam 정렬 필요 |
-| provenance panel | pending | confidence/source refs UI 필요 |
+| human-readable summary | completed | `src/Shared/AdvisorSceneModel/AdvisorSceneSummaryFormatter.cs` 공유 |
+| live sidecar panel | completed | `ShellViewModel` / `MainWindow.xaml`에 실시간 panel 추가 |
+| live scene model adapter | completed | `CompanionHost` owner + `src/Sts2AiCompanion.Host/AdvisorScene/` |
+| provenance panel | completed | confidence / source refs / gaps 표시 |
 | read-only advisor live attach | pending | reward/event부터 시작 |
 
 ## acceptance
@@ -177,10 +202,12 @@ M9 v1에서 이미 얻은 것은 아래다.
 
 - replay scene model과 live sidecar scene model이 같은 schema를 쓴다
 - live path만의 임시 필드가 생기지 않는다
+- `sourceKind` 외에 live 전용 fact field를 추가하지 않는다
 
 ### Gate D. Debuggability
 
 - mismatch가 나왔을 때 source refs / missing facts / observer gaps로 원인을 좁힐 수 있다
+- unchanged poll에서는 `advisor-scene.ndjson`가 증가하지 않는다
 
 ## 필수로 먼저 읽을 문서
 
@@ -202,6 +229,27 @@ M9 v1에서 이미 얻은 것은 아래다.
    - 사람이 실제로 어떻게 읽는지 바뀌면 예시와 설명 갱신
 4. [PROJECT_STATUS.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/PROJECT_STATUS.md)
    - active M9 workstream 포인터가 바뀌면 갱신
+
+## 자동 검증 결과
+
+2026-04-04 current `main` 기준:
+
+- `Sts2AiCompanion.Host` build 통과
+- `Sts2AiCompanion.Wpf` build 통과
+- `Sts2GuiSmokeHarness` build 통과
+- `Sts2ModKit.SelfTest`에 `companion host publishes live advisor scene model artifacts` 추가 후 전체 self-test green
+- fake live export `reward / event / shop` 3 fixture에서 `LatestSceneModel`, `advisor-scene.latest.json`, `advisor-scene.ndjson`, unchanged refresh no-append 확인
+- representative replay fixture `live29 step 0027`에서 `replay-advisor-scene`가 shared schema `sourceKind=replay`로 직렬화됨
+
+## 수동 검증 준비
+
+직접 플레이 전후로 아래 순서를 따른다.
+
+1. AGENTS 가드레일대로 clean boot
+2. WPF sidecar 실행
+3. reward / event / rest-site / shop / map / combat 진입
+4. panel의 `sceneType / sceneStage / canonicalOwner / summary / options`를 실제 화면과 대조
+5. mismatch가 있으면 `missingFacts / observerGaps / confidence / sourceRefs`를 확인
 
 ## 구현 세션 프롬프트
 
@@ -232,9 +280,9 @@ M9 v1에서 이미 얻은 것은 아래다.
 3. src/Sts2AiCompanion.Advisor/AdvisorCoordinator.cs
 4. src/Sts2AiCompanion.Host/CompanionHost.cs
 5. src/Sts2AiCompanion.Foundation/State/CompanionSceneNormalizer.cs
-6. src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneContracts.cs
+6. src/Shared/AdvisorSceneModel/AdvisorSceneContracts.cs
 7. src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneModelBuilder.cs
-8. src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneSummaryFormatter.cs
+8. src/Shared/AdvisorSceneModel/AdvisorSceneSummaryFormatter.cs
 
 핵심 원칙:
 - replay scene model과 live scene model은 같은 schema를 써야 한다

@@ -183,6 +183,124 @@ sealed class ObserverSnapshotReader
         return ReadChoices(document);
     }
 
+    internal static ObserverState CreateReplayObserverState(JsonDocument stateDocument, string[]? eventLines = null)
+    {
+        var stateCapturedAt = TryReadDateTimeOffset(stateDocument.RootElement, "capturedAt");
+        var inventoryDocument = (JsonDocument?)null;
+        var inventorySceneType = TryReadString(inventoryDocument?.RootElement, "sceneType");
+        var inventoryRawCurrentScreen = TryReadString(inventoryDocument?.RootElement, "rawCurrentScreen")
+                                        ?? TryReadString(inventoryDocument?.RootElement, "rawSceneType");
+        var inventoryPublishedCurrentScreen = TryReadString(inventoryDocument?.RootElement, "publishedCurrentScreen")
+                                              ?? TryReadString(inventoryDocument?.RootElement, "publishedSceneType");
+        var inventoryPublishedVisibleScreen = TryReadString(inventoryDocument?.RootElement, "publishedVisibleScreen")
+                                              ?? TryReadString(inventoryDocument?.RootElement, "publishedVisibleScene");
+        var inventoryCompatibilityCurrentScreen = TryReadString(inventoryDocument?.RootElement, "compatibilityCurrentScreen")
+                                                  ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneType");
+        var compatibilityCurrentScreen = TryReadNestedString(stateDocument.RootElement, "meta", "compatibilityCurrentScreen")
+                                         ?? TryReadNestedString(stateDocument.RootElement, "meta", "compatLogicalScreen")
+                                         ?? inventoryCompatibilityCurrentScreen;
+        var rawCurrentScreen = TryReadNestedString(stateDocument.RootElement, "meta", "rawCurrentScreen")
+                               ?? inventoryRawCurrentScreen;
+        var rawObservedScreen = TryReadNestedString(stateDocument.RootElement, "meta", "rawObservedScreen")
+                                ?? TryReadNestedString(stateDocument.RootElement, "meta", "screen")
+                                ?? rawCurrentScreen
+                                ?? inventoryRawCurrentScreen;
+        var trackerCurrentScreen = TryReadString(stateDocument.RootElement, "currentScreen");
+        var publishedCurrentScreen = TryReadString(stateDocument.RootElement, "publishedCurrentScreen")
+                                     ?? TryReadNestedString(stateDocument.RootElement, "meta", "publishedCurrentScreen")
+                                     ?? inventoryPublishedCurrentScreen;
+        var legacyCurrentScreen = inventorySceneType;
+        var currentScreen = publishedCurrentScreen
+                            ?? rawCurrentScreen
+                            ?? rawObservedScreen
+                            ?? legacyCurrentScreen;
+        var publishedVisibleScreen = TryReadString(stateDocument.RootElement, "publishedVisibleScreen")
+                                     ?? TryReadNestedString(stateDocument.RootElement, "meta", "publishedVisibleScreen")
+                                     ?? inventoryPublishedVisibleScreen;
+        var snapshotVersion = TryReadInt64(stateDocument.RootElement, "version");
+        var compatibilityVisibleScreen = TryReadNestedString(stateDocument.RootElement, "meta", "compatibilityVisibleScreen")
+                                         ?? TryReadNestedString(stateDocument.RootElement, "meta", "compatVisibleScreen");
+        var visibleScreen = publishedVisibleScreen
+                            ?? rawObservedScreen
+                            ?? rawCurrentScreen
+                            ?? inventorySceneType;
+        var inCombat = TryReadBool(stateDocument.RootElement, "encounter", "inCombat");
+        var promotedTrackerCombatScreen = inCombat == true
+                                          && string.Equals(trackerCurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
+            ? "combat"
+            : null;
+        currentScreen = promotedTrackerCombatScreen
+                        ?? currentScreen;
+        visibleScreen = promotedTrackerCombatScreen
+                        ?? visibleScreen;
+        var capturedAt = stateCapturedAt;
+        var inventoryId = (string?)null;
+        var compatibilitySceneReady = TryReadNestedBool(stateDocument.RootElement, "meta", "compatSceneReady");
+        var publishedSceneReady = TryReadBool(stateDocument.RootElement, "publishedSceneReady")
+                                  ?? TryReadNestedBool(stateDocument.RootElement, "meta", "publishedSceneReady");
+        var sceneReady = publishedSceneReady;
+        var compatibilitySceneAuthority = TryReadNestedString(stateDocument.RootElement, "meta", "compatSceneAuthority");
+        var publishedSceneAuthority = TryReadString(stateDocument.RootElement, "publishedSceneAuthority")
+                                      ?? TryReadNestedString(stateDocument.RootElement, "meta", "publishedSceneAuthority");
+        var sceneAuthority = publishedSceneAuthority;
+        var compatibilitySceneStability = TryReadNestedString(stateDocument.RootElement, "meta", "compatSceneStability");
+        var publishedSceneStability = TryReadString(stateDocument.RootElement, "publishedSceneStability")
+                                      ?? TryReadNestedString(stateDocument.RootElement, "meta", "publishedSceneStability");
+        var sceneStability = publishedSceneStability;
+        var sceneEpisodeId = TryReadNestedString(stateDocument.RootElement, "meta", "screen-episode");
+        var encounterKind = TryReadNestedString(stateDocument.RootElement, "encounter", "kind");
+        var choiceExtractorPath = TryReadNestedString(stateDocument.RootElement, "meta", "choiceExtractorPath");
+        var playerCurrentHp = TryReadInt32(stateDocument.RootElement, "player", "currentHp");
+        var playerMaxHp = TryReadInt32(stateDocument.RootElement, "player", "maxHp");
+        var playerEnergy = TryReadInt32(stateDocument.RootElement, "player", "energy");
+        var combatHand = ParseCombatHandSummary(TryReadNestedString(stateDocument.RootElement, "meta", "combatHandSummary"));
+        var currentChoices = ReadChoiceLabels(stateDocument);
+        var choices = ReadChoices(stateDocument);
+        var actionNodes = BuildActionNodesFromChoices(choices);
+        var meta = ReadMetaDictionary(stateDocument);
+
+        return new ObserverState(
+            new ObserverSummary(
+                currentScreen,
+                visibleScreen,
+                inCombat,
+                capturedAt,
+                inventoryId,
+                sceneReady,
+                sceneAuthority,
+                sceneStability,
+                sceneEpisodeId,
+                encounterKind,
+                choiceExtractorPath,
+                playerCurrentHp,
+                playerMaxHp,
+                playerEnergy,
+                currentChoices,
+                eventLines ?? Array.Empty<string>(),
+                actionNodes,
+                choices,
+                combatHand)
+            {
+                SnapshotVersion = snapshotVersion,
+                RawCurrentScreen = rawCurrentScreen,
+                RawObservedScreen = rawObservedScreen,
+                PublishedCurrentScreen = publishedCurrentScreen,
+                PublishedVisibleScreen = publishedVisibleScreen,
+                PublishedSceneReady = publishedSceneReady,
+                PublishedSceneAuthority = publishedSceneAuthority,
+                PublishedSceneStability = publishedSceneStability,
+                CompatibilityCurrentScreen = compatibilityCurrentScreen,
+                CompatibilityVisibleScreen = compatibilityVisibleScreen,
+                CompatibilitySceneReady = compatibilitySceneReady,
+                CompatibilitySceneAuthority = compatibilitySceneAuthority,
+                CompatibilitySceneStability = compatibilitySceneStability,
+                Meta = meta,
+            },
+            stateDocument,
+            null,
+            eventLines);
+    }
+
     private static IReadOnlyList<ObserverActionNode> ReconcileActionNodes(
         IReadOnlyList<ObserverActionNode> inventoryNodes,
         IReadOnlyList<ObserverChoice> stateChoices,

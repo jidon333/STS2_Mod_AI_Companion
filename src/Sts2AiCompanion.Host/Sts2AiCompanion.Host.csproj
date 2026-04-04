@@ -11,4 +11,8 @@
     <ProjectReference Include="..\Sts2ModKit.Core\Sts2ModKit.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\AdvisorSceneModel\*.cs" Link="Shared\AdvisorSceneModel\%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

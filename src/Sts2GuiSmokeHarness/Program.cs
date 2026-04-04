@@ -31,6 +31,9 @@ internal static partial class Program
                 case "replay-step":
                     return ReplayStep(options, workspaceRoot);
 
+                case "replay-advisor-scene":
+                    return ReplayAdvisorScene(options, workspaceRoot);
+
                 case "replay-test":
                     return ReplayGoldenScenes(options, workspaceRoot);
 

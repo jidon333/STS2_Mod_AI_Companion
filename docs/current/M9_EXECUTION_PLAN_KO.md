@@ -92,11 +92,11 @@ v1 우선순위는 다음으로 고정한다.
 주요 산출물:
 
 - [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
-- [GuiSmokeAdvisorSceneContracts.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneContracts.cs)
+- `src/Shared/AdvisorSceneModel/AdvisorSceneContracts.cs`
 
 현재 상태:
 
-- `started`
+- `in_progress`
 
 완료 기준:
 
@@ -115,7 +115,7 @@ v1 우선순위는 다음으로 고정한다.
 주요 산출물:
 
 - [GuiSmokeAdvisorSceneModelBuilder.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneModelBuilder.cs)
-- [GuiSmokeAdvisorSceneSummaryFormatter.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneSummaryFormatter.cs)
+- `src/Shared/AdvisorSceneModel/AdvisorSceneSummaryFormatter.cs`
 - [Program.InspectAndReplay.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.InspectAndReplay.cs)
 
 현재 상태:
@@ -193,17 +193,20 @@ v1 우선순위는 다음으로 고정한다.
 주요 산출물:
 
 - [M9_LIVE_SIDECAR_UI_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md)
+- `src/Shared/AdvisorSceneModel/*`
+- `src/Sts2AiCompanion.Host/AdvisorScene/*`
 - `src/Sts2AiCompanion.Wpf`
-- `src/Sts2AiCompanion.Advisor`
 
 현재 상태:
 
-- `pending`
+- `in_progress`
 
 완료 기준:
 
 - live scene type / stage / owner / summary / options / missing facts가 sidecar에 표시됨
 - replay schema와 live schema가 일치함
+- `artifacts/companion/<runId>/advisor-scene/advisor-scene.latest.json` + `advisor-scene.ndjson`가 생성됨
+- unchanged poll에서는 `advisor-scene.ndjson`가 append되지 않음
 
 ## 현재 진척도 보드
 
@@ -217,7 +220,7 @@ v1 우선순위는 다음으로 고정한다.
 | Advisor input contract | in_progress | draft 상태, 아직 mapping only |
 | Coverage gap 운영 | pending | hard gap triage와 root refresh 필요 |
 | Read-only advisor MVP | pending | 아직 production/host merge 안 함 |
-| Live sidecar UI | pending | WPF에 scene model 실시간 패널 추가 예정 |
+| Live sidecar UI | in_progress | `Host` owner live builder, shared contract, WPF panel, advisor-scene artifact band 구현 완료. direct play clean-boot manual sweep만 남음 |
 | Foundation canonical merge | blocked_by_design | schema 안정화 전 금지 |
 | Real-time overlay UI | deferred | 텍스트/artifact proving 이후 단계 |
 
@@ -255,22 +258,22 @@ v1 우선순위는 다음으로 고정한다.
 
 ## 다음 Work Units
 
-### WU1. Coverage Matrix 보강
+### WU1. Shop live refresh
 
-- shop provisional root refresh task를 추가한다.
-- map/combat row의 missing fact severity를 더 명확히 적는다.
+- provisional `shop` root를 fresh direct-play/live root로 교체한다.
+- sidecar panel과 `advisor-scene.latest.json`을 기준으로 shop price/effect gap을 다시 기록한다.
 
-### WU2. Scene Model Fixture 안정화
+### WU2. Direct-play clean boot sweep
 
-- representative fixture root 6개를 기준으로 `replay-advisor-scene` 산출물을 고정한다.
-- schema churn이 큰 field를 줄인다.
+- AGENTS 가드레일대로 clean boot 후 reward/event/rest-site/shop/map/combat 진입을 수동 확인한다.
+- mismatch가 있으면 `missingFacts / observerGaps / confidence / sourceRefs`가 설명 가능한지 본다.
 
-### WU3. Advisor Input Mapping 설계
+### WU3. Advisor input mapping 설계
 
 - scene model에서 advisor input으로 넘길 최소 필드를 정리한다.
 - 이 단계에서도 foundation merge는 하지 않는다.
 
-### WU4. Reward/Event Read-Only Advisor Dry Run
+### WU4. Reward/Event read-only advisor dry run
 
 - reward/event 두 scene에 한정해 advice input/output dry run을 만든다.
 - recommendation label 정합성과 missingInformation 품질을 본다.
@@ -286,7 +289,7 @@ v1 우선순위는 다음으로 고정한다.
 ## 운영 원칙
 
 1. harness는 주력 제품이 아니라 proving ground + acceptance lane으로 본다
-2. scene model은 harness-local에서 먼저 증명한다
+2. scene model contract/summary는 `src/Shared/AdvisorSceneModel`에 두고, replay/live builder는 harness/host adapter로 분리한다
 3. 문서와 fixture를 함께 갱신한다
 4. blocker-fix loop와 M9 workstream을 섞지 않는다
 5. 새 live blocker가 나오면 M5~M8 reopen으로 분리하고, M9 계획 자체와 혼합하지 않는다

@@ -12,6 +12,10 @@
   - `artifacts/gui-smoke/endurance-longrun-20260404-live29`
 - provisional shop root:
   - `artifacts/gui-smoke/verify-shop-slot-source-20260322-0131`
+- live sidecar validation roots:
+  - fake live export `scene-model-reward-run`
+  - fake live export `scene-model-event-run`
+  - fake live export `scene-model-shop-run`
 
 ## Coverage Matrix
 
@@ -30,6 +34,53 @@
 - scene truth는 `observer.state + canonical scene state`에서만 만든다.
 - `request`는 `runId`, `attemptId`, `stepIndex`, `phase`, `history`, `windowBounds`, `screenshotPath` 같은 replay envelope 용도로만 쓴다.
 - shop coverage는 fresh live refresh 전까지 provisional로 취급한다.
+
+## Live Side Seams
+
+- combat:
+  - `snapshot.meta.foregroundOwner`
+  - `snapshot.meta.foregroundActionLane`
+  - `snapshot.meta.combatHandSummary`
+  - `snapshot.meta.combatTargetCount`
+  - `snapshot.meta.combatTargetableEnemyCount`
+- reward:
+  - `snapshot.meta.foregroundOwner`
+  - `snapshot.meta.foregroundActionLane`
+  - `snapshot.meta.rewardProceedVisible`
+  - `snapshot.currentChoices`
+- event:
+  - `snapshot.meta.foregroundOwner`
+  - `snapshot.meta.foregroundActionLane`
+  - `snapshot.meta.ancientPhase`
+  - `snapshot.currentChoices`
+- rest-site:
+  - `snapshot.meta.restSiteButtonsVisible`
+  - `snapshot.meta.restSiteButtonsClickReady`
+  - `snapshot.meta.restSiteProceedVisible`
+  - `snapshot.meta.restSiteUpgradeScreenVisible`
+  - `snapshot.meta.restSiteUpgradeConfirmVisible`
+- shop:
+  - `snapshot.meta.shopInventoryOpen`
+  - `snapshot.meta.shopAffordableOptionCount`
+  - `snapshot.meta.shopCardRemovalVisible`
+  - `snapshot.player.gold`
+  - `snapshot.currentChoices`
+- map:
+  - `snapshot.meta.foregroundOwner`
+  - `snapshot.meta.mapReleaseAuthority`
+  - `snapshot.meta.mapSurfacePending`
+  - `snapshot.meta.mapPointCount`
+  - `snapshot.currentChoices`
+
+## Live Sidecar Notes
+
+- live artifact root는 `artifacts/companion/<runId>/advisor-scene/`다.
+- latest file은 `advisor-scene.latest.json`, change log는 `advisor-scene.ndjson`다.
+- current live gaps:
+  - combat: `combat-enemy-intent-summary-missing`
+  - shop: `shop-item-price-missing`, `shop-item-effect-summary-missing`
+  - map: `map-route-context-missing`, `map-current-node-identity-missing`
+  - event: non-ancient canonical identity는 여전히 partial이다
 
 ## Follow-up Work Item
 

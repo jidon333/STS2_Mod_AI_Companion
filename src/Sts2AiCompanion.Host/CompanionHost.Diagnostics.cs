@@ -50,6 +50,7 @@ internal sealed class CompanionHostDiagnosticsService
         if (paths.LiveMirrorRoot is not null) Directory.CreateDirectory(paths.LiveMirrorRoot);
         if (paths.PromptPacksRoot is not null) Directory.CreateDirectory(paths.PromptPacksRoot);
         if (paths.AdviceRoot is not null) Directory.CreateDirectory(paths.AdviceRoot);
+        if (paths.AdvisorSceneRoot is not null) Directory.CreateDirectory(paths.AdvisorSceneRoot);
         return paths;
     }
 

@@ -1,3 +1,4 @@
+using Sts2AiCompanion.AdvisorSceneModel;
 using FoundationCompanionState = Sts2AiCompanion.Foundation.Contracts.CompanionState;
 using FoundationRewardAssessmentFacts = Sts2AiCompanion.Foundation.Contracts.RewardAssessmentFacts;
 using FoundationRewardOptionSet = Sts2AiCompanion.Foundation.Contracts.RewardOptionSet;
@@ -20,6 +21,9 @@ public sealed record CompanionArtifactPaths(
     string? CodexSessionPath,
     string? CodexTracePath,
     string? CollectorSummaryPath,
+    string? AdvisorSceneRoot,
+    string? AdvisorSceneLatestJsonPath,
+    string? AdvisorSceneLogPath,
     string HostStatusPath);
 
 public sealed record CompanionRunState(
@@ -106,6 +110,7 @@ public sealed record CompanionHostStatus(
 public sealed record CompanionHostSnapshot(
     CompanionHostStatus Status,
     CompanionRunState? RunState,
+    AdvisorSceneArtifact? LatestSceneModel,
     AdviceResponse? LatestAdvice,
     KnowledgeSlice? LatestKnowledgeSlice,
     CompanionCollectorStatus? CollectorStatus,

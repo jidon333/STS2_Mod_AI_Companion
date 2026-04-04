@@ -205,6 +205,8 @@ sealed record ObserverState(
     public bool? CompatibilitySceneReady => Summary.CompatibilitySceneReady;
     public string? CompatibilitySceneAuthority => Summary.CompatibilitySceneAuthority;
     public string? CompatibilitySceneStability => Summary.CompatibilitySceneStability;
+    public int? PlayerCurrentHp => Summary.PlayerCurrentHp;
+    public int? PlayerMaxHp => Summary.PlayerMaxHp;
     public int? PlayerEnergy => Summary.PlayerEnergy;
     public IReadOnlyList<string> CurrentChoices => Summary.CurrentChoices;
     public IReadOnlyList<string> LastEventsTail => Summary.LastEventsTail;

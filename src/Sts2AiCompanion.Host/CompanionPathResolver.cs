@@ -25,6 +25,7 @@ public static class CompanionPathResolver
         var liveMirrorRoot = runRoot is null ? null : Path.Combine(runRoot, "live-mirror");
         var promptPacksRoot = runRoot is null ? null : Path.Combine(runRoot, "prompt-packs");
         var adviceRoot = runRoot is null ? null : Path.Combine(runRoot, "advice");
+        var advisorSceneRoot = runRoot is null ? null : Path.Combine(runRoot, "advisor-scene");
 
         return new CompanionArtifactPaths(
             companionRoot,
@@ -39,6 +40,9 @@ public static class CompanionPathResolver
             runRoot is null ? null : Path.Combine(runRoot, "codex-session.json"),
             runRoot is null ? null : Path.Combine(runRoot, "codex-trace.ndjson"),
             runRoot is null ? null : Path.Combine(runRoot, "collector-summary.json"),
+            advisorSceneRoot,
+            advisorSceneRoot is null ? null : Path.Combine(advisorSceneRoot, "advisor-scene.latest.json"),
+            advisorSceneRoot is null ? null : Path.Combine(advisorSceneRoot, "advisor-scene.ndjson"),
             runRoot is null ? Path.Combine(companionRoot, "host-status.json") : Path.Combine(runRoot, "host-status.json"));
     }
 

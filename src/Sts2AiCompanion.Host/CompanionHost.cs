@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Sts2AiCompanion.AdvisorSceneModel;
 using Sts2AiCompanion.Foundation.State;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.LiveExport;
@@ -28,6 +29,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
     private DateTimeOffset? _lastAdviceAt;
     private string? _currentRunId;
     private AdviceResponse? _latestAdvice;
+    private AdvisorSceneArtifact? _latestSceneModel;
     private KnowledgeSlice? _latestKnowledgeSlice;
     private CompanionRunState? _currentRunState;
     private CodexSessionState? _sessionState;
@@ -42,6 +44,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
     private string? _analysisTriggerKind;
     private string? _analysisMessage;
     private long _adviceRequestSequence;
+    private string? _lastLoggedSceneModelPayload;
 
     public CompanionHost(ScaffoldConfiguration configuration, string workspaceRoot, ICodexSessionClient? codexSessionClient = null)
     {
@@ -131,10 +134,13 @@ public sealed partial class CompanionHost : IAsyncDisposable
                 _currentRunId = snapshot.RunId;
                 _sessionState = TryReadExistingSessionState(snapshot.RunId);
                 _latestAdvice = null;
+                _latestSceneModel = null;
                 _lastPromptPackPath = null;
+                _lastLoggedSceneModelPayload = null;
                 ClearPendingAutomaticAdvice();
             }
             _currentRunState = runState;
+            _latestSceneModel = UpdateSceneArtifacts(runState);
             _latestKnowledgeSlice = _knowledgeCatalogService.BuildSlice(runState, _configuration.Assistant.MaxKnowledgeEntries, _configuration.Assistant.MaxKnowledgeBytes);
             if (_autoAdviceEnabled)
             {
@@ -299,6 +305,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
         if (paths.LiveMirrorRoot is not null) Directory.CreateDirectory(paths.LiveMirrorRoot);
         if (paths.PromptPacksRoot is not null) Directory.CreateDirectory(paths.PromptPacksRoot);
         if (paths.AdviceRoot is not null) Directory.CreateDirectory(paths.AdviceRoot);
+        if (paths.AdvisorSceneRoot is not null) Directory.CreateDirectory(paths.AdvisorSceneRoot);
         return paths;
     }
 
@@ -307,7 +314,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
         var paths = CompanionPathResolver.Resolve(_configuration, _workspaceRoot, _currentRunId);
         var status = new CompanionHostStatus(state, _currentRunState is not null, true, _autoAdviceEnabled, _analysisStartedAt is not null, _currentRunId, _selectedModel, _selectedReasoningEffort, _analysisTriggerKind, _analysisStartedAt, DateTimeOffset.UtcNow, _lastAdviceAt, _analysisMessage ?? message);
         WriteJson(paths.HostStatusPath, status);
-        return new CompanionHostSnapshot(status, _currentRunState, _latestAdvice, _latestKnowledgeSlice, _latestCollectorStatus, paths);
+        return new CompanionHostSnapshot(status, _currentRunState, _latestSceneModel, _latestAdvice, _latestKnowledgeSlice, _latestCollectorStatus, paths);
     }
 
     private void BeginAnalysis(AdviceTrigger trigger, string state = "analyzing")

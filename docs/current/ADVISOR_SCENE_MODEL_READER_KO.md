@@ -36,6 +36,20 @@ CLI:
 
 이 명령은 `*.advisor.scene.json`에 해당하는 구조를 stdout으로 출력한다.
 
+Live sidecar:
+
+- WPF 오른쪽 `현재 scene model` 패널
+- `artifacts/companion/<runId>/advisor-scene/advisor-scene.latest.json`
+- `artifacts/companion/<runId>/advisor-scene/advisor-scene.ndjson`
+
+중요:
+
+- replay와 live는 같은 schema를 쓴다
+- 차이는 `sourceKind`
+  - replay: `sourceKind=replay`
+  - live: `sourceKind=live`
+- live에서는 `attemptId`, `stepIndex`, `phase`, `requestPath`, `screenshotPath`가 null일 수 있다
+
 ## 어떻게 읽나
 
 ### 1. sceneType
@@ -99,6 +113,8 @@ advisor는 장면 종류만이 아니라, 그 장면이 지금 어떤 하위 단
 - 이 요약에는 actuator vocabulary를 넣지 않는다
 - 즉 `allowedActions`, `fallback reason`, `targetLabel` 같은 하네스 내부 용어는 의도적으로 제외한다
 
+WPF에서는 이 값이 `요약` 패널로 그대로 보인다.
+
 ### 5. options
 
 지금 사람이 실제로 볼 수 있는 선택지를 정리한 목록이다.
@@ -140,6 +156,15 @@ advisor는 장면 종류만이 아니라, 그 장면이 지금 어떤 하위 단
 missingFacts = 무엇이 부족한가
 observerGaps = 왜 부족한가
 ```
+
+WPF에서는 이 값이 `누락 정보 / observer gaps` 패널로 분리되어 보인다.
+
+### 7. confidence / sourceRefs
+
+- `confidence`는 각 fact band의 신뢰도다
+- `sourceRefs`는 현재 scene model이 어떤 seam에 기대는지 보여 준다
+
+live sidecar에서 이 값은 `confidence / source refs` 패널로 노출된다.
 
 ## 장면별 예시
 
@@ -248,6 +273,11 @@ observerGaps = 왜 부족한가
 
 - runId, attemptId, stepIndex 같은 envelope 정보는 request에서 읽지만
 - scene truth는 `observer.state + canonical scene state`에서만 만든다
+
+5. live sidecar도 recommendation panel이 아니다
+
+- 이번 wave의 WPF 추가 패널은 read-only scene model viewer다
+- AI recommendation과 fact model을 섞지 않는다
 
 ## 지금 당장 어디를 보면 되나
 

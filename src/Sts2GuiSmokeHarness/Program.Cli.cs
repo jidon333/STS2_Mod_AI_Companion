@@ -245,6 +245,7 @@ internal static partial class Program
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-run --run-root <path>");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- inspect-session --session-root <path>");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-step --request <path> [--decision <path>] [--out <path>] [--trace] [--full-request-rebuild]");
+        Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-advisor-scene --request <path> [--out <path>]");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-test [--suite <path>] [--trace] [--full-request-rebuild]");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- replay-parity-test [--suite <path>] [--trace]");
         Console.WriteLine("  dotnet run --project src\\Sts2GuiSmokeHarness -- self-test");
