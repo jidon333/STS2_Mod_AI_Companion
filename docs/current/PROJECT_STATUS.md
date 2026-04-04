@@ -6,19 +6,25 @@
 
 ## 날짜
 
-- 2026-04-03
+- 2026-04-04
 
 ## 현재 마일스톤 위치
 
-- 현재 진행 축: `M5 authoritative long-run blocker loop`, late acceptance-evidence stage
+- 현재 진행 축: `M9 advice-quality entry`, M5~M8 substrate acceptance completed
 - 현재 engineering focus:
-  1. fresh single-attempt endurance natural-terminal evidence를 current docs와 owner code 기준선으로 고정
-  2. `rest-site -> map handoff`와 `rest-site click-ready/proceed` closure를 current baseline으로 승격하고, closed family를 reopen하지 않고 next blocker를 더 좁은 이름으로 드러내기
-  3. bounded `Slippery Bridge` event contract와 event-lineage stall semantics를 fresh live evidence에 맞춰 고정하고, live review capture usable-state gap은 gameplay blocker와 분리해 유지하기
+  1. fresh live long run 2회 연속 success를 current docs/handoff baseline으로 승격하고, M5 exit를 문서상으로도 확정하기
+  2. replay/parity gate, 비전투 흐름, 전투 안전성은 current `main`에서 M5 acceptance에 사실상 포함된 것으로 정리하고 M6~M8을 reopened blocker가 없는 한 closed substrate baseline으로 다루기
+  3. 다음 active workstream을 harness substrate stabilization이 아니라 `M9 advice-quality`로 전환하되, 새 blocker가 나오면 M5~M8 reopen으로 따로 분류하기
 - 장기 제품 목표: 사람이 실제 플레이 중 참고하는 `읽기 전용 advisor`
 
 중요한 현재 해석:
 
+- current `main`의 active pointer는 더 이상 `combat EndTurn submit-path mismatch`가 아니다
+- latest authoritative fresh roots [endurance-longrun-20260404-live28](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live28) 와 [endurance-longrun-20260404-live29](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live29) 가 연속으로 `player-defeated` natural terminal까지 갔다
+- current `main` HEAD `68e91fd` 는 accepted heal 이후 rest-site release-pending을 canonical contract로 고정했고, live29에서 heal aftermath `rest -> release pending -> proceed -> map` continuity가 fresh root로 다시 확인됐다
+- current `main` 기준으로 M5 acceptance는 충족됐다
+- current milestone layout상 M6 replay/parity gate, M7 비전투 안정화, M8 전투 안정화는 이미 M5 acceptance evidence를 지탱하는 하부 조건으로 current `main`에서 같이 충족된 상태다
+- 따라서 current position은 `M5 late acceptance-evidence`가 아니라 `M9 entry with M5~M8 substrate complete`로 읽는 것이 더 정확하다
 - startup / trust / bootstrap / deploy identity는 broad top blocker가 아니다
 - `WaitRunLoad` resumed room handoff bug는 이미 닫혔다
 - `WaitMainMenu -> EnterRun` logo-animation premature acceptance bug는 current `main`에서 닫혔다
@@ -29,12 +35,48 @@
 - explicit relic reward claim -> `proceed after resolving rewards` inversion은 replay exact repro 기준으로 닫혔고, fresh live rerun에서 재현되지 않았다
 - explicit shop foreground 위에 stale reward misroute가 끼어들던 `HandleShop -> HandleRewards -> decision-wait-plateau` family는 current `main`에서 즉시 `HandleRewards -> HandleShop` 회복으로 닫혔다
 - fresh authoritative endurance root [endurance-longrun-20260401-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260401-live2)는 valid-trust single attempt가 `player-defeated` natural terminal까지 `stepCount=479`로 진행될 수 있음을 보여줬다
+- fresh root [endurance-longrun-20260404-live21](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live21)도 `player-defeated` natural terminal로 끝났고, current `main`이 아직 long run natural terminal에 도달할 수 있음을 다시 확인했다
 - `rest-site -> map handoff release-pending`과 `rest-site click-ready -> proceed` family는 live root [rest-site-click-ready-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/rest-site-click-ready-20260403-live1)에서 닫혔고, run은 rest-site 이후 treasure/event continuity까지 진행한 뒤에야 새 event blocker를 드러냈다
 - `rest-site-click-ready-20260403-live1`의 새 blocker는 `HandleEvent` `미끄러운 다리`에서 semantic `버틴다`를 label-only same-action처럼 소비하던 false progression family였다
 - current `main`에는 `afbee31`과 `c8f6766`가 반영돼 있고, bounded `Slippery Bridge` exit (`OVERCOME`) + event-choice lineage-aware stall fingerprint가 들어가 있다
 - exact live artifact root [slippery-bridge-overcome-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live1)는 old semantic `버틴다` loop가 `player-defeated`까지 이어지는 failure shape를 남긴다
 - fresh smoke root [slippery-bridge-overcome-20260403-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live2)는 valid-trust attempt `0001`이 `max-steps-reached:260`까지 no-stall로 진행됐음을 보여주지만, 이번 seed는 `미끄러운 다리`를 직접 다시 밟지는 않았다
+- `72daabf` 이후 stale end-turn transit reopen family는 current `main`에서 다시 same-snapshot auto-end-turn 재발사 owner로 남지 않는다
+- `41d53a0`은 unchanged reopened player-open snapshot에서 EndTurn barrier를 premature release하지 않게 좁혔고, saved live22 exact repro는 current replay-step에서 `auto-end turn`이 아니라 explicit `combat barrier wait barrier=EndTurn`로 바뀌었다
+- fresh root [endurance-longrun-20260404-live22](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live22)는 old family가 `same-action-stall`로 드러난 마지막 root이고, decisive step [0393.request.json](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live22/attempts/0001/steps/0393.request.json) 기준 root cause는 `combat end-turn barrier premature release -> same-snapshot auto-end-turn reissue`였다
+- fresh root [endurance-longrun-20260404-live24](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live24)는 2026-04-04 earlier pointer에서 마지막 combat blocker를 드러낸 historical root다
+- 그 blocker는 이후 `9b50b9c` 와 `68e91fd` 를 거쳐 current `main` fresh live baseline에서는 active blocker가 아니다
+- live25, live28, live29는 모두 `player-defeated` natural terminal이고, live28/live29는 fresh 2연속 success evidence다
 - live ffmpeg review artifact retention은 2026-04-03 roots에서 success/failure 둘 다 확인됐지만, `window-hwnd gdigrab` review video usable-state는 아직 partial이라 screenshot/request artifact가 source of truth다
+
+## 2026-04-04 pointer update
+
+이 문서의 아래 historical sections에는 2026-04-03 pointer가 많이 남아 있다. 현재 active pointer는 이 섹션과 문서 상단 bullets를 우선한다.
+
+- current `main`의 latest relevant commits:
+  - `41d53a0` `Keep end-turn barrier until post-submit progress`
+  - `9b50b9c` `Wait for confirmed hand-card plays before end turn`
+  - `184a2eb` `Release smith confirm aftermath to rest-site proceed`
+  - `68e91fd` `Canonicalize rest-site release-pending after accepted heal`
+- current code가 유지하는 closure:
+  - ancient option contract
+  - `ChooseFirstNode <-> event`
+  - post-node combat takeover -> generic map wait
+  - explicit relic claim -> proceed inversion
+  - rest-site release-pending over map overlay
+  - rest-site click-ready/proceed
+  - rest-site accepted-heal -> release-pending -> proceed
+  - bounded `Slippery Bridge` `OVERCOME` path
+- current active blocker는 없다. fresh live long run 2회 연속 success가 이미 확보됐다
+- decisive acceptance roots:
+  - [endurance-longrun-20260404-live28](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live28)
+  - [endurance-longrun-20260404-live29](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live29)
+- acceptance reading:
+  1. M5 authoritative long-run blocker loop: complete
+  2. M6 replay/parity gate: complete on current code baseline
+  3. M7 non-combat stability: complete for current substrate acceptance
+  4. M8 combat stability: complete for current substrate acceptance
+  5. next active milestone: `M9 advice-quality`
 
 ## 현재 우선순위
 

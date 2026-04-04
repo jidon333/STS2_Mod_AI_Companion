@@ -2,19 +2,19 @@
 
 > 상태: 현재 사용 중
 > 기준 브랜치: `main`
-> 최종 갱신: 2026-04-03
+> 최종 갱신: 2026-04-04
 > 대상: 새 구현 세션, 새 검증 세션, 새 참모 세션
 
-> 2026-04-03 current pointer:
+> 2026-04-04 current pointer:
 > 이 문서 본문은 `live21 ancient option` wave 중심의 historical handoff가 많이 남아 있다.
 > 현재 active pointer는 [PROJECT_STATUS.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/PROJECT_STATUS.md) 를 우선한다.
-> 최신 기준으로는 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion, `rest-site release pending over map overlay`, rest-site click-ready/proceed family가 닫혔다.
-> decisive 2026-04-03 roots:
-> - [rest-site-click-ready-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/rest-site-click-ready-20260403-live1): rest-site `rest -> visible proceed -> treasure/event continuity`를 live에서 확인했고, 이후 first blocker는 `HandleEvent` `미끄러운 다리` same-action family로 이동했다.
-> - [slippery-bridge-overcome-20260403-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live1): old semantic `버틴다` loop가 `player-defeated`까지 가는 failure shape를 남겼다.
-> - [slippery-bridge-overcome-20260403-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/slippery-bridge-overcome-20260403-live2): `c8f6766` 이후 fresh authoritative smoke root로 `max-steps-reached:260` no-stall까지 진행했지만, 이번 seed는 `미끄러운 다리`를 직접 다시 밟지 않았다.
-> current `main`의 event wave는 `afbee31` + `c8f6766` 기준으로 rest-site click readiness/proceed authority, bounded `Slippery Bridge` exit (`OVERCOME`), event-choice lineage-aware same-action fingerprint를 포함한다.
-> 아직 남은 short-root follow-up은 reward card progression, combat barrier long-tail, direct post-fix `Slippery Bridge` live repro, review-video usable-state다.
+> 최신 기준으로는 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion, `rest-site release pending over map overlay`, rest-site click-ready/proceed, accepted-heal release-pending, bounded `Slippery Bridge` family가 닫혔다.
+> decisive 2026-04-04 roots:
+> - [endurance-longrun-20260404-live28](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live28): fresh live long run이 `player-defeated` natural terminal까지 갔다.
+> - [endurance-longrun-20260404-live29](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live29): second fresh live long run도 `player-defeated` natural terminal까지 갔다.
+> - [endurance-longrun-20260404-live27](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/endurance-longrun-20260404-live27): accepted heal aftermath가 old `rest-site-post-click-noop`로 죽던 마지막 decisive root다.
+> current `main`의 latest decisive stabilization wave는 `41d53a0` + `9b50b9c` + `68e91fd` 기준으로 end-turn barrier hold, confirmed hand-card play gating, accepted-heal release-pending canonicalization을 포함한다.
+> current active blocker는 없다. fresh live long run 2회 연속 success가 확보됐고, practical milestone position은 M5 완료를 넘어 M6~M8 substrate complete, M9 entry로 읽는 편이 맞다.
 
 ## 문서 목적
 
@@ -26,6 +26,13 @@
 2. 최근에 무엇이 끝났는가
 3. 지금 semantic follow-up은 무엇인가
 4. 새 세션이 어디부터 열어야 하는가
+
+current handoff answer:
+
+1. current baseline은 `fresh live long run 2회 연속 natural terminal`이다
+2. M5 authoritative long-run blocker loop는 complete 상태다
+3. M6 replay/parity, M7 non-combat stability, M8 combat stability는 current substrate acceptance 관점에서 함께 닫힌 상태다
+4. 새 세션의 기본 시작점은 blocker-fix loop가 아니라 `M9 advice-quality`다. 다만 fresh live에서 새 blocker가 생기면 M5~M8 reopen으로 별도 취급한다
 
 current blocker와 long-term 구조 계획을 섞지 않기 위해, 구조 계약은 별도 문서로 분리해 둔다.
 

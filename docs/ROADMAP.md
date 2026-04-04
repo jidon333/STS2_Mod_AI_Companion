@@ -48,6 +48,7 @@
 - 목표: valid-trust long-run이 mixed-state stall 없이 자연 terminal boundary까지 안정적으로 진행되는지 증명한다.
 - 사용자 가치: 한 장면 성공이 아니라 실제 run 단위 진행 안정성을 증명하고, 이후 M6~M8 평가를 흔들리지 않는 세션 위에서 진행할 수 있다.
 - acceptance: authoritative long-run artifact가 repeated combat / reward / map / shop continuity를 통과하고, 종료가 harness stall이 아니라 natural terminal / runtime boundary로 분류된다.
+- 2026-04-04 current note: fresh roots `live28`, `live29`가 연속 `player-defeated` natural terminal로 끝났으므로 current source/evidence 기준 M5 acceptance는 충족됐다.
 - 참고: `terminal -> restart -> next attempt first screen` lifecycle automation은 여전히 중요하지만, 현재 제품 방향에서는 잔여 lifecycle 후속 작업으로 별도 추적한다.
 
 #### M6. Replay/Parity 회귀 게이트 고정
@@ -67,6 +68,8 @@
 - 목표: illegal action, stale selection, no-op loop, enemy-turn actuation 같은 전투 안전성 문제를 닫는다.
 - 사용자 가치: AI가 전투에서 허공을 누르거나 말도 안 되는 반복을 하지 않는다.
 - acceptance: valid-trust combat artifact에서 stale non-enemy loop, combat no-op loop, contract drift가 재발하지 않는다.
+
+> 현재 해석: M6~M8은 roadmap상 분리돼 있지만, current `main`은 M5 acceptance를 만족시키는 과정에서 replay/parity gate, 비전투 흐름, 전투 안전성까지 함께 충족했다. practical active position은 M9 entry로 읽는다.
 
 #### M9. 실질적 조언 품질 확보
 
