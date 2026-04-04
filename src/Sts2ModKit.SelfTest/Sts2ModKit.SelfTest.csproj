@@ -15,4 +15,8 @@
     <ProjectReference Include="..\Sts2ModAiCompanion.Mod\Sts2ModAiCompanion.Mod.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\SceneProvenance\*.cs" Link="Shared\SceneProvenance\%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

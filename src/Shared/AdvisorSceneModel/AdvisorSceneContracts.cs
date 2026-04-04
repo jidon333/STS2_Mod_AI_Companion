@@ -9,6 +9,8 @@ public sealed record AdvisorSceneArtifact(
     string SchemaVersion,
     string SourceKind,
     string RunId,
+    DateTimeOffset? CapturedAtUtc,
+    DateTimeOffset? PublishedAtUtc,
     string? AttemptId,
     int? StepIndex,
     string? Phase,

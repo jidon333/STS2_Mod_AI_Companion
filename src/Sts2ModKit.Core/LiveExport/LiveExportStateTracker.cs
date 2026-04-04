@@ -812,6 +812,7 @@ public sealed class LiveExportStateTracker
         }
 
         var stickyScreen = _activeScreenEpisode ?? previous.CurrentScreen;
+        var explicitPublishedScreen = ResolveExplicitPublishedForegroundScreen(observation.Meta);
         var withinEpisodeWindow = _activeScreenEpisodeStartedAt is not null
                                   && observation.ObservedAt - _activeScreenEpisodeStartedAt <= TimeSpan.FromSeconds(45);
         if (observation.Encounter?.InCombat == true
@@ -844,6 +845,13 @@ public sealed class LiveExportStateTracker
             || !IsFallbackScreen(incoming))
         {
             return incoming;
+        }
+
+        if (!string.IsNullOrWhiteSpace(explicitPublishedScreen)
+            && !IsFallbackScreen(explicitPublishedScreen)
+            && !string.Equals(explicitPublishedScreen, stickyScreen, StringComparison.OrdinalIgnoreCase))
+        {
+            return explicitPublishedScreen;
         }
 
         if (HasPartialStateWarning(observation)
@@ -959,11 +967,17 @@ public sealed class LiveExportStateTracker
             .Take(_options.MaxChoiceEntries)
             .ToArray();
 
+        var explicitPublishedScreen = ResolveExplicitPublishedForegroundScreen(observation.Meta);
+        var effectiveNextScreen = !string.IsNullOrWhiteSpace(explicitPublishedScreen)
+                                  && !IsFallbackScreen(explicitPublishedScreen)
+            ? explicitPublishedScreen
+            : nextScreen;
+
         if (incoming.Count == 0
             && previous.Count > 0
-            && (IsChoiceLikeScreen(previousScreen) || IsChoiceLikeScreen(nextScreen))
-            && (string.Equals(previousScreen, nextScreen, StringComparison.Ordinal)
-                || (string.Equals(observation.TriggerKind, "runtime-poll", StringComparison.Ordinal) && IsFallbackScreen(nextScreen)))
+            && (IsChoiceLikeScreen(previousScreen) || IsChoiceLikeScreen(effectiveNextScreen))
+            && (string.Equals(previousScreen, effectiveNextScreen, StringComparison.Ordinal)
+                || (string.Equals(observation.TriggerKind, "runtime-poll", StringComparison.Ordinal) && IsFallbackScreen(effectiveNextScreen)))
             && (HasChoiceResolutionWarning(observation)
                 || string.Equals(observation.TriggerKind, "runtime-poll", StringComparison.Ordinal)
                 || !string.IsNullOrWhiteSpace(observation.SemanticScreen)
@@ -1056,6 +1070,56 @@ public sealed class LiveExportStateTracker
     private static bool IsChoiceLikeScreen(string screen)
     {
         return IsStickyHighValueScreen(screen);
+    }
+
+    private static string? ResolveExplicitPublishedForegroundScreen(IReadOnlyDictionary<string, string?> meta)
+    {
+        var publishedCurrentScreen = ReadMetaValue(meta, "publishedCurrentScreen");
+        if (!string.IsNullOrWhiteSpace(publishedCurrentScreen) && !IsFallbackScreen(publishedCurrentScreen))
+        {
+            return publishedCurrentScreen;
+        }
+
+        var publishedVisibleScreen = ReadMetaValue(meta, "publishedVisibleScreen");
+        if (!string.IsNullOrWhiteSpace(publishedVisibleScreen) && !IsFallbackScreen(publishedVisibleScreen))
+        {
+            return publishedVisibleScreen;
+        }
+
+        var foregroundOwnerScreen = NormalizeForegroundOwnerToScreen(ReadMetaValue(meta, "foregroundOwner"));
+        if (!string.IsNullOrWhiteSpace(foregroundOwnerScreen))
+        {
+            return foregroundOwnerScreen;
+        }
+
+        if (ReadMetaBool(meta, "mapCurrentActiveScreen") == true)
+        {
+            return "map";
+        }
+
+        return !string.IsNullOrWhiteSpace(publishedCurrentScreen)
+            ? publishedCurrentScreen
+            : publishedVisibleScreen;
+    }
+
+    private static string? NormalizeForegroundOwnerToScreen(string? foregroundOwner)
+    {
+        return foregroundOwner?.Trim().ToLowerInvariant() switch
+        {
+            "reward" or "rewards" => "rewards",
+            "event" => "event",
+            "rest-site" => "rest-site",
+            "shop" => "shop",
+            "map" => "map",
+            "combat" => "combat",
+            "main-menu" => "main-menu",
+            "singleplayer-submenu" => "singleplayer-submenu",
+            "character-select" => "character-select",
+            "card-choice" => "card-choice",
+            "upgrade" => "upgrade",
+            "transform" => "transform",
+            _ => null,
+        };
     }
 
     private static bool IsFallbackScreen(string screen)

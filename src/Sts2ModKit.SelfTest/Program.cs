@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text;
 using Sts2AiCompanion.AdvisorSceneModel;
+using Sts2AiCompanion.SceneProvenance;
 using Sts2AiCompanion.Foundation.State;
 using Sts2AiCompanion.Harness.Actions;
 using Sts2AiCompanion.Host;
@@ -87,8 +88,15 @@ Run("runtime reflection capture clears combat slot and success inference", TestR
 Run("companion scene normalizer prefers main-menu over hidden character-select markers", TestCompanionSceneNormalizerMainMenuPriority, failures);
 Run("companion scene normalizer detects blocking overlay from placeholder choices", TestCompanionSceneNormalizerBlockingOverlay, failures);
 Run("companion state mapper prefers main-menu over hidden character-select markers", TestCompanionStateMapperMainMenuPriority, failures);
-Run("companion state mapper preserves visible and flow scene split", TestCompanionStateMapperVisibleAndFlowSceneSplit, failures);
+Run("companion state mapper follows resolved primary scene over compatibility-only visible alias", TestCompanionStateMapperPrimarySceneWinsCompatibilityVisibleAlias, failures);
+Run("screen provenance resolver promotes combat over stale published map", TestScreenProvenanceResolverCombatPromotion, failures);
+Run("screen provenance resolver prefers published screen over raw fallback", TestScreenProvenanceResolverPrefersPublishedScreen, failures);
+Run("screen provenance resolver preserves compatibility as diagnostic-only provenance", TestScreenProvenanceResolverCompatibilityDoesNotPromotePrimary, failures);
+Run("screen provenance resolver uses inventory fallback only for harness adapter", TestScreenProvenanceResolverInventoryFallbackIsolation, failures);
+Run("screen provenance harness and host adapters stay aligned on A2 fixtures", TestScreenProvenanceHarnessHostParity, failures);
 Run("live export tracker preserves high-value state across partial observations", TestLiveExportTrackerPartialMerge, failures);
+Run("live export tracker accepts explicit published scene over sticky fallback preservation", TestLiveExportTrackerPrefersExplicitPublishedSceneOverStickyFallback, failures);
+Run("live export tracker accepts foreground owner over fallback published screen", TestLiveExportTrackerPrefersForegroundOwnerOverFallbackPublishedScreen, failures);
 Run("live export tracker accepts authoritative combat encounter on high-value screen", TestLiveExportTrackerAcceptsAuthoritativeCombatEncounter, failures);
 Run("collector mode records screen episodes and choice diagnostics", TestLiveExportTrackerCollectorMode, failures);
 Run("live export tracker keeps authoritative existing-run menu-to-combat transitions", TestLiveExportTrackerMenuToCombatExistingRunAuthority, failures);
@@ -3538,6 +3546,128 @@ static void TestLiveExportTrackerPartialMerge()
     Assert(second.CurrentChoices.Select(choice => choice.Label).SequenceEqual(first.CurrentChoices.Select(choice => choice.Label), StringComparer.Ordinal), "Expected unresolved choice poll not to clear visible choices.");
 }
 
+static void TestLiveExportTrackerPrefersExplicitPublishedSceneOverStickyFallback()
+{
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
+    var seed = new LiveExportObservation(
+        "choice-list-presented",
+        DateTimeOffset.UtcNow.AddSeconds(-1),
+        "run-001",
+        "active",
+        "event",
+        1,
+        1,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("event-option", "황금 진주", "golden-pearl", null),
+            new LiveExportChoiceSummary("event-option", "정밀한 가위", "precise-scissors", null),
+            new LiveExportChoiceSummary("event-option", "나뭇잎 습포", "leaf-poultice", null),
+        },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("Neow", "Event", false, null),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["publishedCurrentScreen"] = "event",
+            ["publishedVisibleScreen"] = "event",
+        });
+    var first = tracker.Apply(seed).Snapshot;
+    Assert(first.CurrentScreen == "event", "Expected seed event observation to establish event screen.");
+
+    var mapPoll = new LiveExportObservation(
+        "runtime-poll",
+        DateTimeOffset.UtcNow,
+        "run-001",
+        "active",
+        "unknown",
+        1,
+        1,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        Array.Empty<LiveExportChoiceSummary>(),
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary(null, null, false, null),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["publishedCurrentScreen"] = "map",
+            ["publishedVisibleScreen"] = "map",
+        });
+    var second = tracker.Apply(mapPoll).Snapshot;
+
+    Assert(second.CurrentScreen == "map", "Expected explicit published map screen to beat sticky event fallback preservation.");
+    Assert(second.PublishedCurrentScreen == "map", "Expected publishedCurrentScreen to remain map.");
+    Assert(second.CurrentChoices.Count == 0, "Expected explicit published map poll not to preserve stale event choices.");
+}
+
+static void TestLiveExportTrackerPrefersForegroundOwnerOverFallbackPublishedScreen()
+{
+    var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
+    var seed = new LiveExportObservation(
+        "choice-list-presented",
+        DateTimeOffset.UtcNow.AddSeconds(-1),
+        "run-001",
+        "active",
+        "event",
+        1,
+        1,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new[]
+        {
+            new LiveExportChoiceSummary("event-option", "황금 진주", "golden-pearl", null),
+            new LiveExportChoiceSummary("event-option", "정밀한 가위", "precise-scissors", null),
+            new LiveExportChoiceSummary("event-option", "나뭇잎 습포", "leaf-poultice", null),
+        },
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary("Neow", "Event", false, null),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["publishedCurrentScreen"] = "event",
+            ["publishedVisibleScreen"] = "event",
+            ["foregroundOwner"] = "event",
+        });
+    var first = tracker.Apply(seed).Snapshot;
+    Assert(first.CurrentScreen == "event", "Expected seed event observation to establish event screen.");
+
+    var mapPoll = new LiveExportObservation(
+        "runtime-poll",
+        DateTimeOffset.UtcNow,
+        "run-001",
+        "active",
+        "feedback-overlay",
+        1,
+        1,
+        LiveExportPlayerSummary.Empty,
+        Array.Empty<LiveExportCardSummary>(),
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        Array.Empty<LiveExportChoiceSummary>(),
+        Array.Empty<string>(),
+        new LiveExportEncounterSummary(null, null, false, null),
+        new Dictionary<string, object?>(),
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["publishedCurrentScreen"] = "feedback-overlay",
+            ["publishedVisibleScreen"] = "bootstrap",
+            ["foregroundOwner"] = "map",
+            ["mapCurrentActiveScreen"] = "true",
+        });
+    var second = tracker.Apply(mapPoll).Snapshot;
+
+    Assert(second.CurrentScreen == "map", "Expected foreground owner map to beat sticky event preservation when published screen stays fallback.");
+    Assert(second.CurrentChoices.Count == 0, "Expected fallback map poll with explicit foreground owner not to preserve stale event choices.");
+}
+
 static void TestLiveExportTrackerAcceptsAuthoritativeCombatEncounter()
 {
     var tracker = new LiveExportStateTracker(LiveExportStateTrackerOptions.CreateDefault(), @"C:\temp\live");
@@ -3662,7 +3792,7 @@ static void TestCompanionSceneNormalizerBlockingOverlay()
     Assert(scene.SceneType == "blocking-overlay", $"Expected blocking-overlay scene, got {scene.SceneType}.");
 }
 
-static void TestCompanionStateMapperVisibleAndFlowSceneSplit()
+static void TestCompanionStateMapperPrimarySceneWinsCompatibilityVisibleAlias()
 {
     var snapshot = new LiveExportSnapshot(
         "pending-test",
@@ -3696,8 +3826,140 @@ static void TestCompanionStateMapperVisibleAndFlowSceneSplit()
     var state = CompanionStateMapper.FromLiveExport(snapshot, session: null, Array.Empty<LiveExportEventEnvelope>());
 
     Assert(state.Scene.SceneType == "rewards", $"Expected logical rewards scene, got {state.Scene.SceneType}.");
-    Assert(state.Scene.VisibleSceneType == "map", $"Expected visible map scene, got {state.Scene.VisibleSceneType}.");
+    Assert(state.Scene.VisibleSceneType == "rewards", $"Expected visible scene to stay on resolved primary rewards scene, got {state.Scene.VisibleSceneType}.");
     Assert(state.Scene.FlowSceneType == "rewards", $"Expected flow rewards scene, got {state.Scene.FlowSceneType}.");
+}
+
+static void TestScreenProvenanceResolverCombatPromotion()
+{
+    var snapshot = CreateScreenProvenanceSnapshot("combat-promotion", "combat") with
+    {
+        Encounter = new LiveExportEncounterSummary("Jaw Worm", "Combat", true, 2),
+        PublishedCurrentScreen = "map",
+        PublishedVisibleScreen = "map",
+        Meta = MergeMeta(
+            CreateScreenProvenanceSnapshot("combat-promotion", "combat").Meta,
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["foregroundOwner"] = "map",
+                ["combatHandSummary"] = "Strike, Defend",
+            }),
+    };
+
+    var resolved = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(snapshot));
+
+    Assert(resolved.ResolvedCurrentScreen == "combat", $"Expected combat current screen after promotion, got {resolved.ResolvedCurrentScreen ?? "<null>"}.");
+    Assert(resolved.ResolvedVisibleScreen == "combat", $"Expected combat visible screen after promotion, got {resolved.ResolvedVisibleScreen ?? "<null>"}.");
+    Assert(resolved.CombatPromotionApplied, "Expected combat promotion to apply when tracker current screen is combat.");
+}
+
+static void TestScreenProvenanceResolverPrefersPublishedScreen()
+{
+    var input = new ScreenProvenanceInput(
+        RawCurrentScreen: "map",
+        RawObservedScreen: "event",
+        TrackerCurrentScreen: "feedback-overlay",
+        PublishedCurrentScreen: "reward",
+        PublishedVisibleScreen: "reward",
+        CompatibilityCurrentScreen: "map",
+        CompatibilityLogicalScreen: "map",
+        CompatibilityVisibleScreen: "map",
+        PublishedSceneReady: true,
+        PublishedSceneAuthority: "polling",
+        PublishedSceneStability: "stable",
+        CompatibilitySceneReady: false,
+        CompatibilitySceneAuthority: "legacy",
+        CompatibilitySceneStability: "stable",
+        EncounterInCombat: false);
+
+    var resolved = ScreenProvenanceResolver.Resolve(input);
+
+    Assert(resolved.ResolvedCurrentScreen == "reward", $"Expected published reward current screen, got {resolved.ResolvedCurrentScreen ?? "<null>"}.");
+    Assert(resolved.ResolvedVisibleScreen == "reward", $"Expected published reward visible screen, got {resolved.ResolvedVisibleScreen ?? "<null>"}.");
+    Assert(resolved.ProvenanceSource.Contains("published-current", StringComparison.OrdinalIgnoreCase), $"Expected published provenance source, got {resolved.ProvenanceSource}.");
+    Assert(resolved.ResolvedSceneReady == true, "Expected published scene-ready to be preserved.");
+}
+
+static void TestScreenProvenanceResolverCompatibilityDoesNotPromotePrimary()
+{
+    var input = new ScreenProvenanceInput(
+        RawCurrentScreen: null,
+        RawObservedScreen: null,
+        TrackerCurrentScreen: "unknown",
+        PublishedCurrentScreen: null,
+        PublishedVisibleScreen: null,
+        CompatibilityCurrentScreen: null,
+        CompatibilityLogicalScreen: "event",
+        CompatibilityVisibleScreen: "map",
+        PublishedSceneReady: null,
+        PublishedSceneAuthority: null,
+        PublishedSceneStability: null,
+        CompatibilitySceneReady: true,
+        CompatibilitySceneAuthority: "legacy",
+        CompatibilitySceneStability: "stable",
+        EncounterInCombat: false);
+
+    var resolved = ScreenProvenanceResolver.Resolve(input);
+
+    Assert(resolved.ResolvedCurrentScreen is null, $"Expected compatibility-only input not to promote primary current screen, got {resolved.ResolvedCurrentScreen ?? "<null>"}.");
+    Assert(resolved.ResolvedVisibleScreen is null, $"Expected compatibility-only input not to promote primary visible screen, got {resolved.ResolvedVisibleScreen ?? "<null>"}.");
+    Assert(resolved.ResolvedSceneReady is null, "Expected compatibility-only scene-ready not to promote primary scene readiness.");
+    Assert(string.Equals(resolved.CompatibilityLogicalScreen, "event", StringComparison.OrdinalIgnoreCase), $"Expected compatibility logical screen to remain available, got {resolved.CompatibilityLogicalScreen ?? "<null>"}.");
+    Assert(string.Equals(resolved.CompatibilityVisibleScreen, "map", StringComparison.OrdinalIgnoreCase), $"Expected compatibility visible screen to remain available, got {resolved.CompatibilityVisibleScreen ?? "<null>"}.");
+    Assert(resolved.ProvenanceSource.Contains("none", StringComparison.OrdinalIgnoreCase), $"Expected no primary provenance source for compatibility-only input, got {resolved.ProvenanceSource}.");
+}
+
+static void TestScreenProvenanceResolverInventoryFallbackIsolation()
+{
+    var snapshot = CreateScreenProvenanceSnapshot("inventory-fallback-host", "unknown");
+    var inventory = new HarnessNodeInventory(
+        "inventory-only",
+        DateTimeOffset.UtcNow,
+        snapshot.RunId,
+        "map",
+        "episode-map",
+        "dormant",
+        null,
+        true,
+        "published",
+        "stable",
+        Array.Empty<HarnessNodeInventoryItem>())
+    {
+        PublishedCurrentScreen = "map",
+        PublishedVisibleScreen = "map",
+        PublishedSceneReady = true,
+        PublishedSceneAuthority = "inventory",
+        PublishedSceneStability = "stable",
+    };
+
+    var harnessResolved = ScreenProvenanceResolver.Resolve(CreateHarnessProvenanceInput(null, inventory));
+    var hostResolved = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(snapshot));
+
+    Assert(harnessResolved.ResolvedCurrentScreen == "map", $"Expected harness adapter to use inventory fallback current screen, got {harnessResolved.ResolvedCurrentScreen ?? "<null>"}.");
+    Assert(harnessResolved.ResolvedVisibleScreen == "map", $"Expected harness adapter to use inventory fallback visible screen, got {harnessResolved.ResolvedVisibleScreen ?? "<null>"}.");
+    Assert(hostResolved.ResolvedCurrentScreen is null, $"Expected host adapter not to use inventory fallback current screen, got {hostResolved.ResolvedCurrentScreen ?? "<null>"}.");
+    Assert(hostResolved.ResolvedVisibleScreen is null, $"Expected host adapter not to use inventory fallback visible screen, got {hostResolved.ResolvedVisibleScreen ?? "<null>"}.");
+}
+
+static void TestScreenProvenanceHarnessHostParity()
+{
+    foreach (var scenario in CreateScreenProvenanceParityScenarios())
+    {
+        var harnessResolved = ScreenProvenanceResolver.Resolve(CreateHarnessProvenanceInput(scenario.Snapshot, scenario.Inventory));
+        var hostResolved = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(scenario.Snapshot));
+
+        Assert(string.Equals(harnessResolved.ResolvedCurrentScreen, hostResolved.ResolvedCurrentScreen, StringComparison.OrdinalIgnoreCase), $"Expected harness/host current screen parity for {scenario.Name}.");
+        Assert(string.Equals(harnessResolved.ResolvedVisibleScreen, hostResolved.ResolvedVisibleScreen, StringComparison.OrdinalIgnoreCase), $"Expected harness/host visible screen parity for {scenario.Name}.");
+        Assert(string.Equals(harnessResolved.ResolvedSceneAuthority, hostResolved.ResolvedSceneAuthority, StringComparison.OrdinalIgnoreCase), $"Expected harness/host scene authority parity for {scenario.Name}.");
+        Assert(string.Equals(harnessResolved.ResolvedSceneStability, hostResolved.ResolvedSceneStability, StringComparison.OrdinalIgnoreCase), $"Expected harness/host scene stability parity for {scenario.Name}.");
+
+        Assert(string.Equals(harnessResolved.ResolvedCurrentScreen, scenario.ExpectedResolvedCurrentScreen, StringComparison.OrdinalIgnoreCase), $"Expected resolved current screen {scenario.ExpectedResolvedCurrentScreen} for {scenario.Name}, got {harnessResolved.ResolvedCurrentScreen ?? "<null>"}.");
+        Assert(string.Equals(harnessResolved.ResolvedVisibleScreen, scenario.ExpectedResolvedVisibleScreen, StringComparison.OrdinalIgnoreCase), $"Expected resolved visible screen {scenario.ExpectedResolvedVisibleScreen} for {scenario.Name}, got {harnessResolved.ResolvedVisibleScreen ?? "<null>"}.");
+
+        var sceneModel = ResolveHostSceneModelForParityScenario(scenario);
+        Assert(string.Equals(sceneModel.SceneType, scenario.ExpectedSceneType, StringComparison.OrdinalIgnoreCase), $"Expected host sceneType {scenario.ExpectedSceneType} for {scenario.Name}, got {sceneModel.SceneType}.");
+        Assert(string.Equals(sceneModel.CanonicalOwner, scenario.ExpectedCanonicalOwner, StringComparison.OrdinalIgnoreCase), $"Expected host canonicalOwner {scenario.ExpectedCanonicalOwner} for {scenario.Name}, got {sceneModel.CanonicalOwner}.");
+    }
 }
 
 static void TestLiveExportTrackerCollectorMode()
@@ -4625,6 +4887,9 @@ static void ExecuteHostSceneModelScenario(HostSceneModelScenario scenario)
             }
 
             Assert(sceneModel.AttemptId is null && sceneModel.StepIndex is null && sceneModel.Phase is null, $"Expected live scene model replay envelope fields to stay null for scenario {scenario.Name}.");
+            Assert(sceneModel.CapturedAtUtc is not null, $"Expected live scene model to carry capturedAtUtc for scenario {scenario.Name}.");
+            Assert(sceneModel.PublishedAtUtc is not null, $"Expected live scene model to carry publishedAtUtc for scenario {scenario.Name}.");
+            Assert(sceneModel.PublishedAtUtc >= sceneModel.CapturedAtUtc, $"Expected publishedAtUtc to be >= capturedAtUtc for scenario {scenario.Name}.");
             Assert(!string.IsNullOrWhiteSpace(host.CurrentSnapshot.Paths.AdvisorSceneRoot) && Directory.Exists(host.CurrentSnapshot.Paths.AdvisorSceneRoot!), $"Expected advisor-scene root for scenario {scenario.Name}.");
             Assert(File.Exists(host.CurrentSnapshot.Paths.AdvisorSceneLatestJsonPath!), $"Expected advisor-scene.latest.json for scenario {scenario.Name}.");
             Assert(File.Exists(host.CurrentSnapshot.Paths.AdvisorSceneLogPath!), $"Expected advisor-scene.ndjson for scenario {scenario.Name}.");
@@ -4632,6 +4897,8 @@ static void ExecuteHostSceneModelScenario(HostSceneModelScenario scenario)
             var latestSceneArtifact = JsonSerializer.Deserialize<AdvisorSceneArtifact>(File.ReadAllText(host.CurrentSnapshot.Paths.AdvisorSceneLatestJsonPath!, Encoding.UTF8), ConfigurationLoader.JsonOptions)
                 ?? throw new InvalidOperationException($"Expected advisor scene artifact json for scenario {scenario.Name}.");
             Assert(string.Equals(latestSceneArtifact.SceneType, scenario.ExpectedSceneType, StringComparison.Ordinal), $"Expected persisted sceneType {scenario.ExpectedSceneType} for scenario {scenario.Name}.");
+            Assert(latestSceneArtifact.CapturedAtUtc is not null, $"Expected persisted capturedAtUtc for scenario {scenario.Name}.");
+            Assert(latestSceneArtifact.PublishedAtUtc is not null, $"Expected persisted publishedAtUtc for scenario {scenario.Name}.");
 
             var initialLineCount = File.ReadAllLines(host.CurrentSnapshot.Paths.AdvisorSceneLogPath!, Encoding.UTF8).Length;
             Assert(initialLineCount == 1, $"Expected one advisor-scene.ndjson line after first publish for scenario {scenario.Name}.");
@@ -4915,6 +5182,236 @@ static LiveExportSnapshot CreateMapSurfacePendingSceneModelSnapshot(string runId
             ["mapSurfacePending"] = "true",
         },
     };
+}
+
+static LiveExportSnapshot CreateScreenProvenanceSnapshot(string runId, string screen)
+{
+    return CreateHostSnapshot(runId, screen) with
+    {
+        CurrentScreen = screen,
+        Encounter = new LiveExportEncounterSummary(screen, screen, false, null),
+        CurrentChoices = Array.Empty<LiveExportChoiceSummary>(),
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["currentSceneType"] = "MegaCrit.Sts2.Core.Nodes.NGame",
+            ["rootTypeSummary"] = "MegaCrit.Sts2.Core.Nodes.NGame",
+            ["flowScreen"] = screen,
+            ["visibleScreen"] = screen,
+        },
+    };
+}
+
+static HarnessNodeInventory CreateScreenProvenanceInventory(
+    string inventoryId,
+    string runId,
+    string sceneType,
+    string? publishedCurrentScreen,
+    string? publishedVisibleScreen,
+    string? publishedSceneAuthority = "published",
+    string? publishedSceneStability = "stable")
+{
+    return new HarnessNodeInventory(
+        inventoryId,
+        DateTimeOffset.UtcNow,
+        runId,
+        sceneType,
+        $"{sceneType}-episode",
+        "dormant",
+        null,
+        true,
+        publishedSceneAuthority,
+        publishedSceneStability,
+        Array.Empty<HarnessNodeInventoryItem>())
+    {
+        PublishedCurrentScreen = publishedCurrentScreen,
+        PublishedVisibleScreen = publishedVisibleScreen,
+        PublishedSceneReady = true,
+        PublishedSceneAuthority = publishedSceneAuthority,
+        PublishedSceneStability = publishedSceneStability,
+    };
+}
+
+static IReadOnlyList<ScreenProvenanceParityScenario> CreateScreenProvenanceParityScenarios()
+{
+    var combatSnapshot = CreateScreenProvenanceSnapshot("parity-combat-run", "combat") with
+    {
+        Encounter = new LiveExportEncounterSummary("Jaw Worm", "Combat", true, 2),
+        PublishedCurrentScreen = "map",
+        PublishedVisibleScreen = "map",
+        PublishedSceneAuthority = "polling",
+        PublishedSceneStability = "stable",
+        Meta = MergeMeta(
+            CreateScreenProvenanceSnapshot("parity-combat-run", "combat").Meta,
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["foregroundOwner"] = "map",
+                ["combatHandSummary"] = "Strike, Defend",
+            }),
+    };
+
+    var eventSnapshot = CreateEventSceneModelSnapshot("parity-event-run") with
+    {
+        PublishedCurrentScreen = "event",
+        PublishedVisibleScreen = "event",
+        PublishedSceneAuthority = "hook",
+        PublishedSceneStability = "stable",
+        RawObservedScreen = "map",
+    };
+
+    var mapSnapshot = CreateScreenProvenanceSnapshot("parity-map-run", "map") with
+    {
+        PublishedCurrentScreen = "map",
+        PublishedVisibleScreen = "map",
+        PublishedSceneAuthority = "polling",
+        PublishedSceneStability = "stable",
+        CurrentChoices = new[]
+        {
+            new LiveExportChoiceSummary("map-node", "휴식 (1,2)", "1,2", "type:Rest;coord:1,2"),
+        },
+        Meta = MergeMeta(
+            CreateScreenProvenanceSnapshot("parity-map-run", "map").Meta,
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["mapPointCount"] = "1",
+                ["mapCurrentNodeArrowVisible"] = "true",
+            }),
+    };
+
+    var rewardSnapshot = CreateRewardSceneModelSnapshot("parity-reward-run") with
+    {
+        PublishedCurrentScreen = "rewards",
+        PublishedVisibleScreen = "rewards",
+        PublishedSceneAuthority = "hook",
+        PublishedSceneStability = "stable",
+    };
+
+    return new[]
+    {
+        new ScreenProvenanceParityScenario(
+            "combat with stale map foreground owner",
+            "combat-started",
+            combatSnapshot,
+            CreateScreenProvenanceInventory("combat-stale-map", combatSnapshot.RunId, "map", "map", "map", "inventory", "stale"),
+            "combat",
+            "combat",
+            "combat",
+            "combat"),
+        new ScreenProvenanceParityScenario(
+            "event screen with explicit published event screen",
+            "event-opened",
+            eventSnapshot,
+            CreateScreenProvenanceInventory("event-published", eventSnapshot.RunId, "event", "event", "event", "hook", "stable"),
+            "event",
+            "event",
+            "event",
+            "event"),
+        new ScreenProvenanceParityScenario(
+            "map overlay with reachable nodes",
+            "map-opened",
+            mapSnapshot,
+            CreateScreenProvenanceInventory("map-overlay", mapSnapshot.RunId, "map", "map", "map", "polling", "stable"),
+            "map",
+            "map",
+            "map",
+            "map"),
+        new ScreenProvenanceParityScenario(
+            "reward aftermath with published reward proceed state",
+            "reward-screen-opened",
+            rewardSnapshot,
+            CreateScreenProvenanceInventory("reward-aftermath", rewardSnapshot.RunId, "reward", "rewards", "rewards", "hook", "stable"),
+            "rewards",
+            "rewards",
+            "reward",
+            "reward"),
+    };
+}
+
+static AdvisorSceneArtifact ResolveHostSceneModelForParityScenario(ScreenProvenanceParityScenario scenario)
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        configuration = configuration with
+        {
+            Assistant = configuration.Assistant with
+            {
+                AutoAdviceEnabled = false,
+            },
+        };
+        SeedKnowledgeCatalog(root);
+
+        var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+        Directory.CreateDirectory(layout.LiveRoot);
+        var session = new LiveExportSession(
+            $"session-{scenario.Snapshot.RunId}",
+            scenario.Snapshot.RunId,
+            "active",
+            DateTimeOffset.UtcNow.AddMinutes(-1),
+            DateTimeOffset.UtcNow,
+            1,
+            layout.LiveRoot,
+            scenario.EventKind,
+            scenario.Snapshot.CurrentScreen);
+        var events = new[]
+        {
+            new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, scenario.Snapshot.RunId, scenario.EventKind, scenario.Snapshot.CurrentScreen, scenario.Snapshot.Act, scenario.Snapshot.Floor, new Dictionary<string, object?>()),
+        };
+
+        WriteJson(layout.SnapshotPath, scenario.Snapshot);
+        WriteJson(layout.SessionPath, session);
+        File.WriteAllText(layout.SummaryPath, $"{scenario.Name} summary", Encoding.UTF8);
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+        File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+        File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+        Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+        var host = new CompanionHost(configuration, root, new FakeCodexSessionClient());
+        try
+        {
+            host.RefreshAsync().GetAwaiter().GetResult();
+            return host.CurrentSnapshot.LatestSceneModel
+                ?? throw new InvalidOperationException($"Expected latest scene model for scenario {scenario.Name}.");
+        }
+        finally
+        {
+            host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static Dictionary<string, string?> MergeMeta(
+    IReadOnlyDictionary<string, string?> baseline,
+    IReadOnlyDictionary<string, string?> overlay)
+{
+    var merged = new Dictionary<string, string?>(baseline, StringComparer.OrdinalIgnoreCase);
+    foreach (var pair in overlay)
+    {
+        merged[pair.Key] = pair.Value;
+    }
+
+    return merged;
+}
+
+static ScreenProvenanceInput CreateHarnessProvenanceInput(
+    LiveExportSnapshot? snapshot,
+    HarnessNodeInventory? inventory)
+{
+    using var stateDocument = snapshot is null
+        ? null
+        : JsonDocument.Parse(JsonSerializer.Serialize(snapshot, ConfigurationLoader.JsonOptions));
+    using var inventoryDocument = inventory is null
+        ? null
+        : JsonDocument.Parse(JsonSerializer.Serialize(inventory, ConfigurationLoader.JsonOptions));
+    return ScreenProvenanceResolver.CreateFromObserverDocuments(stateDocument, inventoryDocument);
 }
 
 static RewardScenarioDefinition CreateDefaultRewardScenario()
@@ -6516,6 +7013,16 @@ file sealed record HostSceneModelScenario(
     string ExpectedCanonicalOwner,
     int ExpectedOptionCount,
     IReadOnlyList<string> ExpectedMissingFacts);
+
+file sealed record ScreenProvenanceParityScenario(
+    string Name,
+    string EventKind,
+    LiveExportSnapshot Snapshot,
+    HarnessNodeInventory? Inventory,
+    string ExpectedResolvedCurrentScreen,
+    string ExpectedResolvedVisibleScreen,
+    string ExpectedSceneType,
+    string ExpectedCanonicalOwner);
 
 sealed class FakeProbe : IFileStateProbe
 {

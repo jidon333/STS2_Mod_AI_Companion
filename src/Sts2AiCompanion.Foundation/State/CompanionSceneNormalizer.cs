@@ -1,3 +1,4 @@
+using Sts2AiCompanion.SceneProvenance;
 using Sts2ModKit.Core.LiveExport;
 
 namespace Sts2AiCompanion.Foundation.State;
@@ -10,9 +11,15 @@ public sealed record CompanionNormalizedScene(
 
 public static class CompanionSceneNormalizer
 {
-    public static CompanionNormalizedScene Normalize(LiveExportSnapshot snapshot)
+    public static CompanionNormalizedScene Normalize(
+        LiveExportSnapshot snapshot)
     {
-        var rawScene = string.IsNullOrWhiteSpace(snapshot.CurrentScreen) ? "unknown" : snapshot.CurrentScreen.Trim();
+        var resolvedProvenance = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(snapshot));
+        var rawScene = !string.IsNullOrWhiteSpace(resolvedProvenance.ResolvedCurrentScreen)
+            ? resolvedProvenance.ResolvedCurrentScreen.Trim()
+            : !string.IsNullOrWhiteSpace(snapshot.CurrentScreen)
+                ? snapshot.CurrentScreen.Trim()
+                : "unknown";
         var currentSceneType = TryGetMeta(snapshot.Meta, "currentSceneType");
         var rootTypeSummary = TryGetMeta(snapshot.Meta, "rootTypeSummary");
         var modalType = TryGetMeta(snapshot.Meta, "modal-type");

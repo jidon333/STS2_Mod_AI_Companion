@@ -12,8 +12,8 @@
 즉:
 
 ```text
-game -> live export -> Host -> WPF sidecar
-game -> live export -> harness replay
+game -> live export -> shared ScreenProvenanceResolver -> Host -> WPF sidecar
+game -> live export -> shared ScreenProvenanceResolver -> harness replay
 game -> live export -> Foundation/Advisor
 ```
 
@@ -22,8 +22,9 @@ game -> live export -> Foundation/Advisor
 ```mermaid
 flowchart TB
     Game["게임"] --> Export["live export"]
-    Export --> Harness["하네스<br/>replay / validation"]
-    Export --> Host["Host<br/>live scene model"]
+    Export --> Provenance["shared ScreenProvenanceResolver<br/>resolved primary provenance"]
+    Provenance --> Harness["하네스<br/>replay / validation"]
+    Provenance --> Host["Host<br/>live scene model"]
     Export --> Foundation["Foundation<br/>shared state"]
     Host --> Wpf["WPF<br/>sidecar"]
     Foundation --> Advisor["Advisor<br/>read-only"]
@@ -93,6 +94,7 @@ Host는 `live export snapshot을 읽어서 사람이 보는 scene model과 advis
 Host가 하는 일:
 
 - live export 파일을 읽는다
+- shared `ScreenProvenanceResolver`로 resolved `current / visible / ready / authority / stability`를 계산한다
 - run state를 만든다
 - canonical / normalized state를 계산한다
 - live advisor scene model을 만든다
@@ -172,6 +174,7 @@ M9에서는 다음 순서가 맞다.
 ```text
 step.request.json
   -> observer.state.json / replay fixture
+  -> shared ScreenProvenanceResolver resolved provenance
   -> harness canonical scene state
   -> shared advisor scene model
   -> replay-advisor-scene artifact
@@ -188,7 +191,8 @@ step.request.json
 ```mermaid
 flowchart TB
     Req["step.request.json"] --> Obs["observer.state.json<br/>replay fixture"]
-    Obs --> HarnessState["harness canonical<br/>scene state"]
+    Obs --> Provenance["shared ScreenProvenanceResolver<br/>resolved primary provenance"]
+    Provenance --> HarnessState["harness canonical<br/>scene state"]
     HarnessState --> Shared["shared advisor<br/>scene model"]
     Shared --> ReplayArtifact["replay-advisor-scene<br/>artifact"]
 ```
@@ -198,6 +202,7 @@ flowchart TB
 ```text
 game
   -> live export snapshot
+  -> shared ScreenProvenanceResolver resolved provenance
   -> Host run state / normalized state
   -> live advisor scene model
   -> WPF sidecar
@@ -216,7 +221,8 @@ game
 ```mermaid
 flowchart TB
     Game["game"] --> Snapshot["live export<br/>snapshot"]
-    Snapshot --> RunState["Host run state<br/>normalized state"]
+    Snapshot --> Provenance["shared ScreenProvenanceResolver<br/>resolved primary provenance"]
+    Provenance --> RunState["Host run state<br/>normalized state"]
     RunState --> SceneModel["live advisor<br/>scene model"]
     SceneModel --> Wpf["WPF<br/>sidecar"]
     SceneModel --> CompanionArtifacts["companion artifacts<br/>advisor-scene"]
@@ -242,6 +248,8 @@ live export / normalized state / knowledge slice
 
 둘의 목적이 다르기 때문이다.
 
+하지만 `resolved current / visible / ready / authority / stability`의 1차 provenance 해석은 shared `ScreenProvenanceResolver`로 맞춰야 한다.
+
 ### 하네스의 목적
 
 - replay parity
@@ -259,10 +267,10 @@ live export / normalized state / knowledge slice
 
 live sidecar는 `빠른 표시`와 `사람 친화성`이 중요하다.
 
-그래서 둘은 같은 truth를 써도:
+그래서 둘은:
 
-- 경로가 다르고
-- 우선순위가 다르고
+- primary provenance interpretation은 shared resolver로 같다
+- canonical scene state를 쌓는 위치와 깊이가 다르고
 - 최적화 포인트가 다르다
 
 ## 왜 하네스를 고친 것만으로 sidecar 지연이 자동 해결되지 않았나
@@ -335,12 +343,13 @@ flowchart TB
     Exporter["state.latest.json<br/>events.ndjson"] --> HostPoll["Host<br/>PollOnceAsync"]
     HostPoll --> EventsRead["ReadNewEvents()"]
     EventsRead --> FullScan["events.ndjson<br/>전체 재스캔"]
-    HostPoll --> Diagnostics["heavy diagnostics<br/>live-mirror"]
-    HostPoll --> SceneModel["LatestSceneModel<br/>publish"]
+    HostPoll --> RunState["run state + shared provenance"]
+    RunState --> SceneModel["LatestSceneModel<br/>publish"]
+    HostPoll --> Diagnostics["heavy diagnostics<br/>live-mirror<br/>post-publish path"]
     SceneModel --> Wpf["WPF<br/>sidecar"]
 
     FullScan -. "1순위 병목" .-> SceneModel
-    Diagnostics -. "2순위 병목" .-> SceneModel
+    Diagnostics -. "후속 비용" .-> Wpf
     Wpf -. "주범 아님" .- SceneModel
 ```
 
@@ -371,7 +380,7 @@ flowchart TB
 
 즉 sidecar가 10초 이상 늦는 것은 이상 현상이 아니라, 이 경로만으로도 거의 설명된다.
 
-### 2. 2순위 병목: Host diagnostics heavy path
+### 2. 후속 비용: Host diagnostics heavy path
 
 위치:
 
@@ -383,6 +392,8 @@ flowchart TB
 - `raw-observations.ndjson` mirror copy
 - `choice-candidates.ndjson` mirror copy
 - collector summary용 NDJSON 전체 파싱
+
+현재 구현에서는 scene artifact publish가 이 경로보다 먼저 일어난다.
 
 최근 수정으로 이쪽은 일부 완화했다.
 
@@ -460,10 +471,11 @@ Exporter가 늦거나 sticky하면, sidecar는 늦어진다.
 
 ### Host
 
-Host는 exporter를 읽고 `scene model`로 바꾼다.
+Host는 exporter를 읽고 shared provenance를 거쳐 `scene model`로 바꾼다.
 
 Host가 책임지는 것:
 
+- resolved current / visible / ready / authority / stability
 - sceneType
 - sceneStage
 - canonicalOwner

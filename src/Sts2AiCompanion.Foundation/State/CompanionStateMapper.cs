@@ -1,4 +1,5 @@
 using Sts2AiCompanion.Foundation.Contracts;
+using Sts2AiCompanion.SceneProvenance;
 using Sts2ModKit.Core.LiveExport;
 
 namespace Sts2AiCompanion.Foundation.State;
@@ -11,15 +12,13 @@ public static class CompanionStateMapper
         IReadOnlyList<LiveExportEventEnvelope> recentEvents)
     {
         var sanitizedChoices = CompanionSceneNormalizer.SanitizeChoices(snapshot.CurrentChoices);
+        var resolvedProvenance = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(snapshot));
         var normalizedScene = CompanionSceneNormalizer.Normalize(snapshot);
-        var flowScene = snapshot.CompatibilityLogicalScreen
-                        ?? TryGetMeta(snapshot.Meta, "compatLogicalScreen")
-                        ?? snapshot.CurrentScreen
+        var sceneType = NormalizeSceneToken(resolvedProvenance.ResolvedCurrentScreen)
                         ?? normalizedScene.SceneType;
-        var visibleScene = snapshot.CompatibilityVisibleScreen
-                           ?? TryGetMeta(snapshot.Meta, "compatVisibleScreen")
+        var flowScene = sceneType;
+        var visibleScene = NormalizeSceneToken(resolvedProvenance.ResolvedVisibleScreen)
                            ?? flowScene;
-        var sceneType = flowScene;
         var confidence = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
         {
             ["scene"] = normalizedScene.Confidence,
@@ -62,7 +61,7 @@ public static class CompanionStateMapper
                 visibleScene,
                 flowScene,
                 confidence["scene"],
-                normalizedScene.Source,
+                $"provenance:{resolvedProvenance.ProvenanceSource}; semantic:{normalizedScene.Source}",
                 TryGetMeta(snapshot.Meta, "screen-episode")),
             new CompanionPlayerState(
                 snapshot.Player.CurrentHp,
@@ -139,4 +138,11 @@ public static class CompanionStateMapper
     private static bool IsEventScene(string sceneType) => string.Equals(sceneType, "event", StringComparison.OrdinalIgnoreCase);
     private static bool IsShopScene(string sceneType) => string.Equals(sceneType, "shop", StringComparison.OrdinalIgnoreCase);
     private static bool IsRestScene(string sceneType) => string.Equals(sceneType, "rest", StringComparison.OrdinalIgnoreCase) || string.Equals(sceneType, "rest-site", StringComparison.OrdinalIgnoreCase);
+
+    private static string? NormalizeSceneToken(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim().ToLowerInvariant();
+    }
 }

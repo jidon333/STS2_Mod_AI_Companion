@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Sts2AiCompanion.AdvisorSceneModel;
+using Sts2AiCompanion.SceneProvenance;
 using Sts2AiCompanion.Foundation.State;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.LiveExport;
@@ -12,6 +13,8 @@ namespace Sts2AiCompanion.Host;
 
 public sealed partial class CompanionHost : IAsyncDisposable
 {
+    private const int InitialEventsTailBytes = 4 * 1024 * 1024;
+
     private readonly ScaffoldConfiguration _configuration;
     private readonly string _workspaceRoot;
     private readonly LiveExportLayout _layout;
@@ -26,6 +29,9 @@ public sealed partial class CompanionHost : IAsyncDisposable
     private CancellationTokenSource? _loopCts;
     private Task? _loopTask;
     private long _lastObservedSeq;
+    private long _lastEventsReadPosition;
+    private string _pendingEventLine = string.Empty;
+    private bool _eventsCursorInitialized;
     private DateTimeOffset? _lastAdviceAt;
     private string? _currentRunId;
     private AdviceResponse? _latestAdvice;
@@ -125,11 +131,9 @@ public sealed partial class CompanionHost : IAsyncDisposable
             var snapshot = TryReadJson<LiveExportSnapshot>(_layout.SnapshotPath);
             var session = TryReadJson<LiveExportSession>(_layout.SessionPath);
             var summary = TryReadAllText(_layout.SummaryPath);
-            var events = ReadNewEvents(_layout.EventsPath, ref _lastObservedSeq, _configuration.Assistant.RecentEventsCount);
             if (snapshot is null) { PublishSnapshot(CreateSnapshot("waiting-live-export", "state.latest.json is not available yet.")); return; }
-            var recentEvents = (_currentRunState?.RecentEvents ?? Array.Empty<LiveExportEventEnvelope>()).Concat(events).TakeLast(_configuration.Assistant.RecentEventsCount).ToArray();
-            var runState = CreateRunState(snapshot, session, summary ?? string.Empty, recentEvents, DateTimeOffset.UtcNow - snapshot.CapturedAt > TimeSpan.FromSeconds(10));
-            if (!string.Equals(_currentRunId, snapshot.RunId, StringComparison.Ordinal))
+            var runChanged = !string.Equals(_currentRunId, snapshot.RunId, StringComparison.Ordinal);
+            if (runChanged)
             {
                 _currentRunId = snapshot.RunId;
                 _sessionState = TryReadExistingSessionState(snapshot.RunId);
@@ -137,10 +141,31 @@ public sealed partial class CompanionHost : IAsyncDisposable
                 _latestSceneModel = null;
                 _lastPromptPackPath = null;
                 _lastLoggedSceneModelPayload = null;
+                _lastObservedSeq = 0;
                 ClearPendingAutomaticAdvice();
             }
+
+            var events = ReadNewEvents(
+                _layout.EventsPath,
+                snapshot.RunId,
+                ref _lastObservedSeq,
+                ref _lastEventsReadPosition,
+                ref _pendingEventLine,
+                ref _eventsCursorInitialized,
+                _configuration.Assistant.RecentEventsCount);
+            var baseRecentEvents = runChanged || _currentRunState is null
+                ? Array.Empty<LiveExportEventEnvelope>()
+                : _currentRunState.RecentEvents;
+            var recentEvents = baseRecentEvents
+                .Concat(events)
+                .Where(envelope => string.IsNullOrWhiteSpace(snapshot.RunId)
+                                   || string.Equals(envelope.RunId, snapshot.RunId, StringComparison.Ordinal))
+                .TakeLast(_configuration.Assistant.RecentEventsCount)
+                .ToArray();
+            var runState = CreateRunState(snapshot, session, summary ?? string.Empty, recentEvents, DateTimeOffset.UtcNow - snapshot.CapturedAt > TimeSpan.FromSeconds(10));
             _currentRunState = runState;
             _latestSceneModel = UpdateSceneArtifacts(runState);
+            PublishSnapshot(CreateSnapshot("running", "Scene model updated from live export."));
             _latestKnowledgeSlice = _knowledgeCatalogService.BuildSlice(runState, _configuration.Assistant.MaxKnowledgeEntries, _configuration.Assistant.MaxKnowledgeBytes);
             if (_autoAdviceEnabled)
             {
@@ -356,17 +381,101 @@ public sealed partial class CompanionHost : IAsyncDisposable
         return reader.ReadToEnd();
     }
 
-    private static IReadOnlyList<LiveExportEventEnvelope> ReadNewEvents(string path, ref long lastObservedSeq, int tailCount)
+    private static IReadOnlyList<LiveExportEventEnvelope> ReadNewEvents(
+        string path,
+        string? currentRunId,
+        ref long lastObservedSeq,
+        ref long lastReadPosition,
+        ref string pendingLine,
+        ref bool cursorInitialized,
+        int tailCount)
     {
         if (!File.Exists(path)) return Array.Empty<LiveExportEventEnvelope>();
-        var results = new List<LiveExportEventEnvelope>();
-        foreach (var line in ReadAllLinesShared(path))
+
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (!cursorInitialized || stream.Length < lastReadPosition)
         {
-            var envelope = JsonSerializer.Deserialize<LiveExportEventEnvelope>(line, ConfigurationLoader.JsonOptions);
+            lastReadPosition = 0;
+            pendingLine = string.Empty;
+            cursorInitialized = false;
+            lastObservedSeq = 0;
+        }
+
+        var startPosition = lastReadPosition;
+        var skipLeadingPartialLine = false;
+        if (!cursorInitialized)
+        {
+            startPosition = Math.Max(0, stream.Length - InitialEventsTailBytes);
+            skipLeadingPartialLine = startPosition > 0;
+        }
+
+        stream.Seek(startPosition, SeekOrigin.Begin);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
+        var content = reader.ReadToEnd();
+        lastReadPosition = stream.Position;
+        cursorInitialized = true;
+
+        if (skipLeadingPartialLine)
+        {
+            var newlineIndex = content.IndexOf('\n');
+            if (newlineIndex < 0)
+            {
+                pendingLine = string.Empty;
+                return Array.Empty<LiveExportEventEnvelope>();
+            }
+
+            content = content[(newlineIndex + 1)..];
+        }
+
+        if (!string.IsNullOrEmpty(pendingLine))
+        {
+            content = pendingLine + content;
+            pendingLine = string.Empty;
+        }
+
+        if (string.IsNullOrEmpty(content))
+        {
+            return Array.Empty<LiveExportEventEnvelope>();
+        }
+
+        content = content.Replace("\r\n", "\n", StringComparison.Ordinal);
+        if (!content.EndsWith("\n", StringComparison.Ordinal))
+        {
+            var lastNewline = content.LastIndexOf('\n');
+            if (lastNewline < 0)
+            {
+                pendingLine = content;
+                return Array.Empty<LiveExportEventEnvelope>();
+            }
+
+            pendingLine = content[(lastNewline + 1)..];
+            content = content[..(lastNewline + 1)];
+        }
+
+        var results = new List<LiveExportEventEnvelope>();
+        foreach (var line in content.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            LiveExportEventEnvelope? envelope;
+            try
+            {
+                envelope = JsonSerializer.Deserialize<LiveExportEventEnvelope>(line, ConfigurationLoader.JsonOptions);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
             if (envelope is null || envelope.Seq <= lastObservedSeq) continue;
+            if (!string.IsNullOrWhiteSpace(currentRunId)
+                && !string.Equals(envelope.RunId, currentRunId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             results.Add(envelope);
             lastObservedSeq = Math.Max(lastObservedSeq, envelope.Seq);
         }
+
         return results.TakeLast(tailCount).ToArray();
     }
 
@@ -382,9 +491,11 @@ public sealed partial class CompanionHost : IAsyncDisposable
         IReadOnlyList<LiveExportEventEnvelope> recentEvents,
         bool isStale)
     {
+        var provenance = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromLiveSnapshot(snapshot));
         return new CompanionRunState(snapshot, session, summaryText, recentEvents, isStale)
         {
             NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, recentEvents),
+            ScreenProvenance = provenance,
         };
     }
 }

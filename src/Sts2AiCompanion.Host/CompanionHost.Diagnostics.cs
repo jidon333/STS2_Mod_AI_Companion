@@ -7,10 +7,14 @@ namespace Sts2AiCompanion.Host;
 
 internal sealed class CompanionHostDiagnosticsService
 {
+    private static readonly TimeSpan HeavyDiagnosticsRefreshInterval = TimeSpan.FromSeconds(15);
+
     private readonly ScaffoldConfiguration _configuration;
     private readonly string _workspaceRoot;
     private readonly LiveExportLayout _layout;
     private readonly JsonSerializerOptions _jsonOptions;
+    private DateTimeOffset _lastHeavyDiagnosticsRefreshAt;
+    private string? _lastHeavyDiagnosticsRunId;
 
     public CompanionHostDiagnosticsService(
         ScaffoldConfiguration configuration,
@@ -32,9 +36,12 @@ internal sealed class CompanionHostDiagnosticsService
         CodexSessionState? sessionState)
     {
         var paths = EnsureRunArtifacts(runState.Snapshot.RunId);
-        MirrorLiveArtifacts(runState, paths, sessionState);
+        var refreshHeavyDiagnostics = ShouldRefreshHeavyDiagnostics(runState);
+        MirrorLiveArtifacts(runState, paths, sessionState, refreshHeavyDiagnostics);
         var collectorStatus = BuildCollectorStatus(runState, paths, latestKnowledgeSlice, latestAdvice, sessionState);
-        if (_configuration.LiveExport.CollectorModeEnabled && paths.CollectorSummaryPath is not null)
+        if (_configuration.LiveExport.CollectorModeEnabled
+            && paths.CollectorSummaryPath is not null
+            && refreshHeavyDiagnostics)
         {
             WriteJson(paths.CollectorSummaryPath, BuildCollectorSummary(runState, paths, collectorStatus, latestKnowledgeSlice, latestAdvice, sessionState));
         }
@@ -54,7 +61,25 @@ internal sealed class CompanionHostDiagnosticsService
         return paths;
     }
 
-    private void MirrorLiveArtifacts(CompanionRunState runState, CompanionArtifactPaths paths, CodexSessionState? sessionState)
+    private bool ShouldRefreshHeavyDiagnostics(CompanionRunState runState)
+    {
+        if (!string.Equals(_lastHeavyDiagnosticsRunId, runState.Snapshot.RunId, StringComparison.Ordinal))
+        {
+            _lastHeavyDiagnosticsRunId = runState.Snapshot.RunId;
+            _lastHeavyDiagnosticsRefreshAt = DateTimeOffset.UtcNow;
+            return true;
+        }
+
+        if (DateTimeOffset.UtcNow - _lastHeavyDiagnosticsRefreshAt < HeavyDiagnosticsRefreshInterval)
+        {
+            return false;
+        }
+
+        _lastHeavyDiagnosticsRefreshAt = DateTimeOffset.UtcNow;
+        return true;
+    }
+
+    private void MirrorLiveArtifacts(CompanionRunState runState, CompanionArtifactPaths paths, CodexSessionState? sessionState, bool includeHeavyArtifacts)
     {
         if (paths.LiveMirrorRoot is null)
         {
@@ -62,15 +87,18 @@ internal sealed class CompanionHostDiagnosticsService
         }
 
         Directory.CreateDirectory(paths.LiveMirrorRoot);
-        CopyIfExists(_layout.SnapshotPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SnapshotPath)));
-        CopyIfExists(_layout.SummaryPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SummaryPath)));
-        CopyIfExists(_layout.SessionPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SessionPath)));
-        CopyIfExists(_layout.EventsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.EventsPath)));
-        CopyIfExists(_layout.RawObservationsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.RawObservationsPath)));
-        CopyIfExists(_layout.ScreenTransitionsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ScreenTransitionsPath)));
-        CopyIfExists(_layout.ChoiceCandidatesPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceCandidatesPath)));
-        CopyIfExists(_layout.ChoiceDecisionsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceDecisionsPath)));
-        CopyDirectoryIfExists(_layout.SemanticSnapshotsRoot, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SemanticSnapshotsRoot)));
+        CopyIfChanged(_layout.SnapshotPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SnapshotPath)));
+        CopyIfChanged(_layout.SummaryPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SummaryPath)));
+        CopyIfChanged(_layout.SessionPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SessionPath)));
+        if (includeHeavyArtifacts)
+        {
+            CopyIfChanged(_layout.EventsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.EventsPath)));
+            CopyIfChanged(_layout.RawObservationsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.RawObservationsPath)));
+            CopyIfChanged(_layout.ScreenTransitionsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ScreenTransitionsPath)));
+            CopyIfChanged(_layout.ChoiceCandidatesPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceCandidatesPath)));
+            CopyIfChanged(_layout.ChoiceDecisionsPath, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.ChoiceDecisionsPath)));
+            CopyDirectoryIfChanged(_layout.SemanticSnapshotsRoot, Path.Combine(paths.LiveMirrorRoot, Path.GetFileName(_layout.SemanticSnapshotsRoot)));
+        }
         WriteJson(
             paths.CurrentRunStatePath,
             new
@@ -270,15 +298,29 @@ internal sealed class CompanionHostDiagnosticsService
             .ToArray();
     }
 
-    private static void CopyIfExists(string sourcePath, string destinationPath)
+    private static void CopyIfChanged(string sourcePath, string destinationPath)
     {
-        if (File.Exists(sourcePath))
+        if (!File.Exists(sourcePath))
         {
-            File.Copy(sourcePath, destinationPath, overwrite: true);
+            return;
         }
+
+        var sourceInfo = new FileInfo(sourcePath);
+        if (File.Exists(destinationPath))
+        {
+            var destinationInfo = new FileInfo(destinationPath);
+            if (sourceInfo.Length == destinationInfo.Length
+                && sourceInfo.LastWriteTimeUtc == destinationInfo.LastWriteTimeUtc)
+            {
+                return;
+            }
+        }
+
+        File.Copy(sourcePath, destinationPath, overwrite: true);
+        File.SetLastWriteTimeUtc(destinationPath, sourceInfo.LastWriteTimeUtc);
     }
 
-    private static void CopyDirectoryIfExists(string sourcePath, string destinationPath)
+    private static void CopyDirectoryIfChanged(string sourcePath, string destinationPath)
     {
         if (!Directory.Exists(sourcePath))
         {
@@ -288,7 +330,7 @@ internal sealed class CompanionHostDiagnosticsService
         Directory.CreateDirectory(destinationPath);
         foreach (var file in Directory.GetFiles(sourcePath))
         {
-            File.Copy(file, Path.Combine(destinationPath, Path.GetFileName(file)), overwrite: true);
+            CopyIfChanged(file, Path.Combine(destinationPath, Path.GetFileName(file)));
         }
     }
 

@@ -98,6 +98,7 @@ v1 우선순위는 다음으로 고정한다.
 현재 상태:
 
 - `in_progress`
+- `A2 shared provenance parity` 자동 검증 green, direct play clean-boot manual sweep만 남음
 
 완료 기준:
 
@@ -205,6 +206,7 @@ v1 우선순위는 다음으로 고정한다.
 완료 기준:
 
 - live scene type / stage / owner / summary / options / missing facts가 sidecar에 표시됨
+- Harness와 Host가 같은 `ScreenProvenanceResolver`로 resolved current/visible/ready/authority/stability를 계산함
 - replay schema와 live schema가 일치함
 - `artifacts/companion/<runId>/advisor-scene/advisor-scene.latest.json` + `advisor-scene.ndjson`가 생성됨
 - unchanged poll에서는 `advisor-scene.ndjson`가 append되지 않음
@@ -221,7 +223,7 @@ v1 우선순위는 다음으로 고정한다.
 | Advisor input contract | in_progress | draft 상태, 아직 mapping only |
 | Coverage gap 운영 | pending | hard gap triage와 root refresh 필요 |
 | Read-only advisor MVP | pending | 아직 production/host merge 안 함 |
-| Live sidecar UI | in_progress | `Host` owner live builder, shared contract, WPF panel, advisor-scene artifact band 구현 완료. direct play clean-boot manual sweep만 남음 |
+| Live sidecar UI | in_progress | `Host` owner live builder, shared contract, WPF panel, advisor-scene artifact band, shared `ScreenProvenanceResolver` parity까지 구현 완료. direct play clean-boot manual sweep만 남음 |
 | Foundation canonical merge | blocked_by_design | schema 안정화 전 금지 |
 | Real-time overlay UI | deferred | 텍스트/artifact proving 이후 단계 |
 
@@ -270,7 +272,8 @@ M9에서는 아래 anti-pattern을 절대 허용하지 않는다.
   - 장면 truth를 예외 규칙 목록으로 관리하기 시작하면 M9 scene model이 금방 drift한다.
 
 2. 하네스와 다른 장면 authority 규칙을 sidecar에서 따로 만들기
-- replay/harness에서 검증된 `published screen / compatibility screen / canonical owner / release-pending` 규칙을 재사용하거나 shared seam으로 승격해야 한다.
+- replay/harness와 Host는 같은 `ScreenProvenanceResolver`로 primary `current / visible / ready / authority / stability`를 계산해야 한다.
+- `compatibilityCurrentScreen / compatibilityLogicalScreen / compatibilityVisibleScreen / compatibilitySceneReady / compatibilitySceneAuthority / compatibilitySceneStability`는 parity/diagnostics surface일 뿐, primary truth winner가 아니다.
 - `foregroundOwner` 하나만 더 믿거나, `currentChoices`만 더 믿는 식의 live-only 해석기는 만들지 않는다.
 
 3. raw meta를 scene truth로 바로 승격
@@ -280,7 +283,7 @@ M9에서는 아래 anti-pattern을 절대 허용하지 않는다.
 4. AI advice / diagnostics가 scene panel publish를 막게 두기
 - M9 초반의 주 목적은 `scene model 관측`이다.
 - auto advice, knowledge build, diagnostics heavy refresh가 sidecar scene update보다 앞서면 안 된다.
-- `scene model publish`는 AI와 분리된 fast path를 유지해야 한다.
+- current 구현에서도 `scene model publish`는 advice/diagnostics보다 먼저 가는 fast path이며, 이 순서를 유지해야 한다.
 
 5. 하네스 전체 decision/routing 로직을 Host로 가져오기
 - 필요한 것은 `행동 결정`이 아니라 `read-only authority/provenance contract`다.

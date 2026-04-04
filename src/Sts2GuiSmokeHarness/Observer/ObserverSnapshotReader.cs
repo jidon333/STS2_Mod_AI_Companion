@@ -13,6 +13,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows.Forms;
 using Sts2AiCompanion.Foundation.Contracts;
+using Sts2AiCompanion.SceneProvenance;
 using Sts2ModKit.Core.Configuration;
 using Sts2ModKit.Core.Harness;
 using Sts2ModKit.Core.LiveExport;
@@ -36,63 +37,31 @@ sealed class ObserverSnapshotReader
     {
         JsonDocument? stateDocument = TryReadJson(_liveLayout.SnapshotPath);
         JsonDocument? inventoryDocument = TryReadJson(_harnessLayout.InventoryPath);
+        var provenanceInput = ScreenProvenanceResolver.CreateFromObserverDocuments(stateDocument, inventoryDocument);
+        var provenance = ScreenProvenanceResolver.Resolve(provenanceInput);
         var eventLines = includeEventTail ? TryReadTailCached(_liveLayout.EventsPath, 10) : null;
         var stateCapturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt");
         var inventoryCapturedAt = TryReadDateTimeOffset(inventoryDocument?.RootElement, "capturedAt");
 
-        var inventorySceneType = TryReadString(inventoryDocument?.RootElement, "sceneType");
-        var inventoryRawCurrentScreen = TryReadString(inventoryDocument?.RootElement, "rawCurrentScreen")
-                                        ?? TryReadString(inventoryDocument?.RootElement, "rawSceneType");
-        var inventoryPublishedCurrentScreen = TryReadString(inventoryDocument?.RootElement, "publishedCurrentScreen")
-                                              ?? TryReadString(inventoryDocument?.RootElement, "publishedSceneType");
-        var inventoryPublishedVisibleScreen = TryReadString(inventoryDocument?.RootElement, "publishedVisibleScreen")
-                                              ?? TryReadString(inventoryDocument?.RootElement, "publishedVisibleScene");
-        var inventoryCompatibilityCurrentScreen = TryReadString(inventoryDocument?.RootElement, "compatibilityCurrentScreen")
-                                                  ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneType");
+        var inventoryCompatibilityCurrentScreen = provenanceInput.InventoryCompatibilityCurrentScreen;
         var compatibilityCurrentScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatibilityCurrentScreen")
                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatLogicalScreen")
                                          ?? inventoryCompatibilityCurrentScreen;
         var compatibilityLogicalScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatLogicalScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilityLogicalScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneType");
-        var rawCurrentScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "rawCurrentScreen")
-                               ?? inventoryRawCurrentScreen;
-        var rawObservedScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "rawObservedScreen")
-                               ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen")
-                               ?? rawCurrentScreen
-                               ?? inventoryRawCurrentScreen;
-        var trackerCurrentScreen = TryReadString(stateDocument?.RootElement, "currentScreen");
-        var publishedCurrentScreen = TryReadString(stateDocument?.RootElement, "publishedCurrentScreen")
-                                     ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedCurrentScreen")
-                                     ?? inventoryPublishedCurrentScreen;
-        var legacyCurrentScreen = stateDocument is null
-            ? inventorySceneType
-            : null;
-        var currentScreen = publishedCurrentScreen
-                            ?? rawCurrentScreen
-                            ?? rawObservedScreen
-                            ?? legacyCurrentScreen;
-        var publishedVisibleScreen = TryReadString(stateDocument?.RootElement, "publishedVisibleScreen")
-                                     ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedVisibleScreen")
-                                     ?? inventoryPublishedVisibleScreen;
+        var rawCurrentScreen = provenance.RawCurrentScreen;
+        var rawObservedScreen = provenance.RawObservedScreen;
+        var publishedCurrentScreen = provenance.PublishedCurrentScreen;
+        var currentScreen = provenance.ResolvedCurrentScreen;
+        var publishedVisibleScreen = provenance.PublishedVisibleScreen;
         var snapshotVersion = TryReadInt64(stateDocument?.RootElement, "version");
         var compatibilityVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatibilityVisibleScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScreen")
                                          ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatVisibleScreen")
                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScene");
-        var visibleScreen = publishedVisibleScreen
-                            ?? rawObservedScreen
-                            ?? rawCurrentScreen
-                            ?? (stateDocument is null ? inventorySceneType : null);
+        var visibleScreen = provenance.ResolvedVisibleScreen;
         var inCombat = TryReadBool(stateDocument?.RootElement, "encounter", "inCombat");
-        var promotedTrackerCombatScreen = inCombat == true
-                                          && string.Equals(trackerCurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
-                                              ? "combat"
-                                              : null;
-        currentScreen = promotedTrackerCombatScreen
-                        ?? currentScreen;
-        visibleScreen = promotedTrackerCombatScreen
-                        ?? visibleScreen;
         var capturedAt = stateCapturedAt
                          ?? inventoryCapturedAt;
         var inventoryId = inventoryDocument is null
@@ -101,24 +70,21 @@ sealed class ObserverSnapshotReader
         var inventoryPublishedSceneReady = TryReadBool(inventoryDocument?.RootElement, "publishedSceneReady");
         var compatibilitySceneReady = TryReadNestedBool(stateDocument?.RootElement, "meta", "compatSceneReady")
                                       ?? TryReadBool(inventoryDocument?.RootElement, "compatibilitySceneReady");
-        var publishedSceneReady = TryReadBool(stateDocument?.RootElement, "publishedSceneReady")
-                                  ?? TryReadNestedBool(stateDocument?.RootElement, "meta", "publishedSceneReady")
+        var publishedSceneReady = provenance.PublishedSceneReady
                                   ?? inventoryPublishedSceneReady;
-        var sceneReady = publishedSceneReady;
+        var sceneReady = provenance.ResolvedSceneReady;
         var inventoryPublishedSceneAuthority = TryReadString(inventoryDocument?.RootElement, "publishedSceneAuthority");
         var compatibilitySceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneAuthority")
                                           ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneAuthority");
-        var publishedSceneAuthority = TryReadString(stateDocument?.RootElement, "publishedSceneAuthority")
-                                      ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedSceneAuthority")
+        var publishedSceneAuthority = provenance.PublishedSceneAuthority
                                       ?? inventoryPublishedSceneAuthority;
-        var sceneAuthority = publishedSceneAuthority;
+        var sceneAuthority = provenance.ResolvedSceneAuthority;
         var inventoryPublishedSceneStability = TryReadString(inventoryDocument?.RootElement, "publishedSceneStability");
         var compatibilitySceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneStability")
                                           ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneStability");
-        var publishedSceneStability = TryReadString(stateDocument?.RootElement, "publishedSceneStability")
-                                      ?? TryReadNestedString(stateDocument?.RootElement, "meta", "publishedSceneStability")
+        var publishedSceneStability = provenance.PublishedSceneStability
                                       ?? inventoryPublishedSceneStability;
-        var sceneStability = publishedSceneStability;
+        var sceneStability = provenance.ResolvedSceneStability;
         var sceneEpisodeId = TryReadString(inventoryDocument?.RootElement, "sceneEpisodeId")
                              ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen-episode");
         var encounterKind = TryReadNestedString(stateDocument?.RootElement, "encounter", "kind");
@@ -186,67 +152,34 @@ sealed class ObserverSnapshotReader
     internal static ObserverState CreateReplayObserverState(JsonDocument stateDocument, string[]? eventLines = null)
     {
         var stateCapturedAt = TryReadDateTimeOffset(stateDocument.RootElement, "capturedAt");
+        var provenanceInput = ScreenProvenanceResolver.CreateFromObserverDocuments(stateDocument, null);
+        var provenance = ScreenProvenanceResolver.Resolve(provenanceInput);
         var inventoryDocument = (JsonDocument?)null;
-        var inventorySceneType = TryReadString(inventoryDocument?.RootElement, "sceneType");
-        var inventoryRawCurrentScreen = TryReadString(inventoryDocument?.RootElement, "rawCurrentScreen")
-                                        ?? TryReadString(inventoryDocument?.RootElement, "rawSceneType");
-        var inventoryPublishedCurrentScreen = TryReadString(inventoryDocument?.RootElement, "publishedCurrentScreen")
-                                              ?? TryReadString(inventoryDocument?.RootElement, "publishedSceneType");
-        var inventoryPublishedVisibleScreen = TryReadString(inventoryDocument?.RootElement, "publishedVisibleScreen")
-                                              ?? TryReadString(inventoryDocument?.RootElement, "publishedVisibleScene");
-        var inventoryCompatibilityCurrentScreen = TryReadString(inventoryDocument?.RootElement, "compatibilityCurrentScreen")
-                                                  ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneType");
+        var inventoryCompatibilityCurrentScreen = provenanceInput.InventoryCompatibilityCurrentScreen;
         var compatibilityCurrentScreen = TryReadNestedString(stateDocument.RootElement, "meta", "compatibilityCurrentScreen")
                                          ?? TryReadNestedString(stateDocument.RootElement, "meta", "compatLogicalScreen")
                                          ?? inventoryCompatibilityCurrentScreen;
-        var rawCurrentScreen = TryReadNestedString(stateDocument.RootElement, "meta", "rawCurrentScreen")
-                               ?? inventoryRawCurrentScreen;
-        var rawObservedScreen = TryReadNestedString(stateDocument.RootElement, "meta", "rawObservedScreen")
-                                ?? TryReadNestedString(stateDocument.RootElement, "meta", "screen")
-                                ?? rawCurrentScreen
-                                ?? inventoryRawCurrentScreen;
-        var trackerCurrentScreen = TryReadString(stateDocument.RootElement, "currentScreen");
-        var publishedCurrentScreen = TryReadString(stateDocument.RootElement, "publishedCurrentScreen")
-                                     ?? TryReadNestedString(stateDocument.RootElement, "meta", "publishedCurrentScreen")
-                                     ?? inventoryPublishedCurrentScreen;
-        var legacyCurrentScreen = inventorySceneType;
-        var currentScreen = publishedCurrentScreen
-                            ?? rawCurrentScreen
-                            ?? rawObservedScreen
-                            ?? legacyCurrentScreen;
-        var publishedVisibleScreen = TryReadString(stateDocument.RootElement, "publishedVisibleScreen")
-                                     ?? TryReadNestedString(stateDocument.RootElement, "meta", "publishedVisibleScreen")
-                                     ?? inventoryPublishedVisibleScreen;
+        var rawCurrentScreen = provenance.RawCurrentScreen;
+        var rawObservedScreen = provenance.RawObservedScreen;
+        var publishedCurrentScreen = provenance.PublishedCurrentScreen;
+        var currentScreen = provenance.ResolvedCurrentScreen;
+        var publishedVisibleScreen = provenance.PublishedVisibleScreen;
         var snapshotVersion = TryReadInt64(stateDocument.RootElement, "version");
         var compatibilityVisibleScreen = TryReadNestedString(stateDocument.RootElement, "meta", "compatibilityVisibleScreen")
                                          ?? TryReadNestedString(stateDocument.RootElement, "meta", "compatVisibleScreen");
-        var visibleScreen = publishedVisibleScreen
-                            ?? rawObservedScreen
-                            ?? rawCurrentScreen
-                            ?? inventorySceneType;
+        var visibleScreen = provenance.ResolvedVisibleScreen;
         var inCombat = TryReadBool(stateDocument.RootElement, "encounter", "inCombat");
-        var promotedTrackerCombatScreen = inCombat == true
-                                          && string.Equals(trackerCurrentScreen, "combat", StringComparison.OrdinalIgnoreCase)
-            ? "combat"
-            : null;
-        currentScreen = promotedTrackerCombatScreen
-                        ?? currentScreen;
-        visibleScreen = promotedTrackerCombatScreen
-                        ?? visibleScreen;
         var capturedAt = stateCapturedAt;
         var inventoryId = (string?)null;
         var compatibilitySceneReady = TryReadNestedBool(stateDocument.RootElement, "meta", "compatSceneReady");
-        var publishedSceneReady = TryReadBool(stateDocument.RootElement, "publishedSceneReady")
-                                  ?? TryReadNestedBool(stateDocument.RootElement, "meta", "publishedSceneReady");
-        var sceneReady = publishedSceneReady;
+        var publishedSceneReady = provenance.PublishedSceneReady;
+        var sceneReady = provenance.ResolvedSceneReady;
         var compatibilitySceneAuthority = TryReadNestedString(stateDocument.RootElement, "meta", "compatSceneAuthority");
-        var publishedSceneAuthority = TryReadString(stateDocument.RootElement, "publishedSceneAuthority")
-                                      ?? TryReadNestedString(stateDocument.RootElement, "meta", "publishedSceneAuthority");
-        var sceneAuthority = publishedSceneAuthority;
+        var publishedSceneAuthority = provenance.PublishedSceneAuthority;
+        var sceneAuthority = provenance.ResolvedSceneAuthority;
         var compatibilitySceneStability = TryReadNestedString(stateDocument.RootElement, "meta", "compatSceneStability");
-        var publishedSceneStability = TryReadString(stateDocument.RootElement, "publishedSceneStability")
-                                      ?? TryReadNestedString(stateDocument.RootElement, "meta", "publishedSceneStability");
-        var sceneStability = publishedSceneStability;
+        var publishedSceneStability = provenance.PublishedSceneStability;
+        var sceneStability = provenance.ResolvedSceneStability;
         var sceneEpisodeId = TryReadNestedString(stateDocument.RootElement, "meta", "screen-episode");
         var encounterKind = TryReadNestedString(stateDocument.RootElement, "encounter", "kind");
         var choiceExtractorPath = TryReadNestedString(stateDocument.RootElement, "meta", "choiceExtractorPath");

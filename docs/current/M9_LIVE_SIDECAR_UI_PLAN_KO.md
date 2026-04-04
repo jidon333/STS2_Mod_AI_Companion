@@ -55,14 +55,16 @@ M9 v1에서 이미 얻은 것은 아래다.
 원칙:
 
 - replay builder와 같은 의미 계약을 유지하되,
-- live side는 `request`가 없으므로 live snapshot/normalized state 기준으로 scene model을 만든다.
+- live side는 `request`가 없으므로 live snapshot + shared `ScreenProvenanceResolver` resolved primary provenance + normalized state 기준으로 scene model을 만든다.
 
 선택한 seam:
 
 - live export snapshot
+- shared `ScreenProvenanceResolver` resolved current/visible/ready/authority/stability
 - normalized scene
 - current choices
 - recent events는 현재 builder truth source가 아니라 run-state context/diagnostics로만 유지
+- compatibility screen/scene ready/authority/stability는 parity/diagnostics surface로만 유지하고 primary truth winner로 승격하지 않는다
 - `LatestAdvice` / collector degraded reason은 truth source로 쓰지 않음
 
 이번 wave 구현 결정:
@@ -222,12 +224,14 @@ artifact root는 아래로 고정한다.
 - 이런 패치는 빠르지만, 하네스가 이미 겪은 mixed-state/aftermath drift를 live path에서 다시 재현한다.
 
 2. WPF/Host/live builder마다 다른 authority rule을 갖기
-- `ObserverSnapshotReader`가 이미 쓰는 published/raw/compatibility screen 처리와 어긋나는 live-only precedence를 추가하지 않는다.
+- `ObserverSnapshotReader`와 `CompanionHost`는 같은 `ScreenProvenanceResolver`를 써야 한다.
+- published/raw/current/combat-promotion은 shared resolver의 primary provenance 규칙을 따르고, compatibility는 parity/diagnostics 용도로만 남긴다.
 - sidecar 경로는 `하네스와 같은 truth family`를 봐야지, 다른 규칙 세트가 되면 안 된다.
 
 3. AI advice 완료를 기다린 뒤 scene panel을 갱신하기
 - scene panel은 `관측면`이다.
 - auto advice, codex request, diagnostics heavy refresh가 scene panel publish를 지연시키면 안 된다.
+- current 구현에서도 scene artifact/panel publish는 advice/diagnostics보다 먼저 수행되며, 이 순서를 유지해야 한다.
 - sidecar UI는 AI가 켜져 있어도 먼저 갱신돼야 한다.
 
 4. `LatestAdvice`, `CollectorStatus.LastDegradedReason`, prompt artifact를 scene truth source로 사용
@@ -275,10 +279,13 @@ artifact root는 아래로 고정한다.
 
 2026-04-04 current `main` 기준:
 
+- `STS2_Mod_AI_Companion.sln` build 통과
 - `Sts2AiCompanion.Host` build 통과
 - `Sts2AiCompanion.Wpf` build 통과
 - `Sts2GuiSmokeHarness` build 통과
 - `Sts2ModKit.SelfTest`에 `companion host publishes live advisor scene model artifacts` 추가 후 전체 self-test green
+- shared provenance resolver / A2 parity fixture green
+- `Sts2GuiSmokeHarness -- self-test / replay-test / replay-parity-test` green
 - fake live export `reward / event / shop` 3 fixture에서 `LatestSceneModel`, `advisor-scene.latest.json`, `advisor-scene.ndjson`, unchanged refresh no-append 확인
 - representative replay fixture `live29 step 0027`에서 `replay-advisor-scene`가 shared schema `sourceKind=replay`로 직렬화됨
 
@@ -328,7 +335,7 @@ artifact root는 아래로 고정한다.
 
 핵심 원칙:
 - replay scene model과 live scene model은 같은 schema를 써야 한다
-- scene truth는 raw request가 아니라 live snapshot + canonical/normalized scene state에서 만든다
+- scene truth는 raw request가 아니라 live snapshot + shared `ScreenProvenanceResolver` resolved primary provenance + canonical/normalized scene state에서 만든다
 - 사람이 읽는 정보와 actuator vocabulary를 섞지 않는다
 - mismatch를 숨기지 말고 missingFacts/observerGaps/confidence로 드러낸다
 

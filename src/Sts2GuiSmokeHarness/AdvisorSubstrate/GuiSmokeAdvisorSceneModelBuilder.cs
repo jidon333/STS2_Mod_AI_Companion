@@ -95,6 +95,7 @@ static class GuiSmokeAdvisorSceneModelBuilder
         return CreateArtifactBase(
                 request,
                 requestPath,
+                observer.CapturedAt,
                 "combat",
                 details.LifecycleStage,
                 "combat",
@@ -160,6 +161,7 @@ static class GuiSmokeAdvisorSceneModelBuilder
         return CreateArtifactBase(
                 request,
                 requestPath,
+                observer.CapturedAt,
                 "reward",
                 details.ExplicitAction,
                 "reward",
@@ -228,6 +230,7 @@ static class GuiSmokeAdvisorSceneModelBuilder
         return CreateArtifactBase(
                 request,
                 requestPath,
+                observer.CapturedAt,
                 "event",
                 details.ExplicitAction,
                 "event",
@@ -289,6 +292,7 @@ static class GuiSmokeAdvisorSceneModelBuilder
         return CreateArtifactBase(
                 request,
                 requestPath,
+                observer.CapturedAt,
                 "rest-site",
                 ResolveRestSiteStage(scene),
                 "rest-site",
@@ -364,6 +368,7 @@ static class GuiSmokeAdvisorSceneModelBuilder
         return CreateArtifactBase(
                 request,
                 requestPath,
+                observer.CapturedAt,
                 "shop",
                 scene.ShopState.InventoryOpen ? "inventory-open" : "merchant-entry",
                 "shop",
@@ -422,6 +427,7 @@ static class GuiSmokeAdvisorSceneModelBuilder
         return CreateArtifactBase(
                 request,
                 requestPath,
+                observer.CapturedAt,
                 "map",
                 ResolveMapStage(analysisContext),
                 "map",
@@ -459,6 +465,7 @@ static class GuiSmokeAdvisorSceneModelBuilder
         return CreateArtifactBase(
             request,
             requestPath,
+            observer.CapturedAt,
             observer.CurrentScreen ?? observer.VisibleScreen ?? "unknown",
             "unknown",
             "unknown",
@@ -477,6 +484,7 @@ static class GuiSmokeAdvisorSceneModelBuilder
     private static AdvisorSceneArtifact CreateArtifactBase(
         GuiSmokeStepRequest request,
         string requestPath,
+        DateTimeOffset? capturedAtUtc,
         string sceneType,
         string sceneStage,
         string canonicalOwner,
@@ -492,6 +500,8 @@ static class GuiSmokeAdvisorSceneModelBuilder
             AdvisorSceneSchema.Version,
             "replay",
             request.RunId,
+            capturedAtUtc,
+            null,
             request.AttemptId,
             request.StepIndex,
             request.Phase,

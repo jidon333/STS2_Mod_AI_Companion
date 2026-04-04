@@ -1,4 +1,5 @@
 using Sts2AiCompanion.AdvisorSceneModel;
+using Sts2AiCompanion.SceneProvenance;
 using FoundationCompanionState = Sts2AiCompanion.Foundation.Contracts.CompanionState;
 using FoundationRewardAssessmentFacts = Sts2AiCompanion.Foundation.Contracts.RewardAssessmentFacts;
 using FoundationRewardOptionSet = Sts2AiCompanion.Foundation.Contracts.RewardOptionSet;
@@ -34,6 +35,15 @@ public sealed record CompanionRunState(
     bool IsStale)
 {
     public FoundationCompanionState NormalizedState { get; init; } = FoundationCompanionState.CreateUnknown(runId: Snapshot.RunId);
+
+    internal ScreenProvenanceResult ScreenProvenance { get; init; } = new(
+        null,
+        null,
+        null,
+        null,
+        null,
+        "none",
+        false);
 }
 
 public sealed record AdviceTrigger(

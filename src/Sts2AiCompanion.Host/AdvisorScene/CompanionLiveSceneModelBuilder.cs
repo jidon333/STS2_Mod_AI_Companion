@@ -12,7 +12,13 @@ internal static class CompanionLiveSceneModelBuilder
     {
         var sceneType = ResolveSceneType(runState);
         var playerContext = BuildPlayerContext(runState.Snapshot);
-        var sourceRefs = new List<string> { "live-export.snapshot", "foundation.normalized-state.scene" };
+        var sourceRefs = new List<string>
+        {
+            "live-export.snapshot",
+            "shared.scene-provenance.resolvedCurrentScreen",
+            "shared.scene-provenance.resolvedVisibleScreen",
+            "foundation.normalized-state.scene",
+        };
 
         var artifact = sceneType switch
         {
@@ -420,15 +426,18 @@ internal static class CompanionLiveSceneModelBuilder
             .GroupBy(static option => $"{option.Kind}|{option.Label}|{option.Value}", StringComparer.OrdinalIgnoreCase)
             .Select(static group => group.First())
             .ToList();
-        var foregroundOwner = NormalizeSceneToken(TryGetMeta(snapshot.Meta, "foregroundOwner"));
         var mapReleaseAuthority = TryReadBoolMeta(snapshot.Meta, "mapReleaseAuthority") == true;
         var mapSurfacePending = TryReadBoolMeta(snapshot.Meta, "mapSurfacePending") == true;
         var currentNodeArrowVisible = TryReadBoolMeta(snapshot.Meta, "mapCurrentNodeArrowVisible") == true;
         var reachableNodeCount = options.Count > 0 ? options.Count : (TryReadIntMeta(snapshot.Meta, "mapPointCount") ?? 0);
         var reachableNodePresent = reachableNodeCount > 0;
+        var resolvedCurrentScreen = NormalizeSceneToken(runState.ScreenProvenance.ResolvedCurrentScreen);
+        var resolvedVisibleScreen = NormalizeSceneToken(runState.ScreenProvenance.ResolvedVisibleScreen);
         var overlayVisible = reachableNodePresent
                              || currentNodeArrowVisible
-                             || (string.Equals(foregroundOwner, "map", StringComparison.OrdinalIgnoreCase) && !mapSurfacePending);
+                             || ((string.Equals(resolvedCurrentScreen, "map", StringComparison.OrdinalIgnoreCase)
+                                  || string.Equals(resolvedVisibleScreen, "map", StringComparison.OrdinalIgnoreCase))
+                                 && !mapSurfacePending);
         var stage = overlayVisible
             ? "map-overlay"
             : (mapReleaseAuthority && mapSurfacePending ? "map-surface-pending" : "map-overlay");
@@ -448,7 +457,7 @@ internal static class CompanionLiveSceneModelBuilder
             observerGaps.Add("live-export.snapshot.meta.map-node missing");
         }
 
-        sourceRefs.Add("live-export.snapshot.meta.foregroundOwner");
+        sourceRefs.Add("shared.scene-provenance.provenanceSource");
         sourceRefs.Add("live-export.snapshot.meta.mapReleaseAuthority");
         sourceRefs.Add("live-export.snapshot.meta.mapSurfacePending");
         sourceRefs.Add("live-export.snapshot.meta.mapCurrentNodeArrowVisible");
@@ -521,6 +530,8 @@ internal static class CompanionLiveSceneModelBuilder
             AdvisorSceneSchema.Version,
             "live",
             runState.Snapshot.RunId,
+            runState.Snapshot.CapturedAt,
+            null,
             null,
             null,
             null,
@@ -675,10 +686,22 @@ internal static class CompanionLiveSceneModelBuilder
     private static string ResolveSceneType(CompanionRunState runState)
     {
         var snapshot = runState.Snapshot;
-        var foregroundOwner = NormalizeSceneToken(TryGetMeta(snapshot.Meta, "foregroundOwner"));
-        if (IsAdvisorSceneType(foregroundOwner))
+        var resolvedCurrentScreen = NormalizeSceneToken(runState.ScreenProvenance.ResolvedCurrentScreen);
+        if (IsAdvisorSceneType(resolvedCurrentScreen))
         {
-            return foregroundOwner!;
+            return resolvedCurrentScreen!;
+        }
+
+        var resolvedVisibleScreen = NormalizeSceneToken(runState.ScreenProvenance.ResolvedVisibleScreen);
+        if (IsAdvisorSceneType(resolvedVisibleScreen))
+        {
+            return resolvedVisibleScreen!;
+        }
+
+        var normalized = NormalizeSceneToken(runState.NormalizedState.Scene.SemanticSceneType);
+        if (IsAdvisorSceneType(normalized))
+        {
+            return normalized!;
         }
 
         if (HasRewardSceneMarkers(snapshot))
@@ -711,27 +734,30 @@ internal static class CompanionLiveSceneModelBuilder
             return "combat";
         }
 
-        var normalized = NormalizeSceneToken(runState.NormalizedState.Scene.SemanticSceneType);
-        if (IsAdvisorSceneType(normalized))
-        {
-            return normalized!;
-        }
-
         var choiceDerived = DeriveSceneTypeFromChoices(snapshot.CurrentChoices);
         if (choiceDerived is not null)
         {
             return choiceDerived;
         }
 
-        return NormalizeSceneToken(snapshot.CurrentScreen) ?? "unknown";
+        return resolvedCurrentScreen
+               ?? resolvedVisibleScreen
+               ?? NormalizeSceneToken(snapshot.CurrentScreen)
+               ?? "unknown";
     }
 
     private static string ResolveCanonicalOwner(CompanionRunState runState, string fallbackOwner)
     {
-        var foregroundOwner = NormalizeSceneToken(TryGetMeta(runState.Snapshot.Meta, "foregroundOwner"));
-        if (IsAdvisorSceneType(foregroundOwner))
+        var resolvedCurrentScreen = NormalizeSceneToken(runState.ScreenProvenance.ResolvedCurrentScreen);
+        if (IsAdvisorSceneType(resolvedCurrentScreen))
         {
-            return foregroundOwner!;
+            return resolvedCurrentScreen!;
+        }
+
+        var resolvedVisibleScreen = NormalizeSceneToken(runState.ScreenProvenance.ResolvedVisibleScreen);
+        if (IsAdvisorSceneType(resolvedVisibleScreen))
+        {
+            return resolvedVisibleScreen!;
         }
 
         var normalized = NormalizeSceneToken(runState.NormalizedState.Scene.SemanticSceneType);

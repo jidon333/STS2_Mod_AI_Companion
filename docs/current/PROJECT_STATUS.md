@@ -207,7 +207,7 @@ historical frontier는
 | Non-Combat Stability | green | substrate acceptance 기준으로 ancient/event/ChooseFirstNode, rest-site release-pending/click-ready, accepted-heal release-pending, bounded `Slippery Bridge` family가 current `main`에서 닫혔고 fresh live long run 2연속 success가 확보됐다 |
 | Combat Stability | green | substrate acceptance 기준으로 stale non-enemy/target family와 reopen drift는 current `main`에서 닫혔고, fresh live long run 2연속 success에서 generic stall/plateau terminal cause로 재발하지 않았다 |
 | Live-Run Speed Recovery | partial | hot path observer-first baseline은 유지되지만 `deck-remove` / reward card child screen transient capture와 black review video가 남아 있음 |
-| Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 compatibility는 legacy surface로만 남는다 |
+| Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow와 Host live sidecar가 shared `ScreenProvenanceResolver` 기반 primary provenance를 쓰고, compatibility는 legacy surface로만 남는다 |
 | Post-Refactor Cleanup Program | green | runner residual, noncombat residue, partial `Program` owner shedding, supervision health split까지 current `main`에 반영 |
 | Capture Boundary | green | bounded failure contract와 self-test 위에 fresh live proof [capture-boundary-proof-20260329-live1](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/capture-boundary-proof-20260329-live1)이 추가됐다 |
 | Strict Lifecycle Chain | green | fresh live root [strict-lifecycle-chain-20260329-live2](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/strict-lifecycle-chain-20260329-live2)에서 `0001 terminal -> 0002 restart -> 0002 next-attempt-started` chronology와 first-screen proof가 닫혔다 |
@@ -232,6 +232,7 @@ historical frontier는
 - ffmpeg metadata recording과 review artifact retention은 current `main`에서 붙지만, `window-hwnd gdigrab` review video usable-state는 아직 partial이다
 - current `main`의 control-flow observer provenance는 published-first이고, published provenance는 legacy `visibleScreen` / `sceneReady` 계열로 다시 채워지지 않는다
 - bridge node semantics는 compatibility scene winner를 다시 먹지 않는다
+- Host live sidecar의 `sceneType / visibleScene / flowScene`도 shared resolved primary provenance를 먼저 따르고, scene artifact publish는 advice/diagnostics보다 먼저 간다
 - combat post-action은 더 이상 generic observer delta 하나로 다음 step을 열지 않고, lane micro-stage + quiet convergence로 settle된다
 - runtime `combatTargetSummary` raw fact는 current `main`에서 explicit enemy-target authority로 소비된다
 - `AwaitingCardPlayConfirm`는 current `main`에서 stale history/barrier shadow만으로 열리지 않고, positive runtime/export evidence가 있어야 열린다

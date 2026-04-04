@@ -147,44 +147,74 @@ static class ObserverScreenProvenance
         => StrictCompatibilitySceneStability(observer);
 
     public static string? ControlFlowCurrentScreen(ObserverSummary observer)
-        => observer.CurrentScreen
-           ?? StrictPublishedCurrentScreen(observer)
-           ?? StrictDirectCurrentScreen(observer);
+        => HasPromotedCombatPrimary(observer)
+            ? observer.CurrentScreen
+              ?? StrictPublishedCurrentScreen(observer)
+              ?? StrictDirectCurrentScreen(observer)
+            : StrictPublishedCurrentScreen(observer)
+              ?? observer.CurrentScreen
+              ?? StrictDirectCurrentScreen(observer);
 
     public static string? ControlFlowCurrentScreen(ObserverState observer)
-        => observer.CurrentScreen
-           ?? StrictPublishedCurrentScreen(observer)
-           ?? StrictDirectCurrentScreen(observer);
+        => HasPromotedCombatPrimary(observer)
+            ? observer.CurrentScreen
+              ?? StrictPublishedCurrentScreen(observer)
+              ?? StrictDirectCurrentScreen(observer)
+            : StrictPublishedCurrentScreen(observer)
+              ?? observer.CurrentScreen
+              ?? StrictDirectCurrentScreen(observer);
 
     public static string? ControlFlowVisibleScreen(ObserverSummary observer)
-        => observer.VisibleScreen
-           ?? StrictPublishedVisibleScreen(observer)
-           ?? StrictDirectObservedScreen(observer)
-           ?? StrictDirectCurrentScreen(observer);
+        => HasPromotedCombatPrimary(observer)
+            ? observer.VisibleScreen
+              ?? StrictPublishedVisibleScreen(observer)
+              ?? StrictDirectObservedScreen(observer)
+              ?? StrictDirectCurrentScreen(observer)
+            : StrictPublishedVisibleScreen(observer)
+              ?? observer.VisibleScreen
+              ?? StrictDirectObservedScreen(observer)
+              ?? StrictDirectCurrentScreen(observer);
 
     public static string? ControlFlowVisibleScreen(ObserverState observer)
-        => observer.VisibleScreen
-           ?? StrictPublishedVisibleScreen(observer)
-           ?? StrictDirectObservedScreen(observer)
-           ?? StrictDirectCurrentScreen(observer);
+        => HasPromotedCombatPrimary(observer)
+            ? observer.VisibleScreen
+              ?? StrictPublishedVisibleScreen(observer)
+              ?? StrictDirectObservedScreen(observer)
+              ?? StrictDirectCurrentScreen(observer)
+            : StrictPublishedVisibleScreen(observer)
+              ?? observer.VisibleScreen
+              ?? StrictDirectObservedScreen(observer)
+              ?? StrictDirectCurrentScreen(observer);
 
     public static bool? ControlFlowSceneReady(ObserverSummary observer)
-        => StrictPublishedSceneReady(observer);
+        => StrictPublishedSceneReady(observer)
+           ?? observer.SceneReady
+           ?? StrictCompatibilitySceneReady(observer);
 
     public static bool? ControlFlowSceneReady(ObserverState observer)
-        => StrictPublishedSceneReady(observer);
+        => StrictPublishedSceneReady(observer)
+           ?? observer.SceneReady
+           ?? StrictCompatibilitySceneReady(observer);
 
     public static string? ControlFlowSceneAuthority(ObserverSummary observer)
-        => StrictPublishedSceneAuthority(observer);
+        => StrictPublishedSceneAuthority(observer)
+           ?? observer.SceneAuthority
+           ?? StrictCompatibilitySceneAuthority(observer);
 
     public static string? ControlFlowSceneAuthority(ObserverState observer)
-        => StrictPublishedSceneAuthority(observer);
+        => StrictPublishedSceneAuthority(observer)
+           ?? observer.SceneAuthority
+           ?? StrictCompatibilitySceneAuthority(observer);
 
     public static string? ControlFlowSceneStability(ObserverSummary observer)
-        => StrictPublishedSceneStability(observer);
+        => StrictPublishedSceneStability(observer)
+           ?? observer.SceneStability
+           ?? StrictCompatibilitySceneStability(observer);
 
     public static string? ControlFlowSceneStability(ObserverState observer)
-        => StrictPublishedSceneStability(observer);
+        => StrictPublishedSceneStability(observer)
+           ?? observer.SceneStability
+           ?? StrictCompatibilitySceneStability(observer);
 
     public static bool MatchesControlFlowScreen(ObserverSummary observer, string screen)
     {
@@ -228,6 +258,18 @@ static class ObserverScreenProvenance
     {
         return string.Equals(PublishedCurrentScreen(observer), screen, StringComparison.OrdinalIgnoreCase)
                || string.Equals(PublishedVisibleScreen(observer), screen, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasPromotedCombatPrimary(ObserverSummary observer)
+    {
+        return observer.InCombat == true
+               && string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasPromotedCombatPrimary(ObserverState observer)
+    {
+        return observer.InCombat == true
+               && string.Equals(observer.CurrentScreen, "combat", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool MatchesCompatibilityScreen(ObserverSummary observer, string screen)

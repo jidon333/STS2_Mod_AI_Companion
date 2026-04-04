@@ -10,4 +10,8 @@
     <ProjectReference Include="..\Sts2ModKit.Core\Sts2ModKit.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\Shared\SceneProvenance\*.cs" Link="Shared\SceneProvenance\%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

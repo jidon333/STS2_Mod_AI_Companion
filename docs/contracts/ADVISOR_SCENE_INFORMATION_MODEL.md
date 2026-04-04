@@ -64,8 +64,9 @@
 
 ## Truth Source Rule
 
-- scene truth source는 `observer.state + canonical scene state`다.
-- live side truth source는 `live snapshot + normalized scene state + current choices`다.
+- replay/harness truth source는 `observer.state + shared ScreenProvenanceResolver resolved primary provenance + canonical harness scene state`다.
+- live side truth source는 `live snapshot + shared ScreenProvenanceResolver resolved primary provenance + normalized scene state + current choices`다.
+- `compatibilityCurrentScreen / compatibilityLogicalScreen / compatibilityVisibleScreen / compatibilitySceneReady / compatibilitySceneAuthority / compatibilitySceneStability`는 parity/diagnostics surface일 뿐, primary truth winner가 아니다.
 - `recent events`는 현재 live builder의 truth source가 아니라 run-state context/diagnostics 용도로만 유지한다.
 - `GuiSmokeStepRequest`는 truth source가 아니다.
 - `request`에서 허용되는 사용:
