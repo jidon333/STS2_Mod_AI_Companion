@@ -370,7 +370,7 @@ current live baseline note:
 - `live8`는 combat false-confirm + speed regression을 드러낸 authoritative regression root였다
 - `84e4647`, `5ebe718`, `3a24338` 이후 fresh live root [boot-to-long-run-20260330-live9](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live9)에서 그 plateau는 재현되지 않았다
 - `15dd5cf`, `10028f8`, `ed0a379`, `9c6621b` 이후 reward-pick repeated plateau와 stale combat carryover family는 재현되지 않았다
-- historical authoritative blocker at that time was [boot-to-long-run-20260330-live21](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21)의 `HandleEvent` ancient option wait plateau다. current pointer는 문서 상단 2026-04-03 summary와 [PROJECT_STATUS.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/PROJECT_STATUS.md)를 우선한다
+- historical authoritative blocker at that time was [boot-to-long-run-20260330-live21](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/artifacts/gui-smoke/boot-to-long-run-20260330-live21)의 `HandleEvent` ancient option wait plateau다. current pointer는 문서 상단 2026-04-04 current pointer와 [PROJECT_STATUS.md](/mnt/c/Users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/PROJECT_STATUS.md)를 우선한다
 
 ## 절대 reopen하지 말 것
 

@@ -174,6 +174,8 @@ historical frontier는
 다음 step은 closed ancient/event/ChooseFirstNode/rest-site family를 reopen하지 않고 이 네 gap을 분리해서 정리하는 것이다."
 ```
 
+이 요약은 2026-04-03~2026-04-04 early pointer의 historical frontier다. current active pointer는 문서 상단의 `M9 advice-quality entry`와 `live28/live29` 2연속 success evidence를 우선한다.
+
 ### 3. current speed baseline
 
 - speed recovery program의 핵심 목표였던 `capture-first -> observer-first, screenshot-on-demand` 전환은 historical baseline으로 current docs에 남아 있다
@@ -199,8 +201,8 @@ historical frontier는
 | Harness Self-Test | green | `84e4647` current-main recovery 이후 self-test green |
 | Replay Golden Suite | green | `replay-test` 통과 |
 | Replay Parity Suite | green | `reward-aftermath-map-handoff` 포함 current parity fixtures green |
-| Non-Combat Stability | partial | ancient/event/ChooseFirstNode family와 rest-site release-pending family는 닫혔고, bounded `Slippery Bridge` progression도 code/self-test + smoke evidence가 있다. 다만 direct post-fix live repro와 some child-screen smoothness evidence는 아직 partial이다 |
-| Combat Stability | partial | stale non-enemy/target family는 닫혔지만 short roots에서 `combat-barrier-step-budget-exhausted` / `combat-barrier-wait-plateau` long-tail이 남아 있음 |
+| Non-Combat Stability | green | substrate acceptance 기준으로 ancient/event/ChooseFirstNode, rest-site release-pending/click-ready, accepted-heal release-pending, bounded `Slippery Bridge` family가 current `main`에서 닫혔고 fresh live long run 2연속 success가 확보됐다 |
+| Combat Stability | green | substrate acceptance 기준으로 stale non-enemy/target family와 reopen drift는 current `main`에서 닫혔고, fresh live long run 2연속 success에서 generic stall/plateau terminal cause로 재발하지 않았다 |
 | Live-Run Speed Recovery | partial | hot path observer-first baseline은 유지되지만 `deck-remove` / reward card child screen transient capture와 black review video가 남아 있음 |
 | Observer Provenance Migration | green | bridge / tracker / reader / harness control-flow가 published-first baseline으로 정리됐고 compatibility는 legacy surface로만 남는다 |
 | Post-Refactor Cleanup Program | green | runner residual, noncombat residue, partial `Program` owner shedding, supervision health split까지 current `main`에 반영 |
@@ -398,5 +400,5 @@ historical frontier는
 current `main`은 ancient option contract, `ChooseFirstNode <-> event`, post-node combat takeover -> generic map wait, explicit relic claim -> proceed inversion을 닫은 뒤,
 fresh authoritative endurance root에서 `stepCount=479` natural `player-defeated` terminal까지 도달했다.
 이후 2026-04-03 wave는 `rest-site -> map handoff`와 rest-site click-ready/proceed family를 live에서 닫았고, bounded `Slippery Bridge` routing과 event-lineage stall semantics를 current `main`에 올렸다.
-즉 M5 acceptance shape evidence는 late-stage까지 왔지만, short validation follow-up에는 reward card progression, combat barrier long-tail, direct `Slippery Bridge` live repro, review-video usable-state가 아직 남아 있다.
+이후 2026-04-04 current `main`은 accepted-heal release-pending까지 닫았고, fresh live roots `live28`, `live29`가 2회 연속 `player-defeated` natural terminal로 끝나면서 M5 acceptance를 넘어 practical `M9 advice-quality entry` 상태로 이동했다.
 ```
