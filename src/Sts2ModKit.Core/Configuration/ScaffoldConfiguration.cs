@@ -303,9 +303,9 @@ public sealed record AssistantOptions
 {
     public string CodexCommand { get; init; } = "codex";
 
-    public string? CodexModel { get; init; } = "gpt-5.3-codex-spark";
+    public string? CodexModel { get; init; } = "gpt-5.4";
 
-    public string? CodexReasoningEffort { get; init; }
+    public string? CodexReasoningEffort { get; init; } = "medium";
 
     public string? OptionalGodotExe { get; init; }
 
