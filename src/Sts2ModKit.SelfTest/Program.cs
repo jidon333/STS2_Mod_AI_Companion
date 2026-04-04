@@ -80,6 +80,7 @@ Run("bridge guard surface requires explicit published scene provenance", TestHar
 Run("runtime reflection rejects overlay-like player roots", TestRuntimeReflectionRejectsOverlayLikePlayerRoots, failures);
 Run("runtime reflection extracts combat cards from player combat state", TestRuntimeReflectionExtractDeckFromCombatState, failures);
 Run("runtime reflection prefers deck source over combat zones", TestRuntimeReflectionPrefersDeckSourceOverCombatZones, failures);
+Run("runtime reflection ignores standalone deck aliases when player deck is present", TestRuntimeReflectionIgnoresStandaloneDeckAliasesWhenPlayerDeckPresent, failures);
 Run("runtime reflection exports structured combat counts from combat state", TestRuntimeReflectionExportsStructuredCombatCounts, failures);
 Run("runtime reflection prefers player hand ui holders over combat-state hand fallback", TestRuntimeReflectionPrefersPlayerHandUiHolders, failures);
 Run("runtime reflection encounter prefers CombatManager IsInProgress", TestRuntimeReflectionEncounterPrefersCombatManagerIsInProgress, failures);
@@ -3090,18 +3091,27 @@ static void TestRuntimeReflectionPrefersDeckSourceOverCombatZones()
     var method = extractorType!.GetMethod("ExtractDeck", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
     Assert(method is not null, "Expected private ExtractDeck helper.");
 
+    var authoritativeDeck = new FakeDeckPile
+    {
+        Cards = new object[]
+        {
+            new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+            new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+            new FakeCombatCard { Name = "Defend", CardId = "DEFEND", Cost = 1, Type = "skill" },
+        },
+    };
+
     var roots = new object[]
     {
+        new FakePlayerEntity
+        {
+            Name = "Ironclad",
+            Deck = authoritativeDeck,
+        },
         new FakeCombatPlayerRoot
         {
             PlayerCombatState = new FakePlayerCombatState
             {
-                Deck = new object[]
-                {
-                    new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
-                    new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
-                    new FakeCombatCard { Name = "Defend", CardId = "DEFEND", Cost = 1, Type = "skill" },
-                },
                 Hand = new object[]
                 {
                     new FakeCombatCard { Name = "Noise Hand", CardId = "NOISE_HAND", Cost = 1, Type = "attack" },
@@ -3123,6 +3133,51 @@ static void TestRuntimeReflectionPrefersDeckSourceOverCombatZones()
     Assert(cards!.Count == 3, $"Expected deck extraction to prefer deck source only, got {cards.Count}.");
     Assert(cards.Count(card => card.Name == "Strike") == 2, "Expected both Strike copies from deck source to remain present.");
     Assert(cards.All(card => !card.Name!.StartsWith("Noise", StringComparison.Ordinal)), "Expected combat-zone noise cards to stay out of deck extraction.");
+}
+
+static void TestRuntimeReflectionIgnoresStandaloneDeckAliasesWhenPlayerDeckPresent()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod("ExtractDeck", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+    Assert(method is not null, "Expected private ExtractDeck helper.");
+
+    var playerDeck = new FakeDeckPile
+    {
+        Cards = new object[]
+        {
+            new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+            new FakeCombatCard { Name = "Defend", CardId = "DEFEND", Cost = 1, Type = "skill" },
+        },
+    };
+
+    var aliasDeck = new FakeDeckPile
+    {
+        Cards = new object[]
+        {
+            new FakeCombatCard { Name = "Strike", CardId = "STRIKE", Cost = 1, Type = "attack" },
+            new FakeCombatCard { Name = "Defend", CardId = "DEFEND", Cost = 1, Type = "skill" },
+            new FakeCombatCard { Name = "Bash", CardId = "BASH", Cost = 2, Type = "attack" },
+        },
+    };
+
+    var roots = new object[]
+    {
+        new FakePlayerEntity
+        {
+            Name = "Ironclad",
+            Deck = playerDeck,
+        },
+        aliasDeck,
+    };
+
+    var cards = method!.Invoke(null, new object?[] { roots, 16 }) as IReadOnlyList<LiveExportCardSummary>;
+    Assert(cards is not null, "Expected ExtractDeck to return a card list.");
+    Assert(cards!.Count == 2, $"Expected standalone deck aliases to be ignored when player deck is present, got {cards.Count}.");
+    Assert(cards.Any(card => card.Name == "Strike"), "Expected Strike to remain present.");
+    Assert(cards.Any(card => card.Name == "Defend"), "Expected Defend to remain present.");
+    Assert(cards.All(card => card.Name != "Bash"), "Expected standalone deck alias cards to stay out of authoritative deck extraction.");
 }
 
 static void TestRuntimeReflectionExportsStructuredCombatCounts()
@@ -7700,6 +7755,8 @@ file sealed class FakePlayerEntity
     public string Name { get; init; } = "Ironclad";
 
     public bool HasOpenPotionSlots { get; init; }
+
+    public object? Deck { get; init; }
 }
 
 file sealed class FakeOverlayPlayerContainer
@@ -7736,6 +7793,11 @@ file sealed class FakeCombatCard
     public int Cost { get; init; }
 
     public string? Type { get; init; }
+}
+
+file sealed class FakeDeckPile
+{
+    public object[] Cards { get; init; } = Array.Empty<object>();
 }
 
 file sealed class FakeCombatManagerState

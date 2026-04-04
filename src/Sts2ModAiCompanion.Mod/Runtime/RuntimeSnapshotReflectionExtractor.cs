@@ -988,10 +988,27 @@ internal static class RuntimeSnapshotReflectionExtractor
     {
         var cards = new List<LiveExportCardSummary>();
         var seen = new HashSet<int>();
-        var primaryDeckRoots = roots
-            .Concat(FindRoots(roots, "PlayerCombatState", "CombatState", "Deck", "MasterDeck"))
+        var playerRoots = roots
+            .SelectMany(root => new[]
+            {
+                root,
+                TryGetMemberValue(root, "Player"),
+                TryGetMemberValue(root, "Character"),
+                TryGetMemberValue(root, "Hero"),
+                TryGetMemberValue(root, "Creature"),
+            })
+            .Where(root => root is not null)
+            .Cast<object>()
+            .Where(IsAuthoritativePlayerRoot)
             .DistinctBy(RuntimeHelpers.GetHashCode)
             .ToArray();
+        if (playerRoots.Length == 0)
+        {
+            playerRoots = FindRoots(roots, "Player", "Character", "Hero", "Creature")
+                .Where(IsAuthoritativePlayerRoot)
+                .DistinctBy(RuntimeHelpers.GetHashCode)
+                .ToArray();
+        }
 
         void CollectFrom(IEnumerable<object> candidateRoots, params string[] memberNames)
         {
@@ -1022,7 +1039,38 @@ internal static class RuntimeSnapshotReflectionExtractor
             }
         }
 
-        CollectFrom(primaryDeckRoots, "MasterDeck", "Deck", "Cards", "AllCards");
+        bool TryCollectDeckFromRoots(IEnumerable<object> candidateRoots)
+        {
+            foreach (var candidateRoot in candidateRoots.DistinctBy(RuntimeHelpers.GetHashCode))
+            {
+                CollectFrom(new[] { candidateRoot }, "Cards", "AllCards");
+                if (cards.Count > 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        var authoritativeDeckRoots = playerRoots
+            .SelectMany(root => new object?[]
+            {
+                TryGetMemberValue(root, "Deck"),
+                TryGetMemberValue(root, "MasterDeck"),
+            })
+            .Where(root => root is not null)
+            .Cast<object>()
+            .DistinctBy(RuntimeHelpers.GetHashCode)
+            .ToArray();
+
+        if (!TryCollectDeckFromRoots(authoritativeDeckRoots))
+        {
+            var nestedDeckRoots = FindRoots(playerRoots, "Deck", "MasterDeck")
+                .DistinctBy(RuntimeHelpers.GetHashCode)
+                .ToArray();
+            TryCollectDeckFromRoots(nestedDeckRoots);
+        }
 
         if (cards.Count == 0)
         {
