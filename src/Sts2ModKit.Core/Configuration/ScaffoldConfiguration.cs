@@ -303,7 +303,7 @@ public sealed record AssistantOptions
 {
     public string CodexCommand { get; init; } = "codex";
 
-    public string? CodexModel { get; init; }
+    public string? CodexModel { get; init; } = "gpt-5.3-codex-spark";
 
     public string? CodexReasoningEffort { get; init; }
 

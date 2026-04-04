@@ -41,7 +41,7 @@
   },
   "assistant": {
     "codexCommand": "codex",
-    "codexModel": "gpt-5.4",
+    "codexModel": "gpt-5.3-codex-spark",
     "codexReasoningEffort": "xhigh",
     "optionalGodotExe": "C:\\\\Tools\\\\Godot_v4.5.1-stable_win64\\\\Godot_v4.5.1-stable_win64_console.exe",
     "autoAdviceEnabled": true,
