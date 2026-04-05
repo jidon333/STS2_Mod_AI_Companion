@@ -19,6 +19,7 @@
     <Compile Include="..\Shared\AdvisorSceneDisplay\*.cs" Link="Shared\AdvisorSceneDisplay\%(Filename)%(Extension)" />
     <Compile Include="..\Shared\SceneProvenance\*.cs" Link="Shared\SceneProvenance\%(Filename)%(Extension)" />
     <Compile Include="..\Sts2AiCompanion.Wpf\Display\AdvisorSceneDisplayFormatter.cs" Link="Wpf\Display\AdvisorSceneDisplayFormatter.cs" />
+    <Compile Include="..\Sts2AiCompanion.Wpf\Display\EventCompactOptionDisplayFormatter.cs" Link="Wpf\Display\EventCompactOptionDisplayFormatter.cs" />
     <Compile Include="..\Sts2AiCompanion.Wpf\Display\DeckDisplayFormatter.cs" Link="Wpf\Display\DeckDisplayFormatter.cs" />
   </ItemGroup>
 

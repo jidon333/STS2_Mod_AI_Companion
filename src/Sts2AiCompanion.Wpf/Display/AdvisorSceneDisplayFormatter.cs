@@ -81,7 +81,12 @@ internal static class AdvisorSceneDisplayFormatter
             return FormatCombatOptions(visibleOptions, resolver);
         }
 
-        return JoinLines(visibleOptions.Select(option => FormatOptionLine(option, resolver)));
+        if (string.Equals(scene.SceneType, "event", StringComparison.OrdinalIgnoreCase))
+        {
+            return JoinLines(visibleOptions.Select(option => FormatOptionLine(option, resolver, preserveLabel: true)));
+        }
+
+        return JoinLines(visibleOptions.Select(option => FormatOptionLine(option, resolver, preserveLabel: false)));
     }
 
     public static string FormatGaps(AdvisorSceneArtifact? scene)
@@ -595,7 +600,7 @@ internal static class AdvisorSceneDisplayFormatter
                 lines.Add(heading);
             }
 
-            lines.AddRange(group.Select(item => FormatOptionLine(item.Option, resolver)));
+            lines.AddRange(group.Select(item => FormatOptionLine(item.Option, resolver, preserveLabel: false)));
             lines.Add(string.Empty);
         }
 
@@ -607,9 +612,11 @@ internal static class AdvisorSceneDisplayFormatter
         return JoinLines(lines);
     }
 
-    private static string FormatOptionLine(AdvisorSceneOption option, AdvisorKnowledgeDisplayResolver resolver)
+    private static string FormatOptionLine(AdvisorSceneOption option, AdvisorKnowledgeDisplayResolver resolver, bool preserveLabel)
     {
-        var label = resolver.ResolveDisplayText(option.Label, option.Value);
+        var label = preserveLabel
+            ? AdvisorDisplaySanitizer.SanitizeText(option.Label) ?? option.Label
+            : resolver.ResolveDisplayText(option.Label, option.Value);
         var description = resolver.ResolveDescription(option.Description, option.Label, option.Value);
         var status = option.Enabled ? "활성" : "비활성";
 

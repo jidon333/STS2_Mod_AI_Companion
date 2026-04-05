@@ -344,7 +344,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             && compact.EventFacts is not null
             && compact.VisibleOptions.Count > 0)
         {
-            var enriched = BuildEventCompactOptionsText(compact, resolver);
+            var enriched = EventCompactOptionDisplayFormatter.Format(compact);
             if (!string.IsNullOrWhiteSpace(enriched))
             {
                 return enriched;
@@ -352,77 +352,6 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
 
         return AdvisorSceneDisplayFormatter.FormatOptions(sceneModel, resolver);
-    }
-
-    private static string BuildEventCompactOptionsText(
-        Sts2AiCompanion.Foundation.Contracts.RewardEventCompactAdvisorInput compact,
-        AdvisorKnowledgeDisplayResolver resolver)
-    {
-        var eventFacts = compact.EventFacts;
-        if (eventFacts is null)
-        {
-            return "없음";
-        }
-
-        var factMap = eventFacts.OptionFacts
-            .ToDictionary(static fact => fact.Label, StringComparer.Ordinal);
-        var lines = new List<string>();
-        foreach (var option in compact.VisibleOptions)
-        {
-            if (!factMap.TryGetValue(option.Label, out var fact))
-            {
-                lines.Add(FormatCompactOptionLine(option.Label, option.Enabled, option.Description));
-                continue;
-            }
-
-            var description = BuildEventCompactOptionDescription(option, fact);
-            lines.Add(FormatCompactOptionLine(
-                resolver.ResolveDisplayText(option.Label, option.Value),
-                option.Enabled,
-                description));
-        }
-
-        return lines.Count == 0 ? "없음" : JoinLines(lines);
-    }
-
-    private static string FormatCompactOptionLine(string label, bool enabled, string? description)
-    {
-        return $"- {label} [{(enabled ? "활성" : "비활성")}] :: {description ?? "(설명 없음)"}";
-    }
-
-    private static string? BuildEventCompactOptionDescription(
-        Sts2AiCompanion.Foundation.Contracts.CompactAdvisorOption option,
-        Sts2AiCompanion.Foundation.Contracts.EventCompactOptionFact fact)
-    {
-        var segments = new List<string>();
-        var baseDescription = AdvisorDisplaySanitizer.SanitizeText(option.Description);
-        if (!string.IsNullOrWhiteSpace(baseDescription))
-        {
-            segments.Add(baseDescription);
-        }
-
-        foreach (var effect in fact.Effects)
-        {
-            if (string.IsNullOrWhiteSpace(effect.Text))
-            {
-                continue;
-            }
-
-            var text = AdvisorDisplaySanitizer.SanitizeText(effect.Text);
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                continue;
-            }
-
-            if (segments.Contains(text, StringComparer.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            segments.Add(text);
-        }
-
-        return segments.Count == 0 ? null : string.Join(" ", segments);
     }
 
     private (string? path, AdviceInputPack? pack) TryLoadLatestPromptPack(string? promptPacksRoot)

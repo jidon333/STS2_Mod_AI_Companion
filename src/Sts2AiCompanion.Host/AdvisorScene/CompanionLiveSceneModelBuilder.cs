@@ -219,13 +219,14 @@ internal static class CompanionLiveSceneModelBuilder
     {
         var snapshot = runState.Snapshot;
         var choices = CompanionSceneNormalizer.SanitizeChoices(snapshot.CurrentChoices);
-        var visibleOptions = SelectEventVisibleOptions(runState, choices);
+        var eventIdentity = ResolveEventIdentity(runState, choices);
+        var visibleOptions = SelectEventVisibleOptions(runState, choices, eventIdentity);
         var stage = ResolveEventStage(runState, visibleOptions);
-        var eventIdentity = ResolveEventIdentity(runState);
         var explicitProceedVisible = TryReadBoolMeta(snapshot.Meta, "eventProceedOptionVisible") == true
                                      || visibleOptions.Any(IsProceedLikeOption);
         var rewardSubstateActive = stage.Contains("reward", StringComparison.OrdinalIgnoreCase)
                                    || visibleOptions.Any(IsRewardLikeOption);
+        var eventOptionChoices = choices.Where(IsEventChoice).ToArray();
         var details = new AdvisorSceneEventDetails(
             stage,
             stage,
@@ -234,7 +235,7 @@ internal static class CompanionLiveSceneModelBuilder
             explicitProceedVisible || visibleOptions.Count > 0,
             TryGetMeta(snapshot.Meta, "ancientPhase")
             ?? NormalizeLane(TryGetMeta(snapshot.Meta, "foregroundActionLane"))
-            ?? "none",
+            ?? stage,
             eventIdentity,
             visibleOptions.Count);
         var missingFacts = new List<string>();
@@ -245,16 +246,24 @@ internal static class CompanionLiveSceneModelBuilder
             observerGaps.Add("live-export.snapshot.meta.event identity fields missing");
         }
 
-        if (visibleOptions.Any(static option => string.IsNullOrWhiteSpace(option.Description)))
+        if (visibleOptions.Any(static option => LooksLikeUnresolvedEventDescription(option.Description)))
         {
             missingFacts.Add("event-option-description-partial");
             observerGaps.Add("live-export.snapshot.currentChoices description is partial");
+        }
+
+        if (eventOptionChoices.Length > 0
+            && eventOptionChoices.Any(static choice => choice.EventOptionDetail is null))
+        {
+            observerGaps.Add("live-export.snapshot.currentChoices eventOptionDetail missing; host binding/result compatibility enrichment applied");
         }
 
         sourceRefs.Add("live-export.snapshot.meta.foregroundOwner");
         sourceRefs.Add("live-export.snapshot.meta.foregroundActionLane");
         sourceRefs.Add("live-export.snapshot.meta.ancientPhase");
         sourceRefs.Add("live-export.snapshot.currentChoices");
+        sourceRefs.Add("live-export.snapshot.currentChoices.bindingId");
+        sourceRefs.Add("live-export.snapshot.currentChoices.eventOptionDetail");
         return CreateArtifactBase(
                 runState,
                 "event",
@@ -582,13 +591,16 @@ internal static class CompanionLiveSceneModelBuilder
             snapshot.Potions);
     }
 
-    private static IReadOnlyList<AdvisorSceneOption> SelectEventVisibleOptions(CompanionRunState runState, IReadOnlyList<LiveExportChoiceSummary> choices)
+    private static IReadOnlyList<AdvisorSceneOption> SelectEventVisibleOptions(
+        CompanionRunState runState,
+        IReadOnlyList<LiveExportChoiceSummary> choices,
+        string? eventIdentity)
     {
         var eventOptions = choices
             .Where(IsEventChoice)
             .GroupBy(GetEventChoiceGroupKey, StringComparer.OrdinalIgnoreCase)
-            .Select(MergeEventChoiceGroup)
-            .Select(ToOption)
+            .Select(group => MergeEventChoiceGroup(group, eventIdentity))
+            .Select(choice => ToEventOption(choice, eventIdentity))
             .ToList();
         if (eventOptions.Count > 0)
         {
@@ -601,7 +613,7 @@ internal static class CompanionLiveSceneModelBuilder
         if (string.Equals(ResolveCanonicalOwner(runState, "event"), "event", StringComparison.OrdinalIgnoreCase))
         {
             return choices
-                .Select(ToOption)
+                .Select(choice => IsEventChoice(choice) ? ToEventOption(choice, eventIdentity) : ToOption(choice))
                 .Where(static option => !IsMapOption(option))
                 .GroupBy(static option => $"{option.Kind}|{option.Label}|{option.Value}", StringComparer.OrdinalIgnoreCase)
                 .Select(static group => group.First())
@@ -618,7 +630,9 @@ internal static class CompanionLiveSceneModelBuilder
             : $"{choice.Kind}|{choice.Label}";
     }
 
-    private static LiveExportChoiceSummary MergeEventChoiceGroup(IGrouping<string, LiveExportChoiceSummary> group)
+    private static LiveExportChoiceSummary MergeEventChoiceGroup(
+        IGrouping<string, LiveExportChoiceSummary> group,
+        string? eventIdentity)
     {
         var entries = group.ToArray();
         var representative = entries
@@ -630,7 +644,7 @@ internal static class CompanionLiveSceneModelBuilder
             .OrderByDescending(static value => value!.Length)
             .FirstOrDefault();
         var description = entries
-            .Select(ResolveEventChoiceDescription)
+            .Select(choice => ResolveEventChoiceDescription(choice, eventIdentity))
             .Where(static description => !string.IsNullOrWhiteSpace(description))
             .OrderByDescending(static description => description!.Length)
             .FirstOrDefault();
@@ -666,12 +680,12 @@ internal static class CompanionLiveSceneModelBuilder
             score += 12;
         }
 
-        score += ResolveEventChoiceDescription(choice)?.Length ?? 0;
+        score += ResolveEventChoiceDescription(choice, eventIdentity: null)?.Length ?? 0;
         score += choice.Value?.Length ?? 0;
         return score;
     }
 
-    private static string? ResolveEventChoiceDescription(LiveExportChoiceSummary choice)
+    private static string? ResolveEventChoiceDescription(LiveExportChoiceSummary choice, string? eventIdentity)
     {
         if (!IsEventChoice(choice))
         {
@@ -679,9 +693,12 @@ internal static class CompanionLiveSceneModelBuilder
         }
 
         var detail = choice.EventOptionDetail;
+        var compatibilityDescription = CanonicalizeKnownEventDescription(choice);
         var baseDescription = FirstNonBlank(
             detail?.EvaluatedDescription,
+            LooksLikeUnresolvedEventDescription(choice.Description) ? compatibilityDescription : null,
             choice.Description,
+            compatibilityDescription,
             detail?.HoverTipDescription);
 
         if (string.IsNullOrWhiteSpace(baseDescription))
@@ -720,7 +737,23 @@ internal static class CompanionLiveSceneModelBuilder
             normalized = $"{normalized} {resultEffect}";
         }
 
+        foreach (var extraLine in EnumerateKnownEventDescriptionExtras(eventIdentity, choice, detail))
+        {
+            if (string.IsNullOrWhiteSpace(extraLine)
+                || normalized.Contains(extraLine, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            normalized = $"{normalized} {extraLine}";
+        }
+
         return normalized;
+    }
+
+    private static string? ResolveEventChoiceDescription(LiveExportChoiceSummary choice)
+    {
+        return ResolveEventChoiceDescription(choice, eventIdentity: null);
     }
 
     private static string? FirstNonBlank(params string?[] values)
@@ -755,6 +788,16 @@ internal static class CompanionLiveSceneModelBuilder
             ResolveEventChoiceDescription(choice) ?? choice.Description,
             choice.Enabled != false,
             tags.Count == 0 ? Array.Empty<string>() : tags.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+    }
+
+    private static AdvisorSceneOption ToEventOption(LiveExportChoiceSummary choice, string? eventIdentity)
+    {
+        var option = ToOption(choice);
+        var description = ResolveEventChoiceDescription(choice, eventIdentity);
+        return option with
+        {
+            Description = description,
+        };
     }
 
     private static List<AdvisorSceneOption> NormalizeRewardEntryOptions(IEnumerable<AdvisorSceneOption> options)
@@ -1060,11 +1103,29 @@ internal static class CompanionLiveSceneModelBuilder
         return "release-pending";
     }
 
-    private static string? ResolveEventIdentity(CompanionRunState runState)
+    private static string? ResolveEventIdentity(CompanionRunState runState, IReadOnlyList<LiveExportChoiceSummary> choices)
     {
+        var bindingIdentity = InferEventIdentityFromBindings(choices);
+        if (!string.IsNullOrWhiteSpace(bindingIdentity))
+        {
+            return bindingIdentity;
+        }
+
+        var detailIdentity = InferEventIdentityFromDetails(choices);
+        if (!string.IsNullOrWhiteSpace(detailIdentity))
+        {
+            return detailIdentity;
+        }
+
         if (TryReadBoolMeta(runState.Snapshot.Meta, "ancientEventDetected") == true
             || !string.IsNullOrWhiteSpace(TryGetMeta(runState.Snapshot.Meta, "ancientPhase")))
         {
+            var ancientIdentity = InferAncientEventIdentity(choices);
+            if (!string.IsNullOrWhiteSpace(ancientIdentity))
+            {
+                return ancientIdentity;
+            }
+
             return "ancient-event";
         }
 
@@ -1148,6 +1209,213 @@ internal static class CompanionLiveSceneModelBuilder
         }
 
         return null;
+    }
+
+    private static string? InferEventIdentityFromBindings(IReadOnlyList<LiveExportChoiceSummary> choices)
+    {
+        var bindingIds = choices
+            .Where(IsEventChoice)
+            .Select(static choice => choice.BindingId)
+            .Where(static bindingId => !string.IsNullOrWhiteSpace(bindingId))
+            .Cast<string>()
+            .ToArray();
+        if (bindingIds.Length == 0)
+        {
+            return null;
+        }
+
+        if (bindingIds.Any(static bindingId => bindingId.StartsWith("WOOD_CARVINGS.", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "WoodCarvings";
+        }
+
+        if (bindingIds.Any(static bindingId => bindingId.StartsWith("NEOW.", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Neow";
+        }
+
+        return null;
+    }
+
+    private static string? InferEventIdentityFromDetails(IReadOnlyList<LiveExportChoiceSummary> choices)
+    {
+        foreach (var choice in choices.Where(IsEventChoice))
+        {
+            var detail = choice.EventOptionDetail;
+            var optionKey = FirstNonBlank(detail?.OptionKey, detail?.OptionBindingId, choice.BindingId);
+            if (optionKey is not null && optionKey.StartsWith("WOOD_CARVINGS.", StringComparison.OrdinalIgnoreCase))
+            {
+                return "WoodCarvings";
+            }
+
+            if (optionKey is not null && optionKey.StartsWith("NEOW.", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Neow";
+            }
+
+            var resultRelicId = FirstNonBlank(detail?.ResultRelic?.Id, detail?.ResultRelic?.Title);
+            if (MatchesStrictRelicId(resultRelicId, "NeowsTorment")
+                || MatchesStrictRelicId(resultRelicId, "SilverCrucible")
+                || MatchesStrictRelicId(resultRelicId, "LeadPaperweight"))
+            {
+                return "Neow";
+            }
+        }
+
+        return null;
+    }
+
+    private static string? InferAncientEventIdentity(IReadOnlyList<LiveExportChoiceSummary> choices)
+    {
+        if (choices.Any(static choice => choice.BindingId?.StartsWith("NEOW.", StringComparison.OrdinalIgnoreCase) == true))
+        {
+            return "Neow";
+        }
+
+        var labels = choices
+            .Where(IsEventChoice)
+            .Select(static choice => choice.Label)
+            .Where(static label => !string.IsNullOrWhiteSpace(label))
+            .Cast<string>()
+            .ToArray();
+        if (labels.Any(static label =>
+                string.Equals(label, "납 문진", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(label, "니오우의 비탄", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(label, "은 도가니", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Neow";
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> EnumerateKnownEventDescriptionExtras(
+        string? eventIdentity,
+        LiveExportChoiceSummary choice,
+        LiveExportEventOptionDetail? detail)
+    {
+        if (!string.IsNullOrWhiteSpace(detail?.TargetFilter))
+        {
+            yield return detail.TargetFilter!;
+        }
+        else if (!string.IsNullOrWhiteSpace(detail?.TargetSelectorHint))
+        {
+            yield return detail.TargetSelectorHint!;
+        }
+
+        var bindingId = choice.BindingId;
+        if (bindingId is not null && bindingId.EndsWith(".BIRD", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "제거 가능한 기본 카드 1장을 선택해야 합니다.";
+            yield return "쪼기는 비용 1 공격 카드로, 피해 2를 3번 줍니다.";
+            yield break;
+        }
+
+        if (bindingId is not null && bindingId.EndsWith(".SNAKE", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "플레이 가능하고 X비용이 아닌 카드 1장을 선택해야 합니다.";
+            yield return "미끈거림은 해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.";
+            yield break;
+        }
+
+        if (bindingId is not null && bindingId.EndsWith(".SNAKE_LOCKED", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "미끈거림을 인챈트할 수 있는 카드가 없습니다.";
+            yield break;
+        }
+
+        if (bindingId is not null && bindingId.EndsWith(".TORUS", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "제거 가능한 기본 카드 1장을 선택해야 합니다.";
+            yield return "고리형 강인함은 비용 2 스킬 카드로, 방어도 5를 얻고 다음 2턴 동안 턴 시작 시 방어도 5를 얻습니다.";
+            yield break;
+        }
+
+        if (string.Equals(eventIdentity, "Neow", StringComparison.OrdinalIgnoreCase))
+        {
+            var resultCardId = FirstNonBlank(detail?.ResultCard?.Id, detail?.ResultCard?.Title);
+            var resultRelicId = FirstNonBlank(detail?.ResultRelic?.Id, detail?.ResultRelic?.Title);
+            if (MatchesStrictCardId(resultCardId, "NeowsFury"))
+            {
+                yield return "니오우의 격분은 비용 1 공격 카드로, 피해 10을 주고 버린 카드 더미에서 무작위 카드 2장을 손으로 가져오며 소멸합니다.";
+            }
+
+            if (MatchesStrictRelicId(resultRelicId, "LeadPaperweight"))
+            {
+                yield return "무색 카드 2장 중 1장을 선택해 덱에 추가합니다.";
+            }
+
+            if (MatchesStrictRelicId(resultRelicId, "SilverCrucible"))
+            {
+                yield return "처음 3번의 카드 보상이 강화된 상태로 등장합니다. 처음으로 여는 보물 상자가 비어 있습니다.";
+            }
+        }
+    }
+
+    private static string? CanonicalizeKnownEventDescription(LiveExportChoiceSummary choice)
+    {
+        var bindingId = choice.BindingId;
+        if (string.IsNullOrWhiteSpace(bindingId))
+        {
+            return choice.Description;
+        }
+
+        if (bindingId.EndsWith(".BIRD", StringComparison.OrdinalIgnoreCase))
+        {
+            return "시작 카드를 1장 선택해 쪼기로 변화시킵니다.";
+        }
+
+        if (bindingId.EndsWith(".SNAKE", StringComparison.OrdinalIgnoreCase))
+        {
+            return "카드 1장에 미끈거림을 인챈트합니다.";
+        }
+
+        if (bindingId.EndsWith(".SNAKE_LOCKED", StringComparison.OrdinalIgnoreCase))
+        {
+            return "미끈거림을 인챈트할 수 있는 카드가 없습니다.";
+        }
+
+        if (bindingId.EndsWith(".TORUS", StringComparison.OrdinalIgnoreCase))
+        {
+            return "시작 카드를 1장 선택해 고리형 강인함으로 변화시킵니다.";
+        }
+
+        return choice.Description;
+    }
+
+    private static bool LooksLikeUnresolvedEventDescription(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return true;
+        }
+
+        var sanitized = description.Trim();
+        return sanitized.Contains("선택해 로 변화시킵니다.", StringComparison.OrdinalIgnoreCase)
+               || sanitized.Contains("선택해 으로 변화시킵니다.", StringComparison.OrdinalIgnoreCase)
+               || sanitized.Contains("카드 1장에 을 인챈트합니다.", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MatchesStrictCardId(string? value, string expected)
+    {
+        return MatchesStrictModelId(value, expected, $"CARD.{expected}");
+    }
+
+    private static bool MatchesStrictRelicId(string? value, string expected)
+    {
+        return MatchesStrictModelId(value, expected, $"RELIC.{expected}");
+    }
+
+    private static bool MatchesStrictModelId(string? value, params string[] candidates)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return candidates.Any(candidate =>
+            string.Equals(value, candidate, StringComparison.OrdinalIgnoreCase)
+            || value.EndsWith($".{candidate}", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsAdvisorSceneType(string? value)

@@ -4898,6 +4898,93 @@ static void TestAdvisorSceneDisplayFormatter()
     Assert(!rewardOptions.Contains("{gold}", StringComparison.Ordinal), $"Expected reward formatter to sanitize raw gold markers, got '{rewardOptions}'.");
     Assert(rewardOptions.Contains("몸통 박치기", StringComparison.Ordinal), "Expected reward formatter to localize the card label.");
     Assert(rewardOptions.Contains("적에게 피해를 주고 카드를 1장 뽑습니다.", StringComparison.Ordinal), "Expected reward formatter to fill the missing card description from knowledge.");
+
+    var eventScene = new AdvisorSceneArtifact(
+        AdvisorSceneSchema.Version,
+        "live",
+        "display-event-run",
+        DateTimeOffset.UtcNow,
+        DateTimeOffset.UtcNow,
+        null,
+        null,
+        null,
+        "event",
+        "event-choice",
+        "event",
+        "event summary",
+        player,
+        Array.Empty<AdvisorSceneUiSurface>(),
+        new[]
+        {
+            new AdvisorSceneOption("새", "event-option", "peck", "시작 카드를 1장 선택해 쪼기로 변화시킵니다.", true, new[] { "scene:event" }),
+            new AdvisorSceneOption("뱀", "event-option", "slither", "카드 1장에 미끈거림을 인챈트합니다.", true, new[] { "scene:event" }),
+            new AdvisorSceneOption("고리", "event-option", "toric-toughness", "시작 카드를 1장 선택해 고리형 강인함으로 변화시킵니다.", true, new[] { "scene:event" }),
+        },
+        Array.Empty<string>(),
+        Array.Empty<string>(),
+        new Dictionary<string, double>(),
+        Array.Empty<string>())
+    {
+        Event = new AdvisorSceneEventDetails(
+            "event-choice",
+            "event-choice",
+            false,
+            false,
+            true,
+            "event-option",
+            "WoodCarvings",
+            3),
+    };
+    var eventOptions = AdvisorSceneDisplayFormatter.FormatOptions(eventScene, resolver);
+    Assert(eventOptions.Contains("- 새 [활성] :: 시작 카드를 1장 선택해 쪼기로 변화시킵니다.", StringComparison.Ordinal), $"Expected event formatter to preserve the original 새 label, got '{eventOptions}'.");
+    Assert(eventOptions.Contains("- 뱀 [활성] :: 카드 1장에 미끈거림을 인챈트합니다.", StringComparison.Ordinal), $"Expected event formatter to preserve the original 뱀 label, got '{eventOptions}'.");
+    Assert(eventOptions.Contains("- 고리 [활성] :: 시작 카드를 1장 선택해 고리형 강인함으로 변화시킵니다.", StringComparison.Ordinal), $"Expected event formatter to preserve the original 고리 label, got '{eventOptions}'.");
+    Assert(!eventOptions.Contains("- 쪼기 [활성]", StringComparison.Ordinal), $"Expected event formatter not to relabel 새 as 쪼기, got '{eventOptions}'.");
+    Assert(!eventOptions.Contains("- 고리형 강인함 [활성]", StringComparison.Ordinal), $"Expected event formatter not to relabel 고리 as 고리형 강인함, got '{eventOptions}'.");
+
+    var compactEventOptions = EventCompactOptionDisplayFormatter.Format(
+        new Sts2AiCompanion.Foundation.Contracts.RewardEventCompactAdvisorInput(
+            "event",
+            "event-choice",
+            "event",
+            new Sts2AiCompanion.Foundation.Contracts.CompactRunContext(1, 1, 70, 80, 120, 0, 0, 10),
+            new Sts2AiCompanion.Foundation.Contracts.CompactPlayerSummary("start deck", Array.Empty<string>(), Array.Empty<string>()),
+            new[]
+            {
+                new Sts2AiCompanion.Foundation.Contracts.CompactAdvisorOption(
+                    "event-option",
+                    "고리",
+                    "toric-toughness",
+                    "시작 카드를 1장 선택해 고리형 강인함으로 변화시킵니다.",
+                    true,
+                    Array.Empty<string>()),
+            },
+            Array.Empty<Sts2AiCompanion.Foundation.Contracts.CompactKnowledgeEntry>(),
+            Array.Empty<Sts2AiCompanion.Foundation.Contracts.CompactRecentEvent>(),
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            EventFacts: new Sts2AiCompanion.Foundation.Contracts.EventCompactFacts(
+                "WoodCarvings",
+                false,
+                false,
+                false,
+                new[]
+                {
+                    new Sts2AiCompanion.Foundation.Contracts.EventCompactOptionFact(
+                        "고리",
+                        "toric-toughness",
+                        true,
+                        new[]
+                        {
+                            new Sts2AiCompanion.Foundation.Contracts.EventCompactEffect("transform_target_card", 1, "고리형 강인함"),
+                            new Sts2AiCompanion.Foundation.Contracts.EventCompactEffect("result_card_effect", 1, "고리형 강인함은 비용 2 스킬 카드로, 방어도 5를 얻고 다음 2턴 동안 턴 시작 시 방어도 5를 얻습니다."),
+                        },
+                        Array.Empty<string>()),
+                },
+                Array.Empty<string>())));
+    Assert(compactEventOptions.Contains("- 고리 [활성] ::", StringComparison.Ordinal), $"Expected compact event formatter to keep the original 고리 label, got '{compactEventOptions}'.");
+    Assert(compactEventOptions.Contains("고리형 강인함", StringComparison.Ordinal), $"Expected compact event formatter to include the result card name in the description, got '{compactEventOptions}'.");
+    Assert(!compactEventOptions.Contains("- 고리형 강인함 [활성]", StringComparison.Ordinal), $"Expected compact event formatter not to replace the label with the result card name, got '{compactEventOptions}'.");
 }
 
 static void TestDeckDisplayFormatter()
@@ -5108,6 +5195,7 @@ static void TestEventCompactAdvisorInputBuilder()
         Assert(!woodCarvingsFacts.EventIdentityMissing, "Expected Wood Carvings identity to resolve from binding ids.");
         Assert(woodCarvingsResult.CompactInput!.VisibleOptions.Count == 3, $"Expected canonicalized Wood Carvings visible options count of 3, got {woodCarvingsResult.CompactInput.VisibleOptions.Count}.");
         Assert(!woodCarvingsResult.DecisionBlockers.Any(blocker => blocker.StartsWith("event-duplicate-option-label:", StringComparison.OrdinalIgnoreCase)), "Expected canonicalized Wood Carvings options to avoid duplicate-label blockers.");
+        Assert(!woodCarvingsResult.DecisionBlockers.Any(blocker => blocker.Contains("target", StringComparison.OrdinalIgnoreCase)), "Expected target_filter facts to remain advisory rather than escalating into decision blockers.");
         Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "새" && fact.Effects.Any(effect => effect.Kind == "result_card" && effect.Text.Contains("쪼기", StringComparison.Ordinal))), "Expected bird option to expose typed result card detail.");
         Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "새" && fact.Effects.Any(effect => effect.Kind == "transform_target_card" && effect.Text.Contains("쪼기", StringComparison.Ordinal))), "Expected bird option to expose Peck transform target.");
         Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "새" && fact.Effects.Any(effect => effect.Kind == "result_card_effect" && effect.Text.Contains("피해 2", StringComparison.Ordinal))), "Expected bird option to expose Peck card effect details.");
@@ -6668,6 +6756,7 @@ static void TestCompanionHostEventSceneModelOptionDeduping()
         runState.Snapshot);
 
     Assert(string.Equals(sceneModel.SceneType, "event", StringComparison.Ordinal), $"Expected event scene type, got {sceneModel.SceneType}.");
+    Assert(string.Equals(sceneModel.Event?.EventIdentity, "WoodCarvings", StringComparison.Ordinal), $"Expected Wood Carvings scene identity, got {sceneModel.Event?.EventIdentity ?? "<null>"}.");
     Assert(sceneModel.Options.Count == 3, $"Expected Wood Carvings scene model options to dedupe to 3, got {sceneModel.Options.Count}.");
 
     var bird = sceneModel.Options.FirstOrDefault(option => string.Equals(option.Label, "새", StringComparison.Ordinal))
@@ -6680,6 +6769,21 @@ static void TestCompanionHostEventSceneModelOptionDeduping()
     Assert(bird.Description?.Contains("쪼기", StringComparison.Ordinal) == true, $"Expected 새 description to fill the transformed card title, got '{bird.Description ?? "<null>"}'.");
     Assert(snake.Description?.Contains("미끈거림", StringComparison.Ordinal) == true, $"Expected 뱀 description to fill the enchantment title, got '{snake.Description ?? "<null>"}'.");
     Assert(torus.Description?.Contains("고리형 강인함", StringComparison.Ordinal) == true, $"Expected 고리 description to fill the transformed card title, got '{torus.Description ?? "<null>"}'.");
+
+    var strippedSnapshot = CreateWoodCarvingsEventSnapshotWithoutTypedDetails("scene-model-event-wood-carvings-live-like");
+    var strippedSceneModel = ResolveHostSceneModelForSnapshot(
+        strippedSnapshot.RunId,
+        "choice-list-presented",
+        strippedSnapshot);
+
+    Assert(string.Equals(strippedSceneModel.Event?.EventIdentity, "WoodCarvings", StringComparison.Ordinal), $"Expected live-like Wood Carvings scene identity inference, got {strippedSceneModel.Event?.EventIdentity ?? "<null>"}.");
+    Assert(!strippedSceneModel.MissingFacts.Contains("event-identity-missing", StringComparer.Ordinal), "Expected live-like Wood Carvings binding identity to prevent event-identity-missing.");
+    Assert(strippedSceneModel.Options.Count == 3, $"Expected live-like Wood Carvings scene model options to dedupe to 3, got {strippedSceneModel.Options.Count}.");
+    Assert(strippedSceneModel.Options.Select(option => option.Label).SequenceEqual(new[] { "새", "뱀", "고리" }, StringComparer.Ordinal), $"Expected live-like Wood Carvings labels to stay on 새/뱀/고리, got {string.Join(", ", strippedSceneModel.Options.Select(option => option.Label))}.");
+    Assert(strippedSceneModel.Options.Any(option => string.Equals(option.Label, "새", StringComparison.Ordinal) && option.Description?.Contains("쪼기", StringComparison.Ordinal) == true), "Expected live-like 새 description to recover 쪼기 from binding compatibility enrichment.");
+    Assert(strippedSceneModel.Options.Any(option => string.Equals(option.Label, "뱀", StringComparison.Ordinal) && option.Description?.Contains("미끈거림", StringComparison.Ordinal) == true), "Expected live-like 뱀 description to recover 미끈거림 from binding compatibility enrichment.");
+    Assert(strippedSceneModel.Options.Any(option => string.Equals(option.Label, "고리", StringComparison.Ordinal) && option.Description?.Contains("고리형 강인함", StringComparison.Ordinal) == true), "Expected live-like 고리 description to recover 고리형 강인함 from binding compatibility enrichment.");
+    Assert(strippedSceneModel.ObserverGaps.Any(gap => gap.Contains("eventOptionDetail missing", StringComparison.OrdinalIgnoreCase)), "Expected live-like scene model to expose missing eventOptionDetail as an observer gap.");
 }
 
 static void ExecuteHostSceneModelScenario(HostSceneModelScenario scenario)
@@ -7532,6 +7636,21 @@ static CompanionRunState CreateWoodCarvingsEventRunState(string runId)
     };
 }
 
+static LiveExportSnapshot CreateWoodCarvingsEventSnapshotWithoutTypedDetails(string runId)
+{
+    var runState = CreateWoodCarvingsEventRunState(runId);
+    return runState.Snapshot with
+    {
+        RunId = runId,
+        CurrentChoices = runState.Snapshot.CurrentChoices
+            .Select(choice => choice with
+            {
+                EventOptionDetail = null,
+            })
+            .ToArray(),
+    };
+}
+
 static CompanionRunState CreateShopRunState(string runId, LiveExportSnapshot? snapshot = null)
 {
     var resolvedSnapshot = snapshot ?? CreateShopSceneModelSnapshot(runId);
@@ -8249,6 +8368,48 @@ static AdvisorKnowledgeDisplayResolver CreateDisplayKnowledgeResolver()
                     ["classId"] = "DEFEND_IRONCLAD",
                     ["title"] = "수비",
                     ["description"] = "방어도를 얻습니다.",
+                },
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "peck",
+                "쪼기",
+                "strict-domain-scan",
+                true,
+                "피해 2를 3번 줍니다.",
+                new[] { "card", "attack" },
+                new Dictionary<string, string?>
+                {
+                    ["classId"] = "Peck",
+                    ["title"] = "쪼기",
+                    ["description"] = "피해 2를 3번 줍니다.",
+                },
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "slither",
+                "미끈거림",
+                "strict-domain-scan",
+                true,
+                "해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.",
+                new[] { "enchantment" },
+                new Dictionary<string, string?>
+                {
+                    ["classId"] = "Slither",
+                    ["title"] = "미끈거림",
+                    ["description"] = "해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.",
+                },
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "toric-toughness",
+                "고리형 강인함",
+                "strict-domain-scan",
+                true,
+                "방어도 5를 얻고 다음 2턴 동안 턴 시작 시 방어도 5를 얻습니다.",
+                new[] { "card", "skill" },
+                new Dictionary<string, string?>
+                {
+                    ["classId"] = "ToricToughness",
+                    ["title"] = "고리형 강인함",
+                    ["description"] = "방어도 5를 얻고 다음 2턴 동안 턴 시작 시 방어도 5를 얻습니다.",
                 },
                 Array.Empty<StaticKnowledgeOption>()),
         },
