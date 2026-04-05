@@ -1,0 +1,224 @@
+{
+  "generatedAt": "2026-04-05T00:00:00+09:00",
+  "artifactKind": "strategy-principles",
+  "artifactVersion": "v1alpha1",
+  "source": "deep-research-report",
+  "sourceReportPath": "artifacts/knowledge/deep-research-report.md",
+  "notes": [
+    "background-only",
+    "optional-retrieval-base",
+    "does-not-override-live-scene-facts",
+    "exclude-unstable-or-over-specific-heuristics"
+  ],
+  "entries": [
+    {
+      "id": "sts.general.jobs_over_archetypes",
+      "title": "아키타입보다 현재 필요한 역할을 우선하라",
+      "summary": "특정 아키타입을 먼저 잠그기보다, 가까운 전투와 보스가 요구하는 역할을 메우는 카드와 경로를 우선한다. 시너지는 현재 문제를 해결하는 범위에서만 따라간다.",
+      "category": "deckbuilding_axes",
+      "tags": [
+        "jobs",
+        "deckbuilding",
+        "adaptation",
+        "anti-archetype-lock"
+      ],
+      "source_game": "mixed",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "high",
+      "source_links": [
+        "https://sts2.untapped.gg/en/articles/slay-the-spire-deckbuilding-strategy-solving-the-spire-with-jobs",
+        "https://taogaming.wordpress.com/2021/03/06/too-many-words-about-slay-the-spire-part-i-introduction/",
+        "https://sts2.untapped.gg/en/guides/how-to-make-the-best-map-choices-in-slay-the-spire-2"
+      ],
+      "notes": "background-principle-only"
+    },
+    {
+      "id": "sts.general.frontload_vs_scaling",
+      "title": "Frontload와 Scaling은 시간축이 다른 역할이다",
+      "summary": "초반 생존은 즉시 전투력(frontload)에, 후반 장기전은 scaling에 더 크게 좌우된다. 중요한 것은 둘 중 하나를 숭배하는 것이 아니라 시간축에 맞춰 비중을 옮기는 것이다.",
+      "category": "deckbuilding_axes",
+      "tags": [
+        "frontload",
+        "scaling",
+        "time-horizon",
+        "combat-role"
+      ],
+      "source_game": "sts1",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "high",
+      "source_links": [
+        "https://sts2.untapped.gg/en/articles/core-deckbuilding-concepts-in-slay-the-spire",
+        "https://taogaming.wordpress.com/2021/03/06/too-many-words-about-slay-the-spire-part-i-introduction/",
+        "https://www.cloudfallstudios.com/blog/2020/11/2/game-design-tips-reverse-engineering-slay-the-spires-decisions"
+      ],
+      "notes": "background-principle-only"
+    },
+    {
+      "id": "sts.general.draw_selection_as_consistency",
+      "title": "드로우와 선택은 일관성 엔진이다",
+      "summary": "드로우, 선택, 서치, 순환은 화려한 옵션이 아니라 필요한 카드를 필요한 턴에 찾게 해 주는 일관성 엔진이다. 역할이 늘어날수록 이 축의 가치가 커진다.",
+      "category": "deckbuilding_axes",
+      "tags": [
+        "draw",
+        "selection",
+        "consistency",
+        "cycle"
+      ],
+      "source_game": "sts1",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "high",
+      "source_links": [
+        "https://sts2.untapped.gg/en/articles/slay-the-spire-deckbuilding-strategy-solving-the-spire-with-jobs",
+        "https://sts2.untapped.gg/en/articles/core-deckbuilding-concepts-in-slay-the-spire",
+        "https://www.cloudfallstudios.com/blog/2020/11/2/game-design-tips-reverse-engineering-slay-the-spires-decisions"
+      ],
+      "notes": "background-principle-only"
+    },
+    {
+      "id": "sts.general.energy_draw_pair_resource",
+      "title": "에너지와 드로우는 짝자원이다",
+      "summary": "에너지와 드로우는 함께 봐야 하는 자원 축이다. 한쪽만 늘리면 손패나 플레이 기회가 병목이 되므로 둘을 함께 본다.",
+      "category": "deckbuilding_axes",
+      "tags": [
+        "energy",
+        "draw",
+        "resources",
+        "bottleneck"
+      ],
+      "source_game": "mixed",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "medium",
+      "source_links": [
+        "https://www.cloudfallstudios.com/blog/2020/11/2/game-design-tips-reverse-engineering-slay-the-spires-decisions",
+        "https://sts2.untapped.gg/en/articles/core-deckbuilding-concepts-in-slay-the-spire",
+        "https://sts2.untapped.gg/en/articles/slay-the-spire-deckbuilding-strategy-solving-the-spire-with-jobs"
+      ],
+      "notes": "background-principle-only; resource-structure-may-shift-during-ea"
+    },
+    {
+      "id": "sts.general.consistency_and_variance_control",
+      "title": "최선보다 최악의 드로우를 견디는 일관성을 중시하라",
+      "summary": "강한 덱은 최선의 드로우가 아니라 최악의 드로우에서도 버틸 수 있어야 한다. 변동성 제어는 장기 승률의 핵심 축이다.",
+      "category": "consistency",
+      "tags": [
+        "consistency",
+        "variance",
+        "stability",
+        "winrate"
+      ],
+      "source_game": "mixed",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "high",
+      "source_links": [
+        "https://taogaming.wordpress.com/2021/03/06/too-many-words-about-slay-the-spire-part-i-introduction/",
+        "https://sts2.untapped.gg/en/articles/core-deckbuilding-concepts-in-slay-the-spire",
+        "https://sts2.untapped.gg/en/articles/slay-the-spire-deckbuilding-strategy-solving-the-spire-with-jobs"
+      ],
+      "notes": "background-principle-only"
+    },
+    {
+      "id": "sts.general.boss_backplanning_and_flexible_pathing",
+      "title": "경로는 보스에서 역산하고 유연성을 남겨라",
+      "summary": "경로는 현재 보스와 주요 검문을 기준으로 역산하고, 상황이 나빠졌을 때 우회할 수 있는 유연한 분기를 선호한다. 경로는 위험 통제 수단이다.",
+      "category": "map_and_risk",
+      "tags": [
+        "pathing",
+        "boss-backplanning",
+        "flexibility",
+        "risk-control"
+      ],
+      "source_game": "mixed",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "high",
+      "source_links": [
+        "https://sts2.untapped.gg/en/guides/how-to-make-the-best-map-choices-in-slay-the-spire-2",
+        "https://taogaming.wordpress.com/2021/03/06/too-many-words-about-slay-the-spire-part-i-introduction/",
+        "https://slay-the-spire.fandom.com/wiki/Rest_Site"
+      ],
+      "notes": "background-principle-only"
+    },
+    {
+      "id": "sts.general.hp_as_resource",
+      "title": "HP는 자원으로 계산하라",
+      "summary": "HP는 다음 보상과 업그레이드를 얻기 위해 쓰거나 아껴야 하는 자원이다. 휴식과 강화의 기대값을 함께 계산한다.",
+      "category": "map_and_risk",
+      "tags": [
+        "hp-as-resource",
+        "rest-site",
+        "upgrade-tradeoff",
+        "risk"
+      ],
+      "source_game": "mixed",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "high",
+      "source_links": [
+        "https://www.cloudfallstudios.com/blog/2020/11/2/game-design-tips-reverse-engineering-slay-the-spires-decisions",
+        "https://slay-the-spire.fandom.com/wiki/Rest_Site",
+        "https://sts2.untapped.gg/en/guides/how-to-make-the-best-map-choices-in-slay-the-spire-2"
+      ],
+      "notes": "background-principle-only"
+    },
+    {
+      "id": "sts.general.skip_and_removal_reduce_variance",
+      "title": "스킵과 제거는 분산과 순환 시간을 줄인다",
+      "summary": "카드를 추가하지 않는 선택과 약한 카드 제거는 핵심 카드 재등장 시간을 줄이고 분산을 낮춘다. 스킵과 제거는 확률 관리 도구다.",
+      "category": "card_choice_heuristics",
+      "tags": [
+        "skip",
+        "removal",
+        "cycle-time",
+        "variance"
+      ],
+      "source_game": "mixed",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "high",
+      "source_links": [
+        "https://slay-the-spire.fandom.com/wiki/Card_Rewards",
+        "https://sts2.untapped.gg/en/articles/core-deckbuilding-concepts-in-slay-the-spire",
+        "https://taogaming.wordpress.com/2021/03/06/too-many-words-about-slay-the-spire-part-i-introduction/"
+      ],
+      "notes": "background-principle-only"
+    },
+    {
+      "id": "sts.general.avoid_early_archetype_lock_in",
+      "title": "초반 아키타입 고정을 피하라",
+      "summary": "초반에 특정 컨셉을 억지로 고정하면 당장 필요한 전투력을 놓치기 쉽다. 방향성은 이미 가진 자원과 당면 문제를 해결하는 범위에서만 따라간다.",
+      "category": "anti_patterns",
+      "tags": [
+        "anti-pattern",
+        "archetype-lock",
+        "early-game",
+        "adaptation"
+      ],
+      "source_game": "mixed",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "high",
+      "source_links": [
+        "https://sts2.untapped.gg/en/articles/slay-the-spire-deckbuilding-strategy-solving-the-spire-with-jobs",
+        "https://taogaming.wordpress.com/2021/03/06/too-many-words-about-slay-the-spire-part-i-introduction/",
+        "https://www.cloudfallstudios.com/blog/2020/11/2/game-design-tips-reverse-engineering-slay-the-spires-decisions"
+      ],
+      "notes": "background-principle-only"
+    },
+    {
+      "id": "sts.general.risk_management_greed_vs_fear",
+      "title": "탐욕과 보수 사이의 리스크 관리를 하라",
+      "summary": "강할 때는 보상을 늘리고 약할 때는 손실을 제한하는 식으로 탐욕과 보수를 조절한다. 좋은 플레이는 한 번의 최대 기대값보다 연속 의사결정의 리스크 관리에 가깝다.",
+      "category": "anti_patterns",
+      "tags": [
+        "risk-management",
+        "greed",
+        "fear",
+        "pathing"
+      ],
+      "source_game": "mixed",
+      "applies_to_sts2": "yes",
+      "transfer_confidence": "high",
+      "source_links": [
+        "https://taogaming.wordpress.com/2021/03/06/too-many-words-about-slay-the-spire-part-i-introduction/",
+        "https://sts2.untapped.gg/en/guides/how-to-make-the-best-map-choices-in-slay-the-spire-2"
+      ],
+      "notes": "background-principle-only"
+    }
+  ]
+}

@@ -16,6 +16,13 @@
 - `catalog.latest.json` / `catalog.latest.txt`
 - `catalog.assistant.json` / `catalog.assistant.txt`
 - `assistant/cards.json`, `assistant/relics.json`, `assistant/events.json` ...
+- `strategy/strategy-principles.sts.json`
+
+## Strategy Principles Note
+
+- `strategy/strategy-principles.sts.json` 은 `background-only` 전략 원칙 아티팩트입니다.
+- 이 파일은 later retrieval용 짧은 배경 원칙만 담으며, live scene fact, visible options, missing facts, decision blockers를 대체하거나 수정하지 않습니다.
+- 이 파일이 없거나 오래돼도 current compact advisor truth contract는 변하지 않습니다.
 
 ## 위치별 바로 보기
 
