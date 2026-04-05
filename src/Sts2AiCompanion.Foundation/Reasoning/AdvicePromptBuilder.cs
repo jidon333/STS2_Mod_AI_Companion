@@ -76,7 +76,7 @@ public sealed class AdvicePromptBuilder
         }
         builder.AppendLine();
         builder.AppendLine("current_state_summary:");
-        builder.AppendLine(inputPack.SummaryText);
+        builder.AppendLine(SanitizePromptText(inputPack.SummaryText));
         builder.AppendLine();
         builder.AppendLine("recent_events:");
         foreach (var envelope in inputPack.RecentEvents)
@@ -84,7 +84,7 @@ public sealed class AdvicePromptBuilder
             builder.AppendLine($"- {envelope.Ts:O} {envelope.Kind} screen={envelope.Screen} act={envelope.Act?.ToString() ?? "?"} floor={envelope.Floor?.ToString() ?? "?"}");
             if (envelope.Payload.Count > 0)
             {
-                builder.AppendLine($"  payload: {JsonSerializer.Serialize(envelope.Payload)}");
+                builder.AppendLine($"  payload: {SanitizePromptText(JsonSerializer.Serialize(envelope.Payload))}");
             }
         }
 
@@ -101,12 +101,12 @@ public sealed class AdvicePromptBuilder
             builder.AppendLine($"- {entry.Name} [{entry.Id}] source={entry.Source} observed={entry.Observed} tags={tags}");
             if (!string.IsNullOrWhiteSpace(entry.RawText))
             {
-                builder.AppendLine($"  raw: {entry.RawText}");
+                builder.AppendLine($"  raw: {SanitizePromptText(entry.RawText)}");
             }
 
             foreach (var option in entry.Options.Take(5))
             {
-                builder.AppendLine($"  option: {option.Label} :: {option.Description ?? "추가 정보 없음"}");
+                builder.AppendLine($"  option: {SanitizePromptText(option.Label)} :: {SanitizePromptText(option.Description) ?? "추가 정보 없음"}");
             }
         }
 
@@ -133,7 +133,7 @@ public sealed class AdvicePromptBuilder
 
                 if (!string.IsNullOrWhiteSpace(option.Description))
                 {
-                    builder.AppendLine($"  description: {option.Description}");
+                    builder.AppendLine($"  description: {SanitizePromptText(option.Description)}");
                 }
             }
         }
@@ -237,7 +237,7 @@ public sealed class AdvicePromptBuilder
 
             if (!string.IsNullOrWhiteSpace(option.Description))
             {
-                builder.AppendLine($"  description: {option.Description}");
+                builder.AppendLine($"  description: {SanitizePromptText(option.Description)}");
             }
         }
 
@@ -331,7 +331,7 @@ public sealed class AdvicePromptBuilder
             builder.AppendLine($"- {recentEvent.Kind} screen={recentEvent.Screen} act={recentEvent.Act?.ToString() ?? "?"} floor={recentEvent.Floor?.ToString() ?? "?"}");
             if (!string.IsNullOrWhiteSpace(recentEvent.Summary))
             {
-                builder.AppendLine($"  summary: {recentEvent.Summary}");
+                builder.AppendLine($"  summary: {SanitizePromptText(recentEvent.Summary)}");
             }
         }
 
@@ -347,7 +347,7 @@ public sealed class AdvicePromptBuilder
             builder.AppendLine($"- {knowledge.Name} [{knowledge.Id}]");
             if (!string.IsNullOrWhiteSpace(knowledge.Summary))
             {
-                builder.AppendLine($"  summary: {knowledge.Summary}");
+                builder.AppendLine($"  summary: {SanitizePromptText(knowledge.Summary)}");
             }
         }
 
@@ -396,6 +396,11 @@ public sealed class AdvicePromptBuilder
         builder.AppendLine("- guessed effect, guessed option, guessed label 금지.");
         builder.AppendLine("- missingInformation과 decisionBlockers를 비우지 말고 compact input의 공백을 그대로 반영하세요.");
         return builder.ToString().TrimEnd();
+    }
+
+    private static string? SanitizePromptText(string? text)
+    {
+        return PromptTextSanitizer.SanitizeText(text) ?? text;
     }
 
     public string FormatAdviceMarkdown(AdviceResponse response)

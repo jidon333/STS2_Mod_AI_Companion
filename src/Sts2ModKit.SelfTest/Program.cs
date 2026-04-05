@@ -4948,6 +4948,26 @@ static void TestEventCompactAdvisorInputBuilder()
         Assert(compact.EventFacts.OptionFacts.Any(fact => fact.Label == "해독한다" && fact.Effects.Any(effect => effect.Kind == "hp_loss")), "Expected explicit hp_loss fact for the first event option.");
         Assert(compact.EventFacts.OptionFacts.Any(fact => fact.Label == "부순다" && fact.Effects.Any(effect => effect.Kind == "hp_gain")), "Expected explicit hp_gain fact for the second event option.");
 
+        var neowRunState = CreateNeowEventRunState("event-neow-compact-run");
+        var neowSlice = knowledgeService.BuildSlice(ToFoundationRunState(neowRunState), 16, 8192);
+        var neowResult = compactBuilder.Build(ToFoundationRunState(neowRunState), neowSlice);
+        Assert(neowResult.Supported, "Expected Neow-like ancient event compact input to stay supported once option effects are explicit.");
+        Assert(neowResult.CompactInput?.EventFacts is not null, "Expected Neow-like compact event facts.");
+        var neowFacts = neowResult.CompactInput!.EventFacts!;
+        Assert(string.Equals(neowFacts.EventId, "Neow", StringComparison.Ordinal), $"Expected Neow identity inference, got {neowFacts.EventId ?? "<null>"}.");
+        Assert(!neowFacts.EventIdentityMissing, "Expected Neow-like ancient event to resolve identity.");
+        Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "납 문진" && fact.Effects.Any(effect => effect.Kind == "card_gain" && effect.Amount == 1)), "Expected Lead Paperweight option to expose card gain.");
+        Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "니오우의 비탄" && fact.Effects.Any(effect => effect.Kind == "card_gain" && effect.Amount == 1)), "Expected Neow's Torment option to expose card gain.");
+        Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "은 도가니" && fact.Effects.Any(effect => effect.Kind == "card_reward_upgrade" && effect.Amount == 3)), "Expected Silver Crucible option to expose first 3 upgraded rewards.");
+        Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "은 도가니" && fact.Effects.Any(effect => effect.Kind == "treasure_chest_empty")), "Expected Silver Crucible downside to surface.");
+
+        var promptBuilder = new Sts2AiCompanion.Foundation.Reasoning.AdvicePromptBuilder(configuration);
+        var neowPromptPack = promptBuilder.BuildInputPack(ToFoundationRunState(neowRunState), ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "manual", null)), neowSlice, neowResult.CompactInput);
+        var neowPrompt = promptBuilder.FormatPrompt(neowPromptPack);
+        Assert(!neowPrompt.Contains("[blue]", StringComparison.OrdinalIgnoreCase), "Expected prompt text to strip BBCode color tags.");
+        Assert(!neowPrompt.Contains("[gold]", StringComparison.OrdinalIgnoreCase), "Expected prompt text to strip color markers.");
+        Assert(!neowPrompt.Contains("{Cards}", StringComparison.OrdinalIgnoreCase), "Expected prompt text to strip dynamic placeholders.");
+
         var duplicateRunState = CreateEventRunState(
             "event-duplicate-compact-run",
             new[]
@@ -6915,6 +6935,81 @@ static CompanionRunState CreateEventRunState(string runId, IReadOnlyList<LiveExp
     var session = new LiveExportSession("event-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "event-live"), "choice-list-presented", "event");
     var events = CreateEventEvents(runId);
     return new CompanionRunState(snapshot, session, "event summary", events, false)
+    {
+        NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
+    };
+}
+
+static CompanionRunState CreateNeowEventRunState(string runId)
+{
+    var snapshot = CreateHostSnapshot(runId, "event") with
+    {
+        CurrentScreen = "event",
+        Encounter = new LiveExportEncounterSummary("Neow", "Event", false, null),
+        CurrentChoices = new[]
+        {
+            new LiveExportChoiceSummary("event-option", "납 문진", "0", "무색 카드 [blue]2[/blue]장 중 [blue]1[/blue]장을 선택해 [gold]덱[/gold]에 추가합니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "ancient-event-option:0",
+                Enabled = true,
+                SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button", "option-index:0" },
+            },
+            new LiveExportChoiceSummary("event-option", "니오우의 비탄", "1", "[gold]덱[/gold]에 [gold]니오우의 격분[/gold]을 [blue]1[/blue]장 추가합니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "ancient-event-option:1",
+                Enabled = true,
+                SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button", "option-index:1" },
+            },
+            new LiveExportChoiceSummary("event-option", "은 도가니", "2", "처음 [blue]{Cards}[/blue]번의 카드 보상이 [gold]강화[/gold]된 상태로 등장합니다. 처음으로 여는 보물 상자가 [red]비어 있습니다[/red].")
+            {
+                BindingKind = "event-option",
+                BindingId = "ancient-event-option:2",
+                Enabled = true,
+                SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button", "option-index:2" },
+            },
+        },
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choiceExtractorPath"] = "event",
+            ["currentSceneType"] = "NEventRoom",
+            ["rootTypeSummary"] = "NEventRoom",
+            ["flowScreen"] = "event",
+            ["visibleScreen"] = "event",
+            ["foregroundOwner"] = "event",
+            ["foregroundActionLane"] = "ancient-option",
+            ["ancientPhase"] = "options",
+            ["ancientEventDetected"] = "true",
+        },
+    };
+    var session = new LiveExportSession("event-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "event-live"), "choice-list-presented", "event");
+    var events = new[]
+    {
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            1,
+            runId,
+            "event-opened",
+            "event",
+            null,
+            null,
+            new Dictionary<string, object?>()),
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow,
+            2,
+            runId,
+            "choice-list-presented",
+            "event",
+            null,
+            null,
+            new Dictionary<string, object?>
+            {
+                ["choices"] = new[] { "납 문진", "니오우의 비탄", "은 도가니" },
+            }),
+    };
+    return new CompanionRunState(snapshot, session, "neow summary", events, false)
     {
         NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
     };

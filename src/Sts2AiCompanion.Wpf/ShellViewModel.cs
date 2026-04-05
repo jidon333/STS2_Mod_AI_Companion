@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 using Sts2AiCompanion.AdvisorSceneDisplay;
@@ -43,6 +44,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     private Dispatcher? _dispatcher;
     private CompanionHost? _host;
     private WpfKnowledgeCatalogService? _knowledgeCatalogService;
+    private ScaffoldConfiguration? _configuration;
+    private AdvicePromptBuilder? _advicePromptBuilder;
     private DispatcherTimer? _analysisTimer;
     private string _workspaceRoot = Directory.GetCurrentDirectory();
     private bool _analysisInProgress;
@@ -70,6 +73,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     public string SceneProvenanceText { get; private set; } = "없음";
     public string RecentEventsText { get; private set; } = "없음";
     public string KnowledgeEntriesText { get; private set; } = "없음";
+    public string AiPromptSummaryText { get; private set; } = "아직 생성된 AI 입력 요약이 없습니다.";
+    public string AiInputText { get; private set; } = "아직 생성된 prompt-pack이 없습니다.";
+    public string AiPromptPreviewText { get; private set; } = "아직 생성된 프롬프트가 없습니다.";
+    public string CurrentSceneDiagnosticsText { get; private set; } = "현재 장면 진단 정보가 없습니다.";
     public string CollectorNotesText { get; private set; } = "수집 런 진단 정보가 없습니다.";
     public string ConfidenceLine { get; private set; } = "신뢰도: -";
     public string AutoAdviceButtonText { get; private set; } = "자동 조언 일시중지";
@@ -85,6 +92,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         _workspaceRoot = FindWorkspaceRoot(AppContext.BaseDirectory);
         var configPath = Path.Combine(_workspaceRoot, "config", "ai-companion.sample.json");
         var configuration = ConfigurationLoader.LoadFromFile(configPath).Configuration;
+        _configuration = configuration;
+        _advicePromptBuilder = new AdvicePromptBuilder(configuration);
         _knowledgeCatalogService = new WpfKnowledgeCatalogService(configuration, _workspaceRoot);
         _host = new CompanionHost(configuration, _workspaceRoot);
         _host.SnapshotChanged += HostOnSnapshotChanged;
@@ -311,30 +320,254 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             .Select(entry => $"{resolver.ResolveDisplayText(entry.Name, entry.Id)} [출처: {TranslateSource(entry.Source)}]")
             .DefaultIfEmpty("없음"));
 
-        CollectorNotesText = snapshot.CollectorStatus switch
+        var latestPromptPack = TryLoadLatestPromptPack(snapshot.Paths.PromptPacksRoot);
+        AiPromptSummaryText = BuildAiPromptSummaryText(snapshot, latestPromptPack.pack);
+        AiInputText = BuildAiInputText(snapshot, latestPromptPack.path, latestPromptPack.pack);
+        AiPromptPreviewText = BuildAiPromptPreviewText(latestPromptPack.path, latestPromptPack.pack);
+        CurrentSceneDiagnosticsText = BuildCurrentSceneDiagnosticsText(snapshot, latestPromptPack.pack);
+        CollectorNotesText = BuildCollectorHistoryText(snapshot);
+
+        NotifyAll();
+    }
+
+    private (string? path, AdviceInputPack? pack) TryLoadLatestPromptPack(string? promptPacksRoot)
+    {
+        if (string.IsNullOrWhiteSpace(promptPacksRoot) || !Directory.Exists(promptPacksRoot))
+        {
+            return default;
+        }
+
+        var path = Directory.GetFiles(promptPacksRoot, "*.json", SearchOption.TopDirectoryOnly)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return default;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            var pack = JsonSerializer.Deserialize<AdviceInputPack>(json, ConfigurationLoader.JsonOptions);
+            return (path, pack);
+        }
+        catch
+        {
+            return (path, null);
+        }
+    }
+
+    private string BuildAiInputText(CompanionHostSnapshot snapshot, string? promptPackPath, AdviceInputPack? promptPack)
+    {
+        if (string.IsNullOrWhiteSpace(promptPackPath))
+        {
+            return "아직 생성된 prompt-pack이 없습니다.";
+        }
+
+        if (promptPack is null)
+        {
+            return JoinLines(new[]
+            {
+                $"prompt-pack: {Path.GetFileName(promptPackPath)}",
+                $"path: {promptPackPath}",
+                string.Empty,
+                "최신 prompt-pack을 읽지 못했습니다.",
+            });
+        }
+
+        var compact = promptPack.CompactInput;
+        var compactMode = compact switch
+        {
+            null => "legacy",
+            { CombatFacts.PreviewOnly: true } => "compact / combat preview-only",
+            _ => $"compact / {compact.SceneType}",
+        };
+        var excerpt = new
+        {
+            trigger = promptPack.TriggerKind,
+            manual = promptPack.Manual,
+            current_screen = promptPack.CurrentScreen,
+            summary_text = Truncate(promptPack.SummaryText, 400),
+            knowledge_reasons = promptPack.KnowledgeReasons.Take(6).ToArray(),
+            recent_events = promptPack.RecentEvents.TakeLast(3).Select(evt => new
+            {
+                evt.Kind,
+                evt.Screen,
+                evt.Act,
+                evt.Floor,
+                payload_keys = evt.Payload.Keys.Take(8).ToArray(),
+            }).ToArray(),
+            knowledge_entries = promptPack.KnowledgeEntries.Take(6).Select(entry => new
+            {
+                entry.Id,
+                entry.Name,
+                entry.Source,
+            }).ToArray(),
+            compact_input = compact is null ? null : new
+            {
+                compact.SceneType,
+                compact.SceneStage,
+                compact.CanonicalOwner,
+                run_context = compact.RunContext,
+                player_summary = compact.PlayerSummary,
+                visible_options = compact.VisibleOptions.Take(12).ToArray(),
+                reward_facts = compact.RewardFacts,
+                event_facts = compact.EventFacts,
+                shop_facts = compact.ShopFacts,
+                combat_facts = compact.CombatFacts,
+                missing_information = compact.MissingInformation,
+                decision_blockers = compact.DecisionBlockers,
+            },
+        };
+
+        return JoinLines(new[]
+        {
+            $"prompt-pack: {Path.GetFileName(promptPackPath)}",
+            $"path: {promptPackPath}",
+            $"created: {promptPack.CreatedAt:yyyy-MM-dd HH:mm:ss}",
+            $"trigger: {TranslateEventKind(promptPack.TriggerKind)}",
+            $"manual: {(promptPack.Manual ? "yes" : "no")}",
+            $"current screen: {TranslateScreen(promptPack.CurrentScreen)}",
+            $"advisor path: {compactMode}",
+            $"knowledge entries: {promptPack.KnowledgeEntries.Count}",
+            $"knowledge reasons: {(promptPack.KnowledgeReasons.Count > 0 ? string.Join(", ", promptPack.KnowledgeReasons.Take(6)) : "none")}",
+            $"latest advice status: {snapshot.LatestAdvice?.Status ?? "none"}",
+            string.Empty,
+            "입력 발췌",
+            SerializePreview(excerpt),
+        });
+    }
+
+    private string BuildAiPromptSummaryText(CompanionHostSnapshot snapshot, AdviceInputPack? promptPack)
+    {
+        if (promptPack is null)
+        {
+            return "아직 생성된 AI 입력 요약이 없습니다.";
+        }
+
+        var compact = promptPack.CompactInput;
+        var visibleLabels = compact?.VisibleOptions.Select(option => option.Label).Take(6).ToArray() ?? Array.Empty<string>();
+        var currentMissing = snapshot.LatestAdvice?.MissingInformation ?? compact?.MissingInformation ?? Array.Empty<string>();
+        var currentBlockers = snapshot.LatestAdvice?.DecisionBlockers ?? compact?.DecisionBlockers ?? Array.Empty<string>();
+        var keyKnowledge = (snapshot.LatestAdvice?.KnowledgeRefs.Count > 0
+                ? snapshot.LatestAdvice.KnowledgeRefs
+                : compact?.KnowledgeEntries.Select(entry => entry.Name).ToArray())
+            ?? Array.Empty<string>();
+
+        return JoinLines(new[]
+        {
+            $"AI는 지금 `trigger={promptPack.TriggerKind}`, `scene={compact?.SceneType ?? promptPack.CurrentScreen}` 기준으로 판단합니다.",
+            $"보이는 선택지는 {(visibleLabels.Length > 0 ? string.Join(", ", visibleLabels) : "없음")} 입니다.",
+            $"런 맥락은 HP {compact?.RunContext.CurrentHp?.ToString() ?? "?"}/{compact?.RunContext.MaxHp?.ToString() ?? "?"}, 골드 {compact?.RunContext.Gold?.ToString() ?? "?"}, 덱 {compact?.RunContext.DeckCount.ToString() ?? "?"}장 수준으로 압축돼 들어갑니다.",
+            $"AI가 확신 못 하는 이유는 {(currentMissing.Count > 0 ? string.Join(", ", currentMissing.Take(4)) : "없음")} 입니다.",
+            $"실제 차단 요인은 {(currentBlockers.Count > 0 ? string.Join(", ", currentBlockers.Take(4)) : "없음")} 입니다.",
+            $"참고 지식은 {(keyKnowledge.Count > 0 ? string.Join(", ", keyKnowledge.Take(4)) : "거의 없음")} 정도만 씁니다.",
+            compact?.EventFacts is not null && compact.EventFacts.EventIdentityMissing
+                ? "이 event는 정체가 비어 있어, 선택지 효과 구조화가 약하면 추천을 멈추는 쪽으로 동작합니다."
+                : null,
+            compact?.CombatFacts?.PreviewOnly == true
+                ? "combat는 현재 preview-only라 facts만 읽고 추천은 하지 않습니다."
+                : null,
+        });
+    }
+
+    private string BuildAiPromptPreviewText(string? promptPackPath, AdviceInputPack? promptPack)
+    {
+        if (string.IsNullOrWhiteSpace(promptPackPath) || promptPack is null)
+        {
+            return "아직 생성된 프롬프트가 없습니다.";
+        }
+
+        if (_advicePromptBuilder is null)
+        {
+            return "프롬프트 빌더가 아직 초기화되지 않았습니다.";
+        }
+
+        try
+        {
+            var prompt = _advicePromptBuilder.FormatPrompt(promptPack);
+            var preview = Truncate(prompt, 24000);
+            return JoinLines(new[]
+            {
+                $"prompt-pack: {Path.GetFileName(promptPackPath)}",
+                $"prompt length: {prompt.Length} chars",
+                string.Empty,
+                preview,
+                preview.Length < prompt.Length ? string.Empty : string.Empty,
+                preview.Length < prompt.Length ? "(프롬프트가 길어 일부만 표시했습니다.)" : string.Empty,
+            });
+        }
+        catch (Exception exception)
+        {
+            return JoinLines(new[]
+            {
+                $"prompt-pack: {Path.GetFileName(promptPackPath)}",
+                string.Empty,
+                $"프롬프트를 재구성하지 못했습니다: {exception.Message}",
+            });
+        }
+    }
+
+    private string BuildCurrentSceneDiagnosticsText(CompanionHostSnapshot snapshot, AdviceInputPack? promptPack)
+    {
+        var collector = snapshot.CollectorStatus;
+        var normalizedScene = snapshot.RunState?.NormalizedState.Scene.SemanticSceneType;
+        var latestScene = snapshot.LatestSceneModel?.SceneType;
+        var currentScene = string.IsNullOrWhiteSpace(latestScene)
+            ? (string.IsNullOrWhiteSpace(normalizedScene) ? snapshot.RunState?.Snapshot.CurrentScreen : normalizedScene)
+            : latestScene;
+        var historicalReason = collector?.LastDegradedReason;
+        var currentCompact = promptPack?.CompactInput;
+        var currentBlockers = snapshot.LatestAdvice?.DecisionBlockers ?? currentCompact?.DecisionBlockers ?? Array.Empty<string>();
+        var currentMissing = snapshot.LatestAdvice?.MissingInformation ?? currentCompact?.MissingInformation ?? Array.Empty<string>();
+
+        var lines = new List<string>
+        {
+            $"현재 scene: {(snapshot.LatestSceneModel is null ? TranslateScreen(currentScene) : snapshot.LatestSceneModel.SceneType + " / " + snapshot.LatestSceneModel.SceneStage + " / " + snapshot.LatestSceneModel.CanonicalOwner)}",
+            $"normalized scene: {TranslateScreen(normalizedScene)}",
+            $"화면 episode: {collector?.ActiveScreenEpisode ?? "없음"}",
+            $"선택지 추출: {collector?.ChoiceExtractionStatus ?? "미상"}",
+            $"현재 선택지 수: {snapshot.LatestSceneModel?.Options.Count ?? snapshot.RunState?.Snapshot.CurrentChoices.Count ?? 0}",
+            $"현재 advice 상태: {snapshot.LatestAdvice?.Status ?? "없음"}",
+            $"현재 compact path: {DescribeCompactPath(currentCompact)}",
+            $"지식 slice: {(snapshot.LatestKnowledgeSlice?.Entries.Count ?? 0)}개 / {(snapshot.LatestKnowledgeSlice?.Reasons.Count > 0 ? string.Join(", ", snapshot.LatestKnowledgeSlice!.Reasons.Take(4)) : "이유 없음")}",
+            $"부족한 정보: {(currentMissing.Count > 0 ? string.Join(", ", currentMissing.Take(6)) : "없음")}",
+            $"판단 차단 요인: {(currentBlockers.Count > 0 ? string.Join(", ", currentBlockers.Take(6)) : "없음")}",
+        };
+
+        if (string.IsNullOrWhiteSpace(collector?.LastSemanticScreen) && !string.IsNullOrWhiteSpace(normalizedScene))
+        {
+            lines.Add("참고: latest semantic screen이 비어 있어도 normalized scene/episode가 현재 장면을 유지하고 있습니다.");
+        }
+
+        if (LooksLikeHistoricalDegradedReason(currentScene, historicalReason))
+        {
+            lines.Add("주의: 마지막 degraded 이유는 현재 scene 실패가 아니라 이전 combat/map 수집 실패 이력이 섞인 collector 히스토리일 가능성이 큽니다.");
+        }
+
+        return JoinLines(lines);
+    }
+
+    private static string BuildCollectorHistoryText(CompanionHostSnapshot snapshot)
+    {
+        return snapshot.CollectorStatus switch
         {
             null => "수집 런 진단 정보가 없습니다.",
             { Enabled: false } => "수집 런 모드가 비활성화되어 있습니다.",
             var collector => JoinLines(new[]
             {
                 $"collector mode: {(collector.Enabled ? "on" : "off")}",
-                $"최근 semantic 화면: {TranslateScreen(collector.LastSemanticScreen)}",
-                $"화면 episode: {collector.ActiveScreenEpisode ?? "없음"}",
-                $"선택지 추출 상태: {collector.ChoiceExtractionStatus ?? "미상"}",
-                $"마지막 extractor 경로: {collector.LastAcceptedExtractorPath ?? "없음"}",
-                $"마지막 degraded 이유: {collector.LastDegradedReason ?? "없음"}",
+                $"최근 semantic 화면(collector): {TranslateScreen(collector.LastSemanticScreen)}",
+                $"active screen episode: {collector.ActiveScreenEpisode ?? "없음"}",
+                $"choice extraction: {collector.ChoiceExtractionStatus ?? "미상"}",
+                $"extractor path: {collector.LastAcceptedExtractorPath ?? "없음"}",
+                $"마지막 degraded 이유(collector 히스토리): {collector.LastDegradedReason ?? "없음"}",
                 $"session id: {collector.SessionId ?? "없음"}",
                 $"지식 사용 개수: {collector.KnowledgeEntriesUsedCount}",
                 $"지식 사용 이유: {(collector.KnowledgeReasons.Count > 0 ? string.Join(", ", collector.KnowledgeReasons.Take(4)) : "없음")}",
-                $"지식 참조: {(collector.TopKnowledgeRefs.Count > 0 ? string.Join(", ", collector.TopKnowledgeRefs.Take(4)) : "없음")}",
-                $"부족한 정보: {(collector.MissingInformation.Count > 0 ? string.Join(", ", collector.MissingInformation.Take(4)) : "없음")}",
-                $"판단 차단 요인: {(collector.DecisionBlockers.Count > 0 ? string.Join(", ", collector.DecisionBlockers.Take(4)) : "없음")}",
-                string.Empty,
-                collector.Notes,
+                $"지식 참조(top): {(collector.TopKnowledgeRefs.Count > 0 ? string.Join(", ", collector.TopKnowledgeRefs.Take(4)) : "없음")}",
             }),
         };
-
-        NotifyAll();
     }
 
     private void UpdateAnalysisStatusText(string? state = null, string? message = null)
@@ -385,6 +618,53 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         return JoinLines(confidence
             .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
             .Select(pair => $"- {pair.Key}: {pair.Value:0.00}"));
+    }
+
+    private static string SerializePreview(object value)
+    {
+        return JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    private static string Truncate(string? text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+        {
+            return text ?? string.Empty;
+        }
+
+        return text[..maxLength] + Environment.NewLine + "...(truncated)";
+    }
+
+    private static string DescribeCompactPath(Sts2AiCompanion.Foundation.Contracts.RewardEventCompactAdvisorInput? compactInput)
+    {
+        return compactInput switch
+        {
+            null => "legacy / no compact input",
+            { CombatFacts.PreviewOnly: true } => "combat preview-only / no-call",
+            _ => $"compact / {compactInput.SceneType}",
+        };
+    }
+
+    private static bool LooksLikeHistoricalDegradedReason(string? currentScene, string? degradedReason)
+    {
+        if (string.IsNullOrWhiteSpace(currentScene) || string.IsNullOrWhiteSpace(degradedReason))
+        {
+            return false;
+        }
+
+        var normalizedScene = currentScene.Trim().ToLowerInvariant();
+        var reason = degradedReason.Trim().ToLowerInvariant();
+        if (!normalizedScene.Contains("combat", StringComparison.Ordinal) && reason.Contains("combat", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (!normalizedScene.Contains("map", StringComparison.Ordinal) && reason.Contains("map", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private static string ToModelDisplay(string? model)
@@ -559,6 +839,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         Notify(nameof(SceneProvenanceText));
         Notify(nameof(RecentEventsText));
         Notify(nameof(KnowledgeEntriesText));
+        Notify(nameof(AiPromptSummaryText));
+        Notify(nameof(AiInputText));
+        Notify(nameof(AiPromptPreviewText));
+        Notify(nameof(CurrentSceneDiagnosticsText));
         Notify(nameof(CollectorNotesText));
         Notify(nameof(ConfidenceLine));
         Notify(nameof(AutoAdviceButtonText));
