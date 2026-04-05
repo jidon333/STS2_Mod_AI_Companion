@@ -400,6 +400,8 @@ public sealed class AdvicePromptBuilder
                     builder.AppendLine("- event_facts에 target_filter 또는 target_card_filter가 있어도, 그 값이 이미 명시적 후속 선택 조건이라면 그 자체만으로 추천을 보류하지 마세요.");
                     builder.AppendLine("- player_summary.deck에 기본 카드 구성이나 현재 덱 요약이 보이면, exact target 카드가 아직 선택되지 않았더라도 옵션의 broad tradeoff 비교는 가능합니다.");
                     builder.AppendLine("- 공격/방어 방향 비교는 compact input의 덱 요약과 명시적 effect를 기준으로 하세요. 별도의 추가 우선순위 필드가 없다는 이유만으로 decisionBlockers를 만들지 마세요.");
+                    builder.AppendLine("- event_facts에 target_candidate_summary 또는 target_candidate_excluded가 있으면 그 후보를 실제 비교 재료로 사용하세요.");
+                    builder.AppendLine("- X비용 제외 제약만으로 시너지가 제한된다고 단정하지 마세요. compact input에 다른 플레이 가능 후보가 보이면 그 후보 가치도 함께 비교하세요.");
                 }
                 if (string.Equals(compact.EventFacts?.EventId, "Neow", StringComparison.OrdinalIgnoreCase))
                 {

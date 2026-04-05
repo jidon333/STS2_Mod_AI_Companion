@@ -37,7 +37,7 @@ internal sealed class EventCompactInputBuilder
         var optionFacts = new List<EventCompactOptionFact>();
         foreach (var optionSource in optionSources)
         {
-            var effects = ExtractEventEffects(eventId, optionSource);
+            var effects = ExtractEventEffects(eventId, optionSource, runState);
             var optionMissing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var option = optionSource.Option;
             if (effects.Count == 0 && option.Enabled && !LooksLikeProceedOption(option))
@@ -307,7 +307,7 @@ internal sealed class EventCompactInputBuilder
             compatibilityDescription);
     }
 
-    private static List<EventCompactEffect> ExtractEventEffects(string? eventId, EventVisibleOptionSource optionSource)
+    private static List<EventCompactEffect> ExtractEventEffects(string? eventId, EventVisibleOptionSource optionSource, CompanionRunState runState)
     {
         var effects = new List<EventCompactEffect>();
         var option = optionSource.Option;
@@ -340,6 +340,7 @@ internal sealed class EventCompactInputBuilder
         AddStrictEventFallbackEffects(eventId, optionKey, detail, AddIfMissing);
         AddCompatibilityKnownAncientOptionEffects(PromptTextSanitizer.Sanitize(label), AddIfMissing);
         AddCompatibilityKnownEventOptionEffects(eventId, PromptTextSanitizer.Sanitize(label), AddIfMissing);
+        AddTargetCandidateEffects(runState, effects, AddIfMissing);
 
         return effects;
     }
@@ -593,6 +594,91 @@ internal sealed class EventCompactInputBuilder
         }
     }
 
+    private static void AddTargetCandidateEffects(
+        CompanionRunState runState,
+        IReadOnlyList<EventCompactEffect> effects,
+        Action<string, int?, string> addIfMissing)
+    {
+        var targetFilter = effects
+            .FirstOrDefault(static effect => effect.Kind is "target_filter" or "target_card_filter")
+            ?.Text;
+        if (string.IsNullOrWhiteSpace(targetFilter))
+        {
+            return;
+        }
+
+        var deck = runState.Snapshot.Deck;
+        if (deck.Count == 0)
+        {
+            return;
+        }
+
+        if (targetFilter.Contains("제거 가능한 기본 카드", StringComparison.OrdinalIgnoreCase))
+        {
+            var basicCandidates = deck
+                .Where(IsBasicStarterCard)
+                .ToArray();
+            if (basicCandidates.Length > 0)
+            {
+                addIfMissing(
+                    "target_candidate_summary",
+                    basicCandidates.Length,
+                    $"현재 덱의 제거 가능한 기본 카드 후보: {SummarizeCardGroups(basicCandidates)}");
+            }
+
+            return;
+        }
+
+        if (!targetFilter.Contains("플레이 가능하고 X비용이 아닌 카드", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var playableCards = deck
+            .Where(IsPlayableCard)
+            .ToArray();
+        if (playableCards.Length == 0)
+        {
+            return;
+        }
+
+        var knownXCostCards = playableCards
+            .Where(card => card.Cost is < 0)
+            .ToArray();
+        var potentiallyEligibleCards = playableCards
+            .Where(card => card.Cost is null or >= 0)
+            .ToArray();
+        var nonBasicCandidates = potentiallyEligibleCards
+            .Where(card => !IsBasicStarterCard(card))
+            .ToArray();
+        var basicFallbackCandidates = potentiallyEligibleCards
+            .Where(IsBasicStarterCard)
+            .ToArray();
+
+        if (nonBasicCandidates.Length > 0)
+        {
+            addIfMissing(
+                "target_candidate_summary",
+                nonBasicCandidates.Length,
+                $"현재 덱의 비기본 플레이 가능 후보: {SummarizeCardGroups(nonBasicCandidates)}");
+        }
+        else if (basicFallbackCandidates.Length > 0)
+        {
+            addIfMissing(
+                "target_candidate_summary",
+                basicFallbackCandidates.Length,
+                $"현재 덱의 플레이 가능 후보: {SummarizeCardGroups(basicFallbackCandidates)}");
+        }
+
+        if (knownXCostCards.Length > 0)
+        {
+            addIfMissing(
+                "target_candidate_excluded",
+                knownXCostCards.Length,
+                $"현재 확인된 X비용 후보: {SummarizeCardGroups(knownXCostCards)}");
+        }
+    }
+
     private static bool MatchesStrictCardId(string? value, string expected)
     {
         return MatchesStrictModelId(value, expected, $"CARD.{expected}");
@@ -613,6 +699,42 @@ internal sealed class EventCompactInputBuilder
         return candidates.Any(candidate =>
             string.Equals(value, candidate, StringComparison.OrdinalIgnoreCase)
             || value.EndsWith($".{candidate}", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsPlayableCard(LiveExportCardSummary card)
+    {
+        return !string.Equals(card.Type, "Curse", StringComparison.OrdinalIgnoreCase)
+               && !string.Equals(card.Type, "Status", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsBasicStarterCard(LiveExportCardSummary card)
+    {
+        if (!IsPlayableCard(card))
+        {
+            return false;
+        }
+
+        return (card.Id?.Contains("STRIKE_", StringComparison.OrdinalIgnoreCase) ?? false)
+               || (card.Id?.Contains("DEFEND_", StringComparison.OrdinalIgnoreCase) ?? false)
+               || string.Equals(card.Name, "타격", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Name, "수비", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Name, "Strike", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(card.Name, "Defend", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string SummarizeCardGroups(IReadOnlyList<LiveExportCardSummary> cards)
+    {
+        return string.Join(", ",
+            cards
+                .GroupBy(
+                    card => string.IsNullOrWhiteSpace(card.Name)
+                        ? CompactAdvisorBuilderShared.FirstNonBlank(card.Id, "Unknown Card")!
+                        : card.Name,
+                    StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(static group => group.Count())
+                .ThenBy(static group => group.Key, StringComparer.OrdinalIgnoreCase)
+                .Take(5)
+                .Select(static group => $"{group.Key} x{group.Count()}"));
     }
 
     // Temporary compatibility path until the runtime typed seam covers these events broadly.

@@ -5208,11 +5208,51 @@ static void TestEventCompactAdvisorInputBuilder()
         Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "고리" && fact.Effects.Any(effect => effect.Kind == "result_card_effect" && effect.Text.Contains("방어도 5", StringComparison.Ordinal))), "Expected torus option to expose Toric Toughness card effect details.");
         Assert(!woodCarvingsResult.MissingInformation.Contains("event-option-effects-missing:새", StringComparer.Ordinal), "Expected Wood Carvings bird option to avoid missing-effects gaps.");
 
+        var woodCarvingsDeckRunState = CreateWoodCarvingsEventRunState("event-wood-carvings-target-candidates");
+        var enrichedDeckSnapshot = woodCarvingsDeckRunState.Snapshot with
+        {
+            Deck = new[]
+            {
+                new LiveExportCardSummary("타격", "CARD.STRIKE_IRONCLAD", 1, "Attack", false),
+                new LiveExportCardSummary("타격", "CARD.STRIKE_IRONCLAD", 1, "Attack", false),
+                new LiveExportCardSummary("수비", "CARD.DEFEND_IRONCLAD", 1, "Skill", false),
+                new LiveExportCardSummary("강타", "CARD.BASH", 2, "Attack", false),
+                new LiveExportCardSummary("짓밟기", "CARD.STOMP", 3, "Attack", false),
+                new LiveExportCardSummary("소용돌이", "CARD.WHIRLWIND", -1, "Attack", false),
+                new LiveExportCardSummary("등반가의 골칫거리", "CARD.ASCENDERS_BANE", null, "Curse", false),
+            },
+        };
+        var woodCarvingsDeckState = new CompanionRunState(
+            enrichedDeckSnapshot,
+            woodCarvingsDeckRunState.Session,
+            woodCarvingsDeckRunState.SummaryText,
+            woodCarvingsDeckRunState.RecentEvents,
+            woodCarvingsDeckRunState.IsStale)
+        {
+            NormalizedState = CompanionStateMapper.FromLiveExport(
+                enrichedDeckSnapshot,
+                woodCarvingsDeckRunState.Session,
+                woodCarvingsDeckRunState.RecentEvents),
+        };
+        var woodCarvingsDeckSlice = knowledgeService.BuildSlice(ToFoundationRunState(woodCarvingsDeckState), 16, 8192);
+        var woodCarvingsDeckResult = compactBuilder.Build(ToFoundationRunState(woodCarvingsDeckState), woodCarvingsDeckSlice);
+        var snakeFact = woodCarvingsDeckResult.CompactInput?.EventFacts?.OptionFacts.SingleOrDefault(fact => fact.Label == "뱀");
+        Assert(snakeFact is not null, "Expected snake option fact with enriched deck.");
+        Assert(snakeFact!.Effects.Any(effect => effect.Kind == "target_candidate_summary" && effect.Text.Contains("짓밟기", StringComparison.Ordinal)),
+            "Expected snake option to expose a target candidate summary that includes 짓밟기.");
+        Assert(snakeFact.Effects.Any(effect => effect.Kind == "target_candidate_excluded" && effect.Text.Contains("소용돌이", StringComparison.Ordinal)),
+            "Expected snake option to expose known X-cost exclusions when card costs are available.");
+
         var woodPromptPack = promptBuilder.BuildInputPack(ToFoundationRunState(woodCarvingsRunState), ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "manual", null)), woodCarvingsSlice, woodCarvingsResult.CompactInput);
         var woodPrompt = promptBuilder.FormatPrompt(woodPromptPack);
         Assert(woodPrompt.Contains("result_card_effect", StringComparison.Ordinal), "Expected Wood Carvings prompt to include result-card effect lines.");
         Assert(woodPrompt.Contains("result_enchantment_effect", StringComparison.Ordinal), "Expected Wood Carvings prompt to include enchantment effect lines.");
         Assert(!woodPrompt.Contains("성능 정보가 compact input에 없다", StringComparison.Ordinal), "Expected generic event facts to eliminate legacy missing-performance blocker text.");
+
+        var woodDeckPromptPack = promptBuilder.BuildInputPack(ToFoundationRunState(woodCarvingsDeckState), ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "manual", null)), woodCarvingsDeckSlice, woodCarvingsDeckResult.CompactInput);
+        var woodDeckPrompt = promptBuilder.FormatPrompt(woodDeckPromptPack);
+        Assert(woodDeckPrompt.Contains("target_candidate_summary", StringComparison.Ordinal), "Expected Wood Carvings prompt to include target candidate summary facts.");
+        Assert(woodDeckPrompt.Contains("X비용 제외 제약만으로 시너지가 제한된다고 단정하지 마세요.", StringComparison.Ordinal), "Expected prompt guidance to prevent over-penalizing X-cost exclusion.");
 
         var duplicateRunState = CreateEventRunState(
             "event-duplicate-compact-run",
