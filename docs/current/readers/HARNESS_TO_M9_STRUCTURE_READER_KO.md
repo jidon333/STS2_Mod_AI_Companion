@@ -247,6 +247,42 @@ live export / normalized state / knowledge slice
 - scene model은 사실 정리
 - advisor input은 판단용 요약
 
+## Reward/Event Compact Advisor
+
+M9 wave 2에서는 advisor 입력이 `SceneModel`을 직접 먹는 대신, `reward/event` 전용 compact input을 한 번 더 거친다.
+
+핵심 구조는 다음과 같다.
+
+- `Host`가 manual request와 scene gating만 담당한다
+- `Foundation`이 compact contract, pure builder, prompt path, finalizer, degraded fallback을 owner로 가진다
+- `KnowledgeCatalogService.BuildSlice(...)`는 그대로 쓰고, compact builder가 그 bounded slice를 scene-local하게 post-filter한다
+- compact input은 `SceneModel` truth source가 아니라 `CompanionRunState + normalized state + bounded slice` 기반의 판단 재료다
+- reward/event 외 장면은 shared degraded helper로 바로 종료한다
+- replay validator와 live manual advice가 같은 compact path를 쓴다
+
+### Compact Contract Flow
+
+```text
+CompanionRunState + normalized state + bounded BuildSlice(...)
+  -> Foundation compact builder
+  -> Foundation compact prompt/finalizer/fallback
+  -> AdviceInputPack.CompactInput
+  -> existing AdviceResponse shape
+```
+
+중요한 점:
+
+- compact contract는 Host-local이 아니다
+- 새 retrieval API는 만들지 않는다
+- unsupported / degraded response도 shared factory로 만든다
+- recommendedChoiceLabel exact match validation은 Foundation finalizer에서 한 번만 수행한다
+
+이 wave에서 기억할 점:
+
+- `SceneModel`은 계속 sidecar용 fact model이다
+- `AdviceInputPack`은 유지되지만 compact payload를 얹는 carrier다
+- compact input은 `SceneModel` 대체물이 아니라 `reward/event` 판단 재료 압축본이다
+
 ## 왜 하네스와 live sidecar가 다른 경로를 타는가
 
 둘의 목적이 다르기 때문이다.

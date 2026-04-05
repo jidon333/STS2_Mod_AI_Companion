@@ -134,8 +134,10 @@ v1 우선순위는 다음으로 고정한다.
 
 목표:
 
-- scene model과 advisor input pack을 분리한다.
-- v1에서는 mapping direction만 정하고 foundation merge는 보류한다.
+- scene model과 reward/event compact advisor input을 분리한다.
+- `AdviceInputPack`은 유지하되 compact payload를 additive adapter로 주입한다.
+- `Host`는 gating / manual orchestration / adapter wiring만 맡고, `Foundation`이 compact contract, pure builder, prompt path, finalizer, degraded fallback owner가 된다.
+- compact builder는 새 retrieval API 없이 기존 `KnowledgeCatalogService.BuildSlice(...)` 결과를 post-filter한다.
 
 주요 산출물:
 
@@ -143,47 +145,58 @@ v1 우선순위는 다음으로 고정한다.
 
 현재 상태:
 
-- `draft`
+- `in_progress`
 
 완료 기준:
 
-- `SceneModel`과 `AdvisorInputV1`의 경계가 문서로 고정됨
-- `recommendedChoiceLabel` compatibility rule이 명시됨
-- foundation merge gate가 명확히 적힘
+- `RewardEventCompactAdvisorInput`의 owner가 Foundation.Contracts로 고정됨
+- `AdviceInputPack`은 유지되며 compact payload adapter가 명시됨
+- `KnowledgeCatalogService.BuildSlice(...)` 후 compact post-filter 방식이 고정됨
+- `recommendedChoiceLabel` exact-label validation과 shared degraded fallback이 문서화됨
+- reward/event 외 장면은 unsupported/no-call로 명시됨
+- compact input은 `SceneModel` truth source가 아니라 `CompanionRunState + normalized state + bounded slice` 기반의 판단 재료로 문서화됨
 
 ### WS5. Coverage Gaps And Export Follow-Up
 
 목표:
 
+- reward/event MVP blocker만 고정한다.
 - scene model에서 비는 정보를 `missingFacts`와 `observerGaps`로 관리한다.
 - exporter 추가는 hard blocker일 때만 제안한다.
 
 현재 상태:
 
-- `not-started`
+- `in_progress`
 
 완료 기준:
 
-- scene별 hard gap list가 정리됨
-- `observer fix`와 `exporter fix`가 구분됨
-- shop provisional root refresh 같은 follow-up이 별도 work unit으로 관리됨
+- reward/event blocker table이 문서화됨
+- `observer`, `exporter`, `canonicalization`, `display`, `advisor-input`가 구분됨
+- shop/combat follow-up은 이번 wave 비범위로 명시됨
+- reward/event compact advisor에서 해결할 blocker와 다음 wave 이월 blocker가 분리됨
 
-### WS6. Read-Only Advisor MVP
+### WS6. Reward/Event Compact Advisor MVP
 
 목표:
 
-- reward/event 중심의 read-only advisor 입력을 시험한다.
-- actuator 없이 recommendation label / reasons / missing info 정합성을 본다.
+- reward/event 중심의 compact advisor input을 시험한다.
+- manual request만 허용하고 auto advice는 기본 OFF로 유지한다.
+- `recommendedChoiceLabel` exact-match와 `missingInformation` / `decisionBlockers` 정합성을 본다.
+- unsupported/degraded response는 shared factory로 생성한다.
 
 현재 상태:
 
-- `not-started`
+- `in_progress`
 
 완료 기준:
 
-- 최소 reward + event 2개 scene에서 advisor input/output dry run 가능
-- `recommendedChoiceLabel`이 scene model option label과 정확히 대응
-- 조언 실패가 scene model 부족인지 knowledge 부족인지 분리 가능
+- reward/event compact input이 stable하게 생성됨
+- replay 기반 dry run이 reward/event read-only advice를 검증함
+- live sidecar manual request로 reward/event advice를 확인 가능함
+- `recommendedChoiceLabel`이 current scene option label과 정확히 대응
+- unsupported/degraded response가 shared helper로 생성됨
+- Host는 manual gating만 담당하고, compact prompt/finalizer/fallback은 Foundation 공용 경로를 지난다
+- `BuildSlice(...)` post-filter compact knowledge slice가 replay/live 모두에서 같은 기준으로 동작한다
 
 ### WS7. Live Sidecar UI
 
@@ -225,9 +238,9 @@ v1 우선순위는 다음으로 고정한다.
 | Scene model contract 초안 | in_progress | 3-layer boundary와 typed fields 정의됨 |
 | Harness-local scene builder | in_progress | advisor substrate code와 replay path 존재 |
 | Human-readable summary | in_progress | formatter 존재, fixture stabilization 필요 |
-| Advisor input contract | in_progress | draft 상태, 아직 mapping only |
-| Coverage gap 운영 | pending | hard gap triage와 root refresh 필요 |
-| Read-only advisor MVP | pending | 아직 production/host merge 안 함 |
+| Advisor input contract | in_progress | reward/event compact contract + adapter-first 경로로 전환 |
+| Coverage gap 운영 | in_progress | reward/event blocker table과 shared degraded fallback 고정 |
+| Reward/Event Compact Advisor MVP | in_progress | `Host` gating + `Foundation` compact builder/finalizer/fallback + replay dry run |
 | Live sidecar UI | in_progress | `Host` owner live builder, shared contract, WPF panel, advisor-scene artifact band, shared `ScreenProvenanceResolver` parity까지 구현 완료. direct play clean-boot manual sweep만 남음 |
 | Foundation canonical merge | blocked_by_design | schema 안정화 전 금지 |
 | Real-time overlay UI | deferred | 텍스트/artifact proving 이후 단계 |
@@ -258,6 +271,7 @@ v1 우선순위는 다음으로 고정한다.
 
 - current harness routing / allowed-actions / actuator logic을 건드리지 않음
 - observer/exporter 추가는 coverage matrix에서 hard blocker가 드러난 경우에만 진행
+- compact input과 read-only advisor는 reward/event만 범위로 둠
 
 ### Gate D. Advisor Readiness
 

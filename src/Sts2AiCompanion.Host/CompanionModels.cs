@@ -1,6 +1,7 @@
 using Sts2AiCompanion.AdvisorSceneModel;
 using Sts2AiCompanion.SceneProvenance;
 using FoundationCompanionState = Sts2AiCompanion.Foundation.Contracts.CompanionState;
+using FoundationRewardEventCompactAdvisorInput = Sts2AiCompanion.Foundation.Contracts.RewardEventCompactAdvisorInput;
 using FoundationRewardAssessmentFacts = Sts2AiCompanion.Foundation.Contracts.RewardAssessmentFacts;
 using FoundationRewardOptionSet = Sts2AiCompanion.Foundation.Contracts.RewardOptionSet;
 using FoundationRewardRecommendationTrace = Sts2AiCompanion.Foundation.Contracts.RewardRecommendationTrace;
@@ -75,7 +76,8 @@ public sealed record AdviceInputPack(
     FoundationCompanionState? NormalizedState = null,
     FoundationRewardOptionSet? RewardOptionSet = null,
     FoundationRewardAssessmentFacts? RewardAssessmentFacts = null,
-    FoundationRewardRecommendationTrace? RewardRecommendationTraceSeed = null);
+    FoundationRewardRecommendationTrace? RewardRecommendationTraceSeed = null,
+    FoundationRewardEventCompactAdvisorInput? CompactInput = null);
 
 public sealed record AdviceResponse(
     string Status,

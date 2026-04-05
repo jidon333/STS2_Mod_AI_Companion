@@ -36,6 +36,28 @@
 - `request`는 `runId`, `attemptId`, `stepIndex`, `phase`, `history`, `windowBounds`, `screenshotPath` 같은 replay envelope 용도로만 쓴다.
 - shop coverage는 fresh live refresh 전까지 provisional로 취급한다.
 
+## Reward/Event Compact Advisor Blockers
+
+| blocker | category | current owner | wave 2 decision | notes |
+| --- | --- | --- | --- | --- |
+| reward option canonicalization instability | canonicalization | Harness + Foundation | solve in wave 2 | exact label match에 직접 영향 |
+| reward/event card-like description gap | display | Runtime extractor + display seam | solve in wave 2 | evaluated hover tip / node display 우선 |
+| event option duplicate/identity instability | canonicalization | Harness + Foundation | solve in wave 2 | option-level explicit facts의 전제 |
+| reward/event missingFacts affecting label match | advisor-input | Foundation compact builder | solve in wave 2 | no-call degraded fallback 가능 |
+| compact knowledge slice needs scene-local post-filter | advisor-input | Foundation compact builder | solve in wave 2 | existing bounded BuildSlice(...)만 사용 |
+| unsupported reward/event handling | fallback | Foundation shared factory | solve in wave 2 | live/replay/manual failure shape를 일치시킴 |
+| shop candidate scoring | out of scope | n/a | defer | wave 2 비범위 |
+| combat advice | out of scope | n/a | defer | wave 2 비범위 |
+
+## Compact Advisor Notes
+
+- `RewardEventCompactAdvisorInput`는 `SceneModel` 대체물이 아니라 compact advisor용 view다.
+- compact input은 `AdviceInputPack` 앞단의 adapter-first layer다.
+- compact builder는 `CompanionRunState + normalized state + bounded slice`를 입력으로 받는다.
+- 새 retrieval API는 만들지 않고 existing bounded `BuildSlice(...)`를 compact builder가 post-filter 한다.
+- reward/event 외 장면은 `unsupported/degraded` shared helper로 즉시 종료한다.
+- Host는 gating/manual orchestration만 담당하고, Foundation이 compact contract/builder/prompt/finalizer/fallback을 소유한다.
+
 ## Live Side Seams
 
 - combat:

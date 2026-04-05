@@ -8,6 +8,9 @@ using Sts2ModKit.Core.LiveExport;
 using FoundationCodexCliClient = Sts2AiCompanion.Foundation.Reasoning.CodexCliClient;
 using FoundationKnowledgeCatalogService = Sts2AiCompanion.Foundation.Knowledge.KnowledgeCatalogService;
 using FoundationAdvicePromptBuilder = Sts2AiCompanion.Foundation.Reasoning.AdvicePromptBuilder;
+using FoundationAdviceResponseFinalizer = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.AdviceResponseFinalizer;
+using FoundationCompactAdvisorFallbackFactory = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.CompactAdvisorFallbackFactory;
+using FoundationRewardEventCompactAdvisorInputBuilder = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder;
 
 namespace Sts2AiCompanion.Host;
 
@@ -22,6 +25,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
     private readonly AdvicePromptBuilder _promptBuilder;
     private readonly ICodexSessionClient _codexSessionClient;
     private readonly CompanionHostDiagnosticsService _diagnosticsService;
+    private readonly FoundationRewardEventCompactAdvisorInputBuilder _compactInputBuilder = new();
     private readonly SemaphoreSlim _adviceLock = new(1, 1);
     private readonly object _automaticAdviceSync = new();
     private readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
@@ -255,28 +259,63 @@ public sealed partial class CompanionHost : IAsyncDisposable
         _latestKnowledgeSlice = inputPackOverride is not null
             ? new KnowledgeSlice(inputPackOverride.KnowledgeEntries, inputPackOverride.KnowledgeEntries.Sum(e => e.Name.Length + (e.RawText?.Length ?? 0)), inputPackOverride.KnowledgeReasons)
             : _knowledgeCatalogService.BuildSlice(runState, _configuration.Assistant.MaxKnowledgeEntries, _configuration.Assistant.MaxKnowledgeBytes);
-        var inputPack = inputPackOverride ?? _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice);
-        var prompt = _promptBuilder.FormatPrompt(inputPack);
+        AdviceInputPack inputPack;
+        if (inputPackOverride is not null)
+        {
+            inputPack = inputPackOverride;
+        }
+        else
+        {
+            var compactResult = trigger.Manual
+                ? _compactInputBuilder.Build(runState.ToFoundation(), _latestKnowledgeSlice.ToFoundation())
+                : null;
+            if (trigger.Manual && compactResult is { Supported: false })
+            {
+                var fallbackInputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult.CompactInput);
+                var fallbackPaths = EnsureRunArtifacts(runState.Snapshot.RunId);
+                var fallbackRequestId = Guid.NewGuid().ToString("N");
+                var fallbackStartedAt = DateTimeOffset.UtcNow;
+                WriteCodexTrace(fallbackPaths, new
+                {
+                    kind = "request-started",
+                    requestId = fallbackRequestId,
+                    trigger = trigger.Kind,
+                    manual = trigger.Manual,
+                    requestedAt = trigger.RequestedAt,
+                    startedAt = fallbackStartedAt,
+                    existingSessionId = _sessionState?.SessionId,
+                    retrySourcePromptPack,
+                    compactInput = fallbackInputPack.CompactInput is not null,
+                    compactUnsupportedReason = compactResult.ReasonCode,
+                    knowledgeEntriesUsedCount = fallbackInputPack.KnowledgeEntries.Count,
+                    knowledgeReasons = fallbackInputPack.KnowledgeReasons,
+                });
+                var skippedResponse = compactResult.ReasonCode.StartsWith("unsupported-scene-for-compact-advisor:", StringComparison.Ordinal)
+                    ? FoundationCompactAdvisorFallbackFactory.CreateUnsupportedScene(fallbackInputPack.ToFoundation(), runState.NormalizedState.Scene.SceneType).ToHost()
+                    : FoundationCompactAdvisorFallbackFactory.CreateInsufficientCompactInput(
+                        fallbackInputPack.ToFoundation(),
+                        compactResult.ReasonCode,
+                        compactResult.MissingInformation,
+                        compactResult.DecisionBlockers).ToHost();
+                CompleteAdviceResult(runState, trigger, fallbackInputPack, retrySourcePromptPack, fallbackRequestId, fallbackStartedAt, fallbackPaths, skippedResponse, null, modelCall: false);
+                return;
+            }
+
+            inputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult?.CompactInput);
+        }
+
         var paths = EnsureRunArtifacts(runState.Snapshot.RunId);
         var promptPath = retrySourcePromptPack ?? Path.Combine(paths.PromptPacksRoot!, $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{trigger.Kind}.json");
         if (inputPackOverride is null) WriteJson(promptPath, inputPack);
         _lastPromptPackPath = promptPath;
         var requestId = Guid.NewGuid().ToString("N");
         var startedAt = DateTimeOffset.UtcNow;
-        WriteCodexTrace(paths, new { kind = "request-started", requestId, trigger = trigger.Kind, manual = trigger.Manual, requestedAt = trigger.RequestedAt, startedAt, existingSessionId = _sessionState?.SessionId, retrySourcePromptPack, knowledgeEntriesUsedCount = inputPack.KnowledgeEntries.Count, knowledgeReasons = inputPack.KnowledgeReasons });
+        WriteCodexTrace(paths, new { kind = "request-started", requestId, trigger = trigger.Kind, manual = trigger.Manual, requestedAt = trigger.RequestedAt, startedAt, existingSessionId = _sessionState?.SessionId, retrySourcePromptPack, compactInput = inputPack.CompactInput is not null, knowledgeEntriesUsedCount = inputPack.KnowledgeEntries.Count, knowledgeReasons = inputPack.KnowledgeReasons });
+        var prompt = _promptBuilder.FormatPrompt(inputPack);
         try
         {
             var (response, sessionId) = await _codexSessionClient.ExecuteAsync(inputPack, prompt, _sessionState?.SessionId, _selectedModel, _selectedReasoningEffort, cancellationToken).ConfigureAwait(false);
-            _latestAdvice = response; _lastAdviceAt = response.GeneratedAt;
-            if (!string.IsNullOrWhiteSpace(sessionId)) _sessionState = new CodexSessionState(runState.Snapshot.RunId, sessionId!, _sessionState?.CreatedAt ?? DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
-            WriteJson(paths.AdviceLatestJsonPath!, response);
-            File.WriteAllText(paths.AdviceLatestMarkdownPath!, _promptBuilder.FormatAdviceMarkdown(response));
-            AppendNdjson(paths.AdviceLogPath!, response);
-            if (_sessionState is not null) WriteJson(paths.CodexSessionPath!, _sessionState);
-            WriteCodexTrace(paths, new { kind = "request-finished", requestId, trigger = trigger.Kind, manual = trigger.Manual, status = response.Status, generatedAt = response.GeneratedAt, durationMs = (int)Math.Max(0, (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds), sessionId = _sessionState?.SessionId ?? sessionId, retrySourcePromptPack, missingInformation = response.MissingInformation, decisionBlockers = response.DecisionBlockers, knowledgeEntriesUsedCount = inputPack.KnowledgeEntries.Count, knowledgeReasons = inputPack.KnowledgeReasons, knowledgeRefs = response.KnowledgeRefs });
-            _latestCollectorStatus = _diagnosticsService.UpdateArtifacts(runState, _latestKnowledgeSlice, _latestAdvice, _sessionState);
-            EndAnalysis();
-            PublishSnapshot(CreateSnapshot(MapAdviceCompletionState(response), BuildAdviceCompletionMessage(trigger, response)));
+            CompleteAdviceResult(runState, trigger, inputPack, retrySourcePromptPack, requestId, startedAt, paths, response, sessionId, modelCall: true);
         }
         catch (OperationCanceledException)
         {
@@ -351,6 +390,57 @@ public sealed partial class CompanionHost : IAsyncDisposable
         return string.Equals(response.Status, "ok", StringComparison.OrdinalIgnoreCase)
             ? $"AI advice ready: {trigger.Kind}"
             : $"AI advice degraded: {trigger.Kind} - {response.Summary}";
+    }
+
+    private void CompleteAdviceResult(
+        CompanionRunState runState,
+        AdviceTrigger trigger,
+        AdviceInputPack inputPack,
+        string? retrySourcePromptPack,
+        string requestId,
+        DateTimeOffset startedAt,
+        CompanionArtifactPaths paths,
+        AdviceResponse response,
+        string? sessionId,
+        bool modelCall)
+    {
+        var finalResponse = FoundationAdviceResponseFinalizer.Apply(inputPack.ToFoundation(), response.ToFoundation()).ToHost();
+        _latestAdvice = finalResponse;
+        _lastAdviceAt = finalResponse.GeneratedAt;
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            _sessionState = new CodexSessionState(runState.Snapshot.RunId, sessionId!, _sessionState?.CreatedAt ?? DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        }
+
+        WriteJson(paths.AdviceLatestJsonPath!, finalResponse);
+        File.WriteAllText(paths.AdviceLatestMarkdownPath!, _promptBuilder.FormatAdviceMarkdown(finalResponse));
+        AppendNdjson(paths.AdviceLogPath!, finalResponse);
+        if (_sessionState is not null)
+        {
+            WriteJson(paths.CodexSessionPath!, _sessionState);
+        }
+
+        WriteCodexTrace(paths, new
+        {
+            kind = "request-finished",
+            requestId,
+            trigger = trigger.Kind,
+            manual = trigger.Manual,
+            status = finalResponse.Status,
+            generatedAt = finalResponse.GeneratedAt,
+            durationMs = (int)Math.Max(0, (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds),
+            sessionId = _sessionState?.SessionId ?? sessionId,
+            retrySourcePromptPack,
+            modelCall,
+            missingInformation = finalResponse.MissingInformation,
+            decisionBlockers = finalResponse.DecisionBlockers,
+            knowledgeEntriesUsedCount = inputPack.KnowledgeEntries.Count,
+            knowledgeReasons = inputPack.KnowledgeReasons,
+            knowledgeRefs = finalResponse.KnowledgeRefs,
+        });
+        _latestCollectorStatus = _diagnosticsService.UpdateArtifacts(runState, _latestKnowledgeSlice, _latestAdvice, _sessionState);
+        EndAnalysis();
+        PublishSnapshot(CreateSnapshot(MapAdviceCompletionState(finalResponse), BuildAdviceCompletionMessage(trigger, finalResponse)));
     }
 
     private CompanionArtifactPaths EnsureRunArtifacts(string runId)

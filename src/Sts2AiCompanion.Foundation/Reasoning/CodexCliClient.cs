@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Sts2AiCompanion.Foundation.Contracts;
+using Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor;
 using Sts2ModKit.Core.Configuration;
 
 namespace Sts2AiCompanion.Foundation.Reasoning;
@@ -136,7 +137,7 @@ public sealed class CodexCliClient : ICodexSessionClient
                     inputPack.TriggerKind,
                     resolvedSessionId,
                     rawOutput);
-                return (RewardAdviceResponseFinalizer.Apply(inputPack, response), resolvedSessionId);
+                return (AdviceResponseFinalizer.Apply(inputPack, response), resolvedSessionId);
             }
             catch (JsonException exception)
             {
@@ -349,7 +350,7 @@ public sealed class CodexCliClient : ICodexSessionClient
             inputPack.TriggerKind,
             sessionId,
             rawOutput);
-        return RewardAdviceResponseFinalizer.Apply(inputPack, response);
+        return AdviceResponseFinalizer.Apply(inputPack, response);
     }
 
     public static string? TryExtractExecErrorMessage(string? text)

@@ -1,5 +1,6 @@
 using Sts2ModKit.Core.Configuration;
 using FoundationAdvicePromptBuilder = Sts2AiCompanion.Foundation.Reasoning.AdvicePromptBuilder;
+using FoundationRewardEventCompactAdvisorInput = Sts2AiCompanion.Foundation.Contracts.RewardEventCompactAdvisorInput;
 
 namespace Sts2AiCompanion.Host;
 
@@ -17,9 +18,13 @@ public sealed class AdvicePromptBuilder
         _inner = inner;
     }
 
-    public AdviceInputPack BuildInputPack(CompanionRunState runState, AdviceTrigger trigger, KnowledgeSlice slice)
+    public AdviceInputPack BuildInputPack(
+        CompanionRunState runState,
+        AdviceTrigger trigger,
+        KnowledgeSlice slice,
+        FoundationRewardEventCompactAdvisorInput? compactInput = null)
     {
-        return _inner.BuildInputPack(runState.ToFoundation(), trigger.ToFoundation(), slice.ToFoundation()).ToHost();
+        return _inner.BuildInputPack(runState.ToFoundation(), trigger.ToFoundation(), slice.ToFoundation(), compactInput).ToHost();
     }
 
     public string FormatPrompt(AdviceInputPack inputPack)

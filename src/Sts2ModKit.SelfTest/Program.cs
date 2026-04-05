@@ -119,16 +119,22 @@ Run("advisor display resolver uses knowledge fallback for missing descriptions",
 Run("wpf scene display formatter hides utility combat options and sanitizes reward markers", TestAdvisorSceneDisplayFormatter, failures);
 Run("deck display formatter aggregates localized card names", TestDeckDisplayFormatter, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
+Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
+Run("event compact advisor input builder extracts explicit option facts and fails closed on duplicates", TestEventCompactAdvisorInputBuilder, failures);
+Run("compact advice prompt path prefers compact scene-local sections", TestCompactAdvicePromptBuilder, failures);
 Run("reward deterministic builders are reproducible", TestRewardDeterministicBuilders, failures);
 Run("reward deterministic layer stays off for non-card rewards", TestRewardNonCardFallback, failures);
 Run("reward deterministic layer falls back outside reward scenes", TestRewardDeterministicFallback, failures);
 Run("reward live and replay paths share deterministic context", TestRewardLiveReplayDeterministicContext, failures);
 Run("reward finalizer only normalizes labels and attaches trace", TestRewardFinalizerMinimalNormalization, failures);
+Run("compact finalizer clears labels outside current scene options", TestCompactAdviceFinalizer, failures);
 Run("reward model rationale survives without heavy backfill", TestRewardModelRationaleArtifacts, failures);
 Run("reward fixtures include a non-first winning choice", TestRewardNonFirstChoiceScenario, failures);
 Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
 Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
+Run("companion host manual reward advice uses compact input", TestCompanionHostManualRewardCompactAdviceFlow, failures);
 Run("companion host keeps scene model polling responsive while auto advice runs", TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice, failures);
+Run("replay validator uses compact path for reward and event fixtures", TestReplayAdvisorValidatorCompactPath, failures);
 Run("companion host publishes live advisor scene model artifacts", TestCompanionHostLiveSceneModelArtifacts, failures);
 Run("companion host classifies combat options and structured pile counts", TestCompanionHostCombatSceneModelClassification, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
@@ -4867,6 +4873,106 @@ static void TestRewardDeterministicBuilders()
     }
 }
 
+static void TestRewardCompactAdvisorInputBuilder()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var scenario = CreateCuratedRewardScenarios().Single(candidate => candidate.Name == "draw-gap-with-unknown-alternative");
+        var runState = CreateRewardRunStateForScenario(scenario, $"{scenario.RunId}-compact");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+
+        Assert(compactResult.Supported, "Expected reward compact input to stay supported when visible options are stable.");
+        Assert(compactResult.CompactInput is not null, "Expected reward compact input.");
+        var compact = compactResult.CompactInput!;
+        Assert(string.Equals(compact.SceneType, "reward", StringComparison.Ordinal), $"Expected compact reward scene type, got {compact.SceneType}.");
+        Assert(compact.VisibleOptions.Select(option => option.Label).SequenceEqual(scenario.Choices.Select(choice => choice.Label), StringComparer.Ordinal), "Expected compact reward visible options to preserve exact current labels.");
+        Assert(compact.RewardFacts is not null, "Expected reward facts.");
+        Assert(compact.MissingInformation.Contains("reward-option-knowledge-missing:미확인 카드", StringComparer.Ordinal), "Expected reward compact input to preserve deterministic missing-information flags.");
+        Assert(compact.DecisionBlockers.Count == 0, "Expected reward compact input to stay supported without synthetic blockers.");
+        Assert(compact.KnowledgeEntries.Count <= 6, "Expected compact knowledge slice to stay bounded.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestEventCompactAdvisorInputBuilder()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedKnowledgeCatalog(root);
+        var runState = CreateEventRunState("event-compact-run");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        Assert(compactResult.Supported, "Expected event compact input to stay supported when explicit option facts exist.");
+        Assert(compactResult.CompactInput is not null, "Expected event compact input.");
+        var compact = compactResult.CompactInput!;
+        Assert(compact.EventFacts is not null, "Expected event compact facts.");
+        Assert(compact.EventFacts.EventIdentityMissing, "Expected current event fixture to surface identity missing.");
+        Assert(compact.MissingInformation.Contains("event-identity-missing", StringComparer.Ordinal), "Expected event identity gap to surface.");
+        Assert(compact.EventFacts.OptionFacts.Any(fact => fact.Label == "해독한다" && fact.Effects.Any(effect => effect.Kind == "hp_loss")), "Expected explicit hp_loss fact for the first event option.");
+        Assert(compact.EventFacts.OptionFacts.Any(fact => fact.Label == "부순다" && fact.Effects.Any(effect => effect.Kind == "hp_gain")), "Expected explicit hp_gain fact for the second event option.");
+
+        var duplicateRunState = CreateEventRunState(
+            "event-duplicate-compact-run",
+            new[]
+            {
+                new LiveExportChoiceSummary("event-option", "같은 선택지", "option-0", string.Empty),
+                new LiveExportChoiceSummary("event-option", "같은 선택지", "option-1", string.Empty),
+            });
+        var duplicateSlice = knowledgeService.BuildSlice(ToFoundationRunState(duplicateRunState), 16, 8192);
+        var duplicateResult = compactBuilder.Build(ToFoundationRunState(duplicateRunState), duplicateSlice);
+        Assert(!duplicateResult.Supported, "Expected duplicate event option labels with no explicit facts to fail closed.");
+        Assert(duplicateResult.DecisionBlockers.Contains("event-duplicate-option-label:같은 선택지", StringComparer.Ordinal), "Expected duplicate event label blocker.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestCompactAdvicePromptBuilder()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var runState = CreateRewardRunState("reward-compact-prompt-run");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        var promptBuilder = new FoundationAdvicePromptBuilder(configuration);
+        var trigger = ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "compact-test", runState.RecentEvents.LastOrDefault()));
+        var inputPack = promptBuilder.BuildInputPack(ToFoundationRunState(runState), trigger, slice, compactResult.CompactInput);
+        var prompt = promptBuilder.FormatPrompt(inputPack);
+
+        Assert(inputPack.CompactInput is not null, "Expected prompt pack to carry compact input.");
+        Assert(prompt.Contains("scene_identity:", StringComparison.Ordinal), "Expected compact prompt to include scene identity.");
+        Assert(prompt.Contains("reward_facts:", StringComparison.Ordinal), "Expected compact prompt to include reward facts.");
+        Assert(prompt.Contains("visible_options:", StringComparison.Ordinal), "Expected compact prompt to include visible options.");
+        Assert(!prompt.Contains("current_state_summary:", StringComparison.Ordinal), "Compact prompt should not include the legacy large state summary section.");
+        Assert(!prompt.Contains("reward_option_set:", StringComparison.Ordinal), "Compact prompt should not include the legacy deterministic dump section.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestRewardDeterministicFallback()
 {
     var root = CreateTempDirectory();
@@ -4994,6 +5100,54 @@ static void TestRewardFinalizerMinimalNormalization()
     Assert(invalidFinalized.MissingInformation.SequenceEqual(invalidRawResponse.MissingInformation, StringComparer.Ordinal), "Expected finalizer not to backfill missing-information output.");
     Assert(invalidFinalized.KnowledgeRefs.SequenceEqual(invalidRawResponse.KnowledgeRefs, StringComparer.Ordinal), "Expected finalizer not to backfill knowledge refs.");
     Assert(invalidFinalized.RewardRecommendationTrace is not null, "Expected invalid recommendation labels to still carry deterministic trace.");
+}
+
+static void TestCompactAdviceFinalizer()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var runState = CreateRewardRunState("compact-finalizer-run");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        var promptBuilder = new FoundationAdvicePromptBuilder(configuration);
+        var inputPack = promptBuilder.BuildInputPack(
+            ToFoundationRunState(runState),
+            ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "compact-finalizer-test", runState.RecentEvents.LastOrDefault())),
+            slice,
+            compactResult.CompactInput);
+        var invalidResponse = new Sts2AiCompanion.Foundation.Contracts.AdviceResponse(
+            "ok",
+            "invalid-compact-label",
+            "invalid-compact-label",
+            "invalid-compact-label",
+            "현재 화면에 없는 선택지",
+            new[] { "model-owned-reason" },
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            0.4,
+            Array.Empty<string>(),
+            DateTimeOffset.UtcNow,
+            inputPack.RunId,
+            inputPack.TriggerKind,
+            null,
+            "{}");
+        var finalized = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.AdviceResponseFinalizer.Apply(inputPack, invalidResponse);
+
+        Assert(string.Equals(finalized.Status, "degraded", StringComparison.OrdinalIgnoreCase), "Expected compact finalizer to degrade invalid labels.");
+        Assert(finalized.RecommendedChoiceLabel is null, "Expected compact finalizer to clear invalid labels.");
+        Assert(finalized.DecisionBlockers.Contains("recommended-choice-not-in-current-scene-options", StringComparer.Ordinal), "Expected compact finalizer blocker.");
+        Assert(finalized.ReasoningBullets.SequenceEqual(invalidResponse.ReasoningBullets, StringComparer.Ordinal), "Expected compact finalizer not to rewrite reasoning.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
 }
 
 static void TestRewardModelRationaleArtifacts()
@@ -5556,11 +5710,14 @@ static void ExecuteCompanionHostAdviceFlowTest(bool collectorModeEnabled)
 
             var manualRequested = host.RequestManualAdviceAsync().GetAwaiter().GetResult();
             Assert(manualRequested, "Expected manual advice request to succeed after refresh.");
-            Assert(fakeClient.RequestCount == 2, "Expected manual advice to invoke the codex client.");
+            Assert(fakeClient.RequestCount == 1, "Expected manual compact advice on unsupported shop scene to skip the codex client.");
+            Assert(host.CurrentSnapshot.LatestAdvice is not null, "Expected manual advice request to publish a degraded response.");
+            Assert(string.Equals(host.CurrentSnapshot.LatestAdvice.Status, "degraded", StringComparison.OrdinalIgnoreCase), "Expected unsupported manual advice to degrade.");
+            Assert(host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains("unsupported-scene-for-compact-advisor:shop", StringComparer.Ordinal), "Expected unsupported-scene blocker for manual shop advice.");
 
             var retryRequested = host.RequestRetryLastAdviceAsync().GetAwaiter().GetResult();
             Assert(retryRequested, "Expected retry-last advice request to succeed after a prior advice run.");
-            Assert(fakeClient.RequestCount == 3, "Expected retry-last advice to invoke the codex client.");
+            Assert(fakeClient.RequestCount == 2, "Expected retry-last advice to invoke the last model-backed prompt pack.");
 
             var runRoot = host.CurrentSnapshot.Paths.RunRoot;
             Assert(!string.IsNullOrWhiteSpace(runRoot) && Directory.Exists(runRoot!), "Expected companion host to materialize a per-run artifact root.");
@@ -5595,6 +5752,118 @@ static void TestCompanionHostLiveSceneModelArtifacts()
     foreach (var scenario in CreateHostSceneModelScenarios())
     {
         ExecuteHostSceneModelScenario(scenario);
+    }
+}
+
+static void TestCompanionHostManualRewardCompactAdviceFlow()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var baseConfiguration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        var configuration = baseConfiguration with
+        {
+            Assistant = baseConfiguration.Assistant with
+            {
+                AutoAdviceEnabled = false,
+            },
+        };
+        var scenario = CreateDefaultRewardScenario();
+        SeedRewardKnowledgeCatalog(root);
+
+        var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+        Directory.CreateDirectory(layout.LiveRoot);
+        var snapshot = CreateRewardSnapshotForScenario(scenario, "manual-reward-compact-run");
+        var session = new LiveExportSession("manual-reward-session", snapshot.RunId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, layout.LiveRoot, "choice-list-presented", "rewards");
+        var events = CreateRewardEventsForScenario(snapshot.RunId, scenario);
+
+        WriteJson(layout.SnapshotPath, snapshot);
+        WriteJson(layout.SessionPath, session);
+        File.WriteAllText(layout.SummaryPath, "manual reward summary", Encoding.UTF8);
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+        File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+        File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+        Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+        var fakeClient = new FakeCodexSessionClient();
+        var host = new CompanionHost(configuration, root, fakeClient);
+        try
+        {
+            host.RefreshAsync().GetAwaiter().GetResult();
+            Assert(fakeClient.RequestCount == 0, "Expected auto advice off to skip codex on refresh.");
+
+            var manualRequested = host.RequestManualAdviceAsync().GetAwaiter().GetResult();
+            Assert(manualRequested, "Expected manual reward advice request to succeed.");
+            Assert(fakeClient.RequestCount == 1, "Expected manual reward advice to invoke codex through the compact path.");
+            Assert(host.CurrentSnapshot.LatestAdvice is not null, "Expected manual reward advice to publish a response.");
+
+            var promptPackPath = Directory.GetFiles(host.CurrentSnapshot.Paths.PromptPacksRoot!, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .First();
+            var promptPack = JsonSerializer.Deserialize<AdviceInputPack>(File.ReadAllText(promptPackPath), ConfigurationLoader.JsonOptions)
+                ?? throw new InvalidOperationException("Expected manual reward prompt pack.");
+            Assert(promptPack.CompactInput is not null, "Expected manual reward prompt pack to carry compact input.");
+            Assert(string.Equals(promptPack.CompactInput.SceneType, "reward", StringComparison.Ordinal), $"Expected compact reward scene type, got {promptPack.CompactInput.SceneType}.");
+            Assert(promptPack.CompactInput.VisibleOptions.Select(option => option.Label).Contains(host.CurrentSnapshot.LatestAdvice.RecommendedChoiceLabel, StringComparer.Ordinal), "Expected reward recommendation to exact-match a visible compact option label.");
+        }
+        finally
+        {
+            host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestReplayAdvisorValidatorCompactPath()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        SeedRewardKnowledgeCatalog(root);
+        SeedKnowledgeCatalog(root);
+
+        var rewardFixtureRoot = Path.Combine(root, "reward-compact-fixture");
+        WriteReplayFixture(
+            rewardFixtureRoot,
+            configuration,
+            CreateRewardSnapshotForScenario(CreateDefaultRewardScenario(), "replay-compact-reward-run"),
+            new LiveExportSession("replay-reward-session", "replay-compact-reward-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(root, "live"), "choice-list-presented", "rewards"),
+            CreateRewardEventsForScenario("replay-compact-reward-run", CreateDefaultRewardScenario()),
+            "reward replay summary");
+
+        var eventFixtureRoot = Path.Combine(root, "event-compact-fixture");
+        WriteReplayFixture(
+            eventFixtureRoot,
+            configuration,
+            CreateEventSceneModelSnapshot("replay-compact-event-run"),
+            new LiveExportSession("replay-event-session", "replay-compact-event-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(root, "live"), "choice-list-presented", "event"),
+            CreateEventEvents("replay-compact-event-run"),
+            "event replay summary");
+
+        var replayValidator = new FoundationReplayAdvisorValidator(configuration, root);
+        var rewardResult = replayValidator.ValidateAsync(rewardFixtureRoot, null, CancellationToken.None).GetAwaiter().GetResult();
+        var rewardPromptPack = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceInputPack>(File.ReadAllText(rewardResult.PromptPackPath), ConfigurationLoader.JsonOptions)
+            ?? throw new InvalidOperationException("Expected replay reward prompt pack.");
+        Assert(rewardPromptPack.CompactInput is not null, "Expected replay reward prompt pack to carry compact input.");
+        Assert(string.Equals(rewardPromptPack.CompactInput.SceneType, "reward", StringComparison.Ordinal), $"Expected replay reward compact scene type, got {rewardPromptPack.CompactInput.SceneType}.");
+
+        var eventResult = replayValidator.ValidateAsync(eventFixtureRoot, null, CancellationToken.None).GetAwaiter().GetResult();
+        var eventPromptPack = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceInputPack>(File.ReadAllText(eventResult.PromptPackPath), ConfigurationLoader.JsonOptions)
+            ?? throw new InvalidOperationException("Expected replay event prompt pack.");
+        Assert(eventPromptPack.CompactInput is not null, "Expected replay event prompt pack to carry compact input.");
+        Assert(string.Equals(eventPromptPack.CompactInput.SceneType, "event", StringComparison.Ordinal), $"Expected replay event compact scene type, got {eventPromptPack.CompactInput.SceneType}.");
+        Assert(eventPromptPack.CompactInput.EventFacts is not null, "Expected replay event prompt pack to include event facts.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
     }
 }
 
@@ -6053,6 +6322,48 @@ static LiveExportSnapshot CreateEventSceneModelSnapshot(string runId)
             ["ancientPhase"] = "options",
             ["ancientEventDetected"] = "true",
         },
+    };
+}
+
+static IReadOnlyList<LiveExportEventEnvelope> CreateEventEvents(string runId)
+{
+    return new[]
+    {
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            1,
+            runId,
+            "event-opened",
+            "event",
+            1,
+            3,
+            new Dictionary<string, object?>()),
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow,
+            2,
+            runId,
+            "choice-list-presented",
+            "event",
+            1,
+            3,
+            new Dictionary<string, object?>
+            {
+                ["choices"] = new[] { "해독한다", "부순다" },
+            }),
+    };
+}
+
+static CompanionRunState CreateEventRunState(string runId, IReadOnlyList<LiveExportChoiceSummary>? choices = null)
+{
+    var snapshot = CreateEventSceneModelSnapshot(runId) with
+    {
+        CurrentChoices = choices ?? CreateEventSceneModelSnapshot(runId).CurrentChoices,
+    };
+    var session = new LiveExportSession("event-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "event-live"), "choice-list-presented", "event");
+    var events = CreateEventEvents(runId);
+    return new CompanionRunState(snapshot, session, "event summary", events, false)
+    {
+        NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
     };
 }
 
@@ -6614,6 +6925,22 @@ static CompanionRunState CreateNonCardRewardRunState(string runId)
     };
 }
 
+static void WriteReplayFixture(
+    string fixtureRoot,
+    ScaffoldConfiguration configuration,
+    LiveExportSnapshot snapshot,
+    LiveExportSession session,
+    IReadOnlyList<LiveExportEventEnvelope> events,
+    string summaryText)
+{
+    var liveMirrorRoot = Path.Combine(fixtureRoot, "live-mirror");
+    Directory.CreateDirectory(liveMirrorRoot);
+    WriteJson(Path.Combine(liveMirrorRoot, configuration.LiveExport.SnapshotFileName), snapshot);
+    WriteJson(Path.Combine(liveMirrorRoot, configuration.LiveExport.SessionFileName), session);
+    File.WriteAllText(Path.Combine(liveMirrorRoot, configuration.LiveExport.SummaryFileName), summaryText, Encoding.UTF8);
+    File.WriteAllText(Path.Combine(liveMirrorRoot, configuration.LiveExport.EventsFileName), string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+}
+
 static void SeedKnowledgeCatalog(string root)
 {
     var knowledgeRoot = Path.Combine(root, "artifacts", "knowledge");
@@ -6852,7 +7179,8 @@ static Sts2AiCompanion.Foundation.Contracts.AdviceInputPack ToFoundationAdviceIn
         inputPack.NormalizedState,
         inputPack.RewardOptionSet,
         inputPack.RewardAssessmentFacts,
-        inputPack.RewardRecommendationTraceSeed);
+        inputPack.RewardRecommendationTraceSeed,
+        inputPack.CompactInput);
 }
 
 static AdviceInputPack ToHostAdviceInputPack(Sts2AiCompanion.Foundation.Contracts.AdviceInputPack inputPack)
@@ -6872,7 +7200,8 @@ static AdviceInputPack ToHostAdviceInputPack(Sts2AiCompanion.Foundation.Contract
         inputPack.NormalizedState,
         inputPack.RewardOptionSet,
         inputPack.RewardAssessmentFacts,
-        inputPack.RewardRecommendationTraceSeed);
+        inputPack.RewardRecommendationTraceSeed,
+        inputPack.CompactInput);
 }
 
 static Sts2AiCompanion.Foundation.Contracts.AdviceResponse ToFoundationAdviceResponse(AdviceResponse response)

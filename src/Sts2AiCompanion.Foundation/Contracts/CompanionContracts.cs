@@ -57,7 +57,8 @@ public sealed record AdviceInputPack(
     CompanionState? NormalizedState = null,
     RewardOptionSet? RewardOptionSet = null,
     RewardAssessmentFacts? RewardAssessmentFacts = null,
-    RewardRecommendationTrace? RewardRecommendationTraceSeed = null);
+    RewardRecommendationTrace? RewardRecommendationTraceSeed = null,
+    RewardEventCompactAdvisorInput? CompactInput = null);
 
 public sealed record AdviceResponse(
     string Status,

@@ -74,7 +74,8 @@ internal static class FoundationContractAdapter
             inputPack.NormalizedState,
             inputPack.RewardOptionSet,
             inputPack.RewardAssessmentFacts,
-            inputPack.RewardRecommendationTraceSeed);
+            inputPack.RewardRecommendationTraceSeed,
+            inputPack.CompactInput);
     }
 
     public static AdviceInputPack ToHost(this FoundationAdviceInputPack inputPack)
@@ -94,7 +95,8 @@ internal static class FoundationContractAdapter
             inputPack.NormalizedState,
             inputPack.RewardOptionSet,
             inputPack.RewardAssessmentFacts,
-            inputPack.RewardRecommendationTraceSeed);
+            inputPack.RewardRecommendationTraceSeed,
+            inputPack.CompactInput);
     }
 
     public static FoundationAdviceResponse ToFoundation(this AdviceResponse response)

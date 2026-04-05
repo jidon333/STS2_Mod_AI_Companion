@@ -81,6 +81,17 @@
 - `request.Observer.goal/allowedActions/failureModeHint/reasoningMode` 같은 prompt/actuator 필드는 scene truth 계산에 쓰지 않는다.
 - WPF sidecar는 같은 scene model을 scene-aware display formatter로 다시 읽을 수 있지만, display-only knowledge/localization은 label/description 렌더링에만 쓰고 truth source로 쓰지 않는다.
 
+## Wave 2 Link
+
+M9 wave 2에서는 `SceneModel`이 advisor input이 되지 않는다.
+
+- `SceneModel`은 계속 fact model이고, sidecar/WPF/replay artifact surface다.
+- `RewardEventCompactAdvisorInput`은 별도 compact advisor view다.
+- compact advisor는 `SceneModel`에서 직접 파생하기보다 `CompanionRunState + normalized state + bounded knowledge slice`를 다시 압축해서 만든다.
+- knowledge slice는 새 retrieval API 없이 기존 `KnowledgeCatalogService.BuildSlice(...)`를 사용한 뒤 compact builder가 reward/event 관련 항목만 post-filter한다.
+- truth source는 `SceneModel`이 아니라 `normalized state + bounded slice`다.
+- reward/event 외 장면은 compact advisor 대상이 아니다.
+
 ## Common SceneModel Envelope
 
 모든 scene model은 아래 공통 필드를 가진다.
@@ -190,9 +201,12 @@ nullable rule:
 ## V1 Rules
 
 - v1 목표는 `SceneModel + summary`까지다.
-- `AdvisorInputV1`는 다음 wave 전까지 구현하지 않는다.
+- compact advisor input은 `RewardEventCompactAdvisorInput` 기준으로만 다룬다.
 - summary는 사실 서술만 한다.
 - summary는 `click`, `wait`, `fallback`, `candidate`, `targetLabel` 같은 actuator vocabulary를 포함하지 않는다.
 - hard gap은 추정하지 않고 `missingFacts`로 남긴다.
 - reward option list는 raw observer dump를 그대로 넘기지 않고 scene-level normalization을 거친다.
 - live sidecar의 core/advanced 패널은 이 scene model을 사람이 읽기 쉽게 재배치하는 display layer다. raw summary를 그대로 복사하지 않고, scene-aware formatter와 display-only knowledge를 거쳐 보여 줄 수 있다.
+- compact advisor input은 `SceneModel`의 alias가 아니라, reward/event 전용 판단 재료다.
+- compact advisor input은 Host-local DTO가 아니라 Foundation contract다.
+- finalizer와 shared degraded fallback도 Foundation 소유다.

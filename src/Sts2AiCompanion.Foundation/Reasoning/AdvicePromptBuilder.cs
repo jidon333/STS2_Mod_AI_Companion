@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Sts2AiCompanion.Foundation.Contracts;
+using Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor;
 using Sts2ModKit.Core.Configuration;
 
 namespace Sts2AiCompanion.Foundation.Reasoning;
@@ -16,7 +17,11 @@ public sealed class AdvicePromptBuilder
         _configuration = configuration;
     }
 
-    public AdviceInputPack BuildInputPack(CompanionRunState runState, AdviceTrigger trigger, KnowledgeSlice slice)
+    public AdviceInputPack BuildInputPack(
+        CompanionRunState runState,
+        AdviceTrigger trigger,
+        KnowledgeSlice slice,
+        RewardEventCompactAdvisorInput? compactInput = null)
     {
         var rewardOptionSet = _rewardOptionSetBuilder.Build(runState);
         var rewardAssessmentFacts = _rewardAssessmentFactsBuilder.Build(runState, slice, rewardOptionSet);
@@ -39,11 +44,17 @@ public sealed class AdvicePromptBuilder
             runState.NormalizedState,
             rewardOptionSet,
             rewardAssessmentFacts,
-            rewardRecommendationTrace);
+            rewardRecommendationTrace,
+            compactInput);
     }
 
     public string FormatPrompt(AdviceInputPack inputPack)
     {
+        if (inputPack.CompactInput is not null)
+        {
+            return FormatCompactPrompt(inputPack);
+        }
+
         var builder = new StringBuilder();
         builder.AppendLine("당신은 Slay the Spire 2 조언 어시스턴트입니다.");
         builder.AppendLine("- 게임을 대신 플레이하지 마세요.");
@@ -170,6 +181,152 @@ public sealed class AdvicePromptBuilder
         builder.AppendLine("- confidence: 0.0에서 1.0 사이 숫자");
         builder.AppendLine("- knowledgeRefs: 근거로 사용한 지식 항목 id 또는 이름");
         builder.AppendLine("- 정보가 부족해도 summary만 얼버무리지 말고 missingInformation과 decisionBlockers를 반드시 채우세요.");
+        return builder.ToString().TrimEnd();
+    }
+
+    private static string FormatCompactPrompt(AdviceInputPack inputPack)
+    {
+        var compact = inputPack.CompactInput
+            ?? throw new InvalidOperationException("CompactInput is required for compact prompt formatting.");
+        var builder = new StringBuilder();
+        builder.AppendLine("당신은 Slay the Spire 2 조언 어시스턴트입니다.");
+        builder.AppendLine("- reward/event 장면의 compact input만 사용하세요.");
+        builder.AppendLine("- compact input에 없는 정보는 추정하지 마세요.");
+        builder.AppendLine("- 추천이 가능해도 recommendedChoiceLabel은 visible_options에 있는 label과 정확히 일치해야 합니다.");
+        builder.AppendLine("- 불충분하면 recommendedChoiceLabel=null 로 두고 missingInformation/decisionBlockers를 채우세요.");
+        builder.AppendLine("- 반드시 한국어 JSON 스키마만 반환하세요.");
+        builder.AppendLine();
+        builder.AppendLine($"trigger: {inputPack.TriggerKind}");
+        builder.AppendLine($"manual: {inputPack.Manual}");
+        builder.AppendLine($"run_id: {inputPack.RunId}");
+        builder.AppendLine("scene_identity:");
+        builder.AppendLine($"- scene_type: {compact.SceneType}");
+        builder.AppendLine($"- scene_stage: {compact.SceneStage}");
+        builder.AppendLine($"- canonical_owner: {compact.CanonicalOwner}");
+        builder.AppendLine();
+        builder.AppendLine("run_context:");
+        builder.AppendLine($"- act: {compact.RunContext.Act?.ToString() ?? "?"}");
+        builder.AppendLine($"- floor: {compact.RunContext.Floor?.ToString() ?? "?"}");
+        builder.AppendLine($"- hp: {(compact.RunContext.CurrentHp?.ToString() ?? "?")}/{(compact.RunContext.MaxHp?.ToString() ?? "?")}");
+        builder.AppendLine($"- gold: {compact.RunContext.Gold?.ToString() ?? "?"}");
+        builder.AppendLine($"- relic_count: {compact.RunContext.RelicCount}");
+        builder.AppendLine($"- potion_count: {compact.RunContext.PotionCount}");
+        builder.AppendLine($"- deck_count: {compact.RunContext.DeckCount}");
+        builder.AppendLine();
+        builder.AppendLine("player_summary:");
+        builder.AppendLine($"- deck: {compact.PlayerSummary.DeckSummary}");
+        builder.AppendLine($"- key_relics: {(compact.PlayerSummary.KeyRelics.Count == 0 ? "none" : string.Join(", ", compact.PlayerSummary.KeyRelics))}");
+        builder.AppendLine($"- key_potions: {(compact.PlayerSummary.KeyPotions.Count == 0 ? "none" : string.Join(", ", compact.PlayerSummary.KeyPotions))}");
+        builder.AppendLine();
+        builder.AppendLine("visible_options:");
+        foreach (var option in compact.VisibleOptions)
+        {
+            builder.AppendLine($"- label: {option.Label}");
+            builder.AppendLine($"  enabled: {option.Enabled}");
+            builder.AppendLine($"  kind: {option.Kind}");
+            if (!string.IsNullOrWhiteSpace(option.Value))
+            {
+                builder.AppendLine($"  value: {option.Value}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(option.Description))
+            {
+                builder.AppendLine($"  description: {option.Description}");
+            }
+        }
+
+        if (compact.VisibleOptions.Count == 0)
+        {
+            builder.AppendLine("- none");
+        }
+
+        if (compact.RewardFacts is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("reward_facts:");
+            builder.AppendLine($"- reward_type: {compact.RewardFacts.RewardType ?? "unknown"}");
+            builder.AppendLine($"- skip_allowed: {compact.RewardFacts.SkipAllowed}");
+            foreach (var fact in compact.RewardFacts.FactLines)
+            {
+                builder.AppendLine($"- {fact}");
+            }
+        }
+
+        if (compact.EventFacts is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("event_facts:");
+            builder.AppendLine($"- event_id: {compact.EventFacts.EventId ?? "unknown"}");
+            builder.AppendLine($"- event_identity_missing: {compact.EventFacts.EventIdentityMissing}");
+            builder.AppendLine($"- reward_child_active: {compact.EventFacts.RewardChildActive}");
+            builder.AppendLine($"- proceed_visible: {compact.EventFacts.ProceedVisible}");
+            foreach (var optionFact in compact.EventFacts.OptionFacts)
+            {
+                builder.AppendLine($"- option: {optionFact.Label} enabled={optionFact.Enabled} value={optionFact.Value ?? "null"}");
+                foreach (var effect in optionFact.Effects)
+                {
+                    builder.AppendLine($"  effect: {effect.Kind} amount={effect.Amount?.ToString() ?? "?"} text={effect.Text}");
+                }
+
+                foreach (var missing in optionFact.MissingInformation)
+                {
+                    builder.AppendLine($"  missing: {missing}");
+                }
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("recent_events:");
+        foreach (var recentEvent in compact.RecentEvents)
+        {
+            builder.AppendLine($"- {recentEvent.Kind} screen={recentEvent.Screen} act={recentEvent.Act?.ToString() ?? "?"} floor={recentEvent.Floor?.ToString() ?? "?"}");
+            if (!string.IsNullOrWhiteSpace(recentEvent.Summary))
+            {
+                builder.AppendLine($"  summary: {recentEvent.Summary}");
+            }
+        }
+
+        if (compact.RecentEvents.Count == 0)
+        {
+            builder.AppendLine("- none");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("knowledge_slice:");
+        foreach (var knowledge in compact.KnowledgeEntries)
+        {
+            builder.AppendLine($"- {knowledge.Name} [{knowledge.Id}]");
+            if (!string.IsNullOrWhiteSpace(knowledge.Summary))
+            {
+                builder.AppendLine($"  summary: {knowledge.Summary}");
+            }
+        }
+
+        if (compact.KnowledgeEntries.Count == 0)
+        {
+            builder.AppendLine("- none");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("missing_information:");
+        foreach (var missing in compact.MissingInformation.DefaultIfEmpty("none"))
+        {
+            builder.AppendLine($"- {missing}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("decision_blockers:");
+        foreach (var blocker in compact.DecisionBlockers.DefaultIfEmpty("none"))
+        {
+            builder.AppendLine($"- {blocker}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("response_instructions:");
+        builder.AppendLine("- visible_options 안의 label 하나만 recommendedChoiceLabel 로 선택하거나, 확정 불가면 null 로 두세요.");
+        builder.AppendLine("- reward/event 사실과 visible_options에서 직접 확인 가능한 근거만 reasoningBullets에 쓰세요.");
+        builder.AppendLine("- guessed effect, guessed option, guessed label 금지.");
+        builder.AppendLine("- missingInformation과 decisionBlockers를 비우지 말고 compact input의 공백을 그대로 반영하세요.");
         return builder.ToString().TrimEnd();
     }
 
