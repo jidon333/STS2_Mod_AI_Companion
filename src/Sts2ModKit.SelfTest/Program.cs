@@ -121,6 +121,8 @@ Run("deck display formatter aggregates localized card names", TestDeckDisplayFor
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
 Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder extracts explicit option facts and fails closed on duplicates", TestEventCompactAdvisorInputBuilder, failures);
+Run("shop compact advisor input builder extracts purchase counts and fails closed on duplicates", TestShopCompactAdvisorInputBuilder, failures);
+Run("combat compact preview builder captures current facts and stays preview-only", TestCombatCompactPreviewBuilder, failures);
 Run("compact advice prompt path prefers compact scene-local sections", TestCompactAdvicePromptBuilder, failures);
 Run("reward deterministic builders are reproducible", TestRewardDeterministicBuilders, failures);
 Run("reward deterministic layer stays off for non-card rewards", TestRewardNonCardFallback, failures);
@@ -130,12 +132,14 @@ Run("reward finalizer only normalizes labels and attaches trace", TestRewardFina
 Run("compact finalizer clears labels outside current scene options", TestCompactAdviceFinalizer, failures);
 Run("reward model rationale survives without heavy backfill", TestRewardModelRationaleArtifacts, failures);
 Run("reward fixtures include a non-first winning choice", TestRewardNonFirstChoiceScenario, failures);
+Run("shop compact advisor host flow supports model-call and fails closed on duplicates", TestCompanionHostShopCompactAdviceSafety, failures);
+Run("combat preview compact safety stays no-call and retry-last safe", TestCompanionHostCombatPreviewCompactAdviceSafety, failures);
 Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
 Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
 Run("companion host manual reward advice uses compact input", TestCompanionHostManualRewardCompactAdviceFlow, failures);
-Run("companion host keeps compact advisor reward and event scenes manual-only", TestCompanionHostAutomaticCompactAdviceRemainsManualOnly, failures);
+Run("companion host keeps compact advisor managed scenes manual-only", TestCompanionHostAutomaticCompactAdviceRemainsManualOnly, failures);
 Run("companion host keeps scene model polling responsive while auto advice runs", TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice, failures);
-Run("replay validator uses compact path for reward and event fixtures", TestReplayAdvisorValidatorCompactPath, failures);
+Run("replay validator uses compact path for reward event shop and combat fixtures", TestReplayAdvisorValidatorCompactPath, failures);
 Run("companion host publishes live advisor scene model artifacts", TestCompanionHostLiveSceneModelArtifacts, failures);
 Run("companion host classifies combat options and structured pile counts", TestCompanionHostCombatSceneModelClassification, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
@@ -4963,6 +4967,79 @@ static void TestEventCompactAdvisorInputBuilder()
     }
 }
 
+static void TestShopCompactAdvisorInputBuilder()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedKnowledgeCatalog(root);
+        var runState = CreateShopRunState("shop-compact-run");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        Assert(compactResult.Supported, "Expected shop compact input to stay supported when visible purchase options are stable.");
+        Assert(compactResult.CompactInput is not null, "Expected shop compact input.");
+        var compact = compactResult.CompactInput!;
+        Assert(string.Equals(compact.SceneType, "shop", StringComparison.Ordinal), $"Expected compact shop scene type, got {compact.SceneType}.");
+        Assert(compact.ShopFacts is not null, "Expected shop compact facts.");
+        Assert(compact.ShopFacts.InventoryOpen, "Expected inventory-open shop fact.");
+        Assert(compact.ShopFacts.ItemCount == 2, $"Expected item count 2, got {compact.ShopFacts.ItemCount}.");
+        Assert(compact.ShopFacts.ServiceCount == 1, $"Expected service count 1, got {compact.ShopFacts.ServiceCount}.");
+        Assert(compact.ShopFacts.AffordableOptionCount == 2, $"Expected affordable option count 2, got {compact.ShopFacts.AffordableOptionCount}.");
+        Assert(compact.VisibleOptions.Select(option => option.Label).SequenceEqual(runState.Snapshot.CurrentChoices.Select(choice => choice.Label), StringComparer.Ordinal), "Expected shop visible options to preserve exact current labels.");
+
+        var duplicateRunState = CreateShopRunState("shop-duplicate-compact-run", CreateShopDuplicateVisibleOptionsSceneModelSnapshot("shop-duplicate-compact-run"));
+        var duplicateSlice = knowledgeService.BuildSlice(ToFoundationRunState(duplicateRunState), 16, 8192);
+        var duplicateResult = compactBuilder.Build(ToFoundationRunState(duplicateRunState), duplicateSlice);
+        Assert(!duplicateResult.Supported, "Expected duplicate shop option labels to fail closed.");
+        Assert(duplicateResult.DecisionBlockers.Contains("shop-duplicate-option-label:몸풀기", StringComparer.Ordinal), "Expected duplicate shop label blocker.");
+        Assert(duplicateResult.DecisionBlockers.Contains("shop-compact-input-insufficient", StringComparer.Ordinal), "Expected duplicate shop labels to mark compact input insufficient.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestCombatCompactPreviewBuilder()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedKnowledgeCatalog(root);
+        var runState = CreateCombatRunState("combat-compact-preview-run");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        Assert(!compactResult.Supported, "Expected combat compact preview to stay no-call in this wave.");
+        Assert(string.Equals(compactResult.ReasonCode, "combat-preview-only", StringComparison.Ordinal), $"Expected combat preview reason code, got {compactResult.ReasonCode}.");
+        Assert(compactResult.CompactInput is not null, "Expected combat compact input.");
+        var compact = compactResult.CompactInput!;
+        Assert(string.Equals(compact.SceneType, "combat", StringComparison.Ordinal), $"Expected compact combat scene type, got {compact.SceneType}.");
+        Assert(compact.CombatFacts is not null, "Expected combat compact facts.");
+        Assert(compact.CombatFacts.PreviewOnly, "Expected combat facts to stay preview-only.");
+        Assert(compact.CombatFacts.Energy == 3, $"Expected combat energy 3, got {compact.CombatFacts.Energy?.ToString() ?? "<null>"}.");
+        Assert(compact.CombatFacts.HandCount == 3, $"Expected combat hand count 3, got {compact.CombatFacts.HandCount?.ToString() ?? "<null>"}.");
+        Assert(compact.CombatFacts.DrawPileCount == 10, $"Expected draw pile count 10, got {compact.CombatFacts.DrawPileCount?.ToString() ?? "<null>"}.");
+        Assert(compact.CombatFacts.RoundNumber == 3, $"Expected combat round number 3, got {compact.CombatFacts.RoundNumber?.ToString() ?? "<null>"}.");
+        Assert(compact.CombatFacts.TargetableEnemyCount == 1, $"Expected targetable enemy count 1, got {compact.CombatFacts.TargetableEnemyCount?.ToString() ?? "<null>"}.");
+        Assert(compact.CombatFacts.HittableEnemyCount == 1, $"Expected hittable enemy count 1, got {compact.CombatFacts.HittableEnemyCount?.ToString() ?? "<null>"}.");
+        Assert(compact.CombatFacts.TargetSummary is not null && compact.CombatFacts.TargetSummary.Contains("Jaw Worm", StringComparison.OrdinalIgnoreCase), "Expected combat target summary to survive into compact facts.");
+        Assert(compact.VisibleOptions.All(option => !string.Equals(option.Label, "Ping", StringComparison.OrdinalIgnoreCase)), "Expected combat preview compact options to exclude Ping.");
+        Assert(compact.DecisionBlockers.Contains("combat-preview-only", StringComparer.Ordinal), "Expected combat preview blocker.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestCompactAdvicePromptBuilder()
 {
     var root = CreateTempDirectory();
@@ -4986,6 +5063,20 @@ static void TestCompactAdvicePromptBuilder()
         Assert(prompt.Contains("visible_options:", StringComparison.Ordinal), "Expected compact prompt to include visible options.");
         Assert(!prompt.Contains("current_state_summary:", StringComparison.Ordinal), "Compact prompt should not include the legacy large state summary section.");
         Assert(!prompt.Contains("reward_option_set:", StringComparison.Ordinal), "Compact prompt should not include the legacy deterministic dump section.");
+
+        var shopRunState = CreateShopRunState("shop-compact-prompt-run");
+        var shopSlice = knowledgeService.BuildSlice(ToFoundationRunState(shopRunState), 16, 8192);
+        var shopCompactResult = compactBuilder.Build(ToFoundationRunState(shopRunState), shopSlice);
+        var shopInputPack = promptBuilder.BuildInputPack(
+            ToFoundationRunState(shopRunState),
+            trigger,
+            shopSlice,
+            shopCompactResult.CompactInput);
+        var shopPrompt = promptBuilder.FormatPrompt(shopInputPack);
+
+        Assert(shopInputPack.CompactInput is not null && string.Equals(shopInputPack.CompactInput.SceneType, "shop", StringComparison.Ordinal), "Expected compact shop input in prompt pack.");
+        Assert(shopPrompt.Contains("shop_facts:", StringComparison.Ordinal), "Expected compact prompt to include shop facts.");
+        Assert(!shopPrompt.Contains("reward_facts:", StringComparison.Ordinal), "Shop compact prompt should not include reward facts.");
     }
     finally
     {
@@ -5546,11 +5637,10 @@ static void TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice()
             host.StartAsync().GetAwaiter().GetResult();
 
             WaitForCondition(
-                () => fakeClient.RequestCount == 1 && host.CurrentSnapshot.Status.AnalysisInProgress,
+                () => host.CurrentSnapshot.LatestSceneModel is { SceneType: "shop" },
                 TimeSpan.FromSeconds(2),
-                "Expected auto advice to start from the initial non-compact snapshot.");
-
-            Assert(host.CurrentSnapshot.LatestSceneModel is { SceneType: "shop" }, "Expected initial scene model to publish shop before the delayed advice completes.");
+                "Expected initial scene model to publish shop.");
+            Assert(fakeClient.RequestCount == 0, "Expected shop refresh to stay no-call while polling remains responsive.");
 
             WriteJson(layout.SnapshotPath, eventSnapshot);
             File.WriteAllText(layout.SummaryPath, "event summary", Encoding.UTF8);
@@ -5558,9 +5648,7 @@ static void TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice()
             WaitForCondition(
                 () => host.CurrentSnapshot.LatestSceneModel is { SceneType: "event", SceneStage: "ancient-option" },
                 TimeSpan.FromSeconds(2),
-                "Expected polling to publish the newer event scene model while auto advice was still running.");
-
-            Assert(host.CurrentSnapshot.Status.AnalysisInProgress, "Expected delayed auto advice to still be running when the newer scene model published.");
+                "Expected polling to publish the newer event scene model.");
         }
         finally
         {
@@ -5698,20 +5786,20 @@ static void ExecuteCompanionHostAdviceFlowTest(bool collectorModeEnabled)
         var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
         Directory.CreateDirectory(layout.LiveRoot);
         var runId = collectorModeEnabled ? "collector-on-run" : "collector-off-run";
-        var snapshot = CreateHostSnapshot(runId, "shop");
-        var session = new LiveExportSession("session-001", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, layout.LiveRoot, "choice-list-presented", "shop");
+        var snapshot = CreateEventSceneModelSnapshot(runId);
+        var session = new LiveExportSession("session-001", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, layout.LiveRoot, "choice-list-presented", "event");
         var eventPayload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
-            ["screenEpisode"] = "shop",
+            ["screenEpisode"] = "event",
         };
         var events = new[]
         {
-            new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, runId, "choice-list-presented", "shop", 1, 3, eventPayload),
+            new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, runId, "choice-list-presented", "event", 1, 3, eventPayload),
         };
 
         WriteJson(layout.SnapshotPath, snapshot);
         WriteJson(layout.SessionPath, session);
-        File.WriteAllText(layout.SummaryPath, "shop summary", Encoding.UTF8);
+        File.WriteAllText(layout.SummaryPath, "event summary", Encoding.UTF8);
         Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
         File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
         File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
@@ -5726,32 +5814,29 @@ static void ExecuteCompanionHostAdviceFlowTest(bool collectorModeEnabled)
         try
         {
             host.RefreshAsync().GetAwaiter().GetResult();
-            Assert(
-                fakeClient.RequestCount == 1,
-                $"Expected refresh to trigger automatic advice when a semantic event is present. state={host.CurrentSnapshot.Status.State} message={host.CurrentSnapshot.Status.Message}");
-            Assert(host.CurrentSnapshot.LatestAdvice is not null && host.CurrentSnapshot.LatestAdvice.TriggerKind == "choice-list-presented", "Expected automatic advice to be published after refresh.");
-            Assert(host.CurrentSnapshot.RunState?.NormalizedState.Scene.SceneType == "shop", "Expected host run state to carry normalized foundation scene state.");
+            Assert(fakeClient.RequestCount == 0, "Expected event refresh to stay no-call on the compact advisor manual path.");
+            Assert(host.CurrentSnapshot.LatestSceneModel is { SceneType: "event" }, "Expected event scene model to publish after refresh.");
+            Assert(host.CurrentSnapshot.RunState?.NormalizedState.Scene.SceneType == "event", "Expected host run state to carry normalized foundation scene state.");
 
             var manualRequested = host.RequestManualAdviceAsync().GetAwaiter().GetResult();
             Assert(manualRequested, "Expected manual advice request to succeed after refresh.");
-            Assert(fakeClient.RequestCount == 1, "Expected manual compact advice on unsupported shop scene to skip the codex client.");
-            Assert(host.CurrentSnapshot.LatestAdvice is not null, "Expected manual advice request to publish a degraded response.");
-            Assert(string.Equals(host.CurrentSnapshot.LatestAdvice.Status, "degraded", StringComparison.OrdinalIgnoreCase), "Expected unsupported manual advice to degrade.");
-            Assert(host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains("unsupported-scene-for-compact-advisor:shop", StringComparer.Ordinal), "Expected unsupported-scene blocker for manual shop advice.");
+            Assert(fakeClient.RequestCount == 1, "Expected manual compact advice to invoke codex for the supported event scene.");
+            Assert(host.CurrentSnapshot.LatestAdvice is not null, "Expected manual advice request to publish a response.");
 
             var promptPacks = Directory.GetFiles(host.CurrentSnapshot.Paths.PromptPacksRoot!, "*.json", SearchOption.TopDirectoryOnly)
                 .OrderBy(File.GetLastWriteTimeUtc)
                 .ToArray();
-            Assert(promptPacks.Length == 2, $"Expected automatic + no-call degraded prompt packs to both be preserved. actual={promptPacks.Length}");
+            Assert(promptPacks.Length >= 1, $"Expected prompt pack artifacts to be preserved. actual={promptPacks.Length}");
             var noCallPromptPack = JsonSerializer.Deserialize<AdviceInputPack>(File.ReadAllText(promptPacks[^1]), ConfigurationLoader.JsonOptions)
-                ?? throw new InvalidOperationException("Expected manual unsupported prompt pack.");
-            Assert(string.Equals(noCallPromptPack.CurrentScreen, "shop", StringComparison.Ordinal), $"Expected unsupported prompt pack to preserve shop screen, got {noCallPromptPack.CurrentScreen}.");
-            Assert(noCallPromptPack.CompactInput is null, "Expected unsupported shop prompt pack to stay on the no-call degraded carrier without compact input.");
+                ?? throw new InvalidOperationException("Expected manual event prompt pack.");
+            Assert(string.Equals(noCallPromptPack.CurrentScreen, "event", StringComparison.Ordinal), $"Expected event prompt pack to preserve event screen, got {noCallPromptPack.CurrentScreen}.");
+            Assert(noCallPromptPack.CompactInput is not null, "Expected manual event prompt pack to carry compact input.");
+            Assert(string.Equals(noCallPromptPack.CompactInput.SceneType, "event", StringComparison.Ordinal), $"Expected compact event scene type, got {noCallPromptPack.CompactInput.SceneType}.");
 
             var retryRequested = host.RequestRetryLastAdviceAsync().GetAwaiter().GetResult();
             Assert(retryRequested, "Expected retry-last advice request to succeed after a prior advice run.");
-            Assert(fakeClient.RequestCount == 1, "Expected retry-last advice on a no-call degraded prompt pack to stay no-call.");
-            Assert(host.CurrentSnapshot.LatestAdvice is not null && host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains("unsupported-scene-for-compact-advisor:shop", StringComparer.Ordinal), "Expected retry-last to preserve the unsupported-scene degraded response.");
+            Assert(fakeClient.RequestCount == 2, "Expected retry-last advice to invoke codex again for the supported event scene.");
+            Assert(host.CurrentSnapshot.LatestAdvice is not null, "Expected retry-last to preserve a response for the supported event scene.");
 
             var runRoot = host.CurrentSnapshot.Paths.RunRoot;
             Assert(!string.IsNullOrWhiteSpace(runRoot) && Directory.Exists(runRoot!), "Expected companion host to materialize a per-run artifact root.");
@@ -5863,15 +5948,247 @@ static void TestCompanionHostAutomaticCompactAdviceRemainsManualOnly()
         var scenario = CreateDefaultRewardScenario();
         SeedRewardKnowledgeCatalog(root);
 
+        void ExecuteManagedSceneScenario(
+            string name,
+            LiveExportSnapshot snapshot,
+            LiveExportSession session,
+            IReadOnlyList<LiveExportEventEnvelope> events,
+            bool expectManualModelCall,
+            string expectedSceneType,
+            string? expectedNoCallBlocker = null)
+        {
+            var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+            Directory.CreateDirectory(layout.LiveRoot);
+            WriteJson(layout.SnapshotPath, snapshot);
+            WriteJson(layout.SessionPath, session);
+            File.WriteAllText(layout.SummaryPath, $"{name} auto compact summary", Encoding.UTF8);
+            Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+            File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+            File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+            File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+            File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+            File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+            Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+            var fakeClient = new FakeCodexSessionClient();
+            var host = new CompanionHost(configuration, root, fakeClient);
+            try
+            {
+                host.RefreshAsync().GetAwaiter().GetResult();
+                Assert(fakeClient.RequestCount == 0, $"Expected {name} scene to stay manual-only even when auto advice is enabled.");
+                Assert(host.CurrentSnapshot.LatestAdvice is null, $"Expected skipped automatic {name} compact advice not to publish a response.");
+
+                var manualRequested = host.RequestManualAdviceAsync().GetAwaiter().GetResult();
+                Assert(manualRequested, $"Expected manual {name} compact advice request to be accepted.");
+                Assert(fakeClient.RequestCount == (expectManualModelCall ? 1 : 0), expectManualModelCall
+                    ? $"Expected manual {name} advice to invoke codex once."
+                    : $"Expected manual {name} advice to stay no-call.");
+
+                var promptPackPath = Directory.GetFiles(host.CurrentSnapshot.Paths.PromptPacksRoot!, "*.json", SearchOption.TopDirectoryOnly)
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .First();
+                var promptPack = JsonSerializer.Deserialize<AdviceInputPack>(File.ReadAllText(promptPackPath), ConfigurationLoader.JsonOptions)
+                    ?? throw new InvalidOperationException($"Expected {name} prompt pack.");
+                Assert(promptPack.CompactInput is not null, $"Expected {name} prompt pack to carry compact input.");
+                Assert(string.Equals(promptPack.CompactInput.SceneType, expectedSceneType, StringComparison.Ordinal), $"Expected compact scene type {expectedSceneType}, got {promptPack.CompactInput.SceneType}.");
+
+                if (expectManualModelCall)
+                {
+                    Assert(host.CurrentSnapshot.LatestAdvice is not null, $"Expected {name} manual advice response.");
+                }
+                else
+                {
+                    Assert(host.CurrentSnapshot.LatestAdvice is not null, $"Expected {name} no-call advice response.");
+                    Assert(host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains(expectedNoCallBlocker ?? string.Empty, StringComparer.Ordinal), $"Expected {name} no-call blocker '{expectedNoCallBlocker}'.");
+                }
+            }
+            finally
+            {
+                host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        }
+
+        ExecuteManagedSceneScenario(
+            "reward",
+            CreateRewardSnapshotForScenario(scenario, "auto-reward-compact-run"),
+            new LiveExportSession("auto-reward-session", "auto-reward-compact-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(root, "live"), "choice-list-presented", "rewards"),
+            CreateRewardEventsForScenario("auto-reward-compact-run", scenario),
+            expectManualModelCall: true,
+            expectedSceneType: "reward");
+
+        ExecuteManagedSceneScenario(
+            "event",
+            CreateEventSceneModelSnapshot("auto-event-compact-run"),
+            new LiveExportSession("auto-event-session", "auto-event-compact-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(root, "live"), "choice-list-presented", "event"),
+            CreateEventEvents("auto-event-compact-run"),
+            expectManualModelCall: true,
+            expectedSceneType: "event");
+
+        ExecuteManagedSceneScenario(
+            "shop",
+            CreateShopSceneModelSnapshot("auto-shop-compact-run"),
+            new LiveExportSession("auto-shop-session", "auto-shop-compact-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(root, "live"), "choice-list-presented", "shop"),
+            CreateShopEvents("auto-shop-compact-run", CreateShopSceneModelSnapshot("auto-shop-compact-run").CurrentChoices),
+            expectManualModelCall: true,
+            expectedSceneType: "shop");
+
+        ExecuteManagedSceneScenario(
+            "combat",
+            CreateCombatPreviewSceneModelSnapshot("auto-combat-compact-run"),
+            new LiveExportSession("auto-combat-session", "auto-combat-compact-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(root, "live"), "combat-started", "combat"),
+            CreateCombatRunState("auto-combat-compact-run", CreateCombatPreviewSceneModelSnapshot("auto-combat-compact-run")).RecentEvents,
+            expectManualModelCall: false,
+            expectedSceneType: "combat",
+            expectedNoCallBlocker: "combat-preview-only");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestCompanionHostShopCompactAdviceSafety()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var baseConfiguration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        var configuration = baseConfiguration with
+        {
+            Assistant = baseConfiguration.Assistant with
+            {
+                AutoAdviceEnabled = true,
+            },
+        };
+        SeedKnowledgeCatalog(root);
+
+        void ExecuteShopScenario(
+            string runId,
+            LiveExportSnapshot snapshot,
+            bool expectModelCall,
+            string? expectedBlocker)
+        {
+            var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+            Directory.CreateDirectory(layout.LiveRoot);
+            var session = new LiveExportSession($"shop-session-{runId}", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, layout.LiveRoot, "choice-list-presented", "shop");
+            var events = CreateShopEvents(runId, snapshot.CurrentChoices);
+
+            WriteJson(layout.SnapshotPath, snapshot);
+            WriteJson(layout.SessionPath, session);
+            File.WriteAllText(layout.SummaryPath, $"shop compact safety summary :: {runId}", Encoding.UTF8);
+            Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+            File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+            File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+            File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+            File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+            File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+            Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+            var fakeClient = new FakeCodexSessionClient();
+            var host = new CompanionHost(configuration, root, fakeClient);
+            try
+            {
+                host.RefreshAsync().GetAwaiter().GetResult();
+                Assert(fakeClient.RequestCount == 0, "Expected shop refresh to stay manual-only even when auto advice is enabled.");
+
+                var sceneModel = host.CurrentSnapshot.LatestSceneModel
+                    ?? throw new InvalidOperationException("Expected latest scene model for shop compact safety.");
+                Assert(string.Equals(sceneModel.SceneType, "shop", StringComparison.Ordinal), "Expected shop scene type.");
+                Assert(sceneModel.Options.Select(option => option.Label).SequenceEqual(snapshot.CurrentChoices.Select(choice => choice.Label), StringComparer.Ordinal), "Expected shop visible options to preserve the current labels.");
+
+                var manualRequested = host.RequestManualAdviceAsync().GetAwaiter().GetResult();
+                Assert(manualRequested, "Expected manual shop compact request to be accepted.");
+                Assert(fakeClient.RequestCount == (expectModelCall ? 1 : 0), expectModelCall
+                    ? "Expected supported shop manual request to invoke codex."
+                    : "Expected duplicate shop manual request to fail closed without invoking codex.");
+                Assert(host.CurrentSnapshot.LatestAdvice is not null, "Expected manual shop compact request to publish a response.");
+
+                var promptPackPath = Directory.GetFiles(host.CurrentSnapshot.Paths.PromptPacksRoot!, "*.json", SearchOption.TopDirectoryOnly)
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .FirstOrDefault()
+                    ?? throw new InvalidOperationException("Expected a prompt pack artifact for shop manual flow.");
+                var promptPack = JsonSerializer.Deserialize<AdviceInputPack>(File.ReadAllText(promptPackPath), ConfigurationLoader.JsonOptions)
+                    ?? throw new InvalidOperationException("Expected a shop prompt pack.");
+                Assert(string.Equals(promptPack.CurrentScreen, "shop", StringComparison.Ordinal), "Expected shop prompt pack to preserve current screen.");
+                Assert(promptPack.CompactInput is not null, "Expected shop prompt pack to carry compact input.");
+                Assert(string.Equals(promptPack.CompactInput.SceneType, "shop", StringComparison.Ordinal), $"Expected compact shop scene type, got {promptPack.CompactInput.SceneType}.");
+                Assert(promptPack.CompactInput.ShopFacts is not null, "Expected shop prompt pack to include shop facts.");
+
+                if (expectModelCall)
+                {
+                    Assert(promptPack.CompactInput.ShopFacts.ItemCount == 2, $"Expected shop item count 2, got {promptPack.CompactInput.ShopFacts.ItemCount}.");
+                    Assert(promptPack.CompactInput.ShopFacts.ServiceCount == 1, $"Expected shop service count 1, got {promptPack.CompactInput.ShopFacts.ServiceCount}.");
+                    Assert(promptPack.CompactInput.ShopFacts.AffordableOptionCount == 2, $"Expected shop affordable option count 2, got {promptPack.CompactInput.ShopFacts.AffordableOptionCount}.");
+                    Assert(host.CurrentSnapshot.LatestAdvice.RecommendedChoiceLabel is not null, "Expected supported shop manual advice to produce a recommendation label.");
+                    Assert(promptPack.CompactInput.VisibleOptions.Select(option => option.Label).Contains(host.CurrentSnapshot.LatestAdvice.RecommendedChoiceLabel, StringComparer.Ordinal), "Expected shop recommendation to exact-match a visible compact option label.");
+                }
+                else
+                {
+                    Assert(string.Equals(host.CurrentSnapshot.LatestAdvice.Status, "degraded", StringComparison.OrdinalIgnoreCase), "Expected duplicate-label shop advice to degrade.");
+                    Assert(host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains(expectedBlocker ?? string.Empty, StringComparer.Ordinal), $"Expected duplicate-label blocker '{expectedBlocker}'.");
+                    Assert(host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains("shop-compact-input-insufficient", StringComparer.Ordinal), "Expected duplicate-label shop path to mark compact input insufficient.");
+                    Assert(host.CurrentSnapshot.LatestAdvice.RecommendedChoiceLabel is null, "Expected duplicate-label shop path to clear recommendation label.");
+                }
+
+                var retryRequested = host.RequestRetryLastAdviceAsync().GetAwaiter().GetResult();
+                Assert(retryRequested, "Expected retry-last to resolve the shop prompt pack.");
+                Assert(fakeClient.RequestCount == (expectModelCall ? 2 : 0), expectModelCall
+                    ? "Expected retry-last on supported shop flow to invoke codex again."
+                    : "Expected retry-last on duplicate-label shop flow to remain no-call.");
+                Assert(host.CurrentSnapshot.LatestAdvice is not null, "Expected retry-last to publish a shop response.");
+                if (!expectModelCall)
+                {
+                    Assert(host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains(expectedBlocker ?? string.Empty, StringComparer.Ordinal), $"Expected retry-last to preserve blocker '{expectedBlocker}'.");
+                }
+            }
+            finally
+            {
+                host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        }
+
+        ExecuteShopScenario(
+            runId: "shop-compact-supported-run",
+            snapshot: CreateShopSceneModelSnapshot("shop-compact-supported-run"),
+            expectModelCall: true,
+            expectedBlocker: null);
+
+        ExecuteShopScenario(
+            runId: "shop-compact-duplicate-run",
+            snapshot: CreateShopDuplicateVisibleOptionsSceneModelSnapshot("shop-compact-duplicate-run"),
+            expectModelCall: false,
+            expectedBlocker: "shop-duplicate-option-label:몸풀기");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestCompanionHostCombatPreviewCompactAdviceSafety()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var baseConfiguration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        var configuration = baseConfiguration with
+        {
+            Assistant = baseConfiguration.Assistant with
+            {
+                AutoAdviceEnabled = true,
+            },
+        };
+        SeedKnowledgeCatalog(root);
+
         var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
         Directory.CreateDirectory(layout.LiveRoot);
-        var snapshot = CreateRewardSnapshotForScenario(scenario, "auto-reward-compact-run");
-        var session = new LiveExportSession("auto-reward-session", snapshot.RunId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, layout.LiveRoot, "choice-list-presented", "rewards");
-        var events = CreateRewardEventsForScenario(snapshot.RunId, scenario);
+        var snapshot = CreateCombatPreviewSceneModelSnapshot("combat-preview-safety-run");
+        var session = new LiveExportSession("combat-preview-session", snapshot.RunId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, layout.LiveRoot, "combat-started", "combat");
+        var events = CreateCombatRunState(snapshot.RunId, snapshot).RecentEvents;
 
         WriteJson(layout.SnapshotPath, snapshot);
         WriteJson(layout.SessionPath, session);
-        File.WriteAllText(layout.SummaryPath, "automatic reward summary", Encoding.UTF8);
+        File.WriteAllText(layout.SummaryPath, "combat preview safety summary", Encoding.UTF8);
         Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
         File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
         File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
@@ -5885,12 +6202,37 @@ static void TestCompanionHostAutomaticCompactAdviceRemainsManualOnly()
         try
         {
             host.RefreshAsync().GetAwaiter().GetResult();
-            Assert(fakeClient.RequestCount == 0, "Expected reward/event compact MVP scenes to stay manual-only even when auto advice is enabled.");
-            Assert(host.CurrentSnapshot.LatestAdvice is null, "Expected skipped automatic compact advice not to publish a legacy response.");
+            Assert(fakeClient.RequestCount == 0, "Expected combat preview refresh to stay auto-skip safe.");
+
+            var sceneModel = host.CurrentSnapshot.LatestSceneModel
+                ?? throw new InvalidOperationException("Expected latest scene model for combat preview safety.");
+            Assert(string.Equals(sceneModel.SceneType, "combat", StringComparison.Ordinal), "Expected combat scene type.");
+            Assert(sceneModel.Combat is not null, "Expected combat preview scene model to carry combat details.");
 
             var manualRequested = host.RequestManualAdviceAsync().GetAwaiter().GetResult();
-            Assert(manualRequested, "Expected manual reward advice to remain available after automatic compact gating skips the scene.");
-            Assert(fakeClient.RequestCount == 1, "Expected manual reward advice to invoke codex through the compact path.");
+            Assert(manualRequested, "Expected manual combat preview request to be accepted.");
+            Assert(fakeClient.RequestCount == 0, "Expected manual combat preview request to fail closed without invoking codex.");
+            Assert(host.CurrentSnapshot.LatestAdvice is not null, "Expected manual combat preview request to publish a degraded response.");
+            Assert(string.Equals(host.CurrentSnapshot.LatestAdvice.Status, "degraded", StringComparison.OrdinalIgnoreCase), "Expected combat preview advice to degrade.");
+            Assert(host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains("combat-preview-only", StringComparer.Ordinal), "Expected combat preview blocker.");
+            Assert(host.CurrentSnapshot.LatestAdvice.RecommendedChoiceLabel is null, "Expected combat preview to keep recommendation label empty.");
+
+            var promptPackPath = Directory.GetFiles(host.CurrentSnapshot.Paths.PromptPacksRoot!, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault()
+                ?? throw new InvalidOperationException("Expected a prompt pack artifact for combat preview flow.");
+            var promptPack = JsonSerializer.Deserialize<AdviceInputPack>(File.ReadAllText(promptPackPath), ConfigurationLoader.JsonOptions)
+                ?? throw new InvalidOperationException("Expected a combat preview prompt pack.");
+            Assert(promptPack.CompactInput is not null, "Expected combat preview prompt pack to carry compact input.");
+            Assert(string.Equals(promptPack.CompactInput.SceneType, "combat", StringComparison.Ordinal), $"Expected compact combat scene type, got {promptPack.CompactInput.SceneType}.");
+            Assert(promptPack.CompactInput.CombatFacts is not null, "Expected combat preview prompt pack to include combat facts.");
+            Assert(promptPack.CompactInput.CombatFacts.PreviewOnly, "Expected combat preview facts to stay preview-only.");
+
+            var retryRequested = host.RequestRetryLastAdviceAsync().GetAwaiter().GetResult();
+            Assert(retryRequested, "Expected retry-last to resolve the combat preview prompt pack.");
+            Assert(fakeClient.RequestCount == 0, "Expected retry-last on combat preview flow to remain no-call.");
+            Assert(host.CurrentSnapshot.LatestAdvice is not null && host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains("combat-preview-only", StringComparer.Ordinal), "Expected retry-last to preserve the combat preview blocker.");
+            Assert(host.CurrentSnapshot.LatestAdvice.RecommendedChoiceLabel is null, "Expected retry-last combat preview to keep recommendation label empty.");
         }
         finally
         {
@@ -5930,6 +6272,26 @@ static void TestReplayAdvisorValidatorCompactPath()
             CreateEventEvents("replay-compact-event-run"),
             "event replay summary");
 
+        var shopFixtureRoot = Path.Combine(root, "shop-compact-fixture");
+        var shopSnapshot = CreateShopSceneModelSnapshot("replay-compact-shop-run");
+        WriteReplayFixture(
+            shopFixtureRoot,
+            configuration,
+            shopSnapshot,
+            new LiveExportSession("replay-shop-session", "replay-compact-shop-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(root, "live"), "choice-list-presented", "shop"),
+            CreateShopEvents("replay-compact-shop-run", shopSnapshot.CurrentChoices),
+            "shop replay summary");
+
+        var combatFixtureRoot = Path.Combine(root, "combat-compact-fixture");
+        var combatSnapshot = CreateCombatPreviewSceneModelSnapshot("replay-compact-combat-run");
+        WriteReplayFixture(
+            combatFixtureRoot,
+            configuration,
+            combatSnapshot,
+            new LiveExportSession("replay-combat-session", "replay-compact-combat-run", "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(root, "live"), "combat-started", "combat"),
+            CreateCombatRunState("replay-compact-combat-run", combatSnapshot).RecentEvents,
+            "combat replay summary");
+
         var replayValidator = new FoundationReplayAdvisorValidator(configuration, root);
         var rewardResult = replayValidator.ValidateAsync(rewardFixtureRoot, null, CancellationToken.None).GetAwaiter().GetResult();
         var rewardPromptPack = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceInputPack>(File.ReadAllText(rewardResult.PromptPackPath), ConfigurationLoader.JsonOptions)
@@ -5943,6 +6305,28 @@ static void TestReplayAdvisorValidatorCompactPath()
         Assert(eventPromptPack.CompactInput is not null, "Expected replay event prompt pack to carry compact input.");
         Assert(string.Equals(eventPromptPack.CompactInput.SceneType, "event", StringComparison.Ordinal), $"Expected replay event compact scene type, got {eventPromptPack.CompactInput.SceneType}.");
         Assert(eventPromptPack.CompactInput.EventFacts is not null, "Expected replay event prompt pack to include event facts.");
+
+        var shopResult = replayValidator.ValidateAsync(shopFixtureRoot, null, CancellationToken.None).GetAwaiter().GetResult();
+        var shopPromptPack = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceInputPack>(File.ReadAllText(shopResult.PromptPackPath), ConfigurationLoader.JsonOptions)
+            ?? throw new InvalidOperationException("Expected replay shop prompt pack.");
+        var shopAdvice = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceResponse>(File.ReadAllText(shopResult.AdviceJsonPath), ConfigurationLoader.JsonOptions)
+            ?? throw new InvalidOperationException("Expected replay shop advice response.");
+        Assert(shopPromptPack.CompactInput is not null, "Expected replay shop prompt pack to carry compact input.");
+        Assert(string.Equals(shopPromptPack.CompactInput.SceneType, "shop", StringComparison.Ordinal), $"Expected replay shop compact scene type, got {shopPromptPack.CompactInput.SceneType}.");
+        Assert(shopPromptPack.CompactInput.ShopFacts is not null, "Expected replay shop prompt pack to include shop facts.");
+        Assert(!shopAdvice.DecisionBlockers.Contains("unsupported-scene-for-compact-advisor:shop", StringComparer.Ordinal), "Expected replay shop fixture to stay on the compact shop path.");
+
+        var combatResult = replayValidator.ValidateAsync(combatFixtureRoot, null, CancellationToken.None).GetAwaiter().GetResult();
+        var combatPromptPack = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceInputPack>(File.ReadAllText(combatResult.PromptPackPath), ConfigurationLoader.JsonOptions)
+            ?? throw new InvalidOperationException("Expected replay combat prompt pack.");
+        var combatAdvice = JsonSerializer.Deserialize<Sts2AiCompanion.Foundation.Contracts.AdviceResponse>(File.ReadAllText(combatResult.AdviceJsonPath), ConfigurationLoader.JsonOptions)
+            ?? throw new InvalidOperationException("Expected replay combat advice response.");
+        Assert(combatPromptPack.CompactInput is not null, "Expected replay combat prompt pack to carry compact input.");
+        Assert(string.Equals(combatPromptPack.CompactInput.SceneType, "combat", StringComparison.Ordinal), $"Expected replay combat compact scene type, got {combatPromptPack.CompactInput.SceneType}.");
+        Assert(combatPromptPack.CompactInput.CombatFacts is not null, "Expected replay combat prompt pack to include combat facts.");
+        Assert(string.Equals(combatAdvice.Status, "degraded", StringComparison.OrdinalIgnoreCase), "Expected replay combat compact path to stay degraded preview-only.");
+        Assert(combatAdvice.DecisionBlockers.Contains("combat-preview-only", StringComparer.Ordinal), "Expected replay combat advice to carry combat preview blocker.");
+        Assert(combatAdvice.RecommendedChoiceLabel is null, "Expected replay combat preview advice to keep recommendation label empty.");
     }
     finally
     {
@@ -6326,11 +6710,29 @@ static LiveExportSnapshot CreateCombatSceneModelSnapshot(string runId)
             ["combatTargetableEnemyCount"] = "1",
             ["combatHittableEnemyCount"] = "1",
             ["combatTargetingInProgress"] = "false",
+            ["combatRoundNumber"] = "3",
+            ["combatTargetSummary"] = "Jaw Worm:hittable",
         },
         PublishedCurrentScreen = "combat",
         PublishedVisibleScreen = "combat",
         PublishedSceneAuthority = "hook",
         PublishedSceneStability = "stable",
+    };
+}
+
+static LiveExportSnapshot CreateCombatPreviewSceneModelSnapshot(string runId)
+{
+    var baseSnapshot = CreateCombatSceneModelSnapshot(runId);
+    return baseSnapshot with
+    {
+        RecentChanges = new[] { "trigger: combat-preview" },
+        Meta = MergeMeta(
+            baseSnapshot.Meta,
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["combatPreviewVisible"] = "true",
+                ["combatPreviewReason"] = "hand-and-pile-count-preview",
+            }),
     };
 }
 
@@ -6368,6 +6770,46 @@ static LiveExportSnapshot CreateRewardSceneModelSnapshot(string runId)
             ["foregroundActionLane"] = "reward-claim",
             ["rewardProceedVisible"] = "false",
         },
+    };
+}
+
+static LiveExportSnapshot CreateShopDuplicateVisibleOptionsSceneModelSnapshot(string runId)
+{
+    var baseSnapshot = CreateShopSceneModelSnapshot(runId);
+    return baseSnapshot with
+    {
+        CurrentChoices = new[]
+        {
+            new LiveExportChoiceSummary("shop-option:card", "몸풀기", "CARD.WARM_UP", "Merchant inventory slot")
+            {
+                BindingKind = "shop-option",
+                BindingId = "shop-card-0",
+                Enabled = true,
+                SemanticHints = new[] { "shop", "shop-option:card" },
+            },
+            new LiveExportChoiceSummary("shop-option:card", "몸풀기", "CARD.WARM_UP_PLUS", "Merchant inventory slot")
+            {
+                BindingKind = "shop-option",
+                BindingId = "shop-card-1",
+                Enabled = false,
+                SemanticHints = new[] { "shop", "shop-option:card" },
+            },
+            new LiveExportChoiceSummary("shop-card-removal", "카드 제거", "service:card-removal", "Merchant service")
+            {
+                BindingKind = "shop-option",
+                BindingId = "shop-removal",
+                Enabled = true,
+                SemanticHints = new[] { "shop", "service" },
+            },
+            new LiveExportChoiceSummary("shop-back", "뒤로", null, "상점을 닫습니다.")
+            {
+                BindingKind = "shop-option",
+                BindingId = "shop-back",
+                Enabled = true,
+                SemanticHints = new[] { "shop" },
+            },
+        },
+        RecentChanges = new[] { "trigger: shop-duplicate-visible-options" },
     };
 }
 
@@ -6436,6 +6878,34 @@ static IReadOnlyList<LiveExportEventEnvelope> CreateEventEvents(string runId)
     };
 }
 
+static IReadOnlyList<LiveExportEventEnvelope> CreateShopEvents(string runId, IReadOnlyList<LiveExportChoiceSummary> choices)
+{
+    return new[]
+    {
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            1,
+            runId,
+            "shop-opened",
+            "shop",
+            1,
+            3,
+            new Dictionary<string, object?>()),
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow,
+            2,
+            runId,
+            "choice-list-presented",
+            "shop",
+            1,
+            3,
+            new Dictionary<string, object?>
+            {
+                ["choices"] = choices.Select(choice => choice.Label).ToArray(),
+            }),
+    };
+}
+
 static CompanionRunState CreateEventRunState(string runId, IReadOnlyList<LiveExportChoiceSummary>? choices = null)
 {
     var snapshot = CreateEventSceneModelSnapshot(runId) with
@@ -6447,6 +6917,17 @@ static CompanionRunState CreateEventRunState(string runId, IReadOnlyList<LiveExp
     return new CompanionRunState(snapshot, session, "event summary", events, false)
     {
         NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
+    };
+}
+
+static CompanionRunState CreateShopRunState(string runId, LiveExportSnapshot? snapshot = null)
+{
+    var resolvedSnapshot = snapshot ?? CreateShopSceneModelSnapshot(runId);
+    var session = new LiveExportSession("shop-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "shop-live"), "choice-list-presented", "shop");
+    var events = CreateShopEvents(runId, resolvedSnapshot.CurrentChoices);
+    return new CompanionRunState(resolvedSnapshot, session, "shop summary", events, false)
+    {
+        NormalizedState = CompanionStateMapper.FromLiveExport(resolvedSnapshot, session, events),
     };
 }
 
@@ -6505,6 +6986,40 @@ static LiveExportSnapshot CreateShopSceneModelSnapshot(string runId)
             ["shopBackEnabled"] = "true",
             ["shopProceedEnabled"] = "false",
         },
+    };
+}
+
+static CompanionRunState CreateCombatRunState(string runId, LiveExportSnapshot? snapshot = null)
+{
+    var resolvedSnapshot = snapshot ?? CreateCombatSceneModelSnapshot(runId);
+    var session = new LiveExportSession("combat-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "combat-live"), "combat-started", "combat");
+    var events = new[]
+    {
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            1,
+            runId,
+            "combat-started",
+            "combat",
+            resolvedSnapshot.Act,
+            resolvedSnapshot.Floor,
+            new Dictionary<string, object?>()),
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow,
+            2,
+            runId,
+            "choice-list-presented",
+            "combat",
+            resolvedSnapshot.Act,
+            resolvedSnapshot.Floor,
+            new Dictionary<string, object?>
+            {
+                ["choices"] = resolvedSnapshot.CurrentChoices.Select(choice => choice.Label).ToArray(),
+            }),
+    };
+    return new CompanionRunState(resolvedSnapshot, session, "combat summary", events, false)
+    {
+        NormalizedState = CompanionStateMapper.FromLiveExport(resolvedSnapshot, session, events),
     };
 }
 
