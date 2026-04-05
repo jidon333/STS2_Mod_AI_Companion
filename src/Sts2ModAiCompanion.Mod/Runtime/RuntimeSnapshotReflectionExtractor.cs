@@ -5334,6 +5334,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             ScreenBounds = screenBounds,
             Enabled = true,
             SemanticHints = semanticHints,
+            EventOptionDetail = TryCreateEventOptionDetail(button, label, description, optionKeyOverride: TryReadString(option, "TextKey", "Id", "Name"), bindingIdOverride: TryResolveEventOptionBindingId(button)),
         };
     }
 
@@ -8083,6 +8084,7 @@ internal static class RuntimeSnapshotReflectionExtractor
         {
             return null;
         }
+        var description = TryResolveChoiceDescription(item);
 
         var eventOptionBindingId = TryResolveEventOptionBindingId(item);
         var eventOptionChoice = !string.IsNullOrWhiteSpace(eventOptionBindingId);
@@ -8106,7 +8108,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             choiceKind,
             label,
             TryResolveChoiceValue(item, rewardTypeName),
-            TryResolveChoiceDescription(item))
+            description)
         {
             NodeId = nodeId,
             ScreenBounds = TryResolveScreenBounds(item),
@@ -8114,6 +8116,9 @@ internal static class RuntimeSnapshotReflectionExtractor
             BindingId = bindingId,
             Enabled = eventOptionEnabled,
             SemanticHints = BuildChoiceSemanticHints(item, rewardTypeName),
+            EventOptionDetail = eventOptionChoice
+                ? TryCreateEventOptionDetail(item, label, description, optionKeyOverride: null, bindingIdOverride: eventOptionBindingId)
+                : null,
         };
     }
 
@@ -9602,6 +9607,228 @@ internal static class RuntimeSnapshotReflectionExtractor
             TryReadString(option ?? item, "TextKey", "Id", "Name"),
             TryReadString(item, "Index"),
             TryReadString(option, "Title"));
+    }
+
+    private static LiveExportEventOptionDetail? TryCreateEventOptionDetail(
+        object item,
+        string? evaluatedTitle,
+        string? evaluatedDescription,
+        string? optionKeyOverride = null,
+        string? bindingIdOverride = null)
+    {
+        var option = TryGetMemberValue(item, "Option") ?? item;
+        var bindingId = FirstNonEmpty(
+            bindingIdOverride,
+            TryResolveEventOptionBindingId(item),
+            TryResolveEventOptionBindingId(option));
+        var optionKey = FirstNonEmpty(
+            optionKeyOverride,
+            TryReadString(option, "TextKey", "Id", "Name"),
+            TryReadString(item, "Index"),
+            bindingId);
+
+        var hoverTip = TryResolveEventHoverTipSummary(item, evaluatedTitle, evaluatedDescription, optionKey, bindingId);
+        var (resultCard, resultRelic, resultEnchantment, resultPower) = TryResolveEventOptionResultModels(item);
+        var targetSelectorHint = FirstNonEmpty(
+            TryReadString(option, "TargetSelectorHint", "SelectorHint", "SelectionHint", "TargetHint"),
+            TryReadString(item, "TargetSelectorHint", "SelectorHint", "SelectionHint", "TargetHint"));
+        var targetFilter = FirstNonEmpty(
+            TryReadString(option, "TargetFilter", "CardFilter", "AllowedFilter", "SelectionFilter"),
+            TryReadString(item, "TargetFilter", "CardFilter", "AllowedFilter", "SelectionFilter"));
+
+        if (string.IsNullOrWhiteSpace(optionKey)
+            && string.IsNullOrWhiteSpace(bindingId)
+            && hoverTip is null
+            && resultCard is null
+            && resultRelic is null
+            && resultEnchantment is null
+            && resultPower is null
+            && string.IsNullOrWhiteSpace(targetSelectorHint)
+            && string.IsNullOrWhiteSpace(targetFilter))
+        {
+            return null;
+        }
+
+        return new LiveExportEventOptionDetail(
+            optionKey,
+            bindingId,
+            evaluatedTitle,
+            evaluatedDescription,
+            hoverTip?.Title,
+            hoverTip?.Description,
+            resultCard,
+            resultRelic,
+            resultEnchantment,
+            resultPower,
+            targetSelectorHint,
+            targetFilter);
+    }
+
+    private static (string? Title, string? Description, string? Id)? TryResolveEventHoverTipSummary(
+        object item,
+        string? evaluatedTitle,
+        string? evaluatedDescription,
+        string? optionKey,
+        string? bindingId)
+    {
+        var hoverTips = EnumerateHoverTipCandidates(item).ToArray();
+        if (hoverTips.Length == 0)
+        {
+            return null;
+        }
+
+        var preferredSeeds = BuildDisplayMatchSeeds(evaluatedTitle, optionKey, bindingId, evaluatedDescription);
+        foreach (var hoverTip in hoverTips)
+        {
+            if (preferredSeeds.Length > 0
+                && !preferredSeeds.Any(seed => DisplayTextMatchesSeed(hoverTip.Title, seed)
+                                               || DisplayTextMatchesSeed(hoverTip.Id, seed)))
+            {
+                continue;
+            }
+
+            if (!IsPlaceholderChoiceDescription(hoverTip.Description, evaluatedTitle))
+            {
+                return hoverTip;
+            }
+        }
+
+        return hoverTips.Length == 1
+               && !IsPlaceholderChoiceDescription(hoverTips[0].Description, evaluatedTitle)
+            ? hoverTips[0]
+            : null;
+    }
+
+    private static (LiveExportModelSummary? Card, LiveExportModelSummary? Relic, LiveExportModelSummary? Enchantment, LiveExportModelSummary? Power) TryResolveEventOptionResultModels(object item)
+    {
+        LiveExportModelSummary? card = null;
+        LiveExportModelSummary? relic = null;
+        LiveExportModelSummary? enchantment = null;
+        LiveExportModelSummary? power = null;
+
+        void TryAssign(object? candidate)
+        {
+            var summary = TryCreateEventOptionModelSummary(candidate);
+            if (summary is null)
+            {
+                return;
+            }
+
+            switch (summary.Kind)
+            {
+                case "card":
+                    card ??= summary;
+                    break;
+                case "relic":
+                    relic ??= summary;
+                    break;
+                case "enchantment":
+                    enchantment ??= summary;
+                    break;
+                case "power":
+                    power ??= summary;
+                    break;
+            }
+        }
+
+        var option = TryGetMemberValue(item, "Option") ?? item;
+        TryAssign(TryGetMemberValue(option, "Card"));
+        TryAssign(TryGetMemberValue(option, "CardModel"));
+        TryAssign(TryGetMemberValue(option, "Relic"));
+        TryAssign(TryGetMemberValue(option, "Enchantment"));
+        TryAssign(TryGetMemberValue(option, "Power"));
+        TryAssign(TryGetMemberValue(option, "Model"));
+        foreach (var hoverTip in EnumerateHoverTipObjects(item))
+        {
+            TryAssign(TryGetMemberValue(hoverTip, "CanonicalModel"));
+        }
+
+        return (card, relic, enchantment, power);
+    }
+
+    private static IEnumerable<object> EnumerateHoverTipObjects(object source)
+    {
+        var hoverTipObjects = new List<object>();
+        var seen = new HashSet<int>();
+
+        void AddHoverTipCandidate(object? candidate)
+        {
+            if (candidate is null or string)
+            {
+                return;
+            }
+
+            var key = RuntimeHelpers.GetHashCode(candidate);
+            if (!seen.Add(key))
+            {
+                return;
+            }
+
+            hoverTipObjects.Add(candidate);
+        }
+
+        foreach (var current in EnumerateEvaluatedDisplaySources(source))
+        {
+            AddHoverTipCandidate(TryGetMemberValue(current, "HoverTip") ?? TryGetMemberValue(current, "Tooltip"));
+            foreach (var hoverTip in ExpandEnumerable(TryGetMemberValue(current, "HoverTips") ?? TryGetMemberValue(current, "Tooltips")))
+            {
+                AddHoverTipCandidate(hoverTip);
+            }
+        }
+
+        return hoverTipObjects;
+    }
+
+    private static LiveExportModelSummary? TryCreateEventOptionModelSummary(object? model)
+    {
+        if (model is null)
+        {
+            return null;
+        }
+
+        var kind = InferEventOptionModelKind(model);
+        if (kind is null)
+        {
+            return null;
+        }
+
+        return new LiveExportModelSummary(
+            kind,
+            FirstNonEmpty(
+                TryReadString(model, "Id", "CardId", "Name", "Title"),
+                TryReadString(TryGetMemberValue(model, "Card"), "Id", "CardId", "Name", "Title")),
+            FirstNonEmpty(
+                TryResolveChoiceLabel(model),
+                TryReadString(model, "Title", "DisplayName", "Name")),
+            FirstNonEmpty(
+                TryResolveChoiceDescription(model),
+                TryReadString(model, "Description", "DynamicEventDescription", "Body", "TooltipText")));
+    }
+
+    private static string? InferEventOptionModelKind(object model)
+    {
+        var typeName = model.GetType().FullName ?? model.GetType().Name;
+        if (typeName.Contains("CardModel", StringComparison.OrdinalIgnoreCase))
+        {
+            return "card";
+        }
+
+        if (typeName.Contains("RelicModel", StringComparison.OrdinalIgnoreCase))
+        {
+            return "relic";
+        }
+
+        if (typeName.Contains("EnchantmentModel", StringComparison.OrdinalIgnoreCase))
+        {
+            return "enchantment";
+        }
+
+        if (typeName.Contains("PowerModel", StringComparison.OrdinalIgnoreCase))
+        {
+            return "power";
+        }
+
+        return null;
     }
 
     private static bool? TryResolveEventOptionEnabled(object item)

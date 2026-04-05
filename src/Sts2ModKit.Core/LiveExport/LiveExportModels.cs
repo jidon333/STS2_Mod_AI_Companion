@@ -64,7 +64,29 @@ public sealed record LiveExportChoiceSummary(
     public string? IconAssetPath { get; init; }
 
     public IReadOnlyList<string> SemanticHints { get; init; } = Array.Empty<string>();
+
+    public LiveExportEventOptionDetail? EventOptionDetail { get; init; }
 }
+
+public sealed record LiveExportModelSummary(
+    string Kind,
+    string? Id,
+    string? Title,
+    string? Description);
+
+public sealed record LiveExportEventOptionDetail(
+    string? OptionKey,
+    string? OptionBindingId,
+    string? EvaluatedTitle,
+    string? EvaluatedDescription,
+    string? HoverTipTitle,
+    string? HoverTipDescription,
+    LiveExportModelSummary? ResultCard,
+    LiveExportModelSummary? ResultRelic,
+    LiveExportModelSummary? ResultEnchantment,
+    LiveExportModelSummary? ResultPower,
+    string? TargetSelectorHint,
+    string? TargetFilter);
 
 public sealed record LiveExportChoiceCandidate(
     string ExtractorPath,
