@@ -123,9 +123,9 @@ Run("advice prompt builder emits the required prompt sections", TestAdvicePrompt
 Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder extracts explicit option facts and fails closed on duplicates", TestEventCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder respects generic fallback ordering", TestEventCompactFallbackOrdering, failures);
+Run("event compact prompt allows explicit target-filter events to recommend with deck summary", TestCompactAdvicePromptBuilder, failures);
 Run("shop compact advisor input builder extracts purchase counts and fails closed on duplicates", TestShopCompactAdvisorInputBuilder, failures);
 Run("combat compact preview builder captures current facts and stays preview-only", TestCombatCompactPreviewBuilder, failures);
-Run("compact advice prompt path prefers compact scene-local sections", TestCompactAdvicePromptBuilder, failures);
 Run("reward deterministic builders are reproducible", TestRewardDeterministicBuilders, failures);
 Run("reward deterministic layer stays off for non-card rewards", TestRewardNonCardFallback, failures);
 Run("reward deterministic layer falls back outside reward scenes", TestRewardDeterministicFallback, failures);
@@ -144,6 +144,7 @@ Run("companion host keeps scene model polling responsive while auto advice runs"
 Run("replay validator uses compact path for reward event shop and combat fixtures", TestReplayAdvisorValidatorCompactPath, failures);
 Run("companion host publishes live advisor scene model artifacts", TestCompanionHostLiveSceneModelArtifacts, failures);
 Run("companion host classifies combat options and structured pile counts", TestCompanionHostCombatSceneModelClassification, failures);
+Run("companion host deduplicates event binding options and keeps enriched descriptions", TestCompanionHostEventSceneModelOptionDeduping, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
 Run("codex cli surfaces context overflow diagnostics from exec trace", TestCodexCliContextOverflowDiagnostic, failures);
 Run("host codex client retries without resume after context overflow", TestHostCodexCliClientRetriesWithoutResumeAfterContextOverflow, failures);
@@ -5355,6 +5356,21 @@ static void TestCompactAdvicePromptBuilder()
         Assert(shopInputPack.CompactInput is not null && string.Equals(shopInputPack.CompactInput.SceneType, "shop", StringComparison.Ordinal), "Expected compact shop input in prompt pack.");
         Assert(shopPrompt.Contains("shop_facts:", StringComparison.Ordinal), "Expected compact prompt to include shop facts.");
         Assert(!shopPrompt.Contains("reward_facts:", StringComparison.Ordinal), "Shop compact prompt should not include reward facts.");
+
+        var woodCarvingsRunState = CreateWoodCarvingsEventRunState("event-compact-prompt-run");
+        var eventSlice = knowledgeService.BuildSlice(ToFoundationRunState(woodCarvingsRunState), 16, 8192);
+        var eventCompactResult = compactBuilder.Build(ToFoundationRunState(woodCarvingsRunState), eventSlice);
+        var eventInputPack = promptBuilder.BuildInputPack(
+            ToFoundationRunState(woodCarvingsRunState),
+            ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "event-compact-test", woodCarvingsRunState.RecentEvents.LastOrDefault())),
+            eventSlice,
+            eventCompactResult.CompactInput);
+        var eventPrompt = promptBuilder.FormatPrompt(eventInputPack);
+        Assert(eventInputPack.CompactInput is not null && string.Equals(eventInputPack.CompactInput.SceneType, "event", StringComparison.Ordinal), "Expected compact event input in prompt pack.");
+        Assert(eventPrompt.Contains("event_facts:", StringComparison.Ordinal), "Expected compact prompt to include event facts.");
+        Assert(eventPrompt.Contains("target_filter", StringComparison.Ordinal), "Expected compact event prompt to carry target filter facts.");
+        Assert(eventPrompt.Contains("그 자체만으로 추천을 보류하지 마세요.", StringComparison.Ordinal), "Expected event compact prompt to prevent target-filter-only overblocking.");
+        Assert(eventPrompt.Contains("별도의 추가 우선순위 필드가 없다는 이유만으로 decisionBlockers를 만들지 마세요.", StringComparison.Ordinal), "Expected event compact prompt to allow deck-summary-based comparison.");
     }
     finally
     {
@@ -6641,6 +6657,29 @@ static void TestCompanionHostCombatSceneModelClassification()
     Assert(utilityOptions == 1, $"Expected one utility option, got {utilityOptions}.");
     Assert(sceneModel.Options.Any(option => string.Equals(option.Label, "Ping", StringComparison.OrdinalIgnoreCase)
                                             && option.Tags.Contains("category:utility", StringComparer.OrdinalIgnoreCase)), "Expected Ping to stay present in scene truth as a utility option.");
+}
+
+static void TestCompanionHostEventSceneModelOptionDeduping()
+{
+    var runState = CreateWoodCarvingsEventRunState("scene-model-event-wood-carvings");
+    var sceneModel = ResolveHostSceneModelForSnapshot(
+        runState.Snapshot.RunId,
+        "choice-list-presented",
+        runState.Snapshot);
+
+    Assert(string.Equals(sceneModel.SceneType, "event", StringComparison.Ordinal), $"Expected event scene type, got {sceneModel.SceneType}.");
+    Assert(sceneModel.Options.Count == 3, $"Expected Wood Carvings scene model options to dedupe to 3, got {sceneModel.Options.Count}.");
+
+    var bird = sceneModel.Options.FirstOrDefault(option => string.Equals(option.Label, "새", StringComparison.Ordinal))
+        ?? throw new InvalidOperationException("Expected 새 option.");
+    var snake = sceneModel.Options.FirstOrDefault(option => string.Equals(option.Label, "뱀", StringComparison.Ordinal))
+        ?? throw new InvalidOperationException("Expected 뱀 option.");
+    var torus = sceneModel.Options.FirstOrDefault(option => string.Equals(option.Label, "고리", StringComparison.Ordinal))
+        ?? throw new InvalidOperationException("Expected 고리 option.");
+
+    Assert(bird.Description?.Contains("쪼기", StringComparison.Ordinal) == true, $"Expected 새 description to fill the transformed card title, got '{bird.Description ?? "<null>"}'.");
+    Assert(snake.Description?.Contains("미끈거림", StringComparison.Ordinal) == true, $"Expected 뱀 description to fill the enchantment title, got '{snake.Description ?? "<null>"}'.");
+    Assert(torus.Description?.Contains("고리형 강인함", StringComparison.Ordinal) == true, $"Expected 고리 description to fill the transformed card title, got '{torus.Description ?? "<null>"}'.");
 }
 
 static void ExecuteHostSceneModelScenario(HostSceneModelScenario scenario)

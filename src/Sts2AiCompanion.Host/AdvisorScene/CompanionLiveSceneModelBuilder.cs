@@ -584,7 +584,12 @@ internal static class CompanionLiveSceneModelBuilder
 
     private static IReadOnlyList<AdvisorSceneOption> SelectEventVisibleOptions(CompanionRunState runState, IReadOnlyList<LiveExportChoiceSummary> choices)
     {
-        var eventOptions = choices.Where(IsEventChoice).Select(ToOption).ToList();
+        var eventOptions = choices
+            .Where(IsEventChoice)
+            .GroupBy(GetEventChoiceGroupKey, StringComparer.OrdinalIgnoreCase)
+            .Select(MergeEventChoiceGroup)
+            .Select(ToOption)
+            .ToList();
         if (eventOptions.Count > 0)
         {
             return eventOptions
@@ -604,6 +609,123 @@ internal static class CompanionLiveSceneModelBuilder
         }
 
         return Array.Empty<AdvisorSceneOption>();
+    }
+
+    private static string GetEventChoiceGroupKey(LiveExportChoiceSummary choice)
+    {
+        return !string.IsNullOrWhiteSpace(choice.BindingId)
+            ? $"binding:{choice.BindingId}"
+            : $"{choice.Kind}|{choice.Label}";
+    }
+
+    private static LiveExportChoiceSummary MergeEventChoiceGroup(IGrouping<string, LiveExportChoiceSummary> group)
+    {
+        var entries = group.ToArray();
+        var representative = entries
+            .OrderByDescending(ScoreEventChoice)
+            .First();
+        var value = entries
+            .Select(static choice => choice.Value)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .OrderByDescending(static value => value!.Length)
+            .FirstOrDefault();
+        var description = entries
+            .Select(ResolveEventChoiceDescription)
+            .Where(static description => !string.IsNullOrWhiteSpace(description))
+            .OrderByDescending(static description => description!.Length)
+            .FirstOrDefault();
+        var semanticHints = entries
+            .SelectMany(static choice => choice.SemanticHints)
+            .Where(static hint => !string.IsNullOrWhiteSpace(hint))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return representative with
+        {
+            Value = value,
+            Description = description,
+            SemanticHints = semanticHints,
+        };
+    }
+
+    private static int ScoreEventChoice(LiveExportChoiceSummary choice)
+    {
+        var score = 0;
+        if (choice.SemanticHints.Any(static hint => string.Equals(hint, "source:event-option-button", StringComparison.OrdinalIgnoreCase)))
+        {
+            score += 40;
+        }
+
+        if (!string.IsNullOrWhiteSpace(choice.ScreenBounds))
+        {
+            score += 20;
+        }
+
+        if (choice.EventOptionDetail is not null)
+        {
+            score += 12;
+        }
+
+        score += ResolveEventChoiceDescription(choice)?.Length ?? 0;
+        score += choice.Value?.Length ?? 0;
+        return score;
+    }
+
+    private static string? ResolveEventChoiceDescription(LiveExportChoiceSummary choice)
+    {
+        if (!IsEventChoice(choice))
+        {
+            return choice.Description;
+        }
+
+        var detail = choice.EventOptionDetail;
+        var baseDescription = FirstNonBlank(
+            detail?.EvaluatedDescription,
+            choice.Description,
+            detail?.HoverTipDescription);
+
+        if (string.IsNullOrWhiteSpace(baseDescription))
+        {
+            return null;
+        }
+
+        var resultName = FirstNonBlank(
+            detail?.ResultCard?.Title,
+            detail?.ResultRelic?.Title,
+            detail?.ResultEnchantment?.Title,
+            detail?.ResultPower?.Title,
+            detail?.HoverTipTitle);
+        var resultEffect = FirstNonBlank(
+            detail?.ResultCard?.Description,
+            detail?.ResultRelic?.Description,
+            detail?.ResultEnchantment?.Description,
+            detail?.ResultPower?.Description,
+            detail?.HoverTipDescription);
+
+        var normalized = baseDescription;
+        if (!string.IsNullOrWhiteSpace(resultName))
+        {
+            normalized = normalized
+                .Replace(" 선택해 로 ", $" 선택해 {resultName}로 ", StringComparison.Ordinal)
+                .Replace(" 선택해 으로 ", $" 선택해 {resultName}으로 ", StringComparison.Ordinal)
+                .Replace("에 을 인챈트", $"에 {resultName}을 인챈트", StringComparison.Ordinal)
+                .Replace("에 를 인챈트", $"에 {resultName}를 인챈트", StringComparison.Ordinal)
+                .Replace("에 를 추가", $"에 {resultName}를 추가", StringComparison.Ordinal)
+                .Replace("에 을 추가", $"에 {resultName}을 추가", StringComparison.Ordinal);
+        }
+
+        if (!string.IsNullOrWhiteSpace(resultEffect)
+            && !normalized.Contains(resultEffect, StringComparison.OrdinalIgnoreCase))
+        {
+            normalized = $"{normalized} {resultEffect}";
+        }
+
+        return normalized;
+    }
+
+    private static string? FirstNonBlank(params string?[] values)
+    {
+        return values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value));
     }
 
     private static AdvisorSceneOption ToOption(LiveExportChoiceSummary choice)
@@ -630,7 +752,7 @@ internal static class CompanionLiveSceneModelBuilder
             choice.Label,
             choice.Kind,
             choice.Value,
-            choice.Description,
+            ResolveEventChoiceDescription(choice) ?? choice.Description,
             choice.Enabled != false,
             tags.Count == 0 ? Array.Empty<string>() : tags.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }

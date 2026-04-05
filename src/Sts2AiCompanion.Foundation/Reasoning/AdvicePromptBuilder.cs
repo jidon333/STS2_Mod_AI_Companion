@@ -211,8 +211,16 @@ public sealed class AdvicePromptBuilder
         builder.AppendLine($"- canonical_owner: {compact.CanonicalOwner}");
         builder.AppendLine();
         builder.AppendLine("run_context:");
-        builder.AppendLine($"- act: {compact.RunContext.Act?.ToString() ?? "?"}");
-        builder.AppendLine($"- floor: {compact.RunContext.Floor?.ToString() ?? "?"}");
+        if (compact.RunContext.Act is not null)
+        {
+            builder.AppendLine($"- act: {compact.RunContext.Act}");
+        }
+
+        if (compact.RunContext.Floor is not null)
+        {
+            builder.AppendLine($"- floor: {compact.RunContext.Floor}");
+        }
+
         builder.AppendLine($"- hp: {(compact.RunContext.CurrentHp?.ToString() ?? "?")}/{(compact.RunContext.MaxHp?.ToString() ?? "?")}");
         builder.AppendLine($"- gold: {compact.RunContext.Gold?.ToString() ?? "?"}");
         builder.AppendLine($"- relic_count: {compact.RunContext.RelicCount}");
@@ -263,6 +271,11 @@ public sealed class AdvicePromptBuilder
             builder.AppendLine();
             builder.AppendLine("event_facts:");
             builder.AppendLine($"- event_id: {compact.EventFacts.EventId ?? "unknown"}");
+            if (string.Equals(compact.EventFacts.EventId, "Neow", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.AppendLine("- opening_event: true");
+            }
+
             builder.AppendLine($"- event_identity_missing: {compact.EventFacts.EventIdentityMissing}");
             builder.AppendLine($"- reward_child_active: {compact.EventFacts.RewardChildActive}");
             builder.AppendLine($"- proceed_visible: {compact.EventFacts.ProceedVisible}");
@@ -380,6 +393,19 @@ public sealed class AdvicePromptBuilder
                 break;
             case "event":
                 builder.AppendLine("- event facts와 visible_options의 명시적 비용/보상만 근거로 쓰세요.");
+                if (compact.EventFacts?.OptionFacts.Any(static option =>
+                        option.Effects.Any(static effect => effect.Kind is "target_filter" or "target_card_filter")) == true
+                    && compact.DecisionBlockers.Count == 0)
+                {
+                    builder.AppendLine("- event_facts에 target_filter 또는 target_card_filter가 있어도, 그 값이 이미 명시적 후속 선택 조건이라면 그 자체만으로 추천을 보류하지 마세요.");
+                    builder.AppendLine("- player_summary.deck에 기본 카드 구성이나 현재 덱 요약이 보이면, exact target 카드가 아직 선택되지 않았더라도 옵션의 broad tradeoff 비교는 가능합니다.");
+                    builder.AppendLine("- 공격/방어 방향 비교는 compact input의 덱 요약과 명시적 effect를 기준으로 하세요. 별도의 추가 우선순위 필드가 없다는 이유만으로 decisionBlockers를 만들지 마세요.");
+                }
+                if (string.Equals(compact.EventFacts?.EventId, "Neow", StringComparison.OrdinalIgnoreCase))
+                {
+                    builder.AppendLine("- Neow는 런 시작 이벤트입니다. act/floor/path 정보가 비어 있어도 그 자체를 missingInformation이나 decisionBlockers로 올리지 마세요.");
+                    builder.AppendLine("- `니오우의 비탄`의 added_card_effect와 `은 도가니`의 고정 장단점은 이미 확정된 사실로 취급하세요.");
+                }
                 break;
             case "shop":
                 builder.AppendLine("- affordability, option kind, visible descriptions, player resources만 근거로 쓰세요.");

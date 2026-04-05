@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Threading;
@@ -51,6 +52,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     private bool _analysisInProgress;
     private DateTimeOffset? _analysisStartedAt;
     private string? _analysisTriggerKind;
+    private string? _lastPersistedUiSnapshotJson;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -246,8 +248,11 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             RelicsPotionsText = "유물과 포션 정보가 아직 없습니다.";
         }
 
+        var latestPromptPack = TryLoadLatestPromptPack(snapshot.Paths.PromptPacksRoot);
+
         if (snapshot.LatestAdvice is not null)
         {
+            var analysisLatencyText = FormatAdviceLatency(snapshot, latestPromptPack.pack);
             AdviceOverviewText = JoinLines(new[]
             {
                 snapshot.LatestAdvice.Headline,
@@ -256,6 +261,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
                 string.Empty,
                 $"권장 행동: {snapshot.LatestAdvice.RecommendedAction}",
                 $"권장 선택지: {snapshot.LatestAdvice.RecommendedChoiceLabel ?? "-"}",
+                analysisLatencyText is null ? null : $"분석 시간: {analysisLatencyText}",
             });
 
             AdviceDetailsText = JoinLines(new[]
@@ -294,7 +300,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             SceneIdentityText = $"{sceneModel.SceneType} / {sceneModel.SceneStage} / {sceneModel.CanonicalOwner}";
             SceneContextText = AdvisorSceneDisplayFormatter.FormatContext(sceneModel, resolver);
             SceneSummaryText = AdvisorSceneDisplayFormatter.FormatSummary(sceneModel, resolver);
-            SceneOptionsText = AdvisorSceneDisplayFormatter.FormatOptions(sceneModel, resolver);
+            SceneOptionsText = BuildSceneOptionsText(sceneModel, resolver, latestPromptPack.pack);
             SceneGapsText = AdvisorSceneDisplayFormatter.FormatGaps(sceneModel);
             SceneProvenanceText = AdvisorSceneDisplayFormatter.FormatProvenance(sceneModel);
         }
@@ -320,14 +326,103 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             .Select(entry => $"{resolver.ResolveDisplayText(entry.Name, entry.Id)} [출처: {TranslateSource(entry.Source)}]")
             .DefaultIfEmpty("없음"));
 
-        var latestPromptPack = TryLoadLatestPromptPack(snapshot.Paths.PromptPacksRoot);
         AiPromptSummaryText = BuildAiPromptSummaryText(snapshot, latestPromptPack.pack);
         AiInputText = BuildAiInputText(snapshot, latestPromptPack.path, latestPromptPack.pack);
         AiPromptPreviewText = BuildAiPromptPreviewText(latestPromptPack.path, latestPromptPack.pack);
         CurrentSceneDiagnosticsText = BuildCurrentSceneDiagnosticsText(snapshot, latestPromptPack.pack);
         CollectorNotesText = BuildCollectorHistoryText(snapshot);
+        PersistRenderedTextArtifacts(snapshot);
 
         NotifyAll();
+    }
+
+    private string BuildSceneOptionsText(AdvisorSceneArtifact sceneModel, AdvisorKnowledgeDisplayResolver resolver, AdviceInputPack? promptPack)
+    {
+        var compact = promptPack?.CompactInput;
+        if (string.Equals(sceneModel.SceneType, "event", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(compact?.SceneType, "event", StringComparison.OrdinalIgnoreCase)
+            && compact.EventFacts is not null
+            && compact.VisibleOptions.Count > 0)
+        {
+            var enriched = BuildEventCompactOptionsText(compact, resolver);
+            if (!string.IsNullOrWhiteSpace(enriched))
+            {
+                return enriched;
+            }
+        }
+
+        return AdvisorSceneDisplayFormatter.FormatOptions(sceneModel, resolver);
+    }
+
+    private static string BuildEventCompactOptionsText(
+        Sts2AiCompanion.Foundation.Contracts.RewardEventCompactAdvisorInput compact,
+        AdvisorKnowledgeDisplayResolver resolver)
+    {
+        var eventFacts = compact.EventFacts;
+        if (eventFacts is null)
+        {
+            return "없음";
+        }
+
+        var factMap = eventFacts.OptionFacts
+            .ToDictionary(static fact => fact.Label, StringComparer.Ordinal);
+        var lines = new List<string>();
+        foreach (var option in compact.VisibleOptions)
+        {
+            if (!factMap.TryGetValue(option.Label, out var fact))
+            {
+                lines.Add(FormatCompactOptionLine(option.Label, option.Enabled, option.Description));
+                continue;
+            }
+
+            var description = BuildEventCompactOptionDescription(option, fact);
+            lines.Add(FormatCompactOptionLine(
+                resolver.ResolveDisplayText(option.Label, option.Value),
+                option.Enabled,
+                description));
+        }
+
+        return lines.Count == 0 ? "없음" : JoinLines(lines);
+    }
+
+    private static string FormatCompactOptionLine(string label, bool enabled, string? description)
+    {
+        return $"- {label} [{(enabled ? "활성" : "비활성")}] :: {description ?? "(설명 없음)"}";
+    }
+
+    private static string? BuildEventCompactOptionDescription(
+        Sts2AiCompanion.Foundation.Contracts.CompactAdvisorOption option,
+        Sts2AiCompanion.Foundation.Contracts.EventCompactOptionFact fact)
+    {
+        var segments = new List<string>();
+        var baseDescription = AdvisorDisplaySanitizer.SanitizeText(option.Description);
+        if (!string.IsNullOrWhiteSpace(baseDescription))
+        {
+            segments.Add(baseDescription);
+        }
+
+        foreach (var effect in fact.Effects)
+        {
+            if (string.IsNullOrWhiteSpace(effect.Text))
+            {
+                continue;
+            }
+
+            var text = AdvisorDisplaySanitizer.SanitizeText(effect.Text);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            if (segments.Contains(text, StringComparer.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            segments.Add(text);
+        }
+
+        return segments.Count == 0 ? null : string.Join(" ", segments);
     }
 
     private (string? path, AdviceInputPack? pack) TryLoadLatestPromptPack(string? promptPacksRoot)
@@ -432,6 +527,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             $"knowledge entries: {promptPack.KnowledgeEntries.Count}",
             $"knowledge reasons: {(promptPack.KnowledgeReasons.Count > 0 ? string.Join(", ", promptPack.KnowledgeReasons.Take(6)) : "none")}",
             $"latest advice status: {snapshot.LatestAdvice?.Status ?? "none"}",
+            FormatAdviceLatency(snapshot, promptPack) is { } latency ? $"analysis duration: {latency}" : null,
             string.Empty,
             "입력 발췌",
             SerializePreview(excerpt),
@@ -520,6 +616,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         var currentCompact = promptPack?.CompactInput;
         var currentBlockers = snapshot.LatestAdvice?.DecisionBlockers ?? currentCompact?.DecisionBlockers ?? Array.Empty<string>();
         var currentMissing = snapshot.LatestAdvice?.MissingInformation ?? currentCompact?.MissingInformation ?? Array.Empty<string>();
+        var analysisLatency = FormatAdviceLatency(snapshot, promptPack);
 
         var lines = new List<string>
         {
@@ -529,6 +626,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             $"선택지 추출: {collector?.ChoiceExtractionStatus ?? "미상"}",
             $"현재 선택지 수: {snapshot.LatestSceneModel?.Options.Count ?? snapshot.RunState?.Snapshot.CurrentChoices.Count ?? 0}",
             $"현재 advice 상태: {snapshot.LatestAdvice?.Status ?? "없음"}",
+            analysisLatency is null ? "최근 분석 시간: 없음" : $"최근 분석 시간: {analysisLatency}",
             $"현재 compact path: {DescribeCompactPath(currentCompact)}",
             $"지식 slice: {(snapshot.LatestKnowledgeSlice?.Entries.Count ?? 0)}개 / {(snapshot.LatestKnowledgeSlice?.Reasons.Count > 0 ? string.Join(", ", snapshot.LatestKnowledgeSlice!.Reasons.Take(4)) : "이유 없음")}",
             $"부족한 정보: {(currentMissing.Count > 0 ? string.Join(", ", currentMissing.Take(6)) : "없음")}",
@@ -625,6 +723,147 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         return JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
     }
 
+    private void PersistRenderedTextArtifacts(CompanionHostSnapshot snapshot)
+    {
+        if (string.IsNullOrWhiteSpace(snapshot.Paths.RunRoot))
+        {
+            return;
+        }
+
+        try
+        {
+            var directory = Path.Combine(snapshot.Paths.RunRoot!, "wpf-sidecar");
+            Directory.CreateDirectory(directory);
+
+            var rendered = new
+            {
+                generatedAt = DateTimeOffset.UtcNow,
+                runId = snapshot.Status.RunId,
+                screen = snapshot.RunState?.Snapshot.CurrentScreen,
+                advisorPath = DescribeCompactPath(TryLoadLatestPromptPack(snapshot.Paths.PromptPacksRoot).pack?.CompactInput),
+                panels = new Dictionary<string, string>
+                {
+                    ["statusLine"] = StatusLine,
+                    ["runLine"] = RunLine,
+                    ["screenLine"] = ScreenLine,
+                    ["updatedLine"] = UpdatedLine,
+                    ["analysisStatusText"] = AnalysisStatusText,
+                    ["playerText"] = PlayerText,
+                    ["deckText"] = DeckText,
+                    ["relicsPotionsText"] = RelicsPotionsText,
+                    ["adviceOverviewText"] = AdviceOverviewText,
+                    ["adviceDetailsText"] = AdviceDetailsText,
+                    ["sceneIdentityText"] = SceneIdentityText,
+                    ["sceneContextText"] = SceneContextText,
+                    ["sceneSummaryText"] = SceneSummaryText,
+                    ["sceneOptionsText"] = SceneOptionsText,
+                    ["sceneGapsText"] = SceneGapsText,
+                    ["sceneProvenanceText"] = SceneProvenanceText,
+                    ["recentEventsText"] = RecentEventsText,
+                    ["knowledgeEntriesText"] = KnowledgeEntriesText,
+                    ["aiPromptSummaryText"] = AiPromptSummaryText,
+                    ["aiInputText"] = AiInputText,
+                    ["aiPromptPreviewText"] = AiPromptPreviewText,
+                    ["currentSceneDiagnosticsText"] = CurrentSceneDiagnosticsText,
+                    ["collectorNotesText"] = CollectorNotesText,
+                    ["confidenceLine"] = ConfidenceLine,
+                    ["autoAdviceButtonText"] = AutoAdviceButtonText,
+                    ["selectedModelOption"] = SelectedModelOption,
+                    ["selectedReasoningOption"] = SelectedReasoningOption,
+                },
+                renderedText = BuildRenderedUiLogText(),
+            };
+
+            var json = JsonSerializer.Serialize(rendered, new JsonSerializerOptions { WriteIndented = true });
+            if (string.Equals(json, _lastPersistedUiSnapshotJson, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lastPersistedUiSnapshotJson = json;
+            File.WriteAllText(Path.Combine(directory, "wpf-rendered.latest.json"), json, Encoding.UTF8);
+            File.WriteAllText(Path.Combine(directory, "wpf-rendered.latest.md"), BuildRenderedUiLogText(), Encoding.UTF8);
+            File.AppendAllText(Path.Combine(directory, "wpf-rendered.ndjson"), json + Environment.NewLine, Encoding.UTF8);
+        }
+        catch
+        {
+            // WPF artifact logging must not disrupt the live sidecar.
+        }
+    }
+
+    private string BuildRenderedUiLogText()
+    {
+        return JoinLines(new[]
+        {
+            "# WPF Rendered Snapshot",
+            string.Empty,
+            "## 상태",
+            StatusLine,
+            RunLine,
+            ScreenLine,
+            UpdatedLine,
+            AnalysisStatusText,
+            ConfidenceLine,
+            $"모델: {SelectedModelOption}",
+            $"추론 강도: {SelectedReasoningOption}",
+            $"자동 조언 버튼: {AutoAdviceButtonText}",
+            string.Empty,
+            "## 플레이어",
+            PlayerText,
+            string.Empty,
+            "## 덱",
+            DeckText,
+            string.Empty,
+            "## 유물 / 포션",
+            RelicsPotionsText,
+            string.Empty,
+            "## 조언 개요",
+            AdviceOverviewText,
+            string.Empty,
+            "## 조언 상세",
+            AdviceDetailsText,
+            string.Empty,
+            "## 장면 정체",
+            SceneIdentityText,
+            string.Empty,
+            "## 장면 맥락",
+            SceneContextText,
+            string.Empty,
+            "## 장면 요약",
+            SceneSummaryText,
+            string.Empty,
+            "## 보이는 선택지",
+            SceneOptionsText,
+            string.Empty,
+            "## 누락 정보 / gaps",
+            SceneGapsText,
+            string.Empty,
+            "## provenance",
+            SceneProvenanceText,
+            string.Empty,
+            "## 최근 이벤트",
+            RecentEventsText,
+            string.Empty,
+            "## 관련 지식",
+            KnowledgeEntriesText,
+            string.Empty,
+            "## AI 입력 해석",
+            AiPromptSummaryText,
+            string.Empty,
+            "## AI 입력",
+            AiInputText,
+            string.Empty,
+            "## AI 프롬프트 미리보기",
+            AiPromptPreviewText,
+            string.Empty,
+            "## 현재 장면 진단",
+            CurrentSceneDiagnosticsText,
+            string.Empty,
+            "## 수집 런 진단",
+            CollectorNotesText,
+        });
+    }
+
     private static string Truncate(string? text, int maxLength)
     {
         if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
@@ -633,6 +872,34 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
 
         return text[..maxLength] + Environment.NewLine + "...(truncated)";
+    }
+
+    private static string? FormatAdviceLatency(CompanionHostSnapshot snapshot, AdviceInputPack? promptPack)
+    {
+        if (snapshot.LatestAdvice is null || promptPack is null)
+        {
+            return null;
+        }
+
+        var startedAt = promptPack.CreatedAt;
+        var finishedAt = snapshot.LatestAdvice.GeneratedAt;
+        if (finishedAt < startedAt)
+        {
+            return null;
+        }
+
+        var elapsed = finishedAt - startedAt;
+        if (elapsed.TotalSeconds >= 10)
+        {
+            return $"{elapsed.TotalSeconds:0.0}초";
+        }
+
+        if (elapsed.TotalSeconds >= 1)
+        {
+            return $"{elapsed.TotalSeconds:0.00}초";
+        }
+
+        return $"{Math.Max(0, (int)elapsed.TotalMilliseconds)}ms";
     }
 
     private static string DescribeCompactPath(Sts2AiCompanion.Foundation.Contracts.RewardEventCompactAdvisorInput? compactInput)
