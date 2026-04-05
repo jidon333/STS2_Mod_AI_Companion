@@ -188,12 +188,18 @@ public sealed class AdvicePromptBuilder
     {
         var compact = inputPack.CompactInput
             ?? throw new InvalidOperationException("CompactInput is required for compact prompt formatting.");
+        var sceneType = CompactAdvisorScenePolicy.NormalizeSceneType(compact.SceneType);
         var builder = new StringBuilder();
         builder.AppendLine("당신은 Slay the Spire 2 조언 어시스턴트입니다.");
-        builder.AppendLine("- reward/event 장면의 compact input만 사용하세요.");
+        builder.AppendLine("- 현재 compact input만 사용하세요.");
         builder.AppendLine("- compact input에 없는 정보는 추정하지 마세요.");
         builder.AppendLine("- 추천이 가능해도 recommendedChoiceLabel은 visible_options에 있는 label과 정확히 일치해야 합니다.");
         builder.AppendLine("- 불충분하면 recommendedChoiceLabel=null 로 두고 missingInformation/decisionBlockers를 채우세요.");
+        if (compact.CombatFacts?.PreviewOnly == true)
+        {
+            builder.AppendLine("- combat preview에서는 recommendedChoiceLabel을 항상 null 로 두고 현재 facts와 missing info만 요약하세요.");
+        }
+
         builder.AppendLine("- 반드시 한국어 JSON 스키마만 반환하세요.");
         builder.AppendLine();
         builder.AppendLine($"trigger: {inputPack.TriggerKind}");
@@ -275,6 +281,49 @@ public sealed class AdvicePromptBuilder
             }
         }
 
+        if (compact.ShopFacts is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("shop_facts:");
+            builder.AppendLine($"- inventory_open: {compact.ShopFacts.InventoryOpen}");
+            builder.AppendLine($"- item_count: {compact.ShopFacts.ItemCount}");
+            builder.AppendLine($"- service_count: {compact.ShopFacts.ServiceCount}");
+            builder.AppendLine($"- affordable_option_count: {compact.ShopFacts.AffordableOptionCount}");
+            builder.AppendLine($"- card_removal_visible: {compact.ShopFacts.CardRemovalVisible}");
+            builder.AppendLine($"- card_removal_available: {compact.ShopFacts.CardRemovalAvailable}");
+            builder.AppendLine($"- prices_known: {compact.ShopFacts.PricesKnown}");
+            foreach (var missing in compact.ShopFacts.MissingInformation)
+            {
+                builder.AppendLine($"- missing: {missing}");
+            }
+        }
+
+        if (compact.CombatFacts is not null)
+        {
+            builder.AppendLine();
+            builder.AppendLine("combat_preview_facts:");
+            builder.AppendLine($"- preview_only: {compact.CombatFacts.PreviewOnly}");
+            builder.AppendLine($"- hp: {(compact.CombatFacts.CurrentHp?.ToString() ?? "?")}/{(compact.CombatFacts.MaxHp?.ToString() ?? "?")}");
+            builder.AppendLine($"- energy: {compact.CombatFacts.Energy?.ToString() ?? "?"}");
+            builder.AppendLine($"- turn_number: {compact.CombatFacts.TurnNumber?.ToString() ?? "?"}");
+            builder.AppendLine($"- round_number: {compact.CombatFacts.RoundNumber?.ToString() ?? "?"}");
+            builder.AppendLine($"- hand_count: {compact.CombatFacts.HandCount?.ToString() ?? "?"}");
+            builder.AppendLine($"- hand_summary: {compact.CombatFacts.HandSummary ?? "unknown"}");
+            builder.AppendLine($"- draw_pile_count: {compact.CombatFacts.DrawPileCount?.ToString() ?? "?"}");
+            builder.AppendLine($"- discard_pile_count: {compact.CombatFacts.DiscardPileCount?.ToString() ?? "?"}");
+            builder.AppendLine($"- exhaust_pile_count: {compact.CombatFacts.ExhaustPileCount?.ToString() ?? "?"}");
+            builder.AppendLine($"- play_pile_count: {compact.CombatFacts.PlayPileCount?.ToString() ?? "?"}");
+            builder.AppendLine($"- targetable_enemy_count: {compact.CombatFacts.TargetableEnemyCount?.ToString() ?? "?"}");
+            builder.AppendLine($"- hittable_enemy_count: {compact.CombatFacts.HittableEnemyCount?.ToString() ?? "?"}");
+            builder.AppendLine($"- targeting_in_progress: {compact.CombatFacts.TargetingInProgress}");
+            builder.AppendLine($"- target_summary: {compact.CombatFacts.TargetSummary ?? "unknown"}");
+            builder.AppendLine($"- enemy_intent_summary: {compact.CombatFacts.EnemyIntentSummary ?? "unknown"}");
+            foreach (var missing in compact.CombatFacts.MissingInformation)
+            {
+                builder.AppendLine($"- missing: {missing}");
+            }
+        }
+
         builder.AppendLine();
         builder.AppendLine("recent_events:");
         foreach (var recentEvent in compact.RecentEvents)
@@ -324,7 +373,26 @@ public sealed class AdvicePromptBuilder
         builder.AppendLine();
         builder.AppendLine("response_instructions:");
         builder.AppendLine("- visible_options 안의 label 하나만 recommendedChoiceLabel 로 선택하거나, 확정 불가면 null 로 두세요.");
-        builder.AppendLine("- reward/event 사실과 visible_options에서 직접 확인 가능한 근거만 reasoningBullets에 쓰세요.");
+        switch (sceneType)
+        {
+            case "reward":
+                builder.AppendLine("- reward facts와 visible_options에서 직접 확인 가능한 근거만 reasoningBullets에 쓰세요.");
+                break;
+            case "event":
+                builder.AppendLine("- event facts와 visible_options의 명시적 비용/보상만 근거로 쓰세요.");
+                break;
+            case "shop":
+                builder.AppendLine("- affordability, option kind, visible descriptions, player resources만 근거로 쓰세요.");
+                builder.AppendLine("- 장기 synergy, boss pressure, 보이지 않는 가격은 추정하지 마세요.");
+                break;
+            case "combat":
+                builder.AppendLine("- combat preview에서는 추천 라벨을 만들지 말고 현재 facts와 missing info만 요약하세요.");
+                break;
+            default:
+                builder.AppendLine("- scene-specific facts와 visible_options에서 직접 확인 가능한 근거만 reasoningBullets에 쓰세요.");
+                break;
+        }
+
         builder.AppendLine("- guessed effect, guessed option, guessed label 금지.");
         builder.AppendLine("- missingInformation과 decisionBlockers를 비우지 말고 compact input의 공백을 그대로 반영하세요.");
         return builder.ToString().TrimEnd();

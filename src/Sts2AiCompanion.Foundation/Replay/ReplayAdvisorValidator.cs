@@ -72,8 +72,8 @@ public sealed class ReplayAdvisorValidator
                 runState,
                 trigger,
                 slice,
-                compactResult.Supported ? compactResult.CompactInput : null);
-            var response = await CreateResponseAsync(runState, slice, inputPack, mockAdviceResponsePath, cancellationToken).ConfigureAwait(false);
+                compactResult.CompactInput);
+            var response = await CreateResponseAsync(runState, slice, inputPack, compactResult, mockAdviceResponsePath, cancellationToken).ConfigureAwait(false);
 
             var fixtureName = Path.GetFileName(Path.GetFullPath(resolvedFixtureRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             var runId = $"replay-{fixtureName}";
@@ -133,9 +133,38 @@ public sealed class ReplayAdvisorValidator
         CompanionRunState runState,
         KnowledgeSlice slice,
         AdviceInputPack inputPack,
+        CompactAdvisorBuildResult compactResult,
         string? mockAdviceResponsePath,
         CancellationToken cancellationToken)
     {
+        if (compactResult.ReasonCode.StartsWith("unsupported-scene-for-compact-advisor:", StringComparison.Ordinal))
+        {
+            return CompactAdvisorFallbackFactory.CreateUnsupportedScene(inputPack, runState.NormalizedState.Scene.SceneType);
+        }
+
+        if (CompactAdvisorScenePolicy.IsCompactAdvisorScene(runState.NormalizedState.Scene.SceneType)
+            && (!compactResult.Supported || compactResult.CompactInput is null))
+        {
+            var compactPack = inputPack with
+            {
+                CompactInput = compactResult.CompactInput ?? inputPack.CompactInput,
+            };
+            if (string.Equals(compactResult.ReasonCode, "combat-preview-only", StringComparison.OrdinalIgnoreCase))
+            {
+                return CompactAdvisorFallbackFactory.CreateCombatPreview(
+                    compactPack,
+                    compactResult.ReasonCode,
+                    compactResult.MissingInformation,
+                    compactResult.DecisionBlockers);
+            }
+
+            return CompactAdvisorFallbackFactory.CreateInsufficientCompactInput(
+                compactPack,
+                compactResult.ReasonCode,
+                compactResult.MissingInformation,
+                compactResult.DecisionBlockers);
+        }
+
         if (!string.IsNullOrWhiteSpace(mockAdviceResponsePath))
         {
             var mock = await ReadJsonAsync<AdviceResponse>(mockAdviceResponsePath, cancellationToken).ConfigureAwait(false);
@@ -150,25 +179,6 @@ public sealed class ReplayAdvisorValidator
                     TriggerKind = "replay-validation",
                 });
             }
-        }
-
-        var compactResult = _compactInputBuilder.Build(runState, slice);
-        if (compactResult.ReasonCode.StartsWith("unsupported-scene-for-compact-advisor:", StringComparison.Ordinal))
-        {
-            return CompactAdvisorFallbackFactory.CreateUnsupportedScene(inputPack, runState.NormalizedState.Scene.SceneType);
-        }
-
-        if (IsCompactScene(runState) && (!compactResult.Supported || compactResult.CompactInput is null))
-        {
-            var compactPack = inputPack with
-            {
-                CompactInput = compactResult.CompactInput,
-            };
-            return CompactAdvisorFallbackFactory.CreateInsufficientCompactInput(
-                compactPack,
-                compactResult.ReasonCode,
-                compactResult.MissingInformation,
-                compactResult.DecisionBlockers);
         }
 
         var missingInformation = runState.NormalizedState.Unknowns
@@ -212,16 +222,9 @@ public sealed class ReplayAdvisorValidator
         return AdviceResponseFinalizer.Apply(
             inputPack with
             {
-                CompactInput = compactResult.Supported ? compactResult.CompactInput : inputPack.CompactInput,
+                CompactInput = compactResult.CompactInput ?? inputPack.CompactInput,
             },
             response);
-    }
-
-    private static bool IsCompactScene(CompanionRunState runState)
-    {
-        return string.Equals(runState.NormalizedState.Scene.SceneType, "reward", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(runState.NormalizedState.Scene.SceneType, "rewards", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(runState.NormalizedState.Scene.SceneType, "event", StringComparison.OrdinalIgnoreCase);
     }
 
     private string ResolveFixtureRoot(string fixtureRoot)

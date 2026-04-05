@@ -62,6 +62,36 @@ public sealed record EventCompactFacts(
     IReadOnlyList<EventCompactOptionFact> OptionFacts,
     IReadOnlyList<string> MissingInformation);
 
+public sealed record ShopCompactFacts(
+    bool InventoryOpen,
+    int ItemCount,
+    int ServiceCount,
+    int AffordableOptionCount,
+    bool CardRemovalVisible,
+    bool CardRemovalAvailable,
+    bool PricesKnown,
+    IReadOnlyList<string> MissingInformation);
+
+public sealed record CombatCompactFacts(
+    bool PreviewOnly,
+    int? CurrentHp,
+    int? MaxHp,
+    int? Energy,
+    int? TurnNumber,
+    int? RoundNumber,
+    int? HandCount,
+    string? HandSummary,
+    int? DrawPileCount,
+    int? DiscardPileCount,
+    int? ExhaustPileCount,
+    int? PlayPileCount,
+    int? TargetableEnemyCount,
+    int? HittableEnemyCount,
+    bool TargetingInProgress,
+    string? TargetSummary,
+    string? EnemyIntentSummary,
+    IReadOnlyList<string> MissingInformation);
+
 public sealed record RewardEventCompactAdvisorInput(
     string SceneType,
     string SceneStage,
@@ -74,7 +104,9 @@ public sealed record RewardEventCompactAdvisorInput(
     IReadOnlyList<string> MissingInformation,
     IReadOnlyList<string> DecisionBlockers,
     RewardCompactFacts? RewardFacts = null,
-    EventCompactFacts? EventFacts = null);
+    EventCompactFacts? EventFacts = null,
+    ShopCompactFacts? ShopFacts = null,
+    CombatCompactFacts? CombatFacts = null);
 
 public sealed record CompactAdvisorBuildResult(
     bool Supported,
