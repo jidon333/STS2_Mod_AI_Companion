@@ -75,7 +75,8 @@ internal static class FoundationContractAdapter
             inputPack.RewardOptionSet,
             inputPack.RewardAssessmentFacts,
             inputPack.RewardRecommendationTraceSeed,
-            inputPack.CompactInput);
+            inputPack.CompactInput,
+            inputPack.StrategyPrinciples);
     }
 
     public static AdviceInputPack ToHost(this FoundationAdviceInputPack inputPack)
@@ -96,7 +97,8 @@ internal static class FoundationContractAdapter
             inputPack.RewardOptionSet,
             inputPack.RewardAssessmentFacts,
             inputPack.RewardRecommendationTraceSeed,
-            inputPack.CompactInput);
+            inputPack.CompactInput,
+            inputPack.StrategyPrinciples);
     }
 
     public static FoundationAdviceResponse ToFoundation(this AdviceResponse response)
@@ -118,7 +120,10 @@ internal static class FoundationContractAdapter
             response.TriggerKind,
             response.SessionId,
             response.RawResponse,
-            response.RewardRecommendationTrace);
+            response.RewardRecommendationTrace,
+            response.ConservativeView,
+            response.AggressiveView,
+            response.FinalView);
     }
 
     public static AdviceResponse ToHost(this FoundationAdviceResponse response)
@@ -140,7 +145,10 @@ internal static class FoundationContractAdapter
             response.TriggerKind,
             response.SessionId,
             response.RawResponse,
-            response.RewardRecommendationTrace);
+            response.RewardRecommendationTrace,
+            response.ConservativeView,
+            response.AggressiveView,
+            response.FinalView);
     }
 
     public static FoundationCodexSessionState ToFoundation(this CodexSessionState state)

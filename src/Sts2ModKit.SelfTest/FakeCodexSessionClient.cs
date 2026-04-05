@@ -361,7 +361,8 @@ internal sealed class FakeCodexSessionClient : ICodexSessionClient
             inputPack.RewardOptionSet,
             inputPack.RewardAssessmentFacts,
             inputPack.RewardRecommendationTraceSeed,
-            inputPack.CompactInput);
+            inputPack.CompactInput,
+            inputPack.StrategyPrinciples);
     }
 
     private static Sts2AiCompanion.Foundation.Contracts.AdviceResponse ToFoundationResponse(AdviceResponse response)
@@ -383,7 +384,10 @@ internal sealed class FakeCodexSessionClient : ICodexSessionClient
             response.TriggerKind,
             response.SessionId,
             response.RawResponse,
-            response.RewardRecommendationTrace);
+            response.RewardRecommendationTrace,
+            response.ConservativeView,
+            response.AggressiveView,
+            response.FinalView);
     }
 
     private static AdviceResponse ToHostResponse(Sts2AiCompanion.Foundation.Contracts.AdviceResponse response)
@@ -405,7 +409,10 @@ internal sealed class FakeCodexSessionClient : ICodexSessionClient
             response.TriggerKind,
             response.SessionId,
             response.RawResponse,
-            response.RewardRecommendationTrace);
+            response.RewardRecommendationTrace,
+            response.ConservativeView,
+            response.AggressiveView,
+            response.FinalView);
     }
 }
 

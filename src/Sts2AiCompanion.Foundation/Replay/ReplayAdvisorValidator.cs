@@ -15,6 +15,7 @@ public sealed class ReplayAdvisorValidator
     private readonly ScaffoldConfiguration _configuration;
     private readonly string _workspaceRoot;
     private readonly KnowledgeCatalogService _knowledgeCatalogService;
+    private readonly StrategyPrinciplesService _strategyPrinciplesService;
     private readonly AdvicePromptBuilder _promptBuilder;
     private readonly RewardEventCompactAdvisorInputBuilder _compactInputBuilder = new();
 
@@ -27,6 +28,7 @@ public sealed class ReplayAdvisorValidator
         _configuration = configuration;
         _workspaceRoot = workspaceRoot;
         _knowledgeCatalogService = knowledgeCatalogService ?? new KnowledgeCatalogService(configuration, workspaceRoot);
+        _strategyPrinciplesService = new StrategyPrinciplesService(configuration, workspaceRoot);
         _promptBuilder = promptBuilder ?? new AdvicePromptBuilder(configuration);
     }
 
@@ -68,11 +70,15 @@ public sealed class ReplayAdvisorValidator
                 _configuration.Assistant.MaxKnowledgeEntries,
                 _configuration.Assistant.MaxKnowledgeBytes);
             var compactResult = _compactInputBuilder.Build(runState, slice);
+            var strategyPrinciples = compactResult.CompactInput is null
+                ? null
+                : _strategyPrinciplesService.GetRelevantPrinciples(compactResult.CompactInput);
             var inputPack = _promptBuilder.BuildInputPack(
                 runState,
                 trigger,
                 slice,
-                compactResult.CompactInput);
+                compactResult.CompactInput,
+                strategyPrinciples);
             var response = await CreateResponseAsync(runState, slice, inputPack, compactResult, mockAdviceResponsePath, cancellationToken).ConfigureAwait(false);
 
             var fixtureName = Path.GetFileName(Path.GetFullPath(resolvedFixtureRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
@@ -139,7 +145,9 @@ public sealed class ReplayAdvisorValidator
     {
         if (compactResult.ReasonCode.StartsWith("unsupported-scene-for-compact-advisor:", StringComparison.Ordinal))
         {
-            return CompactAdvisorFallbackFactory.CreateUnsupportedScene(inputPack, runState.NormalizedState.Scene.SceneType);
+            return AdviceResponseFinalizer.Apply(
+                inputPack,
+                CompactAdvisorFallbackFactory.CreateUnsupportedScene(inputPack, runState.NormalizedState.Scene.SceneType));
         }
 
         if (CompactAdvisorScenePolicy.IsCompactAdvisorScene(runState.NormalizedState.Scene.SceneType)
@@ -151,18 +159,22 @@ public sealed class ReplayAdvisorValidator
             };
             if (string.Equals(compactResult.ReasonCode, "combat-preview-only", StringComparison.OrdinalIgnoreCase))
             {
-                return CompactAdvisorFallbackFactory.CreateCombatPreview(
+                return AdviceResponseFinalizer.Apply(
+                    compactPack,
+                    CompactAdvisorFallbackFactory.CreateCombatPreview(
+                        compactPack,
+                        compactResult.ReasonCode,
+                        compactResult.MissingInformation,
+                        compactResult.DecisionBlockers));
+            }
+
+            return AdviceResponseFinalizer.Apply(
+                compactPack,
+                CompactAdvisorFallbackFactory.CreateInsufficientCompactInput(
                     compactPack,
                     compactResult.ReasonCode,
                     compactResult.MissingInformation,
-                    compactResult.DecisionBlockers);
-            }
-
-            return CompactAdvisorFallbackFactory.CreateInsufficientCompactInput(
-                compactPack,
-                compactResult.ReasonCode,
-                compactResult.MissingInformation,
-                compactResult.DecisionBlockers);
+                    compactResult.DecisionBlockers));
         }
 
         if (!string.IsNullOrWhiteSpace(mockAdviceResponsePath))

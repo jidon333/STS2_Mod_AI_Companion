@@ -21,7 +21,8 @@ public sealed class AdvicePromptBuilder
         CompanionRunState runState,
         AdviceTrigger trigger,
         KnowledgeSlice slice,
-        RewardEventCompactAdvisorInput? compactInput = null)
+        RewardEventCompactAdvisorInput? compactInput = null,
+        IReadOnlyList<StrategyPrincipleEntry>? strategyPrinciples = null)
     {
         var rewardOptionSet = _rewardOptionSetBuilder.Build(runState);
         var rewardAssessmentFacts = _rewardAssessmentFactsBuilder.Build(runState, slice, rewardOptionSet);
@@ -45,7 +46,8 @@ public sealed class AdvicePromptBuilder
             rewardOptionSet,
             rewardAssessmentFacts,
             rewardRecommendationTrace,
-            compactInput);
+            compactInput,
+            strategyPrinciples);
     }
 
     public string FormatPrompt(AdviceInputPack inputPack)
@@ -338,6 +340,20 @@ public sealed class AdvicePromptBuilder
         }
 
         builder.AppendLine();
+        builder.AppendLine("strategy_principles:");
+        foreach (var principle in inputPack.StrategyPrinciples ?? Array.Empty<StrategyPrincipleEntry>())
+        {
+            builder.AppendLine($"- {principle.Title} [{principle.Id}]");
+            builder.AppendLine($"  transfer_confidence: {principle.TransferConfidence}");
+            builder.AppendLine($"  summary: {SanitizePromptText(principle.Summary)}");
+        }
+
+        if (inputPack.StrategyPrinciples is null || inputPack.StrategyPrinciples.Count == 0)
+        {
+            builder.AppendLine("- none");
+        }
+
+        builder.AppendLine();
         builder.AppendLine("recent_events:");
         foreach (var recentEvent in compact.RecentEvents)
         {
@@ -386,6 +402,9 @@ public sealed class AdvicePromptBuilder
         builder.AppendLine();
         builder.AppendLine("response_instructions:");
         builder.AppendLine("- visible_options 안의 label 하나만 recommendedChoiceLabel 로 선택하거나, 확정 불가면 null 로 두세요.");
+        builder.AppendLine("- strategy_principles는 background-only 보조 렌즈입니다. explicit scene facts, visible_options, missing_information, decision_blockers를 override하지 마세요.");
+        builder.AppendLine("- conservative/aggressive/final view는 같은 사실 집합을 공유하고, 차이는 weighting만 있어야 합니다.");
+        builder.AppendLine("- 가능하면 conservativeView, aggressiveView, finalView를 함께 채우세요. finalView는 canonical top-level 판단과 같은 결론이어야 합니다.");
         switch (sceneType)
         {
             case "reward":
@@ -446,18 +465,11 @@ public sealed class AdvicePromptBuilder
         builder.AppendLine($"- recommended_choice: {response.RecommendedChoiceLabel ?? "없음"}");
         builder.AppendLine($"- confidence: {(response.Confidence?.ToString("0.00") ?? "미상")}");
         builder.AppendLine();
-        builder.AppendLine("## 근거");
-        foreach (var bullet in response.ReasoningBullets.DefaultIfEmpty("없음"))
-        {
-            builder.AppendLine($"- {bullet}");
-        }
-
+        AppendAdviceViewSection(builder, "## 최종 조언", response.FinalView ?? CreateCanonicalView(response), response.RecommendedAction);
         builder.AppendLine();
-        builder.AppendLine("## 리스크");
-        foreach (var note in response.RiskNotes.DefaultIfEmpty("없음"))
-        {
-            builder.AppendLine($"- {note}");
-        }
+        AppendAdviceViewSection(builder, "## 보수적 조언", response.ConservativeView, null);
+        builder.AppendLine();
+        AppendAdviceViewSection(builder, "## 공격적 조언", response.AggressiveView, null);
 
         builder.AppendLine();
         builder.AppendLine("## 부족한 정보");
@@ -500,5 +512,53 @@ public sealed class AdvicePromptBuilder
         }
 
         return builder.ToString().TrimEnd();
+    }
+
+    private static AdvicePerspectiveView CreateCanonicalView(AdviceResponse response)
+    {
+        return new AdvicePerspectiveView(
+            response.Headline,
+            response.RecommendedChoiceLabel,
+            response.Summary,
+            response.ReasoningBullets,
+            response.RiskNotes);
+    }
+
+    private static void AppendAdviceViewSection(
+        StringBuilder builder,
+        string heading,
+        AdvicePerspectiveView? view,
+        string? recommendedAction)
+    {
+        builder.AppendLine(heading);
+        if (view is null)
+        {
+            builder.AppendLine("없음");
+            return;
+        }
+
+        builder.AppendLine(view.Headline);
+        builder.AppendLine();
+        builder.AppendLine(view.Summary);
+        builder.AppendLine();
+        if (!string.IsNullOrWhiteSpace(recommendedAction))
+        {
+            builder.AppendLine($"- recommended_action: {recommendedAction}");
+        }
+
+        builder.AppendLine($"- recommended_choice: {view.RecommendedChoiceLabel ?? "없음"}");
+        builder.AppendLine();
+        builder.AppendLine("### 근거");
+        foreach (var bullet in view.ReasoningBullets.DefaultIfEmpty("없음"))
+        {
+            builder.AppendLine($"- {bullet}");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("### 리스크");
+        foreach (var note in view.RiskNotes.DefaultIfEmpty("없음"))
+        {
+            builder.AppendLine($"- {note}");
+        }
     }
 }

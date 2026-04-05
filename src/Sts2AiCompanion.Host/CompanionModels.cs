@@ -1,10 +1,12 @@
 using Sts2AiCompanion.AdvisorSceneModel;
 using Sts2AiCompanion.SceneProvenance;
+using FoundationAdvicePerspectiveView = Sts2AiCompanion.Foundation.Contracts.AdvicePerspectiveView;
 using FoundationCompanionState = Sts2AiCompanion.Foundation.Contracts.CompanionState;
 using FoundationRewardEventCompactAdvisorInput = Sts2AiCompanion.Foundation.Contracts.RewardEventCompactAdvisorInput;
 using FoundationRewardAssessmentFacts = Sts2AiCompanion.Foundation.Contracts.RewardAssessmentFacts;
 using FoundationRewardOptionSet = Sts2AiCompanion.Foundation.Contracts.RewardOptionSet;
 using FoundationRewardRecommendationTrace = Sts2AiCompanion.Foundation.Contracts.RewardRecommendationTrace;
+using FoundationStrategyPrincipleEntry = Sts2AiCompanion.Foundation.Contracts.StrategyPrincipleEntry;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
 
@@ -77,7 +79,8 @@ public sealed record AdviceInputPack(
     FoundationRewardOptionSet? RewardOptionSet = null,
     FoundationRewardAssessmentFacts? RewardAssessmentFacts = null,
     FoundationRewardRecommendationTrace? RewardRecommendationTraceSeed = null,
-    FoundationRewardEventCompactAdvisorInput? CompactInput = null);
+    FoundationRewardEventCompactAdvisorInput? CompactInput = null,
+    IReadOnlyList<FoundationStrategyPrincipleEntry>? StrategyPrinciples = null);
 
 public sealed record AdviceResponse(
     string Status,
@@ -96,7 +99,10 @@ public sealed record AdviceResponse(
     string TriggerKind,
     string? SessionId,
     string? RawResponse,
-    FoundationRewardRecommendationTrace? RewardRecommendationTrace = null);
+    FoundationRewardRecommendationTrace? RewardRecommendationTrace = null,
+    FoundationAdvicePerspectiveView? ConservativeView = null,
+    FoundationAdvicePerspectiveView? AggressiveView = null,
+    FoundationAdvicePerspectiveView? FinalView = null);
 
 public sealed record CodexSessionState(
     string RunId,

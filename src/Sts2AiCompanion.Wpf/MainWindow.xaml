@@ -83,17 +83,31 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="#143642" Text="AI 조언" />
                     <TextBlock Grid.Row="1" Margin="0,10,0,0" FontWeight="SemiBold" Foreground="#7A3E00" Text="{Binding AnalysisStatusText}" />
-                    <TextBox Grid.Row="2" Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding AdviceOverviewText, Mode=OneWay}" />
-                    <TextBlock Grid.Row="3" Margin="0,10,0,0" FontWeight="SemiBold" Text="근거 / 리스크 / 부족한 정보 / 최근 변화" />
-                    <TextBox Grid.Row="4" Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding AdviceDetailsText, Mode=OneWay}" />
-                    <TextBlock Grid.Row="5" Margin="0,10,0,0" HorizontalAlignment="Right" Text="{Binding ConfidenceLine}" />
+                    <ScrollViewer Grid.Row="2" Margin="0,14,0,0" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <GroupBox Header="최종 조언">
+                                <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding AdviceOverviewText, Mode=OneWay}" />
+                            </GroupBox>
+
+                            <GroupBox Margin="0,12,0,0" Header="최종 근거 / 리스크 / 부족한 정보 / 최근 변화">
+                                <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding AdviceDetailsText, Mode=OneWay}" />
+                            </GroupBox>
+
+                            <GroupBox Margin="0,12,0,0" Header="보수적 조언">
+                                <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding ConservativeAdviceText, Mode=OneWay}" />
+                            </GroupBox>
+
+                            <GroupBox Margin="0,12,0,0" Header="공격적 조언">
+                                <TextBox Style="{StaticResource ReadOnlyPanelTextBox}" Text="{Binding AggressiveAdviceText, Mode=OneWay}" />
+                            </GroupBox>
+
+                            <TextBlock Margin="0,12,0,0" HorizontalAlignment="Right" Text="{Binding ConfidenceLine}" />
+                        </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </Border>
 

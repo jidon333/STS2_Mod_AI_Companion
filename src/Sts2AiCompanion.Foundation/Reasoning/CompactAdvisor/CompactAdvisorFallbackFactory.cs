@@ -120,17 +120,36 @@ public static class CompactAdvisorFallbackFactory
         AdviceInputPack inputPack,
         AdviceResponse response)
     {
+        var degradedRiskNotes = (response.FinalView?.RiskNotes ?? response.RiskNotes)
+            .Append("현재 visible options와 exact match하지 않는 추천 라벨을 숨겼습니다.")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var finalView = response.FinalView ?? new AdvicePerspectiveView(
+            "추천 라벨 불일치",
+            null,
+            "모델이 현재 화면에 보이는 선택지와 정확히 일치하지 않는 추천 라벨을 반환해 추천을 숨깁니다.",
+            response.ReasoningBullets,
+            degradedRiskNotes);
         return response with
         {
             Status = "degraded",
             Headline = "추천 라벨 불일치",
             Summary = "모델이 현재 화면에 보이는 선택지와 정확히 일치하지 않는 추천 라벨을 반환해 추천을 숨깁니다.",
             RecommendedChoiceLabel = null,
+            ReasoningBullets = finalView.ReasoningBullets,
+            RiskNotes = degradedRiskNotes,
             DecisionBlockers = response.DecisionBlockers
                 .Append("recommended-choice-not-in-current-scene-options")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
             RewardRecommendationTrace = inputPack.RewardRecommendationTraceSeed,
+            FinalView = finalView with
+            {
+                Headline = "추천 라벨 불일치",
+                RecommendedChoiceLabel = null,
+                Summary = "모델이 현재 화면에 보이는 선택지와 정확히 일치하지 않는 추천 라벨을 반환해 추천을 숨깁니다.",
+                RiskNotes = degradedRiskNotes,
+            },
         };
     }
 }

@@ -14,6 +14,7 @@ public static class CompactChoiceLabelFinalizer
         if (string.IsNullOrWhiteSpace(response.RecommendedChoiceLabel))
         {
             return response.DecisionBlockers.Contains("recommended-choice-not-in-option-set", StringComparer.OrdinalIgnoreCase)
+                   || response.DecisionBlockers.Contains("recommended-choice-not-in-current-scene-options", StringComparer.OrdinalIgnoreCase)
                 ? CompactAdvisorFallbackFactory.CreateInvalidChoiceLabel(inputPack, response)
                 : response;
         }

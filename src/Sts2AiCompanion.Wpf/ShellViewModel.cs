@@ -66,6 +66,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
     public string RelicsPotionsText { get; private set; } = "유물과 포션 정보가 아직 없습니다.";
     public string AdviceOverviewText { get; private set; } = "아직 조언이 없습니다.";
     public string AdviceDetailsText { get; private set; } = "근거와 리스크 정보가 아직 없습니다.";
+    public string ConservativeAdviceText { get; private set; } = "보수적 관점이 아직 없습니다.";
+    public string AggressiveAdviceText { get; private set; } = "공격적 관점이 아직 없습니다.";
     public string CurrentChoicesText { get; private set; } = "없음";
     public string SceneIdentityText { get; private set; } = "없음";
     public string SceneContextText { get; private set; } = "scene context가 아직 없습니다.";
@@ -253,34 +255,10 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         if (snapshot.LatestAdvice is not null)
         {
             var analysisLatencyText = FormatAdviceLatency(snapshot, latestPromptPack.pack);
-            AdviceOverviewText = JoinLines(new[]
-            {
-                snapshot.LatestAdvice.Headline,
-                string.Empty,
-                snapshot.LatestAdvice.Summary,
-                string.Empty,
-                $"권장 행동: {snapshot.LatestAdvice.RecommendedAction}",
-                $"권장 선택지: {snapshot.LatestAdvice.RecommendedChoiceLabel ?? "-"}",
-                analysisLatencyText is null ? null : $"분석 시간: {analysisLatencyText}",
-            });
-
-            AdviceDetailsText = JoinLines(new[]
-            {
-                "근거",
-                FormatBulletSection(snapshot.LatestAdvice.ReasoningBullets),
-                string.Empty,
-                "리스크",
-                FormatBulletSection(snapshot.LatestAdvice.RiskNotes),
-                string.Empty,
-                "부족한 정보",
-                FormatBulletSection(snapshot.LatestAdvice.MissingInformation),
-                string.Empty,
-                "판단 차단 요인",
-                FormatBulletSection(snapshot.LatestAdvice.DecisionBlockers),
-                string.Empty,
-                "최근 변화",
-                FormatBulletSection(snapshot.RunState?.Snapshot.RecentChanges ?? Array.Empty<string>()),
-            });
+            AdviceOverviewText = AdviceViewDisplayFormatter.FormatFinalOverview(snapshot.LatestAdvice, analysisLatencyText);
+            AdviceDetailsText = AdviceViewDisplayFormatter.FormatFinalDetails(snapshot.LatestAdvice, snapshot.RunState?.Snapshot.RecentChanges ?? Array.Empty<string>());
+            ConservativeAdviceText = AdviceViewDisplayFormatter.FormatAuxiliaryView("보수적 관점", snapshot.LatestAdvice.ConservativeView);
+            AggressiveAdviceText = AdviceViewDisplayFormatter.FormatAuxiliaryView("공격적 관점", snapshot.LatestAdvice.AggressiveView);
             ConfidenceLine = $"신뢰도: {snapshot.LatestAdvice.Confidence?.ToString("0.00") ?? "미상"}";
         }
         else
@@ -292,6 +270,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
                 "게임을 실행했거나 live export가 붙은 뒤 '지금 분석'을 눌러 주세요.",
             });
             AdviceDetailsText = "근거와 리스크 정보가 아직 없습니다.";
+            ConservativeAdviceText = "보수적 관점이 아직 없습니다.";
+            AggressiveAdviceText = "공격적 관점이 아직 없습니다.";
             ConfidenceLine = "신뢰도: -";
         }
 
@@ -427,6 +407,15 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
                 entry.Name,
                 entry.Source,
             }).ToArray(),
+            strategy_principles = (promptPack.StrategyPrinciples ?? Array.Empty<Sts2AiCompanion.Foundation.Contracts.StrategyPrincipleEntry>())
+                .Take(3)
+                .Select(principle => new
+                {
+                    principle.Id,
+                    principle.Title,
+                    principle.TransferConfidence,
+                })
+                .ToArray(),
             compact_input = compact is null ? null : new
             {
                 compact.SceneType,
@@ -478,6 +467,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
                 ? snapshot.LatestAdvice.KnowledgeRefs
                 : compact?.KnowledgeEntries.Select(entry => entry.Name).ToArray())
             ?? Array.Empty<string>();
+        var strategyPrinciples = promptPack.StrategyPrinciples ?? Array.Empty<Sts2AiCompanion.Foundation.Contracts.StrategyPrincipleEntry>();
 
         return JoinLines(new[]
         {
@@ -487,6 +477,7 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             $"AI가 확신 못 하는 이유는 {(currentMissing.Count > 0 ? string.Join(", ", currentMissing.Take(4)) : "없음")} 입니다.",
             $"실제 차단 요인은 {(currentBlockers.Count > 0 ? string.Join(", ", currentBlockers.Take(4)) : "없음")} 입니다.",
             $"참고 지식은 {(keyKnowledge.Count > 0 ? string.Join(", ", keyKnowledge.Take(4)) : "거의 없음")} 정도만 씁니다.",
+            $"전략 원칙은 {(strategyPrinciples.Count > 0 ? string.Join(", ", strategyPrinciples.Select(principle => principle.Title).Take(3)) : "없음")} 수준으로만 보조 렌즈로 붙습니다.",
             compact?.EventFacts is not null && compact.EventFacts.EventIdentityMissing
                 ? "이 event는 정체가 비어 있어, 선택지 효과 구조화가 약하면 추천을 멈추는 쪽으로 동작합니다."
                 : null,
@@ -682,6 +673,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
                     ["relicsPotionsText"] = RelicsPotionsText,
                     ["adviceOverviewText"] = AdviceOverviewText,
                     ["adviceDetailsText"] = AdviceDetailsText,
+                    ["conservativeAdviceText"] = ConservativeAdviceText,
+                    ["aggressiveAdviceText"] = AggressiveAdviceText,
                     ["sceneIdentityText"] = SceneIdentityText,
                     ["sceneContextText"] = SceneContextText,
                     ["sceneSummaryText"] = SceneSummaryText,
@@ -751,6 +744,12 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
             string.Empty,
             "## 조언 상세",
             AdviceDetailsText,
+            string.Empty,
+            "## 보수적 조언",
+            ConservativeAdviceText,
+            string.Empty,
+            "## 공격적 조언",
+            AggressiveAdviceText,
             string.Empty,
             "## 장면 정체",
             SceneIdentityText,
@@ -1026,6 +1025,8 @@ public sealed class ShellViewModel : INotifyPropertyChanged, IAsyncDisposable
         Notify(nameof(RelicsPotionsText));
         Notify(nameof(AdviceOverviewText));
         Notify(nameof(AdviceDetailsText));
+        Notify(nameof(ConservativeAdviceText));
+        Notify(nameof(AggressiveAdviceText));
         Notify(nameof(CurrentChoicesText));
         Notify(nameof(SceneIdentityText));
         Notify(nameof(SceneContextText));

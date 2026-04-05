@@ -13,6 +13,7 @@ public static class AdviceResponseFinalizer
         finalized = string.Equals(sceneType, "combat", StringComparison.OrdinalIgnoreCase)
             ? CombatPreviewResponseFinalizer.Apply(inputPack, finalized)
             : finalized;
+        finalized = AdviceResponseViewFinalizer.Apply(inputPack, finalized);
         return CompactChoiceLabelFinalizer.Apply(inputPack, finalized);
     }
 }

@@ -12,6 +12,7 @@ using FoundationAdviceResponseFinalizer = Sts2AiCompanion.Foundation.Reasoning.C
 using FoundationCompactAdvisorFallbackFactory = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.CompactAdvisorFallbackFactory;
 using FoundationCompactAdvisorScenePolicy = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.CompactAdvisorScenePolicy;
 using FoundationRewardEventCompactAdvisorInputBuilder = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder;
+using FoundationStrategyPrinciplesService = Sts2AiCompanion.Foundation.Knowledge.StrategyPrinciplesService;
 
 namespace Sts2AiCompanion.Host;
 
@@ -23,6 +24,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
     private readonly string _workspaceRoot;
     private readonly LiveExportLayout _layout;
     private readonly KnowledgeCatalogService _knowledgeCatalogService;
+    private readonly FoundationStrategyPrinciplesService _strategyPrinciplesService;
     private readonly AdvicePromptBuilder _promptBuilder;
     private readonly ICodexSessionClient _codexSessionClient;
     private readonly CompanionHostDiagnosticsService _diagnosticsService;
@@ -65,6 +67,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
         var foundationKnowledgeCatalogService = new FoundationKnowledgeCatalogService(configuration, workspaceRoot);
         var foundationPromptBuilder = new FoundationAdvicePromptBuilder(configuration);
         _knowledgeCatalogService = new KnowledgeCatalogService(foundationKnowledgeCatalogService);
+        _strategyPrinciplesService = new FoundationStrategyPrinciplesService(configuration, workspaceRoot);
         _promptBuilder = new AdvicePromptBuilder(foundationPromptBuilder);
         _codexSessionClient = codexSessionClient ?? new CodexCliClient(new FoundationCodexCliClient(configuration, workspaceRoot));
         _diagnosticsService = new CompanionHostDiagnosticsService(configuration, workspaceRoot, _layout, _jsonOptions, _ndjsonOptions);
@@ -295,14 +298,17 @@ public sealed partial class CompanionHost : IAsyncDisposable
             var compactResult = trigger.Manual
                 ? _compactInputBuilder.Build(runState.ToFoundation(), _latestKnowledgeSlice.ToFoundation())
                 : null;
+            var strategyPrinciples = compactResult?.CompactInput is null
+                ? null
+                : _strategyPrinciplesService.GetRelevantPrinciples(compactResult.CompactInput);
             if (trigger.Manual && compactResult is { Supported: false })
             {
-                var fallbackInputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult.CompactInput);
+                var fallbackInputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult.CompactInput, strategyPrinciples);
                 CompleteNoCallAdviceResult(runState, trigger, fallbackInputPack, retrySourcePromptPack, compactResult.ReasonCode);
                 return;
             }
 
-            inputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult?.CompactInput);
+            inputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult?.CompactInput, strategyPrinciples);
         }
 
         var paths = EnsureRunArtifacts(runState.Snapshot.RunId);

@@ -119,7 +119,9 @@ Run("advisor display sanitizer strips raw markers", TestAdvisorDisplaySanitizer,
 Run("advisor display resolver uses knowledge fallback for missing descriptions", TestAdvisorKnowledgeDisplayResolver, failures);
 Run("wpf scene display formatter hides utility combat options and sanitizes reward markers", TestAdvisorSceneDisplayFormatter, failures);
 Run("deck display formatter aggregates localized card names", TestDeckDisplayFormatter, failures);
+Run("strategy principles service loads artifact and retrieves scene-local principles", TestStrategyPrinciplesService, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
+Run("advice prompt builder emits compact strategy principles section", TestCompactAdvicePromptBuilderStrategyPrinciples, failures);
 Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder extracts explicit option facts and fails closed on duplicates", TestEventCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder respects generic fallback ordering", TestEventCompactFallbackOrdering, failures);
@@ -134,7 +136,9 @@ Run("reward deterministic layer falls back outside reward scenes", TestRewardDet
 Run("reward live and replay paths share deterministic context", TestRewardLiveReplayDeterministicContext, failures);
 Run("reward finalizer only normalizes labels and attaches trace", TestRewardFinalizerMinimalNormalization, failures);
 Run("compact finalizer clears labels outside current scene options", TestCompactAdviceFinalizer, failures);
+Run("compact finalizer syncs final view and sanitizes auxiliary view labels", TestCompactAdviceThreeViewFinalizer, failures);
 Run("reward model rationale survives without heavy backfill", TestRewardModelRationaleArtifacts, failures);
+Run("wpf advice view formatter renders final conservative and aggressive blocks", TestAdviceViewDisplayFormatter, failures);
 Run("reward fixtures include a non-first winning choice", TestRewardNonFirstChoiceScenario, failures);
 Run("shop compact advisor host flow supports model-call and fails closed on duplicates", TestCompanionHostShopCompactAdviceSafety, failures);
 Run("combat preview compact safety stays no-call and retry-last safe", TestCompanionHostCombatPreviewCompactAdviceSafety, failures);
@@ -5055,6 +5059,166 @@ static void TestAdvicePromptBuilder()
     Assert(prompt.Contains("response_instructions:", StringComparison.Ordinal), "Expected prompt to include the response instructions section.");
 }
 
+static void TestStrategyPrinciplesService()
+{
+    var root = CreateTempDirectory();
+    var missingRoot = CreateTempDirectory();
+    var malformedRoot = CreateTempDirectory();
+    var lowConfidenceRoot = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        SeedStrategyPrinciplesArtifact(root);
+
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var service = new Sts2AiCompanion.Foundation.Knowledge.StrategyPrinciplesService(configuration, root);
+
+        var rewardRunState = CreateRewardRunState("strategy-reward-run");
+        var rewardSlice = knowledgeService.BuildSlice(ToFoundationRunState(rewardRunState), 16, 8192);
+        var rewardCompact = compactBuilder.Build(ToFoundationRunState(rewardRunState), rewardSlice).CompactInput
+            ?? throw new InvalidOperationException("Expected reward compact input for strategy principles test.");
+        var rewardPrinciples = service.GetRelevantPrinciples(rewardCompact);
+        Assert(
+            rewardPrinciples.Select(entry => entry.Id).SequenceEqual(
+                new[]
+                {
+                    "sts.general.jobs_over_archetypes",
+                    "sts.general.skip_and_removal_reduce_variance",
+                    "sts.general.consistency_and_variance_control",
+                },
+                StringComparer.Ordinal),
+            $"Expected reward strategy principles to stay strict and ordered, got {string.Join(", ", rewardPrinciples.Select(entry => entry.Id))}.");
+        Assert(rewardPrinciples.Count <= 3, "Expected reward strategy retrieval to stay capped at 3 entries.");
+
+        var eventRunState = CreateWoodCarvingsEventRunState("strategy-event-run");
+        var eventSlice = knowledgeService.BuildSlice(ToFoundationRunState(eventRunState), 16, 8192);
+        var eventCompact = compactBuilder.Build(ToFoundationRunState(eventRunState), eventSlice).CompactInput
+            ?? throw new InvalidOperationException("Expected event compact input for strategy principles test.");
+        var eventPrinciples = service.GetRelevantPrinciples(eventCompact);
+        Assert(
+            eventPrinciples.Select(entry => entry.Id).SequenceEqual(
+                new[]
+                {
+                    "sts.general.jobs_over_archetypes",
+                    "sts.general.risk_management_greed_vs_fear",
+                    "sts.general.frontload_vs_scaling",
+                },
+                StringComparer.Ordinal),
+            $"Expected event strategy principles to stay event-local and strict, got {string.Join(", ", eventPrinciples.Select(entry => entry.Id))}.");
+        Assert(!eventPrinciples.Any(entry => string.Equals(entry.Id, "sts.general.hp_as_resource", StringComparison.Ordinal)), "Expected unrelated shop/rest principle to stay out of event retrieval.");
+
+        var shopRunState = CreateShopRunState("strategy-shop-run");
+        var shopSlice = knowledgeService.BuildSlice(ToFoundationRunState(shopRunState), 16, 8192);
+        var shopCompact = compactBuilder.Build(ToFoundationRunState(shopRunState), shopSlice).CompactInput
+            ?? throw new InvalidOperationException("Expected shop compact input for strategy principles test.");
+        var shopPrinciples = service.GetRelevantPrinciples(shopCompact);
+        Assert(
+            shopPrinciples.Select(entry => entry.Id).SequenceEqual(
+                new[]
+                {
+                    "sts.general.skip_and_removal_reduce_variance",
+                    "sts.general.jobs_over_archetypes",
+                    "sts.general.hp_as_resource",
+                },
+                StringComparer.Ordinal),
+            $"Expected shop strategy principles to stay strict and ordered, got {string.Join(", ", shopPrinciples.Select(entry => entry.Id))}.");
+
+        var combatRunState = CreateCombatRunState("strategy-combat-run");
+        var combatSlice = knowledgeService.BuildSlice(ToFoundationRunState(combatRunState), 16, 8192);
+        var combatCompact = compactBuilder.Build(ToFoundationRunState(combatRunState), combatSlice).CompactInput
+            ?? throw new InvalidOperationException("Expected combat compact input for strategy principles test.");
+        var combatPrinciples = service.GetRelevantPrinciples(combatCompact);
+        Assert(
+            combatPrinciples.Select(entry => entry.Id).SequenceEqual(
+                new[]
+                {
+                    "sts.general.frontload_vs_scaling",
+                    "sts.general.draw_selection_as_consistency",
+                    "sts.general.consistency_and_variance_control",
+                },
+                StringComparer.Ordinal),
+            $"Expected combat strategy principles to stay high-confidence only by default, got {string.Join(", ", combatPrinciples.Select(entry => entry.Id))}.");
+        Assert(!combatPrinciples.Any(entry => string.Equals(entry.Id, "sts.general.energy_draw_pair_resource", StringComparison.Ordinal)), "Expected medium-confidence combat principle to stay out when three high-confidence entries already exist.");
+
+        var lowConfidenceConfiguration = CreateRewardTestConfiguration(lowConfidenceRoot);
+        SeedStrategyPrinciplesArtifact(
+            lowConfidenceRoot,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["sts.general.jobs_over_archetypes"] = "low",
+            });
+        var lowConfidenceService = new Sts2AiCompanion.Foundation.Knowledge.StrategyPrinciplesService(lowConfidenceConfiguration, lowConfidenceRoot);
+        var lowConfidencePrinciples = lowConfidenceService.GetRelevantPrinciples(rewardCompact);
+        Assert(!lowConfidencePrinciples.Any(entry => string.Equals(entry.Id, "sts.general.jobs_over_archetypes", StringComparison.Ordinal)), "Expected low-confidence principles to be excluded from strict retrieval.");
+
+        var missingConfiguration = CreateRewardTestConfiguration(missingRoot);
+        var missingService = new Sts2AiCompanion.Foundation.Knowledge.StrategyPrinciplesService(missingConfiguration, missingRoot);
+        Assert(missingService.GetRelevantPrinciples(eventCompact).Count == 0, "Expected missing strategy artifact to fall back to empty retrieval.");
+
+        var malformedConfiguration = CreateRewardTestConfiguration(malformedRoot);
+        var malformedPath = Path.Combine(malformedRoot, "artifacts", "knowledge", "strategy", "strategy-principles.sts.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(malformedPath)!);
+        File.WriteAllText(malformedPath, "{ invalid-json", Encoding.UTF8);
+        var malformedService = new Sts2AiCompanion.Foundation.Knowledge.StrategyPrinciplesService(malformedConfiguration, malformedRoot);
+        Assert(malformedService.GetRelevantPrinciples(shopCompact).Count == 0, "Expected malformed strategy artifact to fall back to empty retrieval.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+        SafeDeleteDirectory(missingRoot);
+        SafeDeleteDirectory(malformedRoot);
+        SafeDeleteDirectory(lowConfidenceRoot);
+    }
+}
+
+static void TestCompactAdvicePromptBuilderStrategyPrinciples()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        SeedStrategyPrinciplesArtifact(root);
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var strategyService = new Sts2AiCompanion.Foundation.Knowledge.StrategyPrinciplesService(configuration, root);
+        var promptBuilder = new FoundationAdvicePromptBuilder(configuration);
+        var runState = CreateWoodCarvingsEventRunState("strategy-prompt-event-run");
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compact = compactBuilder.Build(ToFoundationRunState(runState), slice).CompactInput
+            ?? throw new InvalidOperationException("Expected compact event input for strategy prompt test.");
+        var strategyPrinciples = strategyService.GetRelevantPrinciples(compact);
+        var trigger = ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "strategy-prompt", runState.RecentEvents.LastOrDefault()));
+
+        var inputPack = promptBuilder.BuildInputPack(ToFoundationRunState(runState), trigger, slice, compact, strategyPrinciples);
+        var prompt = promptBuilder.FormatPrompt(inputPack);
+
+        Assert(prompt.Contains("strategy_principles:", StringComparison.Ordinal), "Expected compact prompt to include strategy_principles section.");
+        Assert(prompt.Contains("아키타입보다 현재 필요한 역할을 우선하라", StringComparison.Ordinal), "Expected compact prompt to include retrieved strategy principle titles.");
+        Assert(prompt.Contains("transfer_confidence: high", StringComparison.Ordinal), "Expected compact prompt to include strategy principle confidence.");
+        var eventFactsIndex = prompt.IndexOf("event_facts:", StringComparison.Ordinal);
+        var strategyIndex = prompt.IndexOf("strategy_principles:", StringComparison.Ordinal);
+        var recentEventsIndex = prompt.IndexOf("recent_events:", StringComparison.Ordinal);
+        Assert(eventFactsIndex >= 0 && strategyIndex > eventFactsIndex && recentEventsIndex > strategyIndex, "Expected strategy_principles to appear after scene facts and before recent_events.");
+
+        var noPrinciplesPack = promptBuilder.BuildInputPack(
+            ToFoundationRunState(runState),
+            trigger,
+            slice,
+            compact,
+            Array.Empty<Sts2AiCompanion.Foundation.Contracts.StrategyPrincipleEntry>());
+        var noPrinciplesPrompt = promptBuilder.FormatPrompt(noPrinciplesPack);
+        var strategySection = noPrinciplesPrompt[noPrinciplesPrompt.IndexOf("strategy_principles:", StringComparison.Ordinal)..];
+        Assert(strategySection.Contains("- none", StringComparison.Ordinal), "Expected compact prompt to emit '- none' when no strategy principles are available.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestRewardDeterministicBuilders()
 {
     var root = CreateTempDirectory();
@@ -5771,6 +5935,163 @@ static void TestCompactAdviceFinalizer()
     {
         SafeDeleteDirectory(root);
     }
+}
+
+static void TestCompactAdviceThreeViewFinalizer()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedKnowledgeCatalog(root);
+        var runState = CreateWoodCarvingsEventRunState("compact-three-view-finalizer-run");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var compact = compactBuilder.Build(ToFoundationRunState(runState), slice).CompactInput
+            ?? throw new InvalidOperationException("Expected event compact input for three-view finalizer test.");
+        var inputPack = new FoundationAdvicePromptBuilder(configuration).BuildInputPack(
+            ToFoundationRunState(runState),
+            ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "compact-three-view-finalizer-test", runState.RecentEvents.LastOrDefault())),
+            slice,
+            compact);
+
+        var validResponse = new Sts2AiCompanion.Foundation.Contracts.AdviceResponse(
+            "ok",
+            "원본 헤드라인",
+            "원본 요약",
+            "원본 행동",
+            "새",
+            new[] { "원본 근거" },
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            Array.Empty<string>(),
+            0.7,
+            Array.Empty<string>(),
+            DateTimeOffset.UtcNow,
+            inputPack.RunId,
+            inputPack.TriggerKind,
+            null,
+            "{}",
+            null,
+            new Sts2AiCompanion.Foundation.Contracts.AdvicePerspectiveView(
+                "보수적 헤드라인",
+                "현재 화면에 없는 선택지",
+                "보수적 요약",
+                new[] { "보수적 근거" },
+                Array.Empty<string>()),
+            new Sts2AiCompanion.Foundation.Contracts.AdvicePerspectiveView(
+                "공격적 헤드라인",
+                "고리",
+                "공격적 요약",
+                new[] { "공격적 근거" },
+                Array.Empty<string>()),
+            new Sts2AiCompanion.Foundation.Contracts.AdvicePerspectiveView(
+                "최종 헤드라인",
+                "새",
+                "최종 요약",
+                new[] { "최종 근거" },
+                new[] { "최종 리스크" }));
+
+        var finalized = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.AdviceResponseFinalizer.Apply(inputPack, validResponse);
+        Assert(string.Equals(finalized.Status, "ok", StringComparison.OrdinalIgnoreCase), "Expected valid final view to keep the response non-degraded.");
+        Assert(finalized.ConservativeView is not null && finalized.ConservativeView.RecommendedChoiceLabel is null, "Expected auxiliary invalid labels to be cleared locally.");
+        Assert(finalized.ConservativeView!.RiskNotes.Any(note => note.Contains("exact match", StringComparison.OrdinalIgnoreCase)), "Expected auxiliary invalid labels to surface a local risk note.");
+        Assert(finalized.AggressiveView is not null && string.Equals(finalized.AggressiveView.RecommendedChoiceLabel, "고리", StringComparison.Ordinal), "Expected valid aggressive view label to survive.");
+        Assert(finalized.FinalView is not null && string.Equals(finalized.FinalView.RecommendedChoiceLabel, "새", StringComparison.Ordinal), "Expected valid final view label to survive.");
+        Assert(string.Equals(finalized.Headline, finalized.FinalView!.Headline, StringComparison.Ordinal), "Expected canonical headline to sync from finalView.");
+        Assert(string.Equals(finalized.Summary, finalized.FinalView.Summary, StringComparison.Ordinal), "Expected canonical summary to sync from finalView.");
+        Assert(string.Equals(finalized.RecommendedChoiceLabel, finalized.FinalView.RecommendedChoiceLabel, StringComparison.Ordinal), "Expected canonical label to stay aligned with finalView.");
+
+        var invalidFinalResponse = validResponse with
+        {
+            RecommendedChoiceLabel = "새",
+            FinalView = new Sts2AiCompanion.Foundation.Contracts.AdvicePerspectiveView(
+                "잘못된 최종 헤드라인",
+                "현재 화면에 없는 선택지",
+                "잘못된 최종 요약",
+                new[] { "잘못된 최종 근거" },
+                Array.Empty<string>()),
+        };
+        var invalidFinalized = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.AdviceResponseFinalizer.Apply(inputPack, invalidFinalResponse);
+        Assert(string.Equals(invalidFinalized.Status, "degraded", StringComparison.OrdinalIgnoreCase), "Expected invalid final view label to degrade the canonical response.");
+        Assert(invalidFinalized.RecommendedChoiceLabel is null, "Expected invalid final view label to clear canonical recommendation.");
+        Assert(invalidFinalized.DecisionBlockers.Contains("recommended-choice-not-in-current-scene-options", StringComparer.Ordinal), "Expected invalid final view label to surface the compact exact-label blocker.");
+        Assert(invalidFinalized.FinalView is not null && invalidFinalized.FinalView.RecommendedChoiceLabel is null, "Expected degraded finalView label to be cleared.");
+        Assert(invalidFinalized.FinalView!.RecommendedChoiceLabel == invalidFinalized.RecommendedChoiceLabel, "Expected canonical and finalView labels to stay aligned after degradation.");
+
+        var fallbackResponse = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.CompactAdvisorFallbackFactory.CreateInsufficientCompactInput(
+            inputPack,
+            "event-compact-input-insufficient",
+            new[] { "event-facts-missing" },
+            new[] { "event-compact-input-insufficient" });
+        var fallbackFinalized = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.AdviceResponseFinalizer.Apply(inputPack, fallbackResponse);
+        Assert(fallbackFinalized.FinalView is not null, "Expected no-call fallback to synthesize a finalView through the shared finalizer.");
+        Assert(fallbackFinalized.FinalView!.RecommendedChoiceLabel == fallbackFinalized.RecommendedChoiceLabel, "Expected synthesized finalView to stay aligned with canonical label.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestAdviceViewDisplayFormatter()
+{
+    var advice = new AdviceResponse(
+        "ok",
+        "최종 헤드라인",
+        "최종 요약",
+        "최종 행동",
+        "고리",
+        new[] { "최종 근거 1", "최종 근거 2" },
+        new[] { "최종 리스크" },
+        new[] { "부족한 정보" },
+        new[] { "판단 차단 요인" },
+        0.85,
+        Array.Empty<string>(),
+        DateTimeOffset.UtcNow,
+        "run-three-view",
+        "manual",
+        null,
+        "{}",
+        null,
+        new Sts2AiCompanion.Foundation.Contracts.AdvicePerspectiveView(
+            "보수적 헤드라인",
+            "새",
+            "보수적 요약",
+            new[] { "보수적 근거" },
+            new[] { "보수적 리스크" }),
+        new Sts2AiCompanion.Foundation.Contracts.AdvicePerspectiveView(
+            "공격적 헤드라인",
+            "뱀",
+            "공격적 요약",
+            new[] { "공격적 근거" },
+            new[] { "공격적 리스크" }),
+        new Sts2AiCompanion.Foundation.Contracts.AdvicePerspectiveView(
+            "최종 헤드라인",
+            "고리",
+            "최종 요약",
+            new[] { "최종 근거 1", "최종 근거 2" },
+            new[] { "최종 리스크" }));
+
+    var overview = AdviceViewDisplayFormatter.FormatFinalOverview(advice, "12초");
+    Assert(overview.Contains("최종 헤드라인", StringComparison.Ordinal), "Expected final overview to include the canonical headline.");
+    Assert(overview.Contains("권장 행동: 최종 행동", StringComparison.Ordinal), "Expected final overview to include the canonical recommended action.");
+    Assert(overview.Contains("권장 선택지: 고리", StringComparison.Ordinal), "Expected final overview to include the canonical recommended choice.");
+    Assert(overview.Contains("분석 시간: 12초", StringComparison.Ordinal), "Expected final overview to include analysis latency when provided.");
+
+    var details = AdviceViewDisplayFormatter.FormatFinalDetails(advice, new[] { "choice-list-presented", "event-opened" });
+    Assert(details.Contains("근거", StringComparison.Ordinal), "Expected final details to include the reasoning section.");
+    Assert(details.Contains("- 최종 근거 1", StringComparison.Ordinal), "Expected final details to render reasoning bullets.");
+    Assert(details.Contains("최근 변화", StringComparison.Ordinal), "Expected final details to include recent changes.");
+    Assert(details.Contains("- choice-list-presented", StringComparison.Ordinal), "Expected final details to render recent changes.");
+
+    var conservative = AdviceViewDisplayFormatter.FormatAuxiliaryView("보수적 관점", advice.ConservativeView);
+    Assert(conservative.Contains("보수적 헤드라인", StringComparison.Ordinal), "Expected auxiliary formatter to render the supplied view headline.");
+    Assert(conservative.Contains("권장 선택지: 새", StringComparison.Ordinal), "Expected auxiliary formatter to render the supplied view label.");
+
+    var aggressivePlaceholder = AdviceViewDisplayFormatter.FormatAuxiliaryView("공격적 관점", null);
+    Assert(string.Equals(aggressivePlaceholder, "공격적 관점: 별도 관점 없음", StringComparison.Ordinal), "Expected null auxiliary views to render a stable placeholder.");
 }
 
 static void TestRewardModelRationaleArtifacts()
@@ -8450,6 +8771,101 @@ static void SeedKnowledgeCatalog(string root)
     File.WriteAllText(Path.Combine(knowledgeRoot, "catalog.latest.json"), JsonSerializer.Serialize(catalog, ConfigurationLoader.JsonOptions), Encoding.UTF8);
 }
 
+static void SeedStrategyPrinciplesArtifact(
+    string root,
+    IReadOnlyDictionary<string, string>? confidenceOverrides = null)
+{
+    var strategyRoot = Path.Combine(root, "artifacts", "knowledge", "strategy");
+    Directory.CreateDirectory(strategyRoot);
+
+    static Dictionary<string, object?> CreateEntry(
+        string id,
+        string title,
+        string summary,
+        string transferConfidence)
+    {
+        return new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["id"] = id,
+            ["title"] = title,
+            ["summary"] = summary,
+            ["transfer_confidence"] = transferConfidence,
+        };
+    }
+
+    var entries = new[]
+    {
+        CreateEntry(
+            "sts.general.jobs_over_archetypes",
+            "아키타입보다 현재 필요한 역할을 우선하라",
+            "현재 필요한 역할을 우선하고 아키타입 고정은 늦춘다.",
+            "high"),
+        CreateEntry(
+            "sts.general.frontload_vs_scaling",
+            "Frontload와 Scaling은 시간축이 다른 역할이다",
+            "즉시 전투력과 장기 성장의 비중은 시간축에 따라 달라진다.",
+            "high"),
+        CreateEntry(
+            "sts.general.draw_selection_as_consistency",
+            "드로우와 선택은 일관성 엔진이다",
+            "드로우와 선택은 필요한 카드를 필요한 턴에 찾게 하는 일관성 엔진이다.",
+            "high"),
+        CreateEntry(
+            "sts.general.energy_draw_pair_resource",
+            "에너지와 드로우는 짝자원이다",
+            "에너지와 드로우는 함께 봐야 병목을 줄일 수 있다.",
+            "medium"),
+        CreateEntry(
+            "sts.general.consistency_and_variance_control",
+            "최선보다 최악의 드로우를 견디는 일관성을 중시하라",
+            "최악의 드로우에서도 버티는 안정성이 장기 승률에 중요하다.",
+            "high"),
+        CreateEntry(
+            "sts.general.hp_as_resource",
+            "HP는 자원으로 계산하라",
+            "HP는 다음 보상과 업그레이드를 얻기 위해 계산해서 써야 하는 자원이다.",
+            "high"),
+        CreateEntry(
+            "sts.general.skip_and_removal_reduce_variance",
+            "스킵과 제거는 분산과 순환 시간을 줄인다",
+            "스킵과 제거는 핵심 카드 재등장 시간을 줄이고 분산을 낮춘다.",
+            "high"),
+        CreateEntry(
+            "sts.general.risk_management_greed_vs_fear",
+            "탐욕과 보수 사이의 리스크 관리를 하라",
+            "강할 때는 보상을 늘리고 약할 때는 손실을 제한하는 식으로 리스크를 조절한다.",
+            "high"),
+    };
+
+    if (confidenceOverrides is not null)
+    {
+        foreach (var entry in entries)
+        {
+            if (entry.TryGetValue("id", out var idValue)
+                && idValue is string id
+                && confidenceOverrides.TryGetValue(id, out var overrideConfidence))
+            {
+                entry["transfer_confidence"] = overrideConfidence;
+            }
+        }
+    }
+
+    var payload = new Dictionary<string, object?>(StringComparer.Ordinal)
+    {
+        ["generatedAt"] = DateTimeOffset.UtcNow.ToString("O"),
+        ["artifactKind"] = "strategy-principles",
+        ["artifactVersion"] = "self-test",
+        ["source"] = "self-test",
+        ["notes"] = new[] { "background-only" },
+        ["entries"] = entries,
+    };
+
+    File.WriteAllText(
+        Path.Combine(strategyRoot, "strategy-principles.sts.json"),
+        JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true }),
+        Encoding.UTF8);
+}
+
 static void SeedEventKnowledgeNoiseCatalog(string root)
 {
     var knowledgeRoot = Path.Combine(root, "artifacts", "knowledge");
@@ -8763,7 +9179,8 @@ static Sts2AiCompanion.Foundation.Contracts.AdviceInputPack ToFoundationAdviceIn
         inputPack.RewardOptionSet,
         inputPack.RewardAssessmentFacts,
         inputPack.RewardRecommendationTraceSeed,
-        inputPack.CompactInput);
+        inputPack.CompactInput,
+        inputPack.StrategyPrinciples);
 }
 
 static AdviceInputPack ToHostAdviceInputPack(Sts2AiCompanion.Foundation.Contracts.AdviceInputPack inputPack)
@@ -8784,7 +9201,8 @@ static AdviceInputPack ToHostAdviceInputPack(Sts2AiCompanion.Foundation.Contract
         inputPack.RewardOptionSet,
         inputPack.RewardAssessmentFacts,
         inputPack.RewardRecommendationTraceSeed,
-        inputPack.CompactInput);
+        inputPack.CompactInput,
+        inputPack.StrategyPrinciples);
 }
 
 static Sts2AiCompanion.Foundation.Contracts.AdviceResponse ToFoundationAdviceResponse(AdviceResponse response)
@@ -8806,7 +9224,10 @@ static Sts2AiCompanion.Foundation.Contracts.AdviceResponse ToFoundationAdviceRes
         response.TriggerKind,
         response.SessionId,
         response.RawResponse,
-        response.RewardRecommendationTrace);
+        response.RewardRecommendationTrace,
+        response.ConservativeView,
+        response.AggressiveView,
+        response.FinalView);
 }
 
 static AdviceResponse ToHostAdviceResponse(Sts2AiCompanion.Foundation.Contracts.AdviceResponse response)
@@ -8828,7 +9249,10 @@ static AdviceResponse ToHostAdviceResponse(Sts2AiCompanion.Foundation.Contracts.
         response.TriggerKind,
         response.SessionId,
         response.RawResponse,
-        response.RewardRecommendationTrace);
+        response.RewardRecommendationTrace,
+        response.ConservativeView,
+        response.AggressiveView,
+        response.FinalView);
 }
 
 static void WriteJson<T>(string path, T value)

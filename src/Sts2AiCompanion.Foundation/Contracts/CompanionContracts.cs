@@ -58,7 +58,8 @@ public sealed record AdviceInputPack(
     RewardOptionSet? RewardOptionSet = null,
     RewardAssessmentFacts? RewardAssessmentFacts = null,
     RewardRecommendationTrace? RewardRecommendationTraceSeed = null,
-    RewardEventCompactAdvisorInput? CompactInput = null);
+    RewardEventCompactAdvisorInput? CompactInput = null,
+    IReadOnlyList<StrategyPrincipleEntry>? StrategyPrinciples = null);
 
 public sealed record AdviceResponse(
     string Status,
@@ -77,7 +78,10 @@ public sealed record AdviceResponse(
     string TriggerKind,
     string? SessionId,
     string? RawResponse,
-    RewardRecommendationTrace? RewardRecommendationTrace = null);
+    RewardRecommendationTrace? RewardRecommendationTrace = null,
+    AdvicePerspectiveView? ConservativeView = null,
+    AdvicePerspectiveView? AggressiveView = null,
+    AdvicePerspectiveView? FinalView = null);
 
 public sealed record CodexSessionState(
     string RunId,

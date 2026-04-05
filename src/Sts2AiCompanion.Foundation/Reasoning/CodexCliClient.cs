@@ -136,7 +136,11 @@ public sealed class CodexCliClient : ICodexSessionClient
                     inputPack.RunId,
                     inputPack.TriggerKind,
                     resolvedSessionId,
-                    rawOutput);
+                    rawOutput,
+                    null,
+                    parsed.ConservativeView?.ToContract(),
+                    parsed.AggressiveView?.ToContract(),
+                    parsed.FinalView?.ToContract());
                 return (AdviceResponseFinalizer.Apply(inputPack, response), resolvedSessionId);
             }
             catch (JsonException exception)
@@ -581,6 +585,43 @@ public sealed class CodexCliClient : ICodexSessionClient
             "decisionBlockers": { "type": "array", "items": { "type": "string" } },
             "confidence": { "type": ["number", "null"] },
             "knowledgeRefs": { "type": "array", "items": { "type": "string" } }
+            ,
+            "conservativeView": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "headline": { "type": "string" },
+                "recommendedChoiceLabel": { "type": ["string", "null"] },
+                "summary": { "type": "string" },
+                "reasoningBullets": { "type": "array", "items": { "type": "string" } },
+                "riskNotes": { "type": "array", "items": { "type": "string" } }
+              },
+              "required": ["headline", "recommendedChoiceLabel", "summary", "reasoningBullets", "riskNotes"]
+            },
+            "aggressiveView": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "headline": { "type": "string" },
+                "recommendedChoiceLabel": { "type": ["string", "null"] },
+                "summary": { "type": "string" },
+                "reasoningBullets": { "type": "array", "items": { "type": "string" } },
+                "riskNotes": { "type": "array", "items": { "type": "string" } }
+              },
+              "required": ["headline", "recommendedChoiceLabel", "summary", "reasoningBullets", "riskNotes"]
+            },
+            "finalView": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "properties": {
+                "headline": { "type": "string" },
+                "recommendedChoiceLabel": { "type": ["string", "null"] },
+                "summary": { "type": "string" },
+                "reasoningBullets": { "type": "array", "items": { "type": "string" } },
+                "riskNotes": { "type": "array", "items": { "type": "string" } }
+              },
+              "required": ["headline", "recommendedChoiceLabel", "summary", "reasoningBullets", "riskNotes"]
+            }
           },
           "required": [
             "headline",
@@ -618,5 +659,26 @@ public sealed class CodexCliClient : ICodexSessionClient
         IReadOnlyList<string>? MissingInformation,
         IReadOnlyList<string>? DecisionBlockers,
         double? Confidence,
-        IReadOnlyList<string>? KnowledgeRefs);
+        IReadOnlyList<string>? KnowledgeRefs,
+        CodexAdviceViewContract? ConservativeView,
+        CodexAdviceViewContract? AggressiveView,
+        CodexAdviceViewContract? FinalView);
+
+    private sealed record CodexAdviceViewContract(
+        string? Headline,
+        string? RecommendedChoiceLabel,
+        string? Summary,
+        IReadOnlyList<string>? ReasoningBullets,
+        IReadOnlyList<string>? RiskNotes)
+    {
+        public AdvicePerspectiveView ToContract()
+        {
+            return new AdvicePerspectiveView(
+                Headline ?? "AI 관점",
+                RecommendedChoiceLabel,
+                Summary ?? "요약이 비어 있습니다.",
+                ReasoningBullets ?? Array.Empty<string>(),
+                RiskNotes ?? Array.Empty<string>());
+        }
+    }
 }
