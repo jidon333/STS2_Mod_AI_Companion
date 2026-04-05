@@ -62,6 +62,41 @@ internal static class CompactAdvisorBuilderShared
         return filtered;
     }
 
+    public static IReadOnlyList<CompactKnowledgeEntry> FilterEventKnowledgeEntries(
+        KnowledgeSlice boundedSlice,
+        IEnumerable<string?> strictSeeds)
+    {
+        var normalizedSeeds = strictSeeds
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var filtered = new List<CompactKnowledgeEntry>();
+        var bytes = 0;
+        foreach (var entry in boundedSlice.Entries)
+        {
+            if (!MatchesAnyEventSeed(entry, normalizedSeeds))
+            {
+                continue;
+            }
+
+            var compact = new CompactKnowledgeEntry(
+                entry.Id,
+                entry.Name,
+                FirstNonBlank(entry.RawText, entry.Options.FirstOrDefault()?.Description));
+            var delta = compact.Id.Length + compact.Name.Length + (compact.Summary?.Length ?? 0);
+            if (filtered.Count >= CompactKnowledgeMaxEntries || bytes + delta > CompactKnowledgeMaxBytes)
+            {
+                break;
+            }
+
+            filtered.Add(compact);
+            bytes += delta;
+        }
+
+        return filtered;
+    }
+
     public static IReadOnlyList<CompactRecentEvent> FilterRecentEvents(
         IReadOnlyList<LiveExportEventEnvelope> recentEvents,
         Func<LiveExportEventEnvelope, bool> predicate)
@@ -197,5 +232,112 @@ internal static class CompactAdvisorBuilderShared
         }
 
         return false;
+    }
+
+    private static bool MatchesAnyEventSeed(StaticKnowledgeEntry entry, IReadOnlyList<string> seeds)
+    {
+        foreach (var seed in seeds)
+        {
+            if (MatchesEventSeed(entry, seed))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool MatchesEventSeed(StaticKnowledgeEntry entry, string seed)
+    {
+        if (string.IsNullOrWhiteSpace(seed))
+        {
+            return false;
+        }
+
+        foreach (var candidate in EnumerateEventKnowledgeCandidates(entry))
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            if (string.Equals(candidate, seed, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(Collapse(candidate), Collapse(seed), StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (HasNormalizedIdSuffix(candidate, seed))
+            {
+                return true;
+            }
+
+            if (HasBindingPrefix(candidate, seed))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<string?> EnumerateEventKnowledgeCandidates(StaticKnowledgeEntry entry)
+    {
+        yield return entry.Id;
+        yield return entry.Name;
+
+        foreach (var value in entry.Attributes.Values)
+        {
+            yield return value;
+        }
+
+        foreach (var option in entry.Options)
+        {
+            yield return option.Id;
+            yield return option.Label;
+            foreach (var value in option.Attributes.Values)
+            {
+                yield return value;
+            }
+        }
+    }
+
+    private static bool HasNormalizedIdSuffix(string candidate, string seed)
+    {
+        var collapsedCandidate = Collapse(candidate);
+        var collapsedSeed = Collapse(seed);
+        if (string.IsNullOrWhiteSpace(collapsedCandidate) || string.IsNullOrWhiteSpace(collapsedSeed))
+        {
+            return false;
+        }
+
+        return collapsedCandidate.Length > collapsedSeed.Length
+               && collapsedCandidate.EndsWith(collapsedSeed, StringComparison.Ordinal);
+    }
+
+    private static bool HasBindingPrefix(string candidate, string seed)
+    {
+        var prefix = candidate
+            .Split('.', StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(prefix))
+        {
+            return false;
+        }
+
+        return string.Equals(Collapse(prefix), Collapse(seed), StringComparison.Ordinal);
+    }
+
+    private static string Collapse(string value)
+    {
+        return new string(value
+            .Trim()
+            .ToLowerInvariant()
+            .Where(char.IsLetterOrDigit)
+            .ToArray());
     }
 }

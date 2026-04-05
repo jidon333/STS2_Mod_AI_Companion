@@ -123,6 +123,8 @@ Run("advice prompt builder emits the required prompt sections", TestAdvicePrompt
 Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder extracts explicit option facts and fails closed on duplicates", TestEventCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder respects generic fallback ordering", TestEventCompactFallbackOrdering, failures);
+Run("event compact advisor input builder keeps knowledge slice strict and event-local", TestEventCompactKnowledgeFiltering, failures);
+Run("event compact advisor input builder can keep knowledge slice empty when exact event-local matches are absent", TestEventCompactKnowledgeCanStayEmpty, failures);
 Run("event compact prompt allows explicit target-filter events to recommend with deck summary", TestCompactAdvicePromptBuilder, failures);
 Run("shop compact advisor input builder extracts purchase counts and fails closed on duplicates", TestShopCompactAdvisorInputBuilder, failures);
 Run("combat compact preview builder captures current facts and stays preview-only", TestCombatCompactPreviewBuilder, failures);
@@ -5334,6 +5336,90 @@ static void TestEventCompactFallbackOrdering()
     }
 }
 
+static void TestEventCompactKnowledgeFiltering()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedEventKnowledgeNoiseCatalog(root);
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var promptBuilder = new FoundationAdvicePromptBuilder(configuration);
+        var runState = CreateWoodCarvingsEventRunState("event-knowledge-strict-run");
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        Assert(compactResult.Supported, "Expected Wood Carvings event compact input to stay supported when strict event-local knowledge filtering is applied.");
+        Assert(compactResult.CompactInput is not null, "Expected compact event input.");
+        var compact = compactResult.CompactInput!;
+        Assert(compact.KnowledgeEntries.Count == 1, $"Expected only the exact Wood Carvings event entry to survive strict filtering, got {compact.KnowledgeEntries.Count} entries.");
+        Assert(compact.KnowledgeEntries.Any(entry => entry.Id.Contains("woodcarvings", StringComparison.OrdinalIgnoreCase)), "Expected strict event-local knowledge to keep the Wood Carvings entry.");
+        Assert(!compact.KnowledgeEntries.Any(entry => entry.Name.Contains("진리의 석판", StringComparison.Ordinal)), "Expected unrelated narrative event knowledge to be excluded.");
+        Assert(!compact.KnowledgeEntries.Any(entry => entry.Name.Contains("버섯이 먹고 싶어", StringComparison.Ordinal)), "Expected unrelated event knowledge to stay out of compact input.");
+        Assert(!compact.KnowledgeEntries.Any(entry => entry.Name.Contains("속삭이는 골짜기", StringComparison.Ordinal)), "Expected short label false positives not to leak Whispering Hollow into compact knowledge.");
+
+        var trigger = ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "event-knowledge-strict", runState.RecentEvents.LastOrDefault()));
+        var prompt = promptBuilder.FormatPrompt(promptBuilder.BuildInputPack(ToFoundationRunState(runState), trigger, slice, compact));
+        Assert(prompt.Contains("나무 조각 [megacrit-sts2-core-models-events-woodcarvings]", StringComparison.Ordinal), "Expected prompt knowledge slice to keep the relevant Wood Carvings entry.");
+        Assert(!prompt.Contains("속삭이는 골짜기", StringComparison.Ordinal), "Expected prompt knowledge slice to exclude unrelated event narratives.");
+        Assert(!prompt.Contains("버섯이 먹고 싶어", StringComparison.Ordinal), "Expected prompt knowledge slice to stay event-local.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestEventCompactKnowledgeCanStayEmpty()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedEventKnowledgeNoiseCatalog(root);
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var promptBuilder = new FoundationAdvicePromptBuilder(configuration);
+        var runState = CreateEventRunState(
+            "event-knowledge-empty-run",
+            new[]
+            {
+                new LiveExportChoiceSummary("event-option", "새", "option-0", "최대 체력을 3 잃습니다.")
+                {
+                    BindingKind = "event-option",
+                    BindingId = "option-0",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:event", "source:event-option-button" },
+                },
+                new LiveExportChoiceSummary("event-option", "뱀", "option-1", "50 골드를 얻습니다.")
+                {
+                    BindingKind = "event-option",
+                    BindingId = "option-1",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:event", "source:event-option-button" },
+                },
+            });
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        Assert(compactResult.Supported, "Expected explicit event facts to keep compact input supported even when strict event knowledge is empty.");
+        Assert(compactResult.CompactInput is not null, "Expected compact event input.");
+        var compact = compactResult.CompactInput!;
+        Assert(compact.KnowledgeEntries.Count == 0, $"Expected strict event-local filtering to allow an empty knowledge slice when exact matches are absent, got {compact.KnowledgeEntries.Count} entries.");
+        Assert(compact.EventFacts is not null && compact.EventFacts.OptionFacts.Any(fact => fact.Effects.Count > 0), "Expected event facts to remain sufficient without narrative knowledge.");
+
+        var trigger = ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "event-knowledge-empty", runState.RecentEvents.LastOrDefault()));
+        var prompt = promptBuilder.FormatPrompt(promptBuilder.BuildInputPack(ToFoundationRunState(runState), trigger, slice, compact));
+        Assert(prompt.Contains("knowledge_slice:", StringComparison.Ordinal), "Expected compact prompt to keep the knowledge slice section.");
+        Assert(prompt.Contains("- none", StringComparison.Ordinal), "Expected compact prompt to render an empty event knowledge slice as none.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestShopCompactAdvisorInputBuilder()
 {
     var root = CreateTempDirectory();
@@ -8318,6 +8404,88 @@ static void SeedKnowledgeCatalog(string root)
         Array.Empty<StaticKnowledgeEntry>(),
         Array.Empty<StaticKnowledgeEntry>());
     File.WriteAllText(Path.Combine(knowledgeRoot, "catalog.latest.json"), JsonSerializer.Serialize(catalog, ConfigurationLoader.JsonOptions), Encoding.UTF8);
+}
+
+static void SeedEventKnowledgeNoiseCatalog(string root)
+{
+    var knowledgeRoot = Path.Combine(root, "artifacts", "knowledge");
+    Directory.CreateDirectory(knowledgeRoot);
+    var catalog = new StaticKnowledgeCatalog(
+        DateTimeOffset.UtcNow,
+        new StaticKnowledgeMetadata("event-knowledge-v1", "event-knowledge-test", DateTimeOffset.UtcNow, new Dictionary<string, string?>()),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        new[]
+        {
+            CreateEventKnowledgeEntry(
+                "megacrit-sts2-core-models-events-tabletoftruth",
+                "진리의 석판",
+                "TabletofTruth",
+                "TABLETOFTRUTH",
+                "당신은 오래된 석판을 발견합니다. 새겨진 새 모양 문양이 어렴풋이 보입니다."),
+            CreateEventKnowledgeEntry(
+                "megacrit-sts2-core-models-events-woodcarvings",
+                "나무 조각",
+                "WoodCarvings",
+                "WOOD_CARVINGS",
+                "당신은 먼지가 쌓인 상자를 열고 정교한 나무 조각 3개를 발견했습니다. 새, 뱀, 그리고... 고리?"),
+            CreateEventKnowledgeEntry(
+                "megacrit-sts2-core-models-events-hungryformushrooms",
+                "버섯이 먹고 싶어",
+                "HungryForMushrooms",
+                "HUNGRY_FOR_MUSHROOMS",
+                "낯선 버섯 옆에는 뱀 모양 표식이 새겨져 있습니다."),
+            CreateEventKnowledgeEntry(
+                "megacrit-sts2-core-models-events-doorsoflightanddark",
+                "빛과 어둠의 문",
+                "DoorsOfLightAndDark",
+                "DOORS_OF_LIGHT_AND_DARK",
+                "문 손잡이에는 고리 장식과 함께 빛나는 문양이 보입니다."),
+            CreateEventKnowledgeEntry(
+                "megacrit-sts2-core-models-events-fieldofmansizedholes",
+                "사람 크기 구멍의 들판",
+                "FieldOfManSizedHoles",
+                "FIELD_OF_MAN_SIZED_HOLES",
+                "구덩이 주변에는 새 깃털이 흩어져 있습니다."),
+            CreateEventKnowledgeEntry(
+                "megacrit-sts2-core-models-events-whisperinghollow",
+                "속삭이는 골짜기",
+                "WhisperingHollow",
+                "WHISPERING_HOLLOW",
+                "속삭이는 나무 아래에서 뱀과 고리 모양 장식이 바람에 흔들립니다."),
+        },
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>(),
+        Array.Empty<StaticKnowledgeEntry>());
+    File.WriteAllText(Path.Combine(knowledgeRoot, "catalog.latest.json"), JsonSerializer.Serialize(catalog, ConfigurationLoader.JsonOptions), Encoding.UTF8);
+}
+
+static StaticKnowledgeEntry CreateEventKnowledgeEntry(
+    string id,
+    string name,
+    string className,
+    string classId,
+    string rawText)
+{
+    return new StaticKnowledgeEntry(
+        id,
+        name,
+        "localization-scan",
+        false,
+        rawText,
+        new[] { "l10n", "localized-event", "strict-event", "strict-model" },
+        new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["fullName"] = $"MegaCrit.Sts2.Core.Models.Events.{className}",
+            ["className"] = className,
+            ["strictDomain"] = "event",
+            ["strictModel"] = "true",
+            ["classId"] = classId,
+            ["l10nKey"] = classId,
+            ["title"] = name,
+        },
+        Array.Empty<StaticKnowledgeOption>());
 }
 
 static AdvisorKnowledgeDisplayResolver CreateDisplayKnowledgeResolver()

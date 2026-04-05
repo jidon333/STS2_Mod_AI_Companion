@@ -58,9 +58,6 @@ internal sealed class EventCompactInputBuilder
                 optionMissing.ToArray()));
         }
 
-        var pageId = CompactAdvisorBuilderShared.FirstNonBlank(
-            runState.NormalizedState.Event.PageId,
-            CompactAdvisorBuilderShared.TryGetMeta(runState, "event-page-id"));
         var rewardChildActive = options.Any(option =>
             option.Kind.Contains("reward", StringComparison.OrdinalIgnoreCase)
             || option.Kind.Contains("card", StringComparison.OrdinalIgnoreCase)
@@ -76,13 +73,9 @@ internal sealed class EventCompactInputBuilder
             decisionBlockers.Add("event-compact-input-insufficient");
         }
 
-        var compactKnowledge = CompactAdvisorBuilderShared.FilterKnowledgeEntries(
+        var compactKnowledge = CompactAdvisorBuilderShared.FilterEventKnowledgeEntries(
             boundedSlice,
-            optionSources.SelectMany(GetEventKnowledgeSeeds)
-                .Append("event")
-                .Append(eventId)
-                .Append(pageId)
-                .Concat(GetEventKnowledgeSeeds(eventId, optionSources)));
+            BuildEventKnowledgeSeeds(eventId, optionSources));
         var eventFacts = new EventCompactFacts(
             eventId,
             string.IsNullOrWhiteSpace(eventId),
@@ -788,10 +781,27 @@ internal sealed class EventCompactInputBuilder
         return choice.Description;
     }
 
+    private static IReadOnlyList<string> BuildEventKnowledgeSeeds(
+        string? eventId,
+        IReadOnlyList<EventVisibleOptionSource> options)
+    {
+        return options.SelectMany(GetEventKnowledgeSeeds)
+            .Append(eventId)
+            .Concat(GetEventIdentityKnowledgeSeeds(eventId, options))
+            .Where(seed => !string.IsNullOrWhiteSpace(seed))
+            .Select(seed => seed!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
     private static IEnumerable<string?> GetEventKnowledgeSeeds(EventVisibleOptionSource option)
     {
-        yield return option.Option.Label;
-        yield return option.Option.Value;
+        var bindingId = CompactAdvisorBuilderShared.FirstNonBlank(
+            option.ExportedChoice?.EventOptionDetail?.OptionKey,
+            option.ExportedChoice?.EventOptionDetail?.OptionBindingId,
+            option.ExportedChoice?.BindingId);
+        yield return bindingId;
+        yield return GetBindingPrefix(bindingId);
 
         var detail = option.ExportedChoice?.EventOptionDetail;
         if (detail is null)
@@ -800,7 +810,10 @@ internal sealed class EventCompactInputBuilder
         }
 
         yield return detail.OptionKey;
+        yield return GetBindingPrefix(detail.OptionKey);
         yield return detail.OptionBindingId;
+        yield return GetBindingPrefix(detail.OptionBindingId);
+        yield return detail.HoverTipId;
         yield return detail.HoverTipTitle;
         yield return detail.ResultCard?.Id;
         yield return detail.ResultCard?.Title;
@@ -812,26 +825,28 @@ internal sealed class EventCompactInputBuilder
         yield return detail.ResultPower?.Title;
     }
 
-    private static IEnumerable<string?> GetEventKnowledgeSeeds(string? eventId, IReadOnlyList<EventVisibleOptionSource> options)
+    private static IEnumerable<string?> GetEventIdentityKnowledgeSeeds(string? eventId, IReadOnlyList<EventVisibleOptionSource> options)
     {
         yield return eventId;
 
         var bindingPrefix = options
-            .Select(option => CompactAdvisorBuilderShared.FirstNonBlank(
+            .Select(option => GetBindingPrefix(CompactAdvisorBuilderShared.FirstNonBlank(
                 option.ExportedChoice?.EventOptionDetail?.OptionKey,
                 option.ExportedChoice?.EventOptionDetail?.OptionBindingId,
-                option.ExportedChoice?.BindingId))
+                option.ExportedChoice?.BindingId)))
             .Where(bindingId => !string.IsNullOrWhiteSpace(bindingId))
-            .Select(bindingId => bindingId!.Split('.', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault())
             .FirstOrDefault(prefix => !string.IsNullOrWhiteSpace(prefix));
         yield return bindingPrefix;
+    }
 
-        if (string.Equals(eventId, "WoodCarvings", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(bindingPrefix, "WOOD_CARVINGS", StringComparison.OrdinalIgnoreCase))
+    private static string? GetBindingPrefix(string? bindingId)
+    {
+        if (string.IsNullOrWhiteSpace(bindingId))
         {
-            yield return "나무 조각";
-            yield return "WOOD_CARVINGS";
+            return null;
         }
+
+        return bindingId.Split('.', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
     }
 
     private static int? TryParseEmbeddedAmount(string text)
