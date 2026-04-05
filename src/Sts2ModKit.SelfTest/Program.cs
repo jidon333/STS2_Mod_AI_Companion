@@ -151,6 +151,7 @@ Run("replay validator uses compact path for reward event shop and combat fixture
 Run("companion host publishes live advisor scene model artifacts", TestCompanionHostLiveSceneModelArtifacts, failures);
 Run("companion host classifies combat options and structured pile counts", TestCompanionHostCombatSceneModelClassification, failures);
 Run("companion host deduplicates event binding options and keeps enriched descriptions", TestCompanionHostEventSceneModelOptionDeduping, failures);
+Run("codex cli output schema requires all three advice views at the root", TestCodexCliOutputSchemaRequiresThreeViews, failures);
 Run("codex cli trace parser extracts thread id from json events", TestCodexCliTraceParser, failures);
 Run("codex cli surfaces context overflow diagnostics from exec trace", TestCodexCliContextOverflowDiagnostic, failures);
 Run("host codex client retries without resume after context overflow", TestHostCodexCliClientRetriesWithoutResumeAfterContextOverflow, failures);
@@ -6507,6 +6508,28 @@ static void TestCodexCliTraceParser()
 
     Assert(threadId == "019cdcfc-aefb-76c1-92e7-d36d9d89d3cb", "Expected thread id to be extracted from JSONL events.");
     Assert(!string.IsNullOrWhiteSpace(lastAgentMessageJson) && lastAgentMessageJson.Contains("\"headline\":\"h\"", StringComparison.Ordinal), "Expected final agent message JSON to be captured from item.completed events.");
+}
+
+static void TestCodexCliOutputSchemaRequiresThreeViews()
+{
+    var buildSchema = typeof(FoundationCodexCliClient).GetMethod(
+        "BuildSchema",
+        System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+    Assert(buildSchema is not null, "Expected CodexCliClient.BuildSchema to be available.");
+
+    var schemaJson = buildSchema!.Invoke(null, Array.Empty<object>()) as string;
+    Assert(!string.IsNullOrWhiteSpace(schemaJson), "Expected CodexCliClient.BuildSchema to return schema JSON.");
+
+    using var document = JsonDocument.Parse(schemaJson!);
+    var root = document.RootElement;
+    var properties = root.GetProperty("properties");
+    var required = root.GetProperty("required").EnumerateArray().Select(static entry => entry.GetString()).Where(static value => value is not null).Cast<string>().ToHashSet(StringComparer.Ordinal);
+
+    foreach (var key in new[] { "conservativeView", "aggressiveView", "finalView" })
+    {
+        Assert(properties.TryGetProperty(key, out _), $"Expected schema root properties to contain '{key}'.");
+        Assert(required.Contains(key), $"Expected schema root required list to contain '{key}'.");
+    }
 }
 
 static void TestCodexCliContextOverflowDiagnostic()

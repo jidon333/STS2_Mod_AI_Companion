@@ -633,7 +633,10 @@ public sealed class CodexCliClient : ICodexSessionClient
             "missingInformation",
             "decisionBlockers",
             "confidence",
-            "knowledgeRefs"
+            "knowledgeRefs",
+            "conservativeView",
+            "aggressiveView",
+            "finalView"
           ]
         }
         """;
