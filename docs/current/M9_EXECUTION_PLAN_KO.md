@@ -2,7 +2,7 @@
 
 > 상태: 현재 사용 중
 > 기준 브랜치: `main`
-> 최종 갱신: 2026-04-04
+> 최종 갱신: 2026-04-06
 > 목적: `M9 advice-quality`의 세부 계획, 현재 진척도, 다음 work unit, acceptance gate를 한 문서에서 추적
 
 ## 한 줄 요약
@@ -23,6 +23,10 @@
   - artifact-first
   - harness-local proving schema
   - raw fact를 직접 AI 입력으로 쓰지 않음
+- 현재 additive 진행:
+  - `strategy-principles` background artifact 생성 완료
+  - `StrategyPrinciplesService` strict retrieval + `최종 / 보수적 / 공격적` 3-view advice 경로 구현
+  - live acceptance와 style tuning은 계속 direct-play에서 닫는 중
 
 ## M9 범위
 
@@ -229,6 +233,38 @@ v1 우선순위는 다음으로 고정한다.
 - `SceneSummaryText`는 raw summary를 그대로 복사하지 않고 scene-aware display formatter를 거친다
 - advanced 영역은 기본 접힘으로 유지된다
 
+### WS8. Strategy Principles And 3-View Advice
+
+목표:
+
+- `strategy-principles` artifact를 broad catalog에 섞지 않고 background-only lens로 연결한다.
+- reward/event/shop compact prompt에 scene-local strict strategy principles를 최대 3개만 주입한다.
+- 조언 출력을 `최종 / 보수적 / 공격적` 3-view로 additive 확장한다.
+- canonical top-level 조언은 항상 `FinalView`와 정렬하고, exact-label safety를 유지한다.
+
+주요 산출물:
+
+- `artifacts/knowledge/strategy/strategy-principles.sts.json`
+- `src/Sts2AiCompanion.Foundation/Knowledge/StrategyPrinciplesService.cs`
+- `src/Sts2AiCompanion.Foundation/Contracts/StrategyPrinciplesContracts.cs`
+- `src/Sts2AiCompanion.Foundation/Reasoning/CompactAdvisor/AdviceResponseViewFinalizer.cs`
+- `src/Sts2AiCompanion.Wpf/Display/AdviceViewDisplayFormatter.cs`
+
+현재 상태:
+
+- `in_progress`
+
+완료 기준:
+
+- strategy principles가 separate additive field로 `AdviceInputPack`에 들어간다.
+- retrieval은 scene-local strict mapping만 사용하고, low confidence는 제외한다.
+- compact prompt에 `strategy_principles` section이 들어가되 facts보다 우선하지 않는다.
+- `FinalView`, `ConservativeView`, `AggressiveView`가 additive response shape로 연결된다.
+- canonical top-level 조언은 항상 `FinalView`와 정렬된다.
+- auxiliary invalid label은 해당 view에만 국한되고, valid final response를 degrade시키지 않는다.
+- combat는 strategy principles가 있어도 preview-only / no-call을 유지한다.
+- WPF가 `최종 / 보수적 / 공격적` 3개 블록을 일관되게 표시한다.
+
 ## 현재 진척도 보드
 
 | Item | Status | Notes |
@@ -242,6 +278,8 @@ v1 우선순위는 다음으로 고정한다.
 | Coverage gap 운영 | in_progress | reward/event blocker table과 shared degraded fallback 고정 |
 | Reward/Event Compact Advisor MVP | in_progress | `Host` gating + `Foundation` compact builder/finalizer/fallback + replay dry run |
 | Live sidecar UI | in_progress | `Host` owner live builder, shared contract, WPF panel, advisor-scene artifact band, shared `ScreenProvenanceResolver` parity까지 구현 완료. direct play clean-boot manual sweep만 남음 |
+| Strategy principles artifact | completed | `strategy-principles.sts.json` 생성, background-only note 반영 |
+| Strategy lens + 3-view advice | in_progress | separate loader, strict retrieval, prompt wiring, additive 3-view finalizer/WPF까지 연결. live style validation과 docs sync만 남음 |
 | Foundation canonical merge | blocked_by_design | schema 안정화 전 금지 |
 | Real-time overlay UI | deferred | 텍스트/artifact proving 이후 단계 |
 
