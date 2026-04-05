@@ -81,6 +81,7 @@ public sealed record LiveExportEventOptionDetail(
     string? EvaluatedDescription,
     string? HoverTipTitle,
     string? HoverTipDescription,
+    string? HoverTipId,
     LiveExportModelSummary? ResultCard,
     LiveExportModelSummary? ResultRelic,
     LiveExportModelSummary? ResultEnchantment,

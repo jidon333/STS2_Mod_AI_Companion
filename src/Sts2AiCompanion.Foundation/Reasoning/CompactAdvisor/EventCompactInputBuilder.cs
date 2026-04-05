@@ -513,41 +513,14 @@ internal sealed class EventCompactInputBuilder
             return;
         }
 
-        var sanitizedDescription = PromptTextSanitizer.Sanitize(description);
         if (!string.IsNullOrWhiteSpace(detail.HoverTipTitle))
         {
-            if (sanitizedDescription.Contains("인챈트", StringComparison.OrdinalIgnoreCase))
-            {
-                addIfMissing("result_enchantment", 1, detail.HoverTipTitle);
-            }
-            else if (sanitizedDescription.Contains("힘", StringComparison.OrdinalIgnoreCase)
-                     || sanitizedDescription.Contains("약화", StringComparison.OrdinalIgnoreCase)
-                     || sanitizedDescription.Contains("취약", StringComparison.OrdinalIgnoreCase))
-            {
-                addIfMissing("result_power", 1, detail.HoverTipTitle);
-            }
-            else
-            {
-                addIfMissing("hover_tip", 1, detail.HoverTipTitle);
-            }
+            addIfMissing("hover_tip", 1, detail.HoverTipTitle);
         }
 
         if (!string.IsNullOrWhiteSpace(detail.HoverTipDescription))
         {
-            if (sanitizedDescription.Contains("인챈트", StringComparison.OrdinalIgnoreCase))
-            {
-                addIfMissing("result_enchantment_effect", 1, detail.HoverTipDescription);
-            }
-            else if (sanitizedDescription.Contains("힘", StringComparison.OrdinalIgnoreCase)
-                     || sanitizedDescription.Contains("약화", StringComparison.OrdinalIgnoreCase)
-                     || sanitizedDescription.Contains("취약", StringComparison.OrdinalIgnoreCase))
-            {
-                addIfMissing("result_power_effect", 1, detail.HoverTipDescription);
-            }
-            else
-            {
-                addIfMissing("hover_tip_effect", 1, detail.HoverTipDescription);
-            }
+            addIfMissing("hover_tip_effect", 1, detail.HoverTipDescription);
         }
     }
 
@@ -559,6 +532,7 @@ internal sealed class EventCompactInputBuilder
     {
         var resultCardId = CompactAdvisorBuilderShared.FirstNonBlank(detail?.ResultCard?.Id, detail?.ResultCard?.Title);
         var resultRelicId = CompactAdvisorBuilderShared.FirstNonBlank(detail?.ResultRelic?.Id, detail?.ResultRelic?.Title);
+        var hoverTipId = CompactAdvisorBuilderShared.FirstNonBlank(detail?.HoverTipId, detail?.HoverTipTitle);
 
         if (MatchesStrictCardId(resultCardId, "Peck"))
         {
@@ -596,6 +570,17 @@ internal sealed class EventCompactInputBuilder
             addIfMissing("relic_gain", null, "유물 획득");
             addIfMissing("card_reward_upgrade", 3, "처음 3번의 카드 보상이 강화된 상태로 등장");
             addIfMissing("treasure_chest_empty", 1, "처음으로 여는 보물 상자가 비어 있음");
+        }
+
+        if (MatchesStrictModelId(hoverTipId, "Slither"))
+        {
+            addIfMissing("result_enchantment", 1, CompactAdvisorBuilderShared.FirstNonBlank(detail?.HoverTipTitle, "미끈거림")!);
+            addIfMissing(
+                "result_enchantment_effect",
+                1,
+                CompactAdvisorBuilderShared.FirstNonBlank(
+                    detail?.HoverTipDescription,
+                    "미끈거림은 해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.")!);
         }
 
         if (optionKey is null)

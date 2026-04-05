@@ -9703,6 +9703,7 @@ internal static class RuntimeSnapshotReflectionExtractor
             evaluatedDescription,
             hoverTip?.Title,
             hoverTip?.Description,
+            hoverTip?.Id,
             resultCard,
             resultRelic,
             resultEnchantment,

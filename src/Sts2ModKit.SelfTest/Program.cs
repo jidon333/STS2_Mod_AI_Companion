@@ -2425,6 +2425,7 @@ static void TestRuntimeReflectionEventOptionTypedDetailExport()
     Assert(snakeSummary is not null, "Expected generic event option summary for snake button.");
     Assert(string.Equals(snakeSummary!.EventOptionDetail?.HoverTipTitle, "미끈거림", StringComparison.Ordinal), "Expected snake hover-tip title.");
     Assert(snakeSummary.EventOptionDetail?.HoverTipDescription?.Contains("무작위 0~3", StringComparison.Ordinal) == true, "Expected snake hover-tip description.");
+    Assert(string.Equals(snakeSummary.EventOptionDetail?.HoverTipId, "Slither", StringComparison.Ordinal), "Expected snake hover-tip id.");
 
     var neowButton = new FakeNEventOptionButton(
         2,
@@ -5168,6 +5169,7 @@ static void TestEventCompactFallbackOrdering()
                         null,
                         null,
                         null,
+                        null,
                         new LiveExportModelSummary("card", "Peck", "쪼기", null),
                         null,
                         null,
@@ -5184,6 +5186,41 @@ static void TestEventCompactFallbackOrdering()
             && fact.Effects.Any(effect => effect.Kind == "result_card_effect" && effect.Text.Contains("피해 2", StringComparison.Ordinal))) == true,
             "Expected strict model fallback to fill result-card effect from typed detail.");
         Assert(!typedDetailResult.MissingInformation.Contains("event-option-effects-missing:새", StringComparer.Ordinal), "Expected typed-detail fallback ordering to avoid missing-effects gaps.");
+
+        var hoverTipOnlyRunState = CreateEventRunState(
+            "event-fallback-order-hover-tip-only",
+            new[]
+            {
+                new LiveExportChoiceSummary("event-option", "툴팁 확인", "hover-tip", "툴팁 효과를 확인합니다.")
+                {
+                    BindingKind = "event-option",
+                    BindingId = "UNKNOWN_EVENT.pages.INITIAL.options.HOVER",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                    EventOptionDetail = new LiveExportEventOptionDetail(
+                        "UNKNOWN_EVENT.pages.INITIAL.options.HOVER",
+                        "UNKNOWN_EVENT.pages.INITIAL.options.HOVER",
+                        "툴팁 확인",
+                        null,
+                        "미끈거림",
+                        "미끈거림은 해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null),
+                },
+            });
+        var hoverTipOnlySlice = knowledgeService.BuildSlice(ToFoundationRunState(hoverTipOnlyRunState), 16, 8192);
+        var hoverTipOnlyResult = compactBuilder.Build(ToFoundationRunState(hoverTipOnlyRunState), hoverTipOnlySlice);
+        Assert(hoverTipOnlyResult.Supported, "Expected hover-tip-only event option to stay supported with generic facts.");
+        var hoverTipOnlyFact = hoverTipOnlyResult.CompactInput?.EventFacts?.OptionFacts.SingleOrDefault(fact => fact.Label == "툴팁 확인");
+        Assert(hoverTipOnlyFact is not null, "Expected hover-tip-only option fact.");
+        Assert(hoverTipOnlyFact!.Effects.Any(effect => effect.Kind == "hover_tip" && effect.Text.Contains("미끈거림", StringComparison.Ordinal)), "Expected hover-tip-only path to preserve generic hover tip title.");
+        Assert(hoverTipOnlyFact.Effects.Any(effect => effect.Kind == "hover_tip_effect" && effect.Text.Contains("무작위 0~3", StringComparison.Ordinal)), "Expected hover-tip-only path to preserve generic hover tip effect.");
+        Assert(!hoverTipOnlyFact.Effects.Any(effect => effect.Kind == "result_enchantment"), "Expected hover-tip-only path to avoid heuristic enchantment promotion without a typed hover-tip id.");
 
         var missingRunState = CreateEventRunState(
             "event-fallback-order-missing",
@@ -7183,6 +7220,7 @@ static CompanionRunState CreateNeowEventRunState(string runId)
                     null,
                     null,
                     null,
+                    null,
                     new LiveExportModelSummary("relic", "LeadPaperweight", "납 문진", null),
                     null,
                     null,
@@ -7200,6 +7238,7 @@ static CompanionRunState CreateNeowEventRunState(string runId)
                     "ancient-event-option:1",
                     "니오우의 비탄",
                     "덱에 니오우의 격분을 1장 추가합니다.",
+                    null,
                     null,
                     null,
                     new LiveExportModelSummary("card", "NeowsFury", "니오우의 격분", null),
@@ -7220,6 +7259,7 @@ static CompanionRunState CreateNeowEventRunState(string runId)
                     "ancient-event-option:2",
                     "은 도가니",
                     "처음 3번의 카드 보상이 강화된 상태로 등장합니다. 처음으로 여는 보물 상자가 비어 있습니다.",
+                    null,
                     null,
                     null,
                     null,
@@ -7296,6 +7336,7 @@ static CompanionRunState CreateWoodCarvingsEventRunState(string runId)
                     "시작 카드를 1장 선택해 쪼기로 변화시킵니다.",
                     null,
                     null,
+                    null,
                     new LiveExportModelSummary("card", "Peck", "쪼기", null),
                     null,
                     null,
@@ -7314,6 +7355,7 @@ static CompanionRunState CreateWoodCarvingsEventRunState(string runId)
                     "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
                     "새",
                     "시작 카드를 1장 선택해 쪼기로 변화시킵니다.",
+                    null,
                     null,
                     null,
                     new LiveExportModelSummary("card", "Peck", "쪼기", null),
@@ -7336,6 +7378,7 @@ static CompanionRunState CreateWoodCarvingsEventRunState(string runId)
                     "카드 1장에 미끈거림을 인챈트합니다.",
                     "미끈거림",
                     "미끈거림은 해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.",
+                    "Slither",
                     null,
                     null,
                     null,
@@ -7356,6 +7399,7 @@ static CompanionRunState CreateWoodCarvingsEventRunState(string runId)
                     "카드 1장에 미끈거림을 인챈트합니다.",
                     "미끈거림",
                     "미끈거림은 해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.",
+                    "Slither",
                     null,
                     null,
                     null,
@@ -7376,6 +7420,7 @@ static CompanionRunState CreateWoodCarvingsEventRunState(string runId)
                     "시작 카드를 1장 선택해 고리형 강인함으로 변화시킵니다.",
                     null,
                     null,
+                    null,
                     new LiveExportModelSummary("card", "ToricToughness", "고리형 강인함", null),
                     null,
                     null,
@@ -7394,6 +7439,7 @@ static CompanionRunState CreateWoodCarvingsEventRunState(string runId)
                     "WOOD_CARVINGS.pages.INITIAL.options.TORUS",
                     "고리",
                     "시작 카드를 1장 선택해 고리형 강인함으로 변화시킵니다.",
+                    null,
                     null,
                     null,
                     new LiveExportModelSummary("card", "ToricToughness", "고리형 강인함", null),
