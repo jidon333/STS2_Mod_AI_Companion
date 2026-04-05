@@ -5302,8 +5302,8 @@ internal static class RuntimeSnapshotReflectionExtractor
             TryReadString(option, "Id", "Name"),
             index?.ToString(CultureInfo.InvariantCulture));
         var description = FirstNonEmpty(
-            TryReadString(option, "Description", "Body"),
-            TryResolveChoiceDescription(button));
+            TryResolveChoiceDescription(button),
+            TryReadString(option, "Description", "Body"));
         var isProceed = TryReadBool(option, "IsProceed") == true;
         var semanticHints = new List<string>
         {
@@ -8912,7 +8912,7 @@ internal static class RuntimeSnapshotReflectionExtractor
     {
         foreach (var source in EnumerateEvaluatedDisplaySources(item))
         {
-            var materialized = TryResolveMaterializedDescription(source);
+            var materialized = TryResolveMaterializedDescription(source, preferredLabel);
             if (!IsPlaceholderChoiceDescription(materialized, preferredLabel))
             {
                 return materialized;
@@ -8971,9 +8971,9 @@ internal static class RuntimeSnapshotReflectionExtractor
         }
     }
 
-    private static string? TryResolveMaterializedDescription(object source)
+    private static string? TryResolveMaterializedDescription(object source, string? preferredLabel)
     {
-        return SanitizeChoiceDisplayFallback(FirstNonEmpty(
+        var directDescription = SanitizeChoiceDisplayFallback(FirstNonEmpty(
             TryReadString(TryGetMemberValue(source, "_descriptionLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
             TryReadString(TryGetMemberValue(source, "DescriptionLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
             TryReadString(TryGetMemberValue(source, "_bodyLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
@@ -8981,6 +8981,53 @@ internal static class RuntimeSnapshotReflectionExtractor
             TryReadString(TryGetMemberValue(source, "_infoLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
             TryReadString(TryGetMemberValue(source, "InfoLabel"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
             TryReadString(source, "TooltipText", "DisplayedText")));
+        if (!string.IsNullOrWhiteSpace(directDescription))
+        {
+            return directDescription;
+        }
+
+        return TryResolveDescriptionFromMaterializedLabel(source, preferredLabel);
+    }
+
+    private static string? TryResolveDescriptionFromMaterializedLabel(object source, string? preferredLabel)
+    {
+        var rawText = FirstNonEmpty(
+            TryReadString(TryGetMemberValue(source, "_label"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"),
+            TryReadString(TryGetMemberValue(source, "Label"), "Text", "DisplayedText", "TooltipText", "ParsedText", "BbcodeText", "Value"));
+        if (string.IsNullOrWhiteSpace(rawText))
+        {
+            return null;
+        }
+
+        var sanitizedTitle = SanitizeChoiceDisplayFallback(preferredLabel);
+        var normalizedRawText = rawText.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n');
+        var lines = normalizedRawText
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(SanitizeChoiceDisplayFallback)
+            .Where(static line => !string.IsNullOrWhiteSpace(line))
+            .Cast<string>()
+            .ToArray();
+        if (!string.IsNullOrWhiteSpace(sanitizedTitle)
+            && lines.Length >= 2
+            && string.Equals(lines[0], sanitizedTitle, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Join(" ", lines.Skip(1));
+        }
+
+        var sanitizedText = SanitizeChoiceDisplayFallback(rawText);
+        if (string.IsNullOrWhiteSpace(sanitizedText))
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(sanitizedTitle)
+            && sanitizedText.StartsWith($"{sanitizedTitle} ", StringComparison.OrdinalIgnoreCase))
+        {
+            return sanitizedText[(sanitizedTitle.Length + 1)..].Trim();
+        }
+
+        return sanitizedText;
     }
 
     private static string? TryResolveHoverTipDescription(object source, string? preferredLabel, string? preferredValue)
@@ -9671,7 +9718,15 @@ internal static class RuntimeSnapshotReflectionExtractor
         string? optionKey,
         string? bindingId)
     {
-        var hoverTips = EnumerateHoverTipCandidates(item).ToArray();
+        var option = TryGetMemberValue(item, "Option");
+        var hoverTips = EnumerateHoverTipCandidates(item)
+            .Concat(option is null
+                ? Enumerable.Empty<(string? Title, string? Description, string? Id)>()
+                : EnumerateHoverTipCandidates(option))
+            .DistinctBy(
+                static hoverTip => $"{hoverTip.Title}|{hoverTip.Id}|{hoverTip.Description}",
+                StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         if (hoverTips.Length == 0)
         {
             return null;

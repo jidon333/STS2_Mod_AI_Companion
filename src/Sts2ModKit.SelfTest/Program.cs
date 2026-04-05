@@ -62,6 +62,7 @@ Run("runtime reflection exports explicit ancient option buttons and suppresses p
 Run("runtime reflection marks ancient post-choice completion buttons explicitly", TestRuntimeReflectionAncientEventCompletionExport, failures);
 Run("runtime reflection reconciles ancient await-options residue to generic event-option button lane", TestRuntimeReflectionAncientAwaitOptionsReconcilesToGenericEventButtons, failures);
 Run("runtime reflection exports generic event proceed semantics from EventOption.IsProceed", TestRuntimeReflectionGenericEventProceedExport, failures);
+Run("runtime reflection exports typed event option detail from hover-tip and result-model seams", TestRuntimeReflectionEventOptionTypedDetailExport, failures);
 Run("runtime reflection normalizes ancient mixed post-proceed ownership to map lane", TestRuntimeReflectionAncientMixedPostProceedOwnershipNormalization, failures);
 Run("runtime reflection keeps map owner when post-proceed map surface is pending", TestRuntimeReflectionAncientMixedPostProceedMapPending, failures);
 Run("runtime reflection prefers direct current screen over broad observed probe", TestRuntimeReflectionPrefersDirectCurrentScreenOverBroadObservedProbe, failures);
@@ -121,6 +122,7 @@ Run("deck display formatter aggregates localized card names", TestDeckDisplayFor
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
 Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder extracts explicit option facts and fails closed on duplicates", TestEventCompactAdvisorInputBuilder, failures);
+Run("event compact advisor input builder respects generic fallback ordering", TestEventCompactFallbackOrdering, failures);
 Run("shop compact advisor input builder extracts purchase counts and fails closed on duplicates", TestShopCompactAdvisorInputBuilder, failures);
 Run("combat compact preview builder captures current facts and stays preview-only", TestCombatCompactPreviewBuilder, failures);
 Run("compact advice prompt path prefers compact scene-local sections", TestCompactAdvicePromptBuilder, failures);
@@ -2341,6 +2343,125 @@ static void TestRuntimeReflectionGenericEventProceedExport()
     Assert(proceedChoice.SemanticHints.Contains("source:event-option-button", StringComparer.OrdinalIgnoreCase)
            && proceedChoice.SemanticHints.Contains("event-proceed", StringComparer.OrdinalIgnoreCase),
         "Generic event proceed should preserve explicit EventOption.IsProceed semantic hints.");
+}
+
+static void TestRuntimeReflectionEventOptionTypedDetailExport()
+{
+    var extractorType = typeof(AiCompanionModEntryPoint).Assembly.GetType("Sts2ModAiCompanion.Mod.Runtime.RuntimeSnapshotReflectionExtractor");
+    Assert(extractorType is not null, "Expected runtime snapshot extractor type to exist.");
+
+    var method = extractorType!.GetMethod(
+        "TryCreateChoiceSummary",
+        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
+        binder: null,
+        new[] { typeof(object) },
+        modifiers: null);
+    Assert(method is not null, "Expected private TryCreateChoiceSummary helper.");
+
+    var birdButton = new FakeNEventOptionButton(
+        0,
+        "새",
+        "시작 카드를 1장 선택해 쪼기로 변화시킵니다.",
+        460,
+        942,
+        enabled: true,
+        optionKey: "WOOD_CARVINGS.pages.INITIAL.options.BIRD")
+    {
+        Option = new FakeEventOptionModel
+        {
+            Id = "bird-option",
+            TextKey = "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+            Title = "새",
+            Description = "시작 카드를 1장 선택해 로 변화시킵니다.",
+            HoverTips = new object[]
+            {
+                new FakeCardHoverTip(new FakeCardModel
+                {
+                    Id = "Peck",
+                    Name = "쪼기",
+                }),
+            },
+        },
+        _label = new FakeLabel { Text = "[gold][b]새[/b][/gold]\n시작 카드를 1장 선택해 쪼기로 변화시킵니다." },
+    };
+
+    var birdSummary = method.Invoke(null, new object?[] { birdButton }) as LiveExportChoiceSummary;
+    Assert(birdSummary is not null, "Expected generic event option summary for bird button.");
+    Assert(birdSummary!.EventOptionDetail is not null, "Expected typed event option detail for bird button.");
+    Assert(string.Equals(birdSummary.EventOptionDetail!.OptionKey, "WOOD_CARVINGS.pages.INITIAL.options.BIRD", StringComparison.Ordinal), "Expected bird option key.");
+    Assert(string.Equals(birdSummary.EventOptionDetail!.EvaluatedDescription, "시작 카드를 1장 선택해 쪼기로 변화시킵니다.", StringComparison.Ordinal), "Expected evaluated bird description.");
+    Assert(string.Equals(birdSummary.EventOptionDetail!.ResultCard?.Id, "Peck", StringComparison.Ordinal), "Expected bird result card id.");
+    Assert(string.Equals(birdSummary.EventOptionDetail!.ResultCard?.Title, "쪼기", StringComparison.Ordinal), "Expected bird result card title.");
+
+    var snakeButton = new FakeNEventOptionButton(
+        1,
+        "뱀",
+        "카드 1장에 미끈거림을 인챈트합니다.",
+        460,
+        1038,
+        enabled: true,
+        optionKey: "WOOD_CARVINGS.pages.INITIAL.options.SNAKE")
+    {
+        Option = new FakeEventOptionModel
+        {
+            Id = "snake-option",
+            TextKey = "WOOD_CARVINGS.pages.INITIAL.options.SNAKE",
+            Title = "뱀",
+            Description = "카드 1장에 을 인챈트합니다.",
+            HoverTips = new object[]
+            {
+                new FakeHoverTip
+                {
+                    Id = "Slither",
+                    Title = "미끈거림",
+                    Description = "미끈거림은 해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.",
+                },
+            },
+        },
+        _label = new FakeLabel { Text = "[gold][b]뱀[/b][/gold]\n카드 1장에 미끈거림을 인챈트합니다." },
+    };
+
+    var snakeSummary = method.Invoke(null, new object?[] { snakeButton }) as LiveExportChoiceSummary;
+    Assert(snakeSummary is not null, "Expected generic event option summary for snake button.");
+    Assert(string.Equals(snakeSummary!.EventOptionDetail?.HoverTipTitle, "미끈거림", StringComparison.Ordinal), "Expected snake hover-tip title.");
+    Assert(snakeSummary.EventOptionDetail?.HoverTipDescription?.Contains("무작위 0~3", StringComparison.Ordinal) == true, "Expected snake hover-tip description.");
+
+    var neowButton = new FakeNEventOptionButton(
+        2,
+        "니오우의 비탄",
+        "덱에 니오우의 격분을 1장 추가합니다.",
+        460,
+        1134,
+        enabled: true,
+        optionKey: "NEOW.pages.INITIAL.options.NEOWS_TORMENT")
+    {
+        Option = new FakeEventOptionModel
+        {
+            Id = "neow-option",
+            TextKey = "NEOW.pages.INITIAL.options.NEOWS_TORMENT",
+            Title = "니오우의 비탄",
+            Description = "덱에 니오우의 격분을 1장 추가합니다.",
+            Relic = new FakeRelicModel
+            {
+                Id = "NeowsTorment",
+                Name = "니오우의 비탄",
+                HoverTips = new object[]
+                {
+                    new FakeCardHoverTip(new FakeCardModel
+                    {
+                        Id = "NeowsFury",
+                        Name = "니오우의 격분",
+                    }),
+                },
+            },
+        },
+        _label = new FakeLabel { Text = "[gold][b]니오우의 비탄[/b][/gold]\n덱에 니오우의 격분을 1장 추가합니다." },
+    };
+
+    var neowSummary = method.Invoke(null, new object?[] { neowButton }) as LiveExportChoiceSummary;
+    Assert(neowSummary is not null, "Expected generic event option summary for Neow button.");
+    Assert(string.Equals(neowSummary!.EventOptionDetail?.ResultRelic?.Id, "NeowsTorment", StringComparison.Ordinal), "Expected Neow result relic id.");
+    Assert(string.Equals(neowSummary.EventOptionDetail?.ResultCard?.Id, "NeowsFury", StringComparison.Ordinal), "Expected Neow result card id from relic hover tips.");
 }
 
 static void TestRuntimeReflectionAncientMixedPostProceedOwnershipNormalization()
@@ -4956,17 +5077,50 @@ static void TestEventCompactAdvisorInputBuilder()
         var neowFacts = neowResult.CompactInput!.EventFacts!;
         Assert(string.Equals(neowFacts.EventId, "Neow", StringComparison.Ordinal), $"Expected Neow identity inference, got {neowFacts.EventId ?? "<null>"}.");
         Assert(!neowFacts.EventIdentityMissing, "Expected Neow-like ancient event to resolve identity.");
+        Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "니오우의 비탄" && fact.Effects.Any(effect => effect.Kind == "result_relic" && effect.Text.Contains("니오우의 비탄", StringComparison.Ordinal))), "Expected Neow's Torment option to expose typed result relic detail.");
         Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "납 문진" && fact.Effects.Any(effect => effect.Kind == "card_gain" && effect.Amount == 1)), "Expected Lead Paperweight option to expose card gain.");
         Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "니오우의 비탄" && fact.Effects.Any(effect => effect.Kind == "card_gain" && effect.Amount == 1)), "Expected Neow's Torment option to expose card gain.");
+        Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "니오우의 비탄" && fact.Effects.Any(effect => effect.Kind == "added_card_effect" && effect.Text.Contains("피해 10", StringComparison.Ordinal))), "Expected Neow's Torment option to expose Neow's Fury card effect.");
         Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "은 도가니" && fact.Effects.Any(effect => effect.Kind == "card_reward_upgrade" && effect.Amount == 3)), "Expected Silver Crucible option to expose first 3 upgraded rewards.");
         Assert(neowFacts.OptionFacts.Any(fact => fact.Label == "은 도가니" && fact.Effects.Any(effect => effect.Kind == "treasure_chest_empty")), "Expected Silver Crucible downside to surface.");
 
         var promptBuilder = new Sts2AiCompanion.Foundation.Reasoning.AdvicePromptBuilder(configuration);
         var neowPromptPack = promptBuilder.BuildInputPack(ToFoundationRunState(neowRunState), ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "manual", null)), neowSlice, neowResult.CompactInput);
         var neowPrompt = promptBuilder.FormatPrompt(neowPromptPack);
+        Assert(neowPrompt.Contains("event_id: Neow", StringComparison.Ordinal), "Expected prompt to preserve Neow event identity.");
+        Assert(neowPrompt.Contains("opening_event: true", StringComparison.Ordinal), "Expected prompt to mark Neow as an opening event.");
+        Assert(neowPrompt.Contains("added_card_effect", StringComparison.Ordinal), "Expected prompt to expose added-card effect details for Neow's Torment.");
+        Assert(!neowPrompt.Contains("- act: ?", StringComparison.Ordinal), "Expected prompt to omit unresolved act values instead of emitting '?'.");
+        Assert(!neowPrompt.Contains("- floor: ?", StringComparison.Ordinal), "Expected prompt to omit unresolved floor values instead of emitting '?'.");
         Assert(!neowPrompt.Contains("[blue]", StringComparison.OrdinalIgnoreCase), "Expected prompt text to strip BBCode color tags.");
         Assert(!neowPrompt.Contains("[gold]", StringComparison.OrdinalIgnoreCase), "Expected prompt text to strip color markers.");
         Assert(!neowPrompt.Contains("{Cards}", StringComparison.OrdinalIgnoreCase), "Expected prompt text to strip dynamic placeholders.");
+
+        var woodCarvingsRunState = CreateWoodCarvingsEventRunState("event-wood-carvings-compact-run");
+        var woodCarvingsSlice = knowledgeService.BuildSlice(ToFoundationRunState(woodCarvingsRunState), 16, 8192);
+        var woodCarvingsResult = compactBuilder.Build(ToFoundationRunState(woodCarvingsRunState), woodCarvingsSlice);
+        Assert(woodCarvingsResult.Supported, "Expected Wood Carvings event compact input to stay supported after canonical dedupe.");
+        Assert(woodCarvingsResult.CompactInput?.EventFacts is not null, "Expected Wood Carvings compact event facts.");
+        var woodCarvingsFacts = woodCarvingsResult.CompactInput!.EventFacts!;
+        Assert(string.Equals(woodCarvingsFacts.EventId, "WoodCarvings", StringComparison.Ordinal), $"Expected Wood Carvings identity inference, got {woodCarvingsFacts.EventId ?? "<null>"}.");
+        Assert(!woodCarvingsFacts.EventIdentityMissing, "Expected Wood Carvings identity to resolve from binding ids.");
+        Assert(woodCarvingsResult.CompactInput!.VisibleOptions.Count == 3, $"Expected canonicalized Wood Carvings visible options count of 3, got {woodCarvingsResult.CompactInput.VisibleOptions.Count}.");
+        Assert(!woodCarvingsResult.DecisionBlockers.Any(blocker => blocker.StartsWith("event-duplicate-option-label:", StringComparison.OrdinalIgnoreCase)), "Expected canonicalized Wood Carvings options to avoid duplicate-label blockers.");
+        Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "새" && fact.Effects.Any(effect => effect.Kind == "result_card" && effect.Text.Contains("쪼기", StringComparison.Ordinal))), "Expected bird option to expose typed result card detail.");
+        Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "새" && fact.Effects.Any(effect => effect.Kind == "transform_target_card" && effect.Text.Contains("쪼기", StringComparison.Ordinal))), "Expected bird option to expose Peck transform target.");
+        Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "새" && fact.Effects.Any(effect => effect.Kind == "result_card_effect" && effect.Text.Contains("피해 2", StringComparison.Ordinal))), "Expected bird option to expose Peck card effect details.");
+        Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "뱀" && fact.Effects.Any(effect => effect.Kind == "card_enchant" && effect.Text.Contains("미끈거림", StringComparison.Ordinal))), "Expected snake option to expose Slither enchantment.");
+        Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "뱀" && fact.Effects.Any(effect => effect.Kind == "result_enchantment" && effect.Text.Contains("미끈거림", StringComparison.Ordinal))), "Expected snake option to expose typed enchantment detail.");
+        Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "뱀" && fact.Effects.Any(effect => effect.Kind == "result_enchantment_effect" && effect.Text.Contains("무작위 0~3", StringComparison.Ordinal))), "Expected snake option to expose Slither effect details.");
+        Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "고리" && fact.Effects.Any(effect => effect.Kind == "transform_target_card" && effect.Text.Contains("고리형 강인함", StringComparison.Ordinal))), "Expected torus option to expose Toric Toughness transform target.");
+        Assert(woodCarvingsFacts.OptionFacts.Any(fact => fact.Label == "고리" && fact.Effects.Any(effect => effect.Kind == "result_card_effect" && effect.Text.Contains("방어도 5", StringComparison.Ordinal))), "Expected torus option to expose Toric Toughness card effect details.");
+        Assert(!woodCarvingsResult.MissingInformation.Contains("event-option-effects-missing:새", StringComparer.Ordinal), "Expected Wood Carvings bird option to avoid missing-effects gaps.");
+
+        var woodPromptPack = promptBuilder.BuildInputPack(ToFoundationRunState(woodCarvingsRunState), ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "manual", null)), woodCarvingsSlice, woodCarvingsResult.CompactInput);
+        var woodPrompt = promptBuilder.FormatPrompt(woodPromptPack);
+        Assert(woodPrompt.Contains("result_card_effect", StringComparison.Ordinal), "Expected Wood Carvings prompt to include result-card effect lines.");
+        Assert(woodPrompt.Contains("result_enchantment_effect", StringComparison.Ordinal), "Expected Wood Carvings prompt to include enchantment effect lines.");
+        Assert(!woodPrompt.Contains("성능 정보가 compact input에 없다", StringComparison.Ordinal), "Expected generic event facts to eliminate legacy missing-performance blocker text.");
 
         var duplicateRunState = CreateEventRunState(
             "event-duplicate-compact-run",
@@ -4980,6 +5134,73 @@ static void TestEventCompactAdvisorInputBuilder()
         Assert(!duplicateResult.Supported, "Expected duplicate event option labels to fail closed even when explicit facts exist.");
         Assert(duplicateResult.DecisionBlockers.Contains("event-duplicate-option-label:같은 선택지", StringComparer.Ordinal), "Expected duplicate event label blocker.");
         Assert(duplicateResult.DecisionBlockers.Contains("event-compact-input-insufficient", StringComparer.Ordinal), "Expected duplicate event labels to mark compact input insufficient.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestEventCompactFallbackOrdering()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedKnowledgeCatalog(root);
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+
+        var typedDetailRunState = CreateEventRunState(
+            "event-fallback-order-typed-detail",
+            new[]
+            {
+                new LiveExportChoiceSummary("event-option", "새", "bird", "시작 카드를 1장 선택해 로 변화시킵니다.")
+                {
+                    BindingKind = "event-option",
+                    BindingId = "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                    EventOptionDetail = new LiveExportEventOptionDetail(
+                        "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+                        "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+                        "새",
+                        null,
+                        null,
+                        null,
+                        new LiveExportModelSummary("card", "Peck", "쪼기", null),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null),
+                },
+            });
+        var typedDetailSlice = knowledgeService.BuildSlice(ToFoundationRunState(typedDetailRunState), 16, 8192);
+        var typedDetailResult = compactBuilder.Build(ToFoundationRunState(typedDetailRunState), typedDetailSlice);
+        Assert(typedDetailResult.Supported, "Expected typed-detail event option to stay supported.");
+        Assert(typedDetailResult.CompactInput?.EventFacts?.OptionFacts.Any(fact =>
+            fact.Label == "새"
+            && fact.Effects.Any(effect => effect.Kind == "result_card_effect" && effect.Text.Contains("피해 2", StringComparison.Ordinal))) == true,
+            "Expected strict model fallback to fill result-card effect from typed detail.");
+        Assert(!typedDetailResult.MissingInformation.Contains("event-option-effects-missing:새", StringComparer.Ordinal), "Expected typed-detail fallback ordering to avoid missing-effects gaps.");
+
+        var missingRunState = CreateEventRunState(
+            "event-fallback-order-missing",
+            new[]
+            {
+                new LiveExportChoiceSummary("event-option", "알 수 없는 선택지", "unknown", "{MysteryPlaceholder}")
+                {
+                    BindingKind = "event-option",
+                    BindingId = "UNKNOWN_EVENT.pages.INITIAL.options.MYSTERY",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                },
+            });
+        var missingSlice = knowledgeService.BuildSlice(ToFoundationRunState(missingRunState), 16, 8192);
+        var missingResult = compactBuilder.Build(ToFoundationRunState(missingRunState), missingSlice);
+        Assert(!missingResult.Supported, "Expected unknown placeholder-only event option to fail closed.");
+        Assert(missingResult.MissingInformation.Contains("event-option-effects-missing:알 수 없는 선택지", StringComparer.Ordinal), "Expected missing-information fallback when typed detail and display text are unavailable.");
     }
     finally
     {
@@ -6945,7 +7166,7 @@ static CompanionRunState CreateNeowEventRunState(string runId)
     var snapshot = CreateHostSnapshot(runId, "event") with
     {
         CurrentScreen = "event",
-        Encounter = new LiveExportEncounterSummary("Neow", "Event", false, null),
+        Encounter = new LiveExportEncounterSummary("root", "Event", false, null),
         CurrentChoices = new[]
         {
             new LiveExportChoiceSummary("event-option", "납 문진", "0", "무색 카드 [blue]2[/blue]장 중 [blue]1[/blue]장을 선택해 [gold]덱[/gold]에 추가합니다.")
@@ -6954,6 +7175,19 @@ static CompanionRunState CreateNeowEventRunState(string runId)
                 BindingId = "ancient-event-option:0",
                 Enabled = true,
                 SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button", "option-index:0" },
+                EventOptionDetail = new LiveExportEventOptionDetail(
+                    "NEOW.pages.INITIAL.options.LEAD_PAPERWEIGHT",
+                    "ancient-event-option:0",
+                    "납 문진",
+                    "무색 카드 2장 중 1장을 선택해 덱에 추가합니다.",
+                    null,
+                    null,
+                    null,
+                    new LiveExportModelSummary("relic", "LeadPaperweight", "납 문진", null),
+                    null,
+                    null,
+                    null,
+                    null),
             },
             new LiveExportChoiceSummary("event-option", "니오우의 비탄", "1", "[gold]덱[/gold]에 [gold]니오우의 격분[/gold]을 [blue]1[/blue]장 추가합니다.")
             {
@@ -6961,6 +7195,19 @@ static CompanionRunState CreateNeowEventRunState(string runId)
                 BindingId = "ancient-event-option:1",
                 Enabled = true,
                 SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button", "option-index:1" },
+                EventOptionDetail = new LiveExportEventOptionDetail(
+                    "NEOW.pages.INITIAL.options.NEOWS_TORMENT",
+                    "ancient-event-option:1",
+                    "니오우의 비탄",
+                    "덱에 니오우의 격분을 1장 추가합니다.",
+                    null,
+                    null,
+                    new LiveExportModelSummary("card", "NeowsFury", "니오우의 격분", null),
+                    new LiveExportModelSummary("relic", "NeowsTorment", "니오우의 비탄", null),
+                    null,
+                    null,
+                    null,
+                    null),
             },
             new LiveExportChoiceSummary("event-option", "은 도가니", "2", "처음 [blue]{Cards}[/blue]번의 카드 보상이 [gold]강화[/gold]된 상태로 등장합니다. 처음으로 여는 보물 상자가 [red]비어 있습니다[/red].")
             {
@@ -6968,6 +7215,19 @@ static CompanionRunState CreateNeowEventRunState(string runId)
                 BindingId = "ancient-event-option:2",
                 Enabled = true,
                 SemanticHints = new[] { "scene:event", "ancient-event", "source:ancient-option-button", "option-index:2" },
+                EventOptionDetail = new LiveExportEventOptionDetail(
+                    "NEOW.pages.INITIAL.options.SILVER_CRUCIBLE",
+                    "ancient-event-option:2",
+                    "은 도가니",
+                    "처음 3번의 카드 보상이 강화된 상태로 등장합니다. 처음으로 여는 보물 상자가 비어 있습니다.",
+                    null,
+                    null,
+                    null,
+                    new LiveExportModelSummary("relic", "SilverCrucible", "은 도가니", null),
+                    null,
+                    null,
+                    null,
+                    null),
             },
         },
         Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
@@ -7010,6 +7270,178 @@ static CompanionRunState CreateNeowEventRunState(string runId)
             }),
     };
     return new CompanionRunState(snapshot, session, "neow summary", events, false)
+    {
+        NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
+    };
+}
+
+static CompanionRunState CreateWoodCarvingsEventRunState(string runId)
+{
+    var snapshot = CreateHostSnapshot(runId, "event") with
+    {
+        CurrentScreen = "event",
+        Encounter = new LiveExportEncounterSummary("root", "Event", false, null),
+        CurrentChoices = new[]
+        {
+            new LiveExportChoiceSummary("event-option", "새", "새", "시작 카드를 1장 선택해 로 변화시킵니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+                Enabled = true,
+                SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                EventOptionDetail = new LiveExportEventOptionDetail(
+                    "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+                    "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+                    "새",
+                    "시작 카드를 1장 선택해 쪼기로 변화시킵니다.",
+                    null,
+                    null,
+                    new LiveExportModelSummary("card", "Peck", "쪼기", null),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+            },
+            new LiveExportChoiceSummary("event-option", "새", null, "시작 카드를 1장 선택해 로 변화시킵니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+                Enabled = true,
+                SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                EventOptionDetail = new LiveExportEventOptionDetail(
+                    "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+                    "WOOD_CARVINGS.pages.INITIAL.options.BIRD",
+                    "새",
+                    "시작 카드를 1장 선택해 쪼기로 변화시킵니다.",
+                    null,
+                    null,
+                    new LiveExportModelSummary("card", "Peck", "쪼기", null),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+            },
+            new LiveExportChoiceSummary("event-option", "뱀", "뱀", "카드 1장에 을 인챈트합니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "WOOD_CARVINGS.pages.INITIAL.options.SNAKE",
+                Enabled = true,
+                SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                EventOptionDetail = new LiveExportEventOptionDetail(
+                    "WOOD_CARVINGS.pages.INITIAL.options.SNAKE",
+                    "WOOD_CARVINGS.pages.INITIAL.options.SNAKE",
+                    "뱀",
+                    "카드 1장에 미끈거림을 인챈트합니다.",
+                    "미끈거림",
+                    "미끈거림은 해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+            },
+            new LiveExportChoiceSummary("event-option", "뱀", null, "카드 1장에 을 인챈트합니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "WOOD_CARVINGS.pages.INITIAL.options.SNAKE",
+                Enabled = true,
+                SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                EventOptionDetail = new LiveExportEventOptionDetail(
+                    "WOOD_CARVINGS.pages.INITIAL.options.SNAKE",
+                    "WOOD_CARVINGS.pages.INITIAL.options.SNAKE",
+                    "뱀",
+                    "카드 1장에 미끈거림을 인챈트합니다.",
+                    "미끈거림",
+                    "미끈거림은 해당 카드를 뽑았을 때 이번 전투 동안 비용을 무작위 0~3으로 바꿉니다.",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+            },
+            new LiveExportChoiceSummary("event-option", "고리", "고리", "시작 카드를 1장 선택해 으로 변화시킵니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "WOOD_CARVINGS.pages.INITIAL.options.TORUS",
+                Enabled = true,
+                SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option-button", "option-role:choice" },
+                EventOptionDetail = new LiveExportEventOptionDetail(
+                    "WOOD_CARVINGS.pages.INITIAL.options.TORUS",
+                    "WOOD_CARVINGS.pages.INITIAL.options.TORUS",
+                    "고리",
+                    "시작 카드를 1장 선택해 고리형 강인함으로 변화시킵니다.",
+                    null,
+                    null,
+                    new LiveExportModelSummary("card", "ToricToughness", "고리형 강인함", null),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+            },
+            new LiveExportChoiceSummary("event-option", "고리", null, "시작 카드를 1장 선택해 으로 변화시킵니다.")
+            {
+                BindingKind = "event-option",
+                BindingId = "WOOD_CARVINGS.pages.INITIAL.options.TORUS",
+                Enabled = true,
+                SemanticHints = new[] { "scene:event", "kind:event-option", "source:event-option", "option-role:choice" },
+                EventOptionDetail = new LiveExportEventOptionDetail(
+                    "WOOD_CARVINGS.pages.INITIAL.options.TORUS",
+                    "WOOD_CARVINGS.pages.INITIAL.options.TORUS",
+                    "고리",
+                    "시작 카드를 1장 선택해 고리형 강인함으로 변화시킵니다.",
+                    null,
+                    null,
+                    new LiveExportModelSummary("card", "ToricToughness", "고리형 강인함", null),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null),
+            },
+        },
+        Meta = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["choice-source"] = "live-export",
+            ["choiceExtractorPath"] = "event",
+            ["currentSceneType"] = "NEventRoom",
+            ["rootTypeSummary"] = "NEventRoom",
+            ["flowScreen"] = "event",
+            ["visibleScreen"] = "event",
+            ["foregroundOwner"] = "event",
+            ["foregroundActionLane"] = "event-option",
+        },
+    };
+    var session = new LiveExportSession("event-session", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, Path.Combine(Path.GetTempPath(), "event-live"), "choice-list-presented", "event");
+    var events = new[]
+    {
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow.AddSeconds(-1),
+            1,
+            runId,
+            "event-opened",
+            "event",
+            null,
+            null,
+            new Dictionary<string, object?>()),
+        new LiveExportEventEnvelope(
+            DateTimeOffset.UtcNow,
+            2,
+            runId,
+            "choice-list-presented",
+            "event",
+            null,
+            null,
+            new Dictionary<string, object?>
+            {
+                ["choices"] = new[] { "새", "뱀", "고리" },
+            }),
+    };
+    return new CompanionRunState(snapshot, session, "wood carvings summary", events, false)
     {
         NormalizedState = CompanionStateMapper.FromLiveExport(snapshot, session, events),
     };
@@ -8515,9 +8947,19 @@ file sealed class FakeEventOptionModel
 {
     public string? Id { get; init; }
 
+    public string? TextKey { get; init; }
+
     public string? Title { get; init; }
 
     public string? Description { get; init; }
+
+    public object[] HoverTips { get; init; } = Array.Empty<object>();
+
+    public object? Relic { get; init; }
+
+    public string? TargetSelectorHint { get; init; }
+
+    public string? TargetFilter { get; init; }
 
     public bool IsLocked { get; init; }
 
@@ -8526,7 +8968,7 @@ file sealed class FakeEventOptionModel
 
 file sealed class FakeNEventOptionButton : FakeSceneNode
 {
-    public FakeNEventOptionButton(int index, string title, string description, double x, double y, bool enabled, bool isProceed = false)
+    public FakeNEventOptionButton(int index, string title, string description, double x, double y, bool enabled, bool isProceed = false, string? optionKey = null)
     {
         Index = index;
         Visible = true;
@@ -8536,16 +8978,20 @@ file sealed class FakeNEventOptionButton : FakeSceneNode
         Option = new FakeEventOptionModel
         {
             Id = $"option-{index}",
+            TextKey = optionKey ?? $"option-{index}",
             Title = title,
             Description = description,
             IsLocked = false,
             IsProceed = isProceed,
         };
+        _label = new FakeLabel { Text = $"[gold][b]{title}[/b][/gold]\n{description}" };
     }
 
     public int Index { get; }
 
-    public FakeEventOptionModel Option { get; }
+    public FakeEventOptionModel Option { get; init; }
+
+    public FakeLabel? _label { get; init; }
 
     public bool HasFocusState { get; set; }
 
@@ -8908,6 +9354,22 @@ file sealed class FakeHoverTip
     public string? Description { get; init; }
 
     public string? Id { get; init; }
+
+    public object? CanonicalModel { get; init; }
+}
+
+file sealed class FakeCardHoverTip
+{
+    public FakeCardHoverTip(FakeCardModel card)
+    {
+        Card = card;
+    }
+
+    public FakeCardModel Card { get; }
+
+    public string? Id => Card.Id ?? Card.Name;
+
+    public object CanonicalModel => Card;
 }
 
 file sealed class FakeCardLikeChoice
