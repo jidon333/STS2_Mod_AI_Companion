@@ -615,6 +615,7 @@ internal sealed class EventCompactInputBuilder
 
         if (targetFilter.Contains("제거 가능한 기본 카드", StringComparison.OrdinalIgnoreCase))
         {
+            addIfMissing("target_selection_mode", 1, "플레이어가 대상 카드를 직접 선택합니다.");
             var basicCandidates = deck
                 .Where(IsBasicStarterCard)
                 .ToArray();
@@ -634,6 +635,7 @@ internal sealed class EventCompactInputBuilder
             return;
         }
 
+        addIfMissing("target_selection_mode", 1, "플레이어가 대상 카드를 직접 선택합니다.");
         var playableCards = deck
             .Where(IsPlayableCard)
             .ToArray();

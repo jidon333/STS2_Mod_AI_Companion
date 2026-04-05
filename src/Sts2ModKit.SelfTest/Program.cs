@@ -5238,6 +5238,8 @@ static void TestEventCompactAdvisorInputBuilder()
         var woodCarvingsDeckResult = compactBuilder.Build(ToFoundationRunState(woodCarvingsDeckState), woodCarvingsDeckSlice);
         var snakeFact = woodCarvingsDeckResult.CompactInput?.EventFacts?.OptionFacts.SingleOrDefault(fact => fact.Label == "뱀");
         Assert(snakeFact is not null, "Expected snake option fact with enriched deck.");
+        Assert(snakeFact!.Effects.Any(effect => effect.Kind == "target_selection_mode" && effect.Text.Contains("직접 선택", StringComparison.Ordinal)),
+            "Expected snake option to mark target selection as player-selected.");
         Assert(snakeFact!.Effects.Any(effect => effect.Kind == "target_candidate_summary" && effect.Text.Contains("짓밟기", StringComparison.Ordinal)),
             "Expected snake option to expose a target candidate summary that includes 짓밟기.");
         Assert(snakeFact.Effects.Any(effect => effect.Kind == "target_candidate_excluded" && effect.Text.Contains("소용돌이", StringComparison.Ordinal)),
@@ -5251,6 +5253,8 @@ static void TestEventCompactAdvisorInputBuilder()
 
         var woodDeckPromptPack = promptBuilder.BuildInputPack(ToFoundationRunState(woodCarvingsDeckState), ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "manual", null)), woodCarvingsDeckSlice, woodCarvingsDeckResult.CompactInput);
         var woodDeckPrompt = promptBuilder.FormatPrompt(woodDeckPromptPack);
+        Assert(woodDeckPrompt.Contains("target_selection_mode", StringComparison.Ordinal), "Expected Wood Carvings prompt to include target selection mode facts.");
+        Assert(woodDeckPrompt.Contains("대상 카드는 플레이어가 직접 고르는 것입니다.", StringComparison.Ordinal), "Expected prompt guidance to preserve player-selected targeting semantics.");
         Assert(woodDeckPrompt.Contains("target_candidate_summary", StringComparison.Ordinal), "Expected Wood Carvings prompt to include target candidate summary facts.");
         Assert(woodDeckPrompt.Contains("X비용 제외 제약만으로 시너지가 제한된다고 단정하지 마세요.", StringComparison.Ordinal), "Expected prompt guidance to prevent over-penalizing X-cost exclusion.");
 
