@@ -140,11 +140,46 @@ internal sealed class FakeCodexSessionClient : ICodexSessionClient
         if (!string.IsNullOrWhiteSpace(recommendedChoiceLabel))
         {
             reasoning.Add($"추천 라벨 '{recommendedChoiceLabel}'은 현재 visible options와 exact match 됩니다.");
+
+            if (inputPack.RewardAssessmentFacts is not null)
+            {
+                foreach (var hint in inputPack.RewardAssessmentFacts.SynergyHints.Where(hint => hint.StartsWith(recommendedChoiceLabel + ":", StringComparison.OrdinalIgnoreCase)))
+                {
+                    reasoning.Add($"deterministic 사실: {hint}");
+                }
+
+                foreach (var hint in inputPack.RewardAssessmentFacts.AntiSynergyHints.Where(hint => hint.StartsWith(recommendedChoiceLabel + ":", StringComparison.OrdinalIgnoreCase)))
+                {
+                    reasoning.Add($"deterministic 사실: {hint}");
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(recommendedChoiceLabel) && inputPack.RewardAssessmentFacts is not null)
+        {
+            reasoning.AddRange(
+                inputPack.RewardAssessmentFacts.SynergyHints
+                    .Where(hint => hint.StartsWith(recommendedChoiceLabel + ":", StringComparison.OrdinalIgnoreCase))
+                    .Take(2)
+                    .Select(hint => $"deterministic 사실: {hint}"));
+            reasoning.AddRange(
+                inputPack.RewardAssessmentFacts.AntiSynergyHints
+                    .Where(hint => hint.StartsWith(recommendedChoiceLabel + ":", StringComparison.OrdinalIgnoreCase))
+                    .Take(2)
+                    .Select(hint => $"deterministic 사실: {hint}"));
+        }
+
+        if (inputPack.RewardRecommendationTraceSeed is not null)
+        {
+            reasoning.AddRange(inputPack.RewardRecommendationTraceSeed.AssessmentFactLines.Take(2));
         }
 
         if (compact.RewardFacts is not null)
         {
-            reasoning.AddRange(compact.RewardFacts.FactLines.Take(2));
+            reasoning.AddRange(
+                compact.RewardFacts.FactLines
+                    .Take(2)
+                    .Select(line => $"deterministic 사실: {line}"));
         }
 
         if (compact.EventFacts is not null)
@@ -158,6 +193,11 @@ internal sealed class FakeCodexSessionClient : ICodexSessionClient
             }
         }
 
+        if (inputPack.RewardAssessmentFacts is not null)
+        {
+            reasoning.Add($"현재 덱 facts: attack_pressure={inputPack.RewardAssessmentFacts.AttackPressure}, defense_pressure={inputPack.RewardAssessmentFacts.DefensePressure}, draw_support={inputPack.RewardAssessmentFacts.DrawSupportLevel}, energy_support={inputPack.RewardAssessmentFacts.EnergySupportLevel}");
+        }
+
         return new AdviceResponse(
             "ok",
             $"headline-{inputPack.TriggerKind}",
@@ -167,7 +207,7 @@ internal sealed class FakeCodexSessionClient : ICodexSessionClient
             reasoning
                 .Where(bullet => !string.IsNullOrWhiteSpace(bullet))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(5)
+                .Take(7)
                 .ToArray(),
             Array.Empty<string>(),
             compact.MissingInformation.ToArray(),

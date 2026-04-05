@@ -133,6 +133,7 @@ Run("reward fixtures include a non-first winning choice", TestRewardNonFirstChoi
 Run("host wrappers converge on foundation prompt and knowledge services", TestHostFoundationConvergence, failures);
 Run("companion host keeps advice flow while diagnostics stay optional", TestCompanionHostAdviceFlow, failures);
 Run("companion host manual reward advice uses compact input", TestCompanionHostManualRewardCompactAdviceFlow, failures);
+Run("companion host keeps compact advisor reward and event scenes manual-only", TestCompanionHostAutomaticCompactAdviceRemainsManualOnly, failures);
 Run("companion host keeps scene model polling responsive while auto advice runs", TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice, failures);
 Run("replay validator uses compact path for reward and event fixtures", TestReplayAdvisorValidatorCompactPath, failures);
 Run("companion host publishes live advisor scene model artifacts", TestCompanionHostLiveSceneModelArtifacts, failures);
@@ -4896,6 +4897,24 @@ static void TestRewardCompactAdvisorInputBuilder()
         Assert(compact.MissingInformation.Contains("reward-option-knowledge-missing:미확인 카드", StringComparer.Ordinal), "Expected reward compact input to preserve deterministic missing-information flags.");
         Assert(compact.DecisionBlockers.Count == 0, "Expected reward compact input to stay supported without synthetic blockers.");
         Assert(compact.KnowledgeEntries.Count <= 6, "Expected compact knowledge slice to stay bounded.");
+
+        var duplicateScenario = new RewardScenarioDefinition(
+            "reward-duplicate-labels",
+            "reward-duplicate-labels-run",
+            scenario.Deck,
+            new[]
+            {
+                new LiveExportChoiceSummary("card", "같은 카드", "same-card-0", "카드를 얻습니다."),
+                new LiveExportChoiceSummary("card", "같은 카드", "same-card-1", "카드를 얻습니다."),
+                new LiveExportChoiceSummary("skip", "넘기기", "skip", "보상을 건너뜁니다."),
+            },
+            "같은 카드");
+        var duplicateRunState = CreateRewardRunStateForScenario(duplicateScenario, $"{duplicateScenario.RunId}-compact");
+        var duplicateSlice = knowledgeService.BuildSlice(ToFoundationRunState(duplicateRunState), 16, 8192);
+        var duplicateResult = compactBuilder.Build(ToFoundationRunState(duplicateRunState), duplicateSlice);
+        Assert(!duplicateResult.Supported, "Expected duplicate reward option labels to fail closed.");
+        Assert(duplicateResult.DecisionBlockers.Contains("reward-duplicate-option-label:같은 카드", StringComparer.Ordinal), "Expected duplicate reward label blocker.");
+        Assert(duplicateResult.DecisionBlockers.Contains("reward-compact-input-insufficient", StringComparer.Ordinal), "Expected duplicate reward labels to mark compact input insufficient.");
     }
     finally
     {
@@ -4929,13 +4948,14 @@ static void TestEventCompactAdvisorInputBuilder()
             "event-duplicate-compact-run",
             new[]
             {
-                new LiveExportChoiceSummary("event-option", "같은 선택지", "option-0", string.Empty),
-                new LiveExportChoiceSummary("event-option", "같은 선택지", "option-1", string.Empty),
+                new LiveExportChoiceSummary("event-option", "같은 선택지", "option-0", "최대 체력을 5 잃습니다."),
+                new LiveExportChoiceSummary("event-option", "같은 선택지", "option-1", "50 골드를 얻습니다."),
             });
         var duplicateSlice = knowledgeService.BuildSlice(ToFoundationRunState(duplicateRunState), 16, 8192);
         var duplicateResult = compactBuilder.Build(ToFoundationRunState(duplicateRunState), duplicateSlice);
-        Assert(!duplicateResult.Supported, "Expected duplicate event option labels with no explicit facts to fail closed.");
+        Assert(!duplicateResult.Supported, "Expected duplicate event option labels to fail closed even when explicit facts exist.");
         Assert(duplicateResult.DecisionBlockers.Contains("event-duplicate-option-label:같은 선택지", StringComparer.Ordinal), "Expected duplicate event label blocker.");
+        Assert(duplicateResult.DecisionBlockers.Contains("event-compact-input-insufficient", StringComparer.Ordinal), "Expected duplicate event labels to mark compact input insufficient.");
     }
     finally
     {
@@ -5235,7 +5255,11 @@ static RewardScenarioExecutionResult ExecuteRewardScenario(RewardScenarioDefinit
         try
         {
             host.RefreshAsync().GetAwaiter().GetResult();
-            Assert(fakeClient.RequestCount == 1, $"Expected reward refresh to trigger automatic advice for scenario {scenario.Name}.");
+            Assert(fakeClient.RequestCount == 0, $"Expected reward scenes to stay manual-only during refresh for scenario {scenario.Name}.");
+
+            var manualRequested = host.RequestManualAdviceAsync().GetAwaiter().GetResult();
+            Assert(manualRequested, $"Expected manual reward advice to succeed for scenario {scenario.Name}.");
+            Assert(fakeClient.RequestCount == 1, $"Expected manual reward advice to invoke codex for scenario {scenario.Name}.");
             Assert(host.CurrentSnapshot.LatestAdvice is not null, $"Expected live advice artifact for scenario {scenario.Name}.");
 
             var liveAdvicePath = host.CurrentSnapshot.Paths.AdviceLatestJsonPath
@@ -5496,17 +5520,17 @@ static void TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice()
         Directory.CreateDirectory(layout.LiveRoot);
         const string runId = "scene-poll-during-advice-run";
 
-        var rewardSnapshot = CreateRewardSceneModelSnapshot(runId);
+        var initialSnapshot = CreateHostSnapshot(runId, "shop");
         var eventSnapshot = CreateEventSceneModelSnapshot(runId);
-        var session = new LiveExportSession("session-scene-poll", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, layout.LiveRoot, "choice-list-presented", rewardSnapshot.CurrentScreen);
+        var session = new LiveExportSession("session-scene-poll", runId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 1, layout.LiveRoot, "choice-list-presented", initialSnapshot.CurrentScreen);
         var events = new[]
         {
-            new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, runId, "choice-list-presented", rewardSnapshot.CurrentScreen, rewardSnapshot.Act, rewardSnapshot.Floor, new Dictionary<string, object?>()),
+            new LiveExportEventEnvelope(DateTimeOffset.UtcNow, 1, runId, "choice-list-presented", initialSnapshot.CurrentScreen, initialSnapshot.Act, initialSnapshot.Floor, new Dictionary<string, object?>()),
         };
 
-        WriteJson(layout.SnapshotPath, rewardSnapshot);
+        WriteJson(layout.SnapshotPath, initialSnapshot);
         WriteJson(layout.SessionPath, session);
-        File.WriteAllText(layout.SummaryPath, "reward summary", Encoding.UTF8);
+        File.WriteAllText(layout.SummaryPath, "shop summary", Encoding.UTF8);
         Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
         File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
         File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
@@ -5524,9 +5548,9 @@ static void TestCompanionHostScenePollingStaysResponsiveDuringAutoAdvice()
             WaitForCondition(
                 () => fakeClient.RequestCount == 1 && host.CurrentSnapshot.Status.AnalysisInProgress,
                 TimeSpan.FromSeconds(2),
-                "Expected auto advice to start from the initial reward snapshot.");
+                "Expected auto advice to start from the initial non-compact snapshot.");
 
-            Assert(host.CurrentSnapshot.LatestSceneModel is { SceneType: "reward" }, "Expected initial scene model to publish reward before the delayed advice completes.");
+            Assert(host.CurrentSnapshot.LatestSceneModel is { SceneType: "shop" }, "Expected initial scene model to publish shop before the delayed advice completes.");
 
             WriteJson(layout.SnapshotPath, eventSnapshot);
             File.WriteAllText(layout.SummaryPath, "event summary", Encoding.UTF8);
@@ -5715,9 +5739,19 @@ static void ExecuteCompanionHostAdviceFlowTest(bool collectorModeEnabled)
             Assert(string.Equals(host.CurrentSnapshot.LatestAdvice.Status, "degraded", StringComparison.OrdinalIgnoreCase), "Expected unsupported manual advice to degrade.");
             Assert(host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains("unsupported-scene-for-compact-advisor:shop", StringComparer.Ordinal), "Expected unsupported-scene blocker for manual shop advice.");
 
+            var promptPacks = Directory.GetFiles(host.CurrentSnapshot.Paths.PromptPacksRoot!, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderBy(File.GetLastWriteTimeUtc)
+                .ToArray();
+            Assert(promptPacks.Length == 2, $"Expected automatic + no-call degraded prompt packs to both be preserved. actual={promptPacks.Length}");
+            var noCallPromptPack = JsonSerializer.Deserialize<AdviceInputPack>(File.ReadAllText(promptPacks[^1]), ConfigurationLoader.JsonOptions)
+                ?? throw new InvalidOperationException("Expected manual unsupported prompt pack.");
+            Assert(string.Equals(noCallPromptPack.CurrentScreen, "shop", StringComparison.Ordinal), $"Expected unsupported prompt pack to preserve shop screen, got {noCallPromptPack.CurrentScreen}.");
+            Assert(noCallPromptPack.CompactInput is null, "Expected unsupported shop prompt pack to stay on the no-call degraded carrier without compact input.");
+
             var retryRequested = host.RequestRetryLastAdviceAsync().GetAwaiter().GetResult();
             Assert(retryRequested, "Expected retry-last advice request to succeed after a prior advice run.");
-            Assert(fakeClient.RequestCount == 2, "Expected retry-last advice to invoke the last model-backed prompt pack.");
+            Assert(fakeClient.RequestCount == 1, "Expected retry-last advice on a no-call degraded prompt pack to stay no-call.");
+            Assert(host.CurrentSnapshot.LatestAdvice is not null && host.CurrentSnapshot.LatestAdvice.DecisionBlockers.Contains("unsupported-scene-for-compact-advisor:shop", StringComparer.Ordinal), "Expected retry-last to preserve the unsupported-scene degraded response.");
 
             var runRoot = host.CurrentSnapshot.Paths.RunRoot;
             Assert(!string.IsNullOrWhiteSpace(runRoot) && Directory.Exists(runRoot!), "Expected companion host to materialize a per-run artifact root.");
@@ -5808,6 +5842,55 @@ static void TestCompanionHostManualRewardCompactAdviceFlow()
             Assert(promptPack.CompactInput is not null, "Expected manual reward prompt pack to carry compact input.");
             Assert(string.Equals(promptPack.CompactInput.SceneType, "reward", StringComparison.Ordinal), $"Expected compact reward scene type, got {promptPack.CompactInput.SceneType}.");
             Assert(promptPack.CompactInput.VisibleOptions.Select(option => option.Label).Contains(host.CurrentSnapshot.LatestAdvice.RecommendedChoiceLabel, StringComparer.Ordinal), "Expected reward recommendation to exact-match a visible compact option label.");
+        }
+        finally
+        {
+            host.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestCompanionHostAutomaticCompactAdviceRemainsManualOnly()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateCompanionHostTestConfiguration(root, collectorModeEnabled: false);
+        var scenario = CreateDefaultRewardScenario();
+        SeedRewardKnowledgeCatalog(root);
+
+        var layout = LiveExportPathResolver.Resolve(configuration.GamePaths, configuration.LiveExport);
+        Directory.CreateDirectory(layout.LiveRoot);
+        var snapshot = CreateRewardSnapshotForScenario(scenario, "auto-reward-compact-run");
+        var session = new LiveExportSession("auto-reward-session", snapshot.RunId, "active", DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow, 2, layout.LiveRoot, "choice-list-presented", "rewards");
+        var events = CreateRewardEventsForScenario(snapshot.RunId, scenario);
+
+        WriteJson(layout.SnapshotPath, snapshot);
+        WriteJson(layout.SessionPath, session);
+        File.WriteAllText(layout.SummaryPath, "automatic reward summary", Encoding.UTF8);
+        Directory.CreateDirectory(Path.GetDirectoryName(layout.EventsPath)!);
+        File.WriteAllText(layout.EventsPath, string.Join(Environment.NewLine, events.Select(SerializeNdjson)) + Environment.NewLine, Encoding.UTF8);
+        File.WriteAllText(layout.RawObservationsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ScreenTransitionsPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceCandidatesPath, string.Empty, Encoding.UTF8);
+        File.WriteAllText(layout.ChoiceDecisionsPath, string.Empty, Encoding.UTF8);
+        Directory.CreateDirectory(layout.SemanticSnapshotsRoot);
+
+        var fakeClient = new FakeCodexSessionClient();
+        var host = new CompanionHost(configuration, root, fakeClient);
+        try
+        {
+            host.RefreshAsync().GetAwaiter().GetResult();
+            Assert(fakeClient.RequestCount == 0, "Expected reward/event compact MVP scenes to stay manual-only even when auto advice is enabled.");
+            Assert(host.CurrentSnapshot.LatestAdvice is null, "Expected skipped automatic compact advice not to publish a legacy response.");
+
+            var manualRequested = host.RequestManualAdviceAsync().GetAwaiter().GetResult();
+            Assert(manualRequested, "Expected manual reward advice to remain available after automatic compact gating skips the scene.");
+            Assert(fakeClient.RequestCount == 1, "Expected manual reward advice to invoke codex through the compact path.");
         }
         finally
         {

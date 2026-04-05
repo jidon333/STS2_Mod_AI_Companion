@@ -43,12 +43,19 @@ public sealed class RewardEventCompactAdvisorInputBuilder
             return new CompactAdvisorBuildResult(false, null, Array.Empty<string>(), decisionBlockers.ToArray(), "reward-compact-input-insufficient");
         }
 
-        foreach (var label in options
-                     .GroupBy(option => option.Label, StringComparer.Ordinal)
-                     .Where(group => group.Count() > 1)
-                     .Select(group => group.Key))
+        var duplicateLabels = options
+            .GroupBy(option => option.Label, StringComparer.Ordinal)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        foreach (var label in duplicateLabels)
         {
             decisionBlockers.Add($"reward-duplicate-option-label:{label}");
+        }
+
+        if (duplicateLabels.Length > 0)
+        {
+            decisionBlockers.Add("reward-compact-input-insufficient");
         }
 
         var rewardOptionSet = rewardOptionSetBuilder.Build(runState);
@@ -135,6 +142,11 @@ public sealed class RewardEventCompactAdvisorInputBuilder
         foreach (var label in duplicateLabels)
         {
             decisionBlockers.Add($"event-duplicate-option-label:{label}");
+        }
+
+        if (duplicateLabels.Length > 0)
+        {
+            decisionBlockers.Add("event-compact-input-insufficient");
         }
 
         var optionFacts = new List<EventCompactOptionFact>();

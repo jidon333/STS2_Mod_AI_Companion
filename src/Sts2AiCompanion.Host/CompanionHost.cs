@@ -174,7 +174,27 @@ public sealed partial class CompanionHost : IAsyncDisposable
             if (_autoAdviceEnabled)
             {
                 var autoTrigger = DetermineAutomaticTrigger(events);
-                if (autoTrigger is not null) StartAutomaticAdvice(runState, autoTrigger, cancellationToken);
+                if (autoTrigger is not null)
+                {
+                    if (IsCompactAdvisorScene(runState.NormalizedState.Scene.SceneType))
+                    {
+                        WriteCodexTrace(
+                            EnsureRunArtifacts(runState.Snapshot.RunId),
+                            new
+                            {
+                                kind = "request-skipped",
+                                trigger = autoTrigger.Kind,
+                                manual = autoTrigger.Manual,
+                                requestedAt = autoTrigger.RequestedAt,
+                                reason = "compact-advisor-manual-only",
+                                scene = NormalizeCompactAdvisorSceneType(runState.NormalizedState.Scene.SceneType),
+                            });
+                    }
+                    else
+                    {
+                        StartAutomaticAdvice(runState, autoTrigger, cancellationToken);
+                    }
+                }
             }
             _latestCollectorStatus = _diagnosticsService.UpdateArtifacts(runState, _latestKnowledgeSlice, _latestAdvice, _sessionState);
             PublishSnapshot(CreateSnapshot("running", "Monitoring live export updates."));
@@ -263,6 +283,11 @@ public sealed partial class CompanionHost : IAsyncDisposable
         if (inputPackOverride is not null)
         {
             inputPack = inputPackOverride;
+            if (TryResolveCompactNoCallReason(runState, inputPack, out var noCallReason))
+            {
+                CompleteNoCallAdviceResult(runState, trigger, inputPack, retrySourcePromptPack, noCallReason);
+                return;
+            }
         }
         else
         {
@@ -272,32 +297,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
             if (trigger.Manual && compactResult is { Supported: false })
             {
                 var fallbackInputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult.CompactInput);
-                var fallbackPaths = EnsureRunArtifacts(runState.Snapshot.RunId);
-                var fallbackRequestId = Guid.NewGuid().ToString("N");
-                var fallbackStartedAt = DateTimeOffset.UtcNow;
-                WriteCodexTrace(fallbackPaths, new
-                {
-                    kind = "request-started",
-                    requestId = fallbackRequestId,
-                    trigger = trigger.Kind,
-                    manual = trigger.Manual,
-                    requestedAt = trigger.RequestedAt,
-                    startedAt = fallbackStartedAt,
-                    existingSessionId = _sessionState?.SessionId,
-                    retrySourcePromptPack,
-                    compactInput = fallbackInputPack.CompactInput is not null,
-                    compactUnsupportedReason = compactResult.ReasonCode,
-                    knowledgeEntriesUsedCount = fallbackInputPack.KnowledgeEntries.Count,
-                    knowledgeReasons = fallbackInputPack.KnowledgeReasons,
-                });
-                var skippedResponse = compactResult.ReasonCode.StartsWith("unsupported-scene-for-compact-advisor:", StringComparison.Ordinal)
-                    ? FoundationCompactAdvisorFallbackFactory.CreateUnsupportedScene(fallbackInputPack.ToFoundation(), runState.NormalizedState.Scene.SceneType).ToHost()
-                    : FoundationCompactAdvisorFallbackFactory.CreateInsufficientCompactInput(
-                        fallbackInputPack.ToFoundation(),
-                        compactResult.ReasonCode,
-                        compactResult.MissingInformation,
-                        compactResult.DecisionBlockers).ToHost();
-                CompleteAdviceResult(runState, trigger, fallbackInputPack, retrySourcePromptPack, fallbackRequestId, fallbackStartedAt, fallbackPaths, skippedResponse, null, modelCall: false);
+                CompleteNoCallAdviceResult(runState, trigger, fallbackInputPack, retrySourcePromptPack, compactResult.ReasonCode);
                 return;
             }
 
@@ -370,6 +370,114 @@ public sealed partial class CompanionHost : IAsyncDisposable
         var paths = CompanionPathResolver.Resolve(_configuration, _workspaceRoot, _currentRunId);
         if (string.IsNullOrWhiteSpace(paths.PromptPacksRoot) || !Directory.Exists(paths.PromptPacksRoot)) return null;
         return Directory.GetFiles(paths.PromptPacksRoot, "*.json", SearchOption.TopDirectoryOnly).OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
+    }
+
+    private void CompleteNoCallAdviceResult(
+        CompanionRunState runState,
+        AdviceTrigger trigger,
+        AdviceInputPack inputPack,
+        string? retrySourcePromptPack,
+        string reasonCode)
+    {
+        var paths = EnsureRunArtifacts(runState.Snapshot.RunId);
+        var promptPath = retrySourcePromptPack ?? Path.Combine(paths.PromptPacksRoot!, $"{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{trigger.Kind}.json");
+        if (retrySourcePromptPack is null)
+        {
+            WriteJson(promptPath, inputPack);
+        }
+
+        _lastPromptPackPath = promptPath;
+
+        var requestId = Guid.NewGuid().ToString("N");
+        var startedAt = DateTimeOffset.UtcNow;
+        WriteCodexTrace(paths, new
+        {
+            kind = "request-started",
+            requestId,
+            trigger = trigger.Kind,
+            manual = trigger.Manual,
+            requestedAt = trigger.RequestedAt,
+            startedAt,
+            existingSessionId = _sessionState?.SessionId,
+            retrySourcePromptPack,
+            compactInput = inputPack.CompactInput is not null,
+            compactUnsupportedReason = reasonCode,
+            promptPackPath = promptPath,
+            knowledgeEntriesUsedCount = inputPack.KnowledgeEntries.Count,
+            knowledgeReasons = inputPack.KnowledgeReasons,
+        });
+
+        var skippedResponse = CreateCompactNoCallResponse(runState, inputPack, reasonCode);
+        CompleteAdviceResult(runState, trigger, inputPack, retrySourcePromptPack, requestId, startedAt, paths, skippedResponse, null, modelCall: false);
+    }
+
+    private static AdviceResponse CreateCompactNoCallResponse(
+        CompanionRunState runState,
+        AdviceInputPack inputPack,
+        string reasonCode)
+    {
+        return reasonCode.StartsWith("unsupported-scene-for-compact-advisor:", StringComparison.Ordinal)
+            ? FoundationCompactAdvisorFallbackFactory.CreateUnsupportedScene(inputPack.ToFoundation(), runState.NormalizedState.Scene.SceneType).ToHost()
+            : FoundationCompactAdvisorFallbackFactory.CreateInsufficientCompactInput(
+                inputPack.ToFoundation(),
+                reasonCode,
+                inputPack.CompactInput?.MissingInformation ?? Array.Empty<string>(),
+                inputPack.CompactInput?.DecisionBlockers ?? Array.Empty<string>()).ToHost();
+    }
+
+    private static bool TryResolveCompactNoCallReason(
+        CompanionRunState runState,
+        AdviceInputPack inputPack,
+        out string reasonCode)
+    {
+        var sceneType = NormalizeCompactAdvisorSceneType(inputPack.CompactInput?.SceneType ?? runState.NormalizedState.Scene.SceneType ?? inputPack.CurrentScreen);
+        if (!IsCompactAdvisorScene(sceneType))
+        {
+            reasonCode = $"unsupported-scene-for-compact-advisor:{sceneType}";
+            return true;
+        }
+
+        var blockers = inputPack.CompactInput?.DecisionBlockers ?? Array.Empty<string>();
+        var blockingReason = blockers.FirstOrDefault(IsCompactNoCallBlocker);
+        if (!string.IsNullOrWhiteSpace(blockingReason))
+        {
+            reasonCode = blockingReason;
+            return true;
+        }
+
+        reasonCode = string.Empty;
+        return false;
+    }
+
+    private static bool IsCompactNoCallBlocker(string blocker)
+    {
+        if (string.IsNullOrWhiteSpace(blocker))
+        {
+            return false;
+        }
+
+        return string.Equals(blocker, "reward-compact-input-insufficient", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(blocker, "event-compact-input-insufficient", StringComparison.OrdinalIgnoreCase)
+            || blocker.StartsWith("reward-duplicate-option-label:", StringComparison.OrdinalIgnoreCase)
+            || blocker.StartsWith("event-duplicate-option-label:", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCompactAdvisorScene(string? sceneType)
+    {
+        var normalized = NormalizeCompactAdvisorSceneType(sceneType);
+        return normalized is "reward" or "event";
+    }
+
+    private static string NormalizeCompactAdvisorSceneType(string? sceneType)
+    {
+        if (string.IsNullOrWhiteSpace(sceneType))
+        {
+            return "unknown";
+        }
+
+        return string.Equals(sceneType, "rewards", StringComparison.OrdinalIgnoreCase)
+            ? "reward"
+            : sceneType.Trim().ToLowerInvariant();
     }
 
     private static bool IsAutomaticAdviceTriggerKind(string kind)
