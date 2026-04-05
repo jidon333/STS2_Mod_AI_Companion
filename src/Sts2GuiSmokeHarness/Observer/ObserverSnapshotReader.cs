@@ -37,54 +37,17 @@ sealed class ObserverSnapshotReader
     {
         JsonDocument? stateDocument = TryReadJson(_liveLayout.SnapshotPath);
         JsonDocument? inventoryDocument = TryReadJson(_harnessLayout.InventoryPath);
-        var provenanceInput = ScreenProvenanceResolver.CreateFromObserverDocuments(stateDocument, inventoryDocument);
-        var provenance = ScreenProvenanceResolver.Resolve(provenanceInput);
+        var provenance = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromObserverDocuments(stateDocument, inventoryDocument));
         var eventLines = includeEventTail ? TryReadTailCached(_liveLayout.EventsPath, 10) : null;
         var stateCapturedAt = TryReadDateTimeOffset(stateDocument?.RootElement, "capturedAt");
         var inventoryCapturedAt = TryReadDateTimeOffset(inventoryDocument?.RootElement, "capturedAt");
-
-        var inventoryCompatibilityCurrentScreen = provenanceInput.InventoryCompatibilityCurrentScreen;
-        var compatibilityCurrentScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatibilityCurrentScreen")
-                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatLogicalScreen")
-                                         ?? inventoryCompatibilityCurrentScreen;
-        var compatibilityLogicalScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatLogicalScreen")
-                                         ?? TryReadString(inventoryDocument?.RootElement, "compatibilityLogicalScreen")
-                                         ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneType");
-        var rawCurrentScreen = provenance.RawCurrentScreen;
-        var rawObservedScreen = provenance.RawObservedScreen;
-        var publishedCurrentScreen = provenance.PublishedCurrentScreen;
-        var currentScreen = provenance.ResolvedCurrentScreen;
-        var publishedVisibleScreen = provenance.PublishedVisibleScreen;
         var snapshotVersion = TryReadInt64(stateDocument?.RootElement, "version");
-        var compatibilityVisibleScreen = TryReadNestedString(stateDocument?.RootElement, "meta", "compatibilityVisibleScreen")
-                                         ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScreen")
-                                         ?? TryReadNestedString(stateDocument?.RootElement, "meta", "compatVisibleScreen")
-                                         ?? TryReadString(inventoryDocument?.RootElement, "compatibilityVisibleScene");
-        var visibleScreen = provenance.ResolvedVisibleScreen;
         var inCombat = TryReadBool(stateDocument?.RootElement, "encounter", "inCombat");
         var capturedAt = stateCapturedAt
                          ?? inventoryCapturedAt;
         var inventoryId = inventoryDocument is null
             ? null
             : TryReadString(inventoryDocument.RootElement, "inventoryId");
-        var inventoryPublishedSceneReady = TryReadBool(inventoryDocument?.RootElement, "publishedSceneReady");
-        var compatibilitySceneReady = TryReadNestedBool(stateDocument?.RootElement, "meta", "compatSceneReady")
-                                      ?? TryReadBool(inventoryDocument?.RootElement, "compatibilitySceneReady");
-        var publishedSceneReady = provenance.PublishedSceneReady
-                                  ?? inventoryPublishedSceneReady;
-        var sceneReady = provenance.ResolvedSceneReady;
-        var inventoryPublishedSceneAuthority = TryReadString(inventoryDocument?.RootElement, "publishedSceneAuthority");
-        var compatibilitySceneAuthority = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneAuthority")
-                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneAuthority");
-        var publishedSceneAuthority = provenance.PublishedSceneAuthority
-                                      ?? inventoryPublishedSceneAuthority;
-        var sceneAuthority = provenance.ResolvedSceneAuthority;
-        var inventoryPublishedSceneStability = TryReadString(inventoryDocument?.RootElement, "publishedSceneStability");
-        var compatibilitySceneStability = TryReadNestedString(stateDocument?.RootElement, "meta", "compatSceneStability")
-                                          ?? TryReadString(inventoryDocument?.RootElement, "compatibilitySceneStability");
-        var publishedSceneStability = provenance.PublishedSceneStability
-                                      ?? inventoryPublishedSceneStability;
-        var sceneStability = provenance.ResolvedSceneStability;
         var sceneEpisodeId = TryReadString(inventoryDocument?.RootElement, "sceneEpisodeId")
                              ?? TryReadNestedString(stateDocument?.RootElement, "meta", "screen-episode");
         var encounterKind = TryReadNestedString(stateDocument?.RootElement, "encounter", "kind");
@@ -101,47 +64,26 @@ sealed class ObserverSnapshotReader
             stateCapturedAt,
             inventoryCapturedAt);
         var meta = ReadMetaDictionary(stateDocument);
-
-        return new ObserverState(
-            new ObserverSummary(
-                currentScreen,
-                visibleScreen,
-                inCombat,
-                capturedAt,
-                inventoryId,
-                sceneReady,
-                sceneAuthority,
-                sceneStability,
-                sceneEpisodeId,
-                encounterKind,
-                choiceExtractorPath,
-                playerCurrentHp,
-                playerMaxHp,
-                playerEnergy,
-                currentChoices,
-                eventLines ?? Array.Empty<string>(),
-                actionNodes,
-                choices,
-                combatHand)
-            {
-                SnapshotVersion = snapshotVersion,
-                RawCurrentScreen = rawCurrentScreen,
-                RawObservedScreen = rawObservedScreen,
-                PublishedCurrentScreen = publishedCurrentScreen,
-                PublishedVisibleScreen = publishedVisibleScreen,
-                PublishedSceneReady = publishedSceneReady,
-                PublishedSceneAuthority = publishedSceneAuthority,
-                PublishedSceneStability = publishedSceneStability,
-                CompatibilityCurrentScreen = compatibilityCurrentScreen,
-                CompatibilityVisibleScreen = compatibilityVisibleScreen,
-                CompatibilitySceneReady = compatibilitySceneReady,
-                CompatibilitySceneAuthority = compatibilitySceneAuthority,
-                CompatibilitySceneStability = compatibilitySceneStability,
-                Meta = meta,
-            },
+        return CreateObserverStateCore(
             stateDocument,
             inventoryDocument,
-            eventLines);
+            eventLines,
+            snapshotVersion,
+            provenance,
+            inCombat,
+            capturedAt,
+            inventoryId,
+            sceneEpisodeId,
+            encounterKind,
+            choiceExtractorPath,
+            playerCurrentHp,
+            playerMaxHp,
+            playerEnergy,
+            currentChoices,
+            actionNodes,
+            choices,
+            combatHand,
+            meta);
     }
 
     public static IReadOnlyList<ObserverChoice> ParseChoicesForTesting(JsonDocument? document)
@@ -152,34 +94,12 @@ sealed class ObserverSnapshotReader
     internal static ObserverState CreateReplayObserverState(JsonDocument stateDocument, string[]? eventLines = null)
     {
         var stateCapturedAt = TryReadDateTimeOffset(stateDocument.RootElement, "capturedAt");
-        var provenanceInput = ScreenProvenanceResolver.CreateFromObserverDocuments(stateDocument, null);
-        var provenance = ScreenProvenanceResolver.Resolve(provenanceInput);
+        var provenance = ScreenProvenanceResolver.Resolve(ScreenProvenanceResolver.CreateFromObserverDocuments(stateDocument, null));
         var inventoryDocument = (JsonDocument?)null;
-        var inventoryCompatibilityCurrentScreen = provenanceInput.InventoryCompatibilityCurrentScreen;
-        var compatibilityCurrentScreen = TryReadNestedString(stateDocument.RootElement, "meta", "compatibilityCurrentScreen")
-                                         ?? TryReadNestedString(stateDocument.RootElement, "meta", "compatLogicalScreen")
-                                         ?? inventoryCompatibilityCurrentScreen;
-        var rawCurrentScreen = provenance.RawCurrentScreen;
-        var rawObservedScreen = provenance.RawObservedScreen;
-        var publishedCurrentScreen = provenance.PublishedCurrentScreen;
-        var currentScreen = provenance.ResolvedCurrentScreen;
-        var publishedVisibleScreen = provenance.PublishedVisibleScreen;
         var snapshotVersion = TryReadInt64(stateDocument.RootElement, "version");
-        var compatibilityVisibleScreen = TryReadNestedString(stateDocument.RootElement, "meta", "compatibilityVisibleScreen")
-                                         ?? TryReadNestedString(stateDocument.RootElement, "meta", "compatVisibleScreen");
-        var visibleScreen = provenance.ResolvedVisibleScreen;
         var inCombat = TryReadBool(stateDocument.RootElement, "encounter", "inCombat");
         var capturedAt = stateCapturedAt;
         var inventoryId = (string?)null;
-        var compatibilitySceneReady = TryReadNestedBool(stateDocument.RootElement, "meta", "compatSceneReady");
-        var publishedSceneReady = provenance.PublishedSceneReady;
-        var sceneReady = provenance.ResolvedSceneReady;
-        var compatibilitySceneAuthority = TryReadNestedString(stateDocument.RootElement, "meta", "compatSceneAuthority");
-        var publishedSceneAuthority = provenance.PublishedSceneAuthority;
-        var sceneAuthority = provenance.ResolvedSceneAuthority;
-        var compatibilitySceneStability = TryReadNestedString(stateDocument.RootElement, "meta", "compatSceneStability");
-        var publishedSceneStability = provenance.PublishedSceneStability;
-        var sceneStability = provenance.ResolvedSceneStability;
         var sceneEpisodeId = TryReadNestedString(stateDocument.RootElement, "meta", "screen-episode");
         var encounterKind = TryReadNestedString(stateDocument.RootElement, "encounter", "kind");
         var choiceExtractorPath = TryReadNestedString(stateDocument.RootElement, "meta", "choiceExtractorPath");
@@ -191,17 +111,59 @@ sealed class ObserverSnapshotReader
         var choices = ReadChoices(stateDocument);
         var actionNodes = BuildActionNodesFromChoices(choices);
         var meta = ReadMetaDictionary(stateDocument);
+        return CreateObserverStateCore(
+            stateDocument,
+            inventoryDocument,
+            eventLines,
+            snapshotVersion,
+            provenance,
+            inCombat,
+            capturedAt,
+            inventoryId,
+            sceneEpisodeId,
+            encounterKind,
+            choiceExtractorPath,
+            playerCurrentHp,
+            playerMaxHp,
+            playerEnergy,
+            currentChoices,
+            actionNodes,
+            choices,
+            combatHand,
+            meta);
+    }
 
+    private static ObserverState CreateObserverStateCore(
+        JsonDocument? stateDocument,
+        JsonDocument? inventoryDocument,
+        string[]? eventLines,
+        long? snapshotVersion,
+        ScreenProvenanceResult provenance,
+        bool? inCombat,
+        DateTimeOffset? capturedAt,
+        string? inventoryId,
+        string? sceneEpisodeId,
+        string? encounterKind,
+        string? choiceExtractorPath,
+        int? playerCurrentHp,
+        int? playerMaxHp,
+        int? playerEnergy,
+        IReadOnlyList<string> currentChoices,
+        IReadOnlyList<ObserverActionNode> actionNodes,
+        IReadOnlyList<ObserverChoice> choices,
+        IReadOnlyList<ObservedCombatHandCard> combatHand,
+        IReadOnlyDictionary<string, string?> meta)
+    {
         return new ObserverState(
             new ObserverSummary(
-                currentScreen,
-                visibleScreen,
+                provenance.ResolvedCurrentScreen,
+                provenance.ResolvedVisibleScreen,
                 inCombat,
                 capturedAt,
                 inventoryId,
-                sceneReady,
-                sceneAuthority,
-                sceneStability,
+                provenance.ResolvedSceneReady,
+                provenance.ResolvedSceneAuthority,
+                provenance.ResolvedSceneStability,
                 sceneEpisodeId,
                 encounterKind,
                 choiceExtractorPath,
@@ -215,22 +177,22 @@ sealed class ObserverSnapshotReader
                 combatHand)
             {
                 SnapshotVersion = snapshotVersion,
-                RawCurrentScreen = rawCurrentScreen,
-                RawObservedScreen = rawObservedScreen,
-                PublishedCurrentScreen = publishedCurrentScreen,
-                PublishedVisibleScreen = publishedVisibleScreen,
-                PublishedSceneReady = publishedSceneReady,
-                PublishedSceneAuthority = publishedSceneAuthority,
-                PublishedSceneStability = publishedSceneStability,
-                CompatibilityCurrentScreen = compatibilityCurrentScreen,
-                CompatibilityVisibleScreen = compatibilityVisibleScreen,
-                CompatibilitySceneReady = compatibilitySceneReady,
-                CompatibilitySceneAuthority = compatibilitySceneAuthority,
-                CompatibilitySceneStability = compatibilitySceneStability,
+                RawCurrentScreen = provenance.RawCurrentScreen,
+                RawObservedScreen = provenance.RawObservedScreen,
+                PublishedCurrentScreen = provenance.PublishedCurrentScreen,
+                PublishedVisibleScreen = provenance.PublishedVisibleScreen,
+                PublishedSceneReady = provenance.PublishedSceneReady,
+                PublishedSceneAuthority = provenance.PublishedSceneAuthority,
+                PublishedSceneStability = provenance.PublishedSceneStability,
+                CompatibilityCurrentScreen = provenance.CompatibilityCurrentScreen,
+                CompatibilityVisibleScreen = provenance.CompatibilityVisibleScreen,
+                CompatibilitySceneReady = provenance.CompatibilitySceneReady,
+                CompatibilitySceneAuthority = provenance.CompatibilitySceneAuthority,
+                CompatibilitySceneStability = provenance.CompatibilitySceneStability,
                 Meta = meta,
             },
             stateDocument,
-            null,
+            inventoryDocument,
             eventLines);
     }
 

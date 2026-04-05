@@ -280,12 +280,36 @@ internal static partial class Program
             $"Observer reader currentScreen should stay aligned with shared resolver for {scenarioName}.");
         Assert(string.Equals(observer.VisibleScreen, resolved.ResolvedVisibleScreen, StringComparison.OrdinalIgnoreCase),
             $"Observer reader visibleScreen should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.RawCurrentScreen, resolved.RawCurrentScreen, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader raw current screen should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.RawObservedScreen, resolved.RawObservedScreen, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader raw observed screen should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.PublishedCurrentScreen, resolved.PublishedCurrentScreen, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader published current screen should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.PublishedVisibleScreen, resolved.PublishedVisibleScreen, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader published visible screen should stay aligned with shared resolver for {scenarioName}.");
         Assert(observer.SceneReady == resolved.ResolvedSceneReady,
             $"Observer reader sceneReady should stay aligned with shared resolver for {scenarioName}.");
+        Assert(observer.PublishedSceneReady == resolved.PublishedSceneReady,
+            $"Observer reader published sceneReady should stay aligned with shared resolver for {scenarioName}.");
         Assert(string.Equals(observer.SceneAuthority, resolved.ResolvedSceneAuthority, StringComparison.OrdinalIgnoreCase),
             $"Observer reader sceneAuthority should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.PublishedSceneAuthority, resolved.PublishedSceneAuthority, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader published sceneAuthority should stay aligned with shared resolver for {scenarioName}.");
         Assert(string.Equals(observer.SceneStability, resolved.ResolvedSceneStability, StringComparison.OrdinalIgnoreCase),
             $"Observer reader sceneStability should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.PublishedSceneStability, resolved.PublishedSceneStability, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader published sceneStability should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.CompatibilityCurrentScreen, resolved.CompatibilityCurrentScreen, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader compatibility current screen should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.CompatibilityVisibleScreen, resolved.CompatibilityVisibleScreen, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader compatibility visible screen should stay aligned with shared resolver for {scenarioName}.");
+        Assert(observer.CompatibilitySceneReady == resolved.CompatibilitySceneReady,
+            $"Observer reader compatibility sceneReady should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.CompatibilitySceneAuthority, resolved.CompatibilitySceneAuthority, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader compatibility sceneAuthority should stay aligned with shared resolver for {scenarioName}.");
+        Assert(string.Equals(observer.CompatibilitySceneStability, resolved.CompatibilitySceneStability, StringComparison.OrdinalIgnoreCase),
+            $"Observer reader compatibility sceneStability should stay aligned with shared resolver for {scenarioName}.");
 
         Assert(string.Equals(ObserverScreenProvenance.ControlFlowCurrentScreen(observer), resolved.ResolvedCurrentScreen, StringComparison.OrdinalIgnoreCase),
             $"Harness control-flow current screen should stay aligned with shared resolver for {scenarioName}.");
