@@ -10,6 +10,7 @@ using FoundationKnowledgeCatalogService = Sts2AiCompanion.Foundation.Knowledge.K
 using FoundationAdvicePromptBuilder = Sts2AiCompanion.Foundation.Reasoning.AdvicePromptBuilder;
 using FoundationAdviceResponseFinalizer = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.AdviceResponseFinalizer;
 using FoundationCompactAdvisorFallbackFactory = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.CompactAdvisorFallbackFactory;
+using FoundationCompactAdvisorScenePolicy = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.CompactAdvisorScenePolicy;
 using FoundationRewardEventCompactAdvisorInputBuilder = Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder;
 
 namespace Sts2AiCompanion.Host;
@@ -176,7 +177,7 @@ public sealed partial class CompanionHost : IAsyncDisposable
                 var autoTrigger = DetermineAutomaticTrigger(events);
                 if (autoTrigger is not null)
                 {
-                    if (IsCompactAdvisorScene(runState.NormalizedState.Scene.SceneType))
+                    if (IsCompactAdvisorManagedScene(runState.NormalizedState.Scene.SceneType))
                     {
                         WriteCodexTrace(
                             EnsureRunArtifacts(runState.Snapshot.RunId),
@@ -416,8 +417,15 @@ public sealed partial class CompanionHost : IAsyncDisposable
         AdviceInputPack inputPack,
         string reasonCode)
     {
+        var sceneType = NormalizeCompactAdvisorSceneType(inputPack.CompactInput?.SceneType ?? runState.NormalizedState.Scene.SceneType ?? inputPack.CurrentScreen);
         return reasonCode.StartsWith("unsupported-scene-for-compact-advisor:", StringComparison.Ordinal)
             ? FoundationCompactAdvisorFallbackFactory.CreateUnsupportedScene(inputPack.ToFoundation(), runState.NormalizedState.Scene.SceneType).ToHost()
+            : sceneType is "combat" || reasonCode.StartsWith("combat-", StringComparison.OrdinalIgnoreCase)
+                ? FoundationCompactAdvisorFallbackFactory.CreateCombatPreview(
+                    inputPack.ToFoundation(),
+                    reasonCode,
+                    inputPack.CompactInput?.MissingInformation ?? Array.Empty<string>(),
+                    inputPack.CompactInput?.DecisionBlockers ?? Array.Empty<string>()).ToHost()
             : FoundationCompactAdvisorFallbackFactory.CreateInsufficientCompactInput(
                 inputPack.ToFoundation(),
                 reasonCode,
@@ -451,33 +459,22 @@ public sealed partial class CompanionHost : IAsyncDisposable
 
     private static bool IsCompactNoCallBlocker(string blocker)
     {
-        if (string.IsNullOrWhiteSpace(blocker))
-        {
-            return false;
-        }
-
-        return string.Equals(blocker, "reward-compact-input-insufficient", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(blocker, "event-compact-input-insufficient", StringComparison.OrdinalIgnoreCase)
-            || blocker.StartsWith("reward-duplicate-option-label:", StringComparison.OrdinalIgnoreCase)
-            || blocker.StartsWith("event-duplicate-option-label:", StringComparison.OrdinalIgnoreCase);
+        return FoundationCompactAdvisorScenePolicy.IsNoCallReason(blocker);
     }
 
     private static bool IsCompactAdvisorScene(string? sceneType)
     {
-        var normalized = NormalizeCompactAdvisorSceneType(sceneType);
-        return normalized is "reward" or "event";
+        return FoundationCompactAdvisorScenePolicy.IsCompactAdvisorScene(sceneType);
+    }
+
+    private static bool IsCompactAdvisorManagedScene(string? sceneType)
+    {
+        return IsCompactAdvisorScene(sceneType);
     }
 
     private static string NormalizeCompactAdvisorSceneType(string? sceneType)
     {
-        if (string.IsNullOrWhiteSpace(sceneType))
-        {
-            return "unknown";
-        }
-
-        return string.Equals(sceneType, "rewards", StringComparison.OrdinalIgnoreCase)
-            ? "reward"
-            : sceneType.Trim().ToLowerInvariant();
+        return FoundationCompactAdvisorScenePolicy.NormalizeSceneType(sceneType);
     }
 
     private static bool IsAutomaticAdviceTriggerKind(string kind)
