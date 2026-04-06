@@ -127,6 +127,7 @@ Run("advice prompt builder emits the required prompt sections", TestAdvicePrompt
 Run("advice prompt builder emits compact strategy principles section", TestCompactAdvicePromptBuilderStrategyPrinciples, failures);
 Run("reward option direct fact seam extracts visible card signals", TestRewardOptionDirectFacts, failures);
 Run("reward exact knowledge resolver prefers exact value and attribute matches", TestRewardExactKnowledgeResolver, failures);
+Run("reward knowledge fingerprint records catalog exact enrichment", TestRewardKnowledgeFingerprintCatalogEnrichment, failures);
 Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
 Run("reward compact advisor input builder canonicalizes live reward child-choice duplicates", TestRewardCompactAdvisorLiveChildChoiceCanonicalization, failures);
 Run("reward compact and deterministic builders ignore overlay helper rows", TestRewardCompactOverlayHelperRowCanonicalization, failures);
@@ -5332,6 +5333,82 @@ static void TestRewardExactKnowledgeResolver()
         var battleTranceMatch = resolver.Resolve(battleTranceFacts, boundedSlice, knowledgeService.CurrentCatalog);
         Assert(battleTranceMatch is not null, "Expected reward exact resolver to match battle-trance from bounded slice or catalog.");
         Assert(string.Equals(battleTranceMatch.Entry.Id, "battle-trance", StringComparison.OrdinalIgnoreCase), $"Expected battle-trance exact id match, got {battleTranceMatch.Entry.Id}.");
+
+        var l10nOnlyCatalog = new StaticKnowledgeCatalog(
+            DateTimeOffset.UtcNow,
+            new StaticKnowledgeMetadata(null, null, null, new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)),
+            new[]
+            {
+                new StaticKnowledgeEntry(
+                    "knowledge-entry-with-unrelated-id",
+                    "전혀 다른 카드명",
+                    "self-test",
+                    true,
+                    "테스트용 설명",
+                    new[] { "card" },
+                    new Dictionary<string, string?>
+                    {
+                        ["classId"] = "NOT_THE_CARD_ID",
+                        ["l10nKey"] = "I_AM_INVINCIBLE",
+                    },
+                    Array.Empty<StaticKnowledgeOption>()),
+            },
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>(),
+            Array.Empty<StaticKnowledgeEntry>());
+        var l10nOnlyFacts = extractor.Extract(new RewardOption(0, "reward-pick-card", "매칭되지 않는 라벨", "CARD.IAM_INVINCIBLE", "모호한 설명", false));
+        var l10nOnlyMatch = resolver.Resolve(l10nOnlyFacts, emptySlice, l10nOnlyCatalog);
+        Assert(l10nOnlyMatch is not null, "Expected reward exact resolver to match l10nKey independently of classId.");
+        Assert(string.Equals(l10nOnlyMatch.MatchKind, "l10nKey-collapsed", StringComparison.OrdinalIgnoreCase),
+            $"Expected l10nKey collapsed exact match, got {l10nOnlyMatch?.MatchKind ?? "<null>"}.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestRewardKnowledgeFingerprintCatalogEnrichment()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var scenario = new RewardScenarioDefinition(
+            "reward-catalog-fingerprint",
+            "reward-catalog-fingerprint-run",
+            new[]
+            {
+                new LiveExportCardSummary("Strike", "strike", 1, "Attack", false),
+                new LiveExportCardSummary("Defend", "defend", 1, "Skill", false),
+            },
+            new[]
+            {
+                new LiveExportChoiceSummary("reward-pick-card", "철의 파동", "CARD.IRON_WAVE", "모호한 설명"),
+                new LiveExportChoiceSummary("choice", "넘기기", "skip", "보상을 건너뜁니다."),
+            },
+            "철의 파동");
+        var runState = CreateRewardRunStateForScenario(scenario, $"{scenario.RunId}-facts");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var catalog = knowledgeService.ReloadIfChanged();
+        var factsBuilder = new RewardAssessmentFactsBuilder();
+        var optionSet = new RewardOptionSetBuilder().Build(ToFoundationRunState(runState));
+        var emptySlice = new Sts2AiCompanion.Foundation.Contracts.KnowledgeSlice(
+            Array.Empty<StaticKnowledgeEntry>(),
+            0,
+            Array.Empty<string>());
+        var facts = factsBuilder.Build(ToFoundationRunState(runState), emptySlice, optionSet, catalog);
+
+        Assert(facts is not null, "Expected reward assessment facts for catalog-enrichment fingerprint test.");
+        Assert(facts!.KnowledgeRefs.Contains("megacrit-sts2-core-models-cards-iron-wave", StringComparer.OrdinalIgnoreCase), "Expected reward facts to record the catalog enrichment ref.");
+        Assert(facts.KnowledgeFingerprint.Contains("catalog:megacrit-sts2-core-models-cards-iron-wave", StringComparison.OrdinalIgnoreCase),
+            $"Expected knowledge fingerprint to record catalog-backed enrichment. Actual={facts.KnowledgeFingerprint}");
+        Assert(!string.Equals(facts.KnowledgeFingerprint, "knowledge:none", StringComparison.Ordinal),
+            "Expected knowledge fingerprint to stop underreporting catalog-backed enrichments as knowledge:none.");
     }
     finally
     {

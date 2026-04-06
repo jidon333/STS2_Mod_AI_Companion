@@ -188,6 +188,7 @@ public sealed class RewardAssessmentFactsBuilder
         var antiSynergyHints = new List<string>();
         var missingInformation = new List<string>();
         var knowledgeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var knowledgeEvidenceRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var directFacts = _directFactExtractor.Extract(optionSet)
             .Where(facts => !facts.Option.IsSkipOption)
             .ToArray();
@@ -223,6 +224,7 @@ public sealed class RewardAssessmentFactsBuilder
                 if (usedKnowledge)
                 {
                     knowledgeRefs.Add(match.Entry.Id);
+                    knowledgeEvidenceRefs.Add(BuildKnowledgeEvidenceRef(match));
                 }
             }
 
@@ -262,7 +264,7 @@ public sealed class RewardAssessmentFactsBuilder
         var defensePressure = DescribePressure(blockTaggedCardCount, deckSize);
         var drawSupportLevel = DescribeSupport(drawTaggedCardCount);
         var energySupportLevel = DescribeSupport(energyTaggedCardCount);
-        var knowledgeFingerprint = BuildKnowledgeFingerprint(slice);
+        var knowledgeFingerprint = BuildKnowledgeFingerprint(slice, knowledgeEvidenceRefs);
         var factLines = new[]
         {
             $"deck_size={deckSize}",
@@ -376,14 +378,34 @@ public sealed class RewardAssessmentFactsBuilder
         };
     }
 
-    private static string BuildKnowledgeFingerprint(KnowledgeSlice slice)
+    private static string BuildKnowledgeFingerprint(
+        KnowledgeSlice slice,
+        IReadOnlyCollection<string> knowledgeEvidenceRefs)
     {
-        var ids = slice.Entries
+        var sliceIds = slice.Entries
             .Select(entry => entry.Id)
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        return ids.Length == 0 ? "knowledge:none" : $"knowledge:{string.Join("|", ids)}";
+        var evidenceIds = knowledgeEvidenceRefs
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (sliceIds.Length == 0 && evidenceIds.Length == 0)
+        {
+            return "knowledge:none";
+        }
+
+        var slicePart = sliceIds.Length == 0 ? "none" : string.Join("|", sliceIds);
+        var usedPart = evidenceIds.Length == 0 ? "none" : string.Join("|", evidenceIds);
+        return $"knowledge:slice={slicePart};used={usedPart}";
+    }
+
+    private static string BuildKnowledgeEvidenceRef(RewardKnowledgeMatch match)
+    {
+        var source = match.FromBoundedSlice ? "slice" : "catalog";
+        return $"{source}:{match.Entry.Id}";
     }
 
 }

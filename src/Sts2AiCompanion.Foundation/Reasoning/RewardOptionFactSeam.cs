@@ -16,6 +16,7 @@ public sealed record RewardOptionDirectFacts(
     string? NormalizedValueSeed,
     string? ClassIdSeed,
     string? L10nKeySeed,
+    string? CollapsedIdentitySeed,
     IReadOnlyList<string> NameSeeds);
 
 public sealed record RewardKnowledgeMatch(
@@ -41,6 +42,8 @@ public sealed class RewardOptionFactExtractor
         var sanitizedDescription = PromptTextSanitizer.SanitizeText(option.Description);
         var valueSeed = NormalizeValueSeed(option.Value);
         var classIdSeed = BuildClassKey(option.Value);
+        var l10nKeySeed = BuildL10nKey(option.Value);
+        var collapsedIdentitySeed = BuildCollapsedIdentityKey(option.Value);
         var nameSeeds = BuildNameSeeds(option.Label);
 
         return new RewardOptionDirectFacts(
@@ -54,7 +57,8 @@ public sealed class RewardOptionFactExtractor
             option.Value,
             valueSeed,
             classIdSeed,
-            classIdSeed,
+            l10nKeySeed,
+            collapsedIdentitySeed,
             nameSeeds);
     }
 
@@ -135,6 +139,42 @@ public sealed class RewardOptionFactExtractor
         return new string(builder).Trim('_');
     }
 
+    internal static string? BuildL10nKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var stripped = StripCardPrefix(value);
+        if (string.IsNullOrWhiteSpace(stripped))
+        {
+            return null;
+        }
+
+        return stripped.Trim().ToUpperInvariant().Replace('-', '_').Replace(' ', '_');
+    }
+
+    internal static string? BuildCollapsedIdentityKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var stripped = StripCardPrefix(value);
+        if (string.IsNullOrWhiteSpace(stripped))
+        {
+            return null;
+        }
+
+        return new string(stripped
+            .Trim()
+            .ToUpperInvariant()
+            .Where(char.IsLetterOrDigit)
+            .ToArray());
+    }
+
     private static string? StripCardPrefix(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -202,6 +242,7 @@ public sealed class RewardExactKnowledgeResolver
             directFacts.NormalizedValueSeed,
             directFacts.ClassIdSeed,
             directFacts.L10nKeySeed,
+            directFacts.CollapsedIdentitySeed,
             directFacts.NameSeeds);
     }
 
@@ -217,13 +258,16 @@ public sealed class RewardExactKnowledgeResolver
             ? Array.Empty<string>()
             : new[] { card.Name.Trim() };
         var classIdSeed = RewardOptionFactExtractor.BuildClassKey(card.Id);
+        var l10nKeySeed = RewardOptionFactExtractor.BuildL10nKey(card.Id);
+        var collapsedIdentitySeed = RewardOptionFactExtractor.BuildCollapsedIdentityKey(card.Id);
         return ResolveCore(
             boundedSlice.Entries,
             EnumerateCatalogEntries(catalog, boundedSlice.Entries),
             card.Id,
             RewardOptionFactExtractor.NormalizeValueSeed(card.Id),
             classIdSeed,
-            classIdSeed,
+            l10nKeySeed,
+            collapsedIdentitySeed,
             nameSeeds);
     }
 
@@ -234,16 +278,17 @@ public sealed class RewardExactKnowledgeResolver
         string? normalizedValueSeed,
         string? classIdSeed,
         string? l10nKeySeed,
+        string? collapsedIdentitySeed,
         IReadOnlyList<string> nameSeeds)
     {
         return FindByExactId(sliceEntries, rawValueSeed, true)
                ?? FindByExactId(catalogEntries, rawValueSeed, false)
                ?? FindByNormalizedEntryId(sliceEntries, normalizedValueSeed, true)
                ?? FindByNormalizedEntryId(catalogEntries, normalizedValueSeed, false)
-               ?? FindByAttribute(sliceEntries, "classId", classIdSeed, true)
-               ?? FindByAttribute(catalogEntries, "classId", classIdSeed, false)
-               ?? FindByAttribute(sliceEntries, "l10nKey", l10nKeySeed, true)
-               ?? FindByAttribute(catalogEntries, "l10nKey", l10nKeySeed, false)
+               ?? FindByAttribute(sliceEntries, "classId", classIdSeed, null, true)
+               ?? FindByAttribute(catalogEntries, "classId", classIdSeed, null, false)
+               ?? FindByAttribute(sliceEntries, "l10nKey", l10nKeySeed, collapsedIdentitySeed, true)
+               ?? FindByAttribute(catalogEntries, "l10nKey", l10nKeySeed, collapsedIdentitySeed, false)
                ?? FindByName(sliceEntries, nameSeeds, true)
                ?? FindByName(catalogEntries, nameSeeds, false);
     }
@@ -281,17 +326,38 @@ public sealed class RewardExactKnowledgeResolver
         IReadOnlyList<StaticKnowledgeEntry> entries,
         string key,
         string? seed,
+        string? collapsedSeed,
         bool fromBoundedSlice)
     {
-        if (string.IsNullOrWhiteSpace(seed))
+        if (string.IsNullOrWhiteSpace(seed) && string.IsNullOrWhiteSpace(collapsedSeed))
         {
             return null;
         }
 
-        var match = entries.FirstOrDefault(entry =>
-            entry.Attributes.TryGetValue(key, out var value)
-            && string.Equals(value, seed, StringComparison.OrdinalIgnoreCase));
-        return match is null ? null : new RewardKnowledgeMatch(match, key, fromBoundedSlice);
+        if (!string.IsNullOrWhiteSpace(seed))
+        {
+            var exactMatch = entries.FirstOrDefault(entry =>
+                entry.Attributes.TryGetValue(key, out var value)
+                && string.Equals(value, seed, StringComparison.OrdinalIgnoreCase));
+            if (exactMatch is not null)
+            {
+                return new RewardKnowledgeMatch(exactMatch, key, fromBoundedSlice);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(collapsedSeed))
+        {
+            var collapsedMatch = entries.FirstOrDefault(entry =>
+                entry.Attributes.TryGetValue(key, out var value)
+                && !string.IsNullOrWhiteSpace(value)
+                && string.Equals(RewardOptionFactExtractor.BuildCollapsedIdentityKey(value), collapsedSeed, StringComparison.OrdinalIgnoreCase));
+            if (collapsedMatch is not null)
+            {
+                return new RewardKnowledgeMatch(collapsedMatch, $"{key}-collapsed", fromBoundedSlice);
+            }
+        }
+
+        return null;
     }
 
     private static RewardKnowledgeMatch? FindByName(
