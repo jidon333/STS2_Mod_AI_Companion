@@ -111,8 +111,12 @@ internal sealed class CombatCompactPreviewBuilder
 
     private static IReadOnlyList<CompactAdvisorOption> BuildVisibleOptions(IReadOnlyList<LiveExportChoiceSummary> snapshotChoices)
     {
-        return snapshotChoices
+        return CompactAdvisorBuilderShared.SanitizeSnapshotChoices(snapshotChoices)
             .Where(IsPreviewVisibleChoice)
+            .GroupBy(
+                choice => $"{choice.Kind}|{choice.Label}|{choice.Value ?? string.Empty}",
+                StringComparer.OrdinalIgnoreCase)
+            .Select(static group => group.First())
             .Select(ToCombatOption)
             .ToArray();
     }

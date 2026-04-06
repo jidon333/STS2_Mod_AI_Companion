@@ -1,4 +1,5 @@
 using Sts2AiCompanion.Foundation.Contracts;
+using Sts2AiCompanion.Foundation.State;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
 
@@ -13,10 +14,11 @@ internal static class CompactAdvisorBuilderShared
         IReadOnlyList<CompanionChoiceItem> sourceItems,
         IReadOnlyList<LiveExportChoiceSummary> snapshotChoices)
     {
+        var canonicalSnapshotChoices = SanitizeSnapshotChoices(snapshotChoices);
         return sourceItems
             .Select(item =>
             {
-                var snapshotChoice = MatchSnapshotChoice(snapshotChoices, item);
+                var snapshotChoice = MatchSnapshotChoice(canonicalSnapshotChoices, item);
                 return new CompactAdvisorOption(
                     item.Kind,
                     item.Label,
@@ -26,6 +28,12 @@ internal static class CompactAdvisorBuilderShared
                     BuildOptionTags(item, snapshotChoice));
             })
             .ToArray();
+    }
+
+    public static IReadOnlyList<LiveExportChoiceSummary> SanitizeSnapshotChoices(
+        IReadOnlyList<LiveExportChoiceSummary> snapshotChoices)
+    {
+        return CompanionSceneNormalizer.SanitizeChoices(snapshotChoices);
     }
 
     public static IReadOnlyList<CompactKnowledgeEntry> FilterKnowledgeEntries(

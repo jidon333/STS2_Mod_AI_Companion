@@ -109,12 +109,13 @@ internal sealed class EventCompactInputBuilder
 
     private static IReadOnlyList<EventVisibleOptionSource> BuildVisibleOptions(CompanionRunState runState)
     {
-        var eventChoices = runState.Snapshot.CurrentChoices
+        var snapshotChoices = CompactAdvisorBuilderShared.SanitizeSnapshotChoices(runState.Snapshot.CurrentChoices);
+        var eventChoices = snapshotChoices
             .Where(IsEventChoice)
             .ToArray();
         if (eventChoices.Length == 0)
         {
-            return CompactAdvisorBuilderShared.BuildVisibleOptions(GetEventSourceItems(runState), runState.Snapshot.CurrentChoices)
+            return CompactAdvisorBuilderShared.BuildVisibleOptions(GetEventSourceItems(runState), snapshotChoices)
                 .Select(static option => new EventVisibleOptionSource(option, null))
                 .ToArray();
         }

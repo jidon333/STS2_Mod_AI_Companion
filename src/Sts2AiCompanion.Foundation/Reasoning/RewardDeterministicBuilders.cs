@@ -1,4 +1,5 @@
 using Sts2AiCompanion.Foundation.Contracts;
+using Sts2AiCompanion.Foundation.State;
 using Sts2ModKit.Core.Knowledge;
 using Sts2ModKit.Core.LiveExport;
 
@@ -82,7 +83,8 @@ public sealed class RewardOptionSetBuilder
     internal static IReadOnlyList<LiveExportChoiceSummary> GetCanonicalCardRewardSnapshotChoices(
         IReadOnlyList<LiveExportChoiceSummary> snapshotChoices)
     {
-        var rewardPickChoices = snapshotChoices
+        var sanitizedChoices = CompanionSceneNormalizer.SanitizeChoices(snapshotChoices);
+        var rewardPickChoices = sanitizedChoices
             .Where(IsRewardPickChoice)
             .GroupBy(
                 choice => $"{choice.Kind}|{choice.Label}|{choice.Value ?? string.Empty}",
@@ -95,7 +97,7 @@ public sealed class RewardOptionSetBuilder
         }
 
         var canonicalChoices = new List<LiveExportChoiceSummary>(rewardPickChoices);
-        var skipChoice = SelectCanonicalSkipChoice(snapshotChoices);
+        var skipChoice = SelectCanonicalSkipChoice(sanitizedChoices);
         if (skipChoice is not null)
         {
             canonicalChoices.Add(skipChoice);

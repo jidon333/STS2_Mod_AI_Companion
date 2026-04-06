@@ -124,13 +124,17 @@ Run("advice prompt builder emits the required prompt sections", TestAdvicePrompt
 Run("advice prompt builder emits compact strategy principles section", TestCompactAdvicePromptBuilderStrategyPrinciples, failures);
 Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
 Run("reward compact advisor input builder canonicalizes live reward child-choice duplicates", TestRewardCompactAdvisorLiveChildChoiceCanonicalization, failures);
+Run("reward compact and deterministic builders ignore overlay helper rows", TestRewardCompactOverlayHelperRowCanonicalization, failures);
 Run("event compact advisor input builder extracts explicit option facts and fails closed on duplicates", TestEventCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder respects generic fallback ordering", TestEventCompactFallbackOrdering, failures);
+Run("event compact advisor input builder ignores overlay helper rows", TestEventCompactOverlayHelperRowCanonicalization, failures);
 Run("event compact advisor input builder keeps knowledge slice strict and event-local", TestEventCompactKnowledgeFiltering, failures);
 Run("event compact advisor input builder can keep knowledge slice empty when exact event-local matches are absent", TestEventCompactKnowledgeCanStayEmpty, failures);
 Run("event compact prompt allows explicit target-filter events to recommend with deck summary", TestCompactAdvicePromptBuilder, failures);
 Run("shop compact advisor input builder extracts purchase counts and fails closed on duplicates", TestShopCompactAdvisorInputBuilder, failures);
+Run("shop compact advisor input builder ignores overlay helper rows and exact duplicates", TestShopCompactOverlayHelperRowCanonicalization, failures);
 Run("combat compact preview builder captures current facts and stays preview-only", TestCombatCompactPreviewBuilder, failures);
+Run("combat compact preview builder ignores overlay helper rows and exact duplicates", TestCombatCompactPreviewOverlayHelperRowCanonicalization, failures);
 Run("reward deterministic builders are reproducible", TestRewardDeterministicBuilders, failures);
 Run("reward deterministic layer stays off for non-card rewards", TestRewardNonCardFallback, failures);
 Run("reward deterministic layer falls back outside reward scenes", TestRewardDeterministicFallback, failures);
@@ -5387,6 +5391,96 @@ static void TestRewardCompactAdvisorLiveChildChoiceCanonicalization()
     }
 }
 
+static void TestRewardCompactOverlayHelperRowCanonicalization()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var liveLikeScenario = new RewardScenarioDefinition(
+            "reward-live-overlay-helper",
+            "reward-live-overlay-helper-run",
+            new[]
+            {
+                new LiveExportCardSummary("타격", "CARD.STRIKE", 1, "Attack", false),
+                new LiveExportCardSummary("타격", "CARD.STRIKE", 1, "Attack", false),
+                new LiveExportCardSummary("수비", "CARD.DEFEND", 1, "Skill", false),
+            },
+            new[]
+            {
+                new LiveExportChoiceSummary("reward-pick-card", "철의 파동", "CARD.IRON_WAVE", "방어도를 5 얻습니다. 피해를 5 줍니다.")
+                {
+                    BindingKind = "card-selection-card",
+                    BindingId = "reward-pick",
+                    Enabled = true,
+                    SemanticHints = new[] { "card-selection:reward-pick", "reward-pick" },
+                },
+                new LiveExportChoiceSummary("reward-pick-card", "갈취", "CARD.PILLAGE", "피해를 6 줍니다. 공격이 아닌 카드를 뽑을 때까지 카드를 뽑습니다.")
+                {
+                    BindingKind = "card-selection-card",
+                    BindingId = "reward-pick",
+                    Enabled = true,
+                    SemanticHints = new[] { "card-selection:reward-pick", "reward-pick" },
+                },
+                new LiveExportChoiceSummary("reward-pick-card", "전투의 북소리", "CARD.DRUM_OF_BATTLE", "카드를 2장 뽑습니다. 내 턴 시작 시, 뽑을 카드 더미 맨 위의 카드를 소멸시킵니다.")
+                {
+                    BindingKind = "card-selection-card",
+                    BindingId = "reward-pick",
+                    Enabled = true,
+                    SemanticHints = new[] { "card-selection:reward-pick", "reward-pick" },
+                },
+                new LiveExportChoiceSummary("reward-pick-card", "Dismisser", "overlay", "Overlay helper")
+                {
+                    BindingKind = "card-selection-card",
+                    BindingId = "reward-pick",
+                    Enabled = true,
+                    SemanticHints = new[] { "card-selection:reward-pick", "reward-pick" },
+                },
+                new LiveExportChoiceSummary("card", "덱에 추가할 카드를 선택하세요.", "덱에 추가할 카드를 선택하세요.", "덱에 추가할 카드를 선택하세요.")
+                {
+                    BindingKind = "reward-type",
+                    BindingId = "CardReward",
+                    SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                },
+                new LiveExportChoiceSummary("choice", "넘기기", null, "넘기기"),
+                new LiveExportChoiceSummary("card", "넘기기", "ui_cancel", "넘기기")
+                {
+                    BindingKind = "reward-type",
+                    BindingId = "CardReward",
+                    SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                },
+            },
+            "갈취");
+        var runState = CreateRewardRunStateForScenario(liveLikeScenario, $"{liveLikeScenario.RunId}-compact");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var optionSet = new RewardOptionSetBuilder().Build(ToFoundationRunState(runState));
+        var compactResult = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder()
+            .Build(ToFoundationRunState(runState), slice);
+        var sceneModel = ResolveHostSceneModelForSnapshot(runState.Snapshot.RunId, "choice-list-presented", runState.Snapshot);
+        var expectedChildLabels = new[] { "철의 파동", "갈취", "전투의 북소리" };
+
+        Assert(optionSet is not null, "Expected deterministic reward option set.");
+        Assert(compactResult.Supported, "Expected polluted reward child-choice snapshot to stay supported after overlay helper filtering.");
+        Assert(compactResult.CompactInput is not null, "Expected reward compact input.");
+        Assert(sceneModel.Options.Select(option => option.Label).SequenceEqual(expectedChildLabels, StringComparer.Ordinal),
+            $"Expected host scene truth to drop overlay/helper reward rows. Actual={string.Join(", ", sceneModel.Options.Select(option => option.Label))}");
+        Assert(optionSet!.Options.Where(option => !option.IsSkipOption).Select(option => option.Label).SequenceEqual(expectedChildLabels, StringComparer.Ordinal),
+            $"Expected deterministic reward candidates to match canonical reward child labels. Actual={string.Join(", ", optionSet.Options.Select(option => option.Label))}");
+        Assert(compactResult.CompactInput!.VisibleOptions.Where(option => !string.Equals(option.Label, "넘기기", StringComparison.Ordinal)).Select(option => option.Label).SequenceEqual(expectedChildLabels, StringComparer.Ordinal),
+            $"Expected compact reward candidates to match canonical reward child labels. Actual={string.Join(", ", compactResult.CompactInput.VisibleOptions.Select(option => option.Label))}");
+        Assert(optionSet.Options.Count(option => option.IsSkipOption) == 1, "Expected one canonical reward skip option in deterministic input.");
+        Assert(compactResult.CompactInput.VisibleOptions.Count(option => string.Equals(option.Label, "넘기기", StringComparison.Ordinal)) == 1, "Expected one canonical reward skip option in compact input.");
+        Assert(!compactResult.CompactInput.VisibleOptions.Any(option => string.Equals(option.Label, "Dismisser", StringComparison.OrdinalIgnoreCase)),
+            "Expected overlay helper rows to stay out of compact reward options.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestEventCompactAdvisorInputBuilder()
 {
     var root = CreateTempDirectory();
@@ -5629,6 +5723,57 @@ static void TestEventCompactFallbackOrdering()
     }
 }
 
+static void TestEventCompactOverlayHelperRowCanonicalization()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedKnowledgeCatalog(root);
+        var baseChoices = CreateEventSceneModelSnapshot("event-overlay-helper-base").CurrentChoices;
+        var pollutedChoices = baseChoices
+            .Concat(new[]
+            {
+                new LiveExportChoiceSummary("event-option", "Dismisser", "overlay-dismiss", "Overlay helper")
+                {
+                    BindingKind = "event-option",
+                    BindingId = "overlay-dismiss",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:event", "source:event-option-button" },
+                },
+                new LiveExportChoiceSummary("event-option", "BackButton", "overlay-back", "Overlay helper")
+                {
+                    BindingKind = "event-option",
+                    BindingId = "overlay-back",
+                    Enabled = true,
+                    SemanticHints = new[] { "scene:event", "source:event-option-button" },
+                },
+            })
+            .ToArray();
+        var runState = CreateEventRunState("event-overlay-helper-run", pollutedChoices);
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactResult = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder()
+            .Build(ToFoundationRunState(runState), slice);
+        var sceneModel = ResolveHostSceneModelForSnapshot(runState.Snapshot.RunId, "choice-list-presented", runState.Snapshot);
+        var expectedLabels = new[] { "해독한다", "부순다" };
+
+        Assert(compactResult.Supported, "Expected polluted event overlay rows to be ignored rather than fail closed.");
+        Assert(compactResult.CompactInput is not null, "Expected event compact input.");
+        Assert(sceneModel.Options.Select(option => option.Label).SequenceEqual(expectedLabels, StringComparer.Ordinal),
+            $"Expected host event scene truth to keep only canonical event options. Actual={string.Join(", ", sceneModel.Options.Select(option => option.Label))}");
+        Assert(compactResult.CompactInput!.VisibleOptions.Select(option => option.Label).SequenceEqual(expectedLabels, StringComparer.Ordinal),
+            $"Expected compact event options to match canonical event labels. Actual={string.Join(", ", compactResult.CompactInput.VisibleOptions.Select(option => option.Label))}");
+        Assert(!compactResult.CompactInput.VisibleOptions.Any(option => string.Equals(option.Label, "Dismisser", StringComparison.OrdinalIgnoreCase)
+                                                                       || string.Equals(option.Label, "BackButton", StringComparison.OrdinalIgnoreCase)),
+            "Expected overlay helper rows to stay out of compact event options.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestEventCompactKnowledgeFiltering()
 {
     var root = CreateTempDirectory();
@@ -5750,6 +5895,55 @@ static void TestShopCompactAdvisorInputBuilder()
     }
 }
 
+static void TestShopCompactOverlayHelperRowCanonicalization()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedKnowledgeCatalog(root);
+        var baseSnapshot = CreateShopSceneModelSnapshot("shop-overlay-helper-base");
+        var pollutedSnapshot = baseSnapshot with
+        {
+            CurrentChoices = baseSnapshot.CurrentChoices
+                .Concat(new[]
+                {
+                    baseSnapshot.CurrentChoices[0],
+                    new LiveExportChoiceSummary("shop-option:card", "Dismisser", "overlay", "Overlay helper")
+                    {
+                        BindingKind = "shop-option",
+                        BindingId = "overlay-dismiss",
+                        Enabled = true,
+                        SemanticHints = new[] { "shop", "shop-option:card" },
+                    },
+                })
+                .ToArray(),
+        };
+        var runState = CreateShopRunState("shop-overlay-helper-run", pollutedSnapshot);
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactResult = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder()
+            .Build(ToFoundationRunState(runState), slice);
+        var sceneModel = ResolveHostSceneModelForSnapshot(runState.Snapshot.RunId, "choice-list-presented", runState.Snapshot);
+        var expectedLabels = new[] { "게임용 말", "몸풀기", "카드 제거", "뒤로" };
+
+        Assert(compactResult.Supported, "Expected polluted shop snapshot to stay supported after helper-row canonicalization.");
+        Assert(compactResult.CompactInput is not null, "Expected shop compact input.");
+        Assert(!compactResult.DecisionBlockers.Any(blocker => blocker.StartsWith("shop-duplicate-option-label:", StringComparison.OrdinalIgnoreCase)),
+            "Expected exact duplicate shop rows to collapse before duplicate-label blockers.");
+        Assert(sceneModel.Options.Select(option => option.Label).SequenceEqual(expectedLabels, StringComparer.Ordinal),
+            $"Expected host shop scene truth to drop overlay/helper rows and exact duplicates. Actual={string.Join(", ", sceneModel.Options.Select(option => option.Label))}");
+        Assert(compactResult.CompactInput!.VisibleOptions.Select(option => option.Label).SequenceEqual(expectedLabels, StringComparer.Ordinal),
+            $"Expected compact shop options to match canonical shop labels. Actual={string.Join(", ", compactResult.CompactInput.VisibleOptions.Select(option => option.Label))}");
+        Assert(!compactResult.CompactInput.VisibleOptions.Any(option => string.Equals(option.Label, "Dismisser", StringComparison.OrdinalIgnoreCase)),
+            "Expected overlay helper rows to stay out of compact shop options.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
 static void TestCombatCompactPreviewBuilder()
 {
     var root = CreateTempDirectory();
@@ -5779,6 +5973,55 @@ static void TestCombatCompactPreviewBuilder()
         Assert(compact.CombatFacts.TargetSummary is not null && compact.CombatFacts.TargetSummary.Contains("Jaw Worm", StringComparison.OrdinalIgnoreCase), "Expected combat target summary to survive into compact facts.");
         Assert(compact.VisibleOptions.All(option => !string.Equals(option.Label, "Ping", StringComparison.OrdinalIgnoreCase)), "Expected combat preview compact options to exclude Ping.");
         Assert(compact.DecisionBlockers.Contains("combat-preview-only", StringComparer.Ordinal), "Expected combat preview blocker.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestCombatCompactPreviewOverlayHelperRowCanonicalization()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedKnowledgeCatalog(root);
+        var baseSnapshot = CreateCombatSceneModelSnapshot("combat-overlay-helper-base");
+        var pollutedSnapshot = baseSnapshot with
+        {
+            CurrentChoices = baseSnapshot.CurrentChoices
+                .Concat(new[]
+                {
+                    baseSnapshot.CurrentChoices[0],
+                    new LiveExportChoiceSummary("combat-hand-card", "Dismisser", "overlay", "Overlay helper")
+                    {
+                        Enabled = true,
+                        SemanticHints = new[] { "combat-hand-card" },
+                    },
+                })
+                .ToArray(),
+        };
+        var runState = CreateCombatRunState("combat-overlay-helper-run", pollutedSnapshot);
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactResult = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder()
+            .Build(ToFoundationRunState(runState), slice);
+        var sceneModel = ResolveHostSceneModelForSnapshot(runState.Snapshot.RunId, "choice-list-presented", runState.Snapshot);
+        var expectedLabels = sceneModel.Options
+            .Where(option => !option.Tags.Contains("category:utility", StringComparer.OrdinalIgnoreCase))
+            .Select(option => option.Label)
+            .ToArray();
+
+        Assert(!compactResult.Supported, "Expected combat compact preview to remain no-call after cleanup.");
+        Assert(string.Equals(compactResult.ReasonCode, "combat-preview-only", StringComparison.Ordinal), $"Expected combat preview reason code, got {compactResult.ReasonCode}.");
+        Assert(compactResult.CompactInput is not null, "Expected combat compact input.");
+        Assert(compactResult.CompactInput!.VisibleOptions.Select(option => option.Label).SequenceEqual(expectedLabels, StringComparer.Ordinal),
+            $"Expected compact combat preview options to match non-utility host scene truth. Actual={string.Join(", ", compactResult.CompactInput.VisibleOptions.Select(option => option.Label))}");
+        Assert(!compactResult.CompactInput.VisibleOptions.Any(option => string.Equals(option.Label, "Dismisser", StringComparison.OrdinalIgnoreCase)),
+            "Expected overlay helper rows to stay out of compact combat preview options.");
+        Assert(compactResult.CompactInput.VisibleOptions.Count(option => string.Equals(option.Label, "Strike", StringComparison.Ordinal)) == 1,
+            "Expected exact duplicate combat rows to collapse before compact preview export.");
     }
     finally
     {

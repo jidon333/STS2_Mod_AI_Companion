@@ -79,8 +79,12 @@ internal sealed class ShopCompactInputBuilder
 
     private static IReadOnlyList<CompactAdvisorOption> BuildVisibleOptions(IReadOnlyList<LiveExportChoiceSummary> snapshotChoices)
     {
-        return snapshotChoices
+        return CompactAdvisorBuilderShared.SanitizeSnapshotChoices(snapshotChoices)
             .Where(IsShopChoice)
+            .GroupBy(
+                choice => $"{choice.Kind}|{choice.Label}|{choice.Value ?? string.Empty}",
+                StringComparer.OrdinalIgnoreCase)
+            .Select(static group => group.First())
             .Select(choice => new CompactAdvisorOption(
                 choice.Kind,
                 choice.Label,
