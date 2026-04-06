@@ -34,20 +34,22 @@
 - scene summary는 `request goal`, `allowedActions`, `fallback reason`, `targetLabel` 같은 actuator vocabulary를 포함하지 않는다.
 - scene truth는 `observer.state + canonical scene state`에서만 만든다.
 - `request`는 `runId`, `attemptId`, `stepIndex`, `phase`, `history`, `windowBounds`, `screenshotPath` 같은 replay envelope 용도로만 쓴다.
+- `reward/event/shop` compact advice는 model-backed MVP로 유지하고, `combat`는 preview-only / no-call로 유지한다.
 - shop coverage는 fresh live refresh 전까지 provisional로 취급한다.
 
-## Reward/Event Compact Advisor Blockers
+## Compact Advisor Managed Scene Gaps
 
-| blocker | category | current owner | wave 2 decision | notes |
+| gap | category | current owner | current status | notes |
 | --- | --- | --- | --- | --- |
-| reward option canonicalization instability | canonicalization | Harness + Foundation | solve in wave 2 | exact label match에 직접 영향 |
-| reward/event card-like description gap | display | Runtime extractor + display seam | solve in wave 2 | evaluated hover tip / node display 우선 |
-| event option duplicate/identity instability | canonicalization | Harness + Foundation | solve in wave 2 | option-level explicit facts의 전제 |
-| reward/event missingFacts affecting label match | advisor-input | Foundation compact builder | solve in wave 2 | no-call degraded fallback 가능 |
-| compact knowledge slice needs scene-local post-filter | advisor-input | Foundation compact builder | solve in wave 2 | existing bounded BuildSlice(...)만 사용 |
-| unsupported reward/event handling | fallback | Foundation shared factory | solve in wave 2 | live/replay/manual failure shape를 일치시킴 |
-| shop candidate scoring | out of scope | n/a | defer | wave 2 비범위 |
-| combat advice | out of scope | n/a | defer | wave 2 비범위 |
+| reward direct fact ownership seam | advisor-input | Foundation reward fact builders | pending | direct fact seam은 개선됐지만 opaque reward card info와 fact ownership은 아직 open gap |
+| reward/event card-like description gap | display | Runtime extractor + display seam | pending | evaluated hover tip / node display follow-up이 남아 있음 |
+| event option duplicate/identity instability | canonicalization | Harness + Foundation | pending | generic seam이 primary지만 canonical event identity/title/page id와 일부 strict/compat residue가 남아 있음 |
+| compact missingFacts affecting label match | advisor-input | Foundation compact builders + finalizer | pending | exact-label / no-call degraded safety는 유지하고, gaps는 explicit missing으로 남겨야 함 |
+| shop exact price/effect gap | observer/export + display | Runtime extractor + display seam | pending | shop compact advisor MVP는 지원되지만 authoritative live root는 아직 provisional이고 exact price/effect quality는 미완 |
+| combat preview-only / no-call boundary | contract | Foundation shared policy | by_design | combat는 compact-managed preview facts surface만 제공하고 model call은 하지 않음 |
+
+- reward child-choice helper-row duplicate canonicalization issue는 committed path에서 정리됐다.
+- 현재 reward open gap은 broad duplicate cleanup이 아니라 reward fact ownership / direct fact seam 쪽이다.
 
 ## Compact Advisor Notes
 
@@ -55,7 +57,9 @@
 - compact input은 `AdviceInputPack` 앞단의 adapter-first layer다.
 - compact builder는 `CompanionRunState + normalized state + bounded slice`를 입력으로 받는다.
 - 새 retrieval API는 만들지 않고 existing bounded `BuildSlice(...)`를 compact builder가 post-filter 한다.
-- reward/event 외 장면은 `unsupported/degraded` shared helper로 즉시 종료한다.
+- current compact-managed scene scope는 `reward/event/shop/combat`다.
+- model-call allowed scene은 `reward/event/shop`이고, `combat`는 preview-only / no-call이다.
+- unsupported / insufficient / invalid exact-label mismatch는 shared degraded helper로 정리한다.
 - Host는 gating/manual orchestration만 담당하고, Foundation이 compact contract/builder/prompt/finalizer/fallback을 소유한다.
 
 ## Live Side Seams
@@ -111,7 +115,7 @@
 - live sidecar는 scene-aware display formatter를 써서 `sceneType / sceneStage / canonicalOwner`와 `현재 장면 맥락`을 분리해 보여 준다.
 - `SceneSummaryText`는 raw summary를 그대로 복사하지 않고, display-only knowledge/localization을 거친 결과를 보여 준다.
 - `보이는 선택지`는 기본 플레이에 직접 필요하지 않은 utility/diagnostic choice를 숨긴다.
-- advanced 영역은 기본 접힘으로 두고, `confidence / source refs`, `최근 이벤트`, `관련 지식`, `수집 런 진단`을 그 안에 둔다.
+- advanced 영역은 기본 접힘으로 두고, `confidence / source refs`, `최근 이벤트`, `관련 지식`, `현재 장면 진단`, `AI 입력 요약`, `AI 입력`, `프롬프트 미리보기`, `수집 런 진단`을 그 안에 둔다.
 
 ## Follow-up Work Item
 

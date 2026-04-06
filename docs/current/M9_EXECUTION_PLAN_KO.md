@@ -9,8 +9,8 @@
 
 `M9`의 첫 목표는 AI를 곧바로 더 똑똑하게 만드는 것이 아니라, 현재 하네스가 읽는 게임 상태를 `장면별 human-readable scene model`로 승격시키는 것이다.
 
-읽기 쉬운 안내 문서는 [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md) 를 우선한다.
-구조 자체가 헷갈리면 [HARNESS_TO_M9_STRUCTURE_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/HARNESS_TO_M9_STRUCTURE_READER_KO.md) 를 먼저 읽는다.
+읽기 쉬운 안내 문서는 [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md) 를 우선한다.
+구조 자체가 헷갈리면 [HARNESS_TO_M9_STRUCTURE_READER_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/readers/HARNESS_TO_M9_STRUCTURE_READER_KO.md) 를 먼저 읽는다.
 
 ## 현재 위치
 
@@ -26,6 +26,8 @@
 - 현재 additive 진행:
   - `strategy-principles` background artifact 생성 완료
   - `StrategyPrinciplesService` strict retrieval + `최종 / 보수적 / 공격적` 3-view advice 경로 구현
+  - compact-managed scene은 `reward/event/shop`, `combat preview-only / no-call` 경로가 committed contract로 정리됨
+  - reward child-choice helper-row duplicate residue는 정리됐지만, reward fact ownership / direct fact seam은 아직 open gap으로 남아 있음
   - live acceptance와 style tuning은 계속 direct-play에서 닫는 중
 
 ## M9 범위
@@ -46,7 +48,7 @@
 4. polished real-time overlay UI
 5. raw observer dump direct-to-LLM
 
-별도 sidecar 실시간 표시 workstream은 [M9_LIVE_SIDECAR_UI_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md) 로 분리한다.
+별도 sidecar 실시간 표시 workstream은 [M9_LIVE_SIDECAR_UI_PLAN_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md) 로 분리한다.
 
 ## 장면 우선순위
 
@@ -75,7 +77,7 @@ v1 우선순위는 다음으로 고정한다.
 
 주요 산출물:
 
-- [ADVISOR_UI_COVERAGE_MATRIX_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/ADVISOR_UI_COVERAGE_MATRIX_KO.md)
+- [ADVISOR_UI_COVERAGE_MATRIX_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/ADVISOR_UI_COVERAGE_MATRIX_KO.md)
 
 현재 상태:
 
@@ -96,7 +98,7 @@ v1 우선순위는 다음으로 고정한다.
 
 주요 산출물:
 
-- [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
+- [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
 - `src/Shared/AdvisorSceneModel/AdvisorSceneContracts.cs`
 
 현재 상태:
@@ -120,9 +122,9 @@ v1 우선순위는 다음으로 고정한다.
 
 주요 산출물:
 
-- [GuiSmokeAdvisorSceneModelBuilder.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneModelBuilder.cs)
+- [GuiSmokeAdvisorSceneModelBuilder.cs](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/AdvisorSubstrate/GuiSmokeAdvisorSceneModelBuilder.cs)
 - `src/Shared/AdvisorSceneModel/AdvisorSceneSummaryFormatter.cs`
-- [Program.InspectAndReplay.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2GuiSmokeHarness/Program.InspectAndReplay.cs)
+- [Program.InspectAndReplay.cs](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2GuiSmokeHarness/Program.InspectAndReplay.cs)
 
 현재 상태:
 
@@ -138,14 +140,14 @@ v1 우선순위는 다음으로 고정한다.
 
 목표:
 
-- scene model과 reward/event compact advisor input을 분리한다.
+- scene model과 compact-managed advisor input을 분리한다.
 - `AdviceInputPack`은 유지하되 compact payload를 additive adapter로 주입한다.
 - `Host`는 gating / manual orchestration / adapter wiring만 맡고, `Foundation`이 compact contract, pure builder, prompt path, finalizer, degraded fallback owner가 된다.
 - compact builder는 새 retrieval API 없이 기존 `KnowledgeCatalogService.BuildSlice(...)` 결과를 post-filter한다.
 
 주요 산출물:
 
-- [ADVISOR_INPUT_OUTPUT_CONTRACT.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_INPUT_OUTPUT_CONTRACT.md)
+- [ADVISOR_INPUT_OUTPUT_CONTRACT.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/contracts/ADVISOR_INPUT_OUTPUT_CONTRACT.md)
 
 현재 상태:
 
@@ -157,14 +159,14 @@ v1 우선순위는 다음으로 고정한다.
 - `AdviceInputPack`은 유지되며 compact payload adapter가 명시됨
 - `KnowledgeCatalogService.BuildSlice(...)` 후 compact post-filter 방식이 고정됨
 - `recommendedChoiceLabel` exact-label validation과 shared degraded fallback이 문서화됨
-- reward/event 외 장면은 unsupported/no-call로 명시됨
+- compact-managed scene scope는 `reward/event/shop/combat`, model-call allowed scene은 `reward/event/shop`, `combat`는 preview-only / no-call로 명시됨
 - compact input은 `SceneModel` truth source가 아니라 `CompanionRunState + normalized state + bounded slice` 기반의 판단 재료로 문서화됨
 
 ### WS5. Coverage Gaps And Export Follow-Up
 
 목표:
 
-- reward/event MVP blocker만 고정한다.
+- compact-managed scene의 current gap만 고정한다.
 - scene model에서 비는 정보를 `missingFacts`와 `observerGaps`로 관리한다.
 - exporter 추가는 hard blocker일 때만 제안한다.
 
@@ -174,19 +176,20 @@ v1 우선순위는 다음으로 고정한다.
 
 완료 기준:
 
-- reward/event blocker table이 문서화됨
+- compact-managed scene gap table이 문서화됨
 - `observer`, `exporter`, `canonicalization`, `display`, `advisor-input`가 구분됨
-- shop/combat follow-up은 이번 wave 비범위로 명시됨
-- reward/event compact advisor에서 해결할 blocker와 다음 wave 이월 blocker가 분리됨
+- `shop`은 supported MVP지만 authoritative live root는 provisional로 남는다고 명시됨
+- `combat`는 preview-only / no-call boundary로 남고, reward/event/shop gap과 별도 residual risk가 분리됨
 
-### WS6. Reward/Event Compact Advisor MVP
+### WS6. Compact Advisor Managed Scene MVP
 
 목표:
 
-- reward/event 중심의 compact advisor input을 시험한다.
+- reward/event/shop model-backed compact advisor input을 시험한다.
 - manual request만 허용하고 auto advice는 기본 OFF로 유지한다.
 - `recommendedChoiceLabel` exact-match와 `missingInformation` / `decisionBlockers` 정합성을 본다.
 - unsupported/degraded response는 shared factory로 생성한다.
+- `combat`는 preview-only facts surface로 유지한다.
 
 현재 상태:
 
@@ -194,9 +197,9 @@ v1 우선순위는 다음으로 고정한다.
 
 완료 기준:
 
-- reward/event compact input이 stable하게 생성됨
-- replay 기반 dry run이 reward/event read-only advice를 검증함
-- live sidecar manual request로 reward/event advice를 확인 가능함
+- reward/event/shop compact input이 stable하게 생성됨
+- replay 기반 dry run이 reward/event/shop read-only advice를 검증함
+- live sidecar manual request로 reward/event/shop advice를 확인 가능함
 - `recommendedChoiceLabel`이 current scene option label과 정확히 대응
 - unsupported/degraded response가 shared helper로 생성됨
 - Host는 manual gating만 담당하고, compact prompt/finalizer/fallback은 Foundation 공용 경로를 지난다
@@ -212,7 +215,7 @@ v1 우선순위는 다음으로 고정한다.
 
 주요 산출물:
 
-- [M9_LIVE_SIDECAR_UI_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md)
+- [M9_LIVE_SIDECAR_UI_PLAN_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/M9_LIVE_SIDECAR_UI_PLAN_KO.md)
 - `src/Shared/AdvisorSceneModel/*`
 - `src/Shared/AdvisorSceneDisplay/*`
 - `src/Sts2AiCompanion.Host/AdvisorScene/*`
@@ -274,12 +277,12 @@ v1 우선순위는 다음으로 고정한다.
 | Scene model contract 초안 | in_progress | 3-layer boundary와 typed fields 정의됨 |
 | Harness-local scene builder | in_progress | advisor substrate code와 replay path 존재 |
 | Human-readable summary | in_progress | formatter 존재, fixture stabilization 필요 |
-| Advisor input contract | in_progress | reward/event compact contract + adapter-first 경로로 전환 |
-| Coverage gap 운영 | in_progress | reward/event blocker table과 shared degraded fallback 고정 |
-| Reward/Event Compact Advisor MVP | in_progress | `Host` gating + `Foundation` compact builder/finalizer/fallback + replay dry run |
+| Advisor input contract | in_progress | compact-managed scene contract + adapter-first 경로, `reward/event/shop` model-call + `combat` preview-only / no-call 정리 |
+| Coverage gap 운영 | in_progress | compact-managed scene gap table, provisional shop root, reward direct fact seam open gap 정리 |
+| Compact Advisor Managed Scene MVP | in_progress | `Host` gating + `Foundation` compact builder/finalizer/fallback + reward/event/shop replay dry run, combat preview-only no-call 유지 |
 | Live sidecar UI | in_progress | `Host` owner live builder, shared contract, WPF panel, advisor-scene artifact band, shared `ScreenProvenanceResolver` parity까지 구현 완료. direct play clean-boot manual sweep만 남음 |
 | Strategy principles artifact | completed | `strategy-principles.sts.json` 생성, background-only note 반영 |
-| Strategy lens + 3-view advice | in_progress | separate loader, strict retrieval, prompt wiring, additive 3-view finalizer/WPF까지 연결. live style validation과 docs sync만 남음 |
+| Strategy lens + 3-view advice | in_progress | separate loader, strict retrieval, prompt wiring, additive 3-view finalizer/WPF까지 연결. live style validation, direct-play sweep, docs sync만 남음 |
 | Foundation canonical merge | blocked_by_design | schema 안정화 전 금지 |
 | Real-time overlay UI | deferred | 텍스트/artifact proving 이후 단계 |
 
@@ -309,11 +312,11 @@ v1 우선순위는 다음으로 고정한다.
 
 - current harness routing / allowed-actions / actuator logic을 건드리지 않음
 - observer/exporter 추가는 coverage matrix에서 hard blocker가 드러난 경우에만 진행
-- compact input과 read-only advisor는 reward/event만 범위로 둠
+- compact input과 read-only advisor model-call은 `reward/event/shop`만 범위로 두고, `combat`는 preview-only / no-call로 유지함
 
 ### Gate D. Advisor Readiness
 
-- reward/event 2개 scene 이상에서 scene model 기반 read-only advisor dry run 가능
+- reward/event/shop 3개 scene에서 compact input 기반 read-only advisor dry run 가능
 - 조언 결과를 scene model과 provenance로 설명할 수 있음
 
 ## 절대 하지 말아야 할 것
@@ -374,23 +377,24 @@ M9에서는 아래 anti-pattern을 절대 허용하지 않는다.
 - AGENTS 가드레일대로 clean boot 후 reward/event/rest-site/shop/map/combat 진입을 수동 확인한다.
 - mismatch가 있으면 `missingFacts / observerGaps / confidence / sourceRefs`가 설명 가능한지 본다.
 
-### WU3. Advisor input mapping 설계
+### WU3. Reward direct fact seam follow-up
 
-- scene model에서 advisor input으로 넘길 최소 필드를 정리한다.
-- 이 단계에서도 foundation merge는 하지 않는다.
+- explicit reward scene fact가 knowledge miss보다 우선되는 경계를 더 좁게 정리한다.
+- direct fact seam은 개선됐지만 reward fact ownership은 아직 open gap으로 남기고, opaque reward card 정보는 계속 explicit missing으로 유지한다.
 
-### WU4. Reward/Event read-only advisor dry run
+### WU4. Direct-play advice sweep and style validation
 
-- reward/event 두 scene에 한정해 advice input/output dry run을 만든다.
-- recommendation label 정합성과 missingInformation 품질을 본다.
+- clean-boot direct play에서 reward/event/shop manual advice와 combat preview-only surface를 같이 점검한다.
+- recommendation label 정합성, 3-view 표시, manual-only / preview-only guard, missingInformation 품질을 다시 확인한다.
 
 ## 리스크
 
 1. raw observer/meta가 advisor vocabulary를 오염시키는 것
 2. scene model과 advisor input을 너무 빨리 합쳐서 drift가 나는 것
 3. provisional root를 acceptance-grade root처럼 취급하는 것
-4. combat를 너무 빨리 넓혀 v1 범위가 터지는 것
-5. foundation merge를 너무 빨리 해서 unstable schema를 굳히는 것
+4. reward fact ownership / direct fact seam을 닫힌 문제처럼 문서화하는 것
+5. combat를 full recommendation처럼 넓혀 preview-only / no-call guard를 흐리는 것
+6. foundation merge를 너무 빨리 해서 unstable schema를 굳히는 것
 
 ## 운영 원칙
 
@@ -407,5 +411,5 @@ M9에서는 아래 anti-pattern을 절대 허용하지 않는다.
 
 1. scene inventory / scene model / summary / advisor input draft 문서가 모두 current 상태다
 2. representative scene fixture에서 advisor scene artifact가 안정적으로 생성된다
-3. reward + event read-only advisor dry run이 가능하다
+3. reward + event + shop read-only advisor dry run과 combat preview-only / no-call contract가 current 문서와 일치한다
 4. foundation merge는 하지 않았지만, merge gate를 통과할 조건이 문서/fixture로 명확하다

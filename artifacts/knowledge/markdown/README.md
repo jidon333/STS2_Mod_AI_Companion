@@ -8,7 +8,7 @@
 - 카드는 한국어 제목과 설명이 많이 채워져 있습니다.
 - 이벤트는 제목, 페이지 본문, 선택지 정보가 부분적으로 연결되어 있습니다.
 - 유물, 포션, 키워드, 상점 문구는 coverage가 계속 넓어지는 중이며, 실플레이 교차 검증이 남아 있습니다.
-- 어시스턴트 AI가 직접 읽을 수 있는 JSON은 `catalog.assistant.json`과 `assistant/*.json`입니다.
+- 어시스턴트 AI가 직접 읽을 수 있는 JSON은 `catalog.assistant.json`, `assistant/*.json`, background-only 전략 원칙 아티팩트 `strategy/strategy-principles.sts.json`입니다.
 
 ## 산출물 위치
 

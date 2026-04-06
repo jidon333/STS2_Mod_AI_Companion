@@ -68,6 +68,7 @@
 - live side truth source는 `live snapshot + shared ScreenProvenanceResolver resolved primary provenance + normalized scene state + current choices`다.
 - `compatibilityCurrentScreen / compatibilityLogicalScreen / compatibilityVisibleScreen / compatibilitySceneReady / compatibilitySceneAuthority / compatibilitySceneStability`는 parity/diagnostics surface일 뿐, primary truth winner가 아니다.
 - `recent events`는 현재 live builder의 truth source가 아니라 run-state context/diagnostics 용도로만 유지한다.
+- `strategy principles`는 background-only lens일 뿐, scene truth source가 아니다.
 - `GuiSmokeStepRequest`는 truth source가 아니다.
 - `request`에서 허용되는 사용:
   - `runId`
@@ -88,9 +89,10 @@ M9 wave 2에서는 `SceneModel`이 advisor input이 되지 않는다.
 - `SceneModel`은 계속 fact model이고, sidecar/WPF/replay artifact surface다.
 - `RewardEventCompactAdvisorInput`은 별도 compact advisor view다.
 - compact advisor는 `SceneModel`에서 직접 파생하기보다 `CompanionRunState + normalized state + bounded knowledge slice`를 다시 압축해서 만든다.
-- knowledge slice는 새 retrieval API 없이 기존 `KnowledgeCatalogService.BuildSlice(...)`를 사용한 뒤 compact builder가 reward/event 관련 항목만 post-filter한다.
+- knowledge slice는 새 retrieval API 없이 기존 `KnowledgeCatalogService.BuildSlice(...)`를 사용한 뒤 compact builder가 scene-local 항목만 post-filter한다.
 - truth source는 `SceneModel`이 아니라 `normalized state + bounded slice`다.
-- reward/event 외 장면은 compact advisor 대상이 아니다.
+- current compact-managed scene scope는 `reward/event/shop/combat`다.
+- model call을 허용하는 scene은 `reward/event/shop`이고, `combat`는 preview-only / no-call이다.
 
 ## Common SceneModel Envelope
 
@@ -201,12 +203,12 @@ nullable rule:
 ## V1 Rules
 
 - v1 목표는 `SceneModel + summary`까지다.
-- compact advisor input은 `RewardEventCompactAdvisorInput` 기준으로만 다룬다.
+- compact advisor input type name은 `RewardEventCompactAdvisorInput`이지만, current managed scene scope는 `reward/event/shop/combat`다.
 - summary는 사실 서술만 한다.
 - summary는 `click`, `wait`, `fallback`, `candidate`, `targetLabel` 같은 actuator vocabulary를 포함하지 않는다.
 - hard gap은 추정하지 않고 `missingFacts`로 남긴다.
 - reward option list는 raw observer dump를 그대로 넘기지 않고 scene-level normalization을 거친다.
 - live sidecar의 core/advanced 패널은 이 scene model을 사람이 읽기 쉽게 재배치하는 display layer다. raw summary를 그대로 복사하지 않고, scene-aware formatter와 display-only knowledge를 거쳐 보여 줄 수 있다.
-- compact advisor input은 `SceneModel`의 alias가 아니라, reward/event 전용 판단 재료다.
+- compact advisor input은 `SceneModel`의 alias가 아니라, compact-managed scene 판단 재료다.
 - compact advisor input은 Host-local DTO가 아니라 Foundation contract다.
 - finalizer와 shared degraded fallback도 Foundation 소유다.

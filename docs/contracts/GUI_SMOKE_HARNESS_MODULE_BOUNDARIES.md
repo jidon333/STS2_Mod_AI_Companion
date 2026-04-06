@@ -1,8 +1,8 @@
 # GuiSmokeHarness Cleanup Program
 
-> Status: Completed Baseline Contract
-> Source of truth: Yes
-> Update when: cleanup priority, workstream order, observer fact/export contract, or validation cadence changes.
+> Status: Historical Baseline / Ownership Guardrail
+> Source of truth: No. Current status and active blockers live in `docs/current/*`.
+> Update when: historical baseline meaning, ownership guardrail, observer fact/export contract, or validation cadence changes.
 
 ## 0. 먼저 읽을 요약
 
@@ -194,6 +194,7 @@ O2. residual tracker/bridge shaping audit
 현재 상태:
 
 - `InventoryPublisher` primary field는 current `main`에서 published-first다
+- shared `ScreenProvenanceResolver`가 live/harness primary provenance single owner이고, `Host`와 `ObserverSnapshotReader`는 그 consumer다
 - `ObserverSnapshotReader`는 raw / published / compatibility provenance를 분리해 읽는다
 - `ObserverScreenProvenance` control-flow는 published-first다
 - tracker는 old synthetic field를 primary truth로 다시 승격하지 않는다
@@ -318,8 +319,10 @@ O2. residual tracker/bridge shaping audit
 - `cmd.exe /c dotnet build STS2_Mod_AI_Companion.sln`
 - `cmd.exe /c dotnet run --project src/Sts2ModKit.SelfTest/Sts2ModKit.SelfTest.csproj --no-build`
 - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- self-test`
-- `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-test`
 - `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-parity-test`
+- `cmd.exe /c dotnet run --project src/Sts2GuiSmokeHarness/Sts2GuiSmokeHarness.csproj --no-build -- replay-test`
+  - fixture request root가 유효할 때는 필수다
+  - `tests/replay-fixtures/gui-smoke-golden-scenes.json`가 외부 `artifacts/gui-smoke/...` root를 가리켜 root 부재가 나면, code residue가 아니라 fixture/environment blocker로 기록하고 테스트를 완화하지 않는다
 
 ### 7.2 Live-required workstreams
 

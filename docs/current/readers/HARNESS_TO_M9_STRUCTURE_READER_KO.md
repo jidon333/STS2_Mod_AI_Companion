@@ -239,7 +239,8 @@ live export / normalized state / knowledge slice
   -> read-only recommendation
 ```
 
-이 경로는 아직 M9 후반이나 그 다음 단계다.
+이 경로는 current `main`에서 `reward/event/shop` model-call, `combat` preview-only / no-call까지 연결돼 있다.
+다만 live direct-play validation, reward fact ownership seam, style tuning은 아직 pending이다.
 
 중요:
 
@@ -247,9 +248,9 @@ live export / normalized state / knowledge slice
 - scene model은 사실 정리
 - advisor input은 판단용 요약
 
-## Reward/Event Compact Advisor
+## Compact Advisor Managed Scenes
 
-M9 wave 2에서는 advisor 입력이 `SceneModel`을 직접 먹는 대신, `reward/event` 전용 compact input을 한 번 더 거친다.
+M9 wave 2에서는 advisor 입력이 `SceneModel`을 직접 먹는 대신, compact-managed scene용 input을 한 번 더 거친다.
 
 핵심 구조는 다음과 같다.
 
@@ -257,8 +258,10 @@ M9 wave 2에서는 advisor 입력이 `SceneModel`을 직접 먹는 대신, `rewa
 - `Foundation`이 compact contract, pure builder, prompt path, finalizer, degraded fallback을 owner로 가진다
 - `KnowledgeCatalogService.BuildSlice(...)`는 그대로 쓰고, compact builder가 그 bounded slice를 scene-local하게 post-filter한다
 - compact input은 `SceneModel` truth source가 아니라 `CompanionRunState + normalized state + bounded slice` 기반의 판단 재료다
-- reward/event 외 장면은 shared degraded helper로 바로 종료한다
+- current compact-managed scene scope는 `reward/event/shop/combat`다
+- model call을 허용하는 scene은 `reward/event/shop`이고, `combat`는 preview-only / no-call이다
 - replay validator와 live manual advice가 같은 compact path를 쓴다
+- `strategy principles`는 `AdviceInputPack`의 separate additive background lens이고, canonical top-level advice는 항상 `FinalView`와 정렬된다
 
 ### Compact Contract Flow
 
@@ -281,7 +284,7 @@ CompanionRunState + normalized state + bounded BuildSlice(...)
 
 - `SceneModel`은 계속 sidecar용 fact model이다
 - `AdviceInputPack`은 유지되지만 compact payload를 얹는 carrier다
-- compact input은 `SceneModel` 대체물이 아니라 `reward/event` 판단 재료 압축본이다
+- compact input은 `SceneModel` 대체물이 아니라 compact-managed scene 판단 재료 압축본이다
 
 ## 왜 하네스와 live sidecar가 다른 경로를 타는가
 
@@ -396,7 +399,7 @@ flowchart TB
 
 위치:
 
-- [CompanionHost.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Host/CompanionHost.cs)
+- [CompanionHost.cs](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2AiCompanion.Host/CompanionHost.cs)
 
 핵심 경로:
 
@@ -423,7 +426,7 @@ flowchart TB
 
 위치:
 
-- [CompanionHost.Diagnostics.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Host/CompanionHost.Diagnostics.cs)
+- [CompanionHost.Diagnostics.cs](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2AiCompanion.Host/CompanionHost.Diagnostics.cs)
 
 여기서는 아래가 한 번에 비용을 키웠다.
 
@@ -445,7 +448,7 @@ flowchart TB
 
 위치:
 
-- [ShellViewModel.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Wpf/ShellViewModel.cs)
+- [ShellViewModel.cs](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2AiCompanion.Wpf/ShellViewModel.cs)
 
 현재 구조는:
 
@@ -584,8 +587,8 @@ WPF가 책임지는 것:
 3. [M9_LIVE_SIDECAR_UI_PLAN_KO.md](../M9_LIVE_SIDECAR_UI_PLAN_KO.md)
 4. [ADVISOR_SCENE_MODEL_READER_KO.md](./ADVISOR_SCENE_MODEL_READER_KO.md)
 5. [ADVISOR_UI_COVERAGE_MATRIX_KO.md](../ADVISOR_UI_COVERAGE_MATRIX_KO.md)
-6. [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
-7. [ADVISOR_INPUT_OUTPUT_CONTRACT.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_INPUT_OUTPUT_CONTRACT.md)
+6. [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
+7. [ADVISOR_INPUT_OUTPUT_CONTRACT.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/contracts/ADVISOR_INPUT_OUTPUT_CONTRACT.md)
 
 ## 한 줄 결론
 

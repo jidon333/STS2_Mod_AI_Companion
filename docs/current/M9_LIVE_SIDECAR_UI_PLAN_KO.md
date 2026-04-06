@@ -2,7 +2,7 @@
 
 > 상태: 현재 사용 중
 > 기준 브랜치: `main`
-> 최종 갱신: 2026-04-04
+> 최종 갱신: 2026-04-06
 > 목적: 사령관님이 직접 플레이할 때, 별도 UI에서 현재 scene model과 핵심 정보를 실시간으로 읽을 수 있게 만드는 read-only sidecar 계획
 
 ## 한 줄 요약
@@ -10,7 +10,7 @@
 이번 workstream의 목표는 게임 위 overlay가 아니라, 기존 `WPF advisor window`를 확장해서 `현재 scene / human-readable summary / options / missing facts`를 실시간으로 보여주는 것이다.
 이번 품질 개선 wave에서는 여기에 `core vs advanced` 표시 계층과 scene-aware display formatter를 더한다.
 
-경계와 병목 위치가 헷갈리면 [HARNESS_TO_M9_STRUCTURE_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/HARNESS_TO_M9_STRUCTURE_READER_KO.md) 를 먼저 읽는다.
+경계와 병목 위치가 헷갈리면 [HARNESS_TO_M9_STRUCTURE_READER_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/readers/HARNESS_TO_M9_STRUCTURE_READER_KO.md) 를 먼저 읽는다.
 
 ## 왜 이 작업을 하나
 
@@ -76,7 +76,7 @@ M9 v1에서 이미 얻은 것은 아래다.
 4. live builder root는 `src/Sts2AiCompanion.Host/AdvisorScene/`로 고정한다
 5. WPF scene-aware formatter는 `src/Sts2AiCompanion.Wpf/Display/`에 둔다
 6. WPF는 이번 wave에서도 `CompanionHost` direct path를 유지한다
-7. `AdvisorCoordinator`, foundation contracts, `AdviceInputPack`, `AdviceResponse`는 이번 wave에서 확장하지 않는다
+7. `AdviceInputPack.StrategyPrinciples`, additive 3-view `AdviceResponse`, compact/manual-only policy는 이미 committed contract로 연결돼 있으며, 이번 workstream은 이를 redesign하지 않고 display/debug surface에서 소비한다
 
 중요:
 
@@ -103,8 +103,8 @@ artifact root는 아래로 고정한다.
 
 기존 대상:
 
-- [ShellViewModel.cs](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Wpf/ShellViewModel.cs)
-- [MainWindow.xaml](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/src/Sts2AiCompanion.Wpf/MainWindow.xaml)
+- [ShellViewModel.cs](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2AiCompanion.Wpf/ShellViewModel.cs)
+- [MainWindow.xaml](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/src/Sts2AiCompanion.Wpf/MainWindow.xaml)
 
 추가할 표시 항목:
 
@@ -127,7 +127,7 @@ artifact root는 아래로 고정한다.
 
 - 오른쪽 컬럼을 `현재 scene model` 패널로 재구성한다
 - 상단은 `핵심` 영역으로 두고 `sceneType / stage / owner`, `요약`, `현재 장면 맥락`, `보이는 선택지`, `누락 정보 / observer gaps`를 둔다
-- 하단은 기본 접힘 `고급` 영역으로 두고 `confidence / source refs`, `최근 이벤트`, `관련 지식`, `수집 런 진단`을 넣는다
+- 하단은 기본 접힘 `고급` 영역으로 두고 `confidence / source refs`, `최근 이벤트`, `관련 지식`, `현재 장면 진단`, `AI 입력 요약`, `AI 입력`, `프롬프트 미리보기`, `수집 런 진단`을 넣는다
 - `SceneSummaryText`는 raw summary를 그대로 내보내지 않고 scene-aware display formatter를 거친 결과를 보여 준다
 - `DeckText`, `유물 / 포션`, option label / description은 display-only knowledge resolver를 거쳐 사람이 읽기 쉬운 텍스트로 보여 준다
 - 기존 raw `CurrentChoicesText`는 메인 패널에서 human-readable `SceneOptionsText`로 대체한다
@@ -184,7 +184,8 @@ artifact root는 아래로 고정한다.
 
 완료 기준:
 
-- reward/event 두 scene에서 scene model 기반 advisor dry run 가능
+- reward/event/shop 세 scene에서 manual advice surface를 current compact contract와 대조 가능
+- combat는 preview-only / no-call 상태를 화면에서 명확히 확인 가능
 - 추천과 scene model options label이 정확히 대응
 
 ## 현재 진척도
@@ -196,7 +197,7 @@ artifact root는 아래로 고정한다.
 | live sidecar panel | completed | `ShellViewModel` / `MainWindow.xaml`에 실시간 panel 추가 |
 | live scene model adapter | completed | `CompanionHost` owner + `src/Sts2AiCompanion.Host/AdvisorScene/` |
 | provenance panel | completed | confidence / source refs / gaps 표시 |
-| read-only advisor live attach | pending | reward/event부터 시작 |
+| read-only advisor live attach | pending | reward/event/shop manual advice path는 wired, direct-play style validation과 combat preview-only / no-call sweep이 남음 |
 
 ## acceptance
 
@@ -264,28 +265,28 @@ artifact root는 아래로 고정한다.
 
 ## 필수로 먼저 읽을 문서
 
-1. [AGENTS.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/AGENTS.md)
-2. [PROJECT_STATUS.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/PROJECT_STATUS.md)
-3. [M9_EXECUTION_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_EXECUTION_PLAN_KO.md)
-4. [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md)
-5. [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
-6. [ADVISOR_INPUT_OUTPUT_CONTRACT.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/contracts/ADVISOR_INPUT_OUTPUT_CONTRACT.md)
-7. [ARCHITECTURE.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/ARCHITECTURE.md)
+1. [AGENTS.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/AGENTS.md)
+2. [PROJECT_STATUS.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/PROJECT_STATUS.md)
+3. [M9_EXECUTION_PLAN_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/M9_EXECUTION_PLAN_KO.md)
+4. [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md)
+5. [ADVISOR_SCENE_INFORMATION_MODEL.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/contracts/ADVISOR_SCENE_INFORMATION_MODEL.md)
+6. [ADVISOR_INPUT_OUTPUT_CONTRACT.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/contracts/ADVISOR_INPUT_OUTPUT_CONTRACT.md)
+7. [ARCHITECTURE.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/ARCHITECTURE.md)
 
 ## 작업하면서 반드시 업데이트할 문서
 
-1. [M9_EXECUTION_PLAN_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/M9_EXECUTION_PLAN_KO.md)
+1. [M9_EXECUTION_PLAN_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/M9_EXECUTION_PLAN_KO.md)
    - current progress / next work unit / acceptance gate
-2. [ADVISOR_UI_COVERAGE_MATRIX_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/ADVISOR_UI_COVERAGE_MATRIX_KO.md)
+2. [ADVISOR_UI_COVERAGE_MATRIX_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/ADVISOR_UI_COVERAGE_MATRIX_KO.md)
    - live sidecar에서 확인된 missing / degraded / new evidence root
-3. [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md)
+3. [ADVISOR_SCENE_MODEL_READER_KO.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/readers/ADVISOR_SCENE_MODEL_READER_KO.md)
    - 사람이 실제로 어떻게 읽는지 바뀌면 예시와 설명 갱신
-4. [PROJECT_STATUS.md](/mnt/c/users/jidon/source/repos/sts2_mod_ai_companion/docs/current/PROJECT_STATUS.md)
+4. [PROJECT_STATUS.md](/mnt/c/users/jidon/source/repos/STS2_Mod_AI_Companion/docs/current/PROJECT_STATUS.md)
    - active M9 workstream 포인터가 바뀌면 갱신
 
 ## 자동 검증 결과
 
-2026-04-04 current `main` 기준:
+2026-04-06 current `main` 기준:
 
 - `STS2_Mod_AI_Companion.sln` build 통과
 - `Sts2AiCompanion.Host` build 통과
@@ -293,7 +294,8 @@ artifact root는 아래로 고정한다.
 - `Sts2GuiSmokeHarness` build 통과
 - `Sts2ModKit.SelfTest`에 `companion host publishes live advisor scene model artifacts` 추가 후 전체 self-test green
 - shared provenance resolver / A2 parity fixture green
-- `Sts2GuiSmokeHarness -- self-test / replay-test / replay-parity-test` green
+- `Sts2GuiSmokeHarness -- self-test / replay-parity-test` green
+- `Sts2GuiSmokeHarness -- replay-test`는 fixture request root가 유효할 때만 green으로 취급한다. 현재 repo의 `tests/replay-fixtures/gui-smoke-golden-scenes.json`가 외부 `artifacts/gui-smoke/...` root를 가리키므로, root 부재 시에는 known fixture blocker로 기록하고 테스트를 완화하지 않는다.
 - fake live export `reward / event / shop` 3 fixture에서 `LatestSceneModel`, `advisor-scene.latest.json`, `advisor-scene.ndjson`, unchanged refresh no-append 확인
 - representative replay fixture `live29 step 0027`에서 `replay-advisor-scene`가 shared schema `sourceKind=replay`로 직렬화됨
 
@@ -302,11 +304,12 @@ artifact root는 아래로 고정한다.
 직접 플레이 전후로 아래 순서를 따른다.
 
 1. AGENTS 가드레일대로 clean boot
-   - 원큐 실행은 `scripts/Start-CompanionSidecar-DirectPlay.cmd`
+   - 게임 launch는 `cmd /c start "" "steam://rungameid/2868840"` 기준으로 수행
 2. WPF sidecar 실행
 3. reward / event / rest-site / shop / map / combat 진입
 4. panel의 `sceneType / sceneStage / canonicalOwner / summary / options`를 실제 화면과 대조
-5. mismatch가 있으면 `missingFacts / observerGaps / confidence / sourceRefs`를 확인
+5. reward/event/shop manual advice, combat preview-only / no-call 문구, 3-view 표시가 current contract와 맞는지 함께 확인
+6. mismatch가 있으면 `missingFacts / observerGaps / confidence / sourceRefs`를 확인
 
 ## 구현 세션 프롬프트
 
