@@ -9,7 +9,10 @@ internal sealed class RewardCompactInputBuilder
     private readonly RewardOptionSetBuilder _rewardOptionSetBuilder = new();
     private readonly RewardAssessmentFactsBuilder _rewardAssessmentFactsBuilder = new();
 
-    public CompactAdvisorBuildResult Build(CompanionRunState runState, KnowledgeSlice boundedSlice)
+    public CompactAdvisorBuildResult Build(
+        CompanionRunState runState,
+        KnowledgeSlice boundedSlice,
+        StaticKnowledgeCatalog? catalog = null)
     {
         var options = BuildVisibleOptions(runState);
         var missingInformation = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -23,7 +26,7 @@ internal sealed class RewardCompactInputBuilder
         AddDuplicateLabelBlockers(options, "reward", decisionBlockers);
 
         var rewardOptionSet = _rewardOptionSetBuilder.Build(runState);
-        var rewardAssessmentFacts = _rewardAssessmentFactsBuilder.Build(runState, boundedSlice, rewardOptionSet);
+        var rewardAssessmentFacts = _rewardAssessmentFactsBuilder.Build(runState, boundedSlice, rewardOptionSet, catalog);
         if (rewardAssessmentFacts is not null)
         {
             foreach (var missing in rewardAssessmentFacts.MissingInformation)

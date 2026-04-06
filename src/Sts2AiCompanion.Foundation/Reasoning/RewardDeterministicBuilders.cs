@@ -163,10 +163,14 @@ public sealed class RewardOptionSetBuilder
 
 public sealed class RewardAssessmentFactsBuilder
 {
+    private readonly RewardOptionFactExtractor _directFactExtractor = new();
+    private readonly RewardExactKnowledgeResolver _knowledgeResolver = new();
+
     public RewardAssessmentFacts? Build(
         CompanionRunState runState,
         KnowledgeSlice slice,
-        RewardOptionSet? optionSet)
+        RewardOptionSet? optionSet,
+        StaticKnowledgeCatalog? catalog = null)
     {
         if (optionSet is null || !RewardOptionSetBuilder.IsCardRewardScene(runState))
         {
@@ -177,38 +181,69 @@ public sealed class RewardAssessmentFactsBuilder
         var attackCount = deck.Count(card => string.Equals(card.Type, "attack", StringComparison.OrdinalIgnoreCase));
         var skillCount = deck.Count(card => string.Equals(card.Type, "skill", StringComparison.OrdinalIgnoreCase));
         var powerCount = deck.Count(card => string.Equals(card.Type, "power", StringComparison.OrdinalIgnoreCase));
-        var drawTaggedCardCount = CountTaggedDeckCards(deck, slice.Entries, HasDrawTag);
-        var blockTaggedCardCount = CountTaggedDeckCards(deck, slice.Entries, HasBlockTag);
-        var energyTaggedCardCount = CountTaggedDeckCards(deck, slice.Entries, HasEnergyTag);
+        var drawTaggedCardCount = CountTaggedDeckCards(deck, slice, catalog, HasDrawTag);
+        var blockTaggedCardCount = CountTaggedDeckCards(deck, slice, catalog, HasBlockTag);
+        var energyTaggedCardCount = CountTaggedDeckCards(deck, slice, catalog, HasEnergyTag);
         var synergyHints = new List<string>();
         var antiSynergyHints = new List<string>();
         var missingInformation = new List<string>();
         var knowledgeRefs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var directFacts = _directFactExtractor.Extract(optionSet)
+            .Where(facts => !facts.Option.IsSkipOption)
+            .ToArray();
 
-        foreach (var option in optionSet.Options.Where(option => !option.IsSkipOption))
+        foreach (var facts in directFacts)
         {
-            var match = FindKnowledgeMatch(option, slice.Entries);
-            if (match is null)
+            var option = facts.Option;
+            var match = _knowledgeResolver.Resolve(facts, slice, catalog);
+            var hasDrawSignal = facts.HasDrawSignal;
+            var hasBlockSignal = facts.HasBlockSignal;
+            var hasEnergySignal = facts.HasEnergySignal;
+            var usedKnowledge = false;
+            if (match is not null)
             {
-                missingInformation.Add($"reward-option-knowledge-missing:{option.Label}");
-                continue;
+                if (!hasDrawSignal && HasDrawTag(match.Entry))
+                {
+                    hasDrawSignal = true;
+                    usedKnowledge = true;
+                }
+
+                if (!hasBlockSignal && HasBlockTag(match.Entry))
+                {
+                    hasBlockSignal = true;
+                    usedKnowledge = true;
+                }
+
+                if (!hasEnergySignal && HasEnergyTag(match.Entry))
+                {
+                    hasEnergySignal = true;
+                    usedKnowledge = true;
+                }
+
+                if (usedKnowledge)
+                {
+                    knowledgeRefs.Add(match.Entry.Id);
+                }
             }
 
-            knowledgeRefs.Add(match.Id);
-
-            if (HasDrawTag(match) && drawTaggedCardCount == 0)
+            if (hasDrawSignal && drawTaggedCardCount == 0)
             {
                 synergyHints.Add($"{option.Label}: adds draw support");
             }
 
-            if (HasBlockTag(match) && blockTaggedCardCount == 0)
+            if (hasBlockSignal && blockTaggedCardCount == 0)
             {
                 synergyHints.Add($"{option.Label}: adds block support");
             }
 
-            if (HasEnergyTag(match) && energyTaggedCardCount == 0)
+            if (hasEnergySignal && energyTaggedCardCount == 0)
             {
                 synergyHints.Add($"{option.Label}: adds energy support");
+            }
+
+            if (!facts.HasUsableDescription && match is null)
+            {
+                missingInformation.Add($"reward-option-knowledge-missing:{option.Label}");
             }
 
             if (DeckAlreadyContains(deck, option))
@@ -271,42 +306,16 @@ public sealed class RewardAssessmentFactsBuilder
 
     private static int CountTaggedDeckCards(
         IReadOnlyList<Sts2ModKit.Core.LiveExport.LiveExportCardSummary> deck,
-        IReadOnlyList<StaticKnowledgeEntry> knowledgeEntries,
+        KnowledgeSlice slice,
+        StaticKnowledgeCatalog? catalog,
         Func<StaticKnowledgeEntry, bool> predicate)
     {
+        var knowledgeResolver = new RewardExactKnowledgeResolver();
         return deck.Count(card =>
         {
-            var match = FindKnowledgeMatch(card, knowledgeEntries);
-            return match is not null && predicate(match);
+            var match = knowledgeResolver.Resolve(card, slice, catalog);
+            return match is not null && predicate(match.Entry);
         });
-    }
-
-    private static StaticKnowledgeEntry? FindKnowledgeMatch(RewardOption option, IReadOnlyList<StaticKnowledgeEntry> knowledgeEntries)
-    {
-        return knowledgeEntries.FirstOrDefault(entry => Matches(option.Label, option.Value, entry));
-    }
-
-    private static StaticKnowledgeEntry? FindKnowledgeMatch(Sts2ModKit.Core.LiveExport.LiveExportCardSummary card, IReadOnlyList<StaticKnowledgeEntry> knowledgeEntries)
-    {
-        return knowledgeEntries.FirstOrDefault(entry => Matches(card.Name, card.Id, entry));
-    }
-
-    private static bool Matches(string? label, string? value, StaticKnowledgeEntry entry)
-    {
-        return MatchesSeed(label, entry) || MatchesSeed(value, entry);
-    }
-
-    private static bool MatchesSeed(string? seed, StaticKnowledgeEntry entry)
-    {
-        if (string.IsNullOrWhiteSpace(seed))
-        {
-            return false;
-        }
-
-        var normalizedSeed = Normalize(seed);
-        return string.Equals(entry.Id, normalizedSeed, StringComparison.OrdinalIgnoreCase)
-               || string.Equals(entry.Name, seed, StringComparison.OrdinalIgnoreCase)
-               || entry.Name.Contains(seed, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool DeckAlreadyContains(IReadOnlyList<Sts2ModKit.Core.LiveExport.LiveExportCardSummary> deck, RewardOption option)
@@ -318,27 +327,17 @@ public sealed class RewardAssessmentFactsBuilder
 
     private static bool HasDrawTag(StaticKnowledgeEntry entry)
     {
-        return ContainsAny(entry.RawText, "draw", "카드를 뽑", "draw a card");
+        return RewardOptionFactExtractor.HasDrawSignal(entry.RawText);
     }
 
     private static bool HasBlockTag(StaticKnowledgeEntry entry)
     {
-        return ContainsAny(entry.RawText, "block", "방어도");
+        return RewardOptionFactExtractor.HasBlockSignal(entry.RawText);
     }
 
     private static bool HasEnergyTag(StaticKnowledgeEntry entry)
     {
-        return ContainsAny(entry.RawText, "energy", "에너지");
-    }
-
-    private static bool ContainsAny(string? rawText, params string[] markers)
-    {
-        if (string.IsNullOrWhiteSpace(rawText))
-        {
-            return false;
-        }
-
-        return markers.Any(marker => rawText.Contains(marker, StringComparison.OrdinalIgnoreCase));
+        return RewardOptionFactExtractor.HasEnergySignal(entry.RawText);
     }
 
     private static string DescribePressure(int count, int deckSize)
@@ -387,15 +386,6 @@ public sealed class RewardAssessmentFactsBuilder
         return ids.Length == 0 ? "knowledge:none" : $"knowledge:{string.Join("|", ids)}";
     }
 
-    private static string Normalize(string value)
-    {
-        return new string(value
-            .Trim()
-            .ToLowerInvariant()
-            .Select(character => char.IsLetterOrDigit(character) ? character : '-')
-            .ToArray())
-            .Trim('-');
-    }
 }
 
 internal static class RewardRecommendationTraceBuilder

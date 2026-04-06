@@ -7,8 +7,11 @@ public sealed class RewardEventCompactAdvisorInputBuilder
 {
     private readonly CompactAdvisorInputBuilder _inner = new();
 
-    public CompactAdvisorBuildResult Build(CompanionRunState runState, KnowledgeSlice boundedSlice)
+    public CompactAdvisorBuildResult Build(
+        CompanionRunState runState,
+        KnowledgeSlice boundedSlice,
+        StaticKnowledgeCatalog? catalog = null)
     {
-        return _inner.Build(runState, boundedSlice);
+        return _inner.Build(runState, boundedSlice, catalog);
     }
 }

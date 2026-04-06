@@ -296,19 +296,19 @@ public sealed partial class CompanionHost : IAsyncDisposable
         else
         {
             var compactResult = trigger.Manual
-                ? _compactInputBuilder.Build(runState.ToFoundation(), _latestKnowledgeSlice.ToFoundation())
+                ? _compactInputBuilder.Build(runState.ToFoundation(), _latestKnowledgeSlice.ToFoundation(), _knowledgeCatalogService.CurrentCatalog)
                 : null;
             var strategyPrinciples = compactResult?.CompactInput is null
                 ? null
                 : _strategyPrinciplesService.GetRelevantPrinciples(compactResult.CompactInput);
             if (trigger.Manual && compactResult is { Supported: false })
             {
-                var fallbackInputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult.CompactInput, strategyPrinciples);
+                var fallbackInputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult.CompactInput, strategyPrinciples, _knowledgeCatalogService.CurrentCatalog);
                 CompleteNoCallAdviceResult(runState, trigger, fallbackInputPack, retrySourcePromptPack, compactResult.ReasonCode);
                 return;
             }
 
-            inputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult?.CompactInput, strategyPrinciples);
+            inputPack = _promptBuilder.BuildInputPack(runState, trigger, _latestKnowledgeSlice, compactResult?.CompactInput, strategyPrinciples, _knowledgeCatalogService.CurrentCatalog);
         }
 
         var paths = EnsureRunArtifacts(runState.Snapshot.RunId);

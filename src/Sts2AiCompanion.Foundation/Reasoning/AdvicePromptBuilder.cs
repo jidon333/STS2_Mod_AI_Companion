@@ -3,6 +3,7 @@ using System.Text.Json;
 using Sts2AiCompanion.Foundation.Contracts;
 using Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor;
 using Sts2ModKit.Core.Configuration;
+using Sts2ModKit.Core.Knowledge;
 
 namespace Sts2AiCompanion.Foundation.Reasoning;
 
@@ -22,10 +23,11 @@ public sealed class AdvicePromptBuilder
         AdviceTrigger trigger,
         KnowledgeSlice slice,
         RewardEventCompactAdvisorInput? compactInput = null,
-        IReadOnlyList<StrategyPrincipleEntry>? strategyPrinciples = null)
+        IReadOnlyList<StrategyPrincipleEntry>? strategyPrinciples = null,
+        StaticKnowledgeCatalog? knowledgeCatalog = null)
     {
         var rewardOptionSet = _rewardOptionSetBuilder.Build(runState);
-        var rewardAssessmentFacts = _rewardAssessmentFactsBuilder.Build(runState, slice, rewardOptionSet);
+        var rewardAssessmentFacts = _rewardAssessmentFactsBuilder.Build(runState, slice, rewardOptionSet, knowledgeCatalog);
         var rewardRecommendationTrace = RewardRecommendationTraceBuilder.Build(rewardOptionSet, rewardAssessmentFacts);
 
         return new AdviceInputPack(
@@ -409,6 +411,7 @@ public sealed class AdvicePromptBuilder
         {
             case "reward":
                 builder.AppendLine("- reward facts와 visible_options에서 직접 확인 가능한 근거만 reasoningBullets에 쓰세요.");
+                builder.AppendLine("- visible_options.description에 카드 효과가 직접 보이면 그 설명은 explicit scene fact이며 knowledge_slice보다 우선합니다.");
                 break;
             case "event":
                 builder.AppendLine("- event facts와 visible_options의 명시적 비용/보상만 근거로 쓰세요.");

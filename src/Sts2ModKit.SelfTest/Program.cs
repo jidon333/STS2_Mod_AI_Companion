@@ -21,6 +21,9 @@ using FoundationAdvicePromptBuilder = Sts2AiCompanion.Foundation.Reasoning.Advic
 using FoundationCodexCliClient = Sts2AiCompanion.Foundation.Reasoning.CodexCliClient;
 using FoundationReplayAdvisorValidator = Sts2AiCompanion.Foundation.Replay.ReplayAdvisorValidator;
 using RewardAssessmentFactsBuilder = Sts2AiCompanion.Foundation.Reasoning.RewardAssessmentFactsBuilder;
+using RewardExactKnowledgeResolver = Sts2AiCompanion.Foundation.Reasoning.RewardExactKnowledgeResolver;
+using RewardOptionFactExtractor = Sts2AiCompanion.Foundation.Reasoning.RewardOptionFactExtractor;
+using RewardOption = Sts2AiCompanion.Foundation.Contracts.RewardOption;
 using RewardOptionSetBuilder = Sts2AiCompanion.Foundation.Reasoning.RewardOptionSetBuilder;
 
 var failures = new List<string>();
@@ -122,9 +125,12 @@ Run("deck display formatter aggregates localized card names", TestDeckDisplayFor
 Run("strategy principles service loads artifact and retrieves scene-local principles", TestStrategyPrinciplesService, failures);
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
 Run("advice prompt builder emits compact strategy principles section", TestCompactAdvicePromptBuilderStrategyPrinciples, failures);
+Run("reward option direct fact seam extracts visible card signals", TestRewardOptionDirectFacts, failures);
+Run("reward exact knowledge resolver prefers exact value and attribute matches", TestRewardExactKnowledgeResolver, failures);
 Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
 Run("reward compact advisor input builder canonicalizes live reward child-choice duplicates", TestRewardCompactAdvisorLiveChildChoiceCanonicalization, failures);
 Run("reward compact and deterministic builders ignore overlay helper rows", TestRewardCompactOverlayHelperRowCanonicalization, failures);
+Run("reward compact path preserves true missing for opaque reward cards", TestRewardCompactAdvisorUnknownCardMissing, failures);
 Run("event compact advisor input builder extracts explicit option facts and fails closed on duplicates", TestEventCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder respects generic fallback ordering", TestEventCompactFallbackOrdering, failures);
 Run("event compact advisor input builder ignores overlay helper rows", TestEventCompactOverlayHelperRowCanonicalization, failures);
@@ -5240,9 +5246,9 @@ static void TestRewardDeterministicBuilders()
 
         var optionSetA = optionBuilder.Build(ToFoundationRunState(runState));
         var optionSetB = optionBuilder.Build(ToFoundationRunState(runState));
-        var factsA = factsBuilder.Build(ToFoundationRunState(runState), slice, optionSetA);
-        var factsB = factsBuilder.Build(ToFoundationRunState(runState), slice, optionSetB);
-        var inputPack = new FoundationAdvicePromptBuilder(configuration).BuildInputPack(ToFoundationRunState(runState), ToFoundationTrigger(new AdviceTrigger("reward-screen-opened", DateTimeOffset.UtcNow, false, true, "reward-test", runState.RecentEvents.LastOrDefault())), slice);
+        var factsA = factsBuilder.Build(ToFoundationRunState(runState), slice, optionSetA, knowledgeService.CurrentCatalog);
+        var factsB = factsBuilder.Build(ToFoundationRunState(runState), slice, optionSetB, knowledgeService.CurrentCatalog);
+        var inputPack = new FoundationAdvicePromptBuilder(configuration).BuildInputPack(ToFoundationRunState(runState), ToFoundationTrigger(new AdviceTrigger("reward-screen-opened", DateTimeOffset.UtcNow, false, true, "reward-test", runState.RecentEvents.LastOrDefault())), slice, null, null, knowledgeService.CurrentCatalog);
 
         Assert(optionSetA is not null && optionSetB is not null, "Expected reward option set to be built for rewards scene.");
         Assert(optionSetA.Options.Select(option => option.Label).SequenceEqual(optionSetB.Options.Select(option => option.Label), StringComparer.Ordinal), "Expected reward option labels to be deterministic.");
@@ -5253,6 +5259,79 @@ static void TestRewardDeterministicBuilders()
         Assert(inputPack.RewardOptionSet is not null, "Expected reward input pack to include deterministic option set.");
         Assert(inputPack.RewardAssessmentFacts is not null, "Expected reward input pack to include deterministic assessment facts.");
         Assert(inputPack.RewardRecommendationTraceSeed is not null, "Expected reward input pack to include a trace seed.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestRewardOptionDirectFacts()
+{
+    var scenario = new RewardScenarioDefinition(
+        "reward-direct-facts",
+        "reward-direct-facts-run",
+        new[]
+        {
+            new LiveExportCardSummary("타격", "CARD.STRIKE", 1, "Attack", false),
+            new LiveExportCardSummary("수비", "CARD.DEFEND", 1, "Skill", false),
+        },
+        new[]
+        {
+            new LiveExportChoiceSummary("reward-pick-card", "철의 파동", "CARD.IRON_WAVE", "방어도를 5 얻습니다. 피해를 5 줍니다."),
+            new LiveExportChoiceSummary("reward-pick-card", "갈취", "CARD.PILLAGE", "피해를 6 줍니다. 공격이 아닌 카드를 뽑을 때까지 카드를 뽑습니다."),
+            new LiveExportChoiceSummary("reward-pick-card", "전투의 북소리", "CARD.DRUM_OF_BATTLE", "카드를 2장 뽑습니다. 내 턴 시작 시, 뽑을 카드 더미 맨 위의 카드를 소멸시킵니다."),
+            new LiveExportChoiceSummary("skip", "넘기기", "skip", "보상을 건너뜁니다."),
+        },
+        "갈취");
+    var optionSet = new RewardOptionSetBuilder().Build(ToFoundationRunState(CreateRewardRunStateForScenario(scenario, scenario.RunId)));
+    var extractor = new RewardOptionFactExtractor();
+
+    Assert(optionSet is not null, "Expected reward option set for direct fact test.");
+    var facts = extractor.Extract(optionSet!);
+    var ironWave = facts.Single(fact => string.Equals(fact.Option.Label, "철의 파동", StringComparison.Ordinal));
+    var pillage = facts.Single(fact => string.Equals(fact.Option.Label, "갈취", StringComparison.Ordinal));
+    var drum = facts.Single(fact => string.Equals(fact.Option.Label, "전투의 북소리", StringComparison.Ordinal));
+
+    Assert(ironWave.HasUsableDescription, "Expected direct facts to keep Iron Wave description usable.");
+    Assert(ironWave.HasBlockSignal, "Expected direct facts to mark Iron Wave as block support.");
+    Assert(ironWave.HasDamageSignal, "Expected direct facts to mark Iron Wave as damage.");
+    Assert(pillage.HasDrawSignal, "Expected direct facts to mark Pillage as draw support.");
+    Assert(drum.HasDrawSignal, "Expected direct facts to mark Drum of Battle as draw support.");
+}
+
+static void TestRewardExactKnowledgeResolver()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var extractor = new RewardOptionFactExtractor();
+        var resolver = new RewardExactKnowledgeResolver();
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var emptySlice = new Sts2AiCompanion.Foundation.Contracts.KnowledgeSlice(
+            Array.Empty<StaticKnowledgeEntry>(),
+            0,
+            Array.Empty<string>());
+
+        var ironWaveFacts = extractor.Extract(new RewardOption(0, "reward-pick-card", "철의 파동", "CARD.IRON_WAVE", "방어도를 5 얻습니다. 피해를 5 줍니다.", false));
+        var ironWaveMatch = resolver.Resolve(ironWaveFacts, emptySlice, knowledgeService.ReloadIfChanged());
+        Assert(ironWaveMatch is not null, "Expected reward exact resolver to match Iron Wave from full catalog.");
+        Assert(string.Equals(ironWaveMatch.Entry.Name, "철의 파동", StringComparison.Ordinal), $"Expected Iron Wave exact match, got {ironWaveMatch.Entry.Name}.");
+        Assert(string.Equals(ironWaveMatch.MatchKind, "classId", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(ironWaveMatch.MatchKind, "l10nKey", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(ironWaveMatch.MatchKind, "normalized-entry-id", StringComparison.OrdinalIgnoreCase),
+            $"Expected attribute-driven reward exact match, got {ironWaveMatch.MatchKind}.");
+
+        var battleTranceFacts = extractor.Extract(new RewardOption(0, "reward-pick-card", "전투의 함성", "battle-trance", "카드 3장을 뽑습니다.", false));
+        var boundedSlice = knowledgeService.BuildSlice(
+            ToFoundationRunState(CreateRewardRunState("reward-exact-slice-run")),
+            16,
+            8192);
+        var battleTranceMatch = resolver.Resolve(battleTranceFacts, boundedSlice, knowledgeService.CurrentCatalog);
+        Assert(battleTranceMatch is not null, "Expected reward exact resolver to match battle-trance from bounded slice or catalog.");
+        Assert(string.Equals(battleTranceMatch.Entry.Id, "battle-trance", StringComparison.OrdinalIgnoreCase), $"Expected battle-trance exact id match, got {battleTranceMatch.Entry.Id}.");
     }
     finally
     {
@@ -5272,7 +5351,7 @@ static void TestRewardCompactAdvisorInputBuilder()
         var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
         var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
         var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
-        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice, knowledgeService.CurrentCatalog);
 
         Assert(compactResult.Supported, "Expected reward compact input to stay supported when visible options are stable.");
         Assert(compactResult.CompactInput is not null, "Expected reward compact input.");
@@ -5297,10 +5376,48 @@ static void TestRewardCompactAdvisorInputBuilder()
             "같은 카드");
         var duplicateRunState = CreateRewardRunStateForScenario(duplicateScenario, $"{duplicateScenario.RunId}-compact");
         var duplicateSlice = knowledgeService.BuildSlice(ToFoundationRunState(duplicateRunState), 16, 8192);
-        var duplicateResult = compactBuilder.Build(ToFoundationRunState(duplicateRunState), duplicateSlice);
+        var duplicateResult = compactBuilder.Build(ToFoundationRunState(duplicateRunState), duplicateSlice, knowledgeService.CurrentCatalog);
         Assert(!duplicateResult.Supported, "Expected duplicate reward option labels to fail closed.");
         Assert(duplicateResult.DecisionBlockers.Contains("reward-duplicate-option-label:같은 카드", StringComparer.Ordinal), "Expected duplicate reward label blocker.");
         Assert(duplicateResult.DecisionBlockers.Contains("reward-compact-input-insufficient", StringComparer.Ordinal), "Expected duplicate reward labels to mark compact input insufficient.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestRewardCompactAdvisorUnknownCardMissing()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var scenario = new RewardScenarioDefinition(
+            "reward-opaque-unknown-card",
+            "reward-opaque-unknown-card-run",
+            new[]
+            {
+                new LiveExportCardSummary("Strike", "strike", 1, "Attack", false),
+                new LiveExportCardSummary("Defend", "defend", 1, "Skill", false),
+            },
+            new[]
+            {
+                new LiveExportChoiceSummary("reward-pick-card", "알 수 없는 카드", "CARD.UNKNOWN_REWARD", null),
+                new LiveExportChoiceSummary("choice", "넘기기", "skip", "보상을 건너뜁니다."),
+            },
+            "넘기기");
+        var runState = CreateRewardRunStateForScenario(scenario, $"{scenario.RunId}-compact");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice, knowledgeService.CurrentCatalog);
+
+        Assert(compactResult.Supported, "Expected opaque unknown reward card to remain supported with honest missing info.");
+        Assert(compactResult.CompactInput is not null, "Expected reward compact input.");
+        Assert(compactResult.CompactInput!.MissingInformation.Contains("reward-option-knowledge-missing:알 수 없는 카드", StringComparer.Ordinal),
+            $"Expected true missing information for unknown opaque reward card. Actual={string.Join(", ", compactResult.CompactInput.MissingInformation)}");
     }
     finally
     {
@@ -5372,12 +5489,14 @@ static void TestRewardCompactAdvisorLiveChildChoiceCanonicalization()
         var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
         var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
         var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
-        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice, knowledgeService.CurrentCatalog);
 
         Assert(compactResult.Supported, "Expected live-like reward child-choice duplicates to canonicalize into a supported compact input.");
         Assert(compactResult.CompactInput is not null, "Expected reward compact input.");
         var compact = compactResult.CompactInput!;
         Assert(compact.DecisionBlockers.Count == 0, "Expected live-like reward child-choice canonicalization to remove duplicate blockers.");
+        Assert(!compact.MissingInformation.Any(item => item.StartsWith("reward-option-knowledge-missing:", StringComparison.OrdinalIgnoreCase)),
+            $"Expected visible reward card descriptions to prevent synthetic knowledge-missing flags. Actual={string.Join(", ", compact.MissingInformation)}");
         Assert(compact.VisibleOptions.Select(option => option.Label).SequenceEqual(
             new[] { "철의 파동", "갈취", "전투의 북소리", "넘기기" },
             StringComparer.Ordinal),
@@ -5457,7 +5576,7 @@ static void TestRewardCompactOverlayHelperRowCanonicalization()
         var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
         var optionSet = new RewardOptionSetBuilder().Build(ToFoundationRunState(runState));
         var compactResult = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder()
-            .Build(ToFoundationRunState(runState), slice);
+            .Build(ToFoundationRunState(runState), slice, knowledgeService.CurrentCatalog);
         var sceneModel = ResolveHostSceneModelForSnapshot(runState.Snapshot.RunId, "choice-list-presented", runState.Snapshot);
         var expectedChildLabels = new[] { "철의 파동", "갈취", "전투의 북소리" };
 
@@ -6040,10 +6159,10 @@ static void TestCompactAdvicePromptBuilder()
         var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
         var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
         var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
-        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice, knowledgeService.CurrentCatalog);
         var promptBuilder = new FoundationAdvicePromptBuilder(configuration);
         var trigger = ToFoundationTrigger(new AdviceTrigger("manual", DateTimeOffset.UtcNow, true, true, "compact-test", runState.RecentEvents.LastOrDefault()));
-        var inputPack = promptBuilder.BuildInputPack(ToFoundationRunState(runState), trigger, slice, compactResult.CompactInput);
+        var inputPack = promptBuilder.BuildInputPack(ToFoundationRunState(runState), trigger, slice, compactResult.CompactInput, null, knowledgeService.CurrentCatalog);
         var prompt = promptBuilder.FormatPrompt(inputPack);
 
         Assert(inputPack.CompactInput is not null, "Expected prompt pack to carry compact input.");
@@ -6636,7 +6755,13 @@ static void AssertReviewerReadableRewardAdvice(AdviceResponse advice, AdviceInpu
         $"Expected {channel} reasoning to cite deterministic facts for scenario {scenarioName}.");
     Assert(trace.CandidateLabels.Count > 0, $"Expected {channel} trace to expose candidate labels for scenario {scenarioName}.");
     Assert(trace.AssessmentFactLines.Count > 0, $"Expected {channel} trace to expose deterministic fact lines for scenario {scenarioName}.");
-    Assert(trace.InputKnowledgeRefs.Count > 0, $"Expected {channel} trace to expose deterministic knowledge refs for scenario {scenarioName}.");
+    Assert(
+        trace.InputKnowledgeRefs.Count > 0
+        || trace.AssessmentFactLines.Any(line =>
+            line.StartsWith("synergy:", StringComparison.OrdinalIgnoreCase)
+            || line.StartsWith("anti_synergy:", StringComparison.OrdinalIgnoreCase)
+            || line.StartsWith("missing:", StringComparison.OrdinalIgnoreCase)),
+        $"Expected {channel} trace to expose either exact knowledge enrichments or direct deterministic option facts for scenario {scenarioName}.");
 }
 
 static void TestHostFoundationConvergence()
@@ -9435,6 +9560,51 @@ static void SeedRewardKnowledgeCatalog(string root)
                 "카드 3장을 뽑습니다.",
                 new[] { "card", "skill" },
                 new Dictionary<string, string?>(),
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "megacrit-sts2-core-models-cards-iron-wave",
+                "철의 파동",
+                "strict-domain-scan",
+                true,
+                "방어도를 5 얻습니다. 피해를 5 줍니다.",
+                new[] { "card", "attack", "strict-card" },
+                new Dictionary<string, string?>
+                {
+                    ["classId"] = "IRON_WAVE",
+                    ["l10nKey"] = "IRON_WAVE",
+                    ["title"] = "철의 파동",
+                    ["description"] = "방어도를 5 얻습니다. 피해를 5 줍니다.",
+                },
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "megacrit-sts2-core-models-cards-pillage",
+                "갈취",
+                "strict-domain-scan",
+                true,
+                "피해를 6 줍니다. 공격이 아닌 카드를 뽑을 때까지 카드를 뽑습니다.",
+                new[] { "card", "attack", "strict-card" },
+                new Dictionary<string, string?>
+                {
+                    ["classId"] = "PILLAGE",
+                    ["l10nKey"] = "PILLAGE",
+                    ["title"] = "갈취",
+                    ["description"] = "피해를 6 줍니다. 공격이 아닌 카드를 뽑을 때까지 카드를 뽑습니다.",
+                },
+                Array.Empty<StaticKnowledgeOption>()),
+            new StaticKnowledgeEntry(
+                "megacrit-sts2-core-models-cards-drum-of-battle",
+                "전투의 북소리",
+                "strict-domain-scan",
+                true,
+                "카드를 2장 뽑습니다. 내 턴 시작 시, 뽑을 카드 더미 맨 위의 카드를 소멸시킵니다.",
+                new[] { "card", "power", "strict-card" },
+                new Dictionary<string, string?>
+                {
+                    ["classId"] = "DRUM_OF_BATTLE",
+                    ["l10nKey"] = "DRUM_OF_BATTLE",
+                    ["title"] = "전투의 북소리",
+                    ["description"] = "카드를 2장 뽑습니다. 내 턴 시작 시, 뽑을 카드 더미 맨 위의 카드를 소멸시킵니다.",
+                },
                 Array.Empty<StaticKnowledgeOption>()),
             new StaticKnowledgeEntry(
                 "strike",

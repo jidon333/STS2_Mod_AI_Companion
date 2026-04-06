@@ -69,7 +69,7 @@ public sealed class ReplayAdvisorValidator
                 runState,
                 _configuration.Assistant.MaxKnowledgeEntries,
                 _configuration.Assistant.MaxKnowledgeBytes);
-            var compactResult = _compactInputBuilder.Build(runState, slice);
+            var compactResult = _compactInputBuilder.Build(runState, slice, _knowledgeCatalogService.CurrentCatalog);
             var strategyPrinciples = compactResult.CompactInput is null
                 ? null
                 : _strategyPrinciplesService.GetRelevantPrinciples(compactResult.CompactInput);
@@ -78,7 +78,8 @@ public sealed class ReplayAdvisorValidator
                 trigger,
                 slice,
                 compactResult.CompactInput,
-                strategyPrinciples);
+                strategyPrinciples,
+                _knowledgeCatalogService.CurrentCatalog);
             var response = await CreateResponseAsync(runState, slice, inputPack, compactResult, mockAdviceResponsePath, cancellationToken).ConfigureAwait(false);
 
             var fixtureName = Path.GetFileName(Path.GetFullPath(resolvedFixtureRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));

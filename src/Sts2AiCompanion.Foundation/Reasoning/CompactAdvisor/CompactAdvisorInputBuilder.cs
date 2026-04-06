@@ -10,14 +10,17 @@ public sealed class CompactAdvisorInputBuilder
     private readonly ShopCompactInputBuilder _shopBuilder = new();
     private readonly CombatCompactPreviewBuilder _combatBuilder = new();
 
-    public CompactAdvisorBuildResult Build(CompanionRunState runState, KnowledgeSlice boundedSlice)
+    public CompactAdvisorBuildResult Build(
+        CompanionRunState runState,
+        KnowledgeSlice boundedSlice,
+        StaticKnowledgeCatalog? catalog = null)
     {
         ArgumentNullException.ThrowIfNull(runState);
         ArgumentNullException.ThrowIfNull(boundedSlice);
 
         return CompactAdvisorScenePolicy.NormalizeSceneType(runState.NormalizedState.Scene.SceneType) switch
         {
-            "reward" => _rewardBuilder.Build(runState, boundedSlice),
+            "reward" => _rewardBuilder.Build(runState, boundedSlice, catalog),
             "event" => _eventBuilder.Build(runState, boundedSlice),
             "shop" => _shopBuilder.Build(runState, boundedSlice),
             "combat" => _combatBuilder.Build(runState, boundedSlice),
