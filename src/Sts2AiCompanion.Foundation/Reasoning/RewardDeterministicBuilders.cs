@@ -1,5 +1,6 @@
 using Sts2AiCompanion.Foundation.Contracts;
 using Sts2ModKit.Core.Knowledge;
+using Sts2ModKit.Core.LiveExport;
 
 namespace Sts2AiCompanion.Foundation.Reasoning;
 
@@ -12,9 +13,7 @@ public sealed class RewardOptionSetBuilder
             return null;
         }
 
-        var sourceEntries = runState.NormalizedState.Reward.Entries.Count > 0
-            ? runState.NormalizedState.Reward.Entries
-            : runState.NormalizedState.Choices.List;
+        var sourceEntries = GetRewardSourceEntries(runState);
         if (sourceEntries.Count == 0)
         {
             return null;
@@ -61,10 +60,85 @@ public sealed class RewardOptionSetBuilder
         return visibleEntries.Any(entry => string.Equals(entry.Kind, "card", StringComparison.OrdinalIgnoreCase));
     }
 
+    internal static IReadOnlyList<CompanionChoiceItem> GetRewardSourceEntries(CompanionRunState runState)
+    {
+        var canonicalSnapshotChoices = GetCanonicalCardRewardSnapshotChoices(runState.Snapshot.CurrentChoices);
+        if (canonicalSnapshotChoices.Count > 0)
+        {
+            return canonicalSnapshotChoices
+                .Select(choice => new CompanionChoiceItem(
+                    choice.Kind,
+                    choice.Label,
+                    choice.Value,
+                    choice.Description))
+                .ToArray();
+        }
+
+        return runState.NormalizedState.Reward.Entries.Count > 0
+            ? runState.NormalizedState.Reward.Entries
+            : runState.NormalizedState.Choices.List;
+    }
+
+    internal static IReadOnlyList<LiveExportChoiceSummary> GetCanonicalCardRewardSnapshotChoices(
+        IReadOnlyList<LiveExportChoiceSummary> snapshotChoices)
+    {
+        var rewardPickChoices = snapshotChoices
+            .Where(IsRewardPickChoice)
+            .GroupBy(
+                choice => $"{choice.Kind}|{choice.Label}|{choice.Value ?? string.Empty}",
+                StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToArray();
+        if (rewardPickChoices.Length == 0)
+        {
+            return Array.Empty<LiveExportChoiceSummary>();
+        }
+
+        var canonicalChoices = new List<LiveExportChoiceSummary>(rewardPickChoices);
+        var skipChoice = SelectCanonicalSkipChoice(snapshotChoices);
+        if (skipChoice is not null)
+        {
+            canonicalChoices.Add(skipChoice);
+        }
+
+        return canonicalChoices;
+    }
+
     private static bool IsRewardScene(string? sceneType)
     {
         return string.Equals(sceneType, "reward", StringComparison.OrdinalIgnoreCase)
                || string.Equals(sceneType, "rewards", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRewardPickChoice(LiveExportChoiceSummary choice)
+    {
+        return string.Equals(choice.Kind, "reward-pick-card", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Contains("reward-pick", StringComparer.OrdinalIgnoreCase)
+               || (string.Equals(choice.BindingKind, "card-selection-card", StringComparison.OrdinalIgnoreCase)
+                   && string.Equals(choice.BindingId, "reward-pick", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static LiveExportChoiceSummary? SelectCanonicalSkipChoice(IReadOnlyList<LiveExportChoiceSummary> snapshotChoices)
+    {
+        return snapshotChoices
+            .Where(IsRewardSkipChoice)
+            .OrderByDescending(choice => string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(choice => !string.IsNullOrWhiteSpace(choice.NodeId))
+            .ThenByDescending(choice => choice.Enabled == true)
+            .ThenBy(choice => choice.Value ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+    }
+
+    private static bool IsRewardSkipChoice(LiveExportChoiceSummary choice)
+    {
+        if (!ContainsSkipMarker(choice.Label) && !ContainsSkipMarker(choice.Value))
+        {
+            return false;
+        }
+
+        return string.Equals(choice.Kind, "choice", StringComparison.OrdinalIgnoreCase)
+               || string.Equals(choice.Value, "ui_cancel", StringComparison.OrdinalIgnoreCase)
+               || choice.SemanticHints.Contains("skip-option", StringComparer.OrdinalIgnoreCase);
     }
 
     private static bool IsSkipOption(CompanionChoiceItem entry)

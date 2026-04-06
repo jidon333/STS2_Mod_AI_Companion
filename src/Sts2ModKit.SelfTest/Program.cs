@@ -123,6 +123,7 @@ Run("strategy principles service loads artifact and retrieves scene-local princi
 Run("advice prompt builder emits the required prompt sections", TestAdvicePromptBuilder, failures);
 Run("advice prompt builder emits compact strategy principles section", TestCompactAdvicePromptBuilderStrategyPrinciples, failures);
 Run("reward compact advisor input builder preserves exact labels and missing facts", TestRewardCompactAdvisorInputBuilder, failures);
+Run("reward compact advisor input builder canonicalizes live reward child-choice duplicates", TestRewardCompactAdvisorLiveChildChoiceCanonicalization, failures);
 Run("event compact advisor input builder extracts explicit option facts and fails closed on duplicates", TestEventCompactAdvisorInputBuilder, failures);
 Run("event compact advisor input builder respects generic fallback ordering", TestEventCompactFallbackOrdering, failures);
 Run("event compact advisor input builder keeps knowledge slice strict and event-local", TestEventCompactKnowledgeFiltering, failures);
@@ -5296,6 +5297,89 @@ static void TestRewardCompactAdvisorInputBuilder()
         Assert(!duplicateResult.Supported, "Expected duplicate reward option labels to fail closed.");
         Assert(duplicateResult.DecisionBlockers.Contains("reward-duplicate-option-label:같은 카드", StringComparer.Ordinal), "Expected duplicate reward label blocker.");
         Assert(duplicateResult.DecisionBlockers.Contains("reward-compact-input-insufficient", StringComparer.Ordinal), "Expected duplicate reward labels to mark compact input insufficient.");
+    }
+    finally
+    {
+        SafeDeleteDirectory(root);
+    }
+}
+
+static void TestRewardCompactAdvisorLiveChildChoiceCanonicalization()
+{
+    var root = CreateTempDirectory();
+    try
+    {
+        var configuration = CreateRewardTestConfiguration(root);
+        SeedRewardKnowledgeCatalog(root);
+        var liveLikeScenario = new RewardScenarioDefinition(
+            "reward-live-child-choice",
+            "reward-live-child-choice-run",
+            new[]
+            {
+                new LiveExportCardSummary("타격", "CARD.STRIKE", 1, "Attack", false),
+                new LiveExportCardSummary("타격", "CARD.STRIKE", 1, "Attack", false),
+                new LiveExportCardSummary("수비", "CARD.DEFEND", 1, "Skill", false),
+            },
+            new[]
+            {
+                new LiveExportChoiceSummary("reward-pick-card", "철의 파동", "CARD.IRON_WAVE", "방어도를 5 얻습니다. 피해를 5 줍니다.")
+                {
+                    BindingKind = "card-selection-card",
+                    BindingId = "reward-pick",
+                    Enabled = true,
+                    SemanticHints = new[] { "card-selection:reward-pick", "reward-pick" },
+                },
+                new LiveExportChoiceSummary("reward-pick-card", "갈취", "CARD.PILLAGE", "피해를 6 줍니다. 공격이 아닌 카드를 뽑을 때까지 카드를 뽑습니다.")
+                {
+                    BindingKind = "card-selection-card",
+                    BindingId = "reward-pick",
+                    Enabled = true,
+                    SemanticHints = new[] { "card-selection:reward-pick", "reward-pick" },
+                },
+                new LiveExportChoiceSummary("reward-pick-card", "전투의 북소리", "CARD.DRUM_OF_BATTLE", "카드를 2장 뽑습니다. 내 턴 시작 시, 뽑을 카드 더미 맨 위의 카드를 소멸시킵니다.")
+                {
+                    BindingKind = "card-selection-card",
+                    BindingId = "reward-pick",
+                    Enabled = true,
+                    SemanticHints = new[] { "card-selection:reward-pick", "reward-pick" },
+                },
+                new LiveExportChoiceSummary("card", "덱에 추가할 카드를 선택하세요.", "덱에 추가할 카드를 선택하세요.", "덱에 추가할 카드를 선택하세요.")
+                {
+                    BindingKind = "reward-type",
+                    BindingId = "CardReward",
+                    SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                },
+                new LiveExportChoiceSummary("choice", "넘기기", null, "넘기기"),
+                new LiveExportChoiceSummary("card", "덱에 추가할 카드를 선택하세요.", "CardReward", "덱에 추가할 카드를 선택하세요.")
+                {
+                    BindingKind = "reward-type",
+                    BindingId = "CardReward",
+                    SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                },
+                new LiveExportChoiceSummary("card", "넘기기", "ui_cancel", "넘기기")
+                {
+                    BindingKind = "reward-type",
+                    BindingId = "CardReward",
+                    SemanticHints = new[] { "reward", "reward-card", "reward-type:CardReward" },
+                },
+            },
+            "갈취");
+        var runState = CreateRewardRunStateForScenario(liveLikeScenario, $"{liveLikeScenario.RunId}-compact");
+        var knowledgeService = new FoundationKnowledgeCatalogService(configuration, root);
+        var slice = knowledgeService.BuildSlice(ToFoundationRunState(runState), 16, 8192);
+        var compactBuilder = new Sts2AiCompanion.Foundation.Reasoning.CompactAdvisor.RewardEventCompactAdvisorInputBuilder();
+        var compactResult = compactBuilder.Build(ToFoundationRunState(runState), slice);
+
+        Assert(compactResult.Supported, "Expected live-like reward child-choice duplicates to canonicalize into a supported compact input.");
+        Assert(compactResult.CompactInput is not null, "Expected reward compact input.");
+        var compact = compactResult.CompactInput!;
+        Assert(compact.DecisionBlockers.Count == 0, "Expected live-like reward child-choice canonicalization to remove duplicate blockers.");
+        Assert(compact.VisibleOptions.Select(option => option.Label).SequenceEqual(
+            new[] { "철의 파동", "갈취", "전투의 북소리", "넘기기" },
+            StringComparer.Ordinal),
+            $"Expected reward compact visible options to keep only real card picks plus a single skip option. Actual={string.Join(", ", compact.VisibleOptions.Select(option => option.Label))}");
+        Assert(compact.VisibleOptions.Count(option => string.Equals(option.Label, "넘기기", StringComparison.Ordinal)) == 1, "Expected only one canonical skip option.");
+        Assert(!compact.VisibleOptions.Any(option => option.Label.Contains("선택하세요", StringComparison.Ordinal)), "Expected helper prompt rows to stay out of compact visible options.");
     }
     finally
     {

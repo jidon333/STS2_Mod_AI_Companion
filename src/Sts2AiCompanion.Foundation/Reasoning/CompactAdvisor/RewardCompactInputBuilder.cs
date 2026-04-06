@@ -11,7 +11,7 @@ internal sealed class RewardCompactInputBuilder
 
     public CompactAdvisorBuildResult Build(CompanionRunState runState, KnowledgeSlice boundedSlice)
     {
-        var options = CompactAdvisorBuilderShared.BuildVisibleOptions(GetRewardSourceItems(runState), runState.Snapshot.CurrentChoices);
+        var options = BuildVisibleOptions(runState);
         var missingInformation = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var decisionBlockers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (options.Count == 0)
@@ -81,11 +81,25 @@ internal sealed class RewardCompactInputBuilder
             : new CompactAdvisorBuildResult(true, compactInput, compactInput.MissingInformation, compactInput.DecisionBlockers, "supported");
     }
 
-    private static IReadOnlyList<CompanionChoiceItem> GetRewardSourceItems(CompanionRunState runState)
+    private static IReadOnlyList<CompactAdvisorOption> BuildVisibleOptions(CompanionRunState runState)
     {
-        return runState.NormalizedState.Reward.Entries.Count > 0
-            ? runState.NormalizedState.Reward.Entries
-            : runState.NormalizedState.Choices.List;
+        var canonicalSnapshotChoices = RewardOptionSetBuilder.GetCanonicalCardRewardSnapshotChoices(runState.Snapshot.CurrentChoices);
+        if (canonicalSnapshotChoices.Count > 0)
+        {
+            return canonicalSnapshotChoices
+                .Select(choice => new CompactAdvisorOption(
+                    choice.Kind,
+                    choice.Label,
+                    choice.Value,
+                    choice.Description,
+                    choice.Enabled ?? true,
+                    choice.SemanticHints.Where(hint => !string.IsNullOrWhiteSpace(hint)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()))
+                .ToArray();
+        }
+
+        return CompactAdvisorBuilderShared.BuildVisibleOptions(
+            RewardOptionSetBuilder.GetRewardSourceEntries(runState),
+            runState.Snapshot.CurrentChoices);
     }
 
     private static void AddDuplicateLabelBlockers(
